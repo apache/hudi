@@ -17,11 +17,12 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{BaseFileOnlyRelation, DataSourceReadOptions, DataSourceWriteOptions, IncrementalRelationV1, IncrementalRelationV2, ScalaAssertionSupport}
+import org.apache.hudi.{BaseFileOnlyRelation, DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkUtils, IncrementalRelationV1, IncrementalRelationV2, MergeOnReadIncrementalRelationV2, MergeOnReadSnapshotRelation, ScalaAssertionSupport}
 import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.log.InstantRange.RangeType
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
@@ -29,6 +30,7 @@ import org.apache.spark.sql.functions.{col, lit, struct}
 import org.apache.spark.sql.types.{IntegerType, LongType}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Assumptions.assumeTrue
 
 /** Row shape written by these tests. A nested struct and an array are included so the legacy
  * parquet read path is exercised on complex types -- the historically fragile vectorized
@@ -156,6 +158,36 @@ class TestLegacyParquetReadPath extends HoodieSparkClientTestBase with ScalaAsse
     assertEquals(expected, actual)
   }
 
+  // Inline compaction is switched on automatically for batch MOR writes (HoodieSparkSqlWriter), so it
+  // is pinned off here to keep the second deltacommit in a log file rather than a rewritten base file.
+  private val morDropPartitionColumnsOpts = Map(
+    DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
+    HoodieTableConfig.DROP_PARTITION_COLUMNS.key -> "true",
+    HoodieCompactionConfig.INLINE_COMPACT.key -> "false")
+
+  /**
+   * MOR table whose base files do not carry the partition column, so its values exist only on the
+   * partition path. Deltacommit 1 inserts ids 1..30 across p0/p1/p2; deltacommit 2 upserts a strict
+   * subset of the p0 rows, so the p0 file group gains a log file while p1/p2 stay base-only.
+   *
+   * Both "strict subset" and "single partition" are deliberate: the p1/p2 groups keep the
+   * skip-merging fast path in the same query, and the p0 rows left untouched by deltacommit 2 are
+   * served from the base file, which is where the partition column is missing. Note that
+   * HoodieSparkSqlWriter forces drop.partition.columns off for MOR upserts (HUDI-6926), so the log
+   * records themselves do carry the column -- only the base-file records do not.
+   */
+  private def writeMorDropPartitionColumnsCommits(): Unit = {
+    writeBatch(makeRows(1 to 30, ts = 1L, i => i * 10L),
+      DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL, morDropPartitionColumnsOpts)
+    writeBatch(makeRows((1 to 30).filter(_ % 6 == 0), ts = 2L, i => i * 100L),
+      DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL, morDropPartitionColumnsOpts)
+  }
+
+  /** Distinct `partition` values, rendering a null (the symptom under test) as "null" so that the
+   * assertion reports it rather than failing while sorting. */
+  private def distinctPartitions(df: DataFrame): Seq[String] =
+    df.select("partition").distinct().collect().map(r => String.valueOf(r.get(0))).sorted.toSeq
+
   private def fgReaderDf(extraOpts: Map[String, String] = Map.empty): DataFrame =
     spark.read.format("hudi")
       .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key, "true")
@@ -191,6 +223,16 @@ class TestLegacyParquetReadPath extends HoodieSparkClientTestBase with ScalaAsse
     assertTrue(hadoopFsRelation.fileFormat.getClass.getSimpleName.contains("LegacyHoodieParquetFileFormat"),
       s"Expected the legacy parquet file format but got ${hadoopFsRelation.fileFormat.getClass.getName}")
     spark.baseRelationToDataFrame(hadoopFsRelation)
+  }
+
+  /**
+   * Legacy MOR snapshot scan through [[MergeOnReadSnapshotRelation]] and [[org.apache.hudi.HoodieMergeOnReadRDDV2]]:
+   * base-only splits take the skip-merging fast path, splits carrying log files the file-group-reader branch.
+   */
+  private def legacyMorSnapshotDf(extraOpts: Map[String, String] = Map.empty): DataFrame = {
+    val metaClient = createMetaClient(spark, basePath)
+    spark.baseRelationToDataFrame(
+      MergeOnReadSnapshotRelation(sqlContext, legacyReadOpts(extraOpts), metaClient, None))
   }
 
   /**
@@ -270,9 +312,7 @@ class TestLegacyParquetReadPath extends HoodieSparkClientTestBase with ScalaAsse
     assertSameRows(newReaderDf, legacyFileFormatDf(extractOpts))
     assertSameRows(newReaderDf, legacyRelationDf(extractOpts))
 
-    val partitions = legacyFileFormatDf(extractOpts)
-      .select("partition").distinct().collect().map(_.getString(0)).sorted.toSeq
-    assertEquals(Seq("p0", "p1", "p2"), partitions)
+    assertEquals(Seq("p0", "p1", "p2"), distinctPartitions(legacyFileFormatDf(extractOpts)))
   }
 
   @Test
@@ -469,5 +509,124 @@ class TestLegacyParquetReadPath extends HoodieSparkClientTestBase with ScalaAsse
       assertWidenedValues(legacyDf)
       assertSameRows(newReaderDf, legacyDf)
     }
+  }
+
+  @Test
+  def testCowSnapshotReadWithSchemaOnReadRejectsShreddedVariant(): Unit = {
+    // The shredded-variant guard is copied into all four *LegacyHoodieParquetFileFormat versions,
+    // and buildScan on this relation is the only caller that reaches those copies -- DefaultSource
+    // never routes a batch read to them. Reading a shredded variant back needs Spark 4.1+
+    // (SPARK-54410), which leaves the 4.1 and 4.2 copies as the ones this exercises.
+    assumeTrue(HoodieSparkUtils.gteqSpark4_1, "Shredded variants need Spark 4.1+ to be read back")
+
+    // Schema-on-read models a variant as a two-field {metadata, value} record, so the merged
+    // request clips the file's typed_value away and the typed rows would come back with a null
+    // value residual -- silent data loss (#18285). The legacy formats must fail loudly instead
+    // (ParquetSchemaEvolutionUtils.validateNoShreddedVariants). Forced shredding is what puts a
+    // typed_value group under `v`; without it the file carries the unshredded pair and there is
+    // nothing for the guard to reject.
+    val shreddedSchemaOnReadOpts = Map(
+      DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key -> "true",
+      DataSourceWriteOptions.RECONCILE_SCHEMA.key -> "true",
+      "hoodie.parquet.variant.write.shredding.enabled" -> "true",
+      "hoodie.parquet.variant.force.shredding.schema.for.test" -> "a bigint, b string")
+
+    // The short name is required: it resolves to the Spark 4 datasource, the only one whose
+    // supportsDataType override accepts a VariantType column on write.
+    spark.sql(
+      """select '1' as id, 1L as ts, 'p0' as partition, parse_json('{"a":1,"b":"b1"}') as v
+        |union all
+        |select '2' as id, 1L as ts, 'p0' as partition, parse_json('{"a":2,"b":"b2"}') as v""".stripMargin)
+      .write.format("hudi")
+      .options(writeOpts ++ shreddedSchemaOnReadOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val readOpts = Map(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key -> "true")
+    val metaClient = createMetaClient(spark, basePath)
+    assertTrue(BaseFileOnlyRelation(sqlContext, metaClient, legacyReadOpts(readOpts), None).hasSchemaOnRead,
+      "The write must have recorded an InternalSchema, otherwise the guard's branch is never taken")
+
+    // Only the relation's own buildScan is exercised here, not the HadoopFsRelation conversion:
+    // buildScan embeds the query schema into the reader's Hadoop conf (HoodieBaseRelation
+    // .embedInternalSchema), whereas the converted relation is read with the plain session conf,
+    // so shouldUseInternalSchema is false there and the guard is not on that path at all. That is
+    // also why DefaultSource keeps BaseFileOnlyRelation itself under schema-on-read.
+    val thrown = assertThrows(classOf[Throwable]) {
+      legacyRelationDf(readOpts).select("v").collect()
+    }
+    val causes = Iterator.iterate(thrown: Throwable)(_.getCause).takeWhile(_ != null).take(10).toSeq
+    assertTrue(causes.exists(c => c.isInstanceOf[HoodieException]
+      && String.valueOf(c.getMessage).contains("shredded variant")),
+      s"Expected the shredded-variant rejection but got: $thrown")
+
+    // The guard's empty-projection carve-out (count(*) reads no column data and must keep working)
+    // is pinned on the file-group-reader path by the count(*) leg of "Schema-on-read reads of
+    // shredded variant files fail fast" in TestVariantShreddingMixedLayouts, not here: this relation
+    // cannot serve an empty projection under schema-on-read at all, with or
+    // without a variant. buildScan prunes the internal schema to the zero requested columns, and
+    // InternalSchemaUtils.pruneInternalSchema builds an InternalSchema around a null record (NPE in
+    // buildIdToName; pre-existing, tracked by #19734).
+    // TODO(voon): once #19734 is fixed, restore the carve-out here so the legacy relation pins it too:
+    //   assertEquals(2L, legacyRelationDf(readOpts).count())
+  }
+
+  @Test
+  def testMorSnapshotReadWithDroppedPartitionColumns(): Unit = {
+    writeMorDropPartitionColumnsCommits()
+
+    // The p0 file group carries a log file, so it is served by the file-group-reader branch of
+    // HoodieMergeOnReadRDDV2, which sources every projected column from the files -- and the p0 base
+    // file, holding the rows deltacommit 2 left alone, does not have the partition column. The p1/p2
+    // groups stay base-only in the very same query, so the skip-merging fast path -- the only one
+    // that ever appended the parsed values -- is pinned unregressed at the same time.
+    val newReaderDf = fgReaderDf()
+    assertEquals(30, newReaderDf.count())
+    // Had the updates landed in a rewritten base file instead of a log, the read-optimized query
+    // would already show them and no split in this table would take the merging branch at all.
+    val readOptimizedDf = fgReaderDf(
+      Map(DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL))
+    assertEquals(0, readOptimizedDf.filter(col("ts") === 2L).count())
+
+    val legacyDf = legacyMorSnapshotDf()
+    assertSameRows(newReaderDf, legacyDf)
+    assertEquals(Seq("p0", "p1", "p2"), distinctPartitions(legacyDf))
+
+    // The p0 rows deltacommit 2 left alone are the ones served straight from the base file, where the
+    // partition column does not exist; they must come back as p0 and not as null.
+    val untouchedP0Ids = (1 to 30).filter(i => i % 3 == 0 && i % 6 != 0).map(_.toString)
+    val baseServedP0Df = legacyDf.filter(col("ts") === 1L && col("id").isin(untouchedP0Ids: _*))
+    assertEquals(untouchedP0Ids.size.toLong, baseServedP0Df.count())
+    assertEquals(Seq("p0"), distinctPartitions(baseServedP0Df))
+  }
+
+  @Test
+  def testMorIncrementalReadWithDroppedPartitionColumnsOnLogOnlySlice(): Unit = {
+    writeMorDropPartitionColumnsCommits()
+
+    val metaClient = createMetaClient(spark, basePath)
+    val firstInstant = metaClient.getCommitsTimeline.filterCompletedInstants.firstInstant.get
+
+    // Start-exclusive span covering only the update deltacommit. Its file-system view is built from
+    // the files that deltacommit touched -- log files alone -- so the slice carries no base file and
+    // the split has to resolve its partition values off a log file's path instead.
+    //
+    // NOTE: this test passes with or without the splicing, so unlike the snapshot test above it is
+    // not a repro of the null-partition bug. The rows here come from log records, and those DO carry
+    // the partition column: HUDI-6926 makes a MOR upsert ignore drop.partition.columns. What it does
+    // pin is the log-only resolution itself -- reading the values off HoodieLogFile#getPath, whose
+    // pathInfo is null for these log files -- and that the result agrees with the file-group-reader
+    // oracle.
+    val incOpts = Map(
+      DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
+      DataSourceReadOptions.START_COMMIT.key -> firstInstant.getCompletionTime)
+
+    val newReaderDf = fgReaderDf(incOpts)
+    val legacyDf = spark.baseRelationToDataFrame(
+      MergeOnReadIncrementalRelationV2(sqlContext, legacyReadOpts(incOpts), metaClient, None, RangeType.OPEN_CLOSED))
+
+    assertSameRows(newReaderDf, legacyDf)
+    assertEquals(Seq("p0"), distinctPartitions(legacyDf))
   }
 }

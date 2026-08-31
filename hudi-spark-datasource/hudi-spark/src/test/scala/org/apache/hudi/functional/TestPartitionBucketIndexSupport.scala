@@ -17,7 +17,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{HoodieFileIndex, HoodieSparkUtils, PartitionBucketIndexSupport}
+import org.apache.hudi.{HoodieFileIndex, PartitionBucketIndexSupport}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, PartitionBucketIndexHashingConfig}
@@ -30,8 +30,6 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 
 import org.apache.avro.generic.GenericData
-import org.apache.spark.sql.HoodieCatalystExpressionUtils
-import org.apache.spark.sql.catalyst.encoders.DummyExpressionHolder
 import org.junit.jupiter.api.{BeforeEach, Tag, Test}
 import org.mockito.Mockito
 
@@ -43,6 +41,8 @@ class TestPartitionBucketIndexSupport extends TestBucketIndexSupport {
   private val DEFAULT_EXPRESSIONS = "\\d{4}\\-(06\\-(01|17|18)|11\\-(01|10|11))," + EXPRESSION_BUCKET_NUMBER
   private val DEFAULT_BUCKET_NUMBER = 10
   private val DEFAULT_PARTITION_PATH = Array("2025-06-17", "2025-06-18")
+  // deliberately outside DEFAULT_EXPRESSIONS, so it hashes into DEFAULT_BUCKET_NUMBER buckets
+  private val NON_MATCHING_PARTITION_PATH = "2025-07-01"
   private var fileIndex: HoodieFileIndex = null
   @BeforeEach
   override def setUp(): Unit = {
@@ -111,8 +111,6 @@ class TestPartitionBucketIndexSupport extends TestBucketIndexSupport {
     exprFilePathAnswerCheck(bucketIndexSupport, equalTo, Set.apply(bucket5Id8FileName, bucket2Id5FileName), allFileNames)
     equalTo = "A = 5 And (A = 2 Or B = 'abc')"
     exprFilePathAnswerCheck(bucketIndexSupport, equalTo, Set.apply(bucket5Id8FileName), allFileNames)
-    equalTo = "A = 5 And (A = 2 Or B = 'abc')"
-    exprFilePathAnswerCheck(bucketIndexSupport, equalTo, Set.apply(bucket5Id8FileName), allFileNames)
   }
 
   @Test
@@ -171,34 +169,85 @@ class TestPartitionBucketIndexSupport extends TestBucketIndexSupport {
     exprFilePathAnswerCheck(bucketIndexSupport, equalTo, Set.apply(bucket4Id7FileName), allFileNames)
   }
 
+  /**
+   * Every partition used by the other tests matches the expression, so all of them carry the same
+   * bucket count and nothing there notices if a partition is hashed with the wrong one. Pair a
+   * partition the expression matches, which gets [[EXPRESSION_BUCKET_NUMBER]] buckets, with one it
+   * does not, which falls back to the table default, and check that a file is only a candidate
+   * under the bucket count belonging to its own partition.
+   */
+  @Test
+  def testCandidateFilesUsePerPartitionBucketCount(): Unit = {
+    val configProperties = new TypedProperties()
+    configProperties.setProperty(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD.key, "A")
+    configProperties.setProperty(HoodieTableConfig.RECORDKEY_FIELDS.key, "A")
+    configProperties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key, "A")
+    configProperties.setProperty(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key, String.valueOf(DEFAULT_BUCKET_NUMBER))
+    metaClient.getTableConfig.setValue(HoodieTableConfig.CREATE_SCHEMA.key(), avroSchemaStr)
+    val metadataConfig = HoodieMetadataConfig.newBuilder
+      .fromProperties(configProperties)
+      .enable(configProperties.getBoolean(HoodieMetadataConfig.ENABLE.key, true)).build()
+    val bucketIndexSupport = new PartitionBucketIndexSupport(spark, metadataConfig, metaClient)
+
+    val record = new GenericData.Record(schema.toAvroSchema)
+    record.put("A", "3")
+    val recordKey = new NonpartitionedKeyGenerator(configProperties).getKey(record).getRecordKey
+    val bucketIdInExpressionPartition = BucketIdentifier.getBucketId(recordKey, "A", EXPRESSION_BUCKET_NUMBER)
+    val bucketIdInDefaultPartition = BucketIdentifier.getBucketId(recordKey, "A", DEFAULT_BUCKET_NUMBER)
+    // the two bucket counts have to disagree for this record, otherwise the check below proves nothing
+    assert(bucketIdInExpressionPartition != bucketIdInDefaultPartition)
+
+    // the file id prefix carries a fresh uuid every call, so the same bucket can be named twice
+    def fileNameForBucket(bucketId: Int): String = FSUtils.makeBaseFileName("00000000000000000",
+      FSUtils.makeWriteToken(1, 0, 1), BucketIdentifier.newBucketFileIdPrefix(bucketId) + "-0",
+      HoodieTableConfig.BASE_FILE_FORMAT.defaultValue.getFileExtension)
+
+    val expressionPartition = DEFAULT_PARTITION_PATH(0)
+    val defaultPartition = NON_MATCHING_PARTITION_PATH
+    val expectedFromExpressionPartition = fileNameForBucket(bucketIdInExpressionPartition)
+    val expectedFromDefaultPartition = fileNameForBucket(bucketIdInDefaultPartition)
+    // same bucket as the matching partition's candidate, but sitting in the partition that hashes
+    // into the table default, so it must not be picked up
+    val decoyInDefaultPartition = fileNameForBucket(bucketIdInExpressionPartition)
+
+    val input = Seq(
+      (Option.apply(new BaseHoodieTableFileIndex.PartitionPath(expressionPartition, Array())),
+        fileSlicesOf(expressionPartition, Seq(expectedFromExpressionPartition))),
+      (Option.apply(new BaseHoodieTableFileIndex.PartitionPath(defaultPartition, Array())),
+        fileSlicesOf(defaultPartition, Seq(expectedFromDefaultPartition, decoyInDefaultPartition))))
+
+    val candidate = bucketIndexSupport.computeCandidateFileNames(fileIndex,
+      splitConjunctivePredicates(optimizeResolvedExpr("A = 3")), Seq(), input, false)
+
+    assert(candidate.get.equals(Set.apply(expectedFromExpressionPartition, expectedFromDefaultPartition)))
+  }
+
   def exprFilePathAnswerCheck(bucketIndexSupport: PartitionBucketIndexSupport, exprRaw: String, expectResult: Set[String],
                               allFileStatus: Set[String]): Unit = {
-    if (!HoodieSparkUtils.gteqSpark4_0) { // TODO (HUDI-9403)
-      val resolveExpr = HoodieCatalystExpressionUtils.resolveExpr(spark, exprRaw, structSchema)
-      val optimizerPlan = spark.sessionState.optimizer.execute(DummyExpressionHolder(Seq(resolveExpr)))
-      val optimizerExpr = optimizerPlan.asInstanceOf[DummyExpressionHolder].exprs.head
+    val optimizerExpr = optimizeResolvedExpr(exprRaw)
 
-      // split input files into different partitions
-      val partitionPath1 = DEFAULT_PARTITION_PATH(0)
-      val allFileSlices1: Seq[FileSlice] = allFileStatus.slice(0, 3).map(fileName => {
-        val slice = new FileSlice(partitionPath1, "00000000000000000", FSUtils.getFileId(fileName))
-        slice.setBaseFile(new HoodieBaseFile(new StoragePathInfo(new StoragePath(fileName), 0L, false, 0, 0, 0)))
-        slice
-      }).toSeq
+    // Split the input files across two partitions. A Set iterates in element hash order, and these
+    // file names embed a fresh uuid on every run, so the unsorted split put different buckets in
+    // each partition from one run to the next. Sort first to pin the file to partition assignment.
+    val orderedFileNames = allFileStatus.toSeq.sorted
+    val partitionPath1 = DEFAULT_PARTITION_PATH(0)
+    val partitionPath2 = DEFAULT_PARTITION_PATH(1)
+    val input = Seq(
+      (Option.apply(new BaseHoodieTableFileIndex.PartitionPath(partitionPath1, Array())),
+        fileSlicesOf(partitionPath1, orderedFileNames.slice(0, 3))),
+      (Option.apply(new BaseHoodieTableFileIndex.PartitionPath(partitionPath2, Array())),
+        fileSlicesOf(partitionPath2, orderedFileNames.slice(3, 5))))
+    val candidate = bucketIndexSupport.computeCandidateFileNames(fileIndex, splitConjunctivePredicates(optimizerExpr),
+      Seq(), input, false)
 
-      val partitionPath2 = DEFAULT_PARTITION_PATH(1)
-      val allFileSlices2: Seq[FileSlice] = allFileStatus.slice(3, 5).map(fileName => {
-        val slice = new FileSlice(partitionPath1, "00000000000000000", FSUtils.getFileId(fileName))
-        slice.setBaseFile(new HoodieBaseFile(new StoragePathInfo(new StoragePath(fileName), 0L, false, 0, 0, 0)))
-        slice
-      }).toSeq
+    assert(candidate.get.equals(expectResult))
+  }
 
-      val input = Seq((Option.apply(new BaseHoodieTableFileIndex.PartitionPath(partitionPath1, Array())), allFileSlices1),
-        (Option.apply(new BaseHoodieTableFileIndex.PartitionPath(partitionPath2, Array())), allFileSlices2))
-      val candidate = bucketIndexSupport.computeCandidateFileNames(fileIndex, splitConjunctivePredicates(optimizerExpr),
-        Seq(), input, false)
-
-      assert(candidate.get.equals(expectResult))
-    }
+  private def fileSlicesOf(partitionPath: String, fileNames: Seq[String]): Seq[FileSlice] = {
+    fileNames.map(fileName => {
+      val slice = new FileSlice(partitionPath, "00000000000000000", FSUtils.getFileId(fileName))
+      slice.setBaseFile(new HoodieBaseFile(new StoragePathInfo(new StoragePath(fileName), 0L, false, 0, 0, 0)))
+      slice
+    })
   }
 }

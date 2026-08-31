@@ -18,27 +18,43 @@
 
 package org.apache.hudi.utils;
 
+import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.model.CommitTimeFlinkRecordMerger;
+import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.PartialUpdateFlinkRecordMerger;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.util.FileIOUtils;
+import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
+import org.apache.hudi.sink.FlinkCheckpointClient;
+import org.apache.hudi.sink.muttley.AthenaIngestionGateway;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
@@ -46,10 +62,15 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.Mockito;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -192,7 +213,7 @@ class TestStreamerUtil {
     conf.set(FlinkOptions.OPERATION, WriteOperationType.BULK_INSERT.value());
     metaClient = StreamerUtil.initTableIfNotExists(conf);
 
-    assertFalse(metaClient.getTableConfig().isLSMTreeStorageLayout());
+    assertTrue(metaClient.getTableConfig().isLSMTreeStorageLayout());
   }
 
   @Test
@@ -272,5 +293,262 @@ class TestStreamerUtil {
       fs.create(new Path(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME), HoodieTableConfig.HOODIE_PROPERTIES_FILE));
       assertTrue(StreamerUtil.tableExists(basePath, HadoopConfigurations.getHadoopConf(conf)));
     }
+  }
+
+  @Test
+  void testBuildProperties() {
+    TypedProperties properties = StreamerUtil.buildProperties(
+        Arrays.asList("hoodie.test.one=1", "hoodie.test.two=two"));
+
+    assertEquals("1", properties.getString("hoodie.test.one"));
+    assertEquals("two", properties.getString("hoodie.test.two"));
+    assertThrows(IllegalArgumentException.class,
+        () -> StreamerUtil.buildProperties(Collections.singletonList("invalid")));
+  }
+
+  @Test
+  void testSourceSchemaConfiguration() {
+    Configuration conf = new Configuration();
+    String schema = "{\"type\":\"record\",\"name\":\"record\",\"fields\":[{\"name\":\"id\",\"type\":\"long\"}]}";
+    conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, schema);
+
+    HoodieSchema sourceSchema = StreamerUtil.getSourceSchema(conf);
+
+    assertTrue(sourceSchema.getField("id").isPresent());
+    assertThrows(HoodieException.class,
+        () -> StreamerUtil.getSourceSchema(new Configuration()));
+  }
+
+  @Test
+  void testConfigurationConversions() {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.COMPACTION_MAX_MEMORY, 256);
+    conf.set(FlinkOptions.ORDERING_FIELDS, "ts");
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BLOOM.name());
+
+    TypedProperties properties = StreamerUtil.flinkConf2TypedProperties(conf);
+
+    assertEquals(conf.get(FlinkOptions.TABLE_TYPE),
+        properties.getString(HoodieTableConfig.TYPE.key()));
+    assertEquals(256L * 1024 * 1024, StreamerUtil.getMaxCompactionMemoryInBytes(conf));
+    assertEquals("ts", StreamerUtil.getPayloadConfig(conf).getString(HoodiePayloadConfig.ORDERING_FIELDS));
+    assertEquals(HoodieIndex.IndexType.BLOOM.name(),
+        StreamerUtil.getIndexConfig(conf).getString(HoodieIndexConfig.INDEX_TYPE));
+  }
+
+  @Test
+  void testSimplePathAndFileUtilities() {
+    assertEquals("partition_file-id", StreamerUtil.generateBucketKey("partition", "file-id"));
+
+    assertFalse(StreamerUtil.isValidFile(pathInfo("file.parquet", 4)));
+    assertTrue(StreamerUtil.isValidFile(pathInfo("file.parquet", 5)));
+    assertFalse(StreamerUtil.isValidFile(pathInfo("file.log", 6)));
+    assertTrue(StreamerUtil.isValidFile(pathInfo("file.log", 7)));
+    assertFalse(StreamerUtil.isValidFile(pathInfo("file.orc", 3)));
+    assertTrue(StreamerUtil.isValidFile(pathInfo("file.orc", 4)));
+    assertFalse(StreamerUtil.isValidFile(pathInfo("file.unknown", 0)));
+    assertTrue(StreamerUtil.isValidFile(pathInfo("file.unknown", 1)));
+  }
+
+  @Test
+  void testPartitionExists() {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    org.apache.hadoop.conf.Configuration hadoopConf = HadoopConfigurations.getHadoopConf(conf);
+    assertFalse(StreamerUtil.partitionExists(tempFile.getAbsolutePath(), "dt=2026-08-06", hadoopConf));
+
+    assertTrue(new File(tempFile, "dt=2026-08-06").mkdir());
+    assertTrue(StreamerUtil.partitionExists(tempFile.getAbsolutePath(), "dt=2026-08-06", hadoopConf));
+  }
+
+  @Test
+  void testOrderingFieldAndKeyGeneratorValidation() {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.ORDERING_FIELDS, "missing");
+    assertThrows(HoodieValidationException.class,
+        () -> StreamerUtil.checkOrderingFields(conf, Arrays.asList("id", "ts")));
+
+    conf.set(FlinkOptions.ORDERING_FIELDS, "ts");
+    StreamerUtil.checkOrderingFields(conf, Arrays.asList("id", "ts"));
+    assertEquals("ts", conf.get(FlinkOptions.ORDERING_FIELDS));
+
+    Configuration customPayloadConf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    customPayloadConf.set(FlinkOptions.PAYLOAD_CLASS_NAME, OverwriteWithLatestAvroPayload.class.getName());
+    customPayloadConf.removeConfig(FlinkOptions.ORDERING_FIELDS);
+    StreamerUtil.checkOrderingFields(customPayloadConf, Collections.singletonList("id"));
+    assertEquals(FlinkOptions.NO_PRE_COMBINE, customPayloadConf.get(FlinkOptions.ORDERING_FIELDS));
+
+    Configuration keygenConf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    StreamerUtil.checkKeygenGenerator(true, keygenConf);
+    assertEquals(ComplexAvroKeyGenerator.class.getName(),
+        keygenConf.get(FlinkOptions.KEYGEN_CLASS_NAME));
+  }
+
+  @Test
+  void testKafkaOffsetStringFormatting() {
+    Map<Integer, Long> offsets = new LinkedHashMap<>();
+    offsets.put(2, 200L);
+    offsets.put(0, 100L);
+
+    assertEquals(
+        "kafka_metadata%3Atopic%3A0:100;kafka_metadata%3Atopic%3A2:200;"
+            + "kafka_metadata%3Akafka_cluster%3Atopic%3A:cluster",
+        StreamerUtil.stringFy("topic", "cluster", offsets));
+    assertEquals("kafka_metadata%3Akafka_cluster%3Atopic%3A:cluster",
+        StreamerUtil.stringFy("topic", "cluster", null));
+    assertEquals("", StreamerUtil.stringFy(null, "cluster", offsets));
+  }
+
+  @Test
+  void testOptionalTransformerCreation() throws IOException {
+    assertFalse(StreamerUtil.createTransformer(null).isPresent());
+    assertThrows(IOException.class,
+        () -> StreamerUtil.createTransformer(Collections.singletonList("not.a.Transformer")));
+  }
+
+  @Test
+  void testCheckpointMetadataDisabled() {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.WRITE_EXTRA_METADATA_ENABLED, false);
+    HashMap<String, String> metadata = new HashMap<>();
+
+    StreamerUtil.addFlinkCheckpointIdIntoMetaData(conf, metadata, 123L);
+    StreamerUtil.addKafkaOffsetMetaData(conf, metadata, 123L);
+
+    assertTrue(metadata.isEmpty());
+  }
+
+  @Test
+  void testStreamerPropertiesAndMergeConfiguration() {
+    FlinkStreamerConfig streamerConfig = new FlinkStreamerConfig();
+    streamerConfig.configs = Arrays.asList("hoodie.test.key=value", "hoodie.test.number=2");
+    streamerConfig.kafkaBootstrapServers = "broker:9092";
+    streamerConfig.kafkaGroupId = "group";
+
+    TypedProperties properties = StreamerUtil.appendKafkaProps(streamerConfig);
+    assertEquals("value", properties.getString("hoodie.test.key"));
+    assertEquals("broker:9092", properties.getString("bootstrap.servers"));
+    assertEquals("group", properties.getString("group.id"));
+
+    streamerConfig.configs = Collections.singletonList("invalid");
+    assertThrows(IllegalArgumentException.class, () -> StreamerUtil.getProps(streamerConfig));
+
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    assertNull(StreamerUtil.getMergeMode(conf));
+    conf.set(FlinkOptions.RECORD_MERGE_MODE, RecordMergeMode.EVENT_TIME_ORDERING.name());
+    assertEquals(RecordMergeMode.EVENT_TIME_ORDERING, StreamerUtil.getMergeMode(conf));
+    assertEquals(EventTimeFlinkRecordMerger.class.getName(),
+        StreamerUtil.getMergerClasses(conf, RecordMergeMode.EVENT_TIME_ORDERING, EventTimeAvroPayload.class.getName()));
+    assertEquals(PartialUpdateFlinkRecordMerger.class.getName(),
+        StreamerUtil.getMergerClasses(conf, RecordMergeMode.EVENT_TIME_ORDERING, PartialUpdateAvroPayload.class.getName()));
+    assertEquals(CommitTimeFlinkRecordMerger.class.getName(),
+        StreamerUtil.getMergerClasses(conf, RecordMergeMode.COMMIT_TIME_ORDERING, OverwriteWithLatestAvroPayload.class.getName()));
+    conf.set(FlinkOptions.RECORD_MERGER_IMPLS, "custom.merger");
+    assertEquals("custom.merger",
+        StreamerUtil.getMergerClasses(conf, RecordMergeMode.CUSTOM, OverwriteWithLatestAvroPayload.class.getName()));
+
+    assertTrue(StreamerUtil.getLockConfig(conf).isPresent());
+    assertEquals(tempFile.getAbsolutePath(), StreamerUtil.getTimeGeneratorConfig(conf).getBasePath());
+  }
+
+  @Test
+  void testLanceAndMetaClientUtilities() throws Exception {
+    org.apache.hadoop.conf.Configuration lanceConf = new org.apache.hadoop.conf.Configuration();
+    lanceConf.set(HoodieStorageConfig.LANCE_READ_ALLOCATOR_SIZE_BYTES.key(), "1024");
+    lanceConf.set(HoodieStorageConfig.LANCE_READ_METADATA_ALLOCATOR_SIZE_BYTES.key(), "256");
+    assertEquals("1024", StreamerUtil.getLanceReadConfig(lanceConf)
+        .getString(HoodieStorageConfig.LANCE_READ_ALLOCATOR_SIZE_BYTES));
+    assertEquals("256", StreamerUtil.getLanceReadConfig(lanceConf)
+        .getString(HoodieStorageConfig.LANCE_READ_METADATA_ALLOCATOR_SIZE_BYTES));
+
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    org.apache.hadoop.conf.Configuration hadoopConf = HadoopConfigurations.getHadoopConf(conf);
+    assertFalse(StreamerUtil.getTableConfig(tempFile.getAbsolutePath(), hadoopConf).isPresent());
+    assertNull(StreamerUtil.getLatestTableSchema("", hadoopConf));
+
+    Configuration streamingConf = new Configuration(conf);
+    streamingConf.set(FlinkOptions.PATH, new File(tempFile, "missing").getAbsolutePath());
+    streamingConf.set(FlinkOptions.READ_AS_STREAMING, true);
+    assertNull(StreamerUtil.metaClientForReader(streamingConf, hadoopConf));
+
+    StreamerUtil.initTableIfNotExists(conf, hadoopConf);
+    assertTrue(StreamerUtil.getTableConfig(tempFile.getAbsolutePath(), hadoopConf).isPresent());
+    assertNotNull(StreamerUtil.createMetaClient(tempFile.getAbsolutePath(), hadoopConf));
+    assertNotNull(StreamerUtil.createMetaClient(conf));
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf, hadoopConf);
+    assertNotNull(metaClient);
+    assertNotNull(StreamerUtil.metaClientForReader(conf, hadoopConf));
+    assertNull(StreamerUtil.getLatestTableSchema(tempFile.getAbsolutePath(), hadoopConf));
+    assertNull(StreamerUtil.getLastPendingInstant(metaClient));
+    assertNull(StreamerUtil.getLastPendingInstant(metaClient, false));
+    assertNull(StreamerUtil.getLastCompletedInstant(metaClient));
+    assertFalse(StreamerUtil.haveSuccessfulCommits(metaClient));
+    assertFalse(StreamerUtil.getPreviousCommitMetadata(metaClient).isPresent());
+  }
+
+  @Test
+  void testKafkaCheckpointCollectionHappyPath() throws Exception {
+    Configuration conf = kafkaCheckpointConf();
+    Map<Integer, Long> offsetMap = new HashMap<>();
+    offsetMap.put(1, 200L);
+    offsetMap.put(0, 100L);
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo.Offsets offsets =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo.Offsets(offsetMap);
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo kafkaOffsetsInfo =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo("topic-id", "cluster", offsets);
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo offsetInfo =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo(
+            "123", Collections.singletonList(kafkaOffsetsInfo), "20260806100000", "123");
+    AthenaIngestionGateway gateway = Mockito.mock(AthenaIngestionGateway.class);
+    Mockito.when(gateway.getKafkaCheckpointsInfo(
+        Mockito.anyString(), Mockito.anyString(), Mockito.anyLong(),
+        Mockito.anyString(), Mockito.anyString(), Mockito.anyString(),
+        Mockito.anyString(), Mockito.anyInt(), Mockito.anyMap(),
+        Mockito.anyString(), Mockito.anyString())).thenReturn(Option.of(offsetInfo));
+
+    String result = StreamerUtil.collectKafkaOffsetCheckpoint(conf, 123L, new FlinkCheckpointClient(gateway));
+
+    assertEquals("kafka_metadata%3Atopic%3A0:100;kafka_metadata%3Atopic%3A1:200;"
+        + "kafka_metadata%3Akafka_cluster%3Atopic%3A:cluster", result);
+
+    HashMap<String, String> metadata = new HashMap<>();
+    Configuration incomplete = new Configuration();
+    incomplete.set(FlinkOptions.WRITE_EXTRA_METADATA_ENABLED, true);
+    incomplete.set(FlinkOptions.KAFKA_TOPIC_NAME, "topic");
+    incomplete.set(FlinkOptions.SOURCE_KAFKA_CLUSTER, "cluster");
+    StreamerUtil.addKafkaOffsetMetaData(incomplete, metadata, 123L);
+    assertEquals("kafka_metadata%3Akafka_cluster%3Atopic%3A:cluster",
+        metadata.get(StreamerUtil.HOODIE_METADATA_KEY));
+  }
+
+  @Test
+  void testWriteStatusFailFastValidation() {
+    WriteStatus writeStatus = new WriteStatus();
+    writeStatus.markFailure("key", "partition", new RuntimeException("failure"));
+    Configuration conf = new Configuration();
+    conf.set(FlinkOptions.WRITE_FAIL_FAST, true);
+
+    assertThrows(HoodieException.class,
+        () -> StreamerUtil.validateWriteStatus(conf, "123", Collections.singletonList(writeStatus)));
+  }
+
+  private Configuration kafkaCheckpointConf() {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.DC, "dc");
+    conf.set(FlinkOptions.ENV, "production");
+    conf.set(FlinkOptions.JOB_NAME, "job");
+    conf.set(FlinkOptions.HADOOP_USER, "user");
+    conf.set(FlinkOptions.SOURCE_KAFKA_CLUSTER, "cluster");
+    conf.set(FlinkOptions.TARGET_KAFKA_CLUSTER, "target");
+    conf.set(FlinkOptions.ATHENA_SERVICE, "athena");
+    conf.set(FlinkOptions.CALLER_SERVICE_NAME, "caller");
+    conf.set(FlinkOptions.KAFKA_TOPIC_NAME, "topic");
+    conf.set(FlinkOptions.TOPIC_ID, "topic-id");
+    conf.set(FlinkOptions.SERVICE_TIER, "tier");
+    conf.set(FlinkOptions.SERVICE_NAME, "service");
+    return conf;
+  }
+
+  private static StoragePathInfo pathInfo(String path, long length) {
+    return new StoragePathInfo(new StoragePath(path), length, false, (short) 1, 128, 0);
   }
 }

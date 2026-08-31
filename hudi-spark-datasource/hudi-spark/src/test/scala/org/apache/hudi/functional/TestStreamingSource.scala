@@ -17,9 +17,9 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.DataSourceReadOptions
+import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils}
 import org.apache.hudi.DataSourceReadOptions.{START_OFFSET, STREAMING_READ_TABLE_VERSION}
-import org.apache.hudi.DataSourceWriteOptions.{ORDERING_FIELDS, RECORDKEY_FIELD}
+import org.apache.hudi.DataSourceWriteOptions.{ORDERING_FIELDS, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
@@ -30,7 +30,7 @@ import org.apache.hudi.config.HoodieWriteConfig.{DELETE_PARALLELISM_VALUE, INSER
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.util.JavaConversions
 
-import org.apache.spark.sql.{Row, SaveMode}
+import org.apache.spark.sql.{DataFrame, Row, SaveMode}
 import org.apache.spark.sql.streaming.StreamTest
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
@@ -296,27 +296,30 @@ class TestStreamingSource extends StreamTest {
   }
 
   /**
-   * Exercises the legacy incremental streaming path in [[HoodieStreamSourceV1]], which is taken
-   * when the streaming read table version is below EIGHT and the file group reader is disabled.
-   * This drives the [[IncrementalRelationV1]] (COW) / [[MergeOnReadIncrementalRelationV1]] (MOR)
-   * branches of `getBatch` rather than the newer HadoopFsRelation factory path.
+   * Exercises the legacy incremental streaming path in [[HoodieStreamSourceV1]] (table version
+   * below EIGHT) and [[HoodieStreamSourceV2]] (table version EIGHT and above), taken when the file
+   * group reader is disabled. This drives the standalone incremental relations
+   * ([[IncrementalRelationV1]] / [[MergeOnReadIncrementalRelationV1]] for version 6,
+   * [[IncrementalRelationV2]] / [[MergeOnReadIncrementalRelationV2]] for version 8) via `getBatch`,
+   * rather than the newer HadoopFsRelation factory path.
    */
-  private def testLegacyIncrementalStreamSource(tableType: HoodieTableType): Unit = {
+  private def testLegacyIncrementalStreamSource(tableType: HoodieTableType,
+                                                tableVersion: HoodieTableVersion): Unit = {
     withTempDir { inputDir =>
-      val tablePath = s"${inputDir.getCanonicalPath}/test_${tableType.name}_legacy_stream"
+      val tablePath = s"${inputDir.getCanonicalPath}/test_${tableType.name}_v${tableVersion.versionCode}_legacy_stream"
       HoodieTableMetaClient.newTableBuilder()
         .setTableType(tableType)
         .setTableName(getTableName(tablePath))
-        .setTableVersion(HoodieTableVersion.SIX)
+        .setTableVersion(tableVersion)
         .setRecordKeyFields("id")
         .setOrderingFields("ts")
         .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
-      addData(tablePath, Seq(("1", "a1", "10", "000")), tableVersion = HoodieTableVersion.SIX)
+      addData(tablePath, Seq(("1", "a1", "10", "000")), tableVersion = tableVersion)
       val df = spark.readStream
         .format("org.apache.hudi")
-        .option(WRITE_TABLE_VERSION.key, HoodieTableVersion.SIX.versionCode().toString)
-        .option(STREAMING_READ_TABLE_VERSION.key, HoodieTableVersion.SIX.versionCode().toString)
+        .option(WRITE_TABLE_VERSION.key, tableVersion.versionCode().toString)
+        .option(STREAMING_READ_TABLE_VERSION.key, tableVersion.versionCode().toString)
         // force the legacy (non file-group-reader) incremental relation path
         .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key, "false")
         .load(tablePath)
@@ -330,16 +333,31 @@ class TestStreamingSource extends StreamTest {
         addDataToQuery(tablePath,
           Seq(("2", "a2", "12", "000"),
             ("3", "a3", "12", "000")),
-          tableVersion = HoodieTableVersion.SIX),
+          tableVersion = tableVersion),
         StartStream(),
         AssertOnQuery { q => q.processAllAvailable(); true },
+        // The legacy branch of getBatch materializes the micro batch from an RDD via
+        // internalCreateDataFrame, so the physical plan is a "Scan ExistingRDD"; this fails if the
+        // legacy branch is dropped and the source silently falls back to the file group reader
+        // path, which scans a HadoopFsRelation ("FileScan" / "Scan parquet") instead.
+        AssertOnQuery { q =>
+          val plan = q.lastExecution.executedPlan.toString
+          assertTrue(plan.contains("Scan ExistingRDD"),
+            "expected the legacy RDD-backed incremental batch, but got plan: " + plan)
+          assertTrue(!plan.contains("FileScan"),
+            "expected no file-group-reader HadoopFsRelation scan, but got plan: " + plan)
+          true
+        },
         CheckAnswerRows(
           Seq(Row("2", "a2", "12", "000"),
             Row("3", "a3", "12", "000")),
           lastOnly = true, isSorted = false),
         StopStream,
 
-        addDataToQuery(tablePath, Seq(("4", "a4", "13", "000")), tableVersion = HoodieTableVersion.SIX),
+        // inline clustering on this write lands a replacecommit inside the next getBatch span, which
+        // reaches the replaced-file-group filtering of the legacy incremental relations
+        addDataToQuery(tablePath, Seq(("4", "a4", "13", "000")), enableInlineCluster = true,
+          tableVersion = tableVersion),
         StartStream(),
         AssertOnQuery { q => q.processAllAvailable(); true },
         CheckAnswerRows(Seq(Row("4", "a4", "13", "000")), lastOnly = true, isSorted = false)
@@ -348,11 +366,118 @@ class TestStreamingSource extends StreamTest {
   }
 
   test("test cow stream source with legacy file group reader disabled") {
-    testLegacyIncrementalStreamSource(COPY_ON_WRITE)
+    testLegacyIncrementalStreamSource(COPY_ON_WRITE, HoodieTableVersion.SIX)
   }
 
   test("test mor stream source with legacy file group reader disabled") {
-    testLegacyIncrementalStreamSource(MERGE_ON_READ)
+    testLegacyIncrementalStreamSource(MERGE_ON_READ, HoodieTableVersion.SIX)
+  }
+
+  test("test cow stream source with legacy file group reader disabled on table version 8") {
+    testLegacyIncrementalStreamSource(COPY_ON_WRITE, HoodieTableVersion.EIGHT)
+  }
+
+  test("test mor stream source with legacy file group reader disabled on table version 8") {
+    testLegacyIncrementalStreamSource(MERGE_ON_READ, HoodieTableVersion.EIGHT)
+  }
+
+  test("test mor stream source reads shredded variant with legacy file group reader disabled") {
+    // #19578: with the file group reader disabled, MOR streaming batches materialize through
+    // HoodieMergeOnReadRDDV2, the only user-facing path reading shredded variant base files
+    // without a catalyst schema. The first stream covers the base-only split (first batch, the
+    // branch this fix re-routes) and the log-only split (second batch); the second stream covers
+    // the merged base + log split.
+    assume(HoodieSparkUtils.gteqSpark4_1, "Shredded variant base-file read requires Spark 4.1 or higher")
+
+    withTempDir { inputDir =>
+      val tablePath = s"${inputDir.getCanonicalPath}/test_mor_variant_legacy_stream"
+      HoodieTableMetaClient.newTableBuilder()
+        .setTableType(MERGE_ON_READ)
+        .setTableName(getTableName(tablePath))
+        .setRecordKeyFields("id")
+        .setOrderingFields("ts")
+        .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
+
+      // INMEMORY index routes MOR inserts to log files, so the first base file is the
+      // compaction's SHREDDED one; compact = true trips inline compaction on that write.
+      def addVariantData(valuesSql: String, compact: Boolean): Unit = {
+        // The write must use the short name: it resolves to Spark4DefaultSource, the only
+        // provider overriding CreatableRelationProvider.supportsDataType to accept VariantType.
+        // The fully qualified "org.apache.hudi" resolves to DefaultSource (short name "hudi_v1"),
+        // which has no override, so DataSource.planForWriting on Spark 4.x rejects the variant
+        // column with UNSUPPORTED_DATA_TYPE_FOR_DATASOURCE.
+        spark.sql(valuesSql).write.format("hudi")
+          .options(commonOptions)
+          .option(TBL_NAME.key, getTableName(tablePath))
+          .option(TABLE_TYPE.key, MERGE_ON_READ.name)
+          .option("hoodie.index.type", "INMEMORY")
+          .option("hoodie.parquet.variant.write.shredding.enabled", "true")
+          .option("hoodie.parquet.variant.force.shredding.schema.for.test", "key string")
+          .option(HoodieCompactionConfig.INLINE_COMPACT.key, compact.toString)
+          .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key, "2")
+          .mode(SaveMode.Append)
+          .save(tablePath)
+      }
+
+      // The read keeps the fully qualified name: it goes through StreamSourceProvider, which
+      // never calls supportsDataType.
+      def variantStreamDf(): DataFrame = spark.readStream
+        .format("org.apache.hudi")
+        // force the legacy (non file-group-reader) incremental relation path
+        .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key, "false")
+        .load(tablePath)
+        .selectExpr("id", "cast(v as string) as v", "ts")
+
+      // The legacy branch of getBatch materializes the micro batch from an RDD via
+      // internalCreateDataFrame, so the physical plan is a "Scan ExistingRDD"; this fails if the
+      // legacy branch is dropped and the source silently falls back to the file group reader
+      // path, which scans a HadoopFsRelation ("FileScan" / "Scan parquet") instead.
+      val assertLegacyRddPlan = AssertOnQuery { q =>
+        val plan = q.lastExecution.executedPlan.toString
+        assertTrue(plan.contains("Scan ExistingRDD"),
+          "expected the legacy RDD-backed incremental batch, but got plan: " + plan)
+        assertTrue(!plan.contains("FileScan"),
+          "expected no file-group-reader HadoopFsRelation scan, but got plan: " + plan)
+        true
+      }
+
+      addVariantData("""select 1 as id, parse_json('{"key":"v1"}') as v, 1000L as ts""", compact = false)
+      addVariantData("""select 2 as id, parse_json('{"key":"v2"}') as v, 1000L as ts""", compact = true)
+
+      testStream(variantStreamDf())(
+        // Base-only split: this batch spans both deltacommits and the compaction commit, whose
+        // affected files resolve to the compacted shredded base file with no log on top. This is
+        // the branch the fix re-routes to the file group reader.
+        AssertOnQuery { q => q.processAllAvailable(); true },
+        assertLegacyRddPlan,
+        CheckAnswerRows(Seq(Row(1, "{\"key\":\"v1\"}", 1000L), Row(2, "{\"key\":\"v2\"}", 1000L)),
+          lastOnly = true, isSorted = false),
+        StopStream,
+
+        // Log-only split: MergeOnReadIncrementalRelationV2 builds its file system view out of the
+        // span's affected files alone, and this span covers only the update deltacommit, so the
+        // slice is the appended log file with no base file.
+        AssertOnQuery { _ =>
+          addVariantData("""select 1 as id, parse_json('{"key":"v1-updated"}') as v, 1001L as ts""", compact = false)
+          true
+        },
+        StartStream(),
+        AssertOnQuery { q => q.processAllAvailable(); true },
+        CheckAnswerRows(Seq(Row(1, "{\"key\":\"v1-updated\"}", 1001L)), lastOnly = true, isSorted = false)
+      )
+
+      // Merged split: a fresh testStream over a fresh streaming DataFrame gets its own
+      // checkpoint, so it replays from the INIT offset and its first batch spans the compaction
+      // commit and the update deltacommit together. Only such a span puts the shredded base file
+      // and the update log file in one affected-file list, giving the base + log slice that
+      // neither batch above produces.
+      testStream(variantStreamDf())(
+        AssertOnQuery { q => q.processAllAvailable(); true },
+        assertLegacyRddPlan,
+        CheckAnswerRows(Seq(Row(1, "{\"key\":\"v1-updated\"}", 1001L), Row(2, "{\"key\":\"v2\"}", 1000L)),
+          lastOnly = true, isSorted = false)
+      )
+    }
   }
 
   private def testCheckpointTranslation(tableName: String,
@@ -475,9 +600,10 @@ class TestStreamingSource extends StreamTest {
 
   private def addDataToQuery(inputPath: String,
                              rows: Seq[(String, String, String, String)],
+                             enableInlineCluster: Boolean = false,
                              tableVersion: HoodieTableVersion = HoodieTableVersion.current): AssertOnQuery = {
     AssertOnQuery { _=>
-      addData(inputPath, rows, tableVersion = tableVersion)
+      addData(inputPath, rows, enableInlineCluster = enableInlineCluster, tableVersion = tableVersion)
       true
     }
   }

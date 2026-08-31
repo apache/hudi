@@ -54,6 +54,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
@@ -166,6 +167,19 @@ public class HudiBackgroundSplitLoader
 
         Futures.whenAllComplete(futures)
                 .run(() -> {
+                    // Guava does not order the per-future exception callbacks against this
+                    // combiner, so a failure in the last future could otherwise finish the
+                    // queue before the error listener records it and HudiSplitSource.isFinished
+                    // would answer true with no pending exception. Surface failures here first;
+                    // the listener is idempotent, so double reporting is harmless.
+                    for (ListenableFuture<Void> future : futures) {
+                        try {
+                            Futures.getDone(future);
+                        }
+                        catch (ExecutionException e) {
+                            errorListener.accept(e.getCause());
+                        }
+                    }
                     asyncQueue.finish();
                     log.info("Partition pruning split generation finished on table %s.%s", tableHandle.getSchemaName(), tableHandle.getTableName());
                 }, directExecutor());
@@ -214,9 +228,9 @@ public class HudiBackgroundSplitLoader
 
         List<String> allPartitions = new ArrayList<>(metadataPartitions.keySet());
 
-        List<String> effectivePartitions = Optional.ofNullable(useIndex && partitionIndexSupportOpt.isPresent()
-                ? partitionIndexSupportOpt.get().prunePartitions(allPartitions).orElse(null)
-                : null).orElse(allPartitions);
+        List<String> effectivePartitions = useIndex && partitionIndexSupportOpt.isPresent()
+                ? prunePartitionsSafely(allPartitions)
+                : allPartitions;
 
         Map<String, Partition> finalMetadataPartitions = metadataPartitions;
         List<HiveHudiPartitionInfo> hiveHudiPartitionInfos = effectivePartitions.stream()
@@ -225,6 +239,24 @@ public class HudiBackgroundSplitLoader
                 .toList();
 
         return new ConcurrentLinkedDeque<>(hiveHudiPartitionInfos);
+    }
+
+    /**
+     * Applies partition-stats index pruning, treating any failure as "no pruning". The pruning read
+     * goes through the metadata table and can fail for reasons unrelated to the query itself; index
+     * pruning is an optimization and must never fail the query, mirroring the metastore fallback of
+     * the metadata-table partition listing above.
+     */
+    private List<String> prunePartitionsSafely(List<String> allPartitions)
+    {
+        try {
+            return partitionIndexSupportOpt.get().prunePartitions(allPartitions).orElse(allPartitions);
+        }
+        catch (Exception e) {
+            log.error(e, "Failed to prune partitions via partition stats index on table %s.%s, proceeding without partition pruning",
+                    tableHandle.getSchemaName(), tableHandle.getTableName());
+            return allPartitions;
+        }
     }
 
     private HiveHudiPartitionInfo buildHiveHudiPartitionInfo(HudiTableHandle tableHandle, String partitionName, Partition partition)

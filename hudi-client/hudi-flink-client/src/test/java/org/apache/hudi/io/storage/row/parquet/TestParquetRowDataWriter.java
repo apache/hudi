@@ -29,14 +29,18 @@ import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.io.api.RecordConsumer;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -48,6 +52,37 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 class TestParquetRowDataWriter {
+
+  @Test
+  void testWriteDecimalWithWidthFromHoodieSchema() {
+    HoodieSchema schema = HoodieSchema.parse(
+        "{\"type\":\"record\",\"name\":\"rec\",\"fields\":["
+            + "{\"name\":\"large_fixed\",\"type\":{\"type\":\"fixed\",\"name\":\"large_fixed_type\","
+            + "\"size\":10,\"logicalType\":\"decimal\",\"precision\":20,\"scale\":2}},"
+            + "{\"name\":\"small_fixed\",\"type\":{\"type\":\"fixed\",\"name\":\"small_fixed_type\","
+            + "\"size\":10,\"logicalType\":\"decimal\",\"precision\":10,\"scale\":2}},"
+            + "{\"name\":\"bytes_decimal\",\"type\":{\"type\":\"bytes\",\"logicalType\":\"decimal\","
+            + "\"precision\":20,\"scale\":2}}]}");
+    BigDecimal largeValue = new BigDecimal("123456789.12");
+    BigDecimal smallValue = new BigDecimal("-12.34");
+    BigDecimal bytesValue = new BigDecimal("223456789.34");
+    GenericRowData row = GenericRowData.of(
+        DecimalData.fromBigDecimal(largeValue, 20, 2),
+        DecimalData.fromBigDecimal(smallValue, 10, 2),
+        DecimalData.fromBigDecimal(bytesValue, 20, 2));
+    RecordConsumer consumer = mock(RecordConsumer.class);
+
+    new ParquetRowDataWriter(consumer, true, schema).write(row);
+
+    ArgumentCaptor<Binary> binaryCaptor = ArgumentCaptor.forClass(Binary.class);
+    verify(consumer, times(3)).addBinary(binaryCaptor.capture());
+    assertArrayEquals(signExtend(largeValue.unscaledValue().toByteArray(), 10),
+        binaryCaptor.getAllValues().get(0).getBytes());
+    assertArrayEquals(signExtend(smallValue.unscaledValue().toByteArray(), 10),
+        binaryCaptor.getAllValues().get(1).getBytes());
+    assertArrayEquals(signExtend(bytesValue.unscaledValue().toByteArray(), 9),
+        binaryCaptor.getAllValues().get(2).getBytes());
+  }
 
   @Test
   void testWritePrimitiveNestedArrayMapDecimalAndTimestampValues() {
@@ -172,5 +207,12 @@ class TestParquetRowDataWriter {
     verify(consumer, atLeastOnce()).addFloat(1.5f);
     verify(consumer, atLeastOnce()).addDouble(3.5d);
     verify(consumer, atLeastOnce()).addBinary(any());
+  }
+
+  private static byte[] signExtend(byte[] bytes, int length) {
+    byte[] result = new byte[length];
+    Arrays.fill(result, 0, length - bytes.length, bytes[0] < 0 ? (byte) -1 : (byte) 0);
+    System.arraycopy(bytes, 0, result, length - bytes.length, bytes.length);
+    return result;
   }
 }

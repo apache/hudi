@@ -21,6 +21,7 @@ package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions.INSERT_DROP_DUPS
 import org.apache.hudi.common.config.HoodieConfig
+import org.apache.hudi.common.model.MetaFieldsMode
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
 import org.apache.hudi.config.HoodieWriteConfig
@@ -43,9 +44,20 @@ object AutoRecordKeyGenerationUtils {
       if (hoodieConfig.getBoolean(INSERT_DROP_DUPS)) {
         throw new HoodieKeyGeneratorException("Enabling " + INSERT_DROP_DUPS.key() + " is not supported with auto generation of record keys ")
       }
-      // virtual keys are not supported with auto generation of record keys.
-      if (!parameters.getOrElse(HoodieTableConfig.POPULATE_META_FIELDS.key(), HoodieTableConfig.POPULATE_META_FIELDS.defaultValue().toString).toBoolean) {
-        throw new HoodieKeyGeneratorException("Disabling " + HoodieTableConfig.POPULATE_META_FIELDS.key() + " is not supported with auto generation of record keys")
+      // Virtual keys are not supported with auto generation of record keys. Normalize legacy input
+      // into MetaFieldsMode rather than reading the deprecated boolean directly: a config that states
+      // only hoodie.meta.fields.mode has no populate.meta.fields entry, so reading the raw parameter
+      // would take the `true` default and let the write through. The rows would then land with no
+      // identity at all -- the record key is neither supplied nor generated.
+      val metaFieldsMode = MetaFieldsMode.resolve(hoodieConfig)
+      if (!metaFieldsMode.isRecordKeyPopulated) {
+        // Name whichever property the caller actually set, so the message points at the thing they
+        // have to change rather than at its alias.
+        val statedKey =
+          if (parameters.contains(HoodieTableConfig.META_FIELDS_MODE.key())) HoodieTableConfig.META_FIELDS_MODE.key()
+          else HoodieTableConfig.POPULATE_META_FIELDS.key()
+        throw new HoodieKeyGeneratorException(statedKey
+          + " is not supported with auto generation of record keys when it leaves the record key unpopulated")
       }
       val orderingFieldsStr = ConfigUtils.getOrderingFieldsStrDuringWrite(hoodieConfig.getProps)
       if (StringUtils.nonEmpty(orderingFieldsStr)) {

@@ -89,7 +89,7 @@ public abstract class AbstractMergerHudiTablesInitializer
     private static final String PARTITION_PATH = "";
 
     /** Hudi metadata columns, prepended to every table's data columns in the metastore definition. */
-    private static final List<Column> HUDI_META_COLUMNS = ImmutableList.of(
+    static final List<Column> HUDI_META_COLUMNS = ImmutableList.of(
             new Column("_hoodie_commit_time", HIVE_STRING, Optional.empty(), Map.of()),
             new Column("_hoodie_commit_seqno", HIVE_STRING, Optional.empty(), Map.of()),
             new Column("_hoodie_record_key", HIVE_STRING, Optional.empty(), Map.of()),
@@ -147,6 +147,16 @@ public abstract class AbstractMergerHudiTablesInitializer
 
     /** The table's data columns, in schema order; the Hudi metadata columns are prepended by this class. */
     protected abstract List<Column> dataColumns();
+
+    /**
+     * Whether the metastore definition prepends {@link #HUDI_META_COLUMNS}. The base file always carries them, so
+     * returning {@code false} models hive sync with {@code hoodie.datasource.hive_sync.omit_metadata_fields=true}:
+     * every data column's metastore ordinal then sits five below its physical position in the file.
+     */
+    protected boolean includeMetaColumnsInMetastore()
+    {
+        return true;
+    }
 
     /** The Avro schema the write client writes, matching {@link #dataColumns()}. */
     protected abstract Schema avroSchema();
@@ -206,7 +216,13 @@ public abstract class AbstractMergerHudiTablesInitializer
 
     protected static HoodieRecord<HoodieAvroPayload> avroRecord(GenericRecord record, String key)
     {
-        return new HoodieAvroRecord<>(new HoodieKey(key, PARTITION_PATH), new HoodieAvroPayload(Option.of(record)), null);
+        return new HoodieAvroRecord<>(hoodieKey(key), new HoodieAvroPayload(Option.of(record)), null);
+    }
+
+    /** Addresses a record in the single unnamed partition, e.g. for hard deletes via {@code writeClient.delete}. */
+    protected static HoodieKey hoodieKey(String key)
+    {
+        return new HoodieKey(key, PARTITION_PATH);
     }
 
     /** Mirrors the staged table into the Trino filesystem so the connector observes the commits written so far. */
@@ -279,7 +295,7 @@ public abstract class AbstractMergerHudiTablesInitializer
                 .setTableType(EXTERNAL_TABLE.name())
                 .setOwner(Optional.of("public"))
                 .setDataColumns(ImmutableList.<Column>builder()
-                        .addAll(HUDI_META_COLUMNS)
+                        .addAll(includeMetaColumnsInMetastore() ? HUDI_META_COLUMNS : ImmutableList.<Column>of())
                         .addAll(dataColumns())
                         .build())
                 .setParameters(ImmutableMap.of("serialization.format", "1", "EXTERNAL", "TRUE"))

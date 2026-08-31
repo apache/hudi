@@ -22,7 +22,9 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.avro.model.HoodieInstantInfo;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.function.SerializableBiFunction;
@@ -32,6 +34,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
@@ -273,7 +276,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         partitionFileSlicePairs.add(FileSliceAndPartition.of(p, fileSlice1));
         partitionFileSlicePairs.add(FileSliceAndPartition.of(p, fileSlice2));
         // NOTE: we need to set table config as we are not using write client explicitly and these configs are needed for log record reader
-        metaClient.getTableConfig().setValue(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
+        metaClient.getTableConfig().setValue(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.NONE.name());
         metaClient.getTableConfig().setValue(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
         metaClient.getTableConfig().setValue(HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path");
         List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataLogFile = HoodieTableMetadataUtil.getLogFileColumnRangeMetadata(
@@ -334,11 +337,16 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
                                        List<HoodieRecord> records,
                                        HoodieTableMetaClient metaClient,
                                        HoodieLocalEngineContext engineContext) throws IOException {
+    HoodieConfig writerConfig = new HoodieConfig();
+    writerConfig.getProps().putAll(metaClient.getTableConfig().getProps());
+    // This low-level test path bypasses HoodieWriteConfig, and does not contain codec configuration,
+    // so set the codec explicitly here.
+    writerConfig.setValue(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME, "zstd");
     HoodieFileWriter writer = HoodieFileWriterFactory.getFileWriter(
         instant,
         path,
         metaClient.getStorage(),
-        metaClient.getTableConfig(),
+        writerConfig,
         HOODIE_SCHEMA_WITH_METADATA_FIELDS,
         engineContext.getTaskContextSupplier(),
         HoodieRecord.HoodieRecordType.AVRO);
@@ -559,7 +567,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             Lazy.eagerly(Option.of(HOODIE_SCHEMA_WITH_METADATA_FIELDS)), false, V1).keySet()));
 
     //test with meta cols disabled
-    tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
+    tableConfig.setValue(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.NONE.name());
     metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(true).withMetadataIndexColumnStats(true)
         .build();

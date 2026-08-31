@@ -28,6 +28,7 @@ import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.expressions.CallExpression;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
+import org.apache.flink.table.expressions.ResolvedExpression;
 import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.functions.BuiltInFunctionDefinition;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
@@ -45,7 +46,9 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.source.ExpressionEvaluators.fromExpression;
 import static org.apache.hudi.source.prune.ColumnStatsProbe.convertColumnStats;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -393,6 +396,55 @@ public class TestExpressionEvaluators {
     }
   }
 
+  @Test
+  void testFromExpressionBuildsCompositeEvaluators() {
+    FieldReferenceExpression ref = new FieldReferenceExpression("f_int", DataTypes.INT(), 2, 2);
+    ValueLiteralExpression twelve = new ValueLiteralExpression(12);
+    ValueLiteralExpression thirteen = new ValueLiteralExpression(13);
+    CallExpression equals = call(BuiltInFunctionDefinitions.EQUALS, ref, twelve);
+    CallExpression greaterThan = call(BuiltInFunctionDefinitions.GREATER_THAN, ref, thirteen);
+    Map<String, ColumnStats> stats = convertColumnStats(intIndexRow(12, 12, 0L), queryFields(2));
+
+    ExpressionEvaluators.Evaluator not = fromExpression(CallExpression.permanent(
+        BuiltInFunctionDefinitions.NOT, List.of(equals), DataTypes.BOOLEAN()));
+    ExpressionEvaluators.Evaluator and = fromExpression(CallExpression.permanent(
+        BuiltInFunctionDefinitions.AND, Arrays.asList(equals, greaterThan), DataTypes.BOOLEAN()));
+    ExpressionEvaluators.Evaluator or = fromExpression(CallExpression.permanent(
+        BuiltInFunctionDefinitions.OR, Arrays.asList(equals, greaterThan), DataTypes.BOOLEAN()));
+
+    assertFalse(not.eval(stats));
+    assertFalse(and.eval(stats));
+    assertTrue(or.eval(stats));
+    assertEquals(2, ((ExpressionEvaluators.Or) or).getEvaluators().length);
+    assertEquals(2, fromExpression(Arrays.<ResolvedExpression>asList(equals, greaterThan)).size());
+  }
+
+  @Test
+  void testFromExpressionHandlesUnaryInAndReversedComparison() {
+    FieldReferenceExpression ref = new FieldReferenceExpression("f_int", DataTypes.INT(), 2, 2);
+    ValueLiteralExpression eleven = new ValueLiteralExpression(11);
+    ValueLiteralExpression twelve = new ValueLiteralExpression(12);
+    Map<String, ColumnStats> stats = convertColumnStats(intIndexRow(12, 13), queryFields(2));
+
+    assertInstanceOf(ExpressionEvaluators.IsNull.class, fromExpression(CallExpression.permanent(
+        BuiltInFunctionDefinitions.IS_NULL, List.of(ref), DataTypes.BOOLEAN())));
+    assertInstanceOf(ExpressionEvaluators.IsNotNull.class, fromExpression(CallExpression.permanent(
+        BuiltInFunctionDefinitions.IS_NOT_NULL, List.of(ref), DataTypes.BOOLEAN())));
+
+    ExpressionEvaluators.Evaluator in = fromExpression(CallExpression.permanent(
+        BuiltInFunctionDefinitions.IN, Arrays.asList(ref, eleven, twelve), DataTypes.BOOLEAN()));
+    assertTrue(in.eval(stats));
+
+    assertInstanceOf(ExpressionEvaluators.GreaterThan.class, fromExpression(CallExpression.permanent(
+        BuiltInFunctionDefinitions.LESS_THAN, Arrays.asList(eleven, ref), DataTypes.BOOLEAN())));
+    assertInstanceOf(ExpressionEvaluators.LessThan.class, fromExpression(CallExpression.permanent(
+        BuiltInFunctionDefinitions.GREATER_THAN, Arrays.asList(eleven, ref), DataTypes.BOOLEAN())));
+    assertInstanceOf(ExpressionEvaluators.GreaterThanOrEqual.class, fromExpression(CallExpression.permanent(
+        BuiltInFunctionDefinitions.LESS_THAN_OR_EQUAL, Arrays.asList(eleven, ref), DataTypes.BOOLEAN())));
+    assertInstanceOf(ExpressionEvaluators.LessThanOrEqual.class, fromExpression(CallExpression.permanent(
+        BuiltInFunctionDefinitions.GREATER_THAN_OR_EQUAL, Arrays.asList(eleven, ref), DataTypes.BOOLEAN())));
+  }
+
   @ParameterizedTest
   @MethodSource("twelveObjects")
   void testAllNumericDataTypes(Object twelve) {
@@ -408,6 +460,11 @@ public class TestExpressionEvaluators {
 
   public static Stream<Object> twelveObjects() {
     return Stream.of((byte) 12, (short) 12, 12, 12L, new BigDecimal(12), 12f, 12d);
+  }
+
+  private static CallExpression call(
+      BuiltInFunctionDefinition definition, ResolvedExpression left, ResolvedExpression right) {
+    return CallExpression.permanent(definition, Arrays.asList(left, right), DataTypes.BOOLEAN());
   }
 
   private static RowData intIndexRow(Integer minVal, Integer maxVal) {

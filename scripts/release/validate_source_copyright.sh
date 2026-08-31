@@ -47,8 +47,9 @@ echo -e "\t\tNotice file exists ? [OK]\n"
 ### Licensing Check
 echo "Performing custom Licensing Check "
 # ---
-# Exclude the 'hudi-trino' directory. Its license checks are handled by airlift:
-# https://github.com/airlift/airbase/blob/823101482dbc60600d7862f0f5c93aded6190996/airbase/pom.xml#L1239
+# Exclude the 'hudi-trino' directory: its files carry the short AL header (Trino convention),
+# which the ASF wording this grep matches does not cover. RAT still checks the module via its
+# default AL matchers. Drop this prune once apache/hudi#19412 converts the module to ASF headers.
 # ---
 numfilesWithNoLicense=$(find . -path './hudi-trino' -prune -o -type f -iname '*' | grep -v './hudi-trino' | grep -v NOTICE | grep -v LICENSE | grep -v '.jpg' | grep -v '.json' | grep -v '.zip' | grep -v '.hfile' | grep -v '.data' | grep -v '.commit' | grep -v emptyFile | grep -v DISCLAIMER | grep -v '.sqltemplate' | grep -v KEYS | grep -v '.mailmap' | grep -v 'banner.txt' | grep -v '.txt' | grep -v "fixtures" | xargs grep -L "Licensed to the Apache Software Foundation (ASF)")
 # Check if the variable holding the list of files is non-empty

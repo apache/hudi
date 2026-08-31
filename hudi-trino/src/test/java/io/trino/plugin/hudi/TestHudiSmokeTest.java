@@ -17,6 +17,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.Resources;
 import io.trino.Session;
+import io.trino.blob.cache.alluxio.AlluxioBlobCachePlugin;
 import io.trino.filesystem.Location;
 import io.trino.filesystem.TrinoFileSystemFactory;
 import io.trino.filesystem.TrinoInputFile;
@@ -26,7 +27,9 @@ import io.trino.plugin.base.metrics.FileFormatDataSourceStats;
 import io.trino.plugin.hive.HiveTimestampPrecision;
 import io.trino.plugin.hive.parquet.ParquetReaderConfig;
 import io.trino.plugin.hudi.file.HudiBaseFile;
+import io.trino.plugin.hudi.testing.CompositeHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer;
+import io.trino.plugin.hudi.testing.SchemaEvolutionHudiTablesInitializer;
 import io.trino.spi.SplitWeight;
 import io.trino.spi.connector.ConnectorPageSource;
 import io.trino.spi.connector.ConnectorSession;
@@ -70,6 +73,12 @@ import java.util.stream.Stream;
 import static io.trino.metastore.HiveType.HIVE_TIMESTAMP;
 import static io.trino.plugin.hive.HiveColumnHandle.ColumnType.REGULAR;
 import static io.trino.plugin.hive.HiveColumnHandle.createBaseColumn;
+import static io.trino.plugin.hudi.testing.SchemaEvolutionHudiTablesInitializer.DOUBLE_THRESHOLD;
+import static io.trino.plugin.hudi.testing.SchemaEvolutionHudiTablesInitializer.FLOAT_TO_DOUBLE_COLUMN;
+import static io.trino.plugin.hudi.testing.SchemaEvolutionHudiTablesInitializer.INT_TO_BIGINT_COLUMN;
+import static io.trino.plugin.hudi.testing.SchemaEvolutionHudiTablesInitializer.INT_TO_VARCHAR_COLUMN;
+import static io.trino.plugin.hudi.testing.SchemaEvolutionHudiTablesInitializer.VARCHAR_THRESHOLD;
+import static io.trino.plugin.hudi.testing.SchemaEvolutionHudiTablesInitializer.expectedRowsFrom;
 import static io.trino.plugin.hudi.HudiPageSourceProvider.createPageSource;
 import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_COMPREHENSIVE_TYPES_V6_MOR;
 import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_COMPREHENSIVE_TYPES_V8_MOR;
@@ -78,6 +87,7 @@ import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.Testing
 import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_COW_TABLE_WITH_FIELD_NAMES_IN_CAPS;
 import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_COW_TABLE_WITH_MULTI_KEYS_AND_FIELD_NAMES_IN_CAPS;
 import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_CUSTOM_KEYGEN_PT_V8_MOR;
+import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_MOR_ARCHIVED_TIMELINE;
 import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_MULTI_PT_V8_MOR;
 import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_NON_EXTRACTABLE_PARTITION_PATH;
 import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_NON_PART_COW;
@@ -100,15 +110,30 @@ public class TestHudiSmokeTest
     protected QueryRunner createQueryRunner()
             throws Exception
     {
-        return HudiQueryRunner.builder()
-                .setDataLoader(new ResourceHudiTablesInitializer())
-                .addConnectorProperties(getAdditionalHudiProperties())
-                .build();
+        HudiQueryRunner.Builder builder = HudiQueryRunner.builder()
+                // The resource tables cover the connector's read surface; the second fixture is a table whose base
+                // file predates a type widening, which is what testPredicateOnColumnEvolvedFromFloatToDouble and its
+                // neighbours below read. Loading it here rather than from a suite of its own is what gets it run in
+                // both hudi.parquet.use-column-names modes, since TestHudiConnectorParquetColumnNamesTest reruns
+                // this class positionally.
+                .setDataLoader(new CompositeHudiTablesInitializer(
+                        new ResourceHudiTablesInitializer(),
+                        new SchemaEvolutionHudiTablesInitializer()))
+                .addConnectorProperties(getAdditionalHudiProperties());
+        getBlobCacheProperties().ifPresent(cacheProperties -> builder
+                .withPlugin(new AlluxioBlobCachePlugin())
+                .withBlobCache("alluxio", cacheProperties));
+        return builder.build();
     }
 
     protected ImmutableMap<String, String> getAdditionalHudiProperties()
     {
         return ImmutableMap.of();
+    }
+
+    protected Optional<Map<String, String>> getBlobCacheProperties()
+    {
+        return Optional.empty();
     }
 
     @Test
@@ -932,6 +957,42 @@ public class TestHudiSmokeTest
     @EnumSource(
             value = ResourceHudiTablesInitializer.TestingTable.class,
             names = {"HUDI_MULTI_FG_PT_V6_MOR", "HUDI_MULTI_FG_PT_V8_MOR"})
+    public void testDynamicFilterEliminatesAllSplits(ResourceHudiTablesInitializer.TestingTable table)
+    {
+        Session session = SessionBuilder
+                .from(getSession())
+                .withDynamicFilterTimeout("10s")
+                .build();
+        final String tableIdentifier = "hudi:tests." + table.getRoTableName();
+
+        // The build side matches no rows, so the completed dynamic filter is NONE and the
+        // probe-side split source must report itself finished instead of draining the queue
+        @Language("SQL") String query = "SELECT t1.id FROM " +
+                table + " t1 " +
+                "INNER JOIN " + table + " t2 ON t1.id = t2.id " +
+                "WHERE t2.price < 0";
+        MaterializedResult explainRes = getQueryRunner().execute(session, "EXPLAIN ANALYZE " + query);
+        Pattern scanFilterInputRowsPattern = getScanFilterInputRowsPattern(tableIdentifier);
+        Matcher matcher = scanFilterInputRowsPattern.matcher(explainRes.toString());
+        assertThat(matcher.find())
+                .withFailMessage("Could not find 'ScanFilter' for table '%s' with 'dynamicFilters' and 'Input: X rows' stats in EXPLAIN output.\nOutput was:\n%s",
+                        tableIdentifier, explainRes.toString())
+                .isTrue();
+
+        // Zero probe-side input rows pins split elimination at the source: without the NONE
+        // short-circuit the probe would scan all rows and the join would discard them, which
+        // returns the same empty result but reads Input: 4 rows here
+        assertThat(Long.parseLong(matcher.group(1)))
+                .describedAs("Probe side (%s) should read no rows when the dynamic filter is NONE", tableIdentifier)
+                .isEqualTo(0);
+
+        assertThat(getQueryRunner().execute(session, query).getRowCount()).isEqualTo(0);
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = ResourceHudiTablesInitializer.TestingTable.class,
+            names = {"HUDI_MULTI_FG_PT_V6_MOR", "HUDI_MULTI_FG_PT_V8_MOR"})
     public void testDynamicFilterDisabledPredicatePushdown(ResourceHudiTablesInitializer.TestingTable table)
     {
         Session session = SessionBuilder.from(getSession())
@@ -1281,41 +1342,90 @@ public class TestHudiSmokeTest
         assertQuery(session, actualQuery, expectedQuery);
     }
 
+    /**
+     * apache/hudi#19457: a predicate on a column whose type was widened after a base file was written used to fail
+     * the whole query with {@code Malformed Parquet file. Corrupted statistics for column ...}, because the domain
+     * carries the metastore's widened type while the file's statistics are still of the original one. The connector
+     * now leaves such a domain out of the parquet predicate, and the engine applies it above the scan as it always
+     * did.
+     * <p>
+     * Selecting the evolved column without constraining it was never affected, so the predicate has to be ON it --
+     * and the projection has to include it, or the domain would resolve to no descriptor and be discarded for an
+     * unrelated reason, which is exactly the shape that passes against the unfixed code.
+     * {@link #testReadingAnEvolvedColumnWithoutAPredicate} is the anchor showing the read path itself was always
+     * fine.
+     * <p>
+     * {@link TestHudiConnectorParquetColumnNamesTest} reruns this class with
+     * {@code hudi.parquet.use-column-names=false}. The guard runs on descriptor keys, after the resolution fork, so
+     * the two modes cannot diverge here; the second run is there because the issue was reported against both.
+     * {@code TestHudiEvolvedColumnPredicates} is where the pruning these queries cannot observe is asserted.
+     */
+    @Test
+    public void testPredicateOnColumnEvolvedFromFloatToDouble()
+    {
+        assertQuery(selectEvolvedColumnsWhere(FLOAT_TO_DOUBLE_COLUMN + " > " + DOUBLE_THRESHOLD), expectedRowsFrom(3));
+    }
+
+    @Test
+    public void testPredicateOnColumnEvolvedFromIntToVarchar()
+    {
+        assertQuery(selectEvolvedColumnsWhere("%s > '%s'".formatted(INT_TO_VARCHAR_COLUMN, VARCHAR_THRESHOLD)), expectedRowsFrom(4));
+    }
+
+    @Test
+    public void testReadingAnEvolvedColumnWithoutAPredicate()
+    {
+        // The anchor: widening is a read-path feature that already worked, so a regression here would mean the
+        // fixture stopped modelling an evolved table rather than that the guard misbehaved
+        assertQuery(selectEvolvedColumnsWhere("true"), expectedRowsFrom(1));
+    }
+
+    private static String selectEvolvedColumnsWhere(String predicate)
+    {
+        return "SELECT key, %s, %s, %s FROM %s WHERE %s ORDER BY key".formatted(
+                FLOAT_TO_DOUBLE_COLUMN, INT_TO_BIGINT_COLUMN, INT_TO_VARCHAR_COLUMN,
+                SchemaEvolutionHudiTablesInitializer.TABLE_NAME, predicate);
+    }
+
+    // The MOR fixture's oldest log file belongs to delta commit 20250918122106595, which has been archived: the
+    // first instant on the active timeline is 20250918122107347. File slicing therefore has to look that log
+    // file's completion time up in the LSM archived timeline, a read that goes through
+    // HudiTrinoFileReaderFactory#newParquetFileReader and threw UnsupportedOperationException before
+    // TrinoParquetFileReader existed (apache/hudi#13994).
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testReadTableWithArchivedTimeline(boolean isRtTable)
+    {
+        String tableName = isRtTable ? HUDI_MOR_ARCHIVED_TIMELINE.getRtTableName()
+                : HUDI_MOR_ARCHIVED_TIMELINE.getTableName();
+        @Language("SQL") String actualQuery = "SELECT id, name, price, ts FROM " + tableName;
+        @Language("SQL") String expectedQuery;
+        if (isRtTable) {
+            // Real-time table, log files are merged onto the base files
+            expectedQuery = "VALUES (2, 'updated_user2', 20.0, 2000), (3, 'user3', 30.0, 3000), (4, 'user4', 40.0, 4000), (5, 'user5', 50.0, 5000)";
+        }
+        else {
+            // Read-optimized table, base files only (the fixture was written with inline compaction disabled)
+            expectedQuery = "VALUES (1, 'user1', 10.0, 1000), (2, 'user2', 20.0, 2000), (3, 'user3', 30.0, 3000), (4, 'user4', 40.0, 4000), (5, 'user5', 50.0, 5000)";
+        }
+        assertQuery(actualQuery, expectedQuery);
+    }
+
     private void testTimestampMicros(HiveTimestampPrecision timestampPrecision, LocalDateTime expected)
             throws Exception
     {
         File parquetFile = new File(Resources.getResource("long_timestamp.parquet").toURI());
         Type columnType = createTimestampType(timestampPrecision.getPrecision());
-        HudiSplit hudiSplit = new HudiSplit(
-                new HudiBaseFile(parquetFile.getPath(), parquetFile.getName(), parquetFile.length(), parquetFile.lastModified(), 0, parquetFile.length()),
-                ImmutableList.of(),
-                "000",
-                TupleDomain.all(),
-                ImmutableList.of(),
-                SplitWeight.standard());
 
-        HudiConfig config = new HudiConfig().setUseParquetColumnNames(false);
-        HudiSessionProperties sessionProperties = new HudiSessionProperties(config, new ParquetReaderConfig());
-        ConnectorSession session = TestingConnectorSession.builder()
-                .setPropertyMetadata(sessionProperties.getSessionProperties())
-                .build();
-
-        try (ConnectorPageSource pageSource = createPageSource(
-                session,
+        MaterializedResult result = TestingBaseFilePageSource.read(
+                parquetFile.toPath(),
                 List.of(createBaseColumn("created", 0, HIVE_TIMESTAMP, columnType, REGULAR, Optional.empty())),
-                hudiSplit,
-                new LocalInputFile(parquetFile),
-                parquetFile.getPath(),
-                0L,
-                parquetFile.length(),
-                OptionalLong.of(parquetFile.length()),
-                new FileFormatDataSourceStats(),
-                ParquetReaderOptions.builder().build(),
-                DateTimeZone.UTC, DynamicFilter.EMPTY, true)) {
-            MaterializedResult result = materializeSourceDataStream(session, pageSource, List.of(columnType)).toTestTypes();
-            assertThat(result.getMaterializedRows())
-                    .containsOnly(new MaterializedRow(List.of(expected)));
-        }
+                TupleDomain.all(),
+                false,
+                DynamicFilter.EMPTY);
+
+        assertThat(result.getMaterializedRows())
+                .containsOnly(new MaterializedRow(List.of(expected)));
     }
 
     private static Pattern getScanFilterInputRowsPattern(String tableIdentifier)

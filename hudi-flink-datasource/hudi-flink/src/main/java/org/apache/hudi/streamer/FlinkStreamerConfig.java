@@ -368,7 +368,7 @@ public class FlinkStreamerConfig extends Configuration {
   @Parameter(names = {"--hive-sync-file-format"}, description = "File format for hive sync, default 'PARQUET'")
   public String hiveSyncFileFormat = "PARQUET";
 
-  @Parameter(names = {"--hive-sync-mode"}, description = "Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql, default 'jdbc'")
+  @Parameter(names = {"--hive-sync-mode"}, description = "Mode to choose for Hive ops. Valid values are hms, glue, jdbc and hiveql, default 'jdbc'")
   public String hiveSyncMode = "jdbc";
 
   @Parameter(names = {"--hive-sync-username"}, description = "Username for hive sync, default 'hive'")

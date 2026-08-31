@@ -269,7 +269,7 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
 
     StructType schema = rows.get(0).schema();
     HoodieSchema rawSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(schema,  "test_struct_name", "test_namespace");
-    HoodieSchemaField field = rawSchema.getField(sortColumn).get();
+    HoodieSchemaField field = rawSchema.getField(sortColumn.trim()).get();
     HoodieSchemaField fileNameFiled = rawSchema.getField(FILENAME_METADATA_FIELD).get();
 
     Comparator comparator;
@@ -416,6 +416,9 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
     return Stream.of(
         Arguments.of("begin_lat", true),
         Arguments.of("begin_lat", false),
+        // Leading space: a config list written as "a, b" reaches the partitioner untrimmed.
+        Arguments.of(" begin_lat", true),
+        Arguments.of(" begin_lat", false),
         Arguments.of("_row_key", false),
         Arguments.of("_row_key", true)
     );

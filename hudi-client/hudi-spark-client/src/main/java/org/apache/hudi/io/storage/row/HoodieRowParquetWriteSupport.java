@@ -239,10 +239,16 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
           .flatMap(s -> s.hasFields() ? s.getField(field.name()) : Option.empty())
           .map(HoodieSchemaField::schema)
           .orElse(null);
+      // Unwrap the field's own nullable union too (e.g. ["null", variant] -> variant), like
+      // processNestedDataType does; otherwise nullable variant columns fail the VARIANT check
+      // below and emit a false schema-mismatch warning (shredding still happens via the
+      // processNestedDataType fallthrough, so this only affects which branch handles it).
+      HoodieSchema resolvedFieldSchema = fieldHoodieSchema != null && fieldHoodieSchema.isNullable()
+          ? fieldHoodieSchema.getNonNullType() : fieldHoodieSchema;
 
       if (SparkAdapterSupport$.MODULE$.sparkAdapter().isVariantType(dataType)) {
-        if (fieldHoodieSchema != null && fieldHoodieSchema.getType() == HoodieSchemaType.VARIANT) {
-          HoodieSchema.Variant variantSchema = (HoodieSchema.Variant) fieldHoodieSchema;
+        if (resolvedFieldSchema != null && resolvedFieldSchema.getType() == HoodieSchemaType.VARIANT) {
+          HoodieSchema.Variant variantSchema = (HoodieSchema.Variant) resolvedFieldSchema;
           // If typed_value field exists, the variant is shredded
           if (variantSchema.getTypedValueField().isPresent()) {
             // Use plain types for SparkShreddingUtils (unwraps nested {value, typed_value} structs if present)
@@ -482,6 +488,34 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     }
   }
 
+  /**
+   * Fixed-length byte width for a decimal column: honor the declared Avro {@code fixed} size when
+   * present (it may be wider than the precision-minimal width), otherwise the precision-minimal width.
+   */
+  static int resolveDecimalByteLength(HoodieSchema resolvedSchema, int precision) {
+    if (resolvedSchema instanceof HoodieSchema.Decimal) {
+      HoodieSchema.Decimal decimalSchema = (HoodieSchema.Decimal) resolvedSchema;
+      if (decimalSchema.isFixed()) {
+        int fixedSize = decimalSchema.getFixedSize();
+        ValidationUtils.checkArgument(fixedSize >= Decimal.minBytesForPrecision()[precision],
+            () -> String.format("Avro fixed size %s is too small for decimal precision %s (need >= %s bytes)",
+                fixedSize, precision, Decimal.minBytesForPrecision()[precision]));
+        return fixedSize;
+      }
+    }
+    return Decimal.minBytesForPrecision()[precision];
+  }
+
+  static byte[] padDecimalToFixedLength(byte[] unscaledBytes, int numBytes, byte[] paddingBuffer) {
+    if (unscaledBytes.length == numBytes) {
+      return unscaledBytes;
+    }
+    byte signByte = (unscaledBytes[0] < 0) ? (byte) -1 : (byte) 0;
+    Arrays.fill(paddingBuffer, 0, numBytes - unscaledBytes.length, signByte);
+    System.arraycopy(unscaledBytes, 0, paddingBuffer, numBytes - unscaledBytes.length, unscaledBytes.length);
+    return paddingBuffer;
+  }
+
   private ValueWriter makeWriter(HoodieSchema schema, DataType dataType) {
     HoodieSchema resolvedSchema = schema == null ? null : schema.getNonNullType();
 
@@ -550,28 +584,21 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
         consumeGroup(() -> variantWriter.accept(row, ordinal));
       };
     } else if (dataType instanceof DecimalType) {
+      int precision = ((DecimalType) dataType).precision();
+      ValidationUtils.checkArgument(precision <= DecimalType.MAX_PRECISION(),
+          () -> String.format("Decimal precision %s exceeds max precision %s", precision, DecimalType.MAX_PRECISION()));
+      int scale = ((DecimalType) dataType).scale();
+      // Honor the declared Avro `fixed` size so the row/bulk-insert/clustering/compaction write
+      // path preserves the schema width instead of narrowing to the precision-minimal one.
+      int numBytes = resolveDecimalByteLength(resolvedSchema, precision);
+      // Padding buffer resolved once per column, not per record: reuse the shared decimalBuffer when
+      // it is wide enough, otherwise allocate one dedicated buffer here (an over-allocated Avro fixed
+      // size can exceed the shared buffer's capacity).
+      byte[] paddingBuffer = numBytes <= decimalBuffer.length ? decimalBuffer : new byte[numBytes];
       return (row, ordinal) -> {
-        int precision = ((DecimalType) dataType).precision();
-        ValidationUtils.checkArgument(precision <= DecimalType.MAX_PRECISION(),
-            () -> String.format("Decimal precision %s exceeds max precision %s", precision, DecimalType.MAX_PRECISION()));
-        int scale = ((DecimalType) dataType).scale();
         byte[] bytes = row.getDecimal(ordinal, precision, scale).toJavaBigDecimal().unscaledValue().toByteArray();
-        int numBytes = Decimal.minBytesForPrecision()[precision];
-        byte[] fixedLengthBytes;
-        if (bytes.length == numBytes) {
-          // If the length of the underlying byte array of the unscaled `BigInteger` happens to be
-          // `numBytes`, just reuse it, so that we don't bother copying it to `decimalBuffer`.
-          fixedLengthBytes = bytes;
-        } else {
-          // Otherwise, the length must be less than `numBytes`.  In this case we copy contents of
-          // the underlying bytes with padding sign bytes to `decimalBuffer` to form the result
-          // fixed-length byte array.
-          byte signByte = (bytes[0] < 0) ? (byte) -1 : (byte) 0;
-          Arrays.fill(decimalBuffer, 0, numBytes - bytes.length, signByte);
-          System.arraycopy(bytes, 0, decimalBuffer, numBytes - bytes.length, bytes.length);
-          fixedLengthBytes = decimalBuffer;
-        }
-        recordConsumer.addBinary(Binary.fromReusedByteArray(fixedLengthBytes, 0, numBytes));
+        recordConsumer.addBinary(Binary.fromReusedByteArray(
+            padDecimalToFixedLength(bytes, numBytes, paddingBuffer), 0, numBytes));
       };
     } else if (dataType instanceof ArrayType
             && resolvedSchema != null
@@ -830,7 +857,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
       return Types
           .primitive(FIXED_LEN_BYTE_ARRAY, repetition)
           .as(LogicalTypeAnnotation.decimalType(scale, precision))
-          .length(Decimal.minBytesForPrecision()[precision])
+          .length(resolveDecimalByteLength(resolvedSchema, precision))
           .named(structField.name());
     } else if (dataType instanceof ArrayType
             && resolvedSchema != null
@@ -881,8 +908,9 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
                   .named(MAP_REPEATED_NAME))
           .named(structField.name());
     } else if (dataType instanceof StructType) {
+      StructType nestedStruct = (StructType) dataType;
       Types.GroupBuilder<GroupType> groupBuilder = Types.buildGroup(repetition);
-      Arrays.stream(((StructType) dataType).fields()).forEach(field -> {
+      Arrays.stream(nestedStruct.fields()).forEach(field -> {
         // Note: Cannot use HoodieSchemaField::schema method reference due to Java 17 compilation ambiguity
         HoodieSchema nestedFieldSchema = Option.ofNullable(resolvedSchema)
             .flatMap(s -> s.getField(field.name()))
@@ -890,7 +918,15 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
             .orElse(null);
         groupBuilder.addField(convertField(nestedFieldSchema, field));
       });
-      return groupBuilder.named(structField.name());
+      // A shredded variant column reaches here as a marked struct (the VariantType was replaced by
+      // its {metadata, value, typed_value} shredding schema). Tag the parquet group with the VARIANT
+      // logical type so external readers recognize it as a Variant, matching Spark's native shredded
+      // parquet schema. No-op on Spark 4.0/3.x (the annotation only exists in parquet 1.16+).
+      Types.GroupBuilder<GroupType> taggedBuilder =
+          SparkAdapterSupport$.MODULE$.sparkAdapter().isVariantShreddingStruct(nestedStruct)
+              ? SparkAdapterSupport$.MODULE$.sparkAdapter().applyVariantLogicalType(groupBuilder)
+              : groupBuilder;
+      return taggedBuilder.named(structField.name());
     } else {
       throw new UnsupportedOperationException("Unsupported type: " + dataType);
     }

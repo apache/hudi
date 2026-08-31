@@ -556,16 +556,27 @@
       <artifactId>sqs</artifactId>
       <version>${aws.sdk.version}</version>
     </dependency>
+    <!-- Apache HTTP client is the SDK v2 default sync client and already reaches the runtime classpath
+         transitively via sqs (declared runtime-scope in the awssdk services parent). Declared here as
+         provided purely for compile-time access to ApacheHttpClient.builder().maxConnections(...) in
+         CloudObjectsSelector.createAmazonSqsClient - it does not change the packaged/runtime footprint. -->
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>apache-client</artifactId>
+      <version>${aws.sdk.version}</version>
+      <scope>provided</scope>
+    </dependency>
     <dependency>
       <groupId>software.amazon.awssdk</groupId>
       <artifactId>kinesis</artifactId>
       <version>${aws.sdk.version}</version>
     </dependency>
-    <!-- KPL de-aggregation: extracts user records from Kinesis Producer Library aggregated records -->
+    <!-- STS: assume-role credentials for cross-account Kinesis reads. Already on the classpath transitively
+         via hudi-aws; declared directly because KinesisOffsetGen references StsClient itself. -->
     <dependency>
-      <groupId>com.amazonaws</groupId>
-      <artifactId>amazon-kinesis-deaggregator</artifactId>
-      <version>${aws.kinesis.aggregator.version}</version>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>sts</artifactId>
+      <version>${aws.sdk.version}</version>
     </dependency>
     <!-- Hive - Test -->
     <dependency>

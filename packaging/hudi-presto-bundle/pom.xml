@@ -78,7 +78,6 @@
                   <include>org.apache.parquet:parquet-avro</include>
                   <include>org.apache.avro:avro</include>
                   <include>com.github.ben-manes.caffeine:caffeine</include>
-                  <include>org.codehaus.jackson:*</include>
                   <include>org.apache.commons:commons-lang3</include>
                   <include>com.yammer.metrics:metrics-core</include>
                   <include>commons-io:commons-io</include>
@@ -141,7 +140,10 @@
                   <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
                 </relocation>
               </relocations>
-              <createDependencyReducedPom>false</createDependencyReducedPom>
+              <createDependencyReducedPom>true</createDependencyReducedPom>
+              <!-- Keep dependencies that are not absorbed into the shaded jar, so the reduced POM still
+                   declares what consumers need at runtime. -->
+              <promoteTransitiveDependencies>true</promoteTransitiveDependencies>
               <filters>
                 <filter>
                   <artifact>*:*</artifact>
@@ -188,9 +190,17 @@
       <artifactId>hudi-common</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <!-- Both are shaded in by the artifactSet above. Declared directly rather than relying on
+         hudi-hadoop-mr-bundle to supply them transitively, so this bundle's shade inputs do not depend
+         on another bundle's published dependency list. -->
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-hadoop-mr-bundle</artifactId>
+      <artifactId>hudi-hadoop-mr</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-hadoop-common</artifactId>
       <version>${project.version}</version>
     </dependency>
 

@@ -8,6 +8,7 @@ on:
     paths:
       - 'hudi-trino/**'
       - '.github/workflows/hudi_trino_ci.yml'
+      - 'scripts/trino/**'
       # Upstream modules the connector build installs (the -am closure of the JDK 17
       # install step) plus the poms that own trino.version and the dependency pins.
       # Keep in sync with the case patterns in detect-trino-changes below.
@@ -23,10 +24,12 @@ on:
       - 'hudi-client/hudi-java-client/**'
       - 'hudi-sync/hudi-sync-common/**'
       - 'hudi-sync/hudi-hive-sync/**'
-  # No `paths:` filter here on purpose. test-hudi-trino-plugin is a required status check
-  # in .asf.yaml, and a path-filtered workflow is never instantiated on PRs that miss the
-  # filter, leaving the required context permanently pending. Run on every PR instead and
-  # skip the expensive steps via the detect-trino-changes job below.
+  # No `paths:` filter here on purpose. A path-filtered workflow is never instantiated on
+  # PRs that miss the filter, so any run of this workflow that a reviewer or a required
+  # status check expects to see would sit permanently pending. Run on every PR instead and
+  # skip the expensive steps via the detect-trino-changes job below. (test-hudi-trino-plugin
+  # is no longer a required check: the .asf.yaml contexts list was reset when the CI matrix
+  # was trimmed. Restoring the filter here is an option if runner time gets tight again.)
   pull_request:
     branches:
       - master
@@ -75,6 +78,7 @@ jobs:
             case "$f" in
               hudi-trino/*) TRINO=true ;;
               .github/workflows/hudi_trino_ci.yml) TRINO=true ;;
+              scripts/trino/*) TRINO=true ;;
               # Upstream modules the connector build installs (the -am closure of the JDK 17
               # install step) plus the poms that own trino.version and the dependency pins.
               # Keep in sync with the push paths above.
@@ -103,6 +107,21 @@ jobs:
       - name: Checkout repository
         if: needs.changes.outputs.trino == 'true'
         uses: actions/checkout@v5
+      - name: Read Trino pin
+        id: trino-pin
+        if: needs.changes.outputs.trino == 'true'
+        run: |
+          set -euo pipefail
+          TRINO_SHA=$(sed -n 's|.*<trino.sha>\(.*\)</trino.sha>.*|\1|p' pom.xml)
+          TRINO_VERSION=$(sed -n 's|.*<trino.version>\(.*\)</trino.version>.*|\1|p' pom.xml)
+          # sed -n ...p exits 0 on no match; an empty value would checkout/cache garbage.
+          if [ -z "$TRINO_SHA" ] || [ -z "$TRINO_VERSION" ]; then
+            echo "ERROR: could not read trino.sha/trino.version from pom.xml" >&2
+            exit 1
+          fi
+          echo "Pinned trinodb/trino $TRINO_VERSION at $TRINO_SHA"
+          echo "trino_sha=$TRINO_SHA" >> "$GITHUB_OUTPUT"
+          echo "trino_version=$TRINO_VERSION" >> "$GITHUB_OUTPUT"
       # Hudi targets Java 11 and uses Lombok 1.18.36, which does not run on JDK 25.
       # Build the upstream modules hudi-trino depends on under JDK 17 first,
       # install them into the local m2, then build the connector itself under JDK 25.
@@ -125,23 +144,41 @@ jobs:
           java-version: '25'
           distribution: 'temurin'
           cache: maven
-      # Trino does not publish trino-spi / trino-filesystem / trino-hive test-jars to
-      # Maven Central. Check out the matching release tag and install just the modules
-      # whose test classifiers we need into the local m2.
-      - name: Checkout trinodb/trino at 481
+      - name: Purge Trino artifacts from the local m2
         if: needs.changes.outputs.trino == 'true'
+        # Artifacts an older pin left behind carry the same SNAPSHOT coordinates as the current ones.
+        run: rm -rf ~/.m2/repository/io/trino
+      # Trino publishes neither SNAPSHOT artifacts nor the trino-spi / trino-filesystem /
+      # trino-hive / trino-main test-jars, so every io.trino dependency is built from the
+      # pinned trinodb/trino commit and cached under that commit.
+      - name: Restore Trino artifacts for the pinned commit
+        id: trino-m2
+        if: needs.changes.outputs.trino == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/io/trino
+          key: trino-m2-v2-${{ hashFiles('scripts/trino/bootstrap_trino.sh') }}-${{ steps.trino-pin.outputs.trino_sha }}
+          # No restore-keys on purpose: a partial restore from another pin collides on the
+          # same SNAPSHOT coordinates and poisons the build.
+      - name: Checkout trinodb/trino at the pinned commit
+        if: needs.changes.outputs.trino == 'true' && steps.trino-m2.outputs.cache-hit != 'true'
         uses: actions/checkout@v5
         with:
           repository: trinodb/trino
-          ref: '481'
+          ref: ${{ steps.trino-pin.outputs.trino_sha }}
           path: trino-src
-      - name: Install Trino test-jars (JDK 25)
-        if: needs.changes.outputs.trino == 'true'
-        working-directory: trino-src
-        run: mvn $MVN_ARGS install -pl :trino-spi,:trino-filesystem,:trino-hive,:trino-main -am -DskipTests -Dair.check.skip-all=true
+      - name: Build Trino artifacts from source (JDK 25)
+        if: needs.changes.outputs.trino == 'true' && steps.trino-m2.outputs.cache-hit != 'true'
+        run: scripts/trino/bootstrap_trino.sh trino-src --skip-checkout
       - name: Build connector (JDK 25)
         if: needs.changes.outputs.trino == 'true'
         run: mvn $MVN_ARGS -Phudi-trino -pl hudi-trino install -Dmaven.test.skip=true
+      # The release deploy (-DdeployArtifacts=true) runs javadoc:jar with doclint=none,
+      # and the module pom keeps failOnError=true. Reproduce that exact configuration here
+      # so a javadoc break fails the PR instead of surfacing during the staging deploy.
+      - name: Javadoc check (JDK 25)
+        if: needs.changes.outputs.trino == 'true'
+        run: mvn $MVN_ARGS -Phudi-trino -pl hudi-trino javadoc:jar -Ddoclint=none
       - name: Test connector (JDK 25)
         if: needs.changes.outputs.trino == 'true'
         run: mvn $MVN_ARGS -Phudi-trino,hudi-trino-tests -pl hudi-trino test

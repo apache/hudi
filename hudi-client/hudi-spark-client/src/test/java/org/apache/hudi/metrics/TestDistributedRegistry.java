@@ -29,6 +29,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -182,6 +183,107 @@ public class TestDistributedRegistry {
     Map<String, Long> metricCounts = registry.getAllCounts();
     Assertions.assertEquals(1, metricCounts.size());
     Assertions.assertEquals(finalExpectedSum, metricCounts.get(METRIC_1));
+  }
+
+  @Test
+  public void testSetOnExecutorIsIgnoredWithoutFailingTheJob() {
+    // Given: a registry registered to the spark context
+    String registryName = REGISTRY_NAME + "_testSetOnExecutor";
+    Registry registry = engineContext.getMetricRegistry("", registryName);
+
+    List<Integer> data = new ArrayList<>();
+    data.add(1);
+
+    // When: set() is invoked from an executor. It is non-commutative under accumulator merges, so the
+    // value must not be recorded -- but the guard runs inside a task, where failing would take the write
+    // down with it, so it is ignored rather than thrown.
+    engineContext.map(data, value -> {
+      registry.set(METRIC_1, value);
+      return null;
+    }, 1);
+
+    // Then: the job succeeded and nothing was recorded.
+    Assertions.assertFalse(registry.getAllCounts().containsKey(METRIC_1),
+        "set() from an executor must not record a value: " + registry.getAllCounts());
+  }
+
+  @Test
+  public void testReleaseOnExecutorIsIgnoredWithoutFailingTheJob() {
+    // Given: a registry holding a known count
+    String registryName = REGISTRY_NAME + "_testReleaseOnExecutor";
+    DistributedRegistry registry = (DistributedRegistry) engineContext.getMetricRegistry("", registryName);
+    registry.add(METRIC_1, 5L);
+
+    List<Integer> data = new ArrayList<>();
+    data.add(1);
+
+    // When: release() is invoked from an executor. Clamping and eviction are order-dependent under
+    // accumulator merges, and this runs after the commit has landed, so it is ignored rather than thrown.
+    engineContext.map(data, value -> {
+      registry.release(Collections.singletonMap(METRIC_1, (long) value));
+      return null;
+    }, 1);
+
+    // Then: the job succeeded and the count was left alone.
+    Assertions.assertEquals(5L, registry.getAllCounts().get(METRIC_1),
+        "release() from an executor must not mutate the counters");
+  }
+
+  @Test
+  public void testSetOnDriverSucceeds() {
+    // set() on the driver (no TaskContext) remains supported.
+    DistributedRegistry registry = new DistributedRegistry(REGISTRY_NAME + "_testSetOnDriver");
+    registry.set(METRIC_1, 42);
+    Assertions.assertEquals(42, registry.getAllCounts().get(METRIC_1));
+  }
+
+  @Test
+  public void testReleaseEvictsCountersThatReachZero() {
+    // Given: a registry drained of exactly what it holds, as the commit-boundary drain does
+    DistributedRegistry registry = new DistributedRegistry(REGISTRY_NAME + "_testRelease");
+    registry.add(METRIC_1, 10);
+    registry.add(METRIC_2, 20);
+
+    // When: the full contents are released
+    registry.release(registry.getAllCounts(false));
+
+    // Then: the counters are gone, not left sitting at zero. A zero-valued entry survives
+    // ConcurrentHashMap.merge() and would be republished by every later drain.
+    Assertions.assertTrue(registry.getAllCounts().isEmpty(),
+        "released counters must be evicted, found " + registry.getAllCounts());
+    Assertions.assertTrue(registry.isZero());
+  }
+
+  @Test
+  public void testReleaseKeepsWhatArrivedAfterTheDrain() {
+    // Given: a snapshot taken, and a straggler update folded in before the release lands
+    DistributedRegistry registry = new DistributedRegistry(REGISTRY_NAME + "_testReleaseStraggler");
+    registry.add(METRIC_1, 10);
+    Map<String, Long> drained = registry.getAllCounts(false);
+    registry.add(METRIC_1, 4);
+
+    // When: the drained counts are released
+    registry.release(drained);
+
+    // Then: only the drained amount is subtracted - the straggler belongs to the next drain
+    Assertions.assertEquals(4L, registry.getAllCounts().get(METRIC_1));
+  }
+
+  @Test
+  public void testReleaseClampsAtZero() {
+    // Given: a registry emptied between the drain and the release. Metrics.shutdown() scrapes every
+    // registry in the process with flush=true, so an unrelated table's write finishing does exactly this.
+    DistributedRegistry registry = new DistributedRegistry(REGISTRY_NAME + "_testReleaseClamp");
+    registry.add(METRIC_1, 10);
+    Map<String, Long> drained = registry.getAllCounts(false);
+    registry.clear();
+
+    // When: the release lands on a registry that no longer holds those counts
+    registry.release(drained);
+
+    // Then: nothing negative is left behind - a negative counter would be stamped into commit metadata
+    Assertions.assertTrue(registry.getAllCounts().isEmpty(),
+        "an unbounded subtraction would have left " + METRIC_1 + " negative, got " + registry.getAllCounts());
   }
 
   @Test

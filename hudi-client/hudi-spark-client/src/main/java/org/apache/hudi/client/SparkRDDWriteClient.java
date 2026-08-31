@@ -45,6 +45,7 @@ import org.apache.hudi.metadata.SparkMetadataWriterFactory;
 import org.apache.hudi.metadata.StreamingMetadataWriteHandler;
 import org.apache.hudi.metrics.DistributedRegistryUtil;
 import org.apache.hudi.metrics.HoodieMetrics;
+import org.apache.hudi.metrics.RecordIndexLookupMetrics;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -146,8 +147,8 @@ public class SparkRDDWriteClient<T> extends
       // when streaming writes are enabled, writeStatuses is a mix of data table write status and mdt write status
       List<HoodieWriteStat> dataTableHoodieWriteStats = slimWriteStatsList.stream().filter(entry -> !entry.isMetadataTable()).map(SlimWriteStats::getWriteStat).collect(Collectors.toList());
       List<HoodieWriteStat> partialMetadataTableWriteStats = slimWriteStatsList.stream().filter(entry -> entry.isMetadataTable).map(SlimWriteStats::getWriteStat).collect(Collectors.toList());
-      return commitStats(instantTime, new TableWriteStats(dataTableHoodieWriteStats, partialMetadataTableWriteStats), extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc,
-          false, Option.of(table));
+      return commitStats(instantTime, new TableWriteStats(dataTableHoodieWriteStats, partialMetadataTableWriteStats), extraMetadata, commitActionType, partitionToReplacedFileIds,
+          extraPreCommitFunc, false, Option.of(table));
     } else {
       log.error("Exiting early due to errors with write operation ");
       return false;
@@ -166,6 +167,19 @@ public class SparkRDDWriteClient<T> extends
       streamingMetadataWriteHandler.commitToMetadataTable(table, instantTime, metadata, partialMetadataTableWriteStats);
     } else {
       writeTableMetadata(table, instantTime, metadata);
+    }
+  }
+
+  /**
+   * The commit has landed, so the counters the executors collected for it can be reported. A write that
+   * looked nothing up owns no registry and publishes nothing; a commit that never lands never gets here.
+   */
+  @Override
+  protected void postCommit(HoodieTable table, HoodieCommitMetadata metadata, String instantTime,
+                            String commitActionType, Option<Map<String, String>> extraMetadata) {
+    super.postCommit(table, metadata, instantTime, commitActionType, extraMetadata);
+    if (config.isRecordIndexLookupMetricsEnabled()) {
+      RecordIndexLookupMetrics.publishAndRelease(context, config, metrics);
     }
   }
 

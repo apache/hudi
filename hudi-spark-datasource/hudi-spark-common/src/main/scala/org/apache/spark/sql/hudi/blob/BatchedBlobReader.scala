@@ -25,7 +25,6 @@ import org.apache.hudi.common.util.HoodieStorageUtils
 import org.apache.hudi.io.SeekableDataInputStream
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 
-import org.apache.spark.TaskContext
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{Dataset, Row}
@@ -89,12 +88,14 @@ import scala.collection.mutable.ArrayBuffer
  *   <li>Tune maxGapBytes based on your data access patterns</li>
  * </ul>
  *
- * @param storage        HoodieStorage instance for file I/O
+ * @param resolveStorage Supplies the HoodieStorage for a blob reference. A HoodieStorage is bound
+ *                       to the filesystem of the path it is built with, and a reference is only
+ *                       known once its row arrives, so this is called per read rather than once.
  * @param maxGapBytes    Maximum gap between ranges to consider for batching (default: 4KB)
  * @param lookaheadRows  Number of rows to buffer for batch detection (default: 50)
  */
 class BatchedBlobReader(
-                         storage: HoodieStorage,
+                         resolveStorage: StoragePath => HoodieStorage,
                          maxGapBytes: Int = 4096,
                          lookaheadRows: Int = 50) {
 
@@ -387,9 +388,11 @@ class BatchedBlobReader(
       outputSchema: StructType)
       (implicit builder: RowBuilder[R]): RowResult[R] = {
 
+    var storage: HoodieStorage = null
     var inputStream: InputStream = null
     try {
       val path = new StoragePath(rowInfo.filePath)
+      storage = resolveStorage(path)
       inputStream = storage.open(path)
       val buffer = inputStream.readAllBytes()
 
@@ -405,6 +408,7 @@ class BatchedBlobReader(
             logger.warn(s"Error closing stream for ${rowInfo.filePath}", e)
         }
       }
+      closeStorage(storage, rowInfo.filePath)
     }
   }
 
@@ -426,10 +430,13 @@ class BatchedBlobReader(
       outputSchema: StructType)
       (implicit builder: RowBuilder[R]): Seq[RowResult[R]] = {
 
+    var storage: HoodieStorage = null
     var inputStream: SeekableDataInputStream = null
     try {
       // Get or open file handle
-      inputStream = storage.openSeekable(new StoragePath(range.filePath), false)
+      val path = new StoragePath(range.filePath)
+      storage = resolveStorage(path)
+      inputStream = storage.openSeekable(path, false)
 
       // Seek to start offset
       inputStream.seek(range.startOffset)
@@ -476,6 +483,23 @@ class BatchedBlobReader(
           case e: Exception =>
             logger.warn(s"Error closing input stream for ${range.filePath}", e)
         }
+      }
+      closeStorage(storage, range.filePath)
+    }
+  }
+
+  /**
+   * Storage is resolved per read, so the read that resolved it closes it. HoodieHadoopStorage
+   * treats this as a no-op because it does not own the cached Hadoop filesystem, but another
+   * hoodie.storage.class implementation may hold resources of its own.
+   */
+  private def closeStorage(storage: HoodieStorage, filePath: String): Unit = {
+    if (storage != null) {
+      try {
+        storage.close()
+      } catch {
+        case e: Exception =>
+          logger.warn(s"Error closing storage for $filePath", e)
       }
     }
   }
@@ -691,9 +715,9 @@ object BatchedBlobReader {
 
     // Apply mapPartitions
     val result = df.mapPartitions { partition =>
-      // Create storage and reader for this partition
-      val storage = HoodieStorageUtils.getStorage(broadcastConf.value)
-      val reader = new BatchedBlobReader(storage, maxGapBytes, lookaheadSize)
+      // Create reader for this partition
+      val reader = new BatchedBlobReader(
+        HoodieStorageUtils.getStorage(_, broadcastConf.value), maxGapBytes, lookaheadSize)
 
       // Import implicit instances for Row
       import RowAccessor.rowAccessor
@@ -701,7 +725,6 @@ object BatchedBlobReader {
 
       // Process partition
       val iter = reader.processPartition[Row](partition, structColIdx, outputSchema)
-      TaskContext.get().addTaskCompletionListener[Unit](_ => storage.close())
       iter
     } (sparkAdapter.getCatalystExpressionUtils.getEncoder(outputSchema))
 
@@ -751,16 +774,14 @@ object BatchedBlobReader {
 
     // Process partitions using InternalRow type classes
     rdd.mapPartitions { partition =>
-      val storage = HoodieStorageUtils.getStorage(broadcastConf.value)
-
-      val reader = new BatchedBlobReader(storage, maxGapBytes, lookaheadSize)
+      val reader = new BatchedBlobReader(
+        HoodieStorageUtils.getStorage(_, broadcastConf.value), maxGapBytes, lookaheadSize)
 
       // Import implicit instances for InternalRow
       import RowAccessor.internalRowAccessor
       import RowBuilder.internalRowBuilder
 
       val iter = reader.processPartition[InternalRow](partition, structColIdx, outputSchema)
-      TaskContext.get().addTaskCompletionListener[Unit](_ => storage.close())
       iter
     }
   }

@@ -392,6 +392,12 @@
         </dependency>
 
         <dependency>
+            <groupId>org.locationtech.jts</groupId>
+            <artifactId>jts-core</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
             <groupId>org.openjdk.jol</groupId>
             <artifactId>jol-core</artifactId>
             <scope>provided</scope>
@@ -442,6 +448,18 @@
         <dependency>
             <groupId>io.airlift</groupId>
             <artifactId>testing</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>io.trino</groupId>
+            <artifactId>trino-blob-cache-alluxio</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>io.trino</groupId>
+            <artifactId>trino-blob-cache-memory</artifactId>
             <scope>test</scope>
         </dependency>
 
@@ -593,6 +611,17 @@
                          so disable processing and drop the inherited processor path. -->
                     <proc>none</proc>
                     <annotationProcessorPaths combine.self="override"/>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <configuration>
+                    <!-- The parent release profile pins javadoc source to 11, which rejects records
+                         (a Java 16 feature); follow hudi.trino.java.version instead. -->
+                    <source>${hudi.trino.java.version}</source>
+                    <!-- The release profile also sets failOnError=false; this module's javadoc is clean, keep breaks loud. -->
+                    <failOnError>true</failOnError>
                 </configuration>
             </plugin>
             <plugin>

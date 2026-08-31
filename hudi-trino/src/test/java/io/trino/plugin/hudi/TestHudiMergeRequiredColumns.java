@@ -90,6 +90,21 @@ class TestHudiMergeRequiredColumns
     }
 
     @Test
+    public void testPrefixedDeleteKeyIsRequested()
+    {
+        // v9+ table creation persists the delete key/marker under the hoodie.record.merge.property.
+        // prefix (e.g. for AWSDmsAvroPayload tables); the file-group reader strips the prefix via
+        // getTableMergeProperties() before DeleteContext reads the plain keys, and the connector's
+        // prediction must see the same values or the base-read projection guard fires on narrow queries
+        HoodieTableConfig tableConfig = new HoodieTableConfig();
+        tableConfig.setValue(HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY, "Op");
+        tableConfig.setValue(HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER, "D");
+
+        assertThat(mergeRequiredColumnNames(tableConfig, RecordMergeMode.COMMIT_TIME_ORDERING))
+                .contains("Op");
+    }
+
+    @Test
     public void testRecordKeyFieldsRequestedWithoutPopulatedMetaFields()
     {
         HoodieTableConfig tableConfig = new HoodieTableConfig();
@@ -100,7 +115,7 @@ class TestHudiMergeRequiredColumns
         assertThat(mergeRequiredColumnNames(tableConfig, RecordMergeMode.EVENT_TIME_ORDERING))
                 .doesNotContain("id1", "id2");
 
-        tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, "false");
+        tableConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, "NONE");
         assertThat(mergeRequiredColumnNames(tableConfig, RecordMergeMode.EVENT_TIME_ORDERING))
                 .contains("id1", "id2");
     }

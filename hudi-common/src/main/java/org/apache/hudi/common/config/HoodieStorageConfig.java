@@ -215,8 +215,12 @@ public class HoodieStorageConfig extends HoodieConfig {
   // Default compression codec for parquet
   public static final ConfigProperty<String> PARQUET_COMPRESSION_CODEC_NAME = ConfigProperty
       .key("hoodie.parquet.compression.codec")
-      .defaultValue("gzip")
-      .withDocumentation("Compression Codec for parquet files");
+      .noDefaultValue("ZSTD for Flink and Spark 3.5 or newer; GZIP for Java and older Spark versions")
+      .withDocumentation("Compression codec for Parquet base and native log files. The default is ZSTD for Flink "
+          + "and Spark 3.5 or newer, and GZIP for Java and older Spark versions. Spark 3.3 and 3.4 use a "
+          + "non-vectorized file-group reader affected by PARQUET-2160 when reading ZSTD files, which can leak "
+          + "off-heap memory; upgrade to Spark 3.5 or newer before using ZSTD. An explicitly configured value "
+          + "always takes precedence over the engine default.");
 
   public static final ConfigProperty<Boolean> PARQUET_DICTIONARY_ENABLED = ConfigProperty
       .key("hoodie.parquet.dictionary.enabled")
@@ -297,6 +301,29 @@ public class HoodieStorageConfig extends HoodieConfig {
           + "used to shred variant values at write time in the Avro record path. "
           + "The provider parses variant binary data and populates typed_value columns. "
           + "When not set, the provider is auto-detected from the classpath.");
+
+  public static final ConfigProperty<Boolean> PARQUET_VARIANT_SHREDDING_SCHEMA_INFERENCE_ENABLED = ConfigProperty
+      .key("hoodie.parquet.variant.shredding.schema.inference.enabled")
+      .defaultValue(false)
+      .sinceVersion("1.3.0")
+      .withDocumentation("When enabled, the shredding schema for variant columns without an explicit "
+          + "typed_value in the write schema is inferred automatically per parquet file from a sample of "
+          + "the records written to that file, mirroring Spark 4.1's "
+          + "spark.sql.variant.inferShreddingSchema. Requires Spark 4.1+ on the writer classpath; "
+          + "writes stay unshredded otherwise (Spark 4.0, Flink, Java engines). Applies to every "
+          + "parquet file the writer produces: base files and, on table version 10+, the native "
+          + "parquet log files of MOR tables (each infers its own schema). Data blocks inside "
+          + "Avro-format log files, whether Avro or parquet (hoodie.logfile.data.block.format), stay "
+          + "unshredded and shred at compaction. Applies to top-level variant columns only; a variant "
+          + "nested inside a struct, array or map stays unshredded. This is a write config rather than "
+          + "a table config: SQL DML and procedures called by table name pick it up from the table's "
+          + "catalog properties, while path-based procedures, the DataSource writer and the streamer "
+          + "must be handed it explicitly. Up to 4096 records or 64MB are buffered per "
+          + "open file writer before the writer is created, on top of parquet's own row-group "
+          + "buffer, so size executor memory for concurrently open handles accordingly. Ignored when "
+          + "hoodie.parquet.variant.force.shredding.schema.for.test is set, when write shredding "
+          + "is disabled, or when the table has a schema-on-read internal schema "
+          + "(hoodie.internal.schema).");
 
   public static final ConfigProperty<Boolean> WRITE_UTC_TIMEZONE = ConfigProperty
       .key("hoodie.parquet.write.utc-timezone.enabled")
@@ -509,7 +536,7 @@ public class HoodieStorageConfig extends HoodieConfig {
    * @deprecated Use {@link #PARQUET_COMPRESSION_CODEC_NAME} and its methods instead
    */
   @Deprecated
-  public static final String DEFAULT_PARQUET_COMPRESSION_CODEC = PARQUET_COMPRESSION_CODEC_NAME.defaultValue();
+  public static final String DEFAULT_PARQUET_COMPRESSION_CODEC = "zstd";
   /**
    * @deprecated Use {@link #HFILE_COMPRESSION_ALGORITHM_NAME} and its methods instead
    */
@@ -646,6 +673,11 @@ public class HoodieStorageConfig extends HoodieConfig {
 
     public Builder parquetVariantAllowReadingShredded(boolean allowed) {
       storageConfig.setValue(PARQUET_VARIANT_ALLOW_READING_SHREDDED, String.valueOf(allowed));
+      return this;
+    }
+
+    public Builder parquetVariantShreddingSchemaInferenceEnabled(boolean enabled) {
+      storageConfig.setValue(PARQUET_VARIANT_SHREDDING_SCHEMA_INFERENCE_ENABLED, String.valueOf(enabled));
       return this;
     }
 

@@ -69,7 +69,7 @@ public class TestOptionsResolver {
     assertFalse(OptionsResolver.isLsmTreeStorageLayout(conf));
 
     conf.set(FlinkOptions.OPERATION, WriteOperationType.BULK_INSERT.value());
-    assertFalse(OptionsResolver.isLsmTreeStorageLayout(conf));
+    assertTrue(OptionsResolver.isLsmTreeStorageLayout(conf));
 
     conf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
         HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue());

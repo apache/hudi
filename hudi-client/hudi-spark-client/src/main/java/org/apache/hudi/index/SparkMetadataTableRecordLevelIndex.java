@@ -22,10 +22,12 @@ package org.apache.hudi.index;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.util.Either;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -34,6 +36,7 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.metadata.BucketizedMetadataTableFileGroupIndexParser;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.metrics.RecordIndexLookupMetrics;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -77,8 +80,10 @@ public class SparkMetadataTableRecordLevelIndex extends SparkMetadataTableGlobal
         .partitionBy(new PartitionIdPassthrough(numFileGroups))
         .map(t -> t._2);
     ValidationUtils.checkState(partitionedKeyRDD.getNumPartitions() <= numFileGroups);
-    // Lookup the keys in the record index
-    return HoodieJavaPairRDD.of(partitionedKeyRDD.mapPartitionsToPair(new PartitionedRecordIndexFileGroupLookupFunction(hoodieTable.getTableMetadata())));
+    // Lookup the keys in the record index. Resolved on the driver so the closure carries it to executors.
+    Option<Registry> lookupMetrics = RecordIndexLookupMetrics.resolveRegistry(context, hoodieTable.getConfig());
+    return HoodieJavaPairRDD.of(partitionedKeyRDD.mapPartitionsToPair(
+        new PartitionedRecordIndexFileGroupLookupFunction(hoodieTable.getTableMetadata(), lookupMetrics)));
   }
 
   @Override

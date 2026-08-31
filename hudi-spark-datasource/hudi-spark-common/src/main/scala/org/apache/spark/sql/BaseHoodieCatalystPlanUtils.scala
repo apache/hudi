@@ -22,7 +22,7 @@ import org.apache.hudi.SparkAdapterSupport
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{ResolvedTable, TableOutputResolver}
 import org.apache.spark.sql.catalyst.catalog.CatalogStorageFormat
-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression, ProjectionOverSchema}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{CreateIndex, DropIndex, HoodieShowIndexes, InsertIntoStatement, Join, JoinHint, LogicalPlan, RefreshIndex}
 import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog}
@@ -30,15 +30,8 @@ import org.apache.spark.sql.execution.{ExtendedMode, SimpleMode}
 import org.apache.spark.sql.execution.command.{CreateTableLikeCommand, ExplainCommand, RepairTableCommand}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.StructType
 
 trait BaseHoodieCatalystPlanUtils extends HoodieCatalystPlansUtils {
-
-  /**
-   * Instantiates [[ProjectionOverSchema]] utility
-   */
-  def projectOverSchema(schema: StructType, output: AttributeSet): ProjectionOverSchema =
-    ProjectionOverSchema(schema, output)
 
   /**
    * Un-applies [[ResolvedTable]] that had its signature changed in Spark 3.2

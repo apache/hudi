@@ -23,8 +23,8 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -95,7 +95,7 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
       HoodieConfig config,
       HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
-    boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
+    boolean populateMetaFields = MetaFieldsMode.resolve(config).toLegacyPopulateMetaFields();
     boolean withOperation = config.getBooleanOrDefault(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD);
 
     Pair<StorageConfiguration, HoodieConfig> injectedConfigs = HoodieParquetConfigInjector.applyConfigInjector(storagePath, storage.getConf(), config);
@@ -120,9 +120,10 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
       HoodieConfig config,
       HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) {
-    boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
+    MetaFieldsMode metaFieldsMode = MetaFieldsMode.resolve(config);
+    boolean populateMetaFields = metaFieldsMode.toLegacyPopulateMetaFields();
     boolean withOperation = config.getBooleanOrDefault(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD);
-    Option<org.apache.hudi.common.bloom.BloomFilter> bloomFilter = enableBloomFilter(populateMetaFields, config)
+    Option<org.apache.hudi.common.bloom.BloomFilter> bloomFilter = enableBloomFilter(metaFieldsMode, config)
         ? Option.of(createBloomFilter(config)) : Option.empty();
     RowType rowType = HoodieSchemaConverter.convertToRowType(schema);
     return new HoodieRowDataLanceWriter(
@@ -143,7 +144,7 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
       HoodieConfig config, HoodieRowDataParquetWriteSupport writeSupport) {
     return new HoodieParquetConfig<>(
         writeSupport,
-        getCompressionCodecName(config.getStringOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME)),
+        getCompressionCodecName(config.getString(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME)),
         config.getIntOrDefault(HoodieStorageConfig.PARQUET_BLOCK_SIZE),
         config.getIntOrDefault(HoodieStorageConfig.PARQUET_PAGE_SIZE),
         config.getLongOrDefault(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE),

@@ -56,6 +56,8 @@ public class CloudObjectTestUtils {
     String approximateNumberOfMessages = "0";
 
     if (path != null) {
+      // glacierEventData is deliberately absent from streamer-config/s3-metadata.avsc: a test that
+      // sees it as a column proves the schema was inferred from this payload, not schema-provided
       String body =
           "{\n  \"Type\" : \"Notification\",\n  \"MessageId\" : \"1\",\n  \"TopicArn\" : \"arn:aws:sns:foo:123:"
               + "foo-bar\",\n  \"Subject\" : \"Amazon S3 Notification\",\n  \"Message\" : \"{\\\"Records\\\":"
@@ -63,7 +65,8 @@ public class CloudObjectTestUtils {
               + "-west-2\\\",\\\"eventTime\\\":\\\"2021-07-27T09:05:36.755Z\\\",\\\"eventName\\\":\\\"ObjectCreated"
               + ":Copy\\\",\\\"userIdentity\\\":{\\\"principalId\\\":\\\"AWS:test\\\"},\\\"requestParameters\\\":"
               + "{\\\"sourceIPAddress\\\":\\\"0.0.0.0\\\"},\\\"responseElements\\\":{\\\"x-amz-request-id\\\":\\\""
-              + "test\\\",\\\"x-amz-id-2\\\":\\\"foobar\\\"},\\\"s3\\\":{\\\"s3SchemaVersion\\\":\\\"1.0\\\",\\\""
+              + "test\\\",\\\"x-amz-id-2\\\":\\\"foobar\\\"},\\\"glacierEventData\\\":{\\\"restoreEventData\\\":"
+              + "{\\\"lifecycleRestoreStorageClass\\\":\\\"STANDARD\\\"}},\\\"s3\\\":{\\\"s3SchemaVersion\\\":\\\"1.0\\\",\\\""
               + "configurationId\\\":\\\"foobar\\\",\\\"bucket\\\":{\\\"name\\\":\\\""
               + path.getParent().toString().replace("hdfs://", "")
               + "\\\",\\\"ownerIdentity\\\":{\\\"principalId\\\":\\\"foo\\\"},\\\"arn\\\":\\\"arn:aws:s3:::foo\\\"}"

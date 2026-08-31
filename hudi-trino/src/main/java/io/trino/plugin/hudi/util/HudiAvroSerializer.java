@@ -41,7 +41,6 @@ import io.trino.spi.type.SqlVarbinary;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.VarbinaryType;
 import io.trino.spi.type.VarcharType;
-import org.apache.avro.Conversions;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -49,6 +48,7 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.util.Utf8;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.time.DateTimeException;
 import java.time.Instant;
@@ -60,15 +60,14 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
+import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.base.Verify.verify;
 import static io.airlift.slice.Slices.utf8Slice;
-import static io.trino.plugin.hudi.HudiUtil.constructSchema;
 import static io.trino.plugin.hudi.HudiUtil.getFieldFromSchema;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static io.trino.spi.StandardErrorCode.NUMERIC_VALUE_OUT_OF_RANGE;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.DateType.DATE;
-import static io.trino.spi.type.Decimals.encodeShortScaledValue;
 import static io.trino.spi.type.Decimals.writeBigDecimal;
 import static io.trino.spi.type.Decimals.writeShortDecimal;
 import static io.trino.spi.type.IntegerType.INTEGER;
@@ -106,29 +105,62 @@ public class HudiAvroSerializer
             1, // 9 digits after the dot
     };
 
-    private static final AvroDecimalConverter DECIMAL_CONVERTER = new AvroDecimalConverter();
     private final PrefilledColumnValues prefilledColumnValues;
 
     private final List<HiveColumnHandle> columnHandles;
     private final List<Type> columnTypes;
+    // Both are null for a page-building-only serializer (the two-arg constructor): buildRecordInPage
+    // reads field positions off each record's own schema, so no record schema is needed there -- and
+    // none could be built for hidden (synthesized) columns, which are answered from the split by
+    // PrefilledColumnValues rather than read from the file. serialize() requires the three-arg
+    // constructor, which maps page channel i to record position channelToFieldPosition[i].
     private final Schema schema;
+    private final int[] channelToFieldPosition;
+    // Single-entry cache for buildRecordInPage: all records of a split share one schema instance,
+    // so an identity check makes the per-record, per-column field-name lookup a one-time cost.
+    // Prefilled (hidden/synthesized) columns are not fields of the record schema; they get -1.
+    private Schema positionsCacheSchema;
+    private int[] positionsCache;
 
     public HudiAvroSerializer(List<HiveColumnHandle> columnHandles, PrefilledColumnValues prefilledColumnValues)
     {
         this.columnHandles = columnHandles;
         this.columnTypes = columnHandles.stream().map(HiveColumnHandle::getType).toList();
-        // Fetches projected schema
-        this.schema = constructSchema(columnHandles.stream().filter(ch -> !ch.isHidden()).map(HiveColumnHandle::getName).toList(),
-                columnHandles.stream().filter(ch -> !ch.isHidden()).map(HiveColumnHandle::getHiveType).toList());
         this.prefilledColumnValues = prefilledColumnValues;
+        this.schema = null;
+        this.channelToFieldPosition = null;
+    }
+
+    /**
+     * Builds a serializer whose {@link #serialize} records carry {@code recordSchema} -- the exact
+     * schema hudi-common tracks for the records of this read (the file-group reader's required
+     * schema) -- instead of a schema reconstructed from the projection's Hive types. The
+     * reconstruction differs from the table's real schema (every Hive column becomes a nullable
+     * union, fields follow projection order), and payload-based merging round-trips the record
+     * through Avro BINARY with the tracked schema ({@code BaseAvroPayload}), where any structural
+     * difference misaligns the decode and yields garbage values. Page channels are matched to
+     * record fields BY NAME, so the projection may order columns differently from the schema;
+     * every projected column must be a field of {@code recordSchema}.
+     */
+    public HudiAvroSerializer(List<HiveColumnHandle> columnHandles, PrefilledColumnValues prefilledColumnValues, Schema recordSchema)
+    {
+        this.columnHandles = columnHandles;
+        this.columnTypes = columnHandles.stream().map(HiveColumnHandle::getType).toList();
+        this.schema = recordSchema;
+        this.prefilledColumnValues = prefilledColumnValues;
+        int[] mapping = new int[columnHandles.size()];
+        for (int i = 0; i < columnHandles.size(); i++) {
+            mapping[i] = getFieldFromSchema(columnHandles.get(i).getName(), recordSchema).pos();
+        }
+        this.channelToFieldPosition = mapping;
     }
 
     public IndexedRecord serialize(Page sourcePage, int position)
     {
+        checkState(schema != null, "serialize() requires a serializer built with a record schema");
         IndexedRecord record = new GenericData.Record(schema);
         for (int i = 0; i < columnTypes.size(); i++) {
-            Object value = getValue(sourcePage, i, position);
-            record.put(i, value);
+            record.put(channelToFieldPosition[i], getValue(sourcePage, i, position));
         }
         return record;
     }
@@ -141,19 +173,34 @@ public class HudiAvroSerializer
     public void buildRecordInPage(PageBuilder pageBuilder, IndexedRecord record)
     {
         pageBuilder.declarePosition();
-        int blockSeq = 0;
-        for (int channel = 0; channel < columnTypes.size(); channel++, blockSeq++) {
-            BlockBuilder output = pageBuilder.getBlockBuilder(blockSeq);
-            HiveColumnHandle columnHandle = columnHandles.get(channel);
-            if (prefilledColumnValues.isPrefilled(columnHandle)) {
-                prefilledColumnValues.appendTo(columnHandle, output);
+        // Record may not be projected, get field positions from its own schema
+        int[] fieldPositions = fieldPositionsFor(record.getSchema());
+        for (int channel = 0; channel < columnTypes.size(); channel++) {
+            BlockBuilder output = pageBuilder.getBlockBuilder(channel);
+            int fieldPosition = fieldPositions[channel];
+            if (fieldPosition < 0) {
+                prefilledColumnValues.appendTo(columnHandles.get(channel), output);
             }
             else {
-                // Record may not be projected, get index from it
-                int fieldPosInSchema = getFieldFromSchema(columnHandle.getName(), record.getSchema()).pos();
-                appendTo(columnTypes.get(channel), record.get(fieldPosInSchema), output);
+                appendTo(columnTypes.get(channel), record.get(fieldPosition), output);
             }
         }
+    }
+
+    private int[] fieldPositionsFor(Schema recordSchema)
+    {
+        if (positionsCacheSchema != recordSchema) {
+            int[] positions = new int[columnHandles.size()];
+            for (int channel = 0; channel < columnHandles.size(); channel++) {
+                HiveColumnHandle columnHandle = columnHandles.get(channel);
+                positions[channel] = prefilledColumnValues.isPrefilled(columnHandle)
+                        ? -1
+                        : getFieldFromSchema(columnHandle.getName(), recordSchema).pos();
+            }
+            positionsCache = positions;
+            positionsCacheSchema = recordSchema;
+        }
+        return positionsCache;
     }
 
     public static void appendTo(Type type, Object value, BlockBuilder output)
@@ -211,8 +258,13 @@ public class HudiAvroSerializer
                     }
                     else if (value instanceof GenericData.Fixed fixed) {
                         verify(decimalType.isShort(), "The type should be short decimal");
-                        BigDecimal decimal = DECIMAL_CONVERTER.convert(decimalType.getPrecision(), decimalType.getScale(), fixed.bytes());
-                        type.writeLong(output, encodeShortScaledValue(decimal, decimalType.getScale()));
+                        // Avro stores a decimal as its unscaled value in big-endian two's complement, which is
+                        // exactly what Trino's short decimal holds. Going through Avro's DecimalConversion and
+                        // Decimals.encodeShortScaledValue is a no-op round trip: DecimalConversion.fromBytes reads
+                        // only the scale (it ignores precision, and its schema argument entirely) to build
+                        // BigDecimal(unscaled, scale), and encodeShortScaledValue then calls setScale to that same
+                        // scale, which returns the BigDecimal unchanged, before taking the unscaled value back out.
+                        type.writeLong(output, new BigInteger(fixed.bytes()).longValueExact());
                     }
                     else {
                         throw new TrinoException(GENERIC_INTERNAL_ERROR,
@@ -444,7 +496,7 @@ public class HudiAvroSerializer
             type.writeObject(output, trinoNativeDecimalValue);
         }
         else {
-            throw new TrinoException(GENERIC_INTERNAL_ERROR, "Unhandled type for Object: " + type.getTypeSignature());
+            throw new TrinoException(GENERIC_INTERNAL_ERROR, "Unhandled type for Object: " + type.getTypeDescriptor());
         }
     }
 
@@ -464,7 +516,9 @@ public class HudiAvroSerializer
         output.buildEntry(fieldBuilders -> {
             for (int index = 0; index < fields.size(); index++) {
                 RowType.Field field = fields.get(index);
-                appendTo(field.getType(), record.get(field.getName().orElse("field" + index)), fieldBuilders.get(index));
+                int fieldIndex = index;
+                String fieldName = field.getName().orElseGet(() -> "field" + fieldIndex);
+                appendTo(field.getType(), record.get(fieldName), fieldBuilders.get(index));
             }
         });
     }
@@ -490,16 +544,5 @@ public class HudiAvroSerializer
                 appendTo(valueType, entry.getValue(), valueBuilder);
             }
         });
-    }
-
-    static class AvroDecimalConverter
-    {
-        private static final Conversions.DecimalConversion AVRO_DECIMAL_CONVERSION = new Conversions.DecimalConversion();
-
-        BigDecimal convert(int precision, int scale, byte[] bytes)
-        {
-            Schema schema = new Schema.Parser().parse(format("{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":%d,\"scale\":%d}", precision, scale));
-            return AVRO_DECIMAL_CONVERSION.fromBytes(ByteBuffer.wrap(bytes), schema, schema.getLogicalType());
-        }
     }
 }

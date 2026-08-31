@@ -168,7 +168,7 @@ public enum HFileBlockType {
     in.readFully(buf);
     if (IOUtils.compareTo(buf, magic) != 0) {
       throw new IOException("Invalid magic: expected "
-          + new String(magic) + ", got " + new String(buf));
+          + new String(magic, UTF_8) + ", got " + new String(buf, UTF_8));
     }
   }
 }

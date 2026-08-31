@@ -60,7 +60,6 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.format.FlinkReaderContextFactory;
-import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.HoodieRowDataFileReader;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
@@ -80,9 +79,11 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.CloseableUtils.closeSuppressing;
 import static org.apache.hudi.table.format.FormatUtils.buildAvroRecordBySchema;
 
 /**
@@ -124,19 +125,19 @@ public final class CdcIterators {
 
     @Override
     public boolean hasNext() {
-      if (recordIterator != null) {
-        if (recordIterator.hasNext()) {
-          return true;
-        } else {
+      while (true) {
+        if (recordIterator != null) {
+          if (recordIterator.hasNext()) {
+            return true;
+          }
           recordIterator.close();
           recordIterator = null;
         }
-      }
-      if (fileSplitIterator.hasNext()) {
+        if (!fileSplitIterator.hasNext()) {
+          return false;
+        }
         recordIterator = recordIteratorFunc.apply(fileSplitIterator.next());
-        return recordIterator.hasNext();
       }
-      return false;
     }
 
     @Override
@@ -146,11 +147,12 @@ public final class CdcIterators {
 
     @Override
     public void close() {
-      if (recordIterator != null) {
-        recordIterator.close();
-      }
-      if (imageManager != null) {
-        imageManager.close();
+      try (CdcImageManager ignored = imageManager) {
+        if (recordIterator != null) {
+          recordIterator.close();
+        }
+      } finally {
+        recordIterator = null;
         imageManager = null;
       }
     }
@@ -253,7 +255,7 @@ public final class CdcIterators {
     private final String[] orderingFields;
     private final TypedProperties props;
 
-    private ExternalSpillableMap<String, byte[]> beforeImages;
+    private Map<String, byte[]> beforeImages;
     private RowData currentImage;
     private RowData sideImage;
 
@@ -287,15 +289,15 @@ public final class CdcIterators {
           metaClient.getTableConfig().getPartialUpdateMode());
       this.logRecordIterator = logRecordIterator;
       this.deleteContext = new DeleteContext(props, tableSchema).withReaderSchema(tableSchema);
-      initImages(cdcFileSplit, writeConfig);
+      initImages(cdcFileSplit);
     }
 
-    private void initImages(HoodieCDCFileSplit fileSplit, HoodieWriteConfig writeConfig) throws IOException {
+    private void initImages(HoodieCDCFileSplit fileSplit) throws IOException {
       if (fileSplit.getBeforeFileSlice().isPresent() && !fileSplit.getBeforeFileSlice().get().isEmpty()) {
         this.beforeImages = imageManager.getOrLoadImages(
             maxCompactionMemoryInBytes, fileSplit.getBeforeFileSlice().get());
       } else {
-        this.beforeImages = FormatUtils.spillableMap(writeConfig, maxCompactionMemoryInBytes, getClass().getSimpleName());
+        this.beforeImages = Collections.emptyMap();
       }
     }
 
@@ -348,7 +350,6 @@ public final class CdcIterators {
     @Override
     public void close() {
       logRecordIterator.close();
-      imageManager.close();
     }
 
     @SuppressWarnings("unchecked")
@@ -662,7 +663,12 @@ public final class CdcIterators {
       this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
       this.projection = RowDataProjection.instance(requiredRowType, requiredPositions);
       this.imageManager = imageManager;
-      initImages(fileSplit);
+      try {
+        initImages(fileSplit);
+      } catch (IOException | RuntimeException | Error e) {
+        closeSuppressing(this, e);
+        throw e;
+      }
     }
 
     protected void initImages(HoodieCDCFileSplit fileSplit) throws IOException {

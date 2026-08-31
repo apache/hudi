@@ -61,6 +61,7 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -334,5 +335,14 @@ public class HoodieClientTestUtils {
     } catch (Exception e) {
       return false;
     }
+  }
+
+  /**
+   * Adapts a raw-typed record list, as produced by the test data generators, to the typed
+   * iterator expected by {@code MergeContext} without a raw cast at every call site.
+   */
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  public static <T> Iterator<HoodieRecord<T>> toTypedRecordIterator(List<HoodieRecord> records) {
+    return (Iterator) records.iterator();
   }
 }

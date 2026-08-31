@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -61,7 +62,10 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -157,6 +161,85 @@ public class TestSortedAndChangeLogMergeHandles {
     }
   }
 
+  @Test
+  public void testWriteUpdateRecordDropsIncomingRecordWhenMergeKeepsOldValue() throws Exception {
+    HoodieWriteConfig config = config();
+    TestContext context = new TestContext(config);
+
+    try (MockedStatic<WriteMarkersFactory> markers = mockStatic(WriteMarkersFactory.class);
+         MockedStatic<HoodieFileWriterFactory> writers = mockStatic(HoodieFileWriterFactory.class)) {
+      context.stubWriters(markers, writers);
+      TestableWriteMergeHandle handle = new TestableWriteMergeHandle(config, context.table, new HashMap<>());
+
+      // The merge kept the old value, so the combined record carries the old payload instance.
+      GenericRecord oldData = mock(GenericRecord.class);
+      HoodieRecord oldRecord = record("u");
+      HoodieRecord combinedRecord = record("u");
+      when(oldRecord.getData()).thenReturn(oldData);
+      when(combinedRecord.getData()).thenReturn(oldData);
+
+      assertFalse(handle.writeUpdate(record("u"), oldRecord, combinedRecord));
+      assertEquals(Collections.emptyList(), handle.writtenKeys);
+    }
+  }
+
+  @Test
+  public void testWriteInsertRecordSkipsIgnoredRecord() throws Exception {
+    HoodieWriteConfig config = config();
+    TestContext context = new TestContext(config);
+
+    try (MockedStatic<WriteMarkersFactory> markers = mockStatic(WriteMarkersFactory.class);
+         MockedStatic<HoodieFileWriterFactory> writers = mockStatic(HoodieFileWriterFactory.class)) {
+      context.stubWriters(markers, writers);
+      TestableWriteMergeHandle handle = new TestableWriteMergeHandle(config, context.table, new HashMap<>());
+
+      HoodieRecord ignored = record("i");
+      when(ignored.shouldIgnore(any(HoodieSchema.class), any())).thenReturn(true);
+      handle.writeInsert(ignored);
+
+      assertEquals(Collections.emptyList(), handle.writtenKeys);
+    }
+  }
+
+  @Test
+  public void testWriteRecordMarksFailureWhenPartitionPathDoesNotMatch() throws Exception {
+    HoodieWriteConfig config = config();
+    TestContext context = new TestContext(config);
+
+    try (MockedStatic<WriteMarkersFactory> markers = mockStatic(WriteMarkersFactory.class);
+         MockedStatic<HoodieFileWriterFactory> writers = mockStatic(HoodieFileWriterFactory.class)) {
+      context.stubWriters(markers, writers);
+      TestableWriteMergeHandle handle = new TestableWriteMergeHandle(config, context.table, new HashMap<>());
+
+      HoodieRecord foreignRecord = record("f");
+      when(foreignRecord.getPartitionPath()).thenReturn("another-partition");
+      handle.writeInsert(foreignRecord);
+
+      assertEquals(Collections.emptyList(), handle.writtenKeys);
+      assertTrue(handle.status().hasErrors());
+      assertEquals(1, handle.status().getTotalErrorRecords());
+    }
+  }
+
+  @Test
+  public void testCloseIsIdempotent() throws Exception {
+    HoodieWriteConfig config = config();
+    TestContext context = new TestContext(config);
+
+    try (MockedStatic<WriteMarkersFactory> markers = mockStatic(WriteMarkersFactory.class);
+         MockedStatic<HoodieFileWriterFactory> writers = mockStatic(HoodieFileWriterFactory.class)) {
+      context.stubWriters(markers, writers);
+      TestableWriteMergeHandle handle = new TestableWriteMergeHandle(config, context.table, new HashMap<>());
+
+      List<WriteStatus> first = handle.close();
+      List<WriteStatus> second = handle.close();
+
+      assertEquals(1, second.size());
+      assertSame(first.get(0), second.get(0));
+      verify(context.fileWriter, times(1)).close();
+    }
+  }
+
   private static HoodieWriteConfig config() {
     return HoodieWriteConfig.newBuilder()
         .withPath("/tmp")
@@ -198,6 +281,7 @@ public class TestSortedAndChangeLogMergeHandles {
       when(metaClient.getTableConfig()).thenReturn(tableConfig);
       when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
       when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.TEN);
+      when(tableConfig.getMetaFieldsMode()).thenReturn(MetaFieldsMode.ALL);
       when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.COMMIT_TIME_ORDERING);
       when(tableConfig.getPayloadClassIfPresent()).thenReturn(Option.empty());
       when(tableConfig.getPartitionMetafileFormat()).thenReturn(Option.empty());
@@ -241,6 +325,37 @@ public class TestSortedAndChangeLogMergeHandles {
 
     private void markWritten(String key) {
       writtenRecordKeys.add(key);
+    }
+  }
+
+  private static class TestableWriteMergeHandle extends HoodieWriteMergeHandle {
+    private final List<String> writtenKeys = new ArrayList<>();
+
+    private TestableWriteMergeHandle(
+        HoodieWriteConfig config, HoodieTable table, Map<String, HoodieRecord> records) {
+      super(config, "100", table, records, "partition", "file-1", null,
+          new LocalTaskContextSupplier(), Option.empty());
+    }
+
+    @Override
+    protected void writeToFile(
+        HoodieKey key, HoodieRecord record, HoodieSchema schema, Properties props,
+        boolean shouldPreserveRecordMetadata) {
+      // These tests target the decisions taken before the record reaches the writer.
+      writtenKeys.add(key.getRecordKey());
+    }
+
+    private void writeInsert(HoodieRecord record) throws IOException {
+      writeInsertRecord(record);
+    }
+
+    private boolean writeUpdate(
+        HoodieRecord newRecord, HoodieRecord oldRecord, HoodieRecord combinedRecord) throws IOException {
+      return writeUpdateRecord(newRecord, oldRecord, combinedRecord, writeSchema);
+    }
+
+    private WriteStatus status() {
+      return writeStatus;
     }
   }
 

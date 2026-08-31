@@ -111,6 +111,8 @@ object HoodieProcedures {
       ,(ShowAuditLockStatusProcedure.NAME, ShowAuditLockStatusProcedure.builder)
       ,(ValidateAuditLockProcedure.NAME, ValidateAuditLockProcedure.builder)
       ,(CleanupAuditLockProcedure.NAME, CleanupAuditLockProcedure.builder)
+      ,(GetDeltaStreamerCheckpointProcedure.NAME, GetDeltaStreamerCheckpointProcedure.builder)
+      ,(SetDeltaStreamerCheckpointProcedure.NAME, SetDeltaStreamerCheckpointProcedure.builder)
     )
   }
 }

@@ -19,7 +19,6 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -104,8 +103,11 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
     writeStatus.setStat(new HoodieWriteStat());
     this.writer = new HoodieParquetFileBinaryCopier(
         conf,
-        CompressionCodecName.fromConf(config.getStringOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME)),
+        CompressionCodecName.fromConf(config.getParquetCompressionCodec()),
         fileMetadataMerger);
+    // From the TABLE config, as the write handles do: the mode is a table property, and the copier
+    // otherwise rewrites _hoodie_file_name on a table that does not populate it.
+    this.writer.setMetaFieldsMode(hoodieTable.getMetaClient().getTableConfig().getMetaFieldsMode());
   }
 
   public void write() {

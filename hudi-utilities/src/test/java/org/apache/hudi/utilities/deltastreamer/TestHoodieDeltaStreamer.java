@@ -54,6 +54,10 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchema.TimePrecision;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.internal.Type;
+import org.apache.hudi.common.schema.internal.Types;
+import org.apache.hudi.common.schema.internal.utils.AvroSchemaEvolutionUtils;
+import org.apache.hudi.common.schema.internal.utils.SchemaChangeUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -132,6 +136,8 @@ import org.apache.hudi.utilities.transform.Transformer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.avro.LogicalType;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -201,6 +207,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -758,6 +765,97 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(1450, sqlContext.read().options(hudiOpts).format("org.apache.hudi").load(tableBasePath).filter("current_ts > '1980-01-01'").count());
     assertEquals(1450, sqlContext.read().options(hudiOpts).format("org.apache.hudi").load(tableBasePath).filter("current_ts < '2080-01-01'").count());
     assertEquals(0, sqlContext.read().options(hudiOpts).format("org.apache.hudi").load(tableBasePath).filter("current_ts < '1980-01-01'").count());
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testLongToTimestampPromotionGated(boolean setNullForMissingColumns) throws Exception {
+    // Promoting a plain long column to a timestamp logical type is override-gated: rejected without a
+    // per-field override for every target type, and applied with one. A bare long carries no precision
+    // signal, so the override is the explicit verdict that authorizes the promotion. One bare-long seed
+    // is reused: the rejection cases all throw (table stays bare long), and the accepted case runs last.
+    String tableBasePath = basePath + "/testLongToTs" + setNullForMissingColumns;
+    defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
+
+    // Sync 0: seed the table with `seconds_since_epoch` stored as a bare long.
+    HoodieDeltaStreamer.Config seed = TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT,
+        Collections.singletonList(TestIdentityTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE,
+        false, true, false, null, HoodieTableType.COPY_ON_WRITE.name());
+    seed.configs.add("hoodie.streamer.schemaprovider.source.schema.file=" + basePath + "/source-timestamp-millis.avsc");
+    seed.configs.add("hoodie.streamer.schemaprovider.target.schema.file=" + basePath + "/source-timestamp-millis.avsc");
+    seed.configs.add("hoodie.datasource.write.row.writer.enable=false");
+    seed.configs.add(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key() + "=" + setNullForMissingColumns);
+    new HoodieDeltaStreamer(seed, jsc).sync();
+
+    Schema tableSchema = new TableSchemaResolver(HoodieTestUtils.createMetaClient(storage, tableBasePath))
+        .getTableSchema(false).toAvroSchema();
+    assertNull(tableSchema.getField("seconds_since_epoch").schema().getLogicalType(),
+        "seconds_since_epoch must be seeded as a bare long in the table");
+    Schema baseSchema = new Schema.Parser().parse(fs.open(new Path(basePath + "/source-timestamp-millis.avsc")));
+
+    // Every target type is rejected without a per-field override.
+    for (LogicalType targetType : new LogicalType[] {LogicalTypes.timestampMillis(), LogicalTypes.timestampMicros(),
+        LogicalTypes.localTimestampMillis(), LogicalTypes.localTimestampMicros()}) {
+      String schemaFile = writePromotedSchema(baseSchema, targetType, setNullForMissingColumns);
+      HoodieDeltaStreamer.Config reject = promoteConfig(tableBasePath, schemaFile, setNullForMissingColumns, null);
+      HoodieDeltaStreamer streamer = new HoodieDeltaStreamer(reject, jsc);
+      // sync() wraps the guard's SchemaCompatibilityException in a HoodieIngestionException, so walk
+      // the cause chain to assert on the underlying exception.
+      Throwable thrown = assertThrows(Exception.class, streamer::sync,
+          "long -> " + targetType.getName() + " must be rejected without an override");
+      Throwable cause = thrown;
+      while (cause != null && !(cause instanceof SchemaCompatibilityException)) {
+        cause = cause.getCause();
+      }
+      assertTrue(cause instanceof SchemaCompatibilityException,
+          "Expected a SchemaCompatibilityException in the cause chain, got: " + thrown);
+      Type toType = SchemaChangeUtils.parseTimestampLogicalTypeOverrides("field:" + targetType.getName()).get("field");
+      assertEquals(AvroSchemaEvolutionUtils.timestampPrecisionChangeError(
+          "seconds_since_epoch", Types.LongType.get(), toType).getMessage(), cause.getMessage());
+    }
+
+    // With an override the promotion is authorized (local promotions are covered end-to-end by
+    // testCOWLogicalRepair / testMORLogicalRepair); verify a UTC promotion succeeds and lands on the
+    // table schema.
+    String utcSchemaFile = writePromotedSchema(baseSchema, LogicalTypes.timestampMicros(), setNullForMissingColumns);
+    HoodieDeltaStreamer.Config accept = promoteConfig(tableBasePath, utcSchemaFile, setNullForMissingColumns,
+        "seconds_since_epoch:timestamp-micros");
+    new HoodieDeltaStreamer(accept, jsc).sync();
+    Schema evolved = new TableSchemaResolver(HoodieTestUtils.createMetaClient(storage, tableBasePath))
+        .getTableSchema(false).toAvroSchema();
+    assertEquals("timestamp-micros", evolved.getField("seconds_since_epoch").schema().getLogicalType().getName());
+  }
+
+  private String writePromotedSchema(Schema baseSchema, LogicalType targetType, boolean setNull) throws IOException {
+    Schema incoming = replaceFieldType(baseSchema, "seconds_since_epoch",
+        targetType.addToSchema(Schema.create(Schema.Type.LONG)));
+    String schemaFile = basePath + "/promote-" + targetType.getName() + "-nul" + setNull + ".avsc";
+    UtilitiesTestBase.Helpers.saveStringsToDFS(new String[] {incoming.toString()}, storage, schemaFile);
+    return schemaFile;
+  }
+
+  private HoodieDeltaStreamer.Config promoteConfig(String tableBasePath, String schemaFile,
+                                                   boolean setNullForMissingColumns, String override) {
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT,
+        Collections.singletonList(TestIdentityTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE,
+        false, true, false, null, HoodieTableType.COPY_ON_WRITE.name());
+    cfg.configs.add("hoodie.streamer.schemaprovider.source.schema.file=" + schemaFile);
+    cfg.configs.add("hoodie.streamer.schemaprovider.target.schema.file=" + schemaFile);
+    cfg.configs.add("hoodie.datasource.write.row.writer.enable=false");
+    cfg.configs.add(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key() + "=" + setNullForMissingColumns);
+    if (override != null) {
+      cfg.configs.add(HoodieCommonConfig.TIMESTAMP_LOGICAL_TYPE_OVERRIDES.key() + "=" + override);
+    }
+    return cfg;
+  }
+
+  private static Schema replaceFieldType(Schema recordSchema, String fieldName, Schema newFieldType) {
+    List<Schema.Field> fields = new ArrayList<>();
+    for (Schema.Field field : recordSchema.getFields()) {
+      Schema fieldSchema = field.name().equals(fieldName) ? newFieldType : field.schema();
+      fields.add(new Schema.Field(field.name(), fieldSchema, field.doc(), field.defaultVal()));
+    }
+    return Schema.createRecord(recordSchema.getName(), recordSchema.getDoc(), recordSchema.getNamespace(), false, fields);
   }
 
   @Test
@@ -3236,28 +3334,56 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   @Test
   public void testKafkaTimestampType() throws Exception {
-    topicName = "topic" + testNum;
+    // Timestamp-based Kafka checkpoints have two distinct fallback behaviors we need to cover:
+    //   (1) Checkpoint captured BEFORE records are produced: every record has ts >= checkpoint,
+    //       so `offsetsForTimes` returns concrete offsets and ingestion consumes all of them.
+    //   (2) Checkpoint captured AFTER records are produced: no record has ts >= checkpoint, so
+    //       `offsetsForTimes` returns null for every partition and we fall back to the end offset
+    //       of each partition. Nothing should be ingested, and a subsequent batch produced *after*
+    //       the checkpoint should be picked up on the next sync — this proves that the fallback
+    //       stored a usable checkpoint at the partition tip (not offset 0, which would replay the
+    //       original records).
     kafkaCheckpointType = "timestamp";
-    prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, true, topicName);
-    prepareJsonKafkaDFSSource(PROPS_FILENAME_TEST_JSON_KAFKA, "earliest", topicName);
-    String tableBasePath = basePath + "/test_json_kafka_table" + testNum;
-    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
-        TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
-            Collections.emptyList(), PROPS_FILENAME_TEST_JSON_KAFKA, false,
-            true, 100000, false, null,
-            null, "timestamp", String.valueOf(System.currentTimeMillis())), jsc);
-    deltaStreamer.sync();
-    assertRecordCount(JSON_KAFKA_NUM_RECORDS, tableBasePath, sqlContext);
 
-    prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, false, topicName);
-    deltaStreamer = new HoodieDeltaStreamer(
-        TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
-            Collections.emptyList(), PROPS_FILENAME_TEST_JSON_KAFKA, false,
-            true, 100000, false, null, null,
-            "timestamp", String.valueOf(System.currentTimeMillis())), jsc);
-    deltaStreamer.sync();
-    assertRecordCount(JSON_KAFKA_NUM_RECORDS * 2, tableBasePath, sqlContext);
-    deltaStreamer.shutdownGracefully();
+    // ---- Case 1: checkpoint captured BEFORE producing records ----
+    long checkpointBeforeProduction = System.currentTimeMillis();
+    prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, true, "topic" + testNum);
+    prepareJsonKafkaDFSSource(PROPS_FILENAME_TEST_JSON_KAFKA, "earliest", "topic" + testNum);
+    String tableBasePath1 = basePath + "/test_json_kafka_table" + testNum;
+    syncOnce(TestHelpers.makeConfig(tableBasePath1, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
+        Collections.emptyList(), PROPS_FILENAME_TEST_JSON_KAFKA, false,
+        true, 100000, false, null,
+        null, "timestamp", String.valueOf(checkpointBeforeProduction)));
+    assertRecordCount(JSON_KAFKA_NUM_RECORDS, tableBasePath1, sqlContext);
+
+    // ---- Case 2: checkpoint captured AFTER producing records ----
+    // First batch predates the checkpoint => fallback path returns end offsets (partition tips).
+    // Nothing should be ingested in the first sync; a second batch produced after the checkpoint
+    // should be fully consumed on the follow-up sync (which reuses the checkpoint stored by the
+    // first sync). This asserts we resumed at the tip, not at offset 0.
+    String topicName2 = "topic_after_" + testNum;
+    prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, true, topicName2);
+    // Small pause so the timestamp is guaranteed to be after the last produced record's ts.
+    Thread.sleep(10);
+    long checkpointAfterProduction = System.currentTimeMillis();
+    prepareJsonKafkaDFSSource(PROPS_FILENAME_TEST_JSON_KAFKA, "earliest", topicName2);
+    String tableBasePath2 = basePath + "/test_json_kafka_table_after_" + testNum;
+    syncOnce(TestHelpers.makeConfig(tableBasePath2, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
+        Collections.emptyList(), PROPS_FILENAME_TEST_JSON_KAFKA, false,
+        true, 100000, false, null, null,
+        "timestamp", String.valueOf(checkpointAfterProduction)));
+    assertRecordCount(0, tableBasePath2, sqlContext);
+
+    // Produce a fresh batch strictly after the checkpoint and sync again with no --checkpoint
+    // override, so the streamer picks up from the offsets we stored in the first sync.
+    prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, false, topicName2);
+    syncOnce(TestHelpers.makeConfig(tableBasePath2, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
+        Collections.emptyList(), PROPS_FILENAME_TEST_JSON_KAFKA, false,
+        true, 100000, false, null, null,
+        "timestamp", null));
+    // Only the second batch should be ingested; the first batch (which predates the checkpoint)
+    // stays skipped, confirming the fallback resumed at the partition tip.
+    assertRecordCount(JSON_KAFKA_NUM_RECORDS, tableBasePath2, sqlContext);
   }
 
   @Disabled("HUDI-6609")

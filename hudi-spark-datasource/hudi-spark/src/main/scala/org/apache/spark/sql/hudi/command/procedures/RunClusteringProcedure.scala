@@ -20,12 +20,14 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.{HoodieCLIUtils, HoodieFileIndex, HoodieSchemaConversionUtils}
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.client.SparkRDDWriteClient
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
-import org.apache.hudi.common.util.{ClusteringUtils, HoodieTimer, Option => HOption}
+import org.apache.hudi.common.util.{ClusteringUtils, HoodieTimer, Option => HOption, SortUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieLockConfig}
 import org.apache.hudi.exception.HoodieClusteringException
+import org.apache.hudi.execution.bulkinsert.SpatialCurveSortPartitionerBase
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.{resolveExpr, splitPartitionAndDataPredicates}
@@ -120,14 +122,14 @@ class RunClusteringProcedure extends BaseProcedure
       logInfo(s"Partition selected: $selectedPartitions")
     }
 
-    // Construct sort column info
+    // Construct sort column info. `options`, merged below, may carry the same key and wins over
+    // `order` as it always has; the value is normalised and validated once after the merges, so
+    // the check covers both routes and the plan stores exactly what was checked.
     orderColumns match {
       case Some(o) =>
-        validateOrderColumns(o.asInstanceOf[String], metaClient)
         confs = confs ++ Map(
           HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key() -> o.asInstanceOf[String]
         )
-        logInfo(s"Order columns: $o")
       case _ =>
         logInfo("No order columns")
     }
@@ -149,6 +151,30 @@ class RunClusteringProcedure extends BaseProcedure
         logInfo("No options")
     }
 
+    // Normalise once so the plan stores the same trimmed list the strategies and partitioners
+    // work from, and validate it up front, before any plan is scheduled - whichever of `order`
+    // or `options` set it. A blank value is no sort at all, as the strategies read it
+    // (SparkSizeBasedClusteringPlanStrategy.getStrategyParams), and it is stored blank rather
+    // than dropped: `confs` is the top override in HoodieCLIUtils.createHoodieWriteClient, so a
+    // dropped key would let a sort column set in the session conf or table config through,
+    // unvalidated.
+    //
+    // What passes here is held for the space-curve check below, which cannot run until the write
+    // client exists; the schema travels with it so it is resolved once for both checks.
+    var validatedOrderColumns: Option[(Array[String], HoodieSchema)] = None
+    confs.get(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key()).foreach { sortColumns =>
+      val normalized = sortColumns.split(",").map(_.trim).filter(_.nonEmpty).mkString(",")
+      if (normalized.isEmpty) {
+        confs = confs ++ Map(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key() -> "")
+        logInfo("Order columns cleared")
+      } else {
+        val tableSchema = validateOrderColumns(normalized, metaClient)
+        confs = confs ++ Map(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key() -> normalized)
+        validatedOrderColumns = Some((normalized.split(","), tableSchema))
+        logInfo(s"Order columns: $normalized")
+      }
+    }
+
     val pendingClusteringInstants = ClusteringUtils.getAllPendingClusteringPlans(metaClient)
       .iterator().asScala.map(_.getLeft.requestedTime).toSeq.sortBy(f => f)
 
@@ -159,6 +185,18 @@ class RunClusteringProcedure extends BaseProcedure
     try {
       client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, confs,
         tableName.asInstanceOf[Option[String]])
+      // The space-curve arm cannot sort a nested path: it looks the sort columns up among the
+      // frame's top-level fields, by exact name. Only the write client has the final say on the
+      // strategy - `order_strategy`, `options`, the session conf and the table config all feed
+      // hoodie.layout.optimize.strategy, and createHoodieWriteClient is where they are merged -
+      // so the check waits for it, but still runs before anything is scheduled: rejecting the
+      // combination at execution time would leave the scheduled plan pending.
+      validatedOrderColumns.foreach { case (orderColumns, tableSchema) =>
+        val strategy = client.getConfig.getLayoutOptimizationStrategy
+        if (strategy != HoodieClusteringConfig.LayoutOptimizationStrategy.LINEAR) {
+          SpatialCurveSortPartitionerBase.validateOrderByColumns(orderColumns, tableSchema, strategy)
+        }
+      }
       if (metaClient.getTableConfig.isMetadataTableAvailable) {
         if (!confs.contains(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key)) {
           confs = confs ++ HoodieCLIUtils.getLockOptions(basePath, metaClient.getBasePath.toUri.getScheme, client.getConfig.getCommonConfig.getProps())
@@ -227,19 +265,34 @@ class RunClusteringProcedure extends BaseProcedure
     prunedPartitions.map(partitionPath => partitionPath.getPath).toSet.mkString(",")
   }
 
-  private def validateOrderColumns(orderColumns: String, metaClient: HoodieTableMetaClient): Unit = {
+  /**
+   * Validates the already-normalised (comma-separated, trimmed) order column list against the
+   * table schema with its metadata fields, which is what the partitioners sort on at execution
+   * time (the execution strategy adds them to the schema it hands the partitioners), so a
+   * `_hoodie_*` column is accepted. Every column, top-level or dotted, goes through
+   * `SortUtils.resolveSortColumn`, the same resolver the partitioners are validated with, so a
+   * dotted path resolves here exactly as it does there, and the leaf it lands on is checked for
+   * sortability.
+   *
+   * @return the schema the columns were resolved against, so the space-curve check the caller runs
+   *         once the write client exists does not have to resolve it a second time.
+   */
+  private def validateOrderColumns(orderColumns: String, metaClient: HoodieTableMetaClient): HoodieSchema = {
     if (orderColumns == null) {
       throw new HoodieClusteringException("Order columns is null")
     }
 
-    val tableSchemaResolver = new TableSchemaResolver(metaClient)
-    val fields = tableSchemaResolver.getTableSchema(false)
-      .getFields.asScala.map(_.name().toLowerCase)
-    orderColumns.split(",").foreach(col => {
-      if (!fields.contains(col.toLowerCase)) {
+    val tableSchema = new TableSchemaResolver(metaClient).getTableSchema(true)
+    orderColumns.split(",").foreach { col =>
+      val leaf = SortUtils.resolveSortColumn(tableSchema, col)
+      if (!leaf.isPresent) {
         throw new HoodieClusteringException("Order column not exist:" + col)
       }
-    })
+      // The same validation the partitioners apply at execution time (see
+      // SortUtils.validateSortableColumns), surfaced here before the job is submitted.
+      SortUtils.validateSortableColumn(col, leaf.get)
+    }
+    tableSchema
   }
 }
 

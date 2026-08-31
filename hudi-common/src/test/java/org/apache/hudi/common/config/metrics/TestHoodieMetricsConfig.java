@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.apache.hudi.common.config.HoodieCommonConfig.META_SYNC_BASE_PATH_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 class TestHoodieMetricsConfig {
@@ -38,6 +39,18 @@ class TestHoodieMetricsConfig {
     HoodieMetricsConfig config = HoodieMetricsConfig.newBuilder().build();
     config.setValue(META_SYNC_BASE_PATH_KEY, "base/path/set/during/sync");
     assertEquals("base/path/set/during/sync", config.getBasePath());
+  }
+
+  /**
+   * Turning metrics on is consent to report, not consent to start collecting a new class of metric.
+   * Record index lookup collection registers a Spark accumulator per table and runs per shard read, so
+   * an operator has to ask for it by name rather than inherit it on upgrade.
+   */
+  @Test
+  void recordIndexLookupMetricsStayOffUnlessAskedForByName() {
+    HoodieMetricsConfig config = HoodieMetricsConfig.newBuilder().on(true).build();
+    assertFalse(config.getBoolean(HoodieMetricsConfig.RLI_LOOKUP_METRICS_ENABLE),
+        "enabling metrics must not silently enrol a table in record index lookup collection");
   }
 
   @Test

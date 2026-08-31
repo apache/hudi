@@ -101,7 +101,7 @@ Prerequisites for building Apache Hudi:
 ```
 # Checkout code and build
 git clone https://github.com/apache/hudi.git && cd hudi
-mvn clean package -DskipTests -Dspark3.5 -Dflink2.1
+mvn clean package -DskipTests -Dspark3.5 -Dflink2.2
 
 # Start command
 spark-3.5.0-bin-hadoop3/bin/spark-shell \
@@ -139,6 +139,12 @@ Refer to the table below for building with different Spark and Scala versions.
 | `-Dspark4.2`              | hudi-spark4.2-bundle_2.13                    | For Spark 4.2 and Scala 2.13 (Needs java 17)     |
 | `-Dspark3`                | hudi-spark3-bundle_2.12 (legacy bundle name) | For Spark 3.5.x and Scala 2.12                   |
 
+Hudi uses ZSTD as the default Parquet compression codec with Spark 3.5 and newer. Spark 3.3 and 3.4
+retain GZIP because Hudi's non-vectorized file-group reader uses parquet-java 1.12.x and can leak
+off-heap memory when reading ZSTD files ([PARQUET-2160](https://issues.apache.org/jira/browse/PARQUET-2160)).
+Upgrade to Spark 3.5 or newer before using ZSTD. Keeping GZIP as the write default does not remove the
+risk when an older Spark runtime reads ZSTD files produced by another engine.
+
 Please note that only Spark-related bundles, i.e., `hudi-spark-bundle`, `hudi-utilities-bundle`,
 `hudi-utilities-slim-bundle`, can be built using `scala-2.13` profile. Hudi Flink bundle cannot be built
 using `scala-2.13` profile. To build these bundles on Scala 2.13, use the following command:
@@ -151,10 +157,10 @@ mvn clean package -DskipTests -Dspark3.5 -Dscala-2.13 -pl packaging/hudi-spark-b
 For example,
 ```
 # Build against Spark 3.5.x
-mvn clean package -DskipTests -Dspark3.5 -Dflink2.1
+mvn clean package -DskipTests -Dspark3.5 -Dflink2.2
 
 # Build against Spark 3.4.x
-mvn clean package -DskipTests -Dspark3.4 -Dflink2.1
+mvn clean package -DskipTests -Dspark3.4 -Dflink2.2
 ```
 
 #### What about "spark-avro" module?
@@ -163,14 +169,15 @@ Starting from versions 0.11, Hudi no longer requires `spark-avro` to be specifie
 
 ### Build with different Flink versions
 
-The default Flink version supported is 2.1. The default Flink 2.1.x version, corresponding to the `flink2.1` profile, is 2.1.1.
+The default Flink version supported is 2.2. The default Flink 2.2.x version, corresponding to the `flink2.2` profile, is 2.2.1.
 Flink is Scala-free since 1.15.x, there is no need to specify the Scala version for Flink 1.15.x and above versions.
 Refer to the table below for building with different Flink and Scala versions.
 
 | Maven build options | Expected Flink bundle jar name | Notes                            |
 |:--------------------|:--------------------------------|:---------------------------------|
-| (empty)             | hudi-flink2.1-bundle            | For Flink 2.1 (default options)  |
-| `-Dflink2.1`        | hudi-flink2.1-bundle            | For Flink 2.1 (same as default)  |
+| (empty)             | hudi-flink2.2-bundle            | For Flink 2.2 (default options)  |
+| `-Dflink2.2`        | hudi-flink2.2-bundle            | For Flink 2.2 (same as default)  |
+| `-Dflink2.1`        | hudi-flink2.1-bundle            | For Flink 2.1                    |
 | `-Dflink2.0`        | hudi-flink2.0-bundle            | For Flink 2.0                    |
 | `-Dflink1.20`       | hudi-flink1.20-bundle           | For Flink 1.20                   |
 | `-Dflink1.19`       | hudi-flink1.19-bundle           | For Flink 1.19                   |
@@ -178,8 +185,8 @@ Refer to the table below for building with different Flink and Scala versions.
 
 For example,
 ```
-# Build against Flink 2.1.x
-mvn clean package -DskipTests -Dflink2.1
+# Build against Flink 2.2.x
+mvn clean package -DskipTests -Dflink2.2
 ```
 
 ## Running Tests

@@ -43,6 +43,13 @@ Downstream Dockerfiles (`datanode`, `historyserver`, `hive_base`, `namenode`, `p
 `BASE_IMAGE_TAG` build arg (default `java11`). `build_docker_images.sh` sets it automatically; bare `docker build`
 invocations targeting the Java 17 base must pass `--build-arg BASE_IMAGE_TAG=java17`.
 
+`spark_base` additionally takes `HADOOP_AWS_VERSION`, `AWS_SDK_VERSION` and `ANALYTICS_ACCELERATOR_VERSION` for the
+S3A jars it adds to the Spark classpath. `build_docker_images.sh` derives all three from `--spark-version`, matching
+the Hadoop line each Spark distribution bundles: Spark 4.0.x gets `hadoop-aws` 3.4.1, Spark 4.1.x gets 3.4.2 and
+Spark 4.2.x gets 3.5.0, all with the AWS SDK v2 bundle; Spark 3.x gets 3.3.4 with the SDK v1 bundle. Spark 4.1.x and
+4.2.x also get `analyticsaccelerator-s3` (1.2.1 and 1.3.1), which backs the S3A analytics input stream that
+hadoop-aws 3.5.0 makes the default; an empty `ANALYTICS_ACCELERATOR_VERSION` skips that jar.
+
 ### Docker compose config for the Demo - `/compose`
 
 The `/compose` folder contains the yaml file to compose the Docker environment for running Hudi Demo.
@@ -196,3 +203,33 @@ When `--multi-arch` is enabled, the script builds and pushes the amd64 and arm64
 Note that `--multi-arch` uses `docker buildx build --push` and the image names in the script are hardcoded to the
 `apachehudi/...` Docker Hub repositories, so this flow requires push access to those repositories. No Dockerfile
 changes are needed for the current amd64 plus arm64 image set in this repository.
+
+## Trino E2E image - `/trino`
+
+The Trino E2E stack does not use the `hoodie/hadoop` image tree. `docker/trino/` builds
+`apachehudi/hudi-trino-e2e` directly on top of the official `trinodb/trino` image at the
+root pom's `trino.e2e.version`, baking in a locally-assembled native `trino-hudi` plugin
+directory and the E2E catalog config (`connector.name=hudi`, metastore at
+`thrift://hivemetastore:9083`).
+
+This image is built locally on demand (also by the `hudi_trino_e2e.yml` CI workflow) and
+is NOT published to Docker Hub. The plugin directory comes from the in-repo shim project
+at `docker/trino/shim/` (see `hudi-trino/README.md` for the full build-and-run flow):
+
+```
+# JDK 25; hudi-trino must already be installed into the local m2
+# dep.hudi.version comes from the reactor pom -- the shim is outside the reactor, so
+# cut_release_branch.sh cannot bump the literal default in its own pom.
+HUDI_VERSION=$(mvn -q -ntp help:evaluate -Dexpression=project.version -DforceStdout)
+mvn -f docker/trino/shim/pom.xml clean package -DskipTests -Ddep.hudi.version="$HUDI_VERSION"
+TRINO_VERSION=$(sed -n 's|.*<trino.version>\(.*\)</trino.version>.*|\1|p' pom.xml)
+unzip -o -q "docker/trino/shim/target/trino-hudi-$TRINO_VERSION.zip" -d docker/trino/shim/target  # trino-maven-plugin 24 emits only the zip
+docker/trino/build_image.sh --plugin-dir "docker/trino/shim/target/trino-hudi-$TRINO_VERSION"
+```
+
+The `trinocoordinator` compose service exists only in the
+`docker-compose_hadoop340_hive2310_spark402_{amd64,arm64}.yml` pair, behind the `trino`
+compose profile, so the default hive-sync flows never start it. For fast plugin
+iteration the container supports a bind-mounted overlay: point `TRINO_PLUGIN_DIR` (or
+the `-Dtrino.plugin.dir` test property) at a freshly built plugin dir and restart the
+container instead of rebuilding the image.
