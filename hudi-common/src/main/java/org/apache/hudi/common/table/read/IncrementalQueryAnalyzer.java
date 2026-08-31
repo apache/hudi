@@ -182,6 +182,11 @@ public class IncrementalQueryAnalyzer {
     }
   }
 
+  /**
+   * Analyzes a layout V1 timeline by applying the completion-time range directly to requested time,
+   * since V1 does not persist a separate completion time. This path filters active instants first
+   * and loads the archived timeline at most once, only when the range may overlap it.
+   */
   private QueryContext analyzeForV1Timeline(
       HoodieTimeline filteredTimeline,
       CompletionTimeQueryView completionTimeQueryView) {
@@ -242,6 +247,11 @@ public class IncrementalQueryAnalyzer {
         archivedInstants, activeInstants, filteredTimeline, archivedReadTimeline);
   }
 
+  /**
+   * Analyzes a layout V2 timeline through {@link CompletionTimeQueryView}, since completion time can
+   * differ from requested time. The query view resolves requested-time candidates before they are
+   * materialized from the active and archived timelines.
+   */
   private QueryContext analyzeForV2Timeline(
       HoodieTimeline filteredTimeline,
       CompletionTimeQueryView completionTimeQueryView) {
