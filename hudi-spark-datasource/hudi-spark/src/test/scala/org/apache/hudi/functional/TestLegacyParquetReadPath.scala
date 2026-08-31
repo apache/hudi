@@ -509,6 +509,11 @@ class TestLegacyParquetReadPath extends HoodieSparkClientTestBase with ScalaAsse
       assertWidenedValues(legacyDf)
       assertSameRows(newReaderDf, legacyDf)
     }
+
+    // An empty projection prunes the internal schema to zero columns, which used to build an
+    // InternalSchema around a null record and NPE in buildIdToName (#19734). The shredded-variant
+    // test pins this too, but only from Spark 4.1 up; this leg is the one that runs on every profile.
+    assertEquals(30L, legacyRelationDf(readOpts).count())
   }
 
   @Test

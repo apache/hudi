@@ -67,5 +67,15 @@ class TestHoodieRelations {
     assertEquals(0, requiredAvroSchema.getFields.size)
     assertEquals(0, requiredStructSchema.fields.length)
     assertTrue(requiredInternalSchema.isEmptySchema)
+
+    // The schema-on-read arm must land on the same projection as the plain arm, which has always
+    // handled an empty projection by building a zero-field record. The record names differ ("schema"
+    // vs the table's own), so compare the struct schema and the field count rather than the records.
+    val (plainAvroSchema, plainStructSchema, plainInternalSchema) =
+      HoodieBaseRelation.projectSchema(Left(tableSchema), Array.empty)
+
+    assertEquals(plainStructSchema, requiredStructSchema)
+    assertEquals(plainAvroSchema.getFields.size, requiredAvroSchema.getFields.size)
+    assertTrue(plainInternalSchema.isEmptySchema)
   }
 }
