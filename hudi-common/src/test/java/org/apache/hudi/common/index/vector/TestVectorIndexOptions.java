@@ -25,7 +25,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -47,7 +46,7 @@ class TestVectorIndexOptions {
             VectorIndexOptions.QUERY_MODE, "exact_rerank",
             VectorIndexOptions.FRESHNESS_POLICY, "fail",
             VectorIndexOptions.STALE_LOCATOR_POLICY, "fallback",
-            VectorIndexOptions.FETCH_VERIFY_KEYS, "false"),
+            VectorIndexOptions.FETCH_VERIFY_KEYS, "true"),
         VectorIndexOptions.validateAndNormalize(opts()));
   }
 
@@ -127,10 +126,11 @@ class TestVectorIndexOptions {
   }
 
   @Test
-  void testFetchVerifyKeysBooleanOption() {
-    assertFalse(VectorIndexOptions.shouldVerifyFetchKeys(opts()));
+  void testFetchVerifyKeysIsMandatory() {
+    assertTrue(VectorIndexOptions.shouldVerifyFetchKeys(opts()));
     assertTrue(VectorIndexOptions.shouldVerifyFetchKeys(
         opts(VectorIndexOptions.FETCH_VERIFY_KEYS, "TRUE")));
+    assertInvalidValueContainsKey(VectorIndexOptions.FETCH_VERIFY_KEYS, "false");
   }
 
   @Test

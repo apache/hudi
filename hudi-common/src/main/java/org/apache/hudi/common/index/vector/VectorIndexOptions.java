@@ -64,7 +64,7 @@ public final class VectorIndexOptions {
   public static final VectorStalePolicy DEFAULT_EXACT_FRESHNESS_POLICY = VectorStalePolicy.FAIL;
   public static final VectorStalePolicy DEFAULT_APPROXIMATE_FRESHNESS_POLICY = VectorStalePolicy.WARN;
   public static final VectorStalePolicy DEFAULT_STALE_LOCATOR_POLICY = VectorStalePolicy.FALLBACK;
-  public static final boolean DEFAULT_FETCH_VERIFY_KEYS = false;
+  public static final boolean DEFAULT_FETCH_VERIFY_KEYS = true;
 
   /** Parsed immutable view used by bootstrap and maintenance after aggregate validation. */
   public static final class ResolvedOptions {
@@ -265,7 +265,12 @@ public final class VectorIndexOptions {
   }
 
   public static boolean shouldVerifyFetchKeys(Map<String, String> options) {
-    return getBoolean(options, FETCH_VERIFY_KEYS, DEFAULT_FETCH_VERIFY_KEYS);
+    boolean verifyKeys = getBoolean(options, FETCH_VERIFY_KEYS, DEFAULT_FETCH_VERIFY_KEYS);
+    if (!verifyKeys) {
+      throw new IllegalArgumentException(
+          "Option '" + FETCH_VERIFY_KEYS + "' must be true: exact positional fetches require record-key validation");
+    }
+    return true;
   }
 
   private static boolean getBoolean(Map<String, String> options, String key, boolean defaultValue) {
