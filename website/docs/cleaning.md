@@ -297,6 +297,11 @@ left for the next run, so a backlog drains across several runs rather than in on
 exactly those. When it is unset, TTL considers every partition in the table. Setting it is the safest way to try a
 retention policy on one partition before applying it everywhere.
 
+The list is used verbatim, so each entry has to match the partition path as it exists on storage. That layout depends on
+`hoodie.datasource.write.hive_style_partitioning`: with the default of `false` a partition folder is named for the value
+alone, such as `2026-01-01`, while with it enabled the folder is `event_date=2026-01-01`. Passing the wrong form selects a
+partition that does not exist, and TTL then deletes nothing while still reporting success.
+
 `hoodie.partition.ttl.strategy.stats.max.parallelism` bounds the parallelism used to collect each candidate partition's
 last commit time, defaulting to `200`; the effective value is the smaller of that and the candidate count. It matters
 mainly on that first run, where a table with many historical partitions may want a higher value. This config is new in
@@ -328,6 +333,8 @@ df.write.format("hudi")
   .option("hoodie.table.name", tableName)
   .option("hoodie.datasource.write.recordkey.field", "event_id")
   .option("hoodie.datasource.write.partitionpath.field", "event_date")
+  // partition folders are named event_date=<value>, which partition.selected below must match
+  .option("hoodie.datasource.write.hive_style_partitioning", "true")
   // enable TTL and give it a retention, without which it does nothing
   .option("hoodie.partition.ttl.inline", "true")
   .option("hoodie.partition.ttl.management.strategy.type", "KEEP_BY_TIME")
