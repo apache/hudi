@@ -221,6 +221,140 @@ cleans run --sparkMaster local --hoodieConfigs hoodie.clean.policy=KEEP_LATEST_C
 
 You can find more details and the relevant code for these commands in [`org.apache.hudi.cli.commands.CleansCommand`](https://github.com/apache/hudi/blob/master/hudi-cli/src/main/java/org/apache/hudi/cli/commands/CleansCommand.java) class. 
 
+## Partition TTL
+
+Cleaning bounds how many *versions* of a file are kept, but it never removes a partition: an old partition whose files
+have all been cleaned down to a single version still sits in the table forever. Partition TTL (time to live) is the
+complementary service. It works at partition granularity, and when a partition is judged expired it deletes the whole
+partition rather than trimming file versions inside it.
+
+Because it removes data outright, TTL is off by default and stays off until you set a retention period.
+
+### How a partition is judged expired
+
+TTL asks a strategy which partitions have expired. Two strategies ship with Hudi, selected through
+`hoodie.partition.ttl.management.strategy.type`:
+
+| Strategy | Ages a partition against |
+|---|---|
+| `KEEP_BY_TIME` (default) | The partition's last commit time, taken from the newest base instant among its latest file slices. A partition that is still being written to therefore stays. |
+| `KEEP_BY_CREATION_TIME` | The commit time the partition was created at, read from its partition metadata. Writing to a partition does not extend its life. |
+
+Both compare that timestamp against `hoodie.partition.ttl.strategy.days.retain`. A custom strategy can be supplied
+instead with `hoodie.partition.ttl.strategy.class`, pointing at a subclass of `PartitionTTLStrategy`; when both configs
+are present the class takes precedence over the type.
+
+:::caution
+`hoodie.partition.ttl.strategy.days.retain` defaults to `-1`, and the built-in strategies treat any value of `0` or less
+as "nothing expires". **TTL does nothing at all until you set a positive retention, even with TTL enabled.** This is
+deliberate, so that turning the service on cannot delete data by itself, but it does mean a misconfigured job looks like
+a working one: it runs, reports no expired partitions, and deletes nothing.
+:::
+
+Two other conditions make TTL a silent no-op regardless of retention: a table with no completed commit yet, and an
+unpartitioned table.
+
+### Ways to run partition TTL
+
+**Inline.** Setting `hoodie.partition.ttl.inline=true` runs TTL immediately after each commit, alongside the other inline
+table services.
+
+**As a standalone Spark job.** `org.apache.hudi.utilities.HoodieTTLJob`, in the utilities bundle, runs TTL against an
+existing table without enabling it on the writer:
+
+```
+spark-submit --master local \
+  --class org.apache.hudi.utilities.HoodieTTLJob \
+  hudi-utilities-bundle_2.12-1.2.0.jar \
+  --base-path file:///tmp/events_table \
+  --hoodie-conf hoodie.partition.ttl.strategy.days.retain=30
+```
+
+The utilities bundle is self-contained, so it is passed as the application jar and no `--packages` is needed. Download it
+from Maven Central, or build it locally and point at
+`packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.12-*.jar`.
+
+**From Spark SQL**, with the [`run_ttl`](procedures.md#run_ttl) procedure, which is the easiest way to try TTL on a table
+before committing to running it on every write:
+
+```sql
+call run_ttl(table => 'events_table', retain_days => 30);
+```
+
+However it is triggered, TTL writes a replace commit that drops the expired partitions, the same commit type used by the
+`delete_partition` operation.
+
+### Keeping a first run under control
+
+The first TTL run on an existing table is the risky one, because every historical partition becomes a candidate at once.
+Three configs bound it.
+
+`hoodie.partition.ttl.strategy.max.delete.partitions` caps how many partitions a single run may delete, defaulting to
+`1000`. The limit exists to keep one replace commit from growing unmanageably large; partitions over the cap are simply
+left for the next run, so a backlog drains across several runs rather than in one commit.
+
+`hoodie.partition.ttl.strategy.partition.selected` takes a comma-separated list of partition paths and restricts TTL to
+exactly those. When it is unset, TTL considers every partition in the table. Setting it is the safest way to try a
+retention policy on one partition before applying it everywhere.
+
+The list is used verbatim, so each entry has to match the partition path as it exists on storage. That layout depends on
+`hoodie.datasource.write.hive_style_partitioning`: with the default of `false` a partition folder is named for the value
+alone, such as `2026-01-01`, while with it enabled the folder is `event_date=2026-01-01`. Passing the wrong form selects a
+partition that does not exist, and TTL then deletes nothing while still reporting success.
+
+`hoodie.partition.ttl.strategy.stats.max.parallelism` bounds the parallelism used to collect each candidate partition's
+last commit time, defaulting to `200`; the effective value is the smaller of that and the candidate count. It matters
+mainly on that first run, where a table with many historical partitions may want a higher value. This config is new in
+1.3.0, so it has no effect on earlier releases and does not yet appear in the generated
+[configuration reference](https://hudi.apache.org/docs/next/configurations/); the other six configs above do.
+
+### Partition TTL configs
+
+| Config | Default | Description |
+|---|---|---|
+| `hoodie.partition.ttl.inline` | `false` | Run TTL immediately after each commit |
+| `hoodie.partition.ttl.management.strategy.type` | `KEEP_BY_TIME` | `KEEP_BY_TIME` or `KEEP_BY_CREATION_TIME` |
+| `hoodie.partition.ttl.strategy.class` | none | A `PartitionTTLStrategy` subclass; takes precedence over the type above |
+| `hoodie.partition.ttl.strategy.days.retain` | `-1` | Days to retain. Nothing expires while this is `0` or less |
+| `hoodie.partition.ttl.strategy.partition.selected` | none | Comma-separated partition paths to restrict TTL to |
+| `hoodie.partition.ttl.strategy.max.delete.partitions` | `1000` | Maximum partitions deleted in one run |
+| `hoodie.partition.ttl.strategy.stats.max.parallelism` | `200` | Parallelism for collecting candidate partition commit times. Since 1.3.0 |
+
+### A worked example
+
+Retaining 30 days on a date-partitioned event table, run inline, restricted on the first pass to a single partition so
+the effect can be checked before it is applied to the whole table:
+
+```scala
+val tableName = "events_table"
+val basePath = "file:///tmp/events_table"
+
+df.write.format("hudi")
+  .option("hoodie.table.name", tableName)
+  .option("hoodie.datasource.write.recordkey.field", "event_id")
+  .option("hoodie.datasource.write.partitionpath.field", "event_date")
+  // partition folders are named event_date=<value>, which partition.selected below must match
+  .option("hoodie.datasource.write.hive_style_partitioning", "true")
+  // enable TTL and give it a retention, without which it does nothing
+  .option("hoodie.partition.ttl.inline", "true")
+  .option("hoodie.partition.ttl.management.strategy.type", "KEEP_BY_TIME")
+  .option("hoodie.partition.ttl.strategy.days.retain", "30")
+  // first pass: one partition only
+  .option("hoodie.partition.ttl.strategy.partition.selected", "event_date=2026-01-01")
+  .mode("append")
+  .save(basePath)
+```
+
+Once the deleted partitions look right, drop the `partition.selected` line to let TTL consider the whole table. On a
+table with a long history, expect the backlog to drain over several commits because of the
+`max.delete.partitions` cap.
+
+:::caution
+Partition TTL deletes data. A partition removed by TTL is gone from the table as of that replace commit, recoverable only
+for as long as the cleaner and archival have not yet removed the file versions and timeline entries a time travel query
+would need. Validate a retention policy with `run_ttl`, or with `partition.selected`, before enabling it inline.
+:::
+
 ## Related Resources
 
 <h3>Blogs</h3>
