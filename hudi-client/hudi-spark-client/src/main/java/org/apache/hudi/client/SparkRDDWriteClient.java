@@ -110,16 +110,19 @@ public class SparkRDDWriteClient<T> extends
     HoodieTable table = createTable(config);
     final JavaRDD<WriteStatus> writeStatuses;
     if (WriteOperationType.streamingWritesToMetadataSupported((getOperationType())) && isStreamingWriteToMetadataEnabled(table)) {
-      // Start the metadata commit and introduce the shuffle boundary that selects successful
-      // data-table task outputs. Spark defers metadata generation until commit finalization.
+      // this code block is expected to create a new Metadata Writer, start a new commit in metadata table and trigger streaming write to metadata table.
       writeStatuses = HoodieJavaRDD.getJavaRDD(streamingMetadataWriteHandler.streamWriteToMetadataTable(table, HoodieJavaRDD.of(rawWriteStatuses), instantTime,
           config.getMetadataConfig().getStreamingWritesCoalesceDivisorForDataTableWrites()));
     } else {
       writeStatuses = rawWriteStatuses;
     }
 
-    // Trigger the data-write DAG. Streaming metadata generation is deferred until commitStats,
-    // where it consumes HoodieCommitMetadata built from these successful task outputs.
+    // Triggering the dag for writes.
+    //
+    // 1. If streaming writes are enabled, writes to both data table and metadata table gets triggered at this juncture;
+    // 2. If not, writes to data table gets triggered here.
+    //
+    // When streaming writes are enabled, data table's WriteStatus is expected to contain all stats required to generate metadata table records and so each object will be larger.
     // Here all additional stats and error records are dropped to retain only the required information and prevent collecting large objects on the driver.
     List<SlimWriteStats> slimWriteStatsList = SlimWriteStats.from(writeStatuses);
     // Compute stats for the data table writes and invoke callback
@@ -141,8 +144,7 @@ public class SparkRDDWriteClient<T> extends
 
     // Proceeds only if validator returns true, otherwise bails out.
     if (canProceed) {
-      // Spark streaming mode now returns only data-table statuses; keep the generic split because
-      // other engines and metadata-table writes may still supply metadata statuses.
+      // when streaming writes are enabled, writeStatuses is a mix of data table write status and mdt write status
       List<HoodieWriteStat> dataTableHoodieWriteStats = slimWriteStatsList.stream().filter(entry -> !entry.isMetadataTable()).map(SlimWriteStats::getWriteStat).collect(Collectors.toList());
       List<HoodieWriteStat> partialMetadataTableWriteStats = slimWriteStatsList.stream().filter(entry -> entry.isMetadataTable).map(SlimWriteStats::getWriteStat).collect(Collectors.toList());
       return commitStats(instantTime, new TableWriteStats(dataTableHoodieWriteStats, partialMetadataTableWriteStats), extraMetadata, commitActionType, partitionToReplacedFileIds,

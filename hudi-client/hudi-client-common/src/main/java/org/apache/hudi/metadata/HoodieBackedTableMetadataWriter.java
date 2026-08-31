@@ -980,19 +980,14 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     }
 
     List<HoodieWriteStat> allWriteStats = new ArrayList<>(partialWriteStats);
-    maybeInitializeNewFileGroupsForPartitionedRLI(metadata, instantTime);
-    // Update every partition that was not already written by the streaming phase.
-    HoodieData<WriteStatus> remainingWriteStatuses = prepareAndWriteToNonStreamingPartitions(
-        metadata, instantTime, partialWriteStats);
-    allWriteStats.addAll(remainingWriteStatuses.map(WriteStatus::getStat).collectAsList());
+    // update metadata for left over partitions which does not have streaming writes support.
+    allWriteStats.addAll(prepareAndWriteToNonStreamingPartitions(metadata, instantTime).map(WriteStatus::getStat).collectAsList());
     getWriteClient().commitStats(instantTime, allWriteStats, Option.empty(), HoodieTimeline.DELTA_COMMIT_ACTION,
         Collections.emptyMap(), Option.empty());
   }
 
-  private HoodieData<WriteStatus> prepareAndWriteToNonStreamingPartitions(HoodieCommitMetadata commitMetadata,
-                                                                           String instantTime,
-                                                                           List<HoodieWriteStat> partialWriteStats) {
-    Set<String> partitionsToUpdate = getNonStreamingMetadataPartitionsToUpdate(partialWriteStats);
+  private HoodieData<WriteStatus> prepareAndWriteToNonStreamingPartitions(HoodieCommitMetadata commitMetadata, String instantTime) {
+    Set<String> partitionsToUpdate = getNonStreamingMetadataPartitionsToUpdate();
     List<IndexPartitionAndRecords> mdtPartitionsAndUnTaggedRecords = new BatchMetadataConversionFunction(instantTime, commitMetadata, partitionsToUpdate)
         .convertMetadata();
 
@@ -1002,15 +997,11 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     return convertEngineSpecificDataToHoodieData(secondaryWriteToMetadataTablePartitions(preppedRecords, instantTime));
   }
 
-  private Set<String> getNonStreamingMetadataPartitionsToUpdate(List<HoodieWriteStat> partialWriteStats) {
-    Set<MetadataPartitionType> streamedPartitionTypes = partialWriteStats.stream()
-        .map(HoodieWriteStat::getPartitionPath)
-        .filter(Objects::nonNull)
-        .map(MetadataPartitionType::fromPartitionPath)
-        .collect(Collectors.toSet());
+  private Set<String> getNonStreamingMetadataPartitionsToUpdate() {
     Set<String> toReturn = new HashSet<>();
-    for (MetadataPartitionType partitionType : enabledIndexerMap.keySet()) {
-      if (!streamedPartitionTypes.contains(partitionType)) {
+    Set<MetadataPartitionType> streamingMDTPartitions = new HashSet<>(getStreamingMetadataPartitionsToUpdate().getLeft());
+    for (MetadataPartitionType partitionType: enabledIndexerMap.keySet()) {
+      if (!streamingMDTPartitions.contains(partitionType)) {
         toReturn.add(partitionType.getPartitionPath());
       }
     }

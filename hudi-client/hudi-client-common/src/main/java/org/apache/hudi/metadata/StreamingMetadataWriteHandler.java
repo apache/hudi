@@ -46,9 +46,7 @@ public abstract class StreamingMetadataWriteHandler {
    * @param instantTime            The instant time of interest.
    * @param coalesceDivisorForDataTableWrites assist with determining the coalesce parallelism for data table write statuses. N data table write status
    *                                          spark partitions will be divied by this value to find the coalesce parallelism.
-   * @return Engine-specific write statuses needed to finalize the data-table commit. Spark returns only
-   *         successful data-table task outputs and defers metadata generation until committed stats are available;
-   *         other engines may also return partial metadata-table statuses.
+   * @return {@link HoodieData} of {@link WriteStatus} referring to both data table writes and partial metadata table writes.
    */
   public abstract HoodieData<WriteStatus> streamWriteToMetadataTable(HoodieTable table,
                                                                      HoodieData<WriteStatus> dataTableWriteStatuses,

@@ -115,8 +115,9 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .defaultValue(5000)
       .markAdvanced()
       .sinceVersion("1.1.0")
-      .withDocumentation("When streaming writes to metadata table are enabled, Spark coalesces data-table write statuses before collecting successful task-attempt outputs. "
-          + "The coalesced partition count is the number of write-status partitions divided by this divisor, with a minimum of one partition.");
+      .withDocumentation("When streaming writes to metadata table is enabled via hoodie.metadata.streaming.write.enabled, the data table write statuses are unioned "
+          + "with metadata table write statuses before triggering the entire write dag. The data table write statuses will be coalesce down to the number of write statuses "
+          + "divided by the specified divisor to avoid triggering thousands of no-op tasks for the data table writes which have their status cached.");
 
   public static final boolean DEFAULT_METADATA_ENABLE_FOR_READERS = true;
 

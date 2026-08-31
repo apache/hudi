@@ -65,8 +65,10 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
 
   @Override
   protected TableWriteStats triggerWritesAndFetchWriteStats(HoodieWriteMetadata<JavaRDD<WriteStatus>> tableServiceWriteMetadata) {
-    // Trigger the data-table service DAG. Spark streaming mode defers metadata generation until
-    // the committed table-service stats are available, so this collection contains data statuses.
+    // Triggering the dag for writes.
+    // If streaming writes are enabled, writes to both data table and metadata table get triggered at this juncture.
+    // If not, writes to data table gets triggered here.
+    // When streaming writes are enabled, data table's WriteStatus is expected to contain all stats required to generate metadata table records and so each object will be larger.
     // Here we are dropping all additional stats and error records to retain only the required information and prevent collecting large objects on the driver.
     List<SparkRDDWriteClient.SlimWriteStats> writeStatusMetadataTrackerList = SparkRDDWriteClient.SlimWriteStats.from(tableServiceWriteMetadata.getWriteStatuses());
 

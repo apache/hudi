@@ -42,21 +42,32 @@ public class SparkStreamingMetadataWriteHandler extends StreamingMetadataWriteHa
     Option<HoodieTableMetadataWriter> metadataWriterOpt = getMetadataWriter(instantTime, table);
     ValidationUtils.checkState(metadataWriterOpt.isPresent(),
         "Cannot instantiate metadata writer for the table of interest " + table.getMetaClient().getBasePath());
-    // Spark task retries and speculation are reconciled while the data-table commit is finalized.
-    // Defer metadata generation until completeStreamingCommit can consume the resulting committed
-    // HoodieCommitMetadata. This deliberately reuses the HUDI-8564 committed-output path instead
-    // of deriving RLI/SI locations from pre-commit WriteStatus task attempts.
-    return coalesceDataTableWriteStatuses(dataTableWriteStatuses, coalesceDivisorForDataTableWrites);
+    return streamWriteToMetadataTable(dataTableWriteStatuses, metadataWriterOpt.get(), table, instantTime,
+        coalesceDivisorForDataTableWrites);
   }
 
-  private HoodieData<WriteStatus> coalesceDataTableWriteStatuses(HoodieData<WriteStatus> dataTableWriteStatuses,
-                                                                 int coalesceDivisorForDataTableWrites) {
-    int coalesceParallelism = Math.max(1, dataTableWriteStatuses.getNumPartitions() / coalesceDivisorForDataTableWrites);
-    // Coalesce to fewer Spark tasks before collecting successful task-attempt outputs.
-    // The partitionBy shuffle also materializes the data writes before commit finalization.
-    return HoodieJavaRDD.of(HoodieJavaRDD.getJavaRDD(dataTableWriteStatuses)
-        .mapToPair((PairFunction<WriteStatus, String, WriteStatus>) writeStatus -> new Tuple2(writeStatus.getStat().getPath(), writeStatus))
-        .partitionBy(new CoalescingPartitioner(coalesceParallelism))
-        .map((Function<Tuple2<String, WriteStatus>, WriteStatus>) entry -> entry._2));
+  private HoodieData<WriteStatus> streamWriteToMetadataTable(HoodieData<WriteStatus> dataTableWriteStatuses,
+                                                             HoodieTableMetadataWriter metadataWriter,
+                                                             HoodieTable table,
+                                                             String instantTime,
+                                                             int coalesceDivisorForDataTableWrites) {
+    int coalesceParallelism = Math.max(1,
+        dataTableWriteStatuses.getNumPartitions() / coalesceDivisorForDataTableWrites);
+
+    // Materialize data-table statuses behind a shuffle before deriving metadata records. Spark's
+    // scheduler exposes only the successful attempt for each shuffle partition, so failed or losing
+    // speculative attempts cannot contribute stale RLI/SI locations to the metadata write.
+    HoodieData<WriteStatus> committedDataWriteStatuses = HoodieJavaRDD.of(
+        HoodieJavaRDD.getJavaRDD(dataTableWriteStatuses)
+            .mapToPair((PairFunction<WriteStatus, String, WriteStatus>) writeStatus ->
+                new Tuple2<>(writeStatus.getStat().getPath(), writeStatus))
+            .partitionBy(new CoalescingPartitioner(coalesceParallelism))
+            .map((Function<Tuple2<String, WriteStatus>, WriteStatus>) entry -> entry._2));
+
+    HoodieData<WriteStatus> metadataWriteStatuses =
+        metadataWriter.streamWriteToMetadataPartitions(committedDataWriteStatuses, instantTime);
+    metadataWriteStatuses.persist("MEMORY_AND_DISK_SER", table.getContext(),
+        HoodieData.HoodieDataCacheKey.of(table.getMetaClient().getBasePath().toString(), instantTime));
+    return committedDataWriteStatuses.union(metadataWriteStatuses);
   }
 }
