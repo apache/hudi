@@ -509,6 +509,11 @@ class TestLegacyParquetReadPath extends HoodieSparkClientTestBase with ScalaAsse
       assertWidenedValues(legacyDf)
       assertSameRows(newReaderDf, legacyDf)
     }
+
+    // An empty projection prunes the internal schema to zero columns, which used to build an
+    // InternalSchema around a null record and NPE in buildIdToName (#19734). The shredded-variant
+    // test pins this too, but only from Spark 4.1 up; this leg is the one that runs on every profile.
+    assertEquals(30L, legacyRelationDf(readOpts).count())
   }
 
   @Test
@@ -561,15 +566,7 @@ class TestLegacyParquetReadPath extends HoodieSparkClientTestBase with ScalaAsse
       && String.valueOf(c.getMessage).contains("shredded variant")),
       s"Expected the shredded-variant rejection but got: $thrown")
 
-    // The guard's empty-projection carve-out (count(*) reads no column data and must keep working)
-    // is pinned on the file-group-reader path by the count(*) leg of "Schema-on-read reads of
-    // shredded variant files fail fast" in TestVariantShreddingMixedLayouts, not here: this relation
-    // cannot serve an empty projection under schema-on-read at all, with or
-    // without a variant. buildScan prunes the internal schema to the zero requested columns, and
-    // InternalSchemaUtils.pruneInternalSchema builds an InternalSchema around a null record (NPE in
-    // buildIdToName; pre-existing, tracked by #19734).
-    // TODO(voon): once #19734 is fixed, restore the carve-out here so the legacy relation pins it too:
-    //   assertEquals(2L, legacyRelationDf(readOpts).count())
+    assertEquals(2L, legacyRelationDf(readOpts).count())
   }
 
   @Test
