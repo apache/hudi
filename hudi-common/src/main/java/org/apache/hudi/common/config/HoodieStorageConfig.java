@@ -281,7 +281,11 @@ public class HoodieStorageConfig extends HoodieConfig {
           + "Spark's internal spark.sql.variant.forceShreddingSchemaForTest. "
           + "The value should be a DDL-format schema string (e.g., 'a int, b string, c decimal(15, 1)'). "
           + "When set and write shredding is enabled, this schema overrides the schema-driven shredding "
-          + "configuration for all variant columns.");
+          + "configuration for all variant columns. Applies to variant columns at any depth on both the "
+          + "Spark row write path and the Avro record write path: top-level columns and struct members, "
+          + "including members of structs nested under arrays and maps. A variant that is directly an "
+          + "array element or a map value is not forced; it shreds only when the write schema itself "
+          + "declares a typed_value there.");
 
   public static final ConfigProperty<Boolean> PARQUET_VARIANT_ALLOW_READING_SHREDDED = ConfigProperty
       .key("hoodie.parquet.variant.allow.reading.shredded")

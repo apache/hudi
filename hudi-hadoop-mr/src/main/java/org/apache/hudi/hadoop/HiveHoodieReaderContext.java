@@ -164,7 +164,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     // payload in typed_value, which the projection drops). Detection is shape-based on the
     // footer schema and anchored on the requested column being a variant, so plain user structs
     // of the same shape are left alone. toShreddedReadSchema recurses through structs, array
-    // elements and map values, matching the row writer, which shreds nested variants too.
+    // elements and map values, matching both write paths, which shred nested variants too.
     // The flagged columns are split by Hive's read column names on the outer conf, since the
     // per-file copy below gets requiredSchema's names from setSchemas and cannot tell the two
     // apart: a column Hive selected fails as Hive-visible nulls; a column only requiredSchema

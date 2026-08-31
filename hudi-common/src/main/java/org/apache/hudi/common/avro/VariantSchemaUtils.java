@@ -26,11 +26,15 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
+import org.apache.avro.Schema;
+
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -50,9 +54,36 @@ public class VariantSchemaUtils {
   /**
    * Namespace of the shredded record types {@link #applyInferredShredding} generates. Hudi-owned
    * so the generated names ({@code <column>_variant}) cannot collide with a user-declared record
-   * type of the same simple name in the table schema.
+   * type of the same simple name in the table schema. Deliberately distinct from
+   * {@link #FORCED_VARIANT_NAMESPACE}: the two splices generate the same simple name for the same
+   * column, so a shared namespace would let an inferred record and a forced one collide on one
+   * full name while carrying different typed_value schemas.
    */
   private static final String INFERRED_VARIANT_NAMESPACE = "hoodie.variant.inferred";
+
+  /**
+   * Namespace prefix of the shredded record types {@link #applyForcedShredding} generates; the
+   * enclosing record's full name is appended, so a forced variant is named
+   * {@code hoodie.variant.forced.<enclosing record full name>.<field>_variant}.
+   *
+   * <p>The name has to be a function of the (enclosing record type, field name) pair and of
+   * nothing else. {@code Schema.toString()}, which is what gets stamped into the parquet footer as
+   * {@code parquet.avro.schema}, throws "Can't redefine" when two NON-equal record definitions
+   * share a full name, and emits the second of two EQUAL ones as a bare name reference. A record
+   * type reused under two fields is rebuilt once per position by this splice, so the two rebuilds
+   * must come out EQUAL; keying the generated name on the enclosing record TYPE does that, whereas
+   * a dotted-path name ({@code a.v} against {@code b.v}) would make them differ and fail at file
+   * open. Two distinct record types with a same-named variant member still land in distinct
+   * namespaces, which is exactly Avro's own notion of identity.
+   *
+   * <p>The records generated under the variant carry this namespace too, so a DDL field name is
+   * free to match a user-declared record type in the table schema: the {@code typed_value} record
+   * sits directly in it, and the {@code {value, typed_value}} struct per DDL field one level below
+   * that, under the {@code typed_value} record itself (see
+   * {@link HoodieSchema#createShreddedFieldStruct(String, String, HoodieSchema)} for why a DDL
+   * field spelled {@code typed_value} or {@code <column>_variant} needs the extra level).
+   */
+  private static final String FORCED_VARIANT_NAMESPACE = "hoodie.variant.forced";
 
   private VariantSchemaUtils() {
   }
@@ -144,22 +175,205 @@ public class VariantSchemaUtils {
   }
 
   /**
-   * Strips {@code typed_value} from top-level fields that have the variant SHAPE but lost the
-   * variant logical type, i.e. plain records of {@code {metadata: bytes, value: [nullable]
-   * bytes, typed_value}} (see {@link #isShreddedVariantShape}). Parquet-footer-derived schemas
-   * come back this way (the converter does not attach the variant logical type), so
+   * Splices the forced test-DDL shredding schema into every variant that is a RECORD MEMBER of
+   * {@code schema}, at any depth: top-level fields, members of nested records, and members of
+   * records reached through array elements and map values. The inverse direction of
+   * {@link #stripVariantShredding}. Shredded and unshredded variants alike are replaced, because
+   * the DDL overrides whatever the write schema declared. Returns {@code schema} as-is when it is
+   * not a record, when {@code typedValueFields} is empty, or when nothing below it is a variant.
+   *
+   * <p>A variant that is DIRECTLY an array element or a map value is deliberately NOT forced,
+   * mirroring {@code HoodieRowParquetWriteSupport}: its forced-DDL arm sits in
+   * {@code generateShreddedSchema}, which walks record fields, while the array and map arms of
+   * {@code processNestedDataType} shred an element or value only when the write schema itself
+   * declares a {@code typed_value} there. Both write supports keeping the same reach is what makes
+   * a table's on-disk layout independent of the record type it was written with.
+   *
+   * <p>Value-level shredding is schema-driven at any position ({@code HoodieAvroWriteSupport}
+   * walks the effective schema this method returns), so a hand-authored write schema that declares
+   * {@code typed_value} on a bare element or value still shreds; only this DDL hook stops at
+   * record members.
+   *
+   * @param schema           the writer schema
+   * @param typedValueFields the DDL fields (name to type) every forced variant is shredded on, as
+   *                         parsed from {@code hoodie.parquet.variant.force.shredding.schema.for.test}
+   * @throws HoodieSchemaException when the splice would leave two definitions of one record full
+   *                               name, see {@code checkOneDefinitionPerRecordName}
+   */
+  public static HoodieSchema applyForcedShredding(HoodieSchema schema, Map<String, HoodieSchema> typedValueFields) {
+    if (schema.getType() != HoodieSchemaType.RECORD || typedValueFields == null || typedValueFields.isEmpty()) {
+      return schema;
+    }
+    HoodieSchema forced = applyForcedShreddingToRecord(schema, typedValueFields);
+    if (forced != schema) {
+      checkOneDefinitionPerRecordName(forced.getAvroSchema(), new HashMap<>());
+    }
+    return forced;
+  }
+
+  private static HoodieSchema applyForcedShreddingToRecord(HoodieSchema record, Map<String, HoodieSchema> typedValueFields) {
+    List<HoodieSchemaField> fields = record.getFields();
+    // Built lazily, as in stripRecordVariantShredding: every record without a variant member walks
+    // this method and must not pay for a field copy it will throw away.
+    List<HoodieSchemaField> newFields = null;
+    for (int i = 0; i < fields.size(); i++) {
+      HoodieSchemaField field = fields.get(i);
+      HoodieSchema fieldSchema = field.schema();
+      // A record member is the one position the DDL is allowed to shred; see applyForcedShredding.
+      HoodieSchema replacement = applyForcedShreddingAt(fieldSchema, typedValueFields, record, field.name(), true);
+      if (replacement != fieldSchema && newFields == null) {
+        newFields = copyFieldsBefore(fields, i);
+      }
+      if (newFields != null) {
+        // withSchema makes a fresh Avro Field: reusing one already bound to this record would fail
+        // Schema.setFields with "Field already used" when building the replacement record below.
+        newFields.add(field.withSchema(replacement));
+      }
+    }
+    if (newFields == null) {
+      return record;
+    }
+    return HoodieSchema.createRecord(
+        record.getAvroSchema().getName(),
+        record.getAvroSchema().getNamespace(),
+        record.getAvroSchema().getDoc(),
+        newFields);
+  }
+
+  /**
+   * Applies the forced DDL at one schema position, returning the argument instance when nothing
+   * changes. {@code enclosingRecord} and {@code fieldName} are the record member this position was
+   * reached from and name the generated record (see {@link #FORCED_VARIANT_NAMESPACE}).
+   * {@code variantAllowed} is false once the walk has stepped through an array element or a map
+   * value, where the DDL does not reach; it goes back to true for the members of any record found
+   * there, so {@code array<struct<v variant>>} shreds while {@code array<variant>} does not.
+   *
+   * <p>A genuine multi-branch UNION is out of scope. {@code getNonNullType} only unwraps the
+   * nullable two-branch form, so anything else comes back a UNION, hits {@code default} and passes
+   * through untouched -- a variant inside it is never forced, at any depth below it.
+   * {@code HoodieAvroWriteSupport.buildShredder} has the same arm, so the schema splice and the
+   * value walk agree on what a union does, and so does the read side
+   * ({@code HoodieVariantReconstruction.buildRebuilder}), which is why recursing here alone is not
+   * an option: it would write shredded groups under unions that the Avro reader never
+   * reconstructs. A future change to any of the three arms has to move all of them. The one shape
+   * the pass-through cannot represent -- a record type with a variant member reached both here and
+   * at a forced position, which would leave two definitions of one name -- is rejected up front by
+   * {@link #applyForcedShredding}.
+   */
+  private static HoodieSchema applyForcedShreddingAt(HoodieSchema schema,
+                                                     Map<String, HoodieSchema> typedValueFields,
+                                                     HoodieSchema enclosingRecord,
+                                                     String fieldName,
+                                                     boolean variantAllowed) {
+    boolean wasNullable = schema.isNullable();
+    HoodieSchema unwrapped = wasNullable ? schema.getNonNullType() : schema;
+    HoodieSchema replacement;
+    switch (unwrapped.getType()) {
+      case VARIANT:
+        if (!variantAllowed) {
+          return schema;
+        }
+        replacement = HoodieSchema.createVariantShreddedObject(
+            fieldName + "_variant",
+            FORCED_VARIANT_NAMESPACE + "." + enclosingRecord.getFullName(),
+            unwrapped.getAvroSchema().getDoc(),
+            typedValueFields);
+        break;
+      case RECORD:
+        replacement = applyForcedShreddingToRecord(unwrapped, typedValueFields);
+        break;
+      case ARRAY: {
+        HoodieSchema elementType = unwrapped.getElementType();
+        HoodieSchema shreddedElement = applyForcedShreddingAt(elementType, typedValueFields, enclosingRecord, fieldName, false);
+        replacement = shreddedElement == elementType ? unwrapped : HoodieSchema.createArray(shreddedElement);
+        break;
+      }
+      case MAP: {
+        HoodieSchema valueType = unwrapped.getValueType();
+        HoodieSchema shreddedValue = applyForcedShreddingAt(valueType, typedValueFields, enclosingRecord, fieldName, false);
+        replacement = shreddedValue == valueType ? unwrapped : HoodieSchema.createMap(shreddedValue);
+        break;
+      }
+      default:
+        return schema;
+    }
+    if (replacement == unwrapped) {
+      return schema;
+    }
+    return wasNullable ? HoodieSchema.createNullable(replacement) : replacement;
+  }
+
+  /**
+   * Rejects a spliced schema that defines one record full name twice with different fields. That
+   * is what Avro's {@code Schema.toString()} refuses ("Can't redefine") once the file schema is
+   * stamped into the parquet footer on avro 1.11, and what avro 1.12 turns into a footer that
+   * parses back into another schema (the second definition is written as a bare name reference),
+   * so the check cannot be left to serialization. The one way the splice produces such a pair is a
+   * record type with a variant member reached both at a position the DDL forces and inside a
+   * multi-branch union, which {@link #applyForcedShreddingAt} passes through untouched; the error
+   * says so. A record already seen is not descended into again, so a type reused at many
+   * positions costs one equality check per reuse, and a recursive type terminates.
+   */
+  private static void checkOneDefinitionPerRecordName(Schema schema, Map<String, Schema> definitions) {
+    switch (schema.getType()) {
+      case RECORD: {
+        Schema previous = definitions.putIfAbsent(schema.getFullName(), schema);
+        if (previous != null) {
+          if (!previous.equals(schema)) {
+            throw new HoodieSchemaException(String.format(
+                "Forced variant shredding (%s) produced two different definitions of record type '%s'. "
+                    + "A record type with a variant member reached both at a position the DDL forces and inside "
+                    + "a multi-branch union does this: the DDL does not reach into unions (nor does the Avro read "
+                    + "path), so the type is rebuilt at the first position and kept as-is under the union, and Avro "
+                    + "allows one definition per name in a file schema. Give the two positions distinct record "
+                    + "types or take the variant out of the union.",
+                HoodieStorageConfig.PARQUET_VARIANT_FORCE_SHREDDING_SCHEMA_FOR_TEST.key(), schema.getFullName()));
+          }
+          return;
+        }
+        for (Schema.Field field : schema.getFields()) {
+          checkOneDefinitionPerRecordName(field.schema(), definitions);
+        }
+        return;
+      }
+      case ARRAY:
+        checkOneDefinitionPerRecordName(schema.getElementType(), definitions);
+        return;
+      case MAP:
+        checkOneDefinitionPerRecordName(schema.getValueType(), definitions);
+        return;
+      case UNION:
+        for (Schema branch : schema.getTypes()) {
+          checkOneDefinitionPerRecordName(branch, definitions);
+        }
+        return;
+      default:
+        return;
+    }
+  }
+
+  /**
+   * Strips {@code typed_value} from fields that have the variant SHAPE but lost the variant
+   * logical type, i.e. plain records of {@code {metadata: bytes, value: [nullable] bytes,
+   * typed_value}} (see {@link #isShreddedVariantShape}). Parquet-footer-derived schemas come back
+   * this way (the converter does not attach the variant logical type), so
    * {@link #stripVariantShredding} alone cannot see them. Used by the table-schema footer
    * fallback only; returns {@code schema} as-is when nothing matches.
+   *
+   * <p>The walk recurses through records, array elements and map values because both write
+   * supports shred below the top level: the forced-shredding DDL reaches every variant that is a
+   * record member at any depth on the ROW path
+   * ({@code HoodieRowParquetWriteSupport.processNestedDataType}) and on the AVRO path
+   * ({@link #applyForcedShredding}), and a write schema that declares {@code typed_value} on a
+   * bare array element or map value shreds it on either path.
    *
    * <p>Unlike {@link #isShreddedVariantTarget}, the match here has NO requested-side anchor:
    * the footer fallback runs precisely when no table schema is available to anchor on, so a
    * plain user struct that happens to have exactly this shape is stripped too (a documented,
    * accepted false positive: {@code metadata} plus {@code typed_value} is the variant spec's
-   * vocabulary). Top-level fields only, matching the scope of
-   * {@link #getInferableVariantColumns}: inference never shreds a nested variant, and
-   * {@code HoodieAvroWriteSupport.applyForcedShreddingSchema} walks top-level fields only. The row
-   * writer shreds at any depth its write schema asks it to, forced DDL or not (see
-   * {@link #swapShreddedVariantFields}); those nested layouts are not covered by this fallback.
+   * vocabulary). Recursing extends that false positive from top-level fields to every depth. A
+   * match is terminal: the members of a variant group are the spec's own fields, not user columns
+   * that could hold a nested variant of their own.
    *
    * <p>The shape check also admits the spec's two-field {@code {metadata, typed_value}} form (a
    * writer may omit {@code value} when every row is typed). Stripping that would leave a
@@ -170,53 +384,93 @@ public class VariantSchemaUtils {
     if (schema.getType() != HoodieSchemaType.RECORD) {
       return schema;
     }
+    return stripRecordVariantShreddingByShape(schema);
+  }
 
-    List<HoodieSchemaField> newFields = new ArrayList<>();
-    boolean changed = false;
-
-    for (HoodieSchemaField field : schema.getFields()) {
+  private static HoodieSchema stripRecordVariantShreddingByShape(HoodieSchema record) {
+    List<HoodieSchemaField> fields = record.getFields();
+    // Built lazily, as in stripRecordVariantShredding: this fallback runs on every table-schema
+    // resolution from a data file, and the overwhelmingly common schema matches nothing.
+    List<HoodieSchemaField> newFields = null;
+    for (int i = 0; i < fields.size(); i++) {
+      HoodieSchemaField field = fields.get(i);
       HoodieSchema fieldSchema = field.schema();
-      boolean wasNullable = fieldSchema.isNullable();
-      HoodieSchema unwrapped = wasNullable ? fieldSchema.getNonNullType() : fieldSchema;
-
-      if (isShreddedVariantShape(unwrapped)) {
-        List<HoodieSchemaField> strippedFields = new ArrayList<>();
-        for (HoodieSchemaField member : unwrapped.getFields()) {
-          if (!HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD.equals(member.name())) {
-            strippedFields.add(HoodieSchemaUtils.createNewSchemaField(member));
-          }
-        }
-        if (!unwrapped.getField(HoodieSchema.Variant.VARIANT_VALUE_FIELD).isPresent()) {
-          // Null default, like every other optional field on this path (the footer converter
-          // attaches one, and kept members carry theirs over): HoodieSchemaField#equals compares
-          // defaults, so omitting it would make the stripped schema differ from the one a
-          // three-field file yields for the same column.
-          strippedFields.add(HoodieSchemaField.of(
-              HoodieSchema.Variant.VARIANT_VALUE_FIELD, HoodieSchema.createNullable(HoodieSchemaType.BYTES),
-              null, HoodieSchema.NULL_VALUE));
-        }
-        HoodieSchema stripped = HoodieSchema.createRecord(
-            unwrapped.getAvroSchema().getName(),
-            unwrapped.getAvroSchema().getNamespace(),
-            unwrapped.getAvroSchema().getDoc(),
-            strippedFields);
-        HoodieSchema replacement = wasNullable ? HoodieSchema.createNullable(stripped) : stripped;
-        newFields.add(HoodieSchemaUtils.createNewSchemaField(field.withSchema(replacement)));
-        changed = true;
-      } else {
-        newFields.add(HoodieSchemaUtils.createNewSchemaField(field));
+      HoodieSchema replacement = stripVariantShreddingByShapeAt(fieldSchema);
+      if (replacement != fieldSchema && newFields == null) {
+        newFields = copyFieldsBefore(fields, i);
+      }
+      if (newFields != null) {
+        // withSchema makes a fresh Avro Field: reusing one already bound to this record would fail
+        // Schema.setFields with "Field already used" when building the replacement record below.
+        newFields.add(field.withSchema(replacement));
       }
     }
+    if (newFields == null) {
+      return record;
+    }
+    return HoodieSchema.createRecord(
+        record.getAvroSchema().getName(),
+        record.getAvroSchema().getNamespace(),
+        record.getAvroSchema().getDoc(),
+        newFields);
+  }
 
-    if (!changed) {
+  /** Strips by shape at one schema position, returning the argument instance when nothing changes. */
+  private static HoodieSchema stripVariantShreddingByShapeAt(HoodieSchema schema) {
+    boolean wasNullable = schema.isNullable();
+    HoodieSchema unwrapped = wasNullable ? schema.getNonNullType() : schema;
+    HoodieSchema replacement;
+    switch (unwrapped.getType()) {
+      case RECORD:
+        // A match is terminal: whatever sits under a variant group belongs to the shredding spec,
+        // not to the user, so the walk never descends into one.
+        replacement = isShreddedVariantShape(unwrapped)
+            ? stripShreddedVariantShape(unwrapped)
+            : stripRecordVariantShreddingByShape(unwrapped);
+        break;
+      case ARRAY: {
+        HoodieSchema elementType = unwrapped.getElementType();
+        HoodieSchema strippedElement = stripVariantShreddingByShapeAt(elementType);
+        replacement = strippedElement == elementType ? unwrapped : HoodieSchema.createArray(strippedElement);
+        break;
+      }
+      case MAP: {
+        HoodieSchema valueType = unwrapped.getValueType();
+        HoodieSchema strippedValue = stripVariantShreddingByShapeAt(valueType);
+        replacement = strippedValue == valueType ? unwrapped : HoodieSchema.createMap(strippedValue);
+        break;
+      }
+      default:
+        return schema;
+    }
+    if (replacement == unwrapped) {
       return schema;
     }
+    return wasNullable ? HoodieSchema.createNullable(replacement) : replacement;
+  }
 
+  /** Rebuilds one shape-matched variant group in the unshredded {@code {metadata, value}} form. */
+  private static HoodieSchema stripShreddedVariantShape(HoodieSchema variantShaped) {
+    List<HoodieSchemaField> strippedFields = new ArrayList<>();
+    for (HoodieSchemaField member : variantShaped.getFields()) {
+      if (!HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD.equals(member.name())) {
+        strippedFields.add(HoodieSchemaUtils.createNewSchemaField(member));
+      }
+    }
+    if (!variantShaped.getField(HoodieSchema.Variant.VARIANT_VALUE_FIELD).isPresent()) {
+      // Null default, like every other optional field on this path (the footer converter
+      // attaches one, and kept members carry theirs over): HoodieSchemaField#equals compares
+      // defaults, so omitting it would make the stripped schema differ from the one a
+      // three-field file yields for the same column.
+      strippedFields.add(HoodieSchemaField.of(
+          HoodieSchema.Variant.VARIANT_VALUE_FIELD, HoodieSchema.createNullable(HoodieSchemaType.BYTES),
+          null, HoodieSchema.NULL_VALUE));
+    }
     return HoodieSchema.createRecord(
-        schema.getAvroSchema().getName(),
-        schema.getAvroSchema().getNamespace(),
-        schema.getAvroSchema().getDoc(),
-        newFields);
+        variantShaped.getAvroSchema().getName(),
+        variantShaped.getAvroSchema().getNamespace(),
+        variantShaped.getAvroSchema().getDoc(),
+        strippedFields);
   }
 
   /**
@@ -428,15 +682,16 @@ public class VariantSchemaUtils {
    * file side, which is what {@link #isShreddedVariantTarget} needs to anchor detection. Returns
    * {@code base} when nothing matches.
    *
-   * <p>The walk recurses through records, array elements and map values because the row writer
-   * shreds at any depth its write schema asks it to
-   * ({@code HoodieRowParquetWriteSupport.processNestedDataType} recurses into structs, array
-   * elements and map values, and {@code generateShreddedSchema} re-reads the forced-shredding DDL
-   * on every entry, so {@code struct<v variant>} plus
-   * {@code hoodie.parquet.variant.force.shredding.schema.for.test} does shred at depth on the ROW
-   * path). The AVRO path is the narrower one: {@code HoodieAvroWriteSupport.applyForcedShreddingSchema}
-   * walks top-level fields only, so on that path a nested shredded column needs a hand-authored
-   * write schema that declares {@code typed_value} below the top level.
+   * <p>The walk recurses through records, array elements and map values because both write
+   * supports shred at any depth their write schema asks them to. The forced-shredding DDL
+   * ({@code hoodie.parquet.variant.force.shredding.schema.for.test}) force-shreds every variant
+   * that is a record member at any depth on the ROW path
+   * ({@code HoodieRowParquetWriteSupport.generateShreddedSchema} re-reads the DDL on every entry
+   * and {@code processNestedDataType} recurses into structs, array elements and map values) and,
+   * since the #19689 fix, on the AVRO path too ({@link #applyForcedShredding}), so
+   * {@code struct<v variant>} comes out shredded whichever record type wrote it. A variant that is
+   * DIRECTLY an array element or a map value is force-shredded by neither; it shreds on either
+   * path only when the write schema itself declares {@code typed_value} there.
    */
   private static HoodieSchema swapShreddedVariantFields(HoodieSchema base, HoodieSchema other, boolean baseIsFile) {
     List<HoodieSchemaField> baseFields = base.getFields();

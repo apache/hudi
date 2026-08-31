@@ -57,7 +57,7 @@ import org.apache.spark.sql.execution.vectorized.{OffHeapColumnVector, OnHeapCol
 import org.apache.spark.sql.hudi.MultipleColumnarFileFormatReader
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnarBatchUtils}
 import org.apache.spark.util.SerializableConfiguration
 
@@ -136,6 +136,25 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
   }
 
   /**
+   * True when `dataType` itself, or anything it nests, satisfies `predicate`. A struct that
+   * matches is reported without descending into it, so a variant projection struct is answered
+   * as one type rather than as its pushed-down extraction fields.
+   */
+  private def containsType(dataType: DataType, predicate: DataType => Boolean): Boolean = {
+    predicate(dataType) || (dataType match {
+      case s: StructType => s.fields.exists(f => containsType(f.dataType, predicate))
+      case a: ArrayType => containsType(a.elementType, predicate)
+      case m: MapType => containsType(m.valueType, predicate)
+      case _ => false
+    })
+  }
+
+  private def isVariantProjection(dataType: DataType): Boolean = dataType match {
+    case s: StructType => sparkAdapter.isVariantProjectionStruct(s)
+    case _ => false
+  }
+
+  /**
    * Checks if the file format supports vectorized reading, please refer to SPARK-40918.
    *
    * NOTE: for mor read, even for file-slice with only base file, we can read parquet file with vectorized read,
@@ -153,8 +172,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       supportVectorizedRead = false
       supportReturningBatch = false
       false
-    } else if (schema.fields.exists(f => f.dataType.isInstanceOf[StructType]
-        && sparkAdapter.isVariantProjectionStruct(f.dataType.asInstanceOf[StructType]))) {
+    } else if (schema.fields.exists(f => containsType(f.dataType, isVariantProjection))) {
       // Spark 4.1's PushVariantIntoScan rewrites a variant column to a struct of pushed-down
       // extractions. The Spark vectorized parquet reader treats this as a nested type change
       // (data column is VariantType, required is a struct) and refuses to read in vectorized
@@ -162,9 +180,21 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       supportVectorizedRead = false
       supportReturningBatch = false
       false
-    } else if (HoodieSparkUtils.gteqSpark4_1 && schema.fields.exists(f => sparkAdapter.isVariantType(f.dataType))) {
+    } else if (HoodieSparkUtils.gteqSpark4_1
+        && schema.fields.exists(f => containsType(f.dataType, sparkAdapter.isVariantType))) {
       // #18605: Spark 4.1's vectorized variant read produces UnsafeRow encodings that SIGBUS
       // during RangePartitioner sampling. Force row-based reads. Spark 4.0 unaffected.
+      //
+      // Both checks above walk the schema instead of scanning top-level fields only. Spark's
+      // ParquetUtils.isBatchReadSupported treats VariantType as an atomic type and, once
+      // spark.sql.parquet.enableNestedColumnVectorizedReader is on - on by default since Spark
+      // 3.4.0 (added in 3.3.0, off) - nested columns as batch-readable, so at stock settings a
+      // variant reached the vectorized reader whenever it sat inside a struct/array/map even
+      // though a top-level one did not. The SIGBUS is in the UnsafeRow encoding of the vectorized
+      // variant vectors that RangePartitioner samples, and it samples WHOLE rows, so a variant
+      // carried inside a struct is exposed exactly the same way under any range-partitioned query.
+      // The cost is that nested-variant tables lose vectorization on 4.1+ by default, exactly as
+      // top-level ones do.
       supportVectorizedRead = false
       supportReturningBatch = false
       false

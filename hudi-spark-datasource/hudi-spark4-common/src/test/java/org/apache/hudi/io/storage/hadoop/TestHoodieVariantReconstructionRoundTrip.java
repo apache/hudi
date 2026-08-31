@@ -76,7 +76,7 @@ class TestHoodieVariantReconstructionRoundTrip {
     Map<String, HoodieSchema> shreddedFields = new LinkedHashMap<>();
     shreddedFields.put("a", HoodieSchema.create(HoodieSchemaType.STRING));
     shreddedFields.put("b", HoodieSchema.create(HoodieSchemaType.LONG));
-    HoodieSchema.Variant shreddedVariant = HoodieSchema.createVariantShreddedObject(shreddedFields);
+    HoodieSchema.Variant shreddedVariant = HoodieSchema.createVariantShreddedObject(null, null, null, shreddedFields);
     HoodieSchema.Variant unshreddedVariant = HoodieSchema.createVariant();
 
     HoodieSchema fileSchema = HoodieSchema.createRecord("r", "org.apache.hudi.test", null, Arrays.asList(
@@ -126,7 +126,7 @@ class TestHoodieVariantReconstructionRoundTrip {
     Map<String, HoodieSchema> shreddedFields = new LinkedHashMap<>();
     shreddedFields.put("a", HoodieSchema.create(HoodieSchemaType.STRING));
     shreddedFields.put("b", HoodieSchema.create(HoodieSchemaType.LONG));
-    HoodieSchema.Variant shreddedVariant = HoodieSchema.createVariantShreddedObject(shreddedFields);
+    HoodieSchema.Variant shreddedVariant = HoodieSchema.createVariantShreddedObject(null, null, null, shreddedFields);
     HoodieSchema.Variant unshreddedVariant = HoodieSchema.createVariant();
 
     // Shred with the real provider first, then drop the (null) top-level residual, which yields exactly
@@ -221,7 +221,7 @@ class TestHoodieVariantReconstructionRoundTrip {
     Map<String, HoodieSchema> shreddedFields = new LinkedHashMap<>();
     shreddedFields.put("a", HoodieSchema.create(HoodieSchemaType.STRING));
     shreddedFields.put("b", HoodieSchema.create(HoodieSchemaType.LONG));
-    HoodieSchema.Variant shreddedVariant = HoodieSchema.createVariantShreddedObject(shreddedFields);
+    HoodieSchema.Variant shreddedVariant = HoodieSchema.createVariantShreddedObject(null, null, null, shreddedFields);
     HoodieSchema.Variant unshreddedVariant = HoodieSchema.createVariant();
     // Data fields are nullable with null defaults, as Hudi table schemas declare them; the
     // skeleton read requests the full schema and fills the data columns with the defaults.

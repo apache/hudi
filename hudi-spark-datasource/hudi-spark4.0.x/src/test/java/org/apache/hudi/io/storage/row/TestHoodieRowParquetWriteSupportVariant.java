@@ -295,7 +295,7 @@ public class TestHoodieRowParquetWriteSupportVariant {
     LinkedHashMap<String, HoodieSchema> shreddedFields = new LinkedHashMap<>();
     shreddedFields.put("a", HoodieSchema.create(HoodieSchemaType.INT));
     shreddedFields.put("b", HoodieSchema.create(HoodieSchemaType.STRING));
-    HoodieSchema.Variant variantSchema = HoodieSchema.createVariantShreddedObject(shreddedFields);
+    HoodieSchema.Variant variantSchema = HoodieSchema.createVariantShreddedObject(null, null, null, shreddedFields);
 
     // Create a nested struct containing the variant
     HoodieSchema nestedStructSchema = HoodieSchema.createRecord("NestedStruct", null, null,
@@ -350,7 +350,7 @@ public class TestHoodieRowParquetWriteSupportVariant {
     // Setup: Create shredded variant
     LinkedHashMap<String, HoodieSchema> shreddedFields = new LinkedHashMap<>();
     shreddedFields.put("x", HoodieSchema.create(HoodieSchemaType.LONG));
-    HoodieSchema.Variant variantSchema = HoodieSchema.createVariantShreddedObject(shreddedFields);
+    HoodieSchema.Variant variantSchema = HoodieSchema.createVariantShreddedObject(null, null, null, shreddedFields);
 
     // Create deeply nested structure: level2 -> level1 -> variant
     HoodieSchema level2Schema = HoodieSchema.createRecord("Level2", null, null,
@@ -410,7 +410,7 @@ public class TestHoodieRowParquetWriteSupportVariant {
     // Setup: Array of shredded variants
     LinkedHashMap<String, HoodieSchema> shreddedFields = new LinkedHashMap<>();
     shreddedFields.put("item", HoodieSchema.create(HoodieSchemaType.STRING));
-    HoodieSchema.Variant variantSchema = HoodieSchema.createVariantShreddedObject(shreddedFields);
+    HoodieSchema.Variant variantSchema = HoodieSchema.createVariantShreddedObject(null, null, null, shreddedFields);
 
     HoodieSchema arraySchema = HoodieSchema.createArray(variantSchema);
     HoodieSchema recordSchema = HoodieSchema.createRecord("record", null, null,
@@ -451,7 +451,7 @@ public class TestHoodieRowParquetWriteSupportVariant {
     // Setup: Variant in struct, inside array, inside struct
     LinkedHashMap<String, HoodieSchema> shreddedFields = new LinkedHashMap<>();
     shreddedFields.put("data", HoodieSchema.create(HoodieSchemaType.INT));
-    HoodieSchema.Variant variantSchema = HoodieSchema.createVariantShreddedObject(shreddedFields);
+    HoodieSchema.Variant variantSchema = HoodieSchema.createVariantShreddedObject(null, null, null, shreddedFields);
 
     // Inner struct with variant
     HoodieSchema innerStructSchema = HoodieSchema.createRecord("InnerStruct", null, null,
@@ -523,7 +523,7 @@ public class TestHoodieRowParquetWriteSupportVariant {
     // Setup: Map with nullable shredded variant values
     LinkedHashMap<String, HoodieSchema> shreddedFields = new LinkedHashMap<>();
     shreddedFields.put("score", HoodieSchema.create(HoodieSchemaType.INT));
-    HoodieSchema.Variant variantSchema = HoodieSchema.createVariantShreddedObject(shreddedFields);
+    HoodieSchema.Variant variantSchema = HoodieSchema.createVariantShreddedObject(null, null, null, shreddedFields);
 
     // Wrap the variant in a nullable union, as would occur in real schemas
     HoodieSchema nullableVariantSchema = HoodieSchema.createNullable(variantSchema);
@@ -569,7 +569,7 @@ public class TestHoodieRowParquetWriteSupportVariant {
     // Setup: Array with nullable shredded variant elements
     LinkedHashMap<String, HoodieSchema> shreddedFields = new LinkedHashMap<>();
     shreddedFields.put("tag", HoodieSchema.create(HoodieSchemaType.STRING));
-    HoodieSchema.Variant variantSchema = HoodieSchema.createVariantShreddedObject(shreddedFields);
+    HoodieSchema.Variant variantSchema = HoodieSchema.createVariantShreddedObject(null, null, null, shreddedFields);
 
     // Wrap the variant in a nullable union
     HoodieSchema nullableVariantSchema = HoodieSchema.createNullable(variantSchema);
@@ -710,7 +710,7 @@ public class TestHoodieRowParquetWriteSupportVariant {
   @Test
   public void testEmptyShreddedFieldsMapThrows() {
     assertThrows(IllegalArgumentException.class,
-        () -> HoodieSchema.createVariantShreddedObject(Collections.emptyMap()),
+        () -> HoodieSchema.createVariantShreddedObject(null, null, null, Collections.emptyMap()),
         "Empty shredded fields map should throw IllegalArgumentException");
   }
 

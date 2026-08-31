@@ -33,8 +33,9 @@ import org.apache.parquet.hadoop.{ParquetFileReader, ParquetReader}
 import org.apache.parquet.hadoop.api.ReadSupport
 import org.apache.parquet.hadoop.example.GroupReadSupport
 import org.apache.parquet.hadoop.util.HadoopInputFile
-import org.apache.parquet.schema.{GroupType, MessageType, Type}
+import org.apache.parquet.schema.{GroupType, LogicalTypeAnnotation, MessageType, Type}
 import org.apache.spark.sql.Row
+import org.apache.spark.sql.execution.datasources.parquet.VariantParquetTestFixtures.{listElement, mapValue}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMetadata
 
@@ -108,9 +109,11 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
 
   /**
    * Creates `(id int, s struct<inner: variant>, ts long)` and bulk-inserts row 1 through the row
-   * writer under a forced `k string` nested schema: the bulk-insert row writer is the only
-   * production writer that shreds a variant BELOW the top level, so every nested-shredding leg
-   * needs exactly this table and this seed row.
+   * writer under a forced `k string` nested schema. Both forced hooks recurse into record members
+   * (the row writer's always did, the Avro write support's since the #19689 fix), so a nested
+   * variant shreds on either write path; inference alone stays top-level, and a variant that is
+   * directly an array element or a map value shreds only where the write schema already declares
+   * it. This row-writer seed is what the nested-shredding legs open on.
    */
   private def createNestedVariantRowWriterTable(tableName: String, tablePath: String): Unit = {
     spark.sql(
@@ -189,11 +192,31 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
 
   /**
    * The variant group of `column` inside one parquet file. `column` may be a dotted path
-   * ("s.inner"), walked one struct level per segment, so a nested variant is inspected the same
-   * way as a top-level one.
+   * ("s.inner"), walked one member per segment, so a nested variant is inspected the same way as
+   * a top-level one. A segment that lands on a LIST or MAP group is stepped through its wrapper
+   * to what it holds, so "items.inner" reaches the `inner` member of the element struct of an
+   * `array<struct<inner: variant>>` and "arr" reaches the element of an `array<variant>`.
    */
   protected def variantGroupOf(filePath: String, column: String): GroupType =
-    column.split('.').foldLeft(readParquetSchema(filePath): GroupType)(getFieldAsGroup)
+    column.split('.').foldLeft(readParquetSchema(filePath): GroupType) {
+      (group, segment) => collectionElementOf(getFieldAsGroup(group, segment))
+    }
+
+  /**
+   * Steps a LIST or MAP group down to the group it holds - a list element or a map value - and
+   * returns anything else, a variant group included, unchanged. The two write paths disagree on
+   * the list layout (the Spark writer emits the 3-level `list`/`element` shape, parquet-avro the
+   * 2-level one whose repeated group, named "array" or "<field>_tuple", IS the element), so the
+   * step delegates to the read-side guards' own rule rather than restating it.
+   */
+  private def collectionElementOf(group: GroupType): GroupType =
+    group.getLogicalTypeAnnotation match {
+      case _: LogicalTypeAnnotation.ListLogicalTypeAnnotation =>
+        collectionElementOf(listElement(group).asGroupType())
+      case _: LogicalTypeAnnotation.MapLogicalTypeAnnotation =>
+        collectionElementOf(mapValue(group).asGroupType())
+      case _ => group
+    }
 
   /**
    * Pins the on-disk layout of `column` (a name or a dotted path) across every data parquet file.

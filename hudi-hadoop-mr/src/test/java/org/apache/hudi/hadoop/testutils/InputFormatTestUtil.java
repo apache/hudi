@@ -553,7 +553,7 @@ public class InputFormatTestUtil {
 
   /** A shredded variant schema whose typed_value carries one string field {@code key}. */
   static HoodieSchema.Variant shreddedVariantSchema() {
-    return HoodieSchema.createVariantShreddedObject(
+    return HoodieSchema.createVariantShreddedObject(null, null, null,
         Collections.singletonMap("key", HoodieSchema.create(HoodieSchemaType.STRING)));
   }
 
@@ -601,7 +601,8 @@ public class InputFormatTestUtil {
 
   /**
    * Writes a one-row parquet file with an {@code id} column and a struct column {@code s} whose
-   * {@code inner} member is a shredded variant: the shape the row writer produces at depth.
+   * {@code inner} member is a shredded variant: the shape both write paths produce at depth, since
+   * the forced DDL reaches a variant record member at any depth on the row and the Avro path alike.
    */
   public static StoragePath writeNestedShreddedVariantParquetFile(java.nio.file.Path dir, String fileName) throws IOException {
     return writeNestedShreddedVariantParquetFile(dir, fileName, false);
@@ -646,7 +647,8 @@ public class InputFormatTestUtil {
 
   /**
    * Writes a one-row parquet file with an {@code id} column and an {@code a} column holding an
-   * array of shredded variants: the shape the row writer produces inside a collection.
+   * array of shredded variants: the shape either write path produces from a write schema that
+   * declares it, a bare array element being the one position the forced DDL leaves alone on both.
    *
    * <p>parquet-avro 1.13 writes the 2-level list layout by default
    * ({@code parquet.avro.write-old-list-structure} is true unless set), so the element group is
@@ -671,8 +673,8 @@ public class InputFormatTestUtil {
   /**
    * As {@link #writeArrayShreddedVariantParquetFile(java.nio.file.Path, String, boolean)}, with
    * {@code threeLevelList} switching the layout from parquet-avro's default 2-level {@code array}
-   * to the 3-level {@code list}/{@code element} one, which is what the Spark row writer - the only
-   * production writer that shreds inside a collection - emits.
+   * to the 3-level {@code list}/{@code element} one, which is what the Spark row writer emits; the
+   * Avro write path emits the 2-level form, so both layouts reach the guard.
    */
   public static StoragePath writeArrayShreddedVariantParquetFile(java.nio.file.Path dir, String fileName,
                                                                  boolean wrapElementInStruct,
@@ -750,9 +752,10 @@ public class InputFormatTestUtil {
 
   /**
    * Writes a one-row parquet file with an {@code id} column and an {@code m} column holding a
-   * {@code map<string, variant>} whose value is shredded: the shape the row writer produces inside
-   * a map. A map's entry level, key and value are levels Hive's dotted paths never name, so the
-   * shredded group has to land at the column's own path {@code m}.
+   * {@code map<string, variant>} whose value is shredded: the shape either write path produces from
+   * a write schema that declares it, a bare map value being the other position the forced DDL
+   * leaves alone on both. A map's entry level, key and value are levels Hive's dotted paths never
+   * name, so the shredded group has to land at the column's own path {@code m}.
    */
   public static StoragePath writeMapShreddedVariantParquetFile(java.nio.file.Path dir, String fileName) throws IOException {
     HoodieSchema.Variant shreddedVariant = shreddedVariantSchema();
