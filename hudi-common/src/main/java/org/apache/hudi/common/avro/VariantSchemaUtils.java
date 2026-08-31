@@ -26,11 +26,15 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
+import org.apache.avro.Schema;
+
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -193,12 +197,18 @@ public class VariantSchemaUtils {
    * @param schema           the writer schema
    * @param typedValueFields the DDL fields (name to type) every forced variant is shredded on, as
    *                         parsed from {@code hoodie.parquet.variant.force.shredding.schema.for.test}
+   * @throws HoodieSchemaException when the splice would leave two definitions of one record full
+   *                               name, see {@code checkOneDefinitionPerRecordName}
    */
   public static HoodieSchema applyForcedShredding(HoodieSchema schema, Map<String, HoodieSchema> typedValueFields) {
     if (schema.getType() != HoodieSchemaType.RECORD || typedValueFields == null || typedValueFields.isEmpty()) {
       return schema;
     }
-    return applyForcedShreddingToRecord(schema, typedValueFields);
+    HoodieSchema forced = applyForcedShreddingToRecord(schema, typedValueFields);
+    if (forced != schema) {
+      checkOneDefinitionPerRecordName(forced.getAvroSchema(), new HashMap<>());
+    }
+    return forced;
   }
 
   private static HoodieSchema applyForcedShreddingToRecord(HoodieSchema record, Map<String, HoodieSchema> typedValueFields) {
@@ -242,7 +252,13 @@ public class VariantSchemaUtils {
    * nullable two-branch form, so anything else comes back a UNION, hits {@code default} and passes
    * through untouched -- a variant inside it is never forced, at any depth below it.
    * {@code HoodieAvroWriteSupport.buildShredder} has the same arm, so the schema splice and the
-   * value walk agree on what a union does; a future change to either has to move both.
+   * value walk agree on what a union does, and so does the read side
+   * ({@code HoodieVariantReconstruction.buildRebuilder}), which is why recursing here alone is not
+   * an option: it would write shredded groups under unions that the Avro reader never
+   * reconstructs. A future change to any of the three arms has to move all of them. The one shape
+   * the pass-through cannot represent -- a record type with a variant member reached both here and
+   * at a forced position, which would leave two definitions of one name -- is rejected up front by
+   * {@link #applyForcedShredding}.
    */
   private static HoodieSchema applyForcedShreddingAt(HoodieSchema schema,
                                                      Map<String, HoodieSchema> typedValueFields,
@@ -285,6 +301,55 @@ public class VariantSchemaUtils {
       return schema;
     }
     return wasNullable ? HoodieSchema.createNullable(replacement) : replacement;
+  }
+
+  /**
+   * Rejects a spliced schema that defines one record full name twice with different fields. That
+   * is what Avro's {@code Schema.toString()} refuses ("Can't redefine") once the file schema is
+   * stamped into the parquet footer on avro 1.11, and what avro 1.12 turns into a footer that
+   * parses back into another schema (the second definition is written as a bare name reference),
+   * so the check cannot be left to serialization. The one way the splice produces such a pair is a
+   * record type with a variant member reached both at a position the DDL forces and inside a
+   * multi-branch union, which {@link #applyForcedShreddingAt} passes through untouched; the error
+   * says so. A record already seen is not descended into again, so a type reused at many
+   * positions costs one equality check per reuse, and a recursive type terminates.
+   */
+  private static void checkOneDefinitionPerRecordName(Schema schema, Map<String, Schema> definitions) {
+    switch (schema.getType()) {
+      case RECORD: {
+        Schema previous = definitions.putIfAbsent(schema.getFullName(), schema);
+        if (previous != null) {
+          if (!previous.equals(schema)) {
+            throw new HoodieSchemaException(String.format(
+                "Forced variant shredding (%s) produced two different definitions of record type '%s'. "
+                    + "A record type with a variant member reached both at a position the DDL forces and inside "
+                    + "a multi-branch union does this: the DDL does not reach into unions (nor does the Avro read "
+                    + "path), so the type is rebuilt at the first position and kept as-is under the union, and Avro "
+                    + "allows one definition per name in a file schema. Give the two positions distinct record "
+                    + "types or take the variant out of the union.",
+                HoodieStorageConfig.PARQUET_VARIANT_FORCE_SHREDDING_SCHEMA_FOR_TEST.key(), schema.getFullName()));
+          }
+          return;
+        }
+        for (Schema.Field field : schema.getFields()) {
+          checkOneDefinitionPerRecordName(field.schema(), definitions);
+        }
+        return;
+      }
+      case ARRAY:
+        checkOneDefinitionPerRecordName(schema.getElementType(), definitions);
+        return;
+      case MAP:
+        checkOneDefinitionPerRecordName(schema.getValueType(), definitions);
+        return;
+      case UNION:
+        for (Schema branch : schema.getTypes()) {
+          checkOneDefinitionPerRecordName(branch, definitions);
+        }
+        return;
+      default:
+        return;
+    }
   }
 
   /**

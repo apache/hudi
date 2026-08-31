@@ -2939,7 +2939,7 @@ public class TestHoodieSchema {
     shreddedFields.put("b", HoodieSchema.create(HoodieSchemaType.STRING));
     shreddedFields.put("c", HoodieSchema.createDecimal(15, 1));
 
-    HoodieSchema.Variant variant = HoodieSchema.createVariantShreddedObject(shreddedFields);
+    HoodieSchema.Variant variant = HoodieSchema.createVariantShreddedObject(null, null, null, shreddedFields);
 
     assertNotNull(variant);
     assertInstanceOf(HoodieSchema.Variant.class, variant);
@@ -3019,7 +3019,7 @@ public class TestHoodieSchema {
     shreddedFields.put("a", HoodieSchema.create(HoodieSchemaType.INT));
     shreddedFields.put("b", HoodieSchema.create(HoodieSchemaType.STRING));
 
-    HoodieSchema.Variant original = HoodieSchema.createVariantShreddedObject(shreddedFields);
+    HoodieSchema.Variant original = HoodieSchema.createVariantShreddedObject(null, null, null, shreddedFields);
     String jsonSchema = original.toString();
 
     // Parse back from JSON
@@ -3054,7 +3054,7 @@ public class TestHoodieSchema {
     shreddedFields.put("b", HoodieSchema.create(HoodieSchemaType.STRING));
     shreddedFields.put("c", HoodieSchema.createDecimal(15, 1));
 
-    HoodieSchema.Variant variant = HoodieSchema.createVariantShreddedObject(shreddedFields);
+    HoodieSchema.Variant variant = HoodieSchema.createVariantShreddedObject(null, null, null, shreddedFields);
 
     // getPlainTypedValueSchema should unwrap the nested {value, typed_value} structs
     Option<HoodieSchema> plainOpt = variant.getPlainTypedValueSchema();

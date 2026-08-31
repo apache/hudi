@@ -25,6 +25,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaTestUtils;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 
 import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
@@ -41,6 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestVariantSchemaUtils {
@@ -168,7 +170,7 @@ public class TestVariantSchemaUtils {
     // Spec-form object typed_value for v1; v2 intentionally absent (declined).
     Map<String, HoodieSchema> typedFields = new LinkedHashMap<>();
     typedFields.put("a", HoodieSchema.create(HoodieSchemaType.INT));
-    inferred.put("v1", HoodieSchema.createVariantShreddedObject(typedFields).getTypedValueField().get());
+    inferred.put("v1", HoodieSchema.createVariantShreddedObject(null, null, null, typedFields).getTypedValueField().get());
 
     HoodieSchema spliced = VariantSchemaUtils.applyInferredShredding(schema, inferred);
     assertNotEquals(schema, spliced);
@@ -331,6 +333,33 @@ public class TestVariantSchemaUtils {
     // avro 1.12 emits the second definition as a bare reference to the first, which parses fine
     // and yields a different schema.
     assertEquals(forcedClash.toAvroSchema(), new Schema.Parser().parse(forcedClash.toString()));
+  }
+
+  @Test
+  public void testApplyForcedShreddingKeepsMultiBranchUnionsOutOfReach() {
+    // The DDL does not reach into a multi-branch union, on the schema side, in the value walk and
+    // on the Avro read path alike (HoodieVariantReconstruction.buildRebuilder has the same default
+    // arm): a record type with a variant member that sits only under one is passed through untouched.
+    HoodieSchema reused = HoodieSchemaTestUtils.createRecord("reused",
+        HoodieSchemaField.of("v", HoodieSchema.createVariant()));
+    HoodieSchema unionWithReused = HoodieSchema.createUnion(
+        HoodieSchema.create(HoodieSchemaType.NULL), reused, HoodieSchema.create(HoodieSchemaType.STRING));
+    HoodieSchema underUnionOnly = HoodieSchema.createRecord("rec", "ns", null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("u", unionWithReused, null, HoodieSchema.NULL_VALUE)));
+    assertSame(underUnionOnly, VariantSchemaUtils.applyForcedShredding(underUnionOnly, forcedDdl()));
+
+    // The same type reached at a forced position too would be rebuilt there and kept as-is under
+    // the union: two definitions of one full name, which Avro refuses when the footer schema is
+    // stamped ("Can't redefine" on 1.11; 1.12 writes a name reference that parses back into
+    // another schema). The splice rejects it up front and names the type and the cause.
+    HoodieSchema both = HoodieSchema.createRecord("rec", "ns", null, Arrays.asList(
+        HoodieSchemaField.of("a", reused),
+        HoodieSchemaField.of("u", unionWithReused, null, HoodieSchema.NULL_VALUE)));
+    HoodieSchemaException failure = assertThrows(HoodieSchemaException.class,
+        () -> VariantSchemaUtils.applyForcedShredding(both, forcedDdl()));
+    assertTrue(failure.getMessage().contains("'" + reused.getFullName() + "'")
+        && failure.getMessage().contains("multi-branch union"), failure.getMessage());
   }
 
   @Test

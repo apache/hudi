@@ -195,8 +195,11 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
    * <p>A genuine multi-branch union is out of scope, deliberately: {@code getNonNullType()} only
    * unwraps the nullable two-branch form, so anything else comes back a UNION and lands in
    * {@code default}, leaving any variant inside it unshredded. The schema side agrees -
-   * {@code VariantSchemaUtils.applyForcedShreddingAt} has the same {@code default} arm - so the two
-   * cannot drift apart on their own; changing either one has to be a deliberate change to both.</p>
+   * {@code VariantSchemaUtils.applyForcedShreddingAt} has the same {@code default} arm, and so does
+   * the read side in {@code HoodieVariantReconstruction.buildRebuilder} - so the three cannot drift
+   * apart on their own; changing any one has to be a deliberate change to all of them. The one
+   * shape the schema-side pass-through cannot represent (a record type with a variant member both
+   * under a union and at a forced position) is rejected at splice time, before this walk runs.</p>
    */
   private static Shredder buildShredder(HoodieSchema effective) {
     HoodieSchema unwrapped = effective.getNonNullType();

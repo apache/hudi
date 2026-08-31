@@ -553,7 +553,7 @@ public class InputFormatTestUtil {
 
   /** A shredded variant schema whose typed_value carries one string field {@code key}. */
   static HoodieSchema.Variant shreddedVariantSchema() {
-    return HoodieSchema.createVariantShreddedObject(
+    return HoodieSchema.createVariantShreddedObject(null, null, null,
         Collections.singletonMap("key", HoodieSchema.create(HoodieSchemaType.STRING)));
   }
 

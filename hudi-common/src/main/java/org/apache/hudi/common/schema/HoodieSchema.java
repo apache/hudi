@@ -1025,7 +1025,7 @@ public class HoodieSchema implements Serializable {
    * fields.put("a", HoodieSchema.create(HoodieSchemaType.INT));
    * fields.put("b", HoodieSchema.create(HoodieSchemaType.STRING));
    * fields.put("c", HoodieSchema.createDecimal(15, 1));
-   * HoodieSchema.Variant variant = HoodieSchema.createVariantShreddedObject(fields);
+   * HoodieSchema.Variant variant = HoodieSchema.createVariantShreddedObject("v_variant", "com.example.rec", null, fields);
    * }</pre></p>
    *
    * <p>Produces the following structure:
@@ -1045,18 +1045,19 @@ public class HoodieSchema implements Serializable {
    *  |    |    |-- typed_value: decimal(15,1) (nullable)
    * </pre></p>
    *
-   * @param shreddedFields Map of field names to their typed value schemas. Use LinkedHashMap for ordered fields.
-   * @return a new HoodieSchema.Variant with properly nested typed_value
-   */
-  public static HoodieSchema.Variant createVariantShreddedObject(Map<String, HoodieSchema> shreddedFields) {
-    return createVariantShreddedObject(null, null, null, shreddedFields);
-  }
-
-  /**
-   * Creates a shredded Variant schema for an object type with custom name, namespace, and documentation.
+   * <p>There is deliberately no overload without a namespace: the variant record, its
+   * {@code typed_value} record and every per-field struct are named records, and a null namespace
+   * puts them all at the bare names {@code variant}, {@code typed_value} and the field names, where
+   * two differently shredded variants in one schema, or a user record type spelled like a DDL
+   * field, collide; see {@link #createShreddedFieldStruct(String, String, HoodieSchema)} for what
+   * a collision costs. A null namespace is fine only for a variant built standalone, with no
+   * surrounding schema, as tests do; a caller generating into a user schema owes it one, and the
+   * one production caller ({@code VariantSchemaUtils.applyForcedShredding}) does.
    *
    * @param name           the variant record name (can be null, defaults to "variant")
-   * @param namespace      the namespace (can be null)
+   * @param namespace      the namespace of the variant record and its {@code typed_value} record; the per-field
+   *                       structs go one level below, under {@code <namespace>.typed_value} (null only for a
+   *                       standalone variant, per above)
    * @param doc            the documentation (can be null)
    * @param shreddedFields Map of field names to their typed value schemas. Use LinkedHashMap for ordered fields.
    * @return a new HoodieSchema.Variant with properly nested typed_value
