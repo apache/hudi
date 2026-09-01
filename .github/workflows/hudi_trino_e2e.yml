@@ -16,9 +16,9 @@ on:
       #                         which compiles the whole module, so a break
       #                         anywhere in it fails this pipeline -- not just
       #                         under integ2/.
-      #   pom.xml               owns trino.version, which the shim pom's parent,
-      #                         the Dockerfile TRINO_VERSION arg and the
-      #                         hardcoded 481 paths below all track by hand.
+      #   pom.xml               owns trino.version / trino.sha / trino.e2e.version:
+      #                         the shim pom's parent, the plugin dir path and the
+      #                         server image version below are all derived from them.
       - 'hudi-trino/**'
       - 'docker/trino/**'
       - 'docker/compose/docker-compose_hadoop340_hive2310_spark402*'
@@ -27,6 +27,7 @@ on:
       - 'hudi-integ-test/**'
       - 'pom.xml'
       - '.github/workflows/hudi_trino_e2e.yml'
+      - 'scripts/trino/**'
   pull_request:
     branches:
       - master
@@ -41,6 +42,7 @@ on:
       - 'hudi-integ-test/**'
       - 'pom.xml'
       - '.github/workflows/hudi_trino_e2e.yml'
+      - 'scripts/trino/**'
   workflow_dispatch:
 
 concurrency:
@@ -62,12 +64,81 @@ jobs:
     # hudi-trino at HEAD, assembles the plugin dir via the in-repo shim
     # (docker/trino/shim, standing in for the not-yet-released upstream
     # trinodb/trino plugin/trino-hudi shim), bakes it into a local
-    # apachehudi/hudi-trino_481 image, and runs ITTestTrino* against the
-    # spark402 compose stack (the only pair with the trinocoordinator service).
+    # apachehudi/hudi-trino-e2e image on top of the released trino.e2e.version
+    # server, and runs ITTestTrino* against the spark402 compose stack (the only
+    # pair with the trinocoordinator service).
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - name: Read Trino pin
+        id: trino-pin
+        run: |
+          set -euo pipefail
+          TRINO_SHA=$(sed -n 's|.*<trino.sha>\(.*\)</trino.sha>.*|\1|p' pom.xml)
+          TRINO_VERSION=$(sed -n 's|.*<trino.version>\(.*\)</trino.version>.*|\1|p' pom.xml)
+          E2E_VERSION=$(sed -n 's|.*<trino.e2e.version>\(.*\)</trino.e2e.version>.*|\1|p' pom.xml)
+          # sed -n ...p exits 0 on no match; an empty sha would make the commits API answer
+          # for the default branch and silently skip the suite, so fail loudly instead.
+          if [ -z "$TRINO_SHA" ] || [ -z "$TRINO_VERSION" ] || [ -z "$E2E_VERSION" ]; then
+            echo "ERROR: could not read trino.sha/trino.version/trino.e2e.version from pom.xml" >&2
+            exit 1
+          fi
+          echo "Connector builds at $TRINO_VERSION ($TRINO_SHA); server image is $E2E_VERSION"
+          echo "trino_sha=$TRINO_SHA" >> "$GITHUB_OUTPUT"
+          echo "trino_version=$TRINO_VERSION" >> "$GITHUB_OUTPUT"
+          echo "e2e_version=$E2E_VERSION" >> "$GITHUB_OUTPUT"
+      - name: SPI drift gate
+        id: spi-drift
+        # The plugin is built at the pin but loaded by the released trino.e2e.version server, so
+        # any SPI / filesystem change between the two can make the image unbootable. Skip the run
+        # instead of reporting a failure that no connector change caused.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TRINO_SHA: ${{ steps.trino-pin.outputs.trino_sha }}
+          TRINO_VERSION: ${{ steps.trino-pin.outputs.trino_version }}
+          E2E_VERSION: ${{ steps.trino-pin.outputs.e2e_version }}
+        run: |
+          set -euo pipefail
+          # Per-path commit queries, NOT the compare API: compare caps its file list at 300
+          # and a single Trino release cycle already exceeds that, so a capped compare would
+          # flag every pin more than a release old as drifted. The commits API is uncapped;
+          # any commit reachable from the pin that touched a boundary-crossing path after the
+          # released tag's commit date (excluding the tag commit itself) is drift. Existence
+          # is enough, so the first page settles it -- truncation cannot yield a false pass.
+          # Gated paths are the surfaces where server-built and pin-built classes meet:
+          # core/trino-spi (the server provides it to the plugin classloader), and the
+          # HdfsFileSystemLoader contract, where bundled trino-filesystem-manager loads the
+          # server image's version-matched hdfs jar set (see docker/trino/Dockerfile) whose
+          # HdfsClassLoader then delegates the exact packages io.trino.filesystem and
+          # io.trino.memory.context back to the plugin's bundled copies -- so those two libs
+          # cross the boundary precisely BECAUSE they are bundled.
+          TAG_SHA=$(gh api "repos/trinodb/trino/commits/${E2E_VERSION}" --jq .sha)
+          TAG_DATE=$(gh api "repos/trinodb/trino/commits/${E2E_VERSION}" --jq .commit.committer.date)
+          DRIFTED=false
+          for p in core/trino-spi lib/trino-filesystem lib/trino-filesystem-manager lib/trino-hdfs lib/trino-memory-context; do
+            # Assign before iterating: a failing substitution in the for-list would not trip
+            # set -e, and gh api prints the error body to stdout, so a transient API error
+            # would otherwise iterate over error JSON and silently skip the suite.
+            SHAS=$(gh api "repos/trinodb/trino/commits?sha=${TRINO_SHA}&path=${p}&since=${TAG_DATE}" --jq '.[].sha')
+            for c in $SHAS; do
+              if [ "$c" != "$TAG_SHA" ]; then
+                echo "Boundary-crossing change under ${p}: ${c}"
+                DRIFTED=true
+              fi
+            done
+          done
+          echo "drifted=$DRIFTED" >> "$GITHUB_OUTPUT"
+          if [ "$DRIFTED" = "true" ]; then
+            {
+              echo "## Trino E2E skipped: SPI drift window"
+              echo ""
+              echo "The connector is built against trinodb/trino \`${TRINO_VERSION}\` (\`${TRINO_SHA}\`), while the"
+              echo "e2e server image is released Trino \`${E2E_VERSION}\`. SPI / filesystem paths changed between"
+              echo "the two, so this run is skipped until the pin and the released version re-align."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Free disk space
+        if: steps.spi-drift.outputs.drifted != 'true'
         run: |
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf /usr/local/lib/android
@@ -75,12 +146,14 @@ jobs:
           sudo rm -rf /usr/local/share/boost
           docker system prune --all --force --volumes
       - name: Pre-pull compose images (fails fast if not published)
+        if: steps.spi-drift.outputs.drifted != 'true'
         run: |
           # Surface a missing sparkadhoc image before the long Maven install. The
           # remaining stack images are pulled by docker-compose at test time; the
           # trino image is built locally below, never pulled.
           docker pull apachehudi/hudi-hadoop_3.4.0-hive_2.3.10-sparkadhoc_4.0.2:latest
       - name: Set up JDK 17
+        if: steps.spi-drift.outputs.drifted != 'true'
         uses: actions/setup-java@v5
         with:
           java-version: '17'
@@ -88,24 +161,50 @@ jobs:
           architecture: x64
           cache: maven
       - name: Build and install Hudi artifacts (JDK 17)
+        if: steps.spi-drift.outputs.drifted != 'true'
         # Full reactor: the compose containers mount the workspace and the tests
         # use bundles staged by the -Pintegration-tests build (e.g.
         # docker/hoodie/hadoop/hive_base/target/hoodie-spark-bundle.jar).
         run:
           mvn clean install -T 2 $SCALA_PROFILE -Dspark4.0 -Dflink1.20 -Pintegration-tests -DskipTests=true -Ddocker.compose.skip=true $MVN_ARGS
       - name: Set up JDK 25
+        if: steps.spi-drift.outputs.drifted != 'true'
         uses: actions/setup-java@v5
         with:
           java-version: '25'
           distribution: 'temurin'
           cache: maven
+      - name: Purge Trino artifacts from the local m2
+        if: steps.spi-drift.outputs.drifted != 'true'
+        # Artifacts an older pin left behind carry the same SNAPSHOT coordinates as the current ones.
+        run: rm -rf ~/.m2/repository/io/trino
+      # The connector and the shim assembly resolve io.trino from the pinned trinodb/trino
+      # commit: Trino publishes no SNAPSHOT artifacts, so nothing here comes from Central.
+      - name: Restore Trino artifacts for the pinned commit
+        id: trino-m2
+        if: steps.spi-drift.outputs.drifted != 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/io/trino
+          key: trino-m2-v2-${{ hashFiles('scripts/trino/bootstrap_trino.sh') }}-${{ steps.trino-pin.outputs.trino_sha }}
+          # No restore-keys on purpose: a partial restore from another pin collides on the
+          # same SNAPSHOT coordinates and poisons the build.
+      - name: Checkout trinodb/trino at the pinned commit
+        if: steps.spi-drift.outputs.drifted != 'true' && steps.trino-m2.outputs.cache-hit != 'true'
+        uses: actions/checkout@v5
+        with:
+          repository: trinodb/trino
+          ref: ${{ steps.trino-pin.outputs.trino_sha }}
+          path: trino-src
+      - name: Build Trino artifacts from source (JDK 25)
+        if: steps.spi-drift.outputs.drifted != 'true' && steps.trino-m2.outputs.cache-hit != 'true'
+        run: scripts/trino/bootstrap_trino.sh trino-src --skip-checkout
       - name: Build hudi-trino connector (JDK 25)
-        # No trinodb/trino checkout needed: the unpublished Trino test-jars sit
-        # behind the off-by-default hudi-trino-tests profile and packaging
-        # resolves entirely from Maven Central.
+        if: steps.spi-drift.outputs.drifted != 'true'
         run:
           mvn $MVN_ARGS -Phudi-trino -pl hudi-trino install -Dmaven.test.skip=true
       - name: Assemble trino-hudi plugin dir via in-repo shim (JDK 25)
+        if: steps.spi-drift.outputs.drifted != 'true'
         # package, NOT install: installing would shadow the real
         # io.trino:trino-hudi release coordinates in the local m2 (the shim pom
         # also hard-disables install via maven.install.skip).
@@ -117,20 +216,30 @@ jobs:
           HUDI_VERSION=$(mvn -q -ntp help:evaluate -Dexpression=project.version -DforceStdout)
           echo "Building shim against hudi version: $HUDI_VERSION"
           mvn $MVN_ARGS -f docker/trino/shim/pom.xml clean package -DskipTests -Ddep.hudi.version="$HUDI_VERSION"
-      - name: Build apachehudi/hudi-trino_481 image
+      - name: Build apachehudi/hudi-trino-e2e image
+        if: steps.spi-drift.outputs.drifted != 'true'
+        # The plugin dir is named after the version it was built at; the server underneath is
+        # the released trino.e2e.version.
+        env:
+          TRINO_VERSION: ${{ steps.trino-pin.outputs.trino_version }}
+          E2E_VERSION: ${{ steps.trino-pin.outputs.e2e_version }}
         run: |
-          docker/trino/build_image.sh --plugin-dir docker/trino/shim/target/trino-hudi-481
+          PLUGIN_DIR="docker/trino/shim/target/trino-hudi-${TRINO_VERSION}"
+          # trino-maven-plugin 24 emits only the zip; explode it into the plugin dir layout.
+          unzip -o -q "${PLUGIN_DIR}.zip" -d docker/trino/shim/target
+          docker/trino/build_image.sh --plugin-dir "$PLUGIN_DIR" --trino-version "${E2E_VERSION}"
           # Sanity: the shim must have produced a populated plugin dir with a
           # service descriptor jar, or Trino cannot load the plugin at boot.
-          echo "plugin dir jar count: $(ls docker/trino/shim/target/trino-hudi-481 | wc -l)"
-          ls docker/trino/shim/target/trino-hudi-481/*services*.jar
+          echo "plugin dir jar count: $(ls "$PLUGIN_DIR" | wc -l)"
+          ls "$PLUGIN_DIR"/*services*.jar
       - name: Smoke-boot the Trino image standalone
+        if: steps.spi-drift.outputs.drifted != 'true'
         # Catches image-level boot failures (plugin load errors, bad etc/ config)
         # ~30 min before the IT step would, with the full boot log on screen.
         # --hostname trinocoordinator makes the baked discovery.uri self-resolve.
         run: |
           docker run -d --name trino-smoke --hostname trinocoordinator \
-            apachehudi/hudi-trino_481:latest
+            apachehudi/hudi-trino-e2e:latest
           ok=""
           for i in $(seq 1 18); do
             if [ "$(docker inspect -f '{{.State.Running}}' trino-smoke)" != "true" ]; then
@@ -151,6 +260,7 @@ jobs:
           fi
           docker rm -f trino-smoke
       - name: Set up JDK 17 (restore for the IT run)
+        if: steps.spi-drift.outputs.drifted != 'true'
         # setup-java resets JAVA_HOME on each call; hudi-integ-test needs 17.
         uses: actions/setup-java@v5
         with:
@@ -158,6 +268,7 @@ jobs:
           distribution: 'temurin'
           architecture: x64
       - name: Run Trino E2E ITs (JDK 17)
+        if: steps.spi-drift.outputs.drifted != 'true'
         run: |
           # -DskipITs=false overrides the spark4.0 profile's skipITs=true default
           # (see root pom.xml). -Dcompose.profiles=trino starts the profile-gated

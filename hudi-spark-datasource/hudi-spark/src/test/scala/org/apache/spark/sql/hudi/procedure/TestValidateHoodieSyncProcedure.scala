@@ -25,9 +25,14 @@ import java.sql.SQLException
  * Tests for [[org.apache.spark.sql.hudi.command.procedures.ValidateHoodieSyncProcedure]].
  *
  * The "complete" / "latestPartitions" modes count records over JDBC, but they do not need a live
- * Hive/JDBC endpoint to be exercised negatively: pointed at a portless URL, both fail fast in the
- * driver's transport setup, which rejects the invalid port before any network connect. The last
- * test pins those two failure shapes, one of which is the connection-failure masking bug of #19635.
+ * Hive/JDBC endpoint to be exercised negatively: pointed at a hostless URL, both fail fast in the
+ * driver's URL parsing, which raises JdbcUriParseException (an SQLException) before any transport
+ * class loads or any network connect. The last test pins those two failure shapes, one of which is
+ * the connection-failure masking bug of #19635. Failing during parsing, not transport setup, keeps
+ * the pins independent of libthrift resolution: the Hive 2.3.10 client jars need libthrift 0.14.1
+ * (TConfiguration), but spark-hive pulls 0.12.0 onto the test classpath, so a connect attempt that
+ * reaches HiveAuthUtils.getSocketTransport dies with NoClassDefFoundError instead of the
+ * SQLException these pins rely on, see #19680.
  *
  * The other tests pass 'noop', which short-circuits the record counting (record counts stay 0)
  * while still exercising the timeline comparison, the catch-up-commit computation and the result
@@ -207,7 +212,7 @@ class TestValidateHoodieSyncProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
-  test("Test Call sync_validate record-count modes fail fast on an unreachable HiveServer2") {
+  test("Test Call sync_validate record-count modes fail fast on an unusable HiveServer2 url") {
     withTempDir { tmp =>
       val tableName = generateTableName
       createTable(tableName, s"${tmp.getCanonicalPath}/$tableName")
@@ -215,8 +220,11 @@ class TestValidateHoodieSyncProcedure extends HoodieSparkProcedureTestBase {
 
       // The mode dispatch counts records before the timelines are compared, so a single table as
       // both source and target is enough here: neither call survives the record counting.
-      // Nothing reaches the network either: the url carries no port, so the authority resolves to
-      // unused:-1 and the driver's transport setup rejects that port before any connect.
+      // Nothing reaches the network either: the url has no host, so Utils.configureConnParams
+      // rejects it with JdbcUriParseException (an SQLException) while parsing, before the driver
+      // touches any thrift transport class. That last part is load-bearing, see #19680: with
+      // spark-hive's libthrift 0.12.0 on the classpath, transport setup dies with a
+      // NoClassDefFoundError (the Hive 2.3.10 jars need 0.14.1) instead of an SQLException.
 
       // mode = 'complete' routes to the countRecords overload that declares its connection as
       // `var conn: Connection = null` and closes it in an unguarded `finally { conn.close() }`.
@@ -226,7 +234,7 @@ class TestValidateHoodieSyncProcedure extends HoodieSparkProcedureTestBase {
       val completeFailure = intercept[Throwable] {
         spark.sql(
           s"""call sync_validate(src_table => '$tableName', dst_table => '$tableName',
-             | mode => 'complete', hive_server_url => 'jdbc:hive2://unused', hive_pass => 'x')"""
+             | mode => 'complete', hive_server_url => 'jdbc:hive2://:10000', hive_pass => 'x')"""
             .stripMargin).collect()
       }
       // Assert over the cause chain, never the top-level type: on Spark 3.4+ QueryExecution wraps a
@@ -244,7 +252,7 @@ class TestValidateHoodieSyncProcedure extends HoodieSparkProcedureTestBase {
       val latestPartitionsFailure = intercept[Throwable] {
         spark.sql(
           s"""call sync_validate(src_table => '$tableName', dst_table => '$tableName',
-             | mode => 'latestPartitions', hive_server_url => 'jdbc:hive2://unused', hive_pass => 'x')"""
+             | mode => 'latestPartitions', hive_server_url => 'jdbc:hive2://:10000', hive_pass => 'x')"""
             .stripMargin).collect()
       }
       assert(causeChain(latestPartitionsFailure).exists(_.isInstanceOf[SQLException]),

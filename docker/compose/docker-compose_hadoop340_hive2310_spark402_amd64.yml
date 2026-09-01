@@ -261,7 +261,7 @@ services:
   # docker/trino/empty-overlay (baked-in plugin used); set TRINO_PLUGIN_DIR to a
   # locally-built trino-hudi plugin dir to override it at container start.
   trinocoordinator:
-    image: apachehudi/hudi-trino_481:latest
+    image: apachehudi/hudi-trino-e2e:latest
     profiles: ["trino"]
     hostname: trinocoordinator
     container_name: trinocoordinator

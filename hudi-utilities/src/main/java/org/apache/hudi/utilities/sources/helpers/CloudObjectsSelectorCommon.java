@@ -24,8 +24,11 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.util.CustomizedThreadFactory;
+import org.apache.hudi.common.util.FutureUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -64,15 +67,22 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.CollectionUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.CLOUD_DATAFILE_EXTENSION;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.CLOUD_INCREMENTAL_MERGE_SCHEMA;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.EXISTS_CHECK_PARALLELISM;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.EXISTS_CHECK_PARTITIONS;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.IGNORE_RELATIVE_PATH_PREFIX;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.IGNORE_RELATIVE_PATH_SUBSTR;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.PATH_BASED_PARTITION_FIELDS;
@@ -86,6 +96,7 @@ import static org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig.S3
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.coalesceOrRepartition;
 import static org.apache.spark.sql.functions.input_file_name;
 import static org.apache.spark.sql.functions.split;
+import static org.apache.spark.sql.functions.when;
 
 /**
  * Generic helper methods to fetch from Cloud Storage during incremental fetch from cloud storage buckets.
@@ -100,6 +111,7 @@ public class CloudObjectsSelectorCommon {
   public static final String S3_BUCKET_NAME = "s3.bucket.name";
   public static final String GCS_OBJECT_KEY = "name";
   public static final String GCS_OBJECT_SIZE = "size";
+  public static final String CLOUD_SOURCE_PATH_COLUMN = "_hoodie_cloud_source_path";
   private static final String SPACE_DELIMTER = " ";
   private static final String GCS_PREFIX = "gs://";
 
@@ -115,33 +127,92 @@ public class CloudObjectsSelectorCommon {
    * @param storageUrlSchemePrefix    Eg: s3:// or gs://. The storage-provider-specific prefix to use within the URL.
    * @param storageConf               storage configuration.
    * @param checkIfExists             check if each file exists, before adding it to the returned list
-   * @return
+   * @param existsCheckParallelism    number of threads per task for the existence checks (getObjectMetadata validates it is >= 1); 1 checks sequentially
    */
   public static MapPartitionsFunction<Row, CloudObjectMetadata> getCloudObjectMetadataPerPartition(
-      String storageUrlSchemePrefix, StorageConfiguration<Configuration> storageConf, boolean checkIfExists) {
+      String storageUrlSchemePrefix, StorageConfiguration<Configuration> storageConf,
+      boolean checkIfExists, int existsCheckParallelism) {
     return rows -> {
-      List<CloudObjectMetadata> cloudObjectMetadataPerPartition = new ArrayList<>();
-      rows.forEachRemaining(row -> {
-        Option<String> filePathUrl = getUrlForFile(row, storageUrlSchemePrefix, storageConf, checkIfExists);
-        filePathUrl.ifPresent(url -> {
-          log.info("Adding file: {}", url);
-          long size;
-          Object obj = row.get(2);
-          if (obj instanceof String) {
-            size = Long.parseLong((String) obj);
-          } else if (obj instanceof Integer) {
-            size = ((Integer) obj).longValue();
-          } else if (obj instanceof Long) {
-            size = (long) obj;
-          } else {
-            throw new HoodieIOException("unexpected object size's type in Cloud storage events: " + obj.getClass());
-          }
-          cloudObjectMetadataPerPartition.add(new CloudObjectMetadata(url, size));
-        });
-      });
+      if (!checkIfExists || existsCheckParallelism <= 1) {
+        List<CloudObjectMetadata> cloudObjectMetadataPerPartition = new ArrayList<>();
+        rows.forEachRemaining(row ->
+            processRow(row, storageUrlSchemePrefix, storageConf, checkIfExists).ifPresent(cloudObjectMetadataPerPartition::add));
+        return cloudObjectMetadataPerPartition.iterator();
+      }
 
-      return cloudObjectMetadataPerPartition.iterator();
+      List<Row> rowList = new ArrayList<>();
+      rows.forEachRemaining(rowList::add);
+      if (rowList.isEmpty()) {
+        return Collections.emptyIterator();
+      }
+      ExecutorService executor = Executors.newFixedThreadPool(Math.min(existsCheckParallelism, rowList.size()),
+          new CustomizedThreadFactory("cloud-exists-check", true));
+      try {
+        List<CompletableFuture<Option<CloudObjectMetadata>>> futures = rowList.stream()
+            .map(row -> CompletableFuture.supplyAsync(
+                () -> processRow(row, storageUrlSchemePrefix, storageConf, true), executor))
+            .collect(Collectors.toList());
+        List<Option<CloudObjectMetadata>> results;
+        try {
+          // fails fast: the first failed check completes the returned future exceptionally and cancels the rest,
+          // and every future is complete before this returns, so the pool can be shut down right after
+          results = FutureUtils.allOf(futures).join();
+        } catch (CompletionException e) {
+          throw unwrapExistsCheckFailure(e);
+        }
+        return results.stream()
+            .filter(Option::isPresent)
+            .map(Option::get)
+            .collect(Collectors.toList())
+            .iterator();
+      } finally {
+        // on the failure path this also interrupts the in-flight checks that FutureUtils.allOf only cancelled
+        executor.shutdownNow();
+      }
     };
+  }
+
+  /**
+   * {@link FutureUtils#allOf} wraps the failure of a check in one or more {@link CompletionException}s; rethrow the
+   * original exception so callers see the same failure the sequential path throws, whatever the parallelism.
+   */
+  private static RuntimeException unwrapExistsCheckFailure(CompletionException e) {
+    Throwable cause = e;
+    while (cause instanceof CompletionException && cause.getCause() != null) {
+      cause = cause.getCause();
+    }
+    if (cause instanceof Error) {
+      throw (Error) cause;
+    }
+    return cause instanceof RuntimeException
+        ? (RuntimeException) cause
+        : new HoodieException("Failed during parallel cloud object existence check", cause);
+  }
+
+  /**
+   * Process a single row to build a {@link CloudObjectMetadata}. Optionally checks if the file exists.
+   */
+  private static Option<CloudObjectMetadata> processRow(Row row, String storageUrlSchemePrefix,
+                                                        StorageConfiguration<Configuration> storageConf,
+                                                        boolean checkIfExists) {
+    Option<String> filePathUrl = getUrlForFile(row, storageUrlSchemePrefix, storageConf, checkIfExists);
+    if (!filePathUrl.isPresent()) {
+      return Option.empty();
+    }
+    String url = filePathUrl.get();
+    log.debug("Adding file: {}", url);
+    long size;
+    Object obj = row.get(2);
+    if (obj instanceof String) {
+      size = Long.parseLong((String) obj);
+    } else if (obj instanceof Integer) {
+      size = ((Integer) obj).longValue();
+    } else if (obj instanceof Long) {
+      size = (long) obj;
+    } else {
+      throw new HoodieIOException("unexpected object size's type in Cloud storage events: " + obj.getClass());
+    }
+    return Option.of(new CloudObjectMetadata(url, size));
   }
 
   /**
@@ -155,8 +226,6 @@ public class CloudObjectsSelectorCommon {
   private static Option<String> getUrlForFile(Row row, String storageUrlSchemePrefix,
                                               StorageConfiguration<Configuration> storageConf,
                                               boolean checkIfExists) {
-    final Configuration configuration = storageConf.unwrapCopy();
-
     String bucket = row.getString(0);
     String filePath = storageUrlSchemePrefix + bucket + StoragePath.SEPARATOR + row.getString(1);
 
@@ -165,7 +234,7 @@ public class CloudObjectsSelectorCommon {
       if (!checkIfExists) {
         return Option.of(filePathUrl);
       }
-      boolean exists = checkIfFileExists(storageUrlSchemePrefix, bucket, filePathUrl, configuration);
+      boolean exists = checkIfFileExists(storageUrlSchemePrefix, bucket, filePathUrl, storageConf.unwrapCopy());
       return exists ? Option.of(filePathUrl) : Option.empty();
     } catch (Exception exception) {
       log.error("Failed to generate path to cloud file {}", filePath, exception);
@@ -254,22 +323,52 @@ public class CloudObjectsSelectorCommon {
       TypedProperties props
   ) {
     StorageConfiguration<Configuration> storageConf = HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration());
+    int existsCheckParallelism = getIntWithAltKeys(props, EXISTS_CHECK_PARALLELISM);
+    ValidationUtils.checkArgument(existsCheckParallelism >= 1,
+        EXISTS_CHECK_PARALLELISM.key() + " must be >= 1, got: " + existsCheckParallelism);
+
+    String prefix;
+    String bucketCol;
+    String keyCol;
+    String sizeCol;
     if (type == Type.GCS) {
-      return cloudObjectMetadataDF
-          .select("bucket", "name", "size")
-          .distinct()
-          .mapPartitions(getCloudObjectMetadataPerPartition(GCS_PREFIX, storageConf, checkIfExists), Encoders.kryo(CloudObjectMetadata.class))
-          .collectAsList();
+      prefix = GCS_PREFIX;
+      bucketCol = "bucket";
+      keyCol = GCS_OBJECT_KEY;
+      sizeCol = GCS_OBJECT_SIZE;
     } else if (type == Type.S3) {
       String s3FS = getStringWithAltKeys(props, S3_FS_PREFIX, true).toLowerCase();
-      String s3Prefix = s3FS + "://";
-      return cloudObjectMetadataDF
-          .select(CloudObjectsSelectorCommon.S3_BUCKET_NAME, CloudObjectsSelectorCommon.S3_OBJECT_KEY, CloudObjectsSelectorCommon.S3_OBJECT_SIZE)
-          .distinct()
-          .mapPartitions(getCloudObjectMetadataPerPartition(s3Prefix, storageConf, checkIfExists), Encoders.kryo(CloudObjectMetadata.class))
-          .collectAsList();
+      prefix = s3FS + "://";
+      bucketCol = S3_BUCKET_NAME;
+      keyCol = S3_OBJECT_KEY;
+      sizeCol = S3_OBJECT_SIZE;
+    } else {
+      throw new UnsupportedOperationException("Invalid cloud type " + type);
     }
-    throw new UnsupportedOperationException("Invalid cloud type " + type);
+
+    Dataset<Row> distinctObjects = cloudObjectMetadataDF.select(bucketCol, keyCol, sizeCol).distinct();
+    if (checkIfExists) {
+      // The upstream Window.orderBy() in IncrSourceHelper collapses the dataset to one partition and AQE keeps the
+      // distinct() output there, which would serialize every existence check on one task. Spread the checks over
+      // the cluster: repartition(n) is not coalesced by AQE, and defaultParallelism tracks the registered cores.
+      int numPartitions = existsCheckNumPartitions(props, jsc);
+      log.info("Checking cloud object existence over {} partitions with {} threads per task", numPartitions, existsCheckParallelism);
+      distinctObjects = distinctObjects.repartition(numPartitions);
+    }
+    return distinctObjects
+        .mapPartitions(
+            getCloudObjectMetadataPerPartition(prefix, storageConf, checkIfExists, existsCheckParallelism),
+            Encoders.kryo(CloudObjectMetadata.class))
+        .collectAsList();
+  }
+
+  /**
+   * Number of partitions the existence checks are spread over: {@link CloudSourceConfig#EXISTS_CHECK_PARTITIONS}
+   * when set to a positive value, otherwise the Spark default parallelism. Never below 1 (repartition rejects 0).
+   */
+  static int existsCheckNumPartitions(TypedProperties props, JavaSparkContext jsc) {
+    int configured = getIntWithAltKeys(props, EXISTS_CHECK_PARTITIONS);
+    return Math.max(1, configured > 0 ? configured : jsc.defaultParallelism());
   }
 
   public Option<Dataset<Row>> loadAsDataset(SparkSession spark, List<CloudObjectMetadata> cloudObjectMetadata,
@@ -343,6 +442,20 @@ public class CloudObjectsSelectorCommon {
         dataset = dataset.withColumn(partitionKey, split(split(input_file_name(), partitionPathPattern).getItem(1), StoragePath.SEPARATOR).getItem(0));
       }
     }
+
+    // append the source file path if configured. input_file_name() is non-nullable, so wrap it to make the
+    // column nullable (required to add it to an existing table); the wrapper also maps Spark's "unknown file"
+    // empty string to null. Overwrites a same-named column, matching the partition columns above.
+    if (getBooleanWithAltKeys(properties, CloudSourceConfig.INCLUDE_SOURCE_PATH_FIELD)) {
+      if (rowSchema != null && !Arrays.asList(rowSchema.fieldNames()).contains(CLOUD_SOURCE_PATH_COLUMN)) {
+        // the streamer rewrites row sources to the configured schema provider's schema before writing
+        log.warn("Column {} is not declared in the configured schema provider's schema; it will be dropped before "
+            + "the write unless it is declared there", CLOUD_SOURCE_PATH_COLUMN);
+      }
+      log.info("Adding column {} to dataset", CLOUD_SOURCE_PATH_COLUMN);
+      dataset = dataset.withColumn(CLOUD_SOURCE_PATH_COLUMN, when(input_file_name().notEqual(""), input_file_name()));
+    }
+
     dataset = coalesceOrRepartition(dataset, numPartitions);
     return Option.of(dataset);
   }

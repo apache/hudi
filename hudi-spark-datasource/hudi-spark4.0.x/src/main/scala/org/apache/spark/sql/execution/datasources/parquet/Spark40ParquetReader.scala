@@ -117,6 +117,14 @@ class Spark40ParquetReader(enableVectorizedReader: Boolean,
     }
 
     val footerFileMetaData = fileFooter.getFileMetaData
+    // Reject a shredded variant here, before either branch, so the failure names the column.
+    // Spark40ParquetReader.build pins ParquetInputFormat.READ_SUPPORT_CLASS to Spark's own
+    // ParquetReadSupport, so the vectorized branch below never instantiates
+    // Spark40HoodieParquetReadSupport and never reaches the same guard in its init; on Spark 4.0
+    // VariantType is an AtomicType and supportBatch only disables batching for variant on 4.1+,
+    // so the default COW/MOR base-file read lands on that branch.
+    Spark40HoodieParquetReadSupport.rejectShreddedVariants(
+      footerFileMetaData.getSchema, Some(requiredSchema))
     val datetimeRebaseSpec = DataSourceUtils.datetimeRebaseSpec(
       footerFileMetaData.getKeyValueMetaData.get,
       datetimeRebaseModeInRead)

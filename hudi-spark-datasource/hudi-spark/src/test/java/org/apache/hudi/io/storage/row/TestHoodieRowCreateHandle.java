@@ -21,6 +21,9 @@ package org.apache.hudi.io.storage.row;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.MetaFieldsMode;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -40,6 +43,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 import java.util.Random;
 import java.util.UUID;
 
@@ -81,6 +85,19 @@ public class TestHoodieRowCreateHandle extends HoodieSparkClientTestHarness {
     HoodieWriteConfig config = SparkDatasetTestUtils.getConfigBuilder(basePath, timelineServicePort)
         .withPopulateMetaFields(populateMetaFields)
         .build();
+
+    // The handle reads the meta-fields mode from the TABLE config, not the write config, so the
+    // fixture table -- created with meta fields populated by initMetaClient() -- has to be told what
+    // this run is writing. Without this the writer asks for NONE while the table still says ALL, which
+    // is both rejected by the writer-vs-table check and, here, would have the handle stamp meta
+    // columns the assertions expect to be untouched.
+    Properties tableProps = new Properties();
+    tableProps.putAll(metaClient.getTableConfig().getProps());
+    tableProps.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), String.valueOf(populateMetaFields));
+    tableProps.put(HoodieTableConfig.META_FIELDS_MODE.key(),
+        (populateMetaFields ? MetaFieldsMode.ALL : MetaFieldsMode.NONE).name());
+    HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), tableProps);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
 
     HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
     List<String> fileNames = new ArrayList<>();

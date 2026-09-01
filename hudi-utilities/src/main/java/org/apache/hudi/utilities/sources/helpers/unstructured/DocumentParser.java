@@ -19,6 +19,9 @@
 
 package org.apache.hudi.utilities.sources.helpers.unstructured;
 
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.TypedProperties;
 
 import java.io.InputStream;
@@ -30,11 +33,13 @@ import java.io.Serializable;
  * and must NEVER throw from {@link #parse}: any failure is reported via
  * {@link ParseResult#failed}.
  */
+@PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public interface DocumentParser extends Serializable {
 
   /**
    * Called once per executor instance before the first {@link #parse}.
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   default void init(TypedProperties props) {
   }
 
@@ -45,5 +50,6 @@ public interface DocumentParser extends Serializable {
    * @param fileName     name of the file (used for format detection hints)
    * @param maxTextChars cap on extracted text length; hitting it yields a TRUNCATED result
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   ParseResult parse(InputStream in, String fileName, int maxTextChars);
 }

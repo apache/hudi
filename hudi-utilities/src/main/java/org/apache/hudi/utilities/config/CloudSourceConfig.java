@@ -191,6 +191,20 @@ public class CloudSourceConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Boolean value to allow coalesce alias columns with actual columns while reading from source");
 
+  public static final ConfigProperty<Boolean> INCLUDE_SOURCE_PATH_FIELD = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.include.source.path.field")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("When enabled, appends a nullable string column named _hoodie_cloud_source_path holding the "
+          + "fully-qualified URI of the source file each record was read from, as returned by Spark's "
+          + "input_file_name() (percent-encoded, e.g. s3a://bucket/dir/file%20name.json). A same-named column "
+          + "already present in the dataset is overwritten. If a schema provider is configured "
+          + "(hoodie.streamer.schemaprovider.class), declare the column in its schema (the source schema for the "
+          + "file-based and schema-registry providers) or it is dropped before the write, with or without a "
+          + "transformer. Once enabled on a table, disabling it fails schema validation on the next sync unless "
+          + "hoodie.write.set.null.for.missing.columns is enabled.");
+
   public static final ConfigProperty<Boolean> CLOUD_INCREMENTAL_MERGE_SCHEMA = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.merge.schema.enable")
       .defaultValue(true)
@@ -203,4 +217,25 @@ public class CloudSourceConfig extends HoodieConfig {
           + "Note: the per-read mergeSchema option is honored by Spark's native Parquet reader and by Spark's "
           + "native ORC reader (Spark 3.0+, default ORC impl since Spark 2.4). On older runtimes the option is "
           + "silently ignored.");
+
+  public static final ConfigProperty<Integer> EXISTS_CHECK_PARALLELISM = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.check.file.exists.parallelism")
+      .defaultValue(16)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Number of threads per Spark task used to check cloud object existence concurrently when "
+          + ENABLE_EXISTS_CHECK.key() + " is enabled. Must be >= 1; 1 checks sequentially. All tasks on an executor "
+          + "share one cached FileSystem client, so keep executor cores x this value within the client's connection "
+          + "pool (fs.s3a.connection.maximum, 96 by default on Hadoop 3.3, 500 on 3.4+) to avoid connection pool timeouts.");
+
+  public static final ConfigProperty<Integer> EXISTS_CHECK_PARTITIONS = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.check.file.exists.partitions")
+      .defaultValue(0)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Number of Spark partitions the cloud object existence checks are spread over when "
+          + ENABLE_EXISTS_CHECK.key() + " is enabled; each partition checks with " + EXISTS_CHECK_PARALLELISM.key()
+          + " threads. The default 0 sizes to the cluster (spark default parallelism, i.e. the registered executor "
+          + "cores). Set explicitly to cap the total concurrency (partitions x threads) against the storage client's "
+          + "connection pool and request rate limits.");
 }

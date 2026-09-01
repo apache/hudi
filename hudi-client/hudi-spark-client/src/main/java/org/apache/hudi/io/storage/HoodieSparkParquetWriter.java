@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.io.hadoop.HoodieBaseParquetWriter;
 import org.apache.hudi.io.storage.row.HoodieRowParquetConfig;
 import org.apache.hudi.io.storage.row.HoodieRowParquetWriteSupport;
@@ -31,6 +32,7 @@ import org.apache.spark.unsafe.types.UTF8String;
 
 import java.io.IOException;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 
 import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.COMMIT_SEQNO_METADATA_FIELD;
@@ -44,7 +46,7 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
   private final UTF8String fileName;
   private final UTF8String instantTime;
 
-  private final boolean populateMetaFields;
+  private final MetaFieldsMode metaFieldsMode;
 
   private final HoodieRowParquetWriteSupport writeSupport;
 
@@ -54,12 +56,12 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
                                   HoodieRowParquetConfig parquetConfig,
                                   String instantTime,
                                   TaskContextSupplier taskContextSupplier,
-                                  boolean populateMetaFields) throws IOException {
+                                  MetaFieldsMode metaFieldsMode) throws IOException {
     super(file, parquetConfig);
     this.writeSupport = parquetConfig.getWriteSupport();
     this.fileName = UTF8String.fromString(file.getName());
     this.instantTime = UTF8String.fromString(instantTime);
-    this.populateMetaFields = populateMetaFields;
+    this.metaFieldsMode = Objects.requireNonNull(metaFieldsMode, "metaFieldsMode");
     this.seqIdGenerator = recordIndex -> {
       Integer partitionId = taskContextSupplier.getPartitionIdSupplier().get();
       return HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex);
@@ -68,21 +70,35 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
 
   @Override
   public void writeRowWithMetadata(HoodieKey key, InternalRow row) throws IOException {
-    if (populateMetaFields) {
-      UTF8String recordKey = UTF8String.fromString(key.getRecordKey());
-      updateRecordMetadata(row, recordKey, key.getPartitionPath(), getWrittenRecordCount());
-
-      super.write(row);
-      writeSupport.add(recordKey);
-    } else {
-      super.write(row);
+    switch (metaFieldsMode) {
+      case ALL:
+        UTF8String recordKey = UTF8String.fromString(key.getRecordKey());
+        updateRecordMetadata(row, recordKey, key.getPartitionPath(), getWrittenRecordCount());
+        super.write(row);
+        writeSupport.add(recordKey);
+        break;
+      case NONE:
+        super.write(row);
+        break;
+      default:
+        // Selective mode — populate only the opted-in columns. Record-key column stays null, so
+        // we do NOT register the record key with the write support (bloom filter / RLI hooks are
+        // meaningless without the record-key column).
+        if (metaFieldsMode.isCommitTimePopulated()) {
+          row.update(COMMIT_TIME_METADATA_FIELD.ordinal(), instantTime);
+        }
+        if (metaFieldsMode.isFileNamePopulated()) {
+          row.update(FILENAME_METADATA_FIELD.ordinal(), fileName);
+        }
+        super.write(row);
+        break;
     }
   }
 
   @Override
   public void writeRow(String recordKey, InternalRow row) throws IOException {
     super.write(row);
-    if (populateMetaFields) {
+    if (metaFieldsMode == MetaFieldsMode.ALL) {
       writeSupport.add(UTF8String.fromString(recordKey));
     }
   }

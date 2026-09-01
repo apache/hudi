@@ -1443,6 +1443,25 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
     val dbPath = spark.sessionState.catalog.getDatabaseMetadata("default").locationUri.getPath
     val tablePath = s"${dbPath}/${tableName}"
     assertResult(false)(existsPath(tablePath))
+
+    // The same illegal CTAS against an explicit location must clean the external path up too.
+    withTempDir { tmp =>
+      val externalTableName = generateTableName
+      val externalTablePath = s"${tmp.getCanonicalPath}/$externalTableName"
+      checkExceptionContain(
+        s"""
+           | create table $externalTableName using hudi
+           | tblproperties(
+           |    primaryKey = 'id',
+           |    type = 'cow',
+           |    hoodie.compact.inline='true'
+           | )
+           | location '$externalTablePath'
+           | AS
+           | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
+           |""".stripMargin)("Compaction is not supported on a CopyOnWrite table")
+      assertResult(false)(existsPath(externalTablePath))
+    }
   }
 
   test("Test Create Non-Hudi Table(Parquet Table)") {

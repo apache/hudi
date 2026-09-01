@@ -283,7 +283,7 @@ class TestSpark4VariantShreddingProvider {
     Map<String, HoodieSchema> shreddedFields = new LinkedHashMap<>();
     shreddedFields.put("a", HoodieSchema.create(HoodieSchemaType.STRING));
     shreddedFields.put("b", HoodieSchema.create(HoodieSchemaType.LONG));
-    assertRoundTrips("{\"a\":\"x\",\"b\":5}", HoodieSchema.createVariantShreddedObject(shreddedFields));
+    assertRoundTrips("{\"a\":\"x\",\"b\":5}", HoodieSchema.createVariantShreddedObject(null, null, null, shreddedFields));
   }
 
   @Test
@@ -293,7 +293,7 @@ class TestSpark4VariantShreddingProvider {
     Map<String, HoodieSchema> shreddedFields = new LinkedHashMap<>();
     shreddedFields.put("a", HoodieSchema.create(HoodieSchemaType.STRING));
     shreddedFields.put("b", HoodieSchema.create(HoodieSchemaType.LONG));
-    HoodieSchema.Variant shredded = HoodieSchema.createVariantShreddedObject(shreddedFields);
+    HoodieSchema.Variant shredded = HoodieSchema.createVariantShreddedObject(null, null, null, shreddedFields);
 
     Variant variant = VariantBuilder.parseJson("{\"a\":\"x\",\"c\":99}", false);
     GenericRecord shreddedRecord = shred(variant, shredded);
@@ -317,7 +317,7 @@ class TestSpark4VariantShreddingProvider {
     // the residual, its typed_value stays null, and the top-level value stays null.
     Map<String, HoodieSchema> shreddedFields = new LinkedHashMap<>();
     shreddedFields.put("a", HoodieSchema.create(HoodieSchemaType.LONG));
-    HoodieSchema.Variant shredded = HoodieSchema.createVariantShreddedObject(shreddedFields);
+    HoodieSchema.Variant shredded = HoodieSchema.createVariantShreddedObject(null, null, null, shreddedFields);
 
     Variant variant = VariantBuilder.parseJson("{\"a\":\"str\"}", false);
     GenericRecord shreddedRecord = shred(variant, shredded);

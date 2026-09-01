@@ -750,7 +750,17 @@ object HoodieBaseRelation extends SparkAdapterSupport {
     tableSchema match {
       case Right(internalSchema) =>
         checkState(!internalSchema.isEmptySchema)
-        val prunedInternalSchema = InternalSchemaUtils.pruneInternalSchema(internalSchema, requiredColumns.toList.asJava)
+        // An empty projection (count(*), select 1) reads no column data, so there is nothing to
+        // evolve, and pruning to zero columns builds an InternalSchema around a null record instead
+        // (NPE in buildIdToName, #19734). The empty sentinel is deliberate: it serializes to "" in
+        // SerDeHelper.toJson, so embedInternalSchema leaves HOODIE_QUERY_SCHEMA unset and the reader
+        // stays on zero columns. Hive takes the same carve-out in
+        // SchemaEvolutionContext#doEvolutionForParquetFormat.
+        val prunedInternalSchema = if (requiredColumns.isEmpty) {
+          InternalSchema.getEmptyInternalSchema
+        } else {
+          InternalSchemaUtils.pruneInternalSchema(internalSchema, requiredColumns.toList.asJava)
+        }
         val requiredSchema = InternalSchemaConverter.convert(prunedInternalSchema, "schema")
         val requiredStructSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(requiredSchema)
 

@@ -275,30 +275,6 @@ public class DataSourceUtils {
   }
 
   /**
-   * Resolves duplicate records in the provided {@code incomingHoodieRecords}.
-   *
-   * <p>If {@code failOnDuplicates} is {@code false}, duplicate records already present in the dataset
-   * are dropped. Otherwise, a {@link HoodieDuplicateKeyException} is thrown if duplicates are found.</p>
-   *
-   * @param jssc the Spark context used for executing the deduplication
-   * @param incomingHoodieRecords the input {@link JavaRDD} of {@link HoodieRecord} objects to process
-   * @param parameters a map of configuration parameters, including the dataset path under the key {@code "path"}
-   * @param failOnDuplicates a flag indicating whether to fail when duplicates are found
-   * @return a {@link JavaRDD} of deduplicated {@link HoodieRecord} objects
-   */
-  @SuppressWarnings("unchecked")
-  public static JavaRDD<HoodieRecord> resolveDuplicates(JavaSparkContext jssc,
-                                                        JavaRDD<HoodieRecord> incomingHoodieRecords,
-                                                        Map<String, String> parameters,
-                                                        boolean failOnDuplicates) {
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
-        .withPath(parameters.get("path"))
-        .withProps(parameters).build();
-    return handleDuplicates(
-        new HoodieSparkEngineContext(jssc), incomingHoodieRecords, writeConfig, failOnDuplicates);
-  }
-
-  /**
    * Spark data source WriteStatus validator.
    *
    * <ul>

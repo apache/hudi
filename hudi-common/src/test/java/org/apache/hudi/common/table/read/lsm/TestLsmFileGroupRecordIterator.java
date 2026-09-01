@@ -235,7 +235,7 @@ class TestLsmFileGroupRecordIterator {
     tableConfig.setValue(HoodieTableConfig.ORDERING_FIELDS, "ts");
     tableConfig.setValue(HoodieTableConfig.RECORD_MERGE_MODE, RecordMergeMode.EVENT_TIME_ORDERING.name());
     tableConfig.setValue(HoodieTableConfig.BASE_FILE_FORMAT, HoodieFileFormat.PARQUET.name());
-    tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, "false");
+    tableConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, "NONE");
     StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
     HoodieAvroReaderContext context = org.mockito.Mockito.spy(
         new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty()));

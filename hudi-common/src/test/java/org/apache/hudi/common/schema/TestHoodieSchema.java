@@ -1490,7 +1490,13 @@ public class TestHoodieSchema {
     // Value field should be nullable for shredded
     assertTrue(fields.get(1).schema().isNullable());
 
-    // Verify typed_value schema
+    // The shredding spec makes typed_value OPTIONAL: a row whose value does not match the
+    // shredding schema (a scalar under an object schema, a JSON null) leaves typed_value null
+    // and carries everything in the value residual. A required typed_value makes such rows
+    // unwritable on the Avro path (parquet-avro: "Null-value for required field: typed_value").
+    assertTrue(fields.get(2).schema().isNullable());
+
+    // Verify typed_value schema: the accessor unwraps the nullable union to the value type.
     HoodieSchema retrievedTypedValueSchema = variantSchema.getTypedValueField().get();
     assertEquals(HoodieSchemaType.RECORD, retrievedTypedValueSchema.getType());
   }
@@ -2890,7 +2896,7 @@ public class TestHoodieSchema {
 
   @Test
   public void testCreateShreddedFieldStruct() {
-    HoodieSchema fieldStruct = HoodieSchema.createShreddedFieldStruct("age", HoodieSchema.create(HoodieSchemaType.INT));
+    HoodieSchema fieldStruct = HoodieSchema.createShreddedFieldStruct("age", null, HoodieSchema.create(HoodieSchemaType.INT));
 
     assertNotNull(fieldStruct);
     assertEquals(HoodieSchemaType.RECORD, fieldStruct.getType());
@@ -2913,7 +2919,7 @@ public class TestHoodieSchema {
   @Test
   public void testCreateShreddedFieldStructWithDecimal() {
     HoodieSchema decimalSchema = HoodieSchema.createDecimal(15, 1);
-    HoodieSchema fieldStruct = HoodieSchema.createShreddedFieldStruct("price", decimalSchema);
+    HoodieSchema fieldStruct = HoodieSchema.createShreddedFieldStruct("price", null, decimalSchema);
 
     assertNotNull(fieldStruct);
     List<HoodieSchemaField> fields = fieldStruct.getFields();
@@ -2933,7 +2939,7 @@ public class TestHoodieSchema {
     shreddedFields.put("b", HoodieSchema.create(HoodieSchemaType.STRING));
     shreddedFields.put("c", HoodieSchema.createDecimal(15, 1));
 
-    HoodieSchema.Variant variant = HoodieSchema.createVariantShreddedObject(shreddedFields);
+    HoodieSchema.Variant variant = HoodieSchema.createVariantShreddedObject(null, null, null, shreddedFields);
 
     assertNotNull(variant);
     assertInstanceOf(HoodieSchema.Variant.class, variant);
@@ -3000,6 +3006,11 @@ public class TestHoodieSchema {
     assertEquals("org.apache.hudi", variant.getAvroSchema().getNamespace());
     assertTrue(variant.isShredded());
     assertTrue(TestHoodieSchema.isVariantSchema(variant.getAvroSchema()));
+    // The struct generated per shredded field sits one level below the variant's namespace, under
+    // the typed_value record that holds it, so a field name cannot collide with the two records
+    // generated in that namespace; see createShreddedFieldStruct.
+    assertEquals("org.apache.hudi.typed_value.age",
+        variant.getTypedValueField().get().getField("age").get().schema().getNonNullType().getFullName());
   }
 
   @Test
@@ -3008,7 +3019,7 @@ public class TestHoodieSchema {
     shreddedFields.put("a", HoodieSchema.create(HoodieSchemaType.INT));
     shreddedFields.put("b", HoodieSchema.create(HoodieSchemaType.STRING));
 
-    HoodieSchema.Variant original = HoodieSchema.createVariantShreddedObject(shreddedFields);
+    HoodieSchema.Variant original = HoodieSchema.createVariantShreddedObject(null, null, null, shreddedFields);
     String jsonSchema = original.toString();
 
     // Parse back from JSON
@@ -3043,7 +3054,7 @@ public class TestHoodieSchema {
     shreddedFields.put("b", HoodieSchema.create(HoodieSchemaType.STRING));
     shreddedFields.put("c", HoodieSchema.createDecimal(15, 1));
 
-    HoodieSchema.Variant variant = HoodieSchema.createVariantShreddedObject(shreddedFields);
+    HoodieSchema.Variant variant = HoodieSchema.createVariantShreddedObject(null, null, null, shreddedFields);
 
     // getPlainTypedValueSchema should unwrap the nested {value, typed_value} structs
     Option<HoodieSchema> plainOpt = variant.getPlainTypedValueSchema();
@@ -3086,5 +3097,128 @@ public class TestHoodieSchema {
     // Unshredded variant
     HoodieSchema.Variant unshreddedVariant = HoodieSchema.createVariant();
     assertFalse(unshreddedVariant.getPlainTypedValueSchema().isPresent());
+  }
+
+  @Test
+  public void testGetPlainTypedValueSchemaNestedObjectRecursion() {
+    // Depth-2 spec form: typed_value { a: wrapper{value, typed_value: { b: wrapper{value, typed_value: long} }} }.
+    // Both record levels are named "typed_value", as the schema converters produce them.
+    HoodieSchema innerObject = HoodieSchema.createRecord("typed_value", "inner.ns", null,
+        Collections.singletonList(HoodieSchemaField.of("b",
+            HoodieSchema.createNullable(HoodieSchema.createShreddedFieldStruct("b_wrapper", null, HoodieSchema.create(HoodieSchemaType.LONG))))));
+    HoodieSchema topTypedValue = HoodieSchema.createRecord("typed_value", "outer.ns", null,
+        Collections.singletonList(HoodieSchemaField.of("a",
+            HoodieSchema.createNullable(HoodieSchema.createShreddedFieldStruct("a_wrapper", null, innerObject)))));
+    // Nullable typed_value, as produced by the inferred-shredding splice.
+    HoodieSchema.Variant variant = HoodieSchema.createVariantShredded(HoodieSchema.createNullable(topTypedValue));
+
+    Option<HoodieSchema> plainOpt = variant.getPlainTypedValueSchema();
+    assertTrue(plainOpt.isPresent());
+    HoodieSchema plain = plainOpt.get();
+    assertEquals(HoodieSchemaType.RECORD, plain.getType());
+    assertEquals(1, plain.getFields().size());
+
+    HoodieSchema aPlain = plain.getFields().get(0).schema();
+    aPlain = aPlain.isNullable() ? aPlain.getNonNullType() : aPlain;
+    assertEquals(HoodieSchemaType.RECORD, aPlain.getType());
+    assertEquals(1, aPlain.getFields().size());
+
+    HoodieSchema bPlain = aPlain.getFields().get(0).schema();
+    bPlain = bPlain.isNullable() ? bPlain.getNonNullType() : bPlain;
+    assertEquals(HoodieSchemaType.LONG, bPlain.getType());
+
+    // Generated plain record names must be unique per nesting level: a nested record carrying
+    // its ancestor's fullname is an Avro self-reference, which Spark rejects as recursion.
+    assertNotEquals(plain.getFullName(), aPlain.getFullName());
+  }
+
+  @Test
+  public void testGetPlainTypedValueSchemaNamesDistinguishConcatenatingPaths() {
+    // Two object paths whose segments concatenate to the same string ("x_y" > "z" and "x" > "y_z")
+    // must still yield distinct plain record names for the objects at their leaves; the path goes
+    // into the namespace, where the '.' separator keeps them apart (a flat "<path>_plain" name
+    // gave both leaves "typed_value_x_y_z_plain").
+    HoodieSchema leafObject = HoodieSchema.createRecord("typed_value", "leaf.ns", null,
+        Collections.singletonList(HoodieSchemaField.of("c",
+            HoodieSchema.createNullable(HoodieSchema.createShreddedFieldStruct("c_wrapper", null, HoodieSchema.create(HoodieSchemaType.LONG))))));
+    HoodieSchema underXy = HoodieSchema.createRecord("typed_value", "a.ns", null,
+        Collections.singletonList(HoodieSchemaField.of("z",
+            HoodieSchema.createNullable(HoodieSchema.createShreddedFieldStruct("z_wrapper", null, leafObject)))));
+    HoodieSchema underX = HoodieSchema.createRecord("typed_value", "b.ns", null,
+        Collections.singletonList(HoodieSchemaField.of("y_z",
+            HoodieSchema.createNullable(HoodieSchema.createShreddedFieldStruct("y_z_wrapper", null, leafObject)))));
+    HoodieSchema topTypedValue = HoodieSchema.createRecord("typed_value", "outer.ns", null, Arrays.asList(
+        HoodieSchemaField.of("x_y", HoodieSchema.createNullable(HoodieSchema.createShreddedFieldStruct("x_y_wrapper", null, underXy))),
+        HoodieSchemaField.of("x", HoodieSchema.createNullable(HoodieSchema.createShreddedFieldStruct("x_wrapper", null, underX)))));
+
+    HoodieSchema plain = HoodieSchema.createVariantShredded(topTypedValue).getPlainTypedValueSchema().get();
+    HoodieSchema zLeaf = nestedRecord(plain, "x_y", "z");
+    HoodieSchema yzLeaf = nestedRecord(plain, "x", "y_z");
+    assertEquals(HoodieSchemaType.RECORD, zLeaf.getType());
+    assertEquals(HoodieSchemaType.RECORD, yzLeaf.getType());
+    assertNotEquals(zLeaf.getFullName(), yzLeaf.getFullName());
+    // Serializing the whole tree (as the config-splice path does) must not alias the two leaves.
+    // Avro writes a repeated fullname as a reference to its first definition rather than
+    // throwing, so the check has to be on the re-parsed serialized form.
+    HoodieSchema reparsed = HoodieSchema.parse(plain.toString());
+    assertNotEquals(nestedRecord(reparsed, "x_y", "z").getFullName(), nestedRecord(reparsed, "x", "y_z").getFullName());
+  }
+
+  /** The non-null schema of {@code record.<outer>.<inner>}, both fields nullable. */
+  private static HoodieSchema nestedRecord(HoodieSchema record, String outer, String inner) {
+    return record.getField(outer).get().schema().getNonNullType()
+        .getField(inner).get().schema().getNonNullType();
+  }
+
+  @Test
+  public void testGetPlainTypedValueSchemaValueOnlyWrapper() {
+    // A field whose wrapper has no typed_value stays untyped: plain form is VARIANT.
+    HoodieSchema valueOnlyWrapper = HoodieSchema.createRecord("untyped_wrapper", null, null,
+        Collections.singletonList(
+            HoodieSchemaField.of("value", HoodieSchema.createNullable(HoodieSchemaType.BYTES))));
+    HoodieSchema topTypedValue = HoodieSchema.createRecord("typed_value", null, null, Arrays.asList(
+        HoodieSchemaField.of("a", HoodieSchema.createNullable(HoodieSchema.createShreddedFieldStruct("a_wrapper", null, HoodieSchema.create(HoodieSchemaType.INT)))),
+        HoodieSchemaField.of("u", HoodieSchema.createNullable(valueOnlyWrapper))));
+    HoodieSchema.Variant variant = HoodieSchema.createVariantShredded(topTypedValue);
+
+    HoodieSchema plain = variant.getPlainTypedValueSchema().get();
+    assertEquals(HoodieSchemaType.RECORD, plain.getType());
+    HoodieSchema aPlain = plain.getFields().get(0).schema();
+    aPlain = aPlain.isNullable() ? aPlain.getNonNullType() : aPlain;
+    assertEquals(HoodieSchemaType.INT, aPlain.getType());
+    HoodieSchema uPlain = plain.getFields().get(1).schema();
+    uPlain = uPlain.isNullable() ? uPlain.getNonNullType() : uPlain;
+    assertEquals(HoodieSchemaType.VARIANT, uPlain.getType());
+  }
+
+  @Test
+  public void testGetPlainTypedValueSchemaArrayTypedValue() {
+    // Spec form for arrays: typed_value = array<wrapper{value, typed_value: string}>
+    HoodieSchema arrayTypedValue = HoodieSchema.createArray(
+        HoodieSchema.createShreddedFieldStruct("element_wrapper", null, HoodieSchema.create(HoodieSchemaType.STRING)));
+    HoodieSchema.Variant variant = HoodieSchema.createVariantShredded(arrayTypedValue);
+
+    HoodieSchema plain = variant.getPlainTypedValueSchema().get();
+    assertEquals(HoodieSchemaType.ARRAY, plain.getType());
+    HoodieSchema element = plain.getElementType();
+    element = element.isNullable() ? element.getNonNullType() : element;
+    assertEquals(HoodieSchemaType.STRING, element.getType());
+  }
+
+  @Test
+  public void testGetPlainTypedValueSchemaArrayWithValueOnlyElements() {
+    // Spark emits a REQUIRED value for array-element value-only wrappers (mixed-type elements
+    // decline typing); the plain form of such an array is array<variant>.
+    HoodieSchema valueOnlyElement = HoodieSchema.createRecord("element_wrapper", null, null,
+        Collections.singletonList(
+            HoodieSchemaField.of("value", HoodieSchema.create(HoodieSchemaType.BYTES))));
+    HoodieSchema.Variant variant = HoodieSchema.createVariantShredded(
+        HoodieSchema.createArray(valueOnlyElement));
+
+    HoodieSchema plain = variant.getPlainTypedValueSchema().get();
+    assertEquals(HoodieSchemaType.ARRAY, plain.getType());
+    HoodieSchema element = plain.getElementType();
+    element = element.isNullable() ? element.getNonNullType() : element;
+    assertEquals(HoodieSchemaType.VARIANT, element.getType());
   }
 }

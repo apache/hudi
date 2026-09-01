@@ -347,6 +347,39 @@ public class TestRocksDBDAO {
     assertEquals(disableWAL, walFileSize == 0, "WAL log total size should be 0 when disableWAL=true");
   }
 
+  @Test
+  public void testColumnFamilyExistsAndListColumnFamilies() {
+    String family = "new_family";
+    assertFalse(dbManager.columnFamilyExists(family));
+    assertFalse(dbManager.listColumnFamilies().contains(family));
+
+    dbManager.addColumnFamily(family);
+    assertTrue(dbManager.columnFamilyExists(family));
+    assertTrue(dbManager.listColumnFamilies().contains(family));
+
+    // Adding again should be a no-op and not affect existence/listing.
+    dbManager.addColumnFamily(family);
+    assertTrue(dbManager.columnFamilyExists(family));
+    assertEquals(1, dbManager.listColumnFamilies().stream().filter(family::equals).count());
+
+    dbManager.dropColumnFamily(family);
+    assertFalse(dbManager.columnFamilyExists(family));
+    assertFalse(dbManager.listColumnFamilies().contains(family));
+  }
+
+  @Test
+  public void testListColumnFamiliesTracksMultipleFamilies() {
+    List<String> families = Arrays.asList("family_a", "family_b", "family_c");
+    families.forEach(family -> dbManager.addColumnFamily(family));
+
+    assertTrue(dbManager.listColumnFamilies().containsAll(families));
+
+    dbManager.dropColumnFamily(families.get(1));
+    assertTrue(dbManager.listColumnFamilies().contains(families.get(0)));
+    assertFalse(dbManager.listColumnFamilies().contains(families.get(1)));
+    assertTrue(dbManager.listColumnFamilies().contains(families.get(2)));
+  }
+
   /**
    * Payload key object.
    */

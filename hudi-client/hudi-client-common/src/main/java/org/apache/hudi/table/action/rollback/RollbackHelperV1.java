@@ -502,7 +502,7 @@ public class RollbackHelperV1 extends RollbackHelper {
 
             // fetch file sizes.
             StoragePath fullPartitionPath = StringUtils.isNullOrEmpty(partition) ? new StoragePath(basePathStr) : new StoragePath(basePathStr, partition);
-            HoodieStorage storage = HoodieStorageUtils.getStorage(storageConfiguration);
+            HoodieStorage storage = HoodieStorageUtils.getStorage(fullPartitionPath, storageConfiguration);
             List<Option<StoragePathInfo>> storagePathInfoOpts = getPathInfoUnderPartition(storage,
                 fullPartitionPath, new HashSet<>(missingLogFiles), true);
             List<StoragePathInfo> storagePathInfos = storagePathInfoOpts.stream().filter(storagePathInfoOpt -> storagePathInfoOpt.isPresent())

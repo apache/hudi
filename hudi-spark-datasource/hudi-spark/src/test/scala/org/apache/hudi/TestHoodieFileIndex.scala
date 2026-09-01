@@ -530,6 +530,9 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     val PartitionDirectory(partitionActualValues, filesAfterPrune) = partitionAndFilesAfterPrune.head
     val partitionExpectValues = Seq("default", "2021-03-01", "5", "CN")
     assertEquals(partitionExpectValues.mkString(","), partitionActualValues.toSeq(Seq(StringType)).mkString(","))
+    // `hh` is an int partition column, so the value parsed from the path must be typed: the rendered
+    // string above cannot tell Integer(5) from UTF8String("5"), getInt can
+    assertEquals(5, partitionActualValues.getInt(2))
     assertEquals(getFileCountInPartitionPath(makePartitionPath(partitionNames, partitionExpectValues, complexExpressionPushDown)),
       filesAfterPrune.size)
 

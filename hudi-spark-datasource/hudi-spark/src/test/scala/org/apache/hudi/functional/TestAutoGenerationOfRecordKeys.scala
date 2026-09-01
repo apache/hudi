@@ -171,7 +171,10 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
 
   @ParameterizedTest
   @CsvSource(value = Array(
-    "hoodie.populate.meta.fields,false", "hoodie.combine.before.insert,true", "hoodie.datasource.write.insert.drop.duplicates,true"
+    "hoodie.populate.meta.fields,false", "hoodie.combine.before.insert,true", "hoodie.datasource.write.insert.drop.duplicates,true",
+    // The mode is the source of truth, so stating it must fire this guard exactly as the deprecated
+    // boolean does -- otherwise the write proceeds and the rows land with no record key at all.
+    "hoodie.meta.fields.mode,NONE", "hoodie.meta.fields.mode,COMMIT_TIME_ONLY"
   ))
   def testRecordKeysAutoGenInvalidParams(configKey: String, configValue: String): Unit = {
     val (writeOpts, _) = getWriterReaderOpts(HoodieRecordType.AVRO)

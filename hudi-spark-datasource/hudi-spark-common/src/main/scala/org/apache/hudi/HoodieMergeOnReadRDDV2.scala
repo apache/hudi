@@ -149,13 +149,18 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
     }
   }
 
-  // The plain skip-merging reader cannot read a SHREDDED variant base file: it requests native
-  // VariantType, which clips the shredded group to {metadata, value} and reads value=null (the
-  // #19556 defect family). Such splits take the file-group reader below, whose reader context
-  // requests the full-variant projection shape instead (#19578). Keyed off the adapter building
-  // that shape rather than the mere presence of a variant column: it is None below Spark 4.1,
-  // where the file-group reader would read the same nulls, so re-routing there would cost the
-  // fast path for nothing.
+  // A split whose required schema has a top-level variant column takes the file-group reader
+  // below, whose reader context requests the full-variant projection shape for parquet base
+  // files (#19578), so a SHREDDED base file is read on this legacy path through the same
+  // contract as everywhere else. Without a top-level variant the base-only split stays on
+  // requiredSchemaReaderSkipMerging, whose native VariantType request the Spark 4.1+ parquet
+  // reader reconstructs at any depth - the vectorized one at stock settings, since the legacy
+  // file format inherits ParquetFileFormat.supportBatch and VariantType is atomic; the variant
+  // veto lives in HoodieFileGroupReaderBasedFileFormat only (pinned by TestStreamingSource's
+  // nested-only legacy leg), so this is about one contract, not a null read (#19775). Keyed off
+  // the adapter building that shape
+  // rather than the mere presence of a variant column: it is None below Spark 4.1, where
+  // re-routing would cost the fast path for nothing.
   private val shouldRerouteVariantSplit: Boolean =
     sparkAdapter.buildFullVariantReadSchema(requiredSchema.structTypeSchema).isDefined
 

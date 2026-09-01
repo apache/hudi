@@ -19,6 +19,9 @@
 
 package org.apache.hudi.utilities.transform.embedding;
 
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.TypedProperties;
 
 import java.io.Serializable;
@@ -29,11 +32,13 @@ import java.util.List;
  * executors and are called with record-level batches buffered within a partition; an
  * in-JVM (e.g. ONNX) implementation can slot in beside API-backed ones.
  */
+@PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public interface EmbeddingProvider extends Serializable {
 
   /**
    * Called once per executor instance before the first {@link #embed}.
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   default void init(TypedProperties props) {
   }
 
@@ -42,5 +47,6 @@ public interface EmbeddingProvider extends Serializable {
    * Errors should be retried internally where transient; a thrown exception
    * fails the batch (and the sync) -- the caller never silently drops vectors.
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   List<float[]> embed(List<String> texts);
 }

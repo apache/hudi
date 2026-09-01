@@ -93,7 +93,7 @@ class TestHoodieLsmFileGroupReader {
     tableConfig.setValue(HoodieTableConfig.RECORD_MERGE_MODE, RecordMergeMode.EVENT_TIME_ORDERING.name());
     tableConfig.setValue(HoodieTableConfig.BASE_FILE_FORMAT, HoodieFileFormat.PARQUET.name());
     tableConfig.setValue(HoodieTableConfig.LOG_FILE_FORMAT, HoodieFileFormat.PARQUET.name());
-    tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, "false");
+    tableConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, "NONE");
     storageConfiguration = mock(StorageConfiguration.class);
     HoodieStorage storage = mock(HoodieStorage.class);
     when(storage.newInstance(any(StoragePath.class), any(StorageConfiguration.class))).thenReturn(storage);

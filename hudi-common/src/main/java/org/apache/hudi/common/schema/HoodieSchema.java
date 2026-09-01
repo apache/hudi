@@ -844,13 +844,21 @@ public class HoodieSchema implements Serializable {
         NULL_VALUE
     ));
 
-    // Add typed_value field if provided
+    // Add typed_value field if provided. The shredding spec makes typed_value OPTIONAL: a row
+    // whose value does not match the shredding schema (a scalar or array under an object schema,
+    // a JSON null) leaves typed_value null and carries everything in the value residual. A
+    // required typed_value makes such rows unwritable on the Avro path (parquet-avro throws
+    // "Null-value for required field: typed_value"); the Spark row writer already writes it
+    // optional.
     if (typedValueSchema != null) {
+      HoodieSchema nullableTypedValue = typedValueSchema.isNullable()
+          ? typedValueSchema
+          : HoodieSchema.createNullable(typedValueSchema);
       fields.add(HoodieSchemaField.of(
           Variant.VARIANT_TYPED_VALUE_FIELD,
-          typedValueSchema,
+          nullableTypedValue,
           "Typed value for shredded variant",
-          null
+          NULL_VALUE
       ));
     }
 
@@ -968,11 +976,26 @@ public class HoodieSchema implements Serializable {
    *     |-- typed_value: &lt;fieldType&gt; (nullable)
    * </pre></p>
    *
+   * <p>The record is named after the shredded field, so a caller that generates it from a user
+   * schema has to put it in a namespace it owns, and one strictly below the variant's own. With a
+   * null namespace the struct's full name is the bare field name, which collides with a
+   * user-declared record type of that name; in the variant's own namespace a field spelled
+   * {@code typed_value} or {@code <column>_variant} collides with the generated records that sit
+   * there. Either collision breaks {@code Schema.toString()} -- what gets stamped into the parquet
+   * footer: on avro 1.11 it throws "Can't redefine" at file open, and on avro 1.12 it emits the
+   * second definition as a bare reference to the first, i.e. writes a footer schema that parses
+   * back into something else. {@link #createVariantShreddedObject} therefore passes the full name
+   * of the enclosing {@code typed_value} record. A null namespace is fine for a caller with
+   * nothing to give -- a struct built standalone, as tests do, has no surrounding schema for the
+   * bare name to collide with; anything generating structs into a user schema owes them one.
+   *
    * @param fieldName the name for the record (used as the Avro record name)
+   * @param namespace the namespace of the generated record (null only for a struct built
+   *                  standalone, with no surrounding schema, per above)
    * @param fieldType the schema for the typed_value within this field
    * @return a new HoodieSchema representing the shredded field struct
    */
-  public static HoodieSchema createShreddedFieldStruct(String fieldName, HoodieSchema fieldType) {
+  public static HoodieSchema createShreddedFieldStruct(String fieldName, String namespace, HoodieSchema fieldType) {
     ValidationUtils.checkArgument(fieldName != null && !fieldName.isEmpty(), "Field name cannot be null or empty");
     ValidationUtils.checkArgument(fieldType != null, "Field type cannot be null");
     List<HoodieSchemaField> fields = Arrays.asList(
@@ -989,7 +1012,7 @@ public class HoodieSchema implements Serializable {
             NULL_VALUE
         )
     );
-    return HoodieSchema.createRecord(fieldName, null, null, fields);
+    return HoodieSchema.createRecord(fieldName, namespace, null, fields);
   }
 
   /**
@@ -1002,7 +1025,7 @@ public class HoodieSchema implements Serializable {
    * fields.put("a", HoodieSchema.create(HoodieSchemaType.INT));
    * fields.put("b", HoodieSchema.create(HoodieSchemaType.STRING));
    * fields.put("c", HoodieSchema.createDecimal(15, 1));
-   * HoodieSchema.Variant variant = HoodieSchema.createVariantShreddedObject(fields);
+   * HoodieSchema.Variant variant = HoodieSchema.createVariantShreddedObject("v_variant", "com.example.rec", null, fields);
    * }</pre></p>
    *
    * <p>Produces the following structure:
@@ -1022,18 +1045,19 @@ public class HoodieSchema implements Serializable {
    *  |    |    |-- typed_value: decimal(15,1) (nullable)
    * </pre></p>
    *
-   * @param shreddedFields Map of field names to their typed value schemas. Use LinkedHashMap for ordered fields.
-   * @return a new HoodieSchema.Variant with properly nested typed_value
-   */
-  public static HoodieSchema.Variant createVariantShreddedObject(Map<String, HoodieSchema> shreddedFields) {
-    return createVariantShreddedObject(null, null, null, shreddedFields);
-  }
-
-  /**
-   * Creates a shredded Variant schema for an object type with custom name, namespace, and documentation.
+   * <p>There is deliberately no overload without a namespace: the variant record, its
+   * {@code typed_value} record and every per-field struct are named records, and a null namespace
+   * puts them all at the bare names {@code variant}, {@code typed_value} and the field names, where
+   * two differently shredded variants in one schema, or a user record type spelled like a DDL
+   * field, collide; see {@link #createShreddedFieldStruct(String, String, HoodieSchema)} for what
+   * a collision costs. A null namespace is fine only for a variant built standalone, with no
+   * surrounding schema, as tests do; a caller generating into a user schema owes it one, and the
+   * one production caller ({@code VariantSchemaUtils.applyForcedShredding}) does.
    *
    * @param name           the variant record name (can be null, defaults to "variant")
-   * @param namespace      the namespace (can be null)
+   * @param namespace      the namespace of the variant record and its {@code typed_value} record; the per-field
+   *                       structs go one level below, under {@code <namespace>.typed_value} (null only for a
+   *                       standalone variant, per above)
    * @param doc            the documentation (can be null)
    * @param shreddedFields Map of field names to their typed value schemas. Use LinkedHashMap for ordered fields.
    * @return a new HoodieSchema.Variant with properly nested typed_value
@@ -1046,7 +1070,22 @@ public class HoodieSchema implements Serializable {
     // Build typed_value fields, each wrapped in the spec-compliant {value, typed_value} struct
     List<HoodieSchemaField> typedValueFields = new ArrayList<>();
     for (Map.Entry<String, HoodieSchema> entry : shreddedFields.entrySet()) {
-      HoodieSchema fieldStruct = createShreddedFieldStruct(entry.getKey(), entry.getValue());
+      // The field structs go one level below the variant, under the typed_value record that holds
+      // them, so their full name is <namespace>.typed_value.<field>. Their names come from the
+      // DDL/inferred field names, which are free to match a user-declared record type in the table
+      // schema -- and equally free to be spelled "typed_value" or "<column>_variant", the names of
+      // the two records generated in the variant's own namespace. The extra level clears the field
+      // structs of all three; see createShreddedFieldStruct for what a collision costs. It does
+      // not cover the two generated records themselves, which own <namespace>.typed_value and
+      // <namespace>.<column>_variant outright: a user record type declared with either full name
+      // still collides. Accepted -- the only caller generating from a user schema
+      // (VariantSchemaUtils.applyForcedShredding, behind a test-only config) puts them under
+      // hoodie.variant.forced.<enclosing record>, so reaching that residual means declaring a
+      // record type inside a Hudi-owned namespace.
+      HoodieSchema fieldStruct = createShreddedFieldStruct(
+          entry.getKey(),
+          namespace == null ? null : namespace + "." + Variant.VARIANT_TYPED_VALUE_FIELD,
+          entry.getValue());
       typedValueFields.add(HoodieSchemaField.of(
           entry.getKey(),
           HoodieSchema.createNullable(fieldStruct),
@@ -2491,6 +2530,8 @@ public class HoodieSchema implements Serializable {
   public static class Variant extends HoodieSchema {
 
     private static final String VARIANT_DEFAULT_NAME = "variant";
+    /** Root namespace of the record types {@link #plainTypedValueOf} generates; Hudi-owned. */
+    private static final String PLAIN_TYPED_VALUE_NAMESPACE = "hoodie.variant.plain";
     public static final String VARIANT_METADATA_FIELD = "metadata";
     public static final String VARIANT_VALUE_FIELD = "value";
     public static final String VARIANT_TYPED_VALUE_FIELD = "typed_value";
@@ -2552,7 +2593,9 @@ public class HoodieSchema implements Serializable {
     private Option<HoodieSchema> extractTypedValueSchema(Schema avroSchema) {
       Schema.Field typedValueField = avroSchema.getField(VARIANT_TYPED_VALUE_FIELD);
       if (typedValueField != null) {
-        return Option.of(HoodieSchema.fromAvroSchema(typedValueField.schema()));
+        HoodieSchema typedValue = HoodieSchema.fromAvroSchema(typedValueField.schema());
+        // typed_value is declared nullable per the shredding spec; consumers want the value type.
+        return Option.of(typedValue.isNullable() ? typedValue.getNonNullType() : typedValue);
       }
       return Option.empty();
     }
@@ -2641,8 +2684,11 @@ public class HoodieSchema implements Serializable {
     /**
      * Returns the typed_value schema with plain (unwrapped) types suitable for Spark shredding utilities, i.e. essentially removing the `value` field
      *
-     * <p>If the typed_value follows the variant shredding spec (each field is a struct with
-     * {@code {value: bytes, typed_value: <type>}}), this extracts only the inner typed_value types and returns a record schema containing just those plain types.</p>
+     * <p>If the typed_value follows the variant shredding spec (each object field is a struct
+     * with {@code {value: bytes, typed_value: <type>}}), this extracts only the inner
+     * typed_value types, recursively unwrapping nested objects and arrays. A value-only wrapper
+     * ({@code {value}} with no typed_value, the spec form of a field that stays untyped) maps to
+     * an unshredded VARIANT member.</p>
      *
      * <p>If the typed_value is already in plain form (created with {@code createVariantShredded}),
      * returns the schema as-is.</p>
@@ -2653,47 +2699,108 @@ public class HoodieSchema implements Serializable {
       if (!typedValueSchema.isPresent()) {
         return Option.empty();
       }
-      HoodieSchema tvSchema = typedValueSchema.get();
-      if (tvSchema.getType() != HoodieSchemaType.RECORD) {
-        return typedValueSchema;
+      return Option.of(plainTypedValueOf(typedValueSchema.get(), PLAIN_TYPED_VALUE_NAMESPACE, VARIANT_TYPED_VALUE_FIELD));
+    }
+
+    /**
+     * Recursively converts a typed_value schema from the nested shredding-spec form to the
+     * plain form; schemas not in the spec form pass through unchanged (already plain).
+     *
+     * <p>Generated record names encode the field path: every nesting level of a spec-form
+     * schema is named {@code typed_value}, so reusing the source names (with a null namespace)
+     * would make a nested plain record an Avro self-reference of its ancestor, which Spark's
+     * schema converter rejects as recursion. The path goes into the NAMESPACE, one segment per
+     * level ({@code hoodie.variant.plain.typed_value.a.b_plain} for {@code typed_value.a.b}),
+     * so that paths which would concatenate to the same string ({@code a} under {@code b_c}
+     * versus {@code a_b} under {@code c}) still get distinct full names: '.' separates
+     * namespace segments and cannot occur inside an Avro name.</p>
+     *
+     * @param schema    the schema at this level
+     * @param namespace the namespace of the records generated at this level
+     * @param name      the name of this level (the field name, or {@code typed_value} at the root)
+     */
+    private static HoodieSchema plainTypedValueOf(HoodieSchema schema, String namespace, String name) {
+      HoodieSchema unwrapped = schema.isNullable() ? schema.getNonNullType() : schema;
+
+      if (unwrapped.getType() == HoodieSchemaType.RECORD) {
+        List<HoodieSchemaField> fields = unwrapped.getFields();
+        boolean isNestedForm = !fields.isEmpty() && fields.stream().allMatch(field -> {
+          HoodieSchema fieldSchema = field.schema();
+          if (fieldSchema.isNullable()) {
+            fieldSchema = fieldSchema.getNonNullType();
+          }
+          return isShreddedFieldWrapper(fieldSchema);
+        });
+        if (!isNestedForm) {
+          return schema;
+        }
+
+        List<HoodieSchemaField> plainFields = new ArrayList<>();
+        for (HoodieSchemaField field : fields) {
+          HoodieSchema fieldSchema = field.schema();
+          if (fieldSchema.isNullable()) {
+            fieldSchema = fieldSchema.getNonNullType();
+          }
+          plainFields.add(HoodieSchemaField.of(field.name(),
+              unwrapFieldWrapper(fieldSchema, namespace + "." + name, field.name())));
+        }
+        return HoodieSchema.createRecord(name + "_plain", namespace, null, plainFields);
       }
 
-      List<HoodieSchemaField> fields = tvSchema.getFields();
-      // Check if all fields follow the nested shredding pattern: each field is a record with {value, typed_value}
-      boolean isNestedForm = !fields.isEmpty() && fields.stream().allMatch(field -> {
-        HoodieSchema fieldSchema = field.schema();
-        if (fieldSchema.isNullable()) {
-          fieldSchema = fieldSchema.getNonNullType();
+      if (unwrapped.getType() == HoodieSchemaType.ARRAY) {
+        HoodieSchema element = unwrapped.getElementType();
+        HoodieSchema elementUnwrapped = element.isNullable() ? element.getNonNullType() : element;
+        if (isShreddedFieldWrapper(elementUnwrapped)) {
+          return HoodieSchema.createArray(unwrapFieldWrapper(elementUnwrapped, namespace + "." + name, "element"));
         }
-        if (fieldSchema.getType() != HoodieSchemaType.RECORD) {
-          return false;
-        }
-        Option<HoodieSchemaField> valueSubField = fieldSchema.getField(VARIANT_VALUE_FIELD);
-        Option<HoodieSchemaField> typedValueSubField = fieldSchema.getField(VARIANT_TYPED_VALUE_FIELD);
-        return valueSubField.isPresent()
-            && valueSubField.get().schema().isNullable()
-            && valueSubField.get().schema().getNonNullType().getType() == HoodieSchemaType.BYTES
-            && typedValueSubField.isPresent()
-            && typedValueSubField.get().schema().isNullable()
-            && fieldSchema.getFields().size() == 2;
-      });
-
-      if (!isNestedForm) {
-        return typedValueSchema;
+        return schema;
       }
 
-      // Extract the plain types from the nested form
-      List<HoodieSchemaField> plainFields = new ArrayList<>();
-      for (HoodieSchemaField field : fields) {
-        HoodieSchema fieldSchema = field.schema();
-        if (fieldSchema.isNullable()) {
-          fieldSchema = fieldSchema.getNonNullType();
-        }
-        HoodieSchema innerTypedValue = fieldSchema.getField(VARIANT_TYPED_VALUE_FIELD).get().schema();
-        plainFields.add(HoodieSchemaField.of(field.name(), innerTypedValue));
+      // Scalars and other types are already plain.
+      return schema;
+    }
+
+    /**
+     * Whether {@code schema} is a spec-form shredded-field wrapper: a record of exactly
+     * {@code {value: bytes}} or {@code {value: nullable bytes, typed_value: nullable type}}.
+     */
+    private static boolean isShreddedFieldWrapper(HoodieSchema schema) {
+      if (schema.getType() != HoodieSchemaType.RECORD) {
+        return false;
       }
-      return Option.of(HoodieSchema.createRecord(
-          tvSchema.getAvroSchema().getName() + "_plain", null, null, plainFields));
+      Option<HoodieSchemaField> valueSubField = schema.getField(VARIANT_VALUE_FIELD);
+      if (!valueSubField.isPresent()) {
+        return false;
+      }
+      HoodieSchema valueSchema = valueSubField.get().schema();
+      HoodieSchema valueType = valueSchema.isNullable() ? valueSchema.getNonNullType() : valueSchema;
+      if (valueType.getType() != HoodieSchemaType.BYTES) {
+        return false;
+      }
+      if (schema.getFields().size() == 1) {
+        // Value-only wrapper: the spec emits a required value for array elements and a
+        // nullable value for object fields.
+        return true;
+      }
+      Option<HoodieSchemaField> typedValueSubField = schema.getField(VARIANT_TYPED_VALUE_FIELD);
+      return schema.getFields().size() == 2
+          && valueSchema.isNullable()
+          && typedValueSubField.isPresent()
+          && typedValueSubField.get().schema().isNullable();
+    }
+
+    /**
+     * Extracts the plain type of a spec-form shredded-field wrapper: its inner typed_value,
+     * recursively unwrapped; or an unshredded VARIANT when the wrapper is value-only.
+     */
+    private static HoodieSchema unwrapFieldWrapper(HoodieSchema wrapper, String namespace, String name) {
+      Option<HoodieSchemaField> innerTypedValue = wrapper.getField(VARIANT_TYPED_VALUE_FIELD);
+      if (!innerTypedValue.isPresent()) {
+        // Value-only wrapper: the member stays untyped. Unique name per member to avoid
+        // same-name record clashes within one schema tree.
+        return HoodieSchema.createVariant(name + "_variant", namespace, null);
+      }
+      return plainTypedValueOf(innerTypedValue.get().schema(), namespace, name);
     }
 
     @Override

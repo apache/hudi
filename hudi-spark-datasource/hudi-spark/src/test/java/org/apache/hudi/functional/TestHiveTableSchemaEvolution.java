@@ -116,7 +116,7 @@ public class TestHiveTableSchemaEvolution {
     jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, "6,7,8");
     jobConf.set(serdeConstants.LIST_COLUMNS, "_hoodie_commit_time,_hoodie_commit_seqno,"
         + "_hoodie_record_key,_hoodie_partition_path,_hoodie_file_name,col0,col1,col2_new,col3");
-    jobConf.set(serdeConstants.LIST_COLUMN_TYPES, "string,string,string,string,string,int,float,string,timestamp,string");
+    jobConf.set(serdeConstants.LIST_COLUMN_TYPES, "string,string,string,string,string,int,float,string,timestamp");
     FileInputFormat.setInputPaths(jobConf, path);
 
     HoodieParquetInputFormat inputFormat = new HoodieParquetRealtimeInputFormat();
@@ -160,7 +160,9 @@ public class TestHiveTableSchemaEvolution {
     jobConf.set(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), "true");
     jobConf.set(ColumnProjectionUtils.READ_ALL_COLUMNS, "false");
     jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, "col1,col2_new");
-    jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, "6,7");
+    // Leading blanks are what HIVE-22438 puts in this conf value. The cow arm builds a HoodieParquetInputFormat
+    // directly, so this is the only test that drives cleanProjectionColumnIds ahead of SchemaEvolutionContext.
+    jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, ",,6,7");
     jobConf.set(serdeConstants.LIST_COLUMNS, "_hoodie_commit_time,_hoodie_commit_seqno,"
         + "_hoodie_record_key,_hoodie_partition_path,_hoodie_file_name,col0,col1,col2_new");
     jobConf.set(serdeConstants.LIST_COLUMN_TYPES, "string,string,string,string,string,int,double,string");
@@ -226,7 +228,7 @@ public class TestHiveTableSchemaEvolution {
     jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, "6,7,8,9");
     jobConf.set(serdeConstants.LIST_COLUMNS, "_hoodie_commit_time,_hoodie_commit_seqno,"
             + "_hoodie_record_key,_hoodie_partition_path,_hoodie_file_name,col0,col1,col2,col3,col4");
-    jobConf.set(serdeConstants.LIST_COLUMN_TYPES, "string,string,string,string,string,int,float,string,timestamp,string,string");
+    jobConf.set(serdeConstants.LIST_COLUMN_TYPES, "string,string,string,string,string,int,float,string,timestamp,string");
     FileInputFormat.setInputPaths(jobConf, path);
 
     HoodieParquetInputFormat inputFormat =

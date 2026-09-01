@@ -20,7 +20,6 @@
 package org.apache.hudi.utilities.streamer;
 
 import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
-import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 
@@ -30,7 +29,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorage;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -46,7 +45,7 @@ public class TestHoodieStreamerMetrics {
         .withReporterType("INMEMORY")
         .build();
     HoodieStreamerMetrics metrics = new HoodieStreamerMetrics(
-        metricsConfig, HoodieStorageUtils.getStorage(getDefaultStorageConf()));
+        metricsConfig, getDefaultStorage());
     Timer.Context timerContext = metrics.getErrorTableWriteTimerContext();
     Thread.sleep(TimeUnit.SECONDS.toMillis(1));
     long duration = timerContext.stop();
@@ -64,7 +63,7 @@ public class TestHoodieStreamerMetrics {
         .withReporterType("INMEMORY")
         .build();
     HoodieStreamerMetrics metrics = new HoodieStreamerMetrics(
-        metricsConfig, HoodieStorageUtils.getStorage(getDefaultStorageConf()));
+        metricsConfig, getDefaultStorage());
     Timer.Context timerContext = metrics.getErrorTableWriteTimerContext();
     assertNull(timerContext);
     metrics.updateErrorTableCommitDuration(0L);
@@ -79,7 +78,7 @@ public class TestHoodieStreamerMetrics {
         .withReporterType("INMEMORY")
         .build();
     HoodieStreamerMetrics metrics = new HoodieStreamerMetrics(
-        metricsConfig, HoodieStorageUtils.getStorage(getDefaultStorageConf()));
+        metricsConfig, getDefaultStorage());
     metrics.emitStreamerJobSuccessMetrics();
     MetricRegistry registry = metrics.getMetrics().getRegistry();
     assertEquals(1, registry.getGauges().size());
@@ -95,7 +94,7 @@ public class TestHoodieStreamerMetrics {
         .withReporterType("INMEMORY")
         .build();
     HoodieStreamerMetrics metrics = new HoodieStreamerMetrics(
-        metricsConfig, HoodieStorageUtils.getStorage(getDefaultStorageConf()));
+        metricsConfig, getDefaultStorage());
     metrics.emitStreamerJobFailedMetrics();
     MetricRegistry registry = metrics.getMetrics().getRegistry();
     assertEquals(1, registry.getGauges().size());
@@ -111,7 +110,7 @@ public class TestHoodieStreamerMetrics {
         .withReporterType("INMEMORY")
         .build();
     HoodieStreamerMetrics metrics = new HoodieStreamerMetrics(
-        metricsConfig, HoodieStorageUtils.getStorage(getDefaultStorageConf()));
+        metricsConfig, getDefaultStorage());
     // Should not throw when metrics are disabled
     metrics.emitStreamerJobSuccessMetrics();
     metrics.emitStreamerJobFailedMetrics();
@@ -126,7 +125,7 @@ public class TestHoodieStreamerMetrics {
         .withReporterType("INMEMORY")
         .build();
     HoodieDeltaStreamerMetrics metrics = new HoodieDeltaStreamerMetrics(
-        metricsConfig, HoodieStorageUtils.getStorage(getDefaultStorageConf()));
+        metricsConfig, getDefaultStorage());
     metrics.emitStreamerJobSuccessMetrics();
     assertEquals(".deltastreamer.success", metrics.getMetrics().getRegistry().getGauges().firstKey());
 
@@ -136,7 +135,7 @@ public class TestHoodieStreamerMetrics {
         .withMetricsConfig(HoodieMetricsConfig.newBuilder().on(true).withReporterType("INMEMORY").build())
         .build();
     HoodieDeltaStreamerMetrics metricsFromWriteConfig = new HoodieDeltaStreamerMetrics(
-        writeConfig, HoodieStorageUtils.getStorage(getDefaultStorageConf()));
+        writeConfig, getDefaultStorage());
     metricsFromWriteConfig.emitStreamerJobFailedMetrics();
     assertEquals(".deltastreamer.failure",
         metricsFromWriteConfig.getMetrics().getRegistry().getGauges().firstKey());

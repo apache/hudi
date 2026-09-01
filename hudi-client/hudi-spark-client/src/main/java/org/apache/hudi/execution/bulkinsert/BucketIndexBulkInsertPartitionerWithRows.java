@@ -36,20 +36,44 @@ public class BucketIndexBulkInsertPartitionerWithRows implements BulkInsertParti
   private final String indexKeyFields;
   private final NumBucketsFunction numBucketsFunction;
   private final HoodieWriteConfig writeConfig;
+  private final boolean sortByRecordKey;
   private FileSystemViewStorageConfig viewConfig;
 
-  public BucketIndexBulkInsertPartitionerWithRows(String indexKeyFields, HoodieWriteConfig writeConfig) {
-    this(writeConfig, NumBucketsFunction.fromWriteConfig(writeConfig), indexKeyFields);
+  public BucketIndexBulkInsertPartitionerWithRows(String indexKeyFields,
+                                                  HoodieWriteConfig writeConfig) {
+    this(indexKeyFields, writeConfig, false);
   }
 
-  public BucketIndexBulkInsertPartitionerWithRows(HoodieWriteConfig writeConfig, String expressions, String rule, int bucketNumber) {
-    this(writeConfig, new NumBucketsFunction(expressions, rule, bucketNumber), writeConfig.getBucketIndexHashFieldWithDefault());
+  public BucketIndexBulkInsertPartitionerWithRows(String indexKeyFields,
+                                                  HoodieWriteConfig writeConfig,
+                                                  boolean sortByRecordKey) {
+    this(writeConfig, NumBucketsFunction.fromWriteConfig(writeConfig), indexKeyFields, sortByRecordKey);
   }
 
-  private BucketIndexBulkInsertPartitionerWithRows(HoodieWriteConfig writeConfig, NumBucketsFunction numBucketsFunction, String indexKeyFields) {
+  public BucketIndexBulkInsertPartitionerWithRows(HoodieWriteConfig writeConfig,
+                                                  String expressions,
+                                                  String rule,
+                                                  int bucketNumber) {
+    this(writeConfig, expressions, rule, bucketNumber, false);
+  }
+
+  public BucketIndexBulkInsertPartitionerWithRows(HoodieWriteConfig writeConfig,
+                                                  String expressions,
+                                                  String rule,
+                                                  int bucketNumber,
+                                                  boolean sortByRecordKey) {
+    this(writeConfig, new NumBucketsFunction(expressions, rule, bucketNumber),
+        writeConfig.getBucketIndexHashFieldWithDefault(), sortByRecordKey);
+  }
+
+  private BucketIndexBulkInsertPartitionerWithRows(HoodieWriteConfig writeConfig,
+                                                   NumBucketsFunction numBucketsFunction,
+                                                   String indexKeyFields,
+                                                   boolean sortByRecordKey) {
     this.indexKeyFields = indexKeyFields;
     this.numBucketsFunction = numBucketsFunction;
     this.writeConfig = writeConfig;
+    this.sortByRecordKey = sortByRecordKey;
     if (writeConfig.isUsingRemotePartitioner()) {
       this.viewConfig = writeConfig.getViewStorageConfig();
     }
@@ -60,7 +84,8 @@ public class BucketIndexBulkInsertPartitionerWithRows implements BulkInsertParti
     Partitioner partitioner = writeConfig.isUsingRemotePartitioner() && writeConfig.isEmbeddedTimelineServerEnabled()
         ? BucketPartitionUtils$.MODULE$.getRemotePartitioner(viewConfig, numBucketsFunction, outputPartitions) 
         : BucketPartitionUtils$.MODULE$.getLocalePartitioner(numBucketsFunction, outputPartitions);
-    return BucketPartitionUtils$.MODULE$.createDataFrame(rows, indexKeyFields, numBucketsFunction, partitioner);
+    return BucketPartitionUtils$.MODULE$.createDataFrame(
+        rows, indexKeyFields, numBucketsFunction, partitioner, sortByRecordKey);
   }
 
   @Override

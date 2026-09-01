@@ -25,8 +25,9 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{HoodieCommitMetadata, WriteOperationType}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineLayout}
 import org.apache.hudi.common.testutils.HoodieTestUtils
-import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.common.util.{ClusteringUtils, Option => HOption}
 import org.apache.hudi.common.util.collection.Pair
+import org.apache.hudi.config.HoodieClusteringConfig
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 
 import org.apache.hadoop.conf.Configuration
@@ -864,6 +865,183 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
       assertResult(1)(spark.sql(s"call show_clustering(path => '$basePath')").count())
       assertResult(1)(spark.sql(s"call show_clustering(path => '$basePath', limit => 1)").count())
       assertResult(1)(spark.sql(s"call show_clustering(path => '$basePath', limit => 2)").count())
+    }
+  }
+
+  test("Test Call run_clustering rejects unsortable order columns") {
+    // Not gated on any Spark version: MAP, BLOB and VECTOR exist on every supported Spark, so
+    // this covers the sort-column validation on the lanes where the variant suite is skipped.
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val basePath = s"${tmp.getCanonicalPath}/$tableName"
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  content blob,
+           |  embedding vector(4),
+           |  attrs map<string, string>,
+           |  ts long
+           |) using hudi
+           | options (
+           |  primaryKey = 'id',
+           |  orderingFields = 'ts'
+           | )
+           | location '$basePath'
+       """.stripMargin)
+      spark.sql(s"insert into $tableName values (1, 'a1', null, null, null, 1000)")
+
+      // The procedure validates the order columns up front, before any plan is scheduled. The
+      // recursion into structs and arrays and the case-insensitive column resolution are pinned on
+      // the validator itself in TestSortUtils rather than re-run through this entry point.
+      checkNestedExceptionContains(s"call run_clustering(table => '$tableName', order => 'attrs')")(
+        "Sorting by column 'attrs'")
+      // BLOB and VECTOR do have an ordering, so they are accepted and the clustering runs. One
+      // run covers both, and the same run pins the normalisation: the procedure trims the order
+      // list once, so the execution strategy - which splits the stored value on "," - sees
+      // exactly the columns validated here. Every leg that needs a plan gets a fresh commit
+      // first: incremental table services only consider partitions touched since the last
+      // clustering, so a second back-to-back run would plan nothing.
+      spark.sql(s"insert into $tableName values (2, 'a2', null, null, null, 1001)")
+      spark.sql(s"call run_clustering(table => '$tableName', order => 'content, embedding')").collect()
+      val metaClient = HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(new Configuration), basePath)
+      val clusteringInstant = metaClient.getActiveTimeline.getCompletedReplaceTimeline.lastInstant().get()
+      val clusteringPlan = ClusteringUtils.getClusteringPlan(metaClient, clusteringInstant).get().getRight
+      assertResult("content,embedding")(
+        clusteringPlan.getStrategy.getStrategyParams.get(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key()))
+
+      // The config path has no procedure to normalise for it, so the execution strategy trims at
+      // its own split instead: an inline clustering configured with a space after the comma must
+      // plan and complete rather than fail to resolve ' name'.
+      val replaceCommitsBefore = metaClient.reloadActiveTimeline().getCompletedReplaceTimeline.getInstants.size()
+      withSQLConf(
+        "hoodie.clustering.inline" -> "true",
+        "hoodie.clustering.inline.max.commits" -> "1",
+        "hoodie.clustering.plan.strategy.sort.columns" -> "id, name") {
+        spark.sql(s"insert into $tableName values (3, 'a3', null, null, null, 1002)")
+      }
+      assertResult(replaceCommitsBefore + 1)(
+        metaClient.reloadActiveTimeline().getCompletedReplaceTimeline.getInstants.size())
+      assertResult(3)(spark.sql(s"select * from $tableName").collect().length)
+
+      // The `options` route: the plan-strategy sort columns can arrive through it too, and it is
+      // merged after `order`, so it has to go through the same up-front check. That the check ran
+      // before scheduling is what the empty pending timeline pins: an execution-time rejection
+      // (the strategy and partitioner constructors validate as well) would have left a pending
+      // plan holding the file group, which starves every later scheduling.
+      spark.sql(s"insert into $tableName values (4, 'a4', null, null, null, 1003)")
+      checkNestedExceptionContains(
+        s"call run_clustering(table => '$tableName', options => 'hoodie.clustering.plan.strategy.sort.columns=attrs')")(
+        "Sorting by column 'attrs'")
+      metaClient.reloadActiveTimeline()
+      assertResult(0L)(ClusteringUtils.getAllPendingClusteringPlans(metaClient).count())
+      // ... and an orderable column through the same route passes the check and reaches the plan.
+      // (A multi-column list cannot travel through `options`: HoodieCLIUtils.extractOptions splits
+      // the string on commas into key=value pairs, so the trimming pin above stays on `order`.)
+      spark.sql(s"insert into $tableName values (5, 'a5', null, null, null, 1004)")
+      spark.sql(s"call run_clustering(table => '$tableName', " +
+        "options => 'hoodie.clustering.plan.strategy.sort.columns=embedding')").collect()
+      val optionsInstant = metaClient.reloadActiveTimeline().getCompletedReplaceTimeline.lastInstant().get()
+      assertResult("embedding")(
+        ClusteringUtils.getClusteringPlan(metaClient, optionsInstant).get().getRight
+          .getStrategy.getStrategyParams.get(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key()))
+    }
+  }
+
+  test("Test Call run_clustering resolves nested and meta order columns and keeps a blank override") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val basePath = s"${tmp.getCanonicalPath}/$tableName"
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  s struct<level: int, tags: map<string, string>>,
+           |  ts long
+           |) using hudi
+           | options (
+           |  primaryKey = 'id',
+           |  orderingFields = 'ts'
+           | )
+           | location '$basePath'
+       """.stripMargin)
+      spark.sql(s"insert into $tableName select 1, 'a1', named_struct('level', 1, 'tags', map('k', 'v')), 1000")
+      val metaClient = HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(new Configuration), basePath)
+      val sortColumnsKey = HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key()
+      def lastPlanSortColumns(): String = {
+        val instant = metaClient.reloadActiveTimeline().getCompletedReplaceTimeline.lastInstant().get()
+        ClusteringUtils.getClusteringPlan(metaClient, instant).get().getRight.getStrategy.getStrategyParams.get(sortColumnsKey)
+      }
+
+      // A blank `order` is an override, not an absence: the procedure's confs sit on top of the
+      // session conf in HoodieCLIUtils.createHoodieWriteClient, so the unorderable sort column
+      // set there must neither reach the plan nor fail the job, and the plan carries no sort at
+      // all. Every leg that needs a plan gets a fresh commit first, as in the test above.
+      withSQLConf(sortColumnsKey -> "s.tags") {
+        spark.sql(s"call run_clustering(table => '$tableName', order => '')").collect()
+      }
+      assertResult(null)(lastPlanSortColumns())
+
+      // A meta column is a valid sort column: the execution strategy adds the metadata fields to
+      // the schema the partitioners sort on, so the up-front check resolves against them too.
+      spark.sql(s"insert into $tableName select 2, 'a2', named_struct('level', 2, 'tags', map('k', 'v')), 1001")
+      spark.sql(s"call run_clustering(table => '$tableName', order => '_hoodie_commit_time')").collect()
+      assertResult("_hoodie_commit_time")(lastPlanSortColumns())
+
+      // A nested path resolves to its leaf: an orderable leaf passes and reaches the plan, and
+      // the clustering that sorts on it completes.
+      spark.sql(s"insert into $tableName select 3, 'a3', named_struct('level', 3, 'tags', map('k', 'v')), 1002")
+      spark.sql(s"call run_clustering(table => '$tableName', order => 's.level')").collect()
+      assertResult("s.level")(lastPlanSortColumns())
+      assertResult(3)(spark.sql(s"select * from $tableName").collect().length)
+
+      // ... and the check resolves names as the partitioners do, case-insensitively, so a
+      // differently cased path is the same column.
+      spark.sql(s"insert into $tableName select 4, 'a4', named_struct('level', 4, 'tags', map('k', 'v')), 1003")
+      spark.sql(s"call run_clustering(table => '$tableName', order => 'S.level')").collect()
+      assertResult("S.level")(lastPlanSortColumns())
+      assertResult(4)(spark.sql(s"select * from $tableName").collect().length)
+
+      // ... while an unorderable leaf is rejected under its full path, up front, so no pending
+      // plan is left behind, and a path that does not resolve is reported as missing.
+      spark.sql(s"insert into $tableName select 5, 'a5', named_struct('level', 5, 'tags', map('k', 'v')), 1004")
+      checkNestedExceptionContains(s"call run_clustering(table => '$tableName', order => 's.tags')")(
+        "Sorting by column 's.tags' of type MAP is not supported")
+      checkNestedExceptionContains(s"call run_clustering(table => '$tableName', order => 's.missing')")(
+        "Order column not exist:s.missing")
+      // Only records are descended into: a map's parquet accessor levels are not a path the
+      // partitioners resolve, so the MAP is rejected under `s.tags` and nothing below it resolves.
+      checkNestedExceptionContains(s"call run_clustering(table => '$tableName', order => 's.tags.key_value.value')")(
+        "Order column not exist:s.tags.key_value.value")
+      metaClient.reloadActiveTimeline()
+      assertResult(0L)(ClusteringUtils.getAllPendingClusteringPlans(metaClient).count())
+
+      // A space-curve strategy narrows the rule: the linear partitioners sort a nested path, but
+      // the space-curve helpers look their columns up among the frame's top-level fields by exact
+      // name, so the procedure rejects the combination - up front still, once the write config has
+      // resolved the strategy, because a rejection at execution time would leave the plan pending.
+      spark.sql(s"insert into $tableName select 6, 'a6', named_struct('level', 6, 'tags', map('k', 'v')), 1005")
+      checkNestedExceptionContains(
+        s"call run_clustering(table => '$tableName', order => 's.level', order_strategy => 'z-order')")(
+        "Sort column 's.level' is not a top-level column")
+      metaClient.reloadActiveTimeline()
+      assertResult(0L)(ClusteringUtils.getAllPendingClusteringPlans(metaClient).count())
+
+      // The config route has no procedure to check the column up front, so it is the partitioner
+      // constructors and the execution strategy that reject it (SortUtils.validateSortableColumns),
+      // now resolving the dotted path instead of skipping it and letting Spark's AnalysisException
+      // surface without naming the column. This leg runs last because a rejection at execution
+      // time leaves the plan it failed on pending.
+      withSQLConf(
+        "hoodie.clustering.inline" -> "true",
+        "hoodie.clustering.inline.max.commits" -> "1",
+        sortColumnsKey -> "s.tags") {
+        checkNestedExceptionContains(() => spark.sql(
+          s"insert into $tableName select 7, 'a7', named_struct('level', 7, 'tags', map('k', 'v')), 1006"))(
+          "Sorting by column 's.tags' of type MAP is not supported")
+      }
     }
   }
 

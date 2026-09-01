@@ -18,7 +18,9 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.sql.Dataset;
@@ -30,14 +32,37 @@ import org.apache.spark.sql.Row;
  */
 public abstract class BulkInsertInternalPartitionerWithRowsFactory {
 
-  public static BulkInsertPartitioner<Dataset<Row>> get(HoodieWriteConfig config,
+  public static BulkInsertPartitioner<Dataset<Row>> get(HoodieTableConfig tableConfig,
+                                                        HoodieWriteConfig config,
                                                         boolean isTablePartitioned) {
-    return get(config, isTablePartitioned, false);
+    return get(tableConfig, config, isTablePartitioned, false);
   }
 
-  public static BulkInsertPartitioner<Dataset<Row>> get(HoodieWriteConfig config,
+  public static BulkInsertPartitioner<Dataset<Row>> get(HoodieTableConfig tableConfig,
+                                                        HoodieWriteConfig config,
                                                         boolean isTablePartitioned,
                                                         boolean enforceNumOutputPartitions) {
+    if (tableConfig.isLSMTreeStorageLayout()) {
+      switch (config.getBulkInsertSortMode()) {
+        case GLOBAL_SORT:
+          return new GlobalSortPartitionerWithRows(config);
+        case PARTITION_SORT:
+          return new PartitionSortPartitionerWithRows(config);
+        case PARTITION_PATH_REPARTITION_AND_SORT:
+          return new LSMPartitionPathRepartitionAndSortPartitionerWithRows(
+              isTablePartitioned, config);
+        default:
+          throw new HoodieException(
+              "The bulk insert sort mode \"" + config.getBulkInsertSortMode().name()
+                  + "\" does not guarantee record ordering and is not supported for LSM tables.");
+      }
+    }
+    return get(config, isTablePartitioned, enforceNumOutputPartitions);
+  }
+
+  static BulkInsertPartitioner<Dataset<Row>> get(HoodieWriteConfig config,
+                                                 boolean isTablePartitioned,
+                                                 boolean enforceNumOutputPartitions) {
     BulkInsertSortMode sortMode = config.getBulkInsertSortMode();
     switch (sortMode) {
       case NONE:

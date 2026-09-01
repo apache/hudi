@@ -42,6 +42,7 @@ import org.apache.hudi.common.model.HoodiePreWriteCleanerPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -1543,13 +1544,47 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     return true;
   }
 
+  /**
+   * Pure validation: this method reads both configs and throws, and never modifies either.
+   *
+   * <p>Nothing reconciles the write config against the table beforehand. That is deliberate: the mode
+   * is read further down the write path by handles and writer factories, some of which hold no table
+   * config at all, so the write config has to be correct on its own rather than corrected on the way
+   * in. This gate is what makes that true, by refusing writes whose meta-field settings do not already
+   * agree with the table.
+   */
   public void validateAgainstTableProperties(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
     // mismatch of table versions.
     CommonClientUtils.validateTableVersion(tableConfig, writeConfig);
 
-    // Once meta fields are disabled, it cant be re-enabled for a given table.
-    if (!tableConfig.populateMetaFields() && writeConfig.populateMetaFields()) {
-      throw new HoodieException(HoodieTableConfig.POPULATE_META_FIELDS.key() + " already disabled for the table. Can't be re-enabled back");
+    // Meta-field population is physical, so a writer must not disagree with the table about which
+    // meta columns hold values. Compare the full enum rather than the legacy booleans: those collapse
+    // every selective mode to false, so a writer claiming COMMIT_TIME_ONLY against a NONE table would
+    // slip through and advertise commit times that were never written.
+    //
+    // hoodie.meta.fields.mode is a table property, changeable only via hudi-cli or an upgrade -- never
+    // as a side effect of a write.
+    MetaFieldsMode tableMetaFieldsMode = tableConfig.getMetaFieldsMode();
+
+    // The writer's resolved mode must equal the table's. Both directions are wrong, for different
+    // reasons: widening would leave earlier commits missing a column later ones have, and readers
+    // cannot tell the two apart; narrowing would leave rows the table still advertises as populated,
+    // which incremental queries then silently skip. Only hudi-cli or an upgrade may change the mode.
+    //
+    // HoodieWriteConfig normalizes legacy input into hoodie.meta.fields.mode as its last defaulting
+    // step. Consequently this comparison has one source of truth on both sides, including when the
+    // caller supplied only the deprecated boolean or no meta-field option at all.
+    MetaFieldsMode writeMetaFieldsMode = writeConfig.getMetaFieldsMode();
+    if (writeMetaFieldsMode != tableMetaFieldsMode) {
+      throw new HoodieException(String.format(
+          "%s mismatch: table is %s but the writer requests %s. Meta columns are physical, so the writer must "
+              + "match the table%s. Set %s=%s on the writer, or change the table's mode through "
+              + "hudi-cli.",
+          HoodieTableConfig.META_FIELDS_MODE.key(), tableMetaFieldsMode, writeMetaFieldsMode,
+          writeMetaFieldsMode.isWiderThan(tableMetaFieldsMode)
+              ? " -- enabling a column now would leave earlier commits without it"
+              : " -- writing fewer of them leaves rows the table still advertises as populated",
+          HoodieTableConfig.META_FIELDS_MODE.key(), tableMetaFieldsMode));
     }
 
     // Meta fields can be disabled only when either {@code SimpleKeyGenerator}, {@code ComplexKeyGenerator},
@@ -1561,6 +1596,23 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       }
       if (!KeyGeneratorType.isKeyGenValidForDisabledMetaFields(keyGenClass)) {
         throw new HoodieException("Only simple, non-partitioned or complex key generator are supported when meta-fields are disabled. Used: " + keyGenClass);
+      }
+    }
+
+    // A bloom index needs the record key on disk. Without it the writer never builds a bloom filter
+    // (enableBloomFilter is gated on the same flag), so the reader finds no filter in the footer,
+    // HoodieKeyLookupHandle#getBloomFilter returns null, and addKey NPEs on the first upsert. Reject
+    // the combination here rather than let it fail mid-write with an unattributable
+    // NullPointerException.
+    if (!tableConfig.isRecordKeyPopulated()) {
+      HoodieIndex.IndexType indexType = writeConfig.getIndexType();
+      if (indexType == HoodieIndex.IndexType.BLOOM || indexType == HoodieIndex.IndexType.GLOBAL_BLOOM) {
+        throw new HoodieException(String.format(
+            "%s index requires the %s meta column, which %s=%s does not populate. The bloom filter is "
+                + "never written, so lookups would fail on the first upsert. Use SIMPLE, GLOBAL_SIMPLE, "
+                + "BUCKET or RECORD_INDEX instead, or use a mode that populates the record key.",
+            indexType, HoodieRecord.RECORD_KEY_METADATA_FIELD,
+            HoodieTableConfig.META_FIELDS_MODE.key(), tableConfig.getMetaFieldsMode()));
       }
     }
     if (tableConfig.getTableVersion().lesserThan(HoodieTableVersion.NINE)

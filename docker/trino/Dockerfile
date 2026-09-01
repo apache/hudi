@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
-ARG TRINO_VERSION=481
+ARG TRINO_VERSION=483
 FROM trinodb/trino:${TRINO_VERSION}
 
 USER root

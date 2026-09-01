@@ -48,6 +48,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for {@link HiveDriverPool} that exercise bootstrap, dispatch, error
@@ -183,6 +184,55 @@ class TestHiveDriverPool {
     pool.close();
     assertThrows(IllegalStateException.class,
         () -> pool.dispatchAll(Arrays.asList("anything")));
+  }
+
+  /**
+   * Driver.compile() registers a shutdown hook that Driver.close() does not remove -- only
+   * destroy() does. Closing a pooled Driver without destroying it therefore leaks it, and
+   * everything its last query referenced, into the static ShutdownHookManager for the life
+   * of the JVM. A long-running sync loop builds a pool per sync, so this grows without bound.
+   */
+  @Test
+  void closeDestroysEachPooledDriver() throws Exception {
+    HiveSyncConfig config = configWithEmptyHiveConf();
+    List<Driver> drivers = Collections.synchronizedList(new ArrayList<>());
+    HiveDriverPool.DriverFactory factory = (db) -> {
+      Driver d = mock(Driver.class);
+      drivers.add(d);
+      return d;
+    };
+    HiveDriverPool pool = new HiveDriverPool(config, 3, factory);
+    pool.close();
+
+    assertEquals(3, drivers.size());
+    for (Driver d : drivers) {
+      verify(d, times(1)).close();
+      verify(d, times(1)).destroy();
+    }
+  }
+
+  /**
+   * The hook removal is the whole point of destroy(), so a Driver whose close() blows up must
+   * still be destroyed -- otherwise the failure that made teardown interesting is also the one
+   * that leaks the Driver.
+   */
+  @Test
+  void closeDestroysPooledDriverEvenWhenCloseThrows() throws Exception {
+    HiveSyncConfig config = configWithEmptyHiveConf();
+    List<Driver> drivers = Collections.synchronizedList(new ArrayList<>());
+    HiveDriverPool.DriverFactory factory = (db) -> {
+      Driver d = mock(Driver.class);
+      when(d.close()).thenThrow(new RuntimeException("close failed"));
+      drivers.add(d);
+      return d;
+    };
+    HiveDriverPool pool = new HiveDriverPool(config, 2, factory);
+    pool.close();
+
+    assertEquals(2, drivers.size());
+    for (Driver d : drivers) {
+      verify(d, times(1)).destroy();
+    }
   }
 
   @Test

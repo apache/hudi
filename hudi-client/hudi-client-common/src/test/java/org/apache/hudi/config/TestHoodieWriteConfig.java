@@ -38,6 +38,7 @@ import org.apache.hudi.config.HoodieWriteConfig.Builder;
 import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.core.transaction.lock.NoopLockProvider;
 import org.apache.hudi.exception.HoodieIndexException;
+import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
@@ -153,6 +154,76 @@ public class TestHoodieWriteConfig {
             EngineType.SPARK, HoodieIndex.IndexType.SIMPLE,
             EngineType.FLINK, HoodieIndex.IndexType.INMEMORY,
             EngineType.JAVA, HoodieIndex.IndexType.SIMPLE));
+  }
+
+  @Test
+  public void testDefaultParquetCompressionCodecAccordingToEngine() {
+    assertEquals("zstd", HoodieWriteConfig.getDefaultParquetCompressionCodec(EngineType.FLINK));
+    assertEquals("gzip", HoodieWriteConfig.getDefaultParquetCompressionCodec(EngineType.JAVA));
+
+    HoodieWriteConfig flinkConfig = HoodieWriteConfig.newBuilder()
+        .withEngineType(EngineType.FLINK)
+        .withPath("/tmp")
+        .withStorageConfig(HoodieStorageConfig.newBuilder().parquetWriteLegacyFormat("false").build())
+        .build();
+    assertEquals("zstd", flinkConfig.getParquetCompressionCodec());
+
+    HoodieWriteConfig javaConfig = HoodieWriteConfig.newBuilder()
+        .withEngineType(EngineType.JAVA)
+        .withPath("/tmp")
+        .withStorageConfig(HoodieStorageConfig.newBuilder().parquetWriteLegacyFormat("false").build())
+        .build();
+    assertEquals("gzip", javaConfig.getParquetCompressionCodec());
+
+    javaConfig = HoodieWriteConfig.newBuilder()
+        .withEngineType(EngineType.JAVA)
+        .withPath("/tmp")
+        .withStorageConfig(HoodieStorageConfig.newBuilder().parquetCompressionCodec("zstd").build())
+        .build();
+    assertEquals("zstd", javaConfig.getParquetCompressionCodec());
+
+    Properties explicitCodec = new Properties();
+    explicitCodec.setProperty(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME.key(), "gzip");
+    flinkConfig = HoodieWriteConfig.newBuilder()
+        .withEngineType(EngineType.FLINK)
+        .withPath("/tmp")
+        .withStorageConfig(HoodieStorageConfig.newBuilder().fromProperties(explicitCodec).build())
+        .build();
+    assertEquals("gzip", flinkConfig.getParquetCompressionCodec());
+  }
+
+  @Test
+  public void testDefaultBulkInsertSortModeForLsmLayout() {
+    HoodieWriteConfig defaultLayoutConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp/default-layout")
+        .build();
+    assertFalse(defaultLayoutConfig.isLSMTreeStorageLayout());
+    assertEquals(BulkInsertSortMode.NONE, defaultLayoutConfig.getBulkInsertSortMode());
+
+    Properties lsmLayoutProps = new Properties();
+    lsmLayoutProps.setProperty(
+        HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+        HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue());
+    HoodieWriteConfig lsmLayoutConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp/lsm-layout")
+        .withProperties(lsmLayoutProps)
+        .build();
+    assertTrue(lsmLayoutConfig.isLSMTreeStorageLayout());
+    assertEquals(BulkInsertSortMode.PARTITION_SORT, lsmLayoutConfig.getBulkInsertSortMode());
+
+    HoodieWriteConfig javaLsmLayoutConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp/java-lsm-layout")
+        .withEngineType(EngineType.JAVA)
+        .withProperties(lsmLayoutProps)
+        .build();
+    assertEquals(BulkInsertSortMode.PARTITION_SORT, javaLsmLayoutConfig.getBulkInsertSortMode());
+
+    HoodieWriteConfig explicitlyUnsortedLsmConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp/explicitly-unsorted-lsm-layout")
+        .withProperties(lsmLayoutProps)
+        .withBulkInsertSortMode(BulkInsertSortMode.NONE.name())
+        .build();
+    assertEquals(BulkInsertSortMode.NONE, explicitlyUnsortedLsmConfig.getBulkInsertSortMode());
   }
 
   @Test

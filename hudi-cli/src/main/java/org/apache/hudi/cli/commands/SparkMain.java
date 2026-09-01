@@ -558,7 +558,7 @@ public class SparkMain {
    * @throws Exception
    */
   protected static int upgradeOrDowngradeTable(JavaSparkContext jsc, String basePath, String toVersion) {
-    HoodieWriteConfig config = getWriteConfig(basePath, Boolean.parseBoolean(HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE.defaultValue()),
+    HoodieWriteConfig config = getWriteConfig(jsc, basePath, Boolean.parseBoolean(HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE.defaultValue()),
         false);
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder()
@@ -581,7 +581,7 @@ public class SparkMain {
   }
 
   private static SparkRDDWriteClient createHoodieClient(JavaSparkContext jsc, String basePath, Boolean rollbackUsingMarkers, boolean lazyCleanPolicy) throws Exception {
-    HoodieWriteConfig config = getWriteConfig(basePath, rollbackUsingMarkers, lazyCleanPolicy);
+    HoodieWriteConfig config = getWriteConfig(jsc, basePath, rollbackUsingMarkers, lazyCleanPolicy);
     return new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), config);
   }
 
@@ -589,12 +589,38 @@ public class SparkMain {
     return createHoodieClient(jsc, basePath, Boolean.parseBoolean(HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE.defaultValue()), lazyCleanPolicy);
   }
 
-  private static HoodieWriteConfig getWriteConfig(String basePath, Boolean rollbackUsingMarkers, boolean lazyCleanPolicy) {
-    return HoodieWriteConfig.newBuilder().withPath(basePath)
+  private static HoodieWriteConfig getWriteConfig(JavaSparkContext jsc, String basePath, Boolean rollbackUsingMarkers, boolean lazyCleanPolicy) {
+    HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withRollbackUsingMarkers(rollbackUsingMarkers)
         .withCleanConfig(HoodieCleanConfig.newBuilder().withFailedWritesCleaningPolicy(lazyCleanPolicy ? HoodieFailedWritesCleaningPolicy.LAZY :
             HoodieFailedWritesCleaningPolicy.EAGER).build())
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build());
+    // Adopt the table's meta-fields mode. These commands take only a base path, so without this the
+    // config resolves to the ALL default and is rejected against any table that is not ALL -- meta
+    // columns are physical, and a writer may not disagree with the table about which of them hold
+    // values. The table is the authority on that, and it is readable right here, so read it.
+    withMetaFieldsModeOf(jsc, basePath, builder);
+    return builder.build();
+  }
+
+  /**
+   * Copy {@code hoodie.meta.fields.mode} from the table at {@code basePath} onto the builder.
+   *
+   * <p>Silent when the table cannot be read: these are maintenance commands, and a base path that is
+   * not yet a Hudi table is the caller's problem to report, not this helper's. In that case the
+   * builder keeps its default and any real mismatch still surfaces at validation.
+   */
+  private static void withMetaFieldsModeOf(JavaSparkContext jsc, String basePath, HoodieWriteConfig.Builder builder) {
+    try {
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+          .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()))
+          .setBasePath(basePath)
+          .build();
+      builder.withMetaFieldsMode(metaClient.getTableConfig().getMetaFieldsMode());
+    } catch (Exception e) {
+      log.warn("Could not read the table config at {} to pick up {}; proceeding with the default.",
+          basePath, HoodieTableConfig.META_FIELDS_MODE.key(), e);
+    }
   }
 
   private static int archive(JavaSparkContext jsc, int minCommits, int maxCommits, int commitsRetained, boolean enableMetadata, String basePath) {

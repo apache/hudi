@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage.hadoop;
 
 import org.apache.hudi.common.avro.VariantSchemaUtils;
 import org.apache.hudi.common.avro.VariantShreddingProvider;
+import org.apache.hudi.common.avro.VariantShreddingRuntime;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
@@ -129,8 +130,11 @@ final class HoodieVariantReconstruction {
    * side is matched into it by field name. Detection is anchored by the requested side because the
    * file schema usually comes from converting the parquet footer MessageType, which loses the
    * variant logical type; see VariantSchemaUtils.isShreddedVariantTarget (#19567). Records, array
-   * elements and map values are all descended into, since the row writer shreds variants at any
-   * depth ({@code HoodieRowParquetWriteSupport.processNestedDataType}).
+   * elements and map values are all descended into, matching what the writers can emit; see
+   * {@code VariantSchemaUtils.swapShreddedVariantFields} for what actually produces a nested
+   * shredded file today (both the row and the AVRO write path shred variant record members at any
+   * depth off the forced-shredding property; a variant that is directly an array element or a map
+   * value shreds on neither path unless the write schema itself declares typed_value there).
    */
   private static Rebuilder buildRebuilder(HoodieSchema outputSchema, HoodieSchema fileSchema) {
     if (VariantSchemaUtils.isShreddedVariantTarget(fileSchema, outputSchema)) {
@@ -266,7 +270,7 @@ final class HoodieVariantReconstruction {
     String providerClass = storage.getConf()
         .getString(HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key()).orElse(null);
     if (providerClass == null || providerClass.isEmpty()) {
-      providerClass = VariantShreddingProvider.detectProviderClassOnClasspath();
+      providerClass = VariantShreddingRuntime.getProviderClass().orElse(null);
     }
     return providerClass == null ? null : (VariantShreddingProvider) ReflectionUtils.loadClass(providerClass);
   }

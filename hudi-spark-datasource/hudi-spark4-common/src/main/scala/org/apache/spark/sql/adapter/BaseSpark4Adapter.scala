@@ -18,6 +18,7 @@
 package org.apache.spark.sql.adapter
 
 import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieFileScanRDD, HoodieSchemaConversionUtils}
+import org.apache.hudi.common.avro.VariantShreddingSchemaInferrer
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.JsonUtils
@@ -35,10 +36,12 @@ import org.apache.spark.sql.FileFormatUtilsForFileGroupReader.applyFiltersToPlan
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate, Predicate, SpecializedGetters}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, CreateNamedStruct, Expression, GetStructField, If, InterpretedPredicate, IsNull, Literal, Predicate, SpecializedGetters, UnsafeProjection}
+import org.apache.spark.sql.catalyst.expressions.variant.VariantGet
 import org.apache.spark.sql.catalyst.parser.ParseException
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.types.DataTypeUtils
 import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.classic.ColumnConversions
 import org.apache.spark.sql.execution.{PartitionedFileUtil, QueryExecution, SQLExecution}
@@ -48,7 +51,7 @@ import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, Pa
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
-import org.apache.spark.sql.types.{BinaryType, DataType, StructField, StructType, VariantType}
+import org.apache.spark.sql.types.{BinaryType, DataType, StringType, StructField, StructType, VariantType}
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.types.variant.Variant
@@ -284,8 +287,8 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
     applyVariantLogicalType(builder).named(fieldName)
   }
 
-  // TODO(#18935) drop-spark4.0: when all remaining 4.x adapters are parquet 1.16+, apply variantType() in this base and delete the no-op default plus the Spark4_1Adapter override.
-  protected def applyVariantLogicalType(builder: Types.GroupBuilder[GroupType]): Types.GroupBuilder[GroupType] = builder
+  // TODO(#18935) drop-spark4.0: when all remaining 4.x adapters are parquet 1.16+, apply variantType() in this base and delete the no-op override plus the Spark4_1Adapter override.
+  override def applyVariantLogicalType(builder: Types.GroupBuilder[GroupType]): Types.GroupBuilder[GroupType] = builder
 
   override def isVariantShreddingStruct(structType: StructType): Boolean = {
     SparkShreddingUtils.isVariantShreddingStruct(structType)
@@ -299,9 +302,11 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
   /**
    * Shared implementation behind [[SparkAdapter#buildFullVariantReadSchema]] for the 4.x
    * adapters whose parquet reader can reconstruct shredded variants (4.1+, SPARK-54410).
-   * Spark 4.0 keeps the default None: the write-side methods above have no version gate, so
-   * it does write shredded files, but its reader cannot rebuild them and the projection
-   * shape would not help.
+   * Top-level fields only, matching the whole-variant request PushVariantIntoScan makes for a
+   * root attribute; a variant below the top level is left native, and that reader rebuilds it
+   * at any depth from a native VariantType request (#19775). Spark 4.0 keeps the default None:
+   * the write-side methods above have no version gate, so it does write shredded files, but
+   * its reader cannot rebuild them and the projection shape would not help.
    */
   protected final def rewriteTopLevelVariantsForFullRead(schema: StructType): Option[StructType] = {
     var rewritten = false
@@ -319,6 +324,86 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
     if (rewritten) Some(StructType(fields)) else None
   }
 
+  /**
+   * Shared implementation behind [[SparkAdapter#buildVariantProjector]] for the 4.x adapters
+   * whose planner rewrites variants into projection structs (4.1+).
+   *
+   * Recurses into struct members, mirroring PushVariantIntoScan's `VariantInRelation.rewriteType`:
+   * a variant is rewritten at the root of the relation output or below a STRUCT path, while
+   * arrays and maps keep their native VariantType, so nothing under a collection is projected
+   * here either. Before #19775 this walked top-level fields only, and a projection struct sitting
+   * one struct member down was left holding a raw variant that the plan then read as its
+   * projected children.
+   */
+  protected final def buildVariantProjectorForStructPaths(
+      sparkDataSchema: StructType,
+      sparkRequiredSchema: StructType): Option[InternalRow => InternalRow] = {
+    // Quick check: does any required field carry a variant projection struct, at any depth?
+    if (!sparkRequiredSchema.fields.exists(f => containsVariantProjection(f.dataType))) {
+      None
+    } else {
+      // Surface mismatched schemas with both field lists rather than Spark's bare
+      // IllegalArgumentException from fieldIndex. `path` is the dotted field path of `name`.
+      def lookupDataField(dataStruct: StructType, requiredStruct: StructType,
+                          name: String, path: String): (Int, StructField) = {
+        val idx = dataStruct.getFieldIndex(name).getOrElse(
+          throw new IllegalStateException(
+            s"Required field '$path' is absent from sparkDataSchema; " +
+              s"required=${requiredStruct.fieldNames.mkString("[", ",", "]")}, " +
+              s"data=${dataStruct.fieldNames.mkString("[", ",", "]")}"))
+        (idx, dataStruct.fields(idx))
+      }
+
+      // `ref` reads the data-schema value of type `dataType`; the result has type `requiredType`.
+      def projectionExpr(ref: Expression, dataType: DataType, requiredType: DataType,
+                         path: String): Expression = requiredType match {
+        case projectedStruct: StructType if VariantMetadata.isVariantStruct(projectedStruct) =>
+          require(isVariantType(dataType),
+            s"Expected VariantType for field '$path' in data schema, got $dataType")
+          val childExprs: Seq[Expression] = projectedStruct.fields.toSeq.flatMap { child =>
+            val vm = VariantMetadata.fromMetadata(child.metadata)
+            val pathLit = Literal(UTF8String.fromString(vm.path), StringType)
+            val variantGet: Expression =
+              VariantGet(ref, pathLit, child.dataType, vm.failOnError, Option(vm.timeZoneId))
+            Seq(Literal(UTF8String.fromString(child.name), StringType), variantGet)
+          }
+          val projected = CreateNamedStruct(childExprs)
+          // A null variant has to come out as a NULL struct, not a struct of nulls: CreateNamedStruct
+          // is never null, the parquet paths leave the field null, and PushVariantIntoScan rewrites
+          // IsNull(v) / IsNotNull(v) onto this struct directly.
+          If(IsNull(ref), Literal(null, projected.dataType), projected)
+        case requiredStruct: StructType =>
+          dataType match {
+            // Rebuild the struct member by member only when something below it is projected;
+            // otherwise the reference is already in the required shape and is cheaper untouched.
+            case dataStruct: StructType if containsVariantProjection(requiredStruct) =>
+              val childExprs: Seq[Expression] = requiredStruct.fields.toSeq.flatMap { rf =>
+                val childPath = s"$path.${rf.name}"
+                val (childIdx, childField) = lookupDataField(dataStruct, requiredStruct, rf.name, childPath)
+                val childRef = GetStructField(ref, childIdx, Some(rf.name))
+                Seq(Literal(UTF8String.fromString(rf.name), StringType),
+                  projectionExpr(childRef, childField.dataType, rf.dataType, childPath))
+              }
+              val rebuilt = CreateNamedStruct(childExprs)
+              // CreateNamedStruct is never null, so a null struct would come back as a struct of
+              // nulls without this guard.
+              If(IsNull(ref), Literal(null, rebuilt.dataType), rebuilt)
+            case _ => ref
+          }
+        case _ => ref
+      }
+
+      val exprs: Array[Expression] = sparkRequiredSchema.fields.map { rf =>
+        val (dataIdx, dataField) = lookupDataField(sparkDataSchema, sparkRequiredSchema, rf.name, rf.name)
+        val ref: Expression = BoundReference(dataIdx, dataField.dataType, dataField.nullable)
+        projectionExpr(ref, dataField.dataType, rf.dataType, rf.name)
+      }
+
+      val projection = UnsafeProjection.create(exprs.toIndexedSeq, DataTypeUtils.toAttributes(sparkDataSchema))
+      Some(row => projection(row))
+    }
+  }
+
   override def createShreddedVariantWriter(
     shreddedStructType: StructType,
     writeStruct: Consumer[InternalRow]
@@ -330,6 +415,16 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
       val variant = new Variant(variantVal.getValue, variantVal.getMetadata)
       val shreddedValues = SparkShreddingUtils.castShredded(variant, variantShreddingSchema)
       writeStruct.accept(shreddedValues)
+    }
+  }
+
+  override def extractVariantBinary(row: SpecializedGetters, ordinal: Int): VariantShreddingSchemaInferrer.VariantSample = {
+    if (row.isNullAt(ordinal)) {
+      null
+    } else {
+      val variantVal = row.getVariant(ordinal)
+      // Defensive copies: Spark iterators reuse row instances and VariantVal exposes its backing arrays.
+      new VariantShreddingSchemaInferrer.VariantSample(variantVal.getValue.clone(), variantVal.getMetadata.clone())
     }
   }
 }
