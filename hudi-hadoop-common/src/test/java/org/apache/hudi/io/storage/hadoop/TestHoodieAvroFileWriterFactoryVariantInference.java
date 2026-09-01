@@ -54,9 +54,11 @@ import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 /**
  * Pins the no-inferrer degradation of shredding-schema inference in
- * {@link HoodieAvroFileWriterFactory}: this module's classpath carries no Spark version module,
- * so {@link VariantShreddingRuntime#lookupInferrer()} is empty here, which is what engines without
- * Spark 4.1+ (Flink, Java, Spark 4.0) see in production.
+ * {@link HoodieAvroFileWriterFactory}. Inference is on by default, so this gate is reached by every
+ * engine's Avro write path with a stock config; a classpath without a Spark 4.1+ version module
+ * (Flink, Java, and Spark 3.x and 4.0 in production) must degrade to the plain unshredded writer.
+ * This module's classpath carries no Spark version module, so
+ * {@link VariantShreddingRuntime#lookupInferrer()} is empty here, which is what those engines see.
  */
 public class TestHoodieAvroFileWriterFactoryVariantInference {
 
@@ -64,7 +66,7 @@ public class TestHoodieAvroFileWriterFactoryVariantInference {
   java.nio.file.Path tmpDir;
 
   @Test
-  public void testInferenceFlagWithoutInferrerWritesPlainUnshreddedFile() throws Exception {
+  public void testDefaultInferenceWithoutInferrerWritesPlainUnshreddedFile() throws Exception {
     assumeFalse(VariantShreddingRuntime.lookupInferrer().isPresent(),
         "this test pins the fallback for classpaths without a shredding-schema inferrer");
 
@@ -72,7 +74,8 @@ public class TestHoodieAvroFileWriterFactoryVariantInference {
         HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
         HoodieSchemaField.of("v", HoodieSchema.createNullable(HoodieSchema.createVariant()))));
     HoodieConfig config = new HoodieConfig();
-    config.setValue(HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_SCHEMA_INFERENCE_ENABLED, "true");
+    assertTrue(config.getBooleanOrDefault(HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_SCHEMA_INFERENCE_ENABLED),
+        "inference is on by default since #19690; this test pins what that default does without an inferrer");
     config.setValue(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME, "zstd");
     // Name a provider explicitly: the factory also declines when no shredding provider is available,
     // and this module ships none, so without this the inferrer gate (the one under test) would never

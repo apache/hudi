@@ -92,8 +92,16 @@ public class TestVariantSchemaUtils {
   public void testGetInferableVariantColumnsGating() {
     HoodieSchema schema = schemaWithVariants();
 
-    // Inference disabled (default)
-    assertTrue(VariantSchemaUtils.getInferableVariantColumns(new HoodieConfig(), schema).isEmpty());
+    // Inference enabled (the default since #19690)
+    assertTrue(HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_SCHEMA_INFERENCE_ENABLED.defaultValue(),
+        "#19690 pins inference on by default");
+    assertEquals(Arrays.asList("v1", "v2"),
+        VariantSchemaUtils.getInferableVariantColumns(new HoodieConfig(), schema));
+
+    // Inference disabled explicitly
+    HoodieConfig inferenceOff = new HoodieConfig();
+    inferenceOff.setValue(HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_SCHEMA_INFERENCE_ENABLED, "false");
+    assertTrue(VariantSchemaUtils.getInferableVariantColumns(inferenceOff, schema).isEmpty());
 
     // Write shredding disabled
     HoodieConfig shreddingOff = inferenceEnabledConfig();
@@ -156,9 +164,11 @@ public class TestVariantSchemaUtils {
     writeOnly.setValue("hoodie.write.schema", schemaString);
     assertEquals(Arrays.asList("v1", "v2"), VariantSchemaUtils.getInferableVariantColumnsFromConfig(writeOnly));
 
-    // No schema in the config, or inference disabled: nothing, and no schema parse attempted.
+    // No schema in the config, or inference disabled: nothing, and with inference disabled no
+    // schema parse is attempted at all (the unparseable schema below would throw otherwise).
     assertTrue(VariantSchemaUtils.getInferableVariantColumnsFromConfig(inferenceEnabledConfig()).isEmpty());
     HoodieConfig disabled = new HoodieConfig();
+    disabled.setValue(HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_SCHEMA_INFERENCE_ENABLED, "false");
     disabled.setValue("hoodie.avro.schema", "not a schema");
     assertTrue(VariantSchemaUtils.getInferableVariantColumnsFromConfig(disabled).isEmpty());
   }
