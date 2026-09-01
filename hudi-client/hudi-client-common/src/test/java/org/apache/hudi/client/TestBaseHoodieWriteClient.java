@@ -167,6 +167,9 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     writeProperties.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), keyGeneratorClass);
     writeProperties.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), recordKeyFields);
     writeProperties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), partitionPathFields);
+    // The validation guard only applies when encoding auto-deduction is disabled; with the
+    // default (auto-deduce on) the encoding is resolved from data instead of failing the write.
+    writeProperties.put(HoodieWriteConfig.COMPLEX_KEYGEN_AUTO_DEDUCE_ENCODING.key(), "false");
     if (setComplexKeyGeneratorValidationConfig) {
       writeProperties.put(
           HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key(), enableComplexKeyGeneratorValidation);
