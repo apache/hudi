@@ -22,13 +22,11 @@ package org.apache.spark.sql.hudi.dml.schema
 import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils}
 import org.apache.hudi.common.avro.VariantShreddingRuntime
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.HoodieLogFile
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.schema.internal.HoodieSchemaException
 import org.apache.hudi.common.table.TableSchemaResolver
-import org.apache.hudi.common.table.log.HoodieLogFormat
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.StringUtils
@@ -42,10 +40,8 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable, CatalogTableType}
 import org.apache.spark.sql.hudi.command.CreateHoodieTableCommand
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.{getLastCommitMetadata, getMetaClientAndFileSystemView}
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMetadata
 import org.apache.spark.sql.types.{ArrayType, BinaryType, DataType, LongType, MapType, MetadataBuilder, StringType, StructField, StructType}
-
-import scala.collection.JavaConverters._
 
 class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTestSupport {
 
@@ -1433,31 +1429,6 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
       )
 
       assertInferredTypedValue(tmp.getCanonicalPath, "v", "row writer", present = Seq("a", "b"))
-    }
-  }
-
-  /**
-   * Block types of every log block in the table, read from the log files themselves. Tests that pin
-   * a log format assert on this rather than on file names: native logs carry a .log.parquet suffix,
-   * but an inline log file is named the same whether its data blocks are avro or parquet.
-   */
-  private def listLogBlockTypes(tablePath: String): Seq[HoodieLogBlockType] = {
-    val (metaClient, fsView) = getMetaClientAndFileSystemView(tablePath)
-    val schema = new TableSchemaResolver(metaClient).getTableSchema
-    val logFiles = fsView.getAllFileSlices("").iterator().asScala
-      .flatMap(slice => HoodieTestUtils.getLogFileListFromFileSlice(slice).asScala).toSeq
-    assert(logFiles.nonEmpty, "expected at least one log file")
-    logFiles.flatMap { path =>
-      val reader = HoodieLogFormat.newReader(metaClient, new HoodieLogFile(path), schema)
-      try {
-        val types = scala.collection.mutable.ArrayBuffer[HoodieLogBlockType]()
-        while (reader.hasNext) {
-          types += reader.next().getBlockType
-        }
-        types.toSeq
-      } finally {
-        reader.close()
-      }
     }
   }
 

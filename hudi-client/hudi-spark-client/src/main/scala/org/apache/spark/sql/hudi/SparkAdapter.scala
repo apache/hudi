@@ -514,11 +514,27 @@ trait SparkAdapter extends Serializable {
   def isVariantProjectionStruct(structType: StructType): Boolean = false
 
   /**
-   * If `sparkRequiredSchema` contains any field that's a Spark 4.1 variant projection struct
-   * (i.e., the same-named field in `sparkDataSchema` is `VariantType`), returns a row
-   * transformer that takes an InternalRow in the data-schema shape (with full variants) and
-   * produces an InternalRow in the required-schema shape (with each variant column projected
-   * to its requested struct via VariantGet).
+   * True when `dataType` is a variant projection struct or holds one below a struct path: the two
+   * places PushVariantIntoScan puts them (the root of the relation output and STRUCT members), so
+   * an array element or a map value never matches. The reader context's schema overlay and the
+   * adapter's row projector both key off this, and they have to agree on it.
+   */
+  def containsVariantProjection(dataType: DataType): Boolean = dataType match {
+    case st: StructType =>
+      isVariantProjectionStruct(st) || st.fields.exists(f => containsVariantProjection(f.dataType))
+    case _ => false
+  }
+
+  /**
+   * If `sparkRequiredSchema` contains any Spark 4.1 variant projection struct (i.e., the
+   * same-named field in `sparkDataSchema` is `VariantType`), returns a row transformer that
+   * takes an InternalRow in the data-schema shape (with full variants) and produces an
+   * InternalRow in the required-schema shape (with each variant projected to its requested
+   * struct via VariantGet).
+   *
+   * Projection structs are looked for at the root and below any STRUCT path, the same places
+   * PushVariantIntoScan puts them; a variant that is an array element or a map value keeps its
+   * native VariantType on both sides and is passed through (#19775).
    *
    * Used on the MOR log-file path: log records carry the full variant on disk, but the merger
    * expects rows aligned to the post-PushVariantIntoScan required schema. Returns None when
@@ -530,14 +546,14 @@ trait SparkAdapter extends Serializable {
   /**
    * Rewrites each top-level VariantType field of `schema` into the full-variant projection
    * struct that PushVariantIntoScan would request for whole-variant access: a single child
-   * field "0" of VariantType carrying `VariantMetadata` for path "$". Requesting that shape
-   * makes the parquet reader reconstruct shredded variants by field name; requesting native
-   * VariantType instead clips a shredded file group down to {metadata, value} and reads
-   * value=null (#19556).
-   *
-   * Used by internal (non-catalyst) reads of parquet base files, which have no
-   * PushVariantIntoScan to do this for them. The caller restores the native VariantType
-   * shape by projecting child 0 of each rewritten field.
+   * field "0" of VariantType carrying `VariantMetadata` for path "$". Internal (non-catalyst)
+   * reads of parquet base files request that shape so they read a shredded file through the
+   * same contract as a rewritten user query (#19556); the caller restores native VariantType
+   * by projecting child 0 of each rewritten field. The shape is a contract, not a reader
+   * requirement: on Spark 4.1+ the parquet reader reconstructs a shredded variant for a native
+   * VariantType request too, at any depth, which is why only top-level fields are rewritten
+   * and variants nested in structs, arrays and maps are read natively (#19775). A request in
+   * the physical {metadata, value} struct shape is what reads a shredded group as value=null.
    *
    * Returns None when the schema has no top-level VariantType field or the Spark version has
    * no shredded-read support (Spark 3.x / 4.0).
