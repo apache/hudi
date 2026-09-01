@@ -84,7 +84,7 @@ comment:
 # path filter on a given PR, so a partial run does not zero out that flag's coverage.
 # Flags uploaded by .github/workflows/bot.yml: spark-client-hadoop-common, utilities,
 # common-and-other-modules, spark-java-tests, spark-scala-tests, hadoop-mr-java-client,
-# hudi-cli, integration-tests.
+# integration-tests.
 flag_management:
   default_rules:
     carryforward: true
