@@ -211,7 +211,8 @@ class TestParquetSchemaEvolutionUtils {
     Seq(
       ("metadata first", new StructType().add("metadata", BinaryType).add("value", BinaryType)),
       ("value first", new StructType().add("value", BinaryType).add("metadata", BinaryType))
-    ).foreach { case (order, requiredSchema) =>
+    ).foreach { case (order, variant) =>
+      val requiredSchema = new StructType().add("v", variant)
       val failure = Assertions.assertThrows(classOf[HoodieException], () =>
         ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(requiredSchema, footerOf(shreddedVariant("v"))))
       Assertions.assertTrue(
