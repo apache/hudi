@@ -19,6 +19,9 @@
 
 package org.apache.hudi.common.util;
 
+import java.io.IOException;
+import java.net.URL;
+import java.util.Enumeration;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -66,5 +69,26 @@ public class TestReflectionUtils {
         .collect(Collectors.toList());
     assertTrue(classes.contains(TestReflectionUtils.class.getName()));
     assertTrue(classes.contains(ReflectionUtils.class.getName()));
+  }
+
+  @Test
+  void testGetTopLevelClassesInClasspathHandlesIOException() {
+    // Context class loader whose getResources throws, exercising the recovery path
+    // where the method must return an empty stream instead of propagating.
+    ClassLoader parent = Thread.currentThread().getContextClassLoader();
+    ClassLoader throwingLoader = new ClassLoader(parent) {
+      @Override
+      public Enumeration<URL> getResources(String name) throws IOException {
+        throw new IOException("Simulated failure enumerating resources");
+      }
+    };
+    Thread.currentThread().setContextClassLoader(throwingLoader);
+    try {
+      List<String> classes = ReflectionUtils.getTopLevelClassesInClasspath(TestReflectionUtils.class)
+          .collect(Collectors.toList());
+      assertTrue(classes.isEmpty());
+    } finally {
+      Thread.currentThread().setContextClassLoader(parent);
+    }
   }
 }
