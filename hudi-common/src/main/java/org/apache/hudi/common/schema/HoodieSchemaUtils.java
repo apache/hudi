@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 
@@ -779,7 +780,8 @@ public final class HoodieSchemaUtils {
    * @param schema the input schema to search
    * @return true if the schema contains a small precision decimal field and false otherwise
    */
-  public static boolean hasSmallPrecisionDecimalField(HoodieSchema schema) {
+  @VisibleForTesting
+  static boolean hasSmallPrecisionDecimalField(HoodieSchema schema) {
     return hasDecimalWithCondition(schema, HoodieSchemaUtils::isSmallPrecisionDecimalField);
   }
 
@@ -850,6 +852,7 @@ public final class HoodieSchemaUtils {
     return nonNullType;
   }
 
+  @VisibleForTesting
   public static String addMetadataColumnTypes(String hiveColumnTypes) {
     return "string,string,string,string,string," + hiveColumnTypes;
   }

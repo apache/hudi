@@ -201,7 +201,7 @@ public class HoodieAvroWrapperUtils {
     }
   }
 
-  public static Comparable<?> unwrapAvroValueWrapper(Object avroValueWrapper, String wrapperClassName) {
+  private static Comparable<?> unwrapAvroValueWrapper(Object avroValueWrapper, String wrapperClassName) {
     if (avroValueWrapper == null) {
       return null;
     } else if (DateWrapper.class.getSimpleName().equals(wrapperClassName)) {
@@ -301,7 +301,7 @@ public class HoodieAvroWrapperUtils {
     return BytesWrapper.newBuilder(BYTES_WRAPPER_BUILDER_STUB.get()).setValue((ByteBuffer) value).build();
   }
 
-  public static Object wrapArray(Comparable<?> value, Function<Comparable<?>, Object> wrapper) {
+  private static Object wrapArray(Comparable<?> value, Function<Comparable<?>, Object> wrapper) {
     List<Object> avroValues = OrderingValues.getValues((ArrayComparable) value).stream().map(wrapper::apply).collect(Collectors.toList());
     return ArrayWrapper.newBuilder(ARRAY_WRAPPER_BUILDER_STUB.get()).setWrappedValues(avroValues).build();
   }

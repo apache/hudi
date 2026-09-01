@@ -32,6 +32,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieException;
@@ -189,7 +190,7 @@ public class HoodieAvroUtils {
     return indexedRecordToBytesStream(record);
   }
 
-  public static <T extends IndexedRecord> ByteArrayOutputStream indexedRecordToBytesStream(T record) {
+  private static <T extends IndexedRecord> ByteArrayOutputStream indexedRecordToBytesStream(T record) {
     GenericDatumWriter<T> writer = new GenericDatumWriter<>(record.getSchema(), ConvertingGenericData.INSTANCE);
     try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
       BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, BINARY_ENCODER.get());
@@ -221,7 +222,7 @@ public class HoodieAvroUtils {
    * @param record The GenericRecord to convert
    * @param pretty Whether to pretty-print the json output
    */
-  public static String avroToJsonString(GenericRecord record, boolean pretty) throws IOException {
+  private static String avroToJsonString(GenericRecord record, boolean pretty) throws IOException {
     return avroToJsonHelper(record, pretty).toString();
   }
 
@@ -359,6 +360,7 @@ public class HoodieAvroUtils {
     return AvroSchemaUtils.createNewSchemaFromFieldsWithReference(schema, filteredFields);
   }
 
+  @VisibleForTesting
   public static Schema makeFieldNonNull(Schema schema, String fieldName, Object fieldDefaultValue) {
     ValidationUtils.checkArgument(fieldDefaultValue != null);
     List<Schema.Field> filteredFields = schema.getFields()
@@ -494,7 +496,7 @@ public class HoodieAvroUtils {
   /**
    * Wraps schema as nullable if original was a nullable union.
    */
-  public static Schema wrapNullable(Schema original, Schema updated) {
+  private static Schema wrapNullable(Schema original, Schema updated) {
     if (original.getType() == Schema.Type.UNION) {
       List<Schema> types = original.getTypes();
       if (types.stream().anyMatch(s -> s.getType() == Schema.Type.NULL)) {
@@ -575,6 +577,7 @@ public class HoodieAvroUtils {
    * <p>
    * To better understand conversion rules please check {@link #rewriteRecord(GenericRecord, Schema)}
    */
+  @VisibleForTesting
   public static List<GenericRecord> rewriteRecords(List<GenericRecord> records, Schema newSchema) {
     return records.stream().map(r -> rewriteRecord(r, newSchema)).collect(Collectors.toList());
   }
@@ -698,7 +701,7 @@ public class HoodieAvroUtils {
    * @return the string form of the field
    * or empty if the schema does not contain the field name or the value is null
    */
-  public static Option<String> getNullableValAsString(GenericRecord rec, String fieldName) {
+  private static Option<String> getNullableValAsString(GenericRecord rec, String fieldName) {
     Schema.Field field = rec.getSchema().getField(fieldName);
     String fieldVal = field == null ? null : StringUtils.objToString(rec.get(field.pos()));
     return Option.ofNullable(fieldVal);
@@ -1274,7 +1277,8 @@ public class HoodieAvroUtils {
    * bytes is the result of BigDecimal.unscaledValue().toByteArray();
    * This is also what Conversions.DecimalConversion.toBytes() outputs inside a byte buffer
    */
-  public static Object convertBytesToFixed(byte[] bytes, Schema schema) {
+  @VisibleForTesting
+  static Object convertBytesToFixed(byte[] bytes, Schema schema) {
     LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) schema.getLogicalType();
     BigDecimal bigDecimal = convertBytesToBigDecimal(bytes, decimal);
     return DECIMAL_CONVERSION.toFixed(bigDecimal, schema, decimal);
@@ -1581,15 +1585,17 @@ public class HoodieAvroUtils {
     return rewriteRecordWithNewSchema(oldRecord, newSchema, Collections.EMPTY_MAP, validate);
   }
 
+  @VisibleForTesting
   public static boolean gteqAvro1_9() {
     return AVRO_VERSION != null && StringUtils.compareVersions(AVRO_VERSION, "1.9") >= 0;
   }
 
-  public static boolean gteqAvro1_10() {
+  @VisibleForTesting
+  static boolean gteqAvro1_10() {
     return AVRO_VERSION != null && StringUtils.compareVersions(AVRO_VERSION, "1.10") >= 0;
   }
 
-  static boolean gteqAvro1_12() {
+  private static boolean gteqAvro1_12() {
     return AVRO_VERSION != null && StringUtils.compareVersions(AVRO_VERSION, "1.12") >= 0;
   }
 
