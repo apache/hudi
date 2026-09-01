@@ -25,24 +25,9 @@ import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 /**
- * Regression coverage for MERGE INTO partition-column resolution.
- *
- * For a target table bearing a record key, the incoming batch is written from the source alone
- * and Hudi's index tagging identifies updates, keying off `(recordKey, partitionPath)`. Before the
- * fix, a partition column the source did not carry was never back-filled into the source
- * projection (only record-key and ordering columns were), so the key generator resolved it to the
- * default partition and tagging looked in the wrong place. Every incoming record came back
- * not-matched, which is silently destructive in two different ways depending on the clauses:
- *
- *  - `WHEN MATCHED` only: the record falls through to HoodieRecord.SENTINEL in
- *    `ExpressionPayload#processNotMatchedRecord` and is dropped - the statement reports success and
- *    writes an EMPTY COMMIT, leaving the target untouched.
- *  - `WHEN NOT MATCHED ... INSERT` present: the record is inserted into the default partition
- *    instead, DUPLICATING THE PRIMARY KEY across two partitions while the intended update is lost.
- *
- * The assertions below deliberately check the resulting rows AND their `_hoodie_partition_path`,
- * not merely that the data is unchanged. "Unchanged" is exactly what the dropped-record bug
- * produces, so a test asserting only that passes vacuously in the presence of this defect.
+ * Regression coverage for MERGE INTO partition-column resolution. Assertions check
+ * `_hoodie_partition_path` as well as the row values: unchanged data is what a dropped record
+ * produces, so asserting only that passes whether or not the merge did any work.
  */
 class TestMergeIntoPartitionFieldResolution extends HoodieSparkSqlTestBase {
 
@@ -75,7 +60,6 @@ class TestMergeIntoPartitionFieldResolution extends HoodieSparkSqlTestBase {
         spark.sql(s"insert into $tableName values (1, 'a', 10.0, 1, '2026-08-11')")
 
         // `dt` appears in neither the source output, the ON condition, nor the assignments.
-        // Before the fix this reported success and wrote an empty commit.
         checkExceptionContain(
           s"""
              |merge into $tableName as t
@@ -101,9 +85,7 @@ class TestMergeIntoPartitionFieldResolution extends HoodieSparkSqlTestBase {
         createPartitionedTable(tableName, tableType, s"${tmp.getCanonicalPath}/$tableName")
         spark.sql(s"insert into $tableName values (1, 'a', 10.0, 1, '2026-08-11')")
 
-        // The most damaging shape: with a NOT MATCHED clause the mis-partitioned record used to be
-        // INSERTED into the default partition, yielding two rows with id=1 in different partitions
-        // (name/dt null on the new one) while the intended update never landed.
+        // With a NOT MATCHED clause a mis-partitioned record is inserted rather than dropped.
         checkExceptionContain(
           s"""
              |merge into $tableName as t
@@ -176,9 +158,8 @@ class TestMergeIntoPartitionFieldResolution extends HoodieSparkSqlTestBase {
        """.stripMargin)(expectedError)
         }
 
-        // Untouched either way. Note the partition-changing shape used to be dropped as SENTINEL -
-        // the same empty commit this class guards against - so accepting it would have silently
-        // reinstated the defect for exactly the statement that looks like it should work.
+        // Accepting these would tag the record in the partition it moves TO, missing the existing
+        // version.
         checkAnswer(s"select id, amount, ts, dt, _hoodie_partition_path from $tableName")(
           Seq(1L, 10.0, 1L, "2026-08-11", "dt=2026-08-11")
         )
@@ -233,9 +214,7 @@ class TestMergeIntoPartitionFieldResolution extends HoodieSparkSqlTestBase {
         createPartitionedTable(tableName, tableType, s"${tmp.getCanonicalPath}/$tableName")
         spark.sql(s"insert into $tableName values (1, 'a', 10.0, 1, '2026-08-11')")
 
-        // DeleteAction carries no assignments, so this reaches the resolution by a path none of the
-        // update/insert cases exercise - and it is the common CDC shape. Previously it wrote an
-        // empty commit and deleted nothing.
+        // DeleteAction carries no assignments, so this reaches the resolution by its own path.
         checkExceptionContain(
           s"""
              |merge into $tableName as t
@@ -253,23 +232,8 @@ class TestMergeIntoPartitionFieldResolution extends HoodieSparkSqlTestBase {
     }
   }
 
-  // NOTE: CoW only, deliberately. On MOR the same statement fails inside the writer today, before
-  //       this guard is relevant, with
-  //         HoodieKeyException: recordKey value: "null" for field: "id" cannot be null or empty
-  //       raised from SqlKeyGenerator.getPartitionPath during the delta-commit upsert. That is
-  //       pre-existing: this guard only *skips* for this configuration, so the code path is the
-  //       same as without this change. Asserting the MOR shape here would be pinning a separate,
-  //       unrelated defect - it is reported separately as ENG-47158 instead.
-  // Every global index type must be exempted, not just the one that happened to be tested first.
-  // GLOBAL_RECORD_LEVEL_INDEX is the non-deprecated spelling of RECORD_INDEX on the 1.x line and
-  // SparkHoodieIndexFactory maps both onto SparkMetadataTableGlobalRecordLevelIndex, so a set that
-  // lists one and not the other rejects merges that are correct today. Parameterizing over the
-  // types is what makes that a test failure rather than a customer-visible regression.
-  //
-  // Each entry is (index type, the extra confs that put it in the re-keying configuration). The
-  // record-index spellings default `update.partition.path` to false already but need the index
-  // itself enabled in the metadata table; GLOBAL_BLOOM defaults the flag to true, so it is
-  // disabled explicitly.
+  // CoW only: on MOR the same statement hits a separate pre-existing writer defect first.
+  // Each entry is (index type, the confs that put it in the re-keying configuration).
   private val rekeyingGlobalIndexes: Seq[(String, Map[String, String])] = Seq(
     ("GLOBAL_BLOOM", Map("hoodie.bloom.index.update.partition.path" -> "false")),
     ("GLOBAL_SIMPLE", Map("hoodie.simple.index.update.partition.path" -> "false")),
@@ -340,8 +304,7 @@ class TestMergeIntoPartitionFieldResolution extends HoodieSparkSqlTestBase {
                |when not matched then insert (id, amount, ts) values (s.id, s.amount, s.ts)
        """.stripMargin)(expectedError)
 
-          // Without this the not-matched row is written to dt=__HIVE_DEFAULT_PARTITION__ with a
-          // null dt, which is what the exemption used to allow through.
+          // A not-matched row admitted here would be written to dt=__HIVE_DEFAULT_PARTITION__.
           checkAnswer(s"select count(*) from $tableName")(Seq(1L))
           checkAnswer(s"select id, amount, dt, _hoodie_partition_path from $tableName")(
             Seq(1L, 10.0, "2026-08-11", "dt=2026-08-11")
@@ -463,12 +426,8 @@ class TestMergeIntoPartitionFieldResolution extends HoodieSparkSqlTestBase {
   }
 
   /**
-   * End-to-end regression guard, asserted against the commit timeline rather than the table rows.
-   *
-   * The original defect produced a commit with 0 files and 0 records while reporting success, so no
-   * row-level assertion can catch it: "the data did not change" is indistinguishable from "the
-   * merge legitimately changed nothing". Checking that a successful merge actually wrote records -
-   * and that a rejected one wrote no commit at all - is what closes that hole.
+   * Asserted against the commit timeline, not the rows: a commit with 0 records is
+   * indistinguishable from a merge that legitimately changed nothing.
    */
   test("Test MergeInto e2e: a successful merge writes records, a rejected merge writes no commit") {
     withTempDir { tmp =>
@@ -479,8 +438,7 @@ class TestMergeIntoPartitionFieldResolution extends HoodieSparkSqlTestBase {
 
       val commitsAfterInsert = completedCommitCount(basePath)
 
-      // The shape that used to duplicate the key into the default partition must now be rejected,
-      // and must leave the timeline untouched.
+      // The duplicating shape must be rejected, and must leave the timeline untouched.
       checkExceptionContain(
         s"""
            |merge into $tableName as t
@@ -555,13 +513,8 @@ class TestMergeIntoPartitionFieldResolution extends HoodieSparkSqlTestBase {
 
         // A regression guard for the ON-condition path when an assignment names the same column.
         //
-        // NOTE: this does NOT exercise the deduplication in requiredAttributesMap, despite the
-        //       shape looking like it should - it passes unchanged against the pre-fix code. Only
-        //       the ON condition contributes an association for `dt`
-        //       (partitionFieldsAssociatedExpressions returns nothing once the ON-condition path
-        //       has covered the column, and assignments are not a resolution source), so there is
-        //       exactly one entry and nothing to dedupe. The case that does reach the fold is
-        //       below, over a record key that is also an ordering field.
+        // NOTE: this does NOT reach the dedupe - only the ON condition contributes an association
+        //       for `dt`, so there is one entry. The case that does reach it is below.
         spark.sql(
           s"""
              |merge into $tableName as t
@@ -579,20 +532,9 @@ class TestMergeIntoPartitionFieldResolution extends HoodieSparkSqlTestBase {
     }
   }
 
-  // The one overlap that actually reaches the deduplication in requiredAttributesMap.
-  //
-  // recordKeyAttributeToConditionExpression enumerates record-key and partition-path fields only,
-  // so an ordering field can collide with it exactly when it IS a record key. Here `id` is both
-  // the primary key and the ordering field: the ON condition contributes (id -> s.sid), and
-  // orderingFieldsAssociatedExpressions contributes (id -> s.sid) again from the UPDATE assignment
-  // (which event-time ordering requires). The source carries `sid`, not `id`, so both land in
-  // missingAttributesMap and each emits its own Alias - projecting `id` twice into the batch handed
-  // to the writer.
-  //
-  // The merge outcome is deliberately not asserted beyond identity: with the ordering field equal
-  // on both sides the winner is a tie, and equal-ordering resolution differs between the 0.x and
-  // 1.x lines, so pinning it here would break the planned 0.x backport. The discriminating
-  // property is that the statement completes at all.
+  // The one overlap that reaches the dedupe: `id` is both the record key and the ordering field, so
+  // the ON condition and the assignment each contribute (id -> s.sid) and each emits its own Alias.
+  // The outcome is not asserted beyond identity - equal-ordering resolution differs across lines.
   Seq("cow", "mor").foreach { tableType =>
     test(s"Test MergeInto projects a record key that is also an ordering field only once ($tableType)") {
       withTempDir { tmp =>
