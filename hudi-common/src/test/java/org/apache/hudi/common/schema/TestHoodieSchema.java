@@ -2485,8 +2485,10 @@ public class TestHoodieSchema {
 
   @Test
   public void testBlobFieldCountMethods() {
-    assertTrue(HoodieSchema.Blob.getFieldCount() > 0);
-    assertTrue(HoodieSchema.Blob.getReferenceFieldCount() > 0);
+    // type, data, reference
+    assertEquals(3, HoodieSchema.Blob.getFieldCount());
+    // external_path, offset, length, managed
+    assertEquals(4, HoodieSchema.Blob.getReferenceFieldCount());
   }
 
   @Test
@@ -2550,6 +2552,26 @@ public class TestHoodieSchema {
     assertTrue(managedOpt.isPresent());
     assertEquals(HoodieSchemaType.BOOLEAN, managedOpt.get().schema().getType());
     assertFalse(managedOpt.get().schema().isNullable());
+  }
+
+  @Test
+  public void testBlobNullableFieldsPutNullFirst() {
+    HoodieSchema.Blob blob = HoodieSchema.createBlob();
+
+    HoodieSchema refSchema = blob.getField("reference").get().schema().getNonNullType();
+    List<HoodieSchemaField> nullableFields = Arrays.asList(
+        blob.getField("data").get(),
+        blob.getField("reference").get(),
+        refSchema.getField("offset").get(),
+        refSchema.getField("length").get());
+
+    for (HoodieSchemaField field : nullableFields) {
+      HoodieSchema fieldSchema = field.schema();
+      assertEquals(HoodieSchemaType.UNION, fieldSchema.getType(), field.name() + " must be a union");
+      List<HoodieSchema> branches = fieldSchema.getTypes();
+      assertEquals(2, branches.size(), field.name() + " must be a two-branch union");
+      assertEquals(HoodieSchemaType.NULL, branches.get(0).getType(), field.name() + " must put null first");
+    }
   }
 
   @Test

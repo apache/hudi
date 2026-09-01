@@ -145,7 +145,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * <ul>
  *   <li>{@code unwrapNullable} (this class) - lenient: the first non-null branch of any union</li>
  *   <li>{@code getActualSchemaFromUnion} (this class, private) - resolves complex unions against the datum</li>
- *   <li>{@code AvroSchemaUtils#getNonNullTypeFromUnion} - strict: throws unless the union is exactly one null
+ *   <li>{@code getNonNullTypeFromUnion} (this class) - strict: throws unless the union is exactly one null
  *       branch and one non-null branch</li>
  *   <li>{@link HoodieSchema#getNonNullType()} - strips null branches and never throws</li>
  *   <li>{@code HoodieSchemaUtils#resolveUnionSchema} - selects a branch by full name</li>
@@ -387,6 +387,76 @@ public class HoodieAvroUtils {
     return new Schema.Field(name, schema, doc, convertDefaultValueForAvroCompatibility(defaultValue), order);
   }
 
+  /**
+   * Resolves typical Avro's nullable schema definition: {@code Union(Schema.Type.NULL, <NonNullType>)},
+   * decomposing union and returning the target non-null type
+   * <p>
+   * This is the strict variant: a non-union schema is returned as is, while a union must have exactly two
+   * branches of which exactly one is {@link Schema.Type#NULL}, otherwise a {@link HoodieAvroSchemaException}
+   * is thrown. For the lenient alternatives see {@code unwrapNullable} on this class (first non-null branch
+   * of any union) and {@link HoodieSchema#getNonNullType()} (strips null branches and never throws).
+   * </p>
+   */
+  public static Schema getNonNullTypeFromUnion(Schema schema) {
+    if (schema.getType() != Schema.Type.UNION) {
+      return schema;
+    }
+
+    List<Schema> innerTypes = schema.getTypes();
+
+    if (innerTypes.size() != 2) {
+      throw new HoodieAvroSchemaException(
+          String.format("Unsupported Avro UNION type %s: Only UNION of a null type and a non-null type is supported", schema));
+    }
+    Schema firstInnerType = innerTypes.get(0);
+    Schema secondInnerType = innerTypes.get(1);
+    if ((firstInnerType.getType() != Schema.Type.NULL && secondInnerType.getType() != Schema.Type.NULL)
+        || (firstInnerType.getType() == Schema.Type.NULL && secondInnerType.getType() == Schema.Type.NULL)) {
+      throw new HoodieAvroSchemaException(
+          String.format("Unsupported Avro UNION type %s: Only UNION of a null type and a non-null type is supported", schema));
+    }
+    return firstInnerType.getType() == Schema.Type.NULL ? secondInnerType : firstInnerType;
+  }
+
+  /**
+   * Returns true in case provided {@link Schema} is nullable (ie accepting null values),
+   * returns false otherwise
+   */
+  private static boolean isNullable(Schema schema) {
+    if (schema.getType() != Schema.Type.UNION) {
+      return false;
+    }
+
+    List<Schema> innerTypes = schema.getTypes();
+    return innerTypes.size() > 1 && innerTypes.stream().anyMatch(it -> it.getType() == Schema.Type.NULL);
+  }
+
+  /**
+   * Create a new schema but maintain all meta info from the old schema
+   *
+   * @param schema schema to get the meta info from
+   * @param fields list of fields in order that will be in the new schema
+   *
+   * @return schema with fields from fields, and metadata from schema
+   */
+  static Schema createNewSchemaFromFieldsWithReference(Schema schema, List<Schema.Field> fields) {
+    if (schema == null) {
+      throw new IllegalArgumentException("Schema must not be null");
+    }
+    Schema newSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), schema.isError());
+    Map<String, Object> schemaProps = Collections.emptyMap();
+    try {
+      schemaProps = schema.getObjectProps();
+    } catch (Exception e) {
+      log.warn("Error while getting object properties from schema: {}", schema, e);
+    }
+    for (Map.Entry<String, Object> prop : schemaProps.entrySet()) {
+      newSchema.addProp(prop.getKey(), prop.getValue());
+    }
+    newSchema.setFields(fields);
+    return newSchema;
+  }
+
   private static Schema removeFields(Schema schema, Set<String> fieldsToRemove) {
     List<Schema.Field> filteredFields = schema.getFields()
         .stream()
@@ -394,7 +464,7 @@ public class HoodieAvroUtils {
         .map(HoodieAvroUtils::createNewSchemaField)
         .collect(Collectors.toList());
 
-    return AvroSchemaUtils.createNewSchemaFromFieldsWithReference(schema, filteredFields);
+    return createNewSchemaFromFieldsWithReference(schema, filteredFields);
   }
 
   @VisibleForTesting
@@ -404,13 +474,13 @@ public class HoodieAvroUtils {
         .stream()
         .map(field -> {
           if (Objects.equals(field.name(), fieldName)) {
-            return createNewSchemaField(field.name(), AvroSchemaUtils.getNonNullTypeFromUnion(field.schema()), field.doc(), fieldDefaultValue);
+            return createNewSchemaField(field.name(), getNonNullTypeFromUnion(field.schema()), field.doc(), fieldDefaultValue);
           } else {
             return createNewSchemaField(field);
           }
         })
         .collect(Collectors.toList());
-    return AvroSchemaUtils.createNewSchemaFromFieldsWithReference(schema, filteredFields);
+    return createNewSchemaFromFieldsWithReference(schema, filteredFields);
   }
 
   /**
@@ -757,11 +827,11 @@ public class HoodieAvroUtils {
     if (fieldSchema == null) {
       return fieldValue;
     } else if (fieldValue == null) {
-      checkState(AvroSchemaUtils.isNullable(fieldSchema));
+      checkState(isNullable(fieldSchema));
       return null;
     }
 
-    return convertValueForAvroLogicalTypes(AvroSchemaUtils.getNonNullTypeFromUnion(fieldSchema), fieldValue, consistentLogicalTimestampEnabled);
+    return convertValueForAvroLogicalTypes(getNonNullTypeFromUnion(fieldSchema), fieldValue, consistentLogicalTimestampEnabled);
   }
 
   /**
@@ -1070,7 +1140,7 @@ public class HoodieAvroUtils {
             newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), newField.schema(), renameCols, fieldNames, false));
           } else if (newField.defaultVal() instanceof JsonProperties.Null) {
             newRecord.put(i, null);
-          } else if (!AvroSchemaUtils.isNullable(newField.schema()) && newField.defaultVal() == null) {
+          } else if (!isNullable(newField.schema()) && newField.defaultVal() == null) {
             throw new SchemaCompatibilityException("Field " + createFullName(fieldNames) + " has no default value and is non-nullable");
           } else {
             newRecord.put(i, newField.defaultVal());

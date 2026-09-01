@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.schema;
 
-import org.apache.hudi.common.avro.AvroSchemaUtils;
 import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.internal.HoodieSchemaException;
@@ -85,8 +84,8 @@ import java.util.stream.Stream;
  *   <li>the field-id InternalSchema (schema-on-read) domain: {@code org.apache.hudi.common.schema.internal}</li>
  * </ul>
  *
- * <p>A few methods here still delegate to Avro-typed implementations
- * ({@link #createNullableSchema(HoodieSchema)}, {@link #projectSchema(HoodieSchema, List)} and the 5-arg
+ * <p>A couple of methods here still delegate to Avro-typed implementations
+ * ({@link #projectSchema(HoodieSchema, List)} and the 5-arg
  * {@link #createNewSchemaField(String, HoodieSchema, String, Object, HoodieFieldOrder)}). Those delegations
  * are being retired under #16639; new methods must be implemented on HoodieSchema directly.</p>
  *
@@ -249,24 +248,6 @@ public final class HoodieSchemaUtils {
       }
     }
     return createNewSchemaFromFieldsWithReference(sourceSchema, fields);
-  }
-
-  /**
-   * Creates a nullable version of the given schema (union of null and the schema).
-   *
-   * <p>{@link HoodieSchema#createNullable(HoodieSchema)} is the idempotent native equivalent and is
-   * preferred; this overload round-trips through Avro and is retained only for existing call sites.</p>
-   *
-   * @param schema the input schema
-   * @return new HoodieSchema that allows null values
-   * @throws IllegalArgumentException if schema is null
-   */
-  public static HoodieSchema createNullableSchema(HoodieSchema schema) {
-    ValidationUtils.checkArgument(schema != null, "Schema cannot be null");
-
-    // Delegate to AvroSchemaUtils
-    Schema nullableAvro = AvroSchemaUtils.createNullableSchema(schema.toAvroSchema());
-    return HoodieSchema.fromAvroSchema(nullableAvro);
   }
 
   /**
