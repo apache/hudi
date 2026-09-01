@@ -19,7 +19,8 @@
 package org.apache.hudi.common.schema;
 
 /**
- * The single table of primitive widening promotions, used by {@link HoodieSchemaProjectionChecker}.
+ * The single table of primitive widening promotions, used by {@link HoodieSchemaProjectionChecker} and, for the
+ * primitive cases, by {@link HoodieSchemaCompatibilityChecker}.
  *
  * <p>A promotion lets a reader schema with a wider type read data written with a narrower one:</p>
  * <ul>

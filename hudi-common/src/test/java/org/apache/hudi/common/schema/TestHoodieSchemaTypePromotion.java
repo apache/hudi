@@ -86,6 +86,11 @@ public class TestHoodieSchemaTypePromotion {
     assertFalse(HoodieSchemaTypePromotion.canPromote(HoodieSchemaType.BOOLEAN, HoodieSchemaType.INT));
     assertFalse(HoodieSchemaTypePromotion.canPromote(HoodieSchemaType.INT, HoodieSchemaType.BOOLEAN));
     assertFalse(HoodieSchemaTypePromotion.canPromote(HoodieSchemaType.LONG, HoodieSchemaType.STRING));
+    // Logical-type-over-primitive pairs are reader/writer compatibility rules only (see
+    // HoodieSchemaCompatibilityChecker); they must never be reported as compatible projections.
+    assertFalse(HoodieSchemaTypePromotion.canPromote(HoodieSchemaType.TIMESTAMP, HoodieSchemaType.LONG));
+    assertFalse(HoodieSchemaTypePromotion.canPromote(HoodieSchemaType.UUID, HoodieSchemaType.STRING));
+    assertFalse(HoodieSchemaTypePromotion.canPromote(HoodieSchemaType.DATE, HoodieSchemaType.INT));
   }
 
   @Test
