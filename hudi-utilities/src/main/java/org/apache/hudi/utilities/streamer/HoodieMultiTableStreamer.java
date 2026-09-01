@@ -23,6 +23,7 @@ import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -51,10 +52,17 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.HoodieSchemaProviderConfig.SCHEMA_REGISTRY_BASE_URL;
@@ -79,12 +87,16 @@ public class HoodieMultiTableStreamer {
   private transient JavaSparkContext jssc;
   private final Set<String> successTables;
   private final Set<String> failedTables;
+  @Getter(AccessLevel.NONE)
+  private final boolean failFastOnContinuousMode;
 
   public HoodieMultiTableStreamer(Config config, JavaSparkContext jssc) throws IOException {
     this.tableExecutionContexts = new ArrayList<>();
-    this.successTables = new HashSet<>();
-    this.failedTables = new HashSet<>();
+    // In continuous mode tables are synced concurrently, so use thread-safe sets.
+    this.successTables = ConcurrentHashMap.newKeySet();
+    this.failedTables = ConcurrentHashMap.newKeySet();
     this.jssc = jssc;
+    this.failFastOnContinuousMode = config.failFastOnContinuousMode;
     String commonPropsFile = config.propsFilePath;
     String configFolder = config.configFolder;
     ValidationUtils.checkArgument(!config.filterDupes || config.operation != WriteOperationType.UPSERT,
@@ -389,6 +401,12 @@ public class HoodieMultiTableStreamer {
         + " source-fetch -> Transform -> Hudi Write in loop")
     public Boolean continuousMode = false;
 
+    @Parameter(names = {"--fail-fast-on-continuous"},
+        description = "Only applies in continuous mode. When enabled, the failure of any single table sync fails the "
+            + "whole job. The remaining table syncs are shut down and the process exits with a non-zero status. When "
+            + "disabled (default), each table is synced independently and a single failure does not stop the others.")
+    public Boolean failFastOnContinuousMode = false;
+
     @Parameter(names = {"--min-sync-interval-seconds"},
         description = "the min sync interval of each sync in continuous mode")
     public Integer minSyncIntervalSeconds = 0;
@@ -461,8 +479,25 @@ public class HoodieMultiTableStreamer {
 
   /**
    * Creates actual HoodieDeltaStreamer objects for every table/topic and does incremental sync.
+   *
+   * <p>In continuous mode each table's sync blocks until it is shut down, so the tables are synced concurrently.
+   * Otherwise the tables are synced sequentially, one after another.
    */
   public void sync() {
+    boolean isContinuous = !tableExecutionContexts.isEmpty() && tableExecutionContexts.get(0).getConfig().continuousMode;
+    if (isContinuous) {
+      syncContinuously();
+    } else {
+      syncSequentially();
+    }
+
+    log.info("Ingestion was successful for topics: {}", successTables);
+    if (!failedTables.isEmpty()) {
+      log.info("Ingestion failed for topics: {}", failedTables);
+    }
+  }
+
+  private void syncSequentially() {
     for (TableExecutionContext context : tableExecutionContexts) {
       HoodieStreamer streamer = null;
       try {
@@ -479,10 +514,138 @@ public class HoodieMultiTableStreamer {
         }
       }
     }
+  }
 
-    log.info("Ingestion was successful for topics: {}", successTables);
-    if (!failedTables.isEmpty()) {
-      log.info("Ingestion failed for topics: {}", failedTables);
+  /**
+   * Syncs all tables concurrently, one thread per table. Used for continuous mode where each table's sync blocks
+   * indefinitely.
+   *
+   * <p>When {@code --fail-fast-on-continuous} is enabled, the first table failure fails the whole job. The sibling
+   * streamers are shut down and a {@link HoodieException} is thrown so the caller can exit with a non-zero status.
+   * Otherwise, every table is synced independently and a single failure does not affect the others.
+   */
+  private void syncContinuously() {
+    // Streamer instances are registered from worker threads, so a thread-safe list is required.
+    final List<HoodieStreamer> streamerInstances = new CopyOnWriteArrayList<>();
+    // Set once fail fast trips, so tasks that register their streamer afterwards stop before starting the sync.
+    final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
+    final ExecutorService executor = Executors.newFixedThreadPool(tableExecutionContexts.size(),
+        new CustomizedThreadFactory("multi-table-streamer", true));
+    boolean terminated = false;
+    try {
+      final CompletableFuture<?>[] tableFutures = tableExecutionContexts.stream()
+          .map(context -> CompletableFuture.runAsync(() -> {
+            HoodieStreamer streamer = null;
+            try {
+              streamer = new HoodieStreamer(context.getConfig(), jssc, Option.ofNullable(context.getProperties()));
+              streamerInstances.add(streamer);
+              // Register before checking the flag so a concurrent shutdownStreamers() always sees this streamer.
+              if (shutdownRequested.get()) {
+                return;
+              }
+              streamer.sync();
+              successTables.add(Helpers.getTableWithDatabase(context));
+            } catch (Exception e) {
+              log.error("error while running MultiTableDeltaStreamer for table: {}", context.getTableName(), e);
+              failedTables.add(Helpers.getTableWithDatabase(context));
+              if (failFastOnContinuousMode) {
+                throw new CompletionException(e);
+              }
+            } finally {
+              if (streamer != null) {
+                streamer.shutdownGracefully();
+              }
+            }
+          }, executor)).toArray(CompletableFuture[]::new);
+
+      if (failFastOnContinuousMode) {
+        log.info("Fail fast enabled in continuous mode. The whole job fails on any single table failure");
+        awaitFailFast(tableFutures, streamerInstances, shutdownRequested);
+      } else {
+        CompletableFuture.allOf(tableFutures).join();
+      }
+      log.info("Successful tables: {}, Failed tables: {}", successTables, failedTables);
+    } finally {
+      // Wait for every worker thread to finish (including its finally cleanup) before returning, so sync() does not
+      // return while a table is still writing and main() then stops the shared Spark context under it.
+      terminated = shutdownExecutor(executor);
+    }
+    // If the workers never terminated, ingestion may still be running. Fail loudly instead of returning as if the
+    // cleanup succeeded, so the caller does not silently proceed to Spark teardown with live writers.
+    if (!terminated) {
+      throw new HoodieException("Timed out shutting down table ingestion workers in continuous mode");
+    }
+  }
+
+  /**
+   * Waits until either every table sync finishes successfully or the first one fails. On the first failure, the
+   * remaining streamers are shut down and a {@link HoodieException} is thrown. Unlike {@code anyOf(...)}, this only
+   * trips on an <em>exceptional</em> completion, so a table that terminates normally (e.g. via a
+   * {@link PostWriteTerminationStrategy}) does not abort its siblings.
+   */
+  private void awaitFailFast(CompletableFuture<?>[] tableFutures, List<HoodieStreamer> streamerInstances, AtomicBoolean shutdownRequested) {
+    final CompletableFuture<Void> firstOutcome = new CompletableFuture<>();
+    // Trip as soon as any table fails ...
+    for (CompletableFuture<?> tableFuture : tableFutures) {
+      tableFuture.whenComplete((result, throwable) -> {
+        if (throwable != null) {
+          firstOutcome.completeExceptionally(throwable);
+        }
+      });
+    }
+    // ... or complete normally once every table has finished without failure.
+    CompletableFuture.allOf(tableFutures).whenComplete((result, throwable) -> {
+      if (throwable == null) {
+        firstOutcome.complete(null);
+      }
+    });
+
+    try {
+      firstOutcome.join();
+    } catch (CompletionException e) {
+      Throwable cause = e.getCause() != null ? e.getCause() : e;
+      log.error("error while running MultiTableDeltaStreamer, shutting down remaining tables as fail fast is enabled", cause);
+      shutdownRequested.set(true);
+      // shutdownStreamers only interrupts; the executor teardown in syncContinuously() waits for the siblings to stop.
+      shutdownStreamers(streamerInstances);
+      throw new HoodieException("Fail fast is enabled and a table sync failed in continuous mode.", cause);
+    }
+  }
+
+  /**
+   * Two-phase shutdown of the per-table executor: wait for the running syncs to finish, then force-cancel any that
+   * ignore interruption. Bounded by {@link Constants#SHUTDOWN_TIMEOUT_SECONDS} so a stuck table cannot hang the job.
+   *
+   * @return true if all workers terminated, false if any were still running when the timeout elapsed.
+   */
+  private boolean shutdownExecutor(ExecutorService executor) {
+    executor.shutdown();
+    try {
+      if (executor.awaitTermination(Constants.SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+        return true;
+      }
+      executor.shutdownNow();
+      if (executor.awaitTermination(Constants.SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+        return true;
+      }
+      log.error("executor service did not terminate after shutdown");
+      return false;
+    } catch (InterruptedException e) {
+      executor.shutdownNow();
+      Thread.currentThread().interrupt();
+      return false;
+    }
+  }
+
+  private void shutdownStreamers(List<HoodieStreamer> streamerInstances) {
+    for (HoodieStreamer streamer : streamerInstances) {
+      try {
+        if (!streamer.getIngestionService().isShutdown()) {
+          streamer.getIngestionService().shutdown(true);
+        }
+      } catch (Exception e) {
+        log.warn("error while shutting down a streamer instance during fail fast handling", e);
+      }
     }
   }
 
@@ -497,5 +660,7 @@ public class HoodieMultiTableStreamer {
     private static final String DELIMITER = ".";
     private static final String UNDERSCORE = "_";
     private static final String COMMA_SEPARATOR = ",";
+    // How long each phase of the executor shutdown waits for running table syncs to terminate.
+    private static final long SHUTDOWN_TIMEOUT_SECONDS = 60;
   }
 }
