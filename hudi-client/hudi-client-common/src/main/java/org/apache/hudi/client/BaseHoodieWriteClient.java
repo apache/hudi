@@ -182,10 +182,17 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
                                Option<EmbeddedTimelineService> timelineService,
                                SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     super(context, writeConfig, timelineService);
-    this.index = createIndex(writeConfig);
-    this.upgradeDowngradeHelper = upgradeDowngradeHelper;
-    this.metrics.emitVersionMetrics();
-    this.metrics.emitIndexTypeMetrics(config.getIndexType().ordinal());
+    HoodieIndex<?, ?> createdIndex = null;
+    try {
+      createdIndex = createIndex(writeConfig);
+      this.index = createdIndex;
+      this.upgradeDowngradeHelper = upgradeDowngradeHelper;
+      this.metrics.emitVersionMetrics();
+      this.metrics.emitIndexTypeMetrics(config.getIndexType().ordinal());
+    } catch (RuntimeException | Error e) {
+      releaseAfterFailedInit(createdIndex, e);
+      throw e;
+    }
   }
 
   @VisibleForTesting
@@ -196,9 +203,32 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
                         TransactionManager transactionManager,
                         TimeGenerator timeGenerator) {
     super(context, writeConfig, timelineService, transactionManager, timeGenerator);
-    this.index = createIndex(writeConfig);
-    this.upgradeDowngradeHelper = upgradeDowngradeHelper;
-    this.metrics.emitIndexTypeMetrics(config.getIndexType().ordinal());
+    HoodieIndex<?, ?> createdIndex = null;
+    try {
+      createdIndex = createIndex(writeConfig);
+      this.index = createdIndex;
+      this.upgradeDowngradeHelper = upgradeDowngradeHelper;
+      this.metrics.emitIndexTypeMetrics(config.getIndexType().ordinal());
+    } catch (RuntimeException | Error e) {
+      releaseAfterFailedInit(createdIndex, e);
+      throw e;
+    }
+  }
+
+  /**
+   * The base constructor has already returned, so its resources are live but close() is still
+   * unreachable. Release the index this class had got as far as creating, then let the base release
+   * its own.
+   */
+  private void releaseAfterFailedInit(HoodieIndex<?, ?> createdIndex, Throwable initFailure) {
+    if (createdIndex != null) {
+      try {
+        createdIndex.close();
+      } catch (Exception e) {
+        initFailure.addSuppressed(e);
+      }
+    }
+    releaseAfterFailedInit(initFailure);
   }
 
   protected abstract HoodieIndex<?, ?> createIndex(HoodieWriteConfig writeConfig);
@@ -1675,19 +1705,22 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       // before this point
       this.index.close();
     } catch (Exception e) {
-      failure = failure == null ? e : addSuppressed(failure, e);
+      failure = appendFailure(failure, e);
     }
     try {
       this.tableServiceClient.close();
     } catch (Exception e) {
-      failure = failure == null ? e : addSuppressed(failure, e);
+      failure = appendFailure(failure, e);
     }
     if (failure != null) {
       throw failure instanceof RuntimeException ? (RuntimeException) failure : new HoodieException(failure);
     }
   }
 
-  private static Exception addSuppressed(Exception previousFailure, Exception failure) {
+  private static Exception appendFailure(Exception previousFailure, Exception failure) {
+    if (previousFailure == null) {
+      return failure;
+    }
     previousFailure.addSuppressed(failure);
     return previousFailure;
   }

@@ -656,6 +656,36 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     verify(transactionManager).close();
   }
 
+  /**
+   * The base constructor returns before the subclass constructor body runs, so its resources are
+   * already live while close() is still unreachable. Whatever the subclass does next has to release
+   * them if it throws.
+   */
+  @Test
+  void testResourcesAreReleasedWhenSubclassConstructionFails() throws IOException {
+    initMetaClient();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withEmbeddedTimelineServerEnabled(false)
+        .build();
+
+    TransactionManager transactionManager = mock(TransactionManager.class);
+    TimeGenerator timeGenerator = mock(TimeGenerator.class);
+    RuntimeException indexFailure = new RuntimeException("index cannot be created");
+
+    RuntimeException thrown = assertThrows(RuntimeException.class,
+        () -> new TestWriteClient(writeConfig, mock(HoodieTable.class), Option.empty(),
+            mock(BaseHoodieTableServiceClient.class), transactionManager, timeGenerator) {
+              @Override
+              protected HoodieIndex<?, ?> createIndex(HoodieWriteConfig config) {
+                throw indexFailure;
+              }
+            });
+    assertSame(indexFailure, thrown);
+
+    verify(transactionManager).close();
+  }
+
   public static class ThrowingClientInitCallback implements HoodieClientInitCallback {
     @Override
     public void call(BaseHoodieClient hoodieClient) {

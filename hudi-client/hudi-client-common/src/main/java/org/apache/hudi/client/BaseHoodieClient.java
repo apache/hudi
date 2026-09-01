@@ -155,9 +155,10 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   /**
    * Releases what the constructor already acquired, for the case where it cannot hand back an instance.
    * This mirrors {@link #close()} but must not call it, because subclasses override close() and it would
-   * then run against a half-built object.
+   * then run against a half-built object. Subclasses call this from their own constructor once they have
+   * released whatever they added on top.
    */
-  private void releaseAfterFailedInit(Throwable initFailure) {
+  protected final void releaseAfterFailedInit(Throwable initFailure) {
     try {
       stopEmbeddedServerView(true);
     } catch (Exception e) {
