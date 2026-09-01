@@ -183,6 +183,8 @@ class DefaultSource extends RelationProvider
     try {
       if (effectiveOpts.get(OPERATION.key).contains(BOOTSTRAP_OPERATION_OPT_VAL)) {
         HoodieSparkSqlWriter.bootstrap(sqlContext, mode, effectiveOpts, df)
+      } else if (isDataFrameWritePathEnabled(effectiveOpts)) {
+        runDataFrameWritePath(sqlContext, mode, effectiveOpts, df)
       } else {
         val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sqlContext, mode, effectiveOpts, df)
         if (!success) {
@@ -195,6 +197,41 @@ class DefaultSource extends RelationProvider
     }
 
     new HoodieEmptyRelation(sqlContext, df.schema)
+  }
+
+  /**
+   * The DataFrame-native write path handles insert and upsert; anything else stays on the
+   * legacy writer even when the flag is on.
+   */
+  private def isDataFrameWritePathEnabled(opts: Map[String, String]): Boolean = {
+    val enabled = opts.getOrElse(DefaultSource.DATAFRAME_WRITE_PATH_ENABLE, "false").toBoolean
+    if (!enabled) {
+      false
+    } else {
+      val operation = opts.getOrElse(OPERATION.key, DataSourceWriteOptions.OPERATION.defaultValue())
+      val eligible = operation == DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL ||
+        operation == DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL
+      if (!eligible) {
+        log.warn(s"DataFrame write path is enabled but operation '$operation' is not supported "
+          + "by it; falling back to the legacy write path")
+      }
+      eligible
+    }
+  }
+
+  /**
+   * Invokes the DataFrame write path reflectively: hudi-spark-dataframe depends on the client
+   * modules only, so the datasource reaches it by name to keep the dependency arrow pointing
+   * one way.
+   */
+  private def runDataFrameWritePath(sqlContext: SQLContext,
+                                    mode: SaveMode,
+                                    opts: Map[String, String],
+                                    df: DataFrame): Unit = {
+    val writerClass = getClass.getClassLoader.loadClass(DefaultSource.DATAFRAME_WRITER_CLASS)
+    val method = writerClass.getMethod("write",
+      classOf[SQLContext], classOf[SaveMode], classOf[Map[String, String]], classOf[DataFrame])
+    method.invoke(null, sqlContext, mode, opts, df)
   }
 
   override def createSink(sqlContext: SQLContext,
@@ -300,6 +337,10 @@ class DefaultSource extends RelationProvider
 object DefaultSource {
 
   private val log = LoggerFactory.getLogger(classOf[DefaultSource])
+
+  val DATAFRAME_WRITE_PATH_ENABLE = "hoodie.datasource.write.dataframe.path.enable"
+
+  val DATAFRAME_WRITER_CLASS = "org.apache.hudi.dataframe.HoodieDataFrameWriter"
 
   def createRelation(sqlContext: SQLContext,
                      metaClient: HoodieTableMetaClient,
