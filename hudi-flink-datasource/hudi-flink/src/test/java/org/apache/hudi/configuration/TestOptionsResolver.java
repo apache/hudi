@@ -412,16 +412,16 @@ public class TestOptionsResolver {
     Configuration conf = new Configuration();
     conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
     conf.set(FlinkOptions.INDEX_RLI_BACKEND_TYPE, "mdt");
-    assertFalse(OptionsResolver.isPartitionedRLIWithRocksDBBackend(conf));
+    assertFalse(OptionsResolver.isTimeBoundedRLIBootstrapEnabled(conf));
 
     conf.set(FlinkOptions.INDEX_RLI_BACKEND_TYPE, "rocksdb");
-    assertTrue(OptionsResolver.isPartitionedRLIWithRocksDBBackend(conf));
+    assertFalse(OptionsResolver.isTimeBoundedRLIBootstrapEnabled(conf));
     conf.set(FlinkOptions.INDEX_RLI_BACKEND_TYPE, "RocksDB");
-    assertTrue(OptionsResolver.isPartitionedRLIWithRocksDBBackend(conf));
+    assertFalse(OptionsResolver.isTimeBoundedRLIBootstrapEnabled(conf));
 
     // Only applies to partitioned (non-global) record level index.
     conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
-    assertFalse(OptionsResolver.isPartitionedRLIWithRocksDBBackend(conf));
+    assertFalse(OptionsResolver.isTimeBoundedRLIBootstrapEnabled(conf));
   }
 
   @Test

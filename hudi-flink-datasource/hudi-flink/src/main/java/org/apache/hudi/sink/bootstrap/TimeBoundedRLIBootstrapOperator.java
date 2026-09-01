@@ -26,7 +26,9 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.common.util.hash.BucketIndexUtil;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -41,7 +43,6 @@ import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -61,20 +62,27 @@ import java.util.stream.Collectors;
  * entirely, which is the expected fallback for non-temporal (non date-partitioned) tables.
  */
 @Slf4j
-public class PartitionedRLIBootstrapOperator
+public class TimeBoundedRLIBootstrapOperator
     extends AbstractBootstrapOperator {
 
   private transient HoodieBackedTableMetadata tableMetadata;
   private transient long loadedCnt;
+  private int parallelism;
+  private int taskID;
+  /**
+   * Functions for calculating the task partition to dispatch.
+   */
+  @VisibleForTesting
+  Functions.Function3<Integer, String, Integer, Integer> partitionIndexFunc;
 
-  public PartitionedRLIBootstrapOperator(Configuration conf) {
+  public TimeBoundedRLIBootstrapOperator(Configuration conf) {
     super(conf);
   }
 
   @Override
   public void initializeState(StateInitializationContext context) throws Exception {
     loadedCnt = 0;
-    int taskID = RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext());
+    this.taskID = RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext());
 
     int bootstrapDays = conf.get(FlinkOptions.INDEX_RLI_CACHE_ROCKSDB_BOOTSTRAP_DAYS);
     if (bootstrapDays <= 0) {
@@ -87,6 +95,8 @@ public class PartitionedRLIBootstrapOperator
     HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
     this.tableMetadata = createTableMetadata(metaClient);
 
+    this.parallelism = RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext());
+    this.partitionIndexFunc = BucketIndexUtil.getPartitionIndexFunc(parallelism);
     preLoadPartitionedRLIRecords(metaClient.getTableConfig(), bootstrapDays);
   }
 
@@ -110,9 +120,6 @@ public class PartitionedRLIBootstrapOperator
   }
 
   private void preLoadPartitionedRLIRecords(HoodieTableConfig tableConfig, int bootstrapDays) {
-    int taskID = RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext());
-    int parallelism = RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext());
-
     if (!tableMetadata.enabled()) {
       if (tableConfig.isMetadataTableAvailable()) {
         throw new RuntimeException("Can not initialize the table metadata");
@@ -155,7 +162,7 @@ public class PartitionedRLIBootstrapOperator
   private void preLoadPartition(String partitionPath, List<FileSlice> fileSlices, int taskID, int parallelism) {
     List<FileSlice> filteredFileSlices = new ArrayList<>();
     for (int i = 0; i < fileSlices.size(); i++) {
-      if (shouldLoadBucket(i, parallelism, taskID)) {
+      if (shouldLoadBucket(partitionPath, fileSlices.size(), i, taskID)) {
         filteredFileSlices.add(fileSlices.get(i));
       }
     }
@@ -185,12 +192,13 @@ public class PartitionedRLIBootstrapOperator
   }
 
   /**
-   * Determines if the given file group should be loaded by this task.
-   * Uses round-robin assignment: file group i is assigned to task (i % parallelism).
+   * Determines if the given file group should be loaded by this task, using the same
+   * partition-aware assignment as the write path (see {@link BucketIndexUtil#getPartitionIndexFunc}),
+   * so that each file group is bootstrapped by the same task that owns it during writes.
    */
   @VisibleForTesting
-  boolean shouldLoadBucket(int fileGroupIdx, int parallelism, int taskID) {
-    return fileGroupIdx % parallelism == taskID;
+  boolean shouldLoadBucket(String partitionPath, int fileGroupCount, int fileGroupIdx, int taskID) {
+    return partitionIndexFunc.apply(fileGroupCount, partitionPath, fileGroupIdx) == taskID;
   }
 
   /**
@@ -207,29 +215,12 @@ public class PartitionedRLIBootstrapOperator
 
     List<String> partitionsInWindow = new ArrayList<>();
     for (String partitionPath : partitionPaths) {
-      LocalDate partitionDate = parsePartitionDate(partitionPath, formatter, hiveStylePartitioning);
+      LocalDate partitionDate = StreamerUtil.parsePartitionDate(partitionPath, formatter, hiveStylePartitioning);
       if (partitionDate != null && partitionDate.isAfter(cutoff) && !partitionDate.isAfter(today)) {
         partitionsInWindow.add(partitionPath);
       }
     }
     return partitionsInWindow;
-  }
-
-  private LocalDate parsePartitionDate(String partitionPath, DateTimeFormatter formatter, boolean hiveStylePartitioning) {
-    String dateValue = partitionPath;
-    if (hiveStylePartitioning) {
-      int idx = partitionPath.indexOf('=');
-      if (idx >= 0) {
-        dateValue = partitionPath.substring(idx + 1);
-      }
-    }
-    try {
-      return LocalDate.parse(dateValue, formatter);
-    } catch (DateTimeParseException e) {
-      log.warn("Skip preloading partition {} because its path cannot be parsed as a date with format {}",
-          partitionPath, formatter, e);
-      return null;
-    }
   }
 
   private void closeMetadataTable() {

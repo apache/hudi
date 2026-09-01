@@ -269,8 +269,10 @@ public class OptionsResolver {
    * Returns whether the table uses partitioned record level index served by the local RocksDB-based
    * partitioned index cache, i.e. {@link FlinkOptions#INDEX_RLI_BACKEND_TYPE} is configured as {@code rocksdb}.
    */
-  public static boolean isPartitionedRLIWithRocksDBBackend(Configuration conf) {
-    return isRecordLevelIndex(conf) && ROCKSDB_INDEX_RLI_BACKEND_TYPE.equalsIgnoreCase(conf.get(FlinkOptions.INDEX_RLI_BACKEND_TYPE));
+  public static boolean isTimeBoundedRLIBootstrapEnabled(Configuration conf) {
+    return isRecordLevelIndex(conf)
+            && ROCKSDB_INDEX_RLI_BACKEND_TYPE.equalsIgnoreCase(conf.get(FlinkOptions.INDEX_RLI_BACKEND_TYPE))
+            && conf.get(FlinkOptions.INDEX_RLI_CACHE_ROCKSDB_BOOTSTRAP_DAYS) > 0;
   }
 
   /**

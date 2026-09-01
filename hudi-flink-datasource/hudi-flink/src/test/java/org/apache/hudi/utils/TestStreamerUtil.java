@@ -66,6 +66,8 @@ import org.mockito.Mockito;
 
 import java.io.File;
 import java.io.IOException;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -358,6 +360,26 @@ class TestStreamerUtil {
 
     assertTrue(new File(tempFile, "dt=2026-08-06").mkdir());
     assertTrue(StreamerUtil.partitionExists(tempFile.getAbsolutePath(), "dt=2026-08-06", hadoopConf));
+  }
+
+  @Test
+  void testParsePartitionDate() {
+    DateTimeFormatter dayFormatter = DateTimeFormatter.ofPattern(FlinkOptions.PARTITION_FORMAT_DAY);
+    assertEquals(LocalDate.of(2026, 8, 6), StreamerUtil.parsePartitionDate("20260806", dayFormatter, false));
+
+    DateTimeFormatter dashedDayFormatter = DateTimeFormatter.ofPattern(FlinkOptions.PARTITION_FORMAT_DASHED_DAY);
+    assertEquals(LocalDate.of(2026, 8, 6), StreamerUtil.parsePartitionDate("2026-08-06", dashedDayFormatter, false));
+
+    assertEquals(LocalDate.of(2026, 8, 6), StreamerUtil.parsePartitionDate("dt=20260806", dayFormatter, true));
+
+    // hiveStylePartitioning=false must not strip the "dt=" prefix, so parsing fails.
+    assertNull(StreamerUtil.parsePartitionDate("dt=20260806", dayFormatter, false));
+
+    // no '=' present, hive-style parsing falls back to the raw path.
+    assertEquals(LocalDate.of(2026, 8, 6), StreamerUtil.parsePartitionDate("20260806", dayFormatter, true));
+
+    assertNull(StreamerUtil.parsePartitionDate("not-a-date", dayFormatter, false));
+    assertNull(StreamerUtil.parsePartitionDate("2026-08-06", dayFormatter, false));
   }
 
   @Test

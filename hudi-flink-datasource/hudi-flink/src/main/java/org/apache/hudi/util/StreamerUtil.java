@@ -92,6 +92,9 @@ import org.apache.parquet.hadoop.ParquetFileWriter;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -1024,5 +1027,22 @@ public class StreamerUtil {
           + "Validation will skip previous-commit checks.", e);
     }
     return Option.empty();
+  }
+
+  public static LocalDate parsePartitionDate(String partitionPath, DateTimeFormatter formatter, boolean hiveStylePartitioning) {
+    String dateValue = partitionPath;
+    if (hiveStylePartitioning) {
+      int idx = partitionPath.indexOf('=');
+      if (idx >= 0) {
+        dateValue = partitionPath.substring(idx + 1);
+      }
+    }
+    try {
+      return LocalDate.parse(dateValue, formatter);
+    } catch (DateTimeParseException e) {
+      log.warn("Skip preloading partition {} because its path cannot be parsed as a date with format {}",
+              partitionPath, formatter, e);
+      return null;
+    }
   }
 }

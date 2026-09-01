@@ -35,8 +35,8 @@ import org.apache.hudi.sink.append.AppendWriteFunctions;
 import org.apache.hudi.sink.append.AppendWriteOperator;
 import org.apache.hudi.sink.bootstrap.AbstractBootstrapOperator;
 import org.apache.hudi.sink.bootstrap.BootstrapOperator;
-import org.apache.hudi.sink.bootstrap.PartitionedRLIBootstrapOperator;
 import org.apache.hudi.sink.bootstrap.RLIBootstrapOperator;
+import org.apache.hudi.sink.bootstrap.TimeBoundedRLIBootstrapOperator;
 import org.apache.hudi.sink.bootstrap.batch.BatchBootstrapOperator;
 import org.apache.hudi.sink.bucket.BucketBulkInsertWriterHelper;
 import org.apache.hudi.sink.bucket.BucketStreamWriteOperator;
@@ -432,8 +432,8 @@ public class Pipelines {
       AbstractBootstrapOperator bootstrapOperator;
       if (isGlobalRLI) {
         bootstrapOperator = new RLIBootstrapOperator(conf);
-      } else if (OptionsResolver.isPartitionedRLIWithRocksDBBackend(conf)) {
-        bootstrapOperator = new PartitionedRLIBootstrapOperator(conf);
+      } else if (OptionsResolver.isTimeBoundedRLIBootstrapEnabled(conf)) {
+        bootstrapOperator = new TimeBoundedRLIBootstrapOperator(conf);
       } else {
         bootstrapOperator = new BootstrapOperator(conf);
       }

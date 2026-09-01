@@ -25,7 +25,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.sink.bootstrap.PartitionedRLIBootstrapOperator;
+import org.apache.hudi.sink.bootstrap.TimeBoundedRLIBootstrapOperator;
 import org.apache.hudi.sink.partitioner.GlobalRecordIndexPartitioner;
 import org.apache.hudi.utils.TestConfigurations;
 
@@ -111,6 +111,7 @@ public class TestPipelines {
     conf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, false);
     conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
     conf.set(FlinkOptions.INDEX_RLI_BACKEND_TYPE, "rocksdb");
+    conf.set(FlinkOptions.INDEX_RLI_CACHE_ROCKSDB_BOOTSTRAP_DAYS, 1);
     conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
     DataStream<RowData> input = rowDataInput();
 
@@ -118,7 +119,7 @@ public class TestPipelines {
         Pipelines.bootstrap(conf, TestConfigurations.ROW_TYPE, input, false, false);
 
     assertEquals("index_bootstrap", streaming.getTransformation().getName());
-    assertInstanceOf(PartitionedRLIBootstrapOperator.class, bootstrapOperator(streaming));
+    assertInstanceOf(TimeBoundedRLIBootstrapOperator.class, bootstrapOperator(streaming));
   }
 
   private Object bootstrapOperator(DataStream<HoodieFlinkInternalRow> stream) {
