@@ -62,7 +62,7 @@ public class DistributedRegistry extends AccumulatorV2<Map<String, Long>, Map<St
       jsc.sc().register(fresh);
       Registry.REGISTRY_MAP.forEach((key, registry) -> {
         if (registry == this) {
-          Registry.REGISTRY_MAP.put(key, fresh);
+          Registry.REGISTRY_MAP.replace(key, this, fresh);
         }
       });
       return fresh;

@@ -269,11 +269,12 @@ public class TestDistributedRegistry {
 
     // Simulate SparkContext restart: stop and create a new one
     jsc.stop();
-    SparkConf conf = HoodieClientTestUtils.getSparkConfForTest(
-        TestDistributedRegistry.class.getSimpleName() + "_stale");
-    JavaSparkContext jsc2 = new JavaSparkContext(conf);
-
+    JavaSparkContext jsc2 = null;
     try {
+      SparkConf conf = HoodieClientTestUtils.getSparkConfForTest(
+          TestDistributedRegistry.class.getSimpleName() + "_stale");
+      jsc2 = new JavaSparkContext(conf);
+
       // When: register() is called with the new SparkContext
       // In local mode, isRegistered() may still return true since AccumulatorContext
       // persists across stop/start. Force the stale path by calling register on jsc2.
@@ -292,7 +293,9 @@ public class TestDistributedRegistry {
       Assertions.assertEquals(200, counts.get(METRIC_2));
     } finally {
       Registry.REGISTRY_MAP.remove(cacheKey);
-      jsc2.stop();
+      if (jsc2 != null) {
+        jsc2.stop();
+      }
       // Restore class-level SparkContext for other tests
       jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest(
           TestDistributedRegistry.class.getSimpleName()));
