@@ -81,6 +81,9 @@ public class OptionsResolver {
   // Value to override the default minimum file group count for global record level index.
   public static String GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_DEFAULT = "8";
 
+  // Value of FlinkOptions#INDEX_RLI_BACKEND_TYPE that selects the local RocksDB-based partitioned index cache.
+  private static final String ROCKSDB_INDEX_RLI_BACKEND_TYPE = "rocksdb";
+
   /**
    * Returns whether the current runtime mode is adaptive batch execution.
    */
@@ -260,6 +263,14 @@ public class OptionsResolver {
   public static boolean isGlobalRecordLevelIndex(Configuration conf) {
     HoodieIndex.IndexType indexType = OptionsResolver.getIndexType(conf);
     return indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX;
+  }
+
+  /**
+   * Returns whether the table uses partitioned record level index served by the local RocksDB-based
+   * partitioned index cache, i.e. {@link FlinkOptions#INDEX_RLI_BACKEND_TYPE} is configured as {@code rocksdb}.
+   */
+  public static boolean isPartitionedRLIWithRocksDBBackend(Configuration conf) {
+    return isRecordLevelIndex(conf) && ROCKSDB_INDEX_RLI_BACKEND_TYPE.equalsIgnoreCase(conf.get(FlinkOptions.INDEX_RLI_BACKEND_TYPE));
   }
 
   /**

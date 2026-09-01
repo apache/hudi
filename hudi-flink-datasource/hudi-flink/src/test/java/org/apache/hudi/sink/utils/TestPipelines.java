@@ -25,6 +25,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.sink.bootstrap.PartitionedRLIBootstrapOperator;
 import org.apache.hudi.sink.partitioner.GlobalRecordIndexPartitioner;
 import org.apache.hudi.utils.TestConfigurations;
 
@@ -34,6 +35,8 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSink;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.operators.SimpleOperatorFactory;
+import org.apache.flink.streaming.api.transformations.OneInputTransformation;
 import org.apache.flink.streaming.api.transformations.PartitionTransformation;
 import org.apache.flink.streaming.runtime.partitioner.CustomPartitionerWrapper;
 import org.apache.flink.streaming.runtime.partitioner.StreamPartitioner;
@@ -48,6 +51,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -99,6 +103,27 @@ public class TestPipelines {
         Pipelines.bootstrap(conf, TestConfigurations.ROW_TYPE, input, false, false);
     assertEquals("index_bootstrap", streaming.getTransformation().getName());
     assertEquals(3, streaming.getParallelism());
+  }
+
+  @Test
+  void testPartitionedRLIWithRocksDBBackendUsesPartitionedRLIBootstrapOperator() {
+    Configuration conf = defaultConf();
+    conf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, false);
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
+    conf.set(FlinkOptions.INDEX_RLI_BACKEND_TYPE, "rocksdb");
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+    DataStream<RowData> input = rowDataInput();
+
+    DataStream<HoodieFlinkInternalRow> streaming =
+        Pipelines.bootstrap(conf, TestConfigurations.ROW_TYPE, input, false, false);
+
+    assertEquals("index_bootstrap", streaming.getTransformation().getName());
+    assertInstanceOf(PartitionedRLIBootstrapOperator.class, bootstrapOperator(streaming));
+  }
+
+  private Object bootstrapOperator(DataStream<HoodieFlinkInternalRow> stream) {
+    OneInputTransformation<?, ?> transformation = (OneInputTransformation<?, ?>) stream.getTransformation();
+    return ((SimpleOperatorFactory<?>) transformation.getOperatorFactory()).getOperator();
   }
 
   @Test

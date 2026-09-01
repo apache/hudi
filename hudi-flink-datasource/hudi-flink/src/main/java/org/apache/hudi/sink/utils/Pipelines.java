@@ -33,7 +33,9 @@ import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.sink.StreamWriteOperator;
 import org.apache.hudi.sink.append.AppendWriteFunctions;
 import org.apache.hudi.sink.append.AppendWriteOperator;
+import org.apache.hudi.sink.bootstrap.AbstractBootstrapOperator;
 import org.apache.hudi.sink.bootstrap.BootstrapOperator;
+import org.apache.hudi.sink.bootstrap.PartitionedRLIBootstrapOperator;
 import org.apache.hudi.sink.bootstrap.RLIBootstrapOperator;
 import org.apache.hudi.sink.bootstrap.batch.BatchBootstrapOperator;
 import org.apache.hudi.sink.bucket.BucketBulkInsertWriterHelper;
@@ -427,11 +429,19 @@ public class Pipelines {
 
     boolean isGlobalRLI = OptionsResolver.isGlobalRecordLevelIndex(conf);
     if (conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED) || (bounded && !isGlobalRLI)) {
+      AbstractBootstrapOperator bootstrapOperator;
+      if (isGlobalRLI) {
+        bootstrapOperator = new RLIBootstrapOperator(conf);
+      } else if (OptionsResolver.isPartitionedRLIWithRocksDBBackend(conf)) {
+        bootstrapOperator = new PartitionedRLIBootstrapOperator(conf);
+      } else {
+        bootstrapOperator = new BootstrapOperator(conf);
+      }
       dataStream1 = dataStream1
           .transform(
               "index_bootstrap",
               new HoodieFlinkInternalRowTypeInfo(rowType),
-              isGlobalRLI ? new RLIBootstrapOperator(conf) : new BootstrapOperator(conf))
+              bootstrapOperator)
           .setParallelism(conf.getOptional(FlinkOptions.INDEX_BOOTSTRAP_TASKS).orElse(dataStream1.getParallelism()))
           .uid(opUID("index_bootstrap", conf));
       ((OneInputTransformation<?, ?>) dataStream1.getTransformation()).setChainingStrategy(ChainingStrategy.ALWAYS);
