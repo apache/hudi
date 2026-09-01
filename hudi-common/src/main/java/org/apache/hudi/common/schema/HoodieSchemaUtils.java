@@ -22,6 +22,11 @@ import org.apache.hudi.common.avro.AvroSchemaUtils;
 import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.internal.HoodieSchemaException;
+import org.apache.hudi.common.schema.internal.InternalSchema;
+import org.apache.hudi.common.schema.internal.action.TableChanges;
+import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter;
+import org.apache.hudi.common.schema.internal.utils.SchemaChangeUtils;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -81,8 +86,7 @@ import java.util.stream.Stream;
  * </ul>
  *
  * <p>A few methods here still delegate to Avro-typed implementations
- * ({@link #asNullable(HoodieSchema)}, {@link #createNullableSchema(HoodieSchema)},
- * {@link #projectSchema(HoodieSchema, List)} and the 5-arg
+ * ({@link #createNullableSchema(HoodieSchema)}, {@link #projectSchema(HoodieSchema, List)} and the 5-arg
  * {@link #createNewSchemaField(String, HoodieSchema, String, Object, HoodieFieldOrder)}). Those delegations
  * are being retired under #16639; new methods must be implemented on HoodieSchema directly.</p>
  *
@@ -266,18 +270,42 @@ public final class HoodieSchemaUtils {
   }
 
   /**
-   * Create a new schema by force changing all the fields as nullable.
+   * Create a new schema by force changing all the top-level fields as nullable.
    *
-   * @return a new schema with all the fields updated as nullable
+   * <p>The rewrite runs through the field-id {@link InternalSchema}: the record is converted, every
+   * still-required top-level field is marked nullable with a {@link TableChanges.ColumnUpdateChange},
+   * and the updated InternalSchema is converted back under the original full name. Only the top level
+   * changes - the inner fields of a nested record keep the nullability they had. Because the record is
+   * rebuilt from the InternalSchema, its full name, field order and per-field docs survive, while the
+   * record-level doc and any custom record properties do not.</p>
+   *
+   * <p>When every top-level field is already nullable the input instance itself is returned and no
+   * conversion runs.</p>
+   *
+   * @param schema original schema
+   * @return a schema with all the top-level fields updated as nullable, or {@code schema} itself when
+   *         there is nothing to change
    * @throws IllegalArgumentException if schema is null
-   * @see AvroSchemaUtils#asNullable(Schema)
    */
   public static HoodieSchema asNullable(HoodieSchema schema) {
     ValidationUtils.checkArgument(schema != null, "Schema cannot be null");
 
-    // Delegate to AvroSchemaUtils
-    Schema nullableAvro = AvroSchemaUtils.asNullable(schema.toAvroSchema());
-    return HoodieSchema.fromAvroSchema(nullableAvro);
+    // NOTE: HoodieSchema#isNullable is false for a bare NULL type, unlike Avro's Schema#isNullable, so a
+    //       NULL-typed field is excluded explicitly to keep it out of the update list as it always was.
+    List<String> requiredCols = schema.getFields().stream()
+        .filter(f -> !(f.schema().isNullable() || f.schema().getType() == HoodieSchemaType.NULL))
+        .map(HoodieSchemaField::name)
+        .collect(Collectors.toList());
+    if (requiredCols.isEmpty()) {
+      return schema;
+    }
+
+    InternalSchema internalSchema = InternalSchemaConverter.convert(schema);
+    TableChanges.ColumnUpdateChange schemaChange = TableChanges.ColumnUpdateChange.get(internalSchema);
+    schemaChange = CollectionUtils.reduce(requiredCols, schemaChange,
+        (change, field) -> change.updateColumnNullability(field, true));
+    return InternalSchemaConverter.convert(
+        SchemaChangeUtils.applyTableChanges2Schema(internalSchema, schemaChange), schema.getFullName());
   }
 
   /**

@@ -24,6 +24,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieNullSchemaTypeException;
 
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
@@ -50,6 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -2082,6 +2084,140 @@ public class TestHoodieSchemaUtils {
     assertEquals("complex_field.key_value.value.list.element.value", result.get().getLeft());
     assertEquals("value", result.get().getRight().name());
     assertEquals(HoodieSchemaType.LONG, result.get().getRight().schema().getType());
+  }
+
+  /**
+   * Record with a namespace, a record-level doc, a custom record prop, per-field docs and a nested
+   * record - all of its top-level fields required.
+   */
+  private static HoodieSchema allRequiredPersonSchema() {
+    HoodieSchema address = HoodieSchema.createRecord(
+        "Address",
+        "ns.test",
+        "the address record",
+        Arrays.asList(
+            HoodieSchemaField.of("city", HoodieSchema.create(HoodieSchemaType.STRING), "city doc", null),
+            HoodieSchemaField.of("zip", HoodieSchema.create(HoodieSchemaType.INT), null, null)));
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "Person",
+        "ns.test",
+        "the person record",
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), "id doc", null),
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
+            HoodieSchemaField.of("address", address, "address doc", null)));
+    schema.addProp("hoodie.custom.prop", "custom-value");
+    return schema;
+  }
+
+  @Test
+  public void testAsNullableMakesEveryTopLevelFieldNullable() {
+    HoodieSchema schema = allRequiredPersonSchema();
+
+    HoodieSchema nullable = HoodieSchemaUtils.asNullable(schema);
+
+    assertNotSame(schema, nullable);
+    assertEquals("Person", nullable.getName());
+    assertEquals("ns.test", nullable.getNamespace().get());
+    assertEquals("ns.test.Person", nullable.getFullName());
+    assertEquals(Arrays.asList("id", "name", "address"),
+        nullable.getFields().stream().map(HoodieSchemaField::name).collect(Collectors.toList()));
+
+    for (HoodieSchemaField field : nullable.getFields()) {
+      assertTrue(field.isNullable(), "Field " + field.name() + " should be nullable");
+      assertEquals(HoodieSchema.NULL_VALUE, field.defaultVal().get());
+    }
+    assertEquals(HoodieSchemaType.INT, nullable.getField("id").get().getNonNullSchema().getType());
+    assertEquals(HoodieSchemaType.STRING, nullable.getField("name").get().getNonNullSchema().getType());
+
+    // Per-field docs survive the InternalSchema round trip.
+    assertEquals("id doc", nullable.getField("id").get().doc().get());
+    assertFalse(nullable.getField("name").get().doc().isPresent());
+    assertEquals("address doc", nullable.getField("address").get().doc().get());
+
+    // Only the top level changes: the nested record keeps its own required fields.
+    HoodieSchema nestedAddress = nullable.getField("address").get().getNonNullSchema();
+    assertEquals(HoodieSchemaType.RECORD, nestedAddress.getType());
+    assertEquals("ns.test.Address", nestedAddress.getFullName());
+    assertFalse(nestedAddress.getField("city").get().isNullable());
+    assertFalse(nestedAddress.getField("zip").get().isNullable());
+    assertEquals("city doc", nestedAddress.getField("city").get().doc().get());
+
+    // The InternalSchema carries neither a record doc nor record props, so both are dropped. This is
+    // the behaviour the Avro-typed implementation had as well, since it ran the same conversion.
+    assertFalse(nullable.getDoc().isPresent());
+    assertTrue(nullable.getObjectProps().isEmpty());
+
+    // The input schema is left untouched.
+    assertEquals("the person record", schema.getDoc().get());
+    assertEquals("custom-value", schema.getObjectProps().get("hoodie.custom.prop"));
+    assertFalse(schema.getField("id").get().isNullable());
+  }
+
+  @Test
+  public void testAsNullableReturnsSameInstanceWhenAllFieldsAlreadyNullable() {
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "AllNullable",
+        "ns.test",
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.createNullable(HoodieSchemaType.INT), null, HoodieSchema.NULL_VALUE),
+            HoodieSchemaField.of("name", HoodieSchema.createNullable(HoodieSchemaType.STRING), "name doc", HoodieSchema.NULL_VALUE)));
+
+    assertSame(schema, HoodieSchemaUtils.asNullable(schema));
+  }
+
+  @Test
+  public void testAsNullableLeavesAlreadyNullableFieldsUntouched() {
+    HoodieSchema nullableName = HoodieSchema.createNullable(HoodieSchemaType.STRING);
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "Mixed",
+        "ns.test",
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("optional_name", nullableName, "name doc", HoodieSchema.NULL_VALUE),
+            HoodieSchemaField.of("required_id", HoodieSchema.create(HoodieSchemaType.LONG), null, null)));
+
+    HoodieSchema nullable = HoodieSchemaUtils.asNullable(schema);
+
+    assertEquals(nullableName, nullable.getField("optional_name").get().schema());
+    assertEquals("name doc", nullable.getField("optional_name").get().doc().get());
+
+    HoodieSchemaField requiredId = nullable.getField("required_id").get();
+    assertTrue(requiredId.isNullable());
+    assertEquals(HoodieSchemaType.LONG, requiredId.getNonNullSchema().getType());
+  }
+
+  @Test
+  public void testAsNullableTreatsBareNullFieldAsAlreadyNullable() {
+    // Avro's Schema#isNullable is true for a bare NULL type while HoodieSchema#isNullable is not, so a
+    // record made only of NULL-typed fields must still short-circuit rather than attempt a conversion.
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "OnlyNull",
+        "ns.test",
+        null,
+        Collections.singletonList(
+            HoodieSchemaField.of("nothing", HoodieSchema.create(HoodieSchemaType.NULL), null, null)));
+
+    assertSame(schema, HoodieSchemaUtils.asNullable(schema));
+  }
+
+  @Test
+  public void testAsNullableRejectsBareNullFieldAlongsideARequiredField() {
+    // A NULL-typed field is never added to the update list, but as soon as some other field does need
+    // updating the InternalSchema conversion runs and rejects the NULL type outright. Pinned because it
+    // is what the previous Avro-typed implementation did too.
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "NullAndRequired",
+        "ns.test",
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("nothing", HoodieSchema.create(HoodieSchemaType.NULL), null, null),
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null)));
+
+    HoodieNullSchemaTypeException exception = assertThrows(HoodieNullSchemaTypeException.class,
+        () -> HoodieSchemaUtils.asNullable(schema));
+    assertTrue(exception.getMessage().contains("nothing"), exception.getMessage());
   }
 
   private static HoodieSchema deleteLogTableSchema() {
