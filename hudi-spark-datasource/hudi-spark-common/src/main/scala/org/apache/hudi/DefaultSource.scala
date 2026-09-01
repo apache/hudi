@@ -228,10 +228,22 @@ class DefaultSource extends RelationProvider
                                     mode: SaveMode,
                                     opts: Map[String, String],
                                     df: DataFrame): Unit = {
-    val writerClass = getClass.getClassLoader.loadClass(DefaultSource.DATAFRAME_WRITER_CLASS)
+    val writerClass = try {
+      getClass.getClassLoader.loadClass(DefaultSource.DATAFRAME_WRITER_CLASS)
+    } catch {
+      case e: ClassNotFoundException =>
+        throw new HoodieException("The DataFrame write path is enabled ("
+          + DefaultSource.DATAFRAME_WRITE_PATH_ENABLE
+          + ") but the hudi-spark-dataframe module is not on the classpath", e)
+    }
     val method = writerClass.getMethod("write",
       classOf[SQLContext], classOf[SaveMode], classOf[Map[String, String]], classOf[DataFrame])
-    method.invoke(null, sqlContext, mode, opts, df)
+    try {
+      method.invoke(null, sqlContext, mode, opts, df)
+    } catch {
+      case e: java.lang.reflect.InvocationTargetException if e.getCause != null =>
+        throw e.getCause
+    }
   }
 
   override def createSink(sqlContext: SQLContext,

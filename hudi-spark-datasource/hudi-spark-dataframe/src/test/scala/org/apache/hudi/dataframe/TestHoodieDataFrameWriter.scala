@@ -20,7 +20,7 @@ package org.apache.hudi.dataframe
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
-import org.apache.spark.sql.{Row, SaveMode, SparkSession}
+import org.apache.spark.sql.{functions, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
 import org.junit.jupiter.api.{AfterAll, Assertions, BeforeAll, Test, TestInstance}
 import org.junit.jupiter.api.io.TempDir
@@ -147,6 +147,23 @@ class TestHoodieDataFrameWriter {
     Assertions.assertEquals((3L, "v5-updated", "k5"), result("k5"))
     Assertions.assertEquals((10L, "v3-updated", "k3"), result("k3"))
     Assertions.assertEquals(3, completedCommits(path))
+
+    // Commit 4: read-modify-write round trip; the input carries Hudi meta columns which the
+    // writer must drop and regenerate.
+    spark.read.format("hudi").load(path)
+      .filter(functions.col("key") === "k1")
+      .withColumn("ts", functions.lit(100L))
+      .withColumn("value", functions.lit("v1-roundtrip"))
+      .write.format("hudi")
+      .options(writeOptions("upsert"))
+      .mode(SaveMode.Append)
+      .save(path)
+
+    result = readAsMap(path)
+    Assertions.assertEquals(5, result.size)
+    Assertions.assertEquals((100L, "v1-roundtrip", "k1"), result("k1"))
+    Assertions.assertEquals((3L, "v5-updated", "k5"), result("k5"))
+    Assertions.assertEquals(4, completedCommits(path))
 
     // No duplicate record keys across the table after the merges.
     val keys = spark.read.format("hudi").load(path).select("_hoodie_record_key").collect().map(_.getString(0))
