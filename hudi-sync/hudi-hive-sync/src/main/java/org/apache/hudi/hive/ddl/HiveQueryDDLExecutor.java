@@ -336,12 +336,12 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
    * above, because close() detaches the session from this thread and {@code Driver.destroy()} can
    * reach {@code SessionState.get()} while releasing locks.
    */
-  private static void closeQuietly(SessionState sessionState) {
-    if (sessionState == null) {
+  private static void closeQuietly(SessionState state) {
+    if (state == null) {
       return;
     }
     try {
-      sessionState.close();
+      state.close();
     } catch (Exception e) {
       log.error("Error while closing SessionState", e);
     }
