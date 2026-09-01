@@ -44,15 +44,41 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Utility class for HoodieSchema operations including table schema manipulation,
- * compatibility checking, and schema evolution operations.
+ * HoodieSchema-typed structural transforms of table schemas and of the well-known Hudi record shapes.
  *
- * <p>This class provides HoodieSchema equivalents of operations found in AvroSchemaUtils
- * and HoodieAvroUtils, focusing on table schema management rather than record-level operations.</p>
+ * <p>What lives here:</p>
+ * <ul>
+ *   <li>metadata fields: {@link #addMetadataFields(HoodieSchema, boolean)},
+ *       {@link #removeMetadataFields(HoodieSchema)}, {@link #isMetadataField(String)}</li>
+ *   <li>record-key and delete-log schemas: {@link #getRecordKeySchema()},
+ *       {@link #getRecordKeyPartitionPathSchema()}, {@link #createDeleteLogSchema(HoodieSchema, List)}</li>
+ *   <li>projection and pruning: {@link #generateProjectionSchema(HoodieSchema, List)},
+ *       {@link #projectSchema(HoodieSchema, List)}, {@link #pruneDataSchema(HoodieSchema, HoodieSchema, Set)},
+ *       {@link #removeFields(HoodieSchema, Set)}</li>
+ *   <li>appending and merging fields: {@link #appendFieldsToSchema(HoodieSchema, List)},
+ *       {@link #appendFieldsToSchemaDedupNested(HoodieSchema, List)},
+ *       {@link #mergeSchemas(HoodieSchema, HoodieSchema)}</li>
+ *   <li>nullability: {@link #asNullable(HoodieSchema)}</li>
+ *   <li>name sanitizing: {@link #sanitizeName(String)}</li>
+ *   <li>lookups that need more than {@link HoodieSchema} offers on its own:
+ *       {@link #getNestedField(HoodieSchema, String)}, {@link #findNestedField(HoodieSchema, String)},
+ *       {@link #findMissingFields(HoodieSchema, HoodieSchema)},
+ *       {@link #resolveUnionSchema(HoodieSchema, String)}</li>
+ * </ul>
  *
- * <p>All methods in this class delegate to the corresponding Avro utilities internally
- * while providing a clean HoodieSchema-based API. This approach ensures consistency
- * with existing behavior while enabling migration to HoodieSchema types.</p>
+ * <p>Not here:</p>
+ * <ul>
+ *   <li>value and record operations: {@link org.apache.hudi.common.avro.HoodieAvroUtils}</li>
+ *   <li>reader/writer compatibility checks: {@link HoodieSchemaCompatibility}</li>
+ *   <li>questions about a single schema: instance methods on {@link HoodieSchema}</li>
+ *   <li>the field-id InternalSchema (schema-on-read) domain: {@code org.apache.hudi.common.schema.internal}</li>
+ * </ul>
+ *
+ * <p>A few methods here still delegate to Avro-typed implementations
+ * ({@link #asNullable(HoodieSchema)}, {@link #createNullableSchema(HoodieSchema)},
+ * {@link #projectSchema(HoodieSchema, List)} and the 5-arg
+ * {@link #createNewSchemaField(String, HoodieSchema, String, Object, HoodieFieldOrder)}). Those delegations
+ * are being retired under #16639; new methods must be implemented on HoodieSchema directly.</p>
  *
  * @since 1.2.0
  */
@@ -111,8 +137,10 @@ public final class HoodieSchemaUtils {
   }
 
   /**
-   * Adds Hudi metadata fields to the given schema.
-   * This is equivalent to HoodieAvroUtils.addMetadataFields() but operates on HoodieSchema.
+   * Prepends the Hudi metadata columns ({@code _hoodie_commit_time}, {@code _hoodie_commit_seqno},
+   * {@code _hoodie_record_key}, {@code _hoodie_partition_path}, {@code _hoodie_file_name}) to the given
+   * schema; {@code withOperationField} additionally adds {@code _hoodie_operation}. Metadata columns
+   * already present on the input schema are dropped rather than duplicated.
    *
    * @param schema             the input schema
    * @param withOperationField whether to include operation metadata field
@@ -164,8 +192,7 @@ public final class HoodieSchemaUtils {
   }
 
   /**
-   * Removes Hudi metadata fields from the given schema.
-   * This is equivalent to HoodieAvroUtils.removeMetadataFields() but operates on HoodieSchema.
+   * Removes the Hudi metadata columns, including {@code _hoodie_operation}, from the given schema.
    *
    * @param schema the input schema with metadata fields
    * @return new HoodieSchema with metadata fields removed
@@ -182,6 +209,11 @@ public final class HoodieSchemaUtils {
 
   /**
    * Merges two schemas, combining fields from both with conflict resolution.
+   *
+   * <p>This is a plain recursive union of the two field lists: source field order is preserved and
+   * target-only fields are appended. There is no type promotion and no nullability reconciliation. For
+   * schema-evolution reconciliation use {@code AvroSchemaEvolutionUtils#reconcileSchema} /
+   * {@code AvroSchemaEvolutionUtils#reconcileSchemaRequirements}.</p>
    *
    * @param sourceSchema source schema to merge from
    * @param targetSchema target schema to merge into
@@ -210,8 +242,10 @@ public final class HoodieSchemaUtils {
   }
 
   /**
-   * Creates a nullable version of the given schema (union with null).
-   * This is equivalent to AvroSchemaUtils.createNullableSchema() but operates on HoodieSchema.
+   * Creates a nullable version of the given schema (union of null and the schema).
+   *
+   * <p>{@link HoodieSchema#createNullable(HoodieSchema)} is the idempotent native equivalent and is
+   * preferred; this overload round-trips through Avro and is retained only for existing call sites.</p>
    *
    * @param schema the input schema
    * @return new HoodieSchema that allows null values
@@ -227,10 +261,10 @@ public final class HoodieSchemaUtils {
 
   /**
    * Create a new schema by force changing all the fields as nullable.
-   * This is equivalent to AvroSchemaUtils.asNullable() but operates on HoodieSchema.
    *
    * @return a new schema with all the fields updated as nullable
    * @throws IllegalArgumentException if schema is null
+   * @see AvroSchemaUtils#asNullable(Schema)
    */
   public static HoodieSchema asNullable(HoodieSchema schema) {
     ValidationUtils.checkArgument(schema != null, "Schema cannot be null");
@@ -241,8 +275,8 @@ public final class HoodieSchemaUtils {
   }
 
   /**
-   * Removes specified fields from a RECORD schema.
-   * This is equivalent to HoodieAvroUtils.removeFields() but operates on HoodieSchema.
+   * Removes the named top-level fields from a RECORD schema, preserving the record's name, namespace,
+   * error flag and custom properties. Returns the input schema unchanged when no field matches.
    *
    * @param schema original schema (must be RECORD type)
    * @param fieldNamesToRemove set of field names to remove
@@ -287,28 +321,32 @@ public final class HoodieSchemaUtils {
   }
 
   /**
-   * Finds fields that are present in the table schema but missing in the writer schema.
-   * This is equivalent to AvroSchemaUtils.findMissingFields() but operates on HoodieSchemas.
+   * Finds the top-level fields that are present in the table schema but missing from the writer schema.
+   * Nested records are not descended into; {@code HoodieSchemaCompatibility#checkValidEvolution} is the
+   * one that finds missing fields recursively.
    *
    * @param tableSchema  the complete table schema
    * @param writerSchema the writer schema to check against
    * @return list of HoodieSchemaFields that are missing in writer schema
    * @throws IllegalArgumentException if either schema is null
+   * @see HoodieSchemaCompatibility#checkValidEvolution(HoodieSchema, HoodieSchema)
    */
   public static List<HoodieSchemaField> findMissingFields(HoodieSchema tableSchema, HoodieSchema writerSchema) {
     return findMissingFields(tableSchema, writerSchema, Collections.emptySet());
   }
 
   /**
-   * Finds fields that are present in the table schema but missing in the writer schema,
-   * excluding partition columns from the check.
-   * This is equivalent to AvroSchemaUtils.findMissingFields() but operates on HoodieSchemas.
+   * Finds the top-level fields that are present in the table schema but missing from the writer schema,
+   * skipping the excluded column names (typically the partition columns). Nested records are not descended
+   * into; {@code HoodieSchemaCompatibility#checkValidEvolution} is the one that finds missing fields
+   * recursively.
    *
    * @param tableSchema    the complete table schema
    * @param writerSchema   the writer schema to check against
    * @param excludeColumns column names to exclude from missing field check
    * @return list of HoodieSchemaFields that are missing in writer schema
    * @throws IllegalArgumentException if either schema is null
+   * @see HoodieSchemaCompatibility#checkValidEvolution(HoodieSchema, HoodieSchema)
    */
   public static List<HoodieSchemaField> findMissingFields(HoodieSchema tableSchema, HoodieSchema writerSchema,
                                                           Set<String> excludeColumns) {
@@ -332,8 +370,8 @@ public final class HoodieSchemaUtils {
   }
 
   /**
-   * Creates a new schema field with the specified properties.
-   * This is equivalent to HoodieAvroUtils.createNewSchemaField() but returns HoodieSchemaField.
+   * Alias of {@link HoodieSchemaField#of(String, HoodieSchema, String, Object)} with argument validation.
+   * Prefer {@code HoodieSchemaField.of} directly in new code.
    *
    * @param name         field name
    * @param schema       field schema
@@ -351,8 +389,10 @@ public final class HoodieSchemaUtils {
   }
 
   /**
-   * Creates a new schema field with the specified properties, including field order.
-   * This is equivalent to HoodieAvroUtils.createNewSchemaField() but returns HoodieSchemaField.
+   * Alias of {@link HoodieSchemaField#of(String, HoodieSchema, String, Object, HoodieFieldOrder)} with
+   * argument validation. Prefer {@code HoodieSchemaField.of} directly in new code; this overload still
+   * round-trips through the Avro-typed {@code HoodieAvroUtils#createNewSchemaField} and is being retired
+   * under #16639.
    *
    * @param name         field name
    * @param schema       field schema
@@ -376,8 +416,10 @@ public final class HoodieSchemaUtils {
   }
 
   /**
-   * Creates a new HoodieSchemaField from an existing field.
-   * This is equivalent to HoodieAvroUtils.createNewSchemaField() but returns HoodieSchemaField.
+   * Copy factory: returns a new field carrying the same name, schema, doc and default value as
+   * {@code field}. It exists because the backing Avro field cannot be shared between two records, so a
+   * field taken off one schema has to be copied before being placed on another. When building a field from
+   * scratch prefer {@link HoodieSchemaField#of(String, HoodieSchema, String, Object)}.
    *
    * @param field the original HoodieSchemaField to create a new field from
    * @return a new HoodieSchemaField with the same properties but properly formatted default value
@@ -388,7 +430,13 @@ public final class HoodieSchemaUtils {
 
   /**
    * Gets a field (including nested fields) from the schema using dot notation.
-   * This method delegates to {@link HoodieSchema#getNestedField(String)}.
+   * This method is a null-checking facade over {@link HoodieSchema#getNestedField(String)}: it returns the
+   * leaf field itself, paired with its canonical dotted path.
+   * <p>
+   * Not to be confused with {@link #findNestedField(HoodieSchema, String)}, which returns a synthesized
+   * lineage sub-schema rather than the leaf, and which does not understand {@code list.element} /
+   * {@code key_value} path segments.
+   * </p>
    * <p>
    * Supports nested field access using dot notation. For example:
    * <ul>
@@ -577,6 +625,13 @@ public final class HoodieSchemaUtils {
 
   /**
    * Get gets a field from a record, works on nested fields as well (if you provide the whole name, eg: toplevel.nextlevel.child)
+   * <p>
+   * Returns a synthesized lineage sub-schema, not the leaf field: {@code b.z.z2} comes back as
+   * {@code b:record(z:record(z2))}. That shape is what {@link #appendFieldsToSchemaDedupNested} consumes.
+   * Only record nesting is understood here - {@code list.element} and {@code key_value} path segments are
+   * not. Use {@link #getNestedField(HoodieSchema, String)} or {@link HoodieSchema#getNestedField(String)}
+   * when the leaf field and its canonical path are what is wanted.
+   * </p>
    * @return the field, including its lineage.
    * For example, if you have a schema: record(a:int, b:record(x:int, y:long, z:record(z1: int, z2: float, z3: double), c:bool)
    * "fieldName" | output
@@ -647,10 +702,11 @@ public final class HoodieSchemaUtils {
   }
 
   /**
-   * Fetch schema for record key and partition path.
-   * This is equivalent to HoodieAvroUtils.getRecordKeyPartitionPathSchema() but returns HoodieSchema.
+   * Builds the two-column {@code HoodieRecordKey} record holding {@code _hoodie_record_key} and
+   * {@code _hoodie_partition_path}, both nullable strings.
    *
    * @return HoodieSchema containing record key and partition path fields
+   * @see #getRecordKeySchema()
    */
   public static HoodieSchema getRecordKeyPartitionPathSchema() {
     List<HoodieSchemaField> toBeAddedFields = new ArrayList<>(2);
@@ -689,8 +745,16 @@ public final class HoodieSchemaUtils {
 
   /**
    * Fetches projected schema given list of fields to project. The field can be nested in format `a.b.c` where a is
-   * the top level field, b is at second level and so on.
+   * the top level field, b is at second level and so on. Field names are matched case-sensitively.
    * This is equivalent to {@link HoodieAvroUtils#projectSchema(Schema, List)} but operates on HoodieSchema.
+   *
+   * <p>The two sibling projection helpers differ:</p>
+   * <ul>
+   *   <li>{@link #generateProjectionSchema(HoodieSchema, List)} - top-level fields only, matched
+   *       case-insensitively</li>
+   *   <li>{@link #pruneDataSchema(HoodieSchema, HoodieSchema, Set)} - prunes to the shape of a required
+   *       schema instead of to a list of names</li>
+   * </ul>
    *
    * @param fileSchema the original schema
    * @param fields     list of fields to project

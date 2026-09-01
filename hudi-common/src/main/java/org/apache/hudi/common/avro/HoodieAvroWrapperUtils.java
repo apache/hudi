@@ -59,6 +59,16 @@ import static org.apache.hudi.common.util.DateTimeUtils.instantToMicros;
 import static org.apache.hudi.common.util.DateTimeUtils.microsToInstant;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.tryUpcastDecimal;
 
+/**
+ * Wraps and unwraps Java values into the generated Avro {@code *Wrapper} records used by column stats
+ * ({@code DateWrapper}, {@code DecimalWrapper}, {@code TimestampMicrosWrapper}, and so on).
+ *
+ * <p>Value conversion only: nothing here manipulates schemas. The wrapper schema is fixed by the generated
+ * record, and the only schema this class reads is the one it needs to pick the right wrapper for a value.
+ * For schema work see {@link org.apache.hudi.common.schema.HoodieSchema} and
+ * {@link org.apache.hudi.common.schema.HoodieSchemaUtils}; for general record and value operations see
+ * {@link HoodieAvroUtils}.</p>
+ */
 public class HoodieAvroWrapperUtils {
 
   private static final Conversions.DecimalConversion AVRO_DECIMAL_CONVERSION = new Conversions.DecimalConversion();

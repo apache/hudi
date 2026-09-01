@@ -113,7 +113,44 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
- * Helper class to do common stuff across Avro.
+ * Operations on Avro records and values.
+ *
+ * <p>This class owns the record-level half of the Avro world:</p>
+ * <ul>
+ *   <li>serialization: {@code avroToBytes} / {@code bytesToAvro} and the JSON converters</li>
+ *   <li>record rewriting between schemas: {@code rewriteRecord*}, {@code projectRecordToNewSchemaShallow},
+ *       {@code stitchRecords}</li>
+ *   <li>value coercion for logical types: {@code convertValueFor*}, {@code convertBytesToBigDecimal}</li>
+ *   <li>record-key, metadata-column and nested-value access: {@code getNestedFieldVal},
+ *       {@code addHoodieKeyToRecord}, {@code getRecordColumnValues}, {@code createHoodieRecordFromAvro}</li>
+ * </ul>
+ *
+ * <p>Raw {@link Schema} helpers live here only when they serve a record operation on this class (for example
+ * {@code createNewSchemaField}, {@code projectSchema}, {@code unwrapNullable}). This is not the place for
+ * table-schema manipulation.</p>
+ *
+ * <p>Where else to look:</p>
+ * <ul>
+ *   <li>{@link org.apache.hudi.common.schema.HoodieSchema} - questions about one schema: navigation,
+ *       nullability, type predicates, and the {@code create*} / {@code parse} factories</li>
+ *   <li>{@link org.apache.hudi.common.schema.HoodieSchemaUtils} - HoodieSchema-typed structural transforms
+ *       of table schemas</li>
+ *   <li>{@link org.apache.hudi.common.schema.HoodieSchemaCompatibility} - reader/writer compatibility and
+ *       projection checks</li>
+ *   <li>{@code org.apache.hudi.common.schema.internal} - the field-id InternalSchema (schema-on-read) domain</li>
+ * </ul>
+ *
+ * <p>Union unwrapping is deliberately not one helper. Pick by contract:</p>
+ * <ul>
+ *   <li>{@code unwrapNullable} (this class) - lenient: the first non-null branch of any union</li>
+ *   <li>{@code getActualSchemaFromUnion} (this class, private) - resolves complex unions against the datum</li>
+ *   <li>{@code AvroSchemaUtils#getNonNullTypeFromUnion} - strict: throws unless the union is exactly one null
+ *       branch and one non-null branch</li>
+ *   <li>{@link HoodieSchema#getNonNullType()} - strips null branches and never throws</li>
+ *   <li>{@code HoodieSchemaUtils#resolveUnionSchema} - selects a branch by full name</li>
+ *   <li>{@code AvroOrcUtils#getActualSchemaType} - maps an all-null union to NULL</li>
+ * </ul>
+ * <p>These semantics differ on purpose (see #19212) and must not be merged into one helper.</p>
  */
 @Slf4j
 public class HoodieAvroUtils {
@@ -1424,10 +1461,6 @@ public class HoodieAvroUtils {
 
   /**
    * convert days to Date
-   * <p>
-   * NOTE: This method could only be used in tests
-   *
-   * @VisibleForTesting
    */
   public static java.sql.Date toJavaDate(int days) {
     LocalDate date = LocalDate.ofEpochDay(days);
@@ -1438,10 +1471,6 @@ public class HoodieAvroUtils {
 
   /**
    * convert Date to days
-   * <p>
-   * NOTE: This method could only be used in tests
-   *
-   * @VisibleForTesting
    */
   public static int fromJavaDate(Date date) {
     long millisUtc = date.getTime();
