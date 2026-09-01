@@ -123,7 +123,7 @@ object HoodieInternalRowUtils {
 
   /**
    * Get or create [[StructType]] for provided [[Schema]]
-   * @param schema [[Schema]] to convert to [[StructType]], NOTE: It is best that the schema passed in is cached through [[org.apache.hudi.common.avro.AvroSchemaCache]], so that we can reduce the overhead of schema lookup in the map
+   * @param schema [[Schema]] to convert to [[StructType]], NOTE: It is best that the schema passed in is cached through [[org.apache.hudi.common.schema.HoodieAvroSchemaCache]], so that we can reduce the overhead of schema lookup in the map
    * @return [[StructType]] for provided [[Schema]]
    */
   def getCachedSchema(schema: HoodieSchema): StructType = {

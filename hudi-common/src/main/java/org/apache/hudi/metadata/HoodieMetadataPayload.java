@@ -24,7 +24,6 @@ import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.avro.model.HoodieSecondaryIndexInfo;
-import org.apache.hudi.common.avro.AvroSchemaCache;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -110,7 +109,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private static final HoodieSchema HOODIE_METADATA_SCHEMA = HoodieSchemaCache.intern(
       HoodieSchema.fromAvroSchema(HoodieMetadataRecord.getClassSchema()));
   // Cache the Avro schema reference for O(1) equality checks during Avro.Schema -> HoodieSchema migration
-  private static final Schema HOODIE_METADATA_AVRO_SCHEMA = AvroSchemaCache.intern(HoodieMetadataRecord.getClassSchema());
+  private static final Schema HOODIE_METADATA_AVRO_SCHEMA = HoodieMetadataRecord.getClassSchema();
   /**
    * Field offsets when metadata fields are present
    */
