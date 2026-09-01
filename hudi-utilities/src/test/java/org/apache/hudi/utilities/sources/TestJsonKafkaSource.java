@@ -296,7 +296,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     double maxVal = Math.pow(10, decSchema.getPrecision() - decSchema.getScale());
     double minVal = maxVal * 0.1;
     for (GenericRecord record : records) {
-      BigDecimal dec = org.apache.hudi.common.schema.HoodieSchemaUtils.convertBytesToBigDecimal(((ByteBuffer) record.get(fieldname)).array(), decSchema);
+      BigDecimal dec = org.apache.hudi.common.avro.HoodieAvroUtils.convertBytesToBigDecimal(((ByteBuffer) record.get(fieldname)).array(), decSchema);
       double doubleValue = dec.doubleValue();
       assertTrue(doubleValue <= maxVal && doubleValue >= minVal);
     }

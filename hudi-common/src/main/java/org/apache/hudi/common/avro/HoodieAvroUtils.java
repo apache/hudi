@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.schema.HoodieAvroSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
@@ -1297,6 +1298,23 @@ public class HoodieAvroUtils {
   public static BigDecimal convertBytesToBigDecimal(byte[] value, int precision, int scale) {
     return new BigDecimal(new BigInteger(value),
         scale, new MathContext(precision, RoundingMode.HALF_UP));
+  }
+
+  /**
+   * Converts a byte array to a BigDecimal using the given decimal schema.
+   *
+   * @param value         the byte array to convert
+   * @param decimalSchema the decimal schema containing precision and scale
+   * @return the resulting BigDecimal
+   * @throws IllegalArgumentException if the schema is not a DECIMAL type
+   */
+  public static BigDecimal convertBytesToBigDecimal(byte[] value, HoodieSchema decimalSchema) {
+    ValidationUtils.checkArgument(decimalSchema != null, "Decimal schema cannot be null");
+    ValidationUtils.checkArgument(decimalSchema.getType() == HoodieSchemaType.DECIMAL,
+        () -> "Schema must be of DECIMAL type, but is " + decimalSchema.getType());
+
+    HoodieSchema.Decimal decimal = (HoodieSchema.Decimal) decimalSchema;
+    return convertBytesToBigDecimal(value, decimal.getPrecision(), decimal.getScale());
   }
 
   /**

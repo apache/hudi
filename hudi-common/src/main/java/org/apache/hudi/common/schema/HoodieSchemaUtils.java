@@ -32,7 +32,6 @@ import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -387,36 +386,6 @@ public final class HoodieSchemaUtils {
   }
 
   /**
-   * Converts a byte array to a BigDecimal using the given decimal schema.
-   *
-   * @param value         the byte array to convert
-   * @param decimalSchema the decimal schema containing precision and scale
-   * @return the resulting BigDecimal
-   * @throws IllegalArgumentException if the schema is not a DECIMAL type
-   */
-  public static BigDecimal convertBytesToBigDecimal(byte[] value, HoodieSchema decimalSchema) {
-    ValidationUtils.checkArgument(decimalSchema != null, "Decimal schema cannot be null");
-    ValidationUtils.checkArgument(decimalSchema.getType() == HoodieSchemaType.DECIMAL,
-        () -> "Schema must be of DECIMAL type, but is " + decimalSchema.getType());
-
-    HoodieSchema.Decimal decimal = (HoodieSchema.Decimal) decimalSchema;
-    return convertBytesToBigDecimal(value, decimal.getPrecision(), decimal.getScale());
-  }
-
-  /**
-   * Converts a byte array to a BigDecimal with the specified precision and scale.
-   * Delegates to {@link HoodieAvroUtils#convertBytesToBigDecimal(byte[], int, int)}.
-   *
-   * @param value     the byte array to convert
-   * @param precision the precision of the decimal
-   * @param scale     the scale of the decimal
-   * @return the resulting BigDecimal
-   */
-  public static BigDecimal convertBytesToBigDecimal(byte[] value, int precision, int scale) {
-    return HoodieAvroUtils.convertBytesToBigDecimal(value, precision, scale);
-  }
-
-  /**
    * Gets a field (including nested fields) from the schema using dot notation.
    * This method delegates to {@link HoodieSchema#getNestedField(String)}.
    * <p>
@@ -674,43 +643,6 @@ public final class HoodieSchemaUtils {
 
   public static HoodieSchema getRecordKeySchema() {
     return RECORD_KEY_SCHEMA;
-  }
-
-  /**
-   * Converts field values for specific data types with logical type handling.
-   * This is equivalent to HoodieAvroUtils.convertValueForSpecificDataTypes() but operates on HoodieSchema.
-   * <p>
-   * Handles special conversions for Avro logical types:
-   * <ul>
-   *   <li>Date type - converts epoch day integer to LocalDate</li>
-   *   <li>Timestamp types - converts epoch milliseconds/microseconds to Timestamp</li>
-   *   <li>Decimal type - converts bytes/fixed to BigDecimal</li>
-   * </ul>
-   *
-   * @param fieldSchema the field schema
-   * @param fieldValue the field value to convert
-   * @param consistentLogicalTimestampEnabled whether to use consistent logical timestamp handling
-   * @return converted value for logical types, or original value
-   * @throws IllegalStateException if fieldValue is null but schema is not nullable
-   * @since 1.2.0
-   */
-  public static Object convertValueForSpecificDataTypes(HoodieSchema fieldSchema,
-                                                        Object fieldValue,
-                                                        boolean consistentLogicalTimestampEnabled) {
-    if (fieldSchema == null) {
-      return fieldValue;
-    } else if (fieldValue == null) {
-      ValidationUtils.checkState(fieldSchema.isNullable(),
-          "Field value is null but schema is not nullable");
-      return null;
-    }
-
-    // Delegate to existing Avro utility
-    return HoodieAvroUtils.convertValueForSpecificDataTypes(
-        fieldSchema.toAvroSchema(),
-        fieldValue,
-        consistentLogicalTimestampEnabled
-    );
   }
 
   /**
