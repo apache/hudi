@@ -395,8 +395,10 @@ class TestStreamingSource extends StreamTest {
    * one. With a top-level `v` beside it the base-only split is re-routed to the file group reader
    * (HoodieMergeOnReadRDDV2.shouldRerouteVariantSplit), while the nested-only leg keeps that split
    * on requiredSchemaReaderSkipMerging - Spark's own parquet reader with a native VariantType
-   * request one struct member down, which the Spark 4.1+ row reader reconstructs out of the
-   * shredded group (#19775). That second leg is the one HoodieMergeOnReadRDDV2's comment relies on.
+   * request one struct member down, which the Spark 4.1+ parquet reader reconstructs out of the
+   * shredded group; the vectorized one at stock settings, as the legacy file format inherits
+   * ParquetFileFormat.supportBatch and VariantType is atomic (#19775). That second leg is the one
+   * HoodieMergeOnReadRDDV2's comment relies on.
    */
   private def testLegacyShreddedVariantStream(withTopLevelVariant: Boolean): Unit = {
     assume(HoodieSparkUtils.gteqSpark4_1, "Shredded variant base-file read requires Spark 4.1 or higher")
@@ -505,7 +507,7 @@ class TestStreamingSource extends StreamTest {
         // affected files resolve to the compacted shredded base file with no log on top. With a
         // top-level `v` this is the split shouldRerouteVariantSplit sends to the file group
         // reader; without one it stays on requiredSchemaReaderSkipMerging, the leg that pins the
-        // nested-shredded base read by Spark's own row reader.
+        // nested-shredded base read by Spark's own parquet reader.
         AssertOnQuery { q => q.processAllAvailable(); true },
         assertLegacyRddPlan,
         CheckAnswerRows(Seq(

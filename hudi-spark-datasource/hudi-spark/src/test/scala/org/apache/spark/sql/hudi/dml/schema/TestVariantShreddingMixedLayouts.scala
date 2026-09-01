@@ -1116,10 +1116,17 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
       checkAnswer(s"select count(*) from $tableName where s.inner is not null")(Seq(4))
       // The whole struct: no extraction, so nothing is rewritten even with pushVariantIntoScan on,
       // and the merge is read through a plain native VariantType at depth. `s` itself is never
-      // null - only its `inner` member is, and only for id 4.
+      // null - only its `inner` member is, and only for id 4 - and the payload has to be the
+      // merged one, not a stale or nulled-out variant (VariantVal.toString is its JSON).
       val wholeStruct = spark.sql(s"select id, s from $tableName order by id").collect()
       assert(wholeStruct.length == 5, s"[$leg] whole-struct read should return 5 rows")
-      assert(wholeStruct.forall(!_.isNullAt(1)), s"[$leg] whole-struct read nulled out s")
+      wholeStruct.foreach { row =>
+        val id = row.getInt(0)
+        assert(!row.isNullAt(1), s"[$leg] whole-struct read nulled out s for id $id")
+        val inner = row.getStruct(1).getAs[Any]("inner")
+        assert(Option(inner).map(_.toString).orNull == mergedJson(id),
+          s"[$leg] whole-struct read of s.inner for id $id should be ${mergedJson(id)}, got $inner")
+      }
       // Both arms expect the very same rows; only the plan tells them apart.
       val verdict = if (pushed) "should have" else "must not have"
       assert(variantProjectionPushedIntoScan(
