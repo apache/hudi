@@ -142,8 +142,37 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     this.metrics = new HoodieMetrics(config, storage);
     this.txnManager = transactionManager;
     this.timeGenerator = timeGenerator;
-    startEmbeddedServerView();
-    runClientInitCallbacks();
+    try {
+      startEmbeddedServerView();
+      runClientInitCallbacks();
+    } catch (RuntimeException | Error e) {
+      // The constructor is not returning, so no caller ever gets an instance to close(): release here or leak.
+      releaseAfterFailedInit(e);
+      throw e;
+    }
+  }
+
+  /**
+   * Releases what the constructor already acquired, for the case where it cannot hand back an instance.
+   * This mirrors {@link #close()} but must not call it, because subclasses override close() and it would
+   * then run against a half-built object.
+   */
+  private void releaseAfterFailedInit(Throwable initFailure) {
+    try {
+      stopEmbeddedServerView(true);
+    } catch (Exception e) {
+      initFailure.addSuppressed(e);
+    }
+    try {
+      this.heartbeatClient.close();
+    } catch (Exception e) {
+      initFailure.addSuppressed(e);
+    }
+    try {
+      this.txnManager.close();
+    } catch (Exception e) {
+      initFailure.addSuppressed(e);
+    }
   }
 
   /**
