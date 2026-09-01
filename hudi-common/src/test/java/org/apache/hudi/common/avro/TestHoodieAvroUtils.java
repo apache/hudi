@@ -1079,6 +1079,21 @@ public class TestHoodieAvroUtils {
     }
   }
 
+  @Test
+  void testGetRecordColumnValues() {
+    Schema schema = new Schema.Parser().parse(EXAMPLE_SCHEMA);
+    GenericRecord record = new GenericData.Record(schema);
+    record.put("non_pii_col", "val1");
+    record.put("pii_col", "val2");
+    record.put("timestamp", 3.5);
+    HoodieRecordPayload avroPayload = new RewriteAvroPayload(record);
+    HoodieAvroRecord avroRecord = new HoodieAvroRecord(new HoodieKey("record1", "partition1"), avroPayload);
+
+    Object[] columnValues = HoodieAvroUtils.getRecordColumnValues(
+        avroRecord, new String[] {"non_pii_col", "pii_col"}, HoodieSchema.parse(EXAMPLE_SCHEMA), false);
+    assertArrayEquals(new Object[] {"val1", "val2"}, columnValues);
+  }
+
   private static Stream<Arguments> recordNeedsRewriteForExtendedAvroTypePromotion() {
     Schema decimal1 = LogicalTypes.decimal(12, 2).addToSchema(Schema.create(Schema.Type.BYTES));
     Schema decimal2 = LogicalTypes.decimal(10, 2).addToSchema(Schema.create(Schema.Type.BYTES));

@@ -23,7 +23,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.schema.HoodieAvroSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
@@ -887,15 +886,15 @@ public class HoodieAvroUtils {
    *
    * @param record  Hoodie record.
    * @param columns Names of the columns to get values.
-   * @param schema  {@link Schema} instance.
+   * @param schema  {@link HoodieSchema} instance.
    * @return Column value.
    */
   public static Object[] getRecordColumnValues(HoodieRecord record,
                                                String[] columns,
-                                               Schema schema,
+                                               HoodieSchema schema,
                                                boolean consistentLogicalTimestampEnabled) {
     try {
-      GenericRecord genericRecord = (GenericRecord) (record.toIndexedRecord(HoodieAvroSchemaCache.intern(schema), new Properties()).get()).getData();
+      GenericRecord genericRecord = (GenericRecord) (record.toIndexedRecord(schema, new Properties()).get()).getData();
       List<Object> list = new ArrayList<>();
       for (String col : columns) {
         list.add(HoodieAvroUtils.getNestedFieldVal(genericRecord, col, true, consistentLogicalTimestampEnabled));

@@ -328,7 +328,7 @@ public class HoodieTableMetadataUtil {
     Object fieldValue;
     HoodieSchemaType fieldSchemaType = fieldSchema.getType();
     if (record.getRecordType() == HoodieRecordType.AVRO) {
-      fieldValue = HoodieAvroUtils.getRecordColumnValues(record, new String[]{fieldName}, recordSchema.toAvroSchema(), false)[0];
+      fieldValue = HoodieAvroUtils.getRecordColumnValues(record, new String[]{fieldName}, recordSchema, false)[0];
       if (fieldValue != null && fieldSchemaType.equals(HoodieSchemaType.DATE)) {
         fieldValue = java.sql.Date.valueOf(fieldValue.toString());
       }
