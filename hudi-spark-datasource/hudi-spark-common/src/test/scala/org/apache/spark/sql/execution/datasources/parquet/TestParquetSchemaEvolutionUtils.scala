@@ -27,15 +27,17 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.parquet.hadoop.metadata.FileMetaData
 import org.apache.parquet.schema.{Type, Types}
 import org.apache.spark.sql.execution.datasources.parquet.VariantParquetTestFixtures.{shreddedVariant, stringKeyMap, threeLevelList, twoLevelList, unshreddedVariant}
-import org.apache.spark.sql.types.{BinaryType, MetadataBuilder, StructField, StructType}
+import org.apache.spark.sql.types.{ArrayType, BinaryType, IntegerType, MapType, MetadataBuilder, StringType, StructField, StructType}
 import org.junit.jupiter.api.{Assertions, Test}
 
 import java.util.{Arrays, Collections, HashMap}
 
 /**
- * Unit tests for [[ParquetSchemaEvolutionUtils.validateNoShreddedVariants]], the schema-on-read
- * guard that fails a read the merged internal-schema request would otherwise serve with the
- * typed_value clipped away. No SparkSession: the guard is a pure schema walk.
+ * Unit tests for the two shredded-variant read guards of [[ParquetSchemaEvolutionUtils]]:
+ * validateNoShreddedVariants, the schema-on-read guard that fails a read the merged
+ * internal-schema request would otherwise serve with the typed_value clipped away, and
+ * validateNoShreddedVariantStructs, the Spark 3.x guard for a variant requested as its
+ * unshredded struct shape. No SparkSession: both guards are pure schema walks.
  */
 class TestParquetSchemaEvolutionUtils {
 
@@ -198,6 +200,70 @@ class TestParquetSchemaEvolutionUtils {
   /** A footer over a file of one top-level column. */
   private def footerOf(column: Type): FileMetaData =
     new FileMetaData(Types.buildMessage().addField(column).named("test"), new HashMap[String, String](), "test")
+
+  /**
+   * The Spark 3.x shape: no VariantType there, so a variant column is declared as
+   * struct&lt;value: binary, metadata: binary&gt; (the shape Hive sync also writes). Either member
+   * order is the same column, and the unshredded twin of the same file must still read.
+   */
+  @Test
+  def testValidateNoShreddedVariantStructsRejectsTopLevelShreddedVariant(): Unit = {
+    Seq(
+      ("metadata first", new StructType().add("metadata", BinaryType).add("value", BinaryType)),
+      ("value first", new StructType().add("value", BinaryType).add("metadata", BinaryType))
+    ).foreach { case (order, requiredSchema) =>
+      val failure = Assertions.assertThrows(classOf[HoodieException], () =>
+        ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(requiredSchema, footerOf(shreddedVariant("v"))))
+      Assertions.assertTrue(
+        failure.getMessage.contains("shredded variant") && failure.getMessage.contains("'v'"),
+        s"The $order error must name the shredded variant column, got: ${failure.getMessage}")
+
+      ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(requiredSchema, footerOf(unshreddedVariant("v")))
+    }
+  }
+
+  /** The walk has to reach a variant below a struct, a list element and a map value. */
+  @Test
+  def testValidateNoShreddedVariantStructsRejectsNestedShreddedVariant(): Unit = {
+    Seq(
+      ("struct", new StructType().add("s", new StructType().add("inner", variantStruct)),
+        footerOf(Types.optionalGroup().addField(shreddedVariant("inner")).named("s")), "'s.inner'"),
+      ("list", new StructType().add("v", ArrayType(variantStruct)),
+        footerOf(threeLevelList("v", shreddedVariant("element"))), "'v.element'"),
+      ("map", new StructType().add("v", MapType(StringType, variantStruct)),
+        footerOf(stringKeyMap("v", shreddedVariant("value"))), "'v.value'")
+    ).foreach { case (leg, requiredSchema, footer, path) =>
+      val failure = Assertions.assertThrows(classOf[HoodieException], () =>
+        ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(requiredSchema, footer))
+      Assertions.assertTrue(failure.getMessage.contains(path),
+        s"The $leg error must name $path, got: ${failure.getMessage}")
+    }
+  }
+
+  /**
+   * The requested side must be the variant shape exactly, so a user struct that merely contains
+   * those two names, or carries them with another type, reads the same file untouched - as does a
+   * column the file does not hold at all. Each leg fails the test by throwing.
+   */
+  @Test
+  def testValidateNoShreddedVariantStructsLeavesOtherRequestsAlone(): Unit = {
+    Seq(
+      new StructType().add("metadata", BinaryType).add("value", BinaryType).add("extra", BinaryType),
+      new StructType().add("metadata", BinaryType).add("value", IntegerType),
+      new StructType().add("a", BinaryType).add("b", BinaryType)
+    ).foreach { requested =>
+      ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(
+        new StructType().add("v", requested), footerOf(shreddedVariant("v")))
+    }
+
+    // A column added after the file was written has no footer field to walk.
+    ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(
+      new StructType().add("added", variantStruct), footerOf(shreddedVariant("v")))
+  }
+
+  /** How a variant column is declared on Spark 3.x, which has no VariantType. */
+  private def variantStruct: StructType =
+    new StructType().add("value", BinaryType).add("metadata", BinaryType)
 
   /**
    * What a 2-level repeated group wraps here: a single struct field "e" holding the shredded

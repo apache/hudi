@@ -247,6 +247,14 @@ abstract class Spark3LegacyHoodieParquetFileFormat(shouldAppendPartitionValues: 
 
       // Clone new conf
       val hadoopAttemptConf = new Configuration(broadcastedHadoopConf.value.value)
+      // A variant column is declared as its unshredded struct shape on Spark 3.x (no VariantType);
+      // reject a file that shreds it before either branch below, so the read fails naming the
+      // column instead of projecting the group by name and returning a null value for every
+      // shredded row. Gated like the schema-on-read guard: an empty projection (count(*)) reads no
+      // column data and must not pay a footer read.
+      if (requiredSchema.nonEmpty) {
+        ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(requiredSchema, footerFileMetaData)
+      }
       val typeChangeInfos: java.util.Map[Integer, Pair[DataType, DataType]] = if (shouldUseInternalSchema) {
         // Same guard as ParquetSchemaEvolutionUtils.getHadoopConfClone: schema-on-read cannot
         // reconstruct shredded variants, so fail loudly instead of silently dropping typed_value.

@@ -117,6 +117,11 @@ class Spark35ParquetReader(enableVectorizedReader: Boolean,
     }
 
     val footerFileMetaData = fileFooter.getFileMetaData
+    // A variant column is declared as its unshredded struct shape on Spark 3.x (no VariantType);
+    // reject a file that shreds it here, before the reader is built, so the read fails naming the
+    // column instead of projecting the group by name and returning a null value for every
+    // shredded row.
+    ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(requiredSchema, footerFileMetaData)
     val datetimeRebaseSpec = DataSourceUtils.datetimeRebaseSpec(
       footerFileMetaData.getKeyValueMetaData.get,
       datetimeRebaseModeInRead)
