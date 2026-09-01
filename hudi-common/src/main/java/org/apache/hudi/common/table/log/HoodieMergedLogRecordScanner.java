@@ -21,7 +21,6 @@ package org.apache.hudi.common.table.log;
 import org.apache.hudi.common.avro.AvroRecordContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.RecordContext;
-import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
@@ -281,7 +280,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
   }
 
   @Override
-  protected void processNextDeletedRecord(DeleteRecord deleteRecord) {
+  protected void processNextDeletedRecord(BufferedRecord<?> deleteRecord, String partitionPath) {
     String key = deleteRecord.getRecordKey();
     HoodieRecord oldRecord = records.get(key);
     if (oldRecord != null) {
@@ -304,9 +303,9 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     // Put the DELETE record
     if (recordType == HoodieRecord.HoodieRecordType.AVRO) {
       records.put(key, HoodieRecordUtils.generateEmptyPayload(key,
-          deleteRecord.getPartitionPath(), deleteRecord.getOrderingValue(), getPayloadClassFQN()));
+          partitionPath, deleteRecord.getOrderingValue(), getPayloadClassFQN()));
     } else {
-      HoodieEmptyRecord record = new HoodieEmptyRecord<>(new HoodieKey(key, deleteRecord.getPartitionPath()), null, deleteRecord.getOrderingValue(), recordType);
+      HoodieEmptyRecord record = new HoodieEmptyRecord<>(new HoodieKey(key, partitionPath), null, deleteRecord.getOrderingValue(), recordType);
       records.put(key, record);
     }
   }

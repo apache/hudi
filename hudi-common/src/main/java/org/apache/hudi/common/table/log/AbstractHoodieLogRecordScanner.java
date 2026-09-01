@@ -18,8 +18,9 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -36,7 +37,10 @@ import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -52,6 +56,7 @@ import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.util.ArrayDeque;
@@ -68,6 +73,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.COMPACTED_BLOCK_TIMES;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME;
@@ -159,6 +165,10 @@ public abstract class AbstractHoodieLogRecordScanner {
   private HoodieTimeline commitsTimeline = null;
   private HoodieTimeline completedInstantsTimeline = null;
   private HoodieTimeline inflightInstantsTimeline = null;
+  // Reader context used to materialize delete records through the engine-agnostic reader APIs.
+  private HoodieReaderContext<IndexedRecord> deleteReaderContext;
+  // Physical partition path of the log files, used to restore HoodieKey for buffered deletes.
+  private final Option<String> deletePartitionPathOpt;
 
   protected AbstractHoodieLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths,
                                            HoodieSchema readerSchema, String latestInstantTime,
@@ -220,7 +230,42 @@ public abstract class AbstractHoodieLogRecordScanner {
     }
 
     this.partitionNameOverrideOpt = partitionNameOverride;
+    this.deletePartitionPathOpt = resolveDeletePartitionPath(basePath, logFilePaths, partitionNameOverride);
     this.recordType = recordMerger.getRecordType();
+  }
+
+  private static Option<String> resolveDeletePartitionPath(String basePath, List<String> logFilePaths,
+                                                           Option<String> partitionNameOverride) {
+    if (partitionNameOverride.isPresent()) {
+      return partitionNameOverride;
+    }
+    if (logFilePaths.isEmpty()) {
+      return Option.empty();
+    }
+    return Option.of(getRelativePartitionPath(
+        new StoragePath(basePath), new StoragePath(logFilePaths.get(0)).getParent()));
+  }
+
+  private HoodieReaderContext<IndexedRecord> getOrCreateDeleteReaderContext() {
+    if (deleteReaderContext == null) {
+      HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
+      TypedProperties mergeProps = ConfigUtils.getMergeProps(payloadProps, tableConfig);
+      HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(
+          hoodieTableMetaClient.getStorageConf(), tableConfig, instantRange, Option.empty(), mergeProps);
+      readerContext.setHasLogFiles(true);
+      readerContext.setHasBootstrapBaseFile(false);
+      readerContext.setShouldMergeUseRecordPosition(false);
+      readerContext.setTablePath(hoodieTableMetaClient.getBasePath().toString());
+      readerContext.setLatestCommitTime(latestInstantTime);
+      readerContext.getRecordContext().setPartitionPath(deletePartitionPathOpt.orElse(null));
+      readerContext.initRecordMerger(mergeProps);
+      Option<InternalSchema> internalSchemaOpt = internalSchema.isEmptySchema()
+          ? Option.empty() : Option.of(internalSchema);
+      readerContext.setSchemaHandler(new FileGroupReaderSchemaHandler<>(
+          readerContext, readerSchema, readerSchema, internalSchemaOpt, mergeProps, hoodieTableMetaClient));
+      deleteReaderContext = readerContext;
+    }
+    return deleteReaderContext;
   }
 
   private HoodieTimeline getOrCreateCompletedInstantsTimeline() {
@@ -504,9 +549,18 @@ public abstract class AbstractHoodieLogRecordScanner {
   /**
    * Process next deleted record.
    *
-   * @param deleteRecord Deleted record(hoodie key and ordering value)
+   * @param deleteRecord Deleted record (record key and ordering value)
+   * @param partitionPath Partition containing the deleted record
    */
-  protected abstract void processNextDeletedRecord(DeleteRecord deleteRecord);
+  protected abstract void processNextDeletedRecord(BufferedRecord<?> deleteRecord, String partitionPath);
+
+  private void processDeleteBlock(HoodieDeleteBlock deleteBlock) {
+    checkState(deletePartitionPathOpt.isPresent(), "Partition path is required when processing delete records");
+    String partitionPath = deletePartitionPathOpt.get();
+    for (BufferedRecord<IndexedRecord> deleteRecord : deleteBlock.getRecordsToDelete(getOrCreateDeleteReaderContext())) {
+      processNextDeletedRecord(deleteRecord, partitionPath);
+    }
+  }
 
   /**
    * Process the set of log blocks belonging to the last instant which is read fully.
@@ -524,7 +578,7 @@ public abstract class AbstractHoodieLogRecordScanner {
           processDataBlock((HoodieDataBlock) lastBlock, keySpecOpt);
           break;
         case DELETE_BLOCK:
-          Arrays.stream(((HoodieDeleteBlock) lastBlock).getRecordsToDelete()).forEach(this::processNextDeletedRecord);
+          processDeleteBlock((HoodieDeleteBlock) lastBlock);
           break;
         case CORRUPT_BLOCK:
           log.warn("Found a corrupt block which was not rolled back");

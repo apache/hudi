@@ -80,6 +80,11 @@ public class HoodieNativeLogDeleteBlock extends HoodieDeleteBlock {
     return decodeOrderedRecordPositionList(getLogBlockHeader());
   }
 
+  /**
+   * @deprecated Use {@link #getRecordsToDelete(HoodieReaderContext)} so delete records are
+   * materialized through the reader context.
+   */
+  @Deprecated
   @Override
   public DeleteRecord[] getRecordsToDelete() {
     if (recordsToDelete == null) {

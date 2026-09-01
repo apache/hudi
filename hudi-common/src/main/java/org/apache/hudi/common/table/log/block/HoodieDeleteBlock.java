@@ -112,6 +112,11 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
     return baos;
   }
 
+  /**
+   * @deprecated Use {@link #getRecordsToDelete(HoodieReaderContext)} so delete records are
+   * materialized through the reader context.
+   */
+  @Deprecated
   public DeleteRecord[] getRecordsToDelete() {
     try {
       if (recordsToDelete == null) {

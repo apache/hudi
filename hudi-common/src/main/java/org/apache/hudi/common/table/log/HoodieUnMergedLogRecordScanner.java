@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -27,6 +26,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
+import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -86,9 +86,9 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
   }
 
   @Override
-  protected void processNextDeletedRecord(DeleteRecord deleteRecord) {
+  protected void processNextDeletedRecord(BufferedRecord<?> deleteRecord, String partitionPath) {
     if (recordDeletionCallback != null) {
-      recordDeletionCallback.apply(deleteRecord.getHoodieKey());
+      recordDeletionCallback.apply(new HoodieKey(deleteRecord.getRecordKey(), partitionPath));
     }
   }
 
