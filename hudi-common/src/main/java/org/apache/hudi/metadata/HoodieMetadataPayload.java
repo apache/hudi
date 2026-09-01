@@ -108,7 +108,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   // Note: Variable is unused, but caching is required.
   private static final HoodieSchema HOODIE_METADATA_SCHEMA = HoodieSchemaCache.intern(
       HoodieSchema.fromAvroSchema(HoodieMetadataRecord.getClassSchema()));
-  // Cache the Avro schema reference for O(1) equality checks during Avro.Schema -> HoodieSchema migration
+  // Held for the reference-equality fast path in getInsertValue: getClassSchema() returns the
+  // generated class's SCHEMA$ singleton, so no interning is needed.
   private static final Schema HOODIE_METADATA_AVRO_SCHEMA = HoodieMetadataRecord.getClassSchema();
   /**
    * Field offsets when metadata fields are present
