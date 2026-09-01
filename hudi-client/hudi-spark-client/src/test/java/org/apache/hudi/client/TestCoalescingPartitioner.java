@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
+import org.apache.spark.HashPartitioner;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.api.java.function.Function;
@@ -186,18 +187,39 @@ public class TestCoalescingPartitioner extends HoodieClientTestBase {
   }
 
   /**
-   * "polygenelubricants" hashes to Integer.MIN_VALUE, which Math.abs leaves negative, so a
-   * partitioner deriving its answer that way returns an index Spark cannot use. Asserting the
-   * fixture first, so this stops silently passing if String.hashCode ever changes.
+   * Spark's own HashPartitioner routes with Utils.nonNegativeMod, which is floorMod. Pinning the
+   * exact index against it is a real oracle: asserting only that the index is in range would pass
+   * for abs-mod too, and abs-mod differs from floorMod for roughly half of all negative hashes.
    */
   @Test
-  public void testPartitionIsInRangeForMinValueHash() {
-    String key = "polygenelubricants";
-    assertEquals(Integer.MIN_VALUE, key.hashCode());
+  public void testPartitionMatchesSparkHashPartitioner() {
+    String minValueHashKey = "polygenelubricants";
+    assertEquals(Integer.MIN_VALUE, minValueHashKey.hashCode());
+    // Integer.MIN_VALUE % 2^k == 0, so only 3, 5, 6 and 7 fail on the old Math.abs expression;
+    // trimming this list to powers of two would stop it exercising the fix.
     for (int numPartitions : new int[] {1, 2, 3, 4, 5, 6, 7, 8, 16}) {
-      int partition = new CoalescingPartitioner(numPartitions).getPartition(key);
-      assertTrue(partition >= 0 && partition < numPartitions,
-          "partition " + partition + " out of range for numPartitions " + numPartitions);
+      HashPartitioner oracle = new HashPartitioner(numPartitions);
+      for (Object key : new Object[] {minValueHashKey, -1, -2, -3, -5, -100, 0, 1, 100}) {
+        int partition = new CoalescingPartitioner(numPartitions).getPartition(key);
+        assertTrue(partition >= 0 && partition < numPartitions,
+            "partition " + partition + " out of range for numPartitions " + numPartitions);
+        assertEquals(oracle.getPartition(key), partition,
+            "key " + key + " at numPartitions " + numPartitions);
+      }
     }
   }
+
+  /**
+   * The assertions above only call getPartition. This drives a real shuffle so the failure the old
+   * expression produced is visible end to end: BypassMergeSortShuffleWriter indexes its
+   * partitionWriters array with whatever getPartition answers, unguarded.
+   */
+  @Test
+  public void testShuffleSucceedsForMinValueHashKey() {
+    JavaRDD<String> keys = jsc.parallelize(Collections.singletonList("polygenelubricants"), 1);
+    assertEquals(1, keys.mapToPair(key -> new Tuple2<>(key, key))
+        .partitionBy(new CoalescingPartitioner(3))
+        .count());
+  }
+
 }

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
-import org.junit.jupiter.api.Test;
+import org.apache.spark.HashPartitioner;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -31,22 +31,24 @@ class TestPartitionPathRDDPartitioner {
 
   /**
    * Objects.hash(x) is 31 + x.hashCode(), so this partition path overflows it to
-   * Integer.MIN_VALUE, which Math.abs leaves negative.
+   * Integer.MIN_VALUE. The partitioner hashes that sum rather than the string, so the oracle is
+   * fed the boxed int. Spark's HashPartitioner routes with Utils.nonNegativeMod, i.e. floorMod.
    */
-  private static final String MIN_VALUE_HASH_PATH = "xfjfxsf";
-
-  @Test
-  void assertFixtureStillOverflowsToMinValue() {
-    assertEquals(Integer.MIN_VALUE, Objects.hash(MIN_VALUE_HASH_PATH));
-  }
-
+  // Integer.MIN_VALUE % 2^k == 0, so only 3, 5, 6 and 7 fail on the old Math.abs expression;
+  // trimming this list to powers of two would stop it exercising the fix.
   @ParameterizedTest
   @ValueSource(ints = {1, 2, 3, 4, 5, 6, 7, 8, 16})
-  void assertPartitionIsInRangeForMinValueHash(int numPartitions) {
+  void testPartitionMatchesSparkHashPartitioner(int numPartitions) {
+    String minValueHashPath = "xfjfxsf";
+    assertEquals(Integer.MIN_VALUE, Objects.hash(minValueHashPath));
+
     PartitionPathRDDPartitioner partitioner =
-        new PartitionPathRDDPartitioner(o -> MIN_VALUE_HASH_PATH, numPartitions);
+        new PartitionPathRDDPartitioner(o -> minValueHashPath, numPartitions);
     int partition = partitioner.getPartition(new Object());
     assertTrue(partition >= 0 && partition < numPartitions,
         "partition " + partition + " out of range for numPartitions " + numPartitions);
+    assertEquals(new HashPartitioner(numPartitions).getPartition(Objects.hash(minValueHashPath)),
+        partition, "numPartitions " + numPartitions);
   }
+
 }
