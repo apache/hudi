@@ -100,6 +100,16 @@ public class BucketIdentifier implements Serializable {
    * Generate a new file id for NBCC mode, file id is fixed for each bucket with format: "{bucket_id}-0000-0000-0000-000000000000-0"
    */
   public static String newBucketFileIdForNBCC(String bucketIdStr) {
-    return FSUtils.createNewFileId(bucketIdStr + CONSTANT_FILE_ID_SUFFIX, 0);
+    return newBucketFileIdForNBCC(bucketIdStr, 0);
+  }
+
+  /**
+   * Generate a new file id for NBCC mode with a specific generation.
+   * Format: "{bucket_id}-0000-0000-0000-000000000000-{generation}"
+   * Used when the default generation (0) has been retired by a replacecommit,
+   * so subsequent writes land on a fresh file id.
+   */
+  public static String newBucketFileIdForNBCC(String bucketIdStr, int generation) {
+    return FSUtils.createNewFileId(bucketIdStr + CONSTANT_FILE_ID_SUFFIX, generation);
   }
 }
