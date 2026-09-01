@@ -2085,4 +2085,48 @@ public class TestHoodieSchemaUtils {
     assertEquals("value", result.get().getRight().name());
     assertEquals(HoodieSchemaType.LONG, result.get().getRight().schema().getType());
   }
+
+  private static HoodieSchema deleteLogTableSchema() {
+    return HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("ts", HoodieSchema.create(HoodieSchemaType.LONG), "ordering field doc", null),
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+  }
+
+  @Test
+  public void testCreateDeleteLogSchema() {
+    HoodieSchema deleteLogSchema =
+        HoodieSchemaUtils.createDeleteLogSchema(deleteLogTableSchema(), Collections.singletonList("ts"));
+
+    assertEquals("hudi_delete_log_record", deleteLogSchema.getName());
+    assertEquals(2, deleteLogSchema.getFields().size());
+
+    // The record key is always present and never nullable.
+    HoodieSchemaField recordKeyField = deleteLogSchema.getFields().get(0);
+    assertEquals(HoodieRecord.RECORD_KEY_METADATA_FIELD, recordKeyField.name());
+    assertEquals(HoodieSchemaType.STRING, recordKeyField.schema().getType());
+    assertFalse(recordKeyField.isNullable());
+
+    // The ordering field keeps its doc but is made nullable with a null default, even though
+    // the table schema marks it required.
+    HoodieSchemaField orderingField = deleteLogSchema.getFields().get(1);
+    assertEquals("ts", orderingField.name());
+    assertTrue(orderingField.isNullable());
+    assertEquals(HoodieSchemaType.LONG, orderingField.getNonNullSchema().getType());
+    assertEquals("ordering field doc", orderingField.doc().get());
+    assertEquals(HoodieSchema.NULL_VALUE, orderingField.defaultVal().get());
+  }
+
+  @Test
+  public void testCreateDeleteLogSchemaWithUnknownOrderingField() {
+    HoodieSchema tableSchema = deleteLogTableSchema();
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+        () -> HoodieSchemaUtils.createDeleteLogSchema(tableSchema, Collections.singletonList("not_a_field")));
+    assertEquals("Ordering field not_a_field not found in table schema", exception.getMessage());
+  }
 }

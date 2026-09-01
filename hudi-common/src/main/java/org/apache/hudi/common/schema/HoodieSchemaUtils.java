@@ -41,6 +41,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Utility class for HoodieSchema operations including table schema manipulation,
@@ -662,6 +663,28 @@ public final class HoodieSchemaUtils {
     toBeAddedFields.add(recordKeyField);
     toBeAddedFields.add(partitionPathField);
     return HoodieSchema.createRecord("HoodieRecordKey", "", "", false, toBeAddedFields);
+  }
+
+  /**
+   * Schema of a native delete log record: the record key plus the ordering fields, which are
+   * always nullable (see the comment in the body).
+   */
+  public static HoodieSchema createDeleteLogSchema(HoodieSchema tableSchema, List<String> orderingFieldNames) {
+    // Native delete logs store only the record key plus optional ordering values, so ordering fields in
+    // the delete-log schema must always be nullable even when the table schema marks them required.
+    // A delete record such as HoodieEmptyRecord may carry OrderingValues.getDefault() as an in-memory
+    // sentinel rather than a real field value. Persist NULL for that missing value so readers can map it
+    // back to the default ordering without confusing it with a real business value such as 0.
+    List<HoodieSchemaField> fields = Stream.concat(
+        Stream.of(createNewSchemaField(
+            HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieSchema.create(HoodieSchemaType.STRING), null, null)),
+        orderingFieldNames.stream().map(orderingFieldName -> tableSchema.getField(orderingFieldName)
+            .map(field -> createNewSchemaField(
+                field.name(), HoodieSchema.createNullable(field.schema()), field.doc().orElse(null), HoodieSchema.NULL_VALUE))
+            .orElseThrow(() ->
+                new IllegalArgumentException("Ordering field " + orderingFieldName + " not found in table schema"))))
+        .collect(Collectors.toList());
+    return HoodieSchema.createRecord("hudi_delete_log_record", null, null, fields);
   }
 
   /**
