@@ -44,9 +44,9 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * {@code HoodieSchemaUtils#createNullableSchema}, the field construction inside {@link HoodieSchema.Blob},
  * and a handful of internal uses in {@link HoodieAvroUtils}.
  *
- * <p>This class is being retired under #16639. Do not add methods here: the HoodieSchema twin of every
- * method on this class already exists, so use {@link org.apache.hudi.common.schema.HoodieSchema} or
- * {@link org.apache.hudi.common.schema.HoodieSchemaUtils} instead.</p>
+ * <p>This class is being retired under #16639. Do not add methods here: every method on this class except
+ * {@link #getNonNullTypeFromUnion(Schema)} already has a HoodieSchema twin, so use
+ * {@link org.apache.hudi.common.schema.HoodieSchema} or {@link org.apache.hudi.common.schema.HoodieSchemaUtils} instead.</p>
  */
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 @Slf4j

@@ -42,7 +42,7 @@ package org.apache.hudi.common.schema;
  * versus bytes) and, for fixed, an equal fixed size, whereas the decimal check in
  * {@code HoodieSchemaCompatibilityChecker} compares only precision and scale.</p>
  *
- * <p>This class is package-private and used internally by schema compatibility checkers.</p>
+ * <p>This class is package-private and used only by {@link HoodieSchemaProjectionChecker}.</p>
  */
 class HoodieSchemaTypePromotion {
 
