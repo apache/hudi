@@ -1235,9 +1235,11 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
                 "MERGE INTO field resolution error: No matching assignment found for target table ordering field `ts`"
               )
             } else {
-              spark.sql(
-                updateStatement)
-              // For COMMIT_TIME_ORDERING, ts should be updated to 1003
+              // `value` is the partition column and is supplied by neither the source, the ON
+              // condition, nor the assignments, so the statement is rejected.
+              checkExceptionContain(updateStatement)(
+                "Failed to resolve partition fields"
+              )
               checkAnswer(s"select id, name, value, ts from $tableName")(
                 Seq(1, "a1", 10, 1000)
               )
