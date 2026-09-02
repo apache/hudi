@@ -22,25 +22,30 @@ import org.apache.hudi.AvroConversionUtils.getAvroRecordNameAndNamespace
 import org.apache.hudi.client.{SparkRDDWriteClient, WriteStatus}
 import org.apache.hudi.common.config.{HoodieReaderConfig, RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey
+import org.apache.hudi.common.data.HoodieListData
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.HoodieInstant
-import org.apache.hudi.common.util.{CommitUtils, ConfigUtils, Option => HOption, StringUtils}
+import org.apache.hudi.common.util.{CommitUtils, ConfigUtils, HoodieDataUtils, Option => HOption, StringUtils}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.execution.bulkinsert.NonSortPartitionerWithRows
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
+import org.apache.hudi.metadata.{HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.table.HoodieTable
 
+import org.apache.spark.Partitioner
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SaveMode, SQLContext}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.functions.{col, concat, hash, lit, udf, when}
+import org.apache.spark.sql.functions.{coalesce, col, concat, hash, lit, udf, when}
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.types.{StringType, StructField, StructType}
 
 import scala.collection.JavaConverters._
 
@@ -112,8 +117,8 @@ object HoodieDataFrameWriter extends Logging {
       val prepared = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(
         input, writeConfig, table.getMetaClient.getTableConfig, new NonSortPartitionerWithRows(), instantTime)
 
-      // Stage 3: index tagging as a join against the latest base-file meta columns.
-      val tagged = tagRecords(spark, prepared, operation, table)
+      // Stage 3: index tagging (record-level-index point lookup or simple-index join).
+      val tagged = tagRecords(spark, prepared, operation, writeConfig, table)
 
       // Stage 4: routing on a bucket column; updates pin to their file group, inserts hash
       // across small-file padding slots and new-file buckets planned from table metadata.
@@ -249,14 +254,89 @@ object HoodieDataFrameWriter extends Logging {
   }
 
   /**
-   * Simple-index-style tagging: read only the meta columns of the latest base files and left
-   * join the input on (record key, partition path), producing the target file id column (null
-   * for inserts).
+   * Tags incoming rows with their target file group: the record-level-index strategy when the
+   * index is configured and its metadata partition exists, else the simple-index-style join
+   * against the latest base files' meta columns. Inserts come back with a null file id.
    */
   private def tagRecords(spark: org.apache.spark.sql.SparkSession,
                          prepared: Dataset[Row],
                          operation: WriteOperationType,
-                         table: org.apache.hudi.table.HoodieTable[_, _, _, _]): Dataset[Row] = {
+                         writeConfig: HoodieWriteConfig,
+                         table: HoodieTable[_, _, _, _]): Dataset[Row] = {
+    val recordIndexConfigured = writeConfig.getIndexType == HoodieIndex.IndexType.RECORD_INDEX ||
+      writeConfig.getIndexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX
+    if (operation == WriteOperationType.UPSERT && recordIndexConfigured
+      && table.getMetaClient.getTableConfig.isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX)) {
+      log.info("Tagging incoming records via the record-level index")
+      tagViaRecordIndex(spark, prepared, table)
+    } else {
+      tagViaSimpleJoin(spark, prepared, operation, table)
+    }
+  }
+
+  /**
+   * Record-level-index tagging: only thin record keys shuffle, partitioned with the same hash
+   * that shards the record index across its N file groups, so each Spark partition does point
+   * lookups against exactly one index shard. Located keys join back to the input rows; the index
+   * never shuffles. Located rows keep their original table partition (the update-partition-path
+   * semantics of the global record index with the default config).
+   */
+  private def tagViaRecordIndex(spark: org.apache.spark.sql.SparkSession,
+                                prepared: Dataset[Row],
+                                table: HoodieTable[_, _, _, _]): Dataset[Row] = {
+    val numFileGroups = table.getTableMetadata.getNumFileGroupsForPartition(MetadataPartitionType.RECORD_INDEX)
+    val indexVersion = HoodieTableMetadataUtil.existingIndexVersionOrDefault(
+      MetadataPartitionType.RECORD_INDEX.getPartitionPath, table.getMetaClient)
+    val mappingFunction = MetadataPartitionType
+      .fromPartitionPath(MetadataPartitionType.RECORD_INDEX.getPartitionPath)
+      .getFileGroupMappingFunction(indexVersion)
+    val serTable = table
+
+    val locationRows = prepared.select(col(HoodieRecord.RECORD_KEY_METADATA_FIELD))
+      .queryExecution.toRdd
+      .map(row => row.getString(0))
+      .map(key => (mappingFunction.apply(key, numFileGroups).intValue(), key))
+      .partitionBy(new ShardPartitioner(numFileGroups))
+      .map(_._2)
+      .mapPartitions { keys =>
+        val keyList = new java.util.ArrayList[String]()
+        keys.foreach(keyList.add)
+        if (keyList.isEmpty) {
+          Iterator.empty
+        } else {
+          val locations = serTable.getTableMetadata
+            .readRecordIndexLocationsWithKeys(HoodieListData.eager[String](keyList))
+          try {
+            HoodieDataUtils.dedupeAndCollectAsList(locations).asScala
+              .map(pair => Row(pair.getKey, pair.getValue.getPartitionPath, pair.getValue.getFileId))
+              .iterator
+          } finally {
+            locations.unpersistWithDependencies()
+          }
+        }
+      }
+    val locationSchema = StructType(Seq(
+      StructField("_hoodie_lookup_key", StringType),
+      StructField("_hoodie_located_partition", StringType),
+      StructField(TAGGED_FILE_ID_COL, StringType)))
+    val locations = spark.createDataFrame(locationRows, locationSchema)
+    prepared.join(locations,
+        prepared(HoodieRecord.RECORD_KEY_METADATA_FIELD) === locations("_hoodie_lookup_key"),
+        "left_outer")
+      .withColumn(HoodieRecord.PARTITION_PATH_METADATA_FIELD,
+        coalesce(col("_hoodie_located_partition"), col(HoodieRecord.PARTITION_PATH_METADATA_FIELD)))
+      .drop("_hoodie_lookup_key", "_hoodie_located_partition")
+  }
+
+  /**
+   * Simple-index-style tagging: read only the meta columns of the latest base files and left
+   * join the input on (record key, partition path), producing the target file id column (null
+   * for inserts).
+   */
+  private def tagViaSimpleJoin(spark: org.apache.spark.sql.SparkSession,
+                               prepared: Dataset[Row],
+                               operation: WriteOperationType,
+                               table: HoodieTable[_, _, _, _]): Dataset[Row] = {
     val latestBaseFiles = if (operation == WriteOperationType.UPSERT) {
       // The view only serves partitions already loaded into it; load them all on the same view
       // instance before asking for the latest base files across the table.
@@ -316,4 +396,13 @@ object HoodieDataFrameWriter extends Logging {
       .repartition(numWriteTasks, col(ROUTING_BUCKET_COL))
       .sortWithinPartitions(col(ROUTING_BUCKET_COL))
   }
+}
+
+/**
+ * Passes through pre-computed shard ids as Spark partition ids, aligning the thin-key shuffle
+ * with the record index's own file-group hashing (Spark's Murmur3 partitioning does not).
+ */
+private class ShardPartitioner(shards: Int) extends Partitioner {
+  override def numPartitions: Int = shards
+  override def getPartition(key: Any): Int = key.asInstanceOf[Int]
 }

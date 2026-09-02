@@ -65,23 +65,27 @@ class TestHoodieDataFrameWriter {
     }
   }
 
-  private def writeOptions(operation: String): Map[String, String] = Map(
+  private def writeOptions(operation: String,
+                           extraOpts: Map[String, String] = Map.empty): Map[String, String] = Map(
     "hoodie.table.name" -> "test_dataframe_table",
     HoodieDataFrameWriter.DATAFRAME_WRITE_PATH_ENABLE -> "true",
     HoodieDataFrameWriter.RECORD_KEY_FIELD -> "key",
     HoodieDataFrameWriter.PARTITION_PATH_FIELD -> "partition",
     "hoodie.datasource.write.precombine.field" -> "ts",
     "hoodie.embed.timeline.server" -> "false",
-    HoodieDataFrameWriter.OPERATION_KEY -> operation)
+    HoodieDataFrameWriter.OPERATION_KEY -> operation) ++ extraOpts
 
   private def makeDf(rows: Seq[(String, String, Long, String)]) = {
     spark.createDataFrame(
       rows.map(r => Row(r._1, r._2, r._3, r._4)).asJava, schema)
   }
 
-  private def writeHudi(rows: Seq[(String, String, Long, String)], operation: String, path: String): Unit = {
+  private def writeHudi(rows: Seq[(String, String, Long, String)],
+                        operation: String,
+                        path: String,
+                        extraOpts: Map[String, String] = Map.empty): Unit = {
     makeDf(rows).write.format("hudi")
-      .options(writeOptions(operation))
+      .options(writeOptions(operation, extraOpts))
       .mode(SaveMode.Append)
       .save(path)
   }
@@ -185,6 +189,43 @@ class TestHoodieDataFrameWriter {
       .map(r => org.apache.hudi.common.fs.FSUtils.getFileId(r.getString(0))).distinct
     Assertions.assertEquals(1, fileIds.length)
     Assertions.assertEquals(2, completedCommits(path))
+  }
+
+  @Test
+  def testUpsertWithRecordLevelIndexTagging(): Unit = {
+    val path = tempDir.resolve("test_table_rli").toString
+    val rliOpts = Map(
+      "hoodie.metadata.record.index.enable" -> "true",
+      "hoodie.index.type" -> "RECORD_INDEX")
+
+    writeHudi(Seq(
+      ("r1", "p1", 1L, "w1"),
+      ("r2", "p1", 1L, "w2"),
+      ("r3", "p2", 1L, "w3")), "insert", path, rliOpts)
+
+    // The record index partition exists after the first commit, so the second write tags
+    // through the point-lookup strategy.
+    val metaClient = HoodieTableMetaClient.builder()
+      .setConf(HadoopFSUtils.getStorageConfWithCopy(spark.sparkContext.hadoopConfiguration))
+      .setBasePath(path)
+      .build()
+    Assertions.assertTrue(metaClient.getTableConfig.isMetadataPartitionAvailable(
+      org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX))
+
+    writeHudi(Seq(
+      ("r2", "p1", 5L, "w2-updated"),
+      ("r4", "p2", 2L, "w4")), "upsert", path, rliOpts)
+
+    val result = readAsMap(path)
+    Assertions.assertEquals(4, result.size)
+    Assertions.assertEquals((1L, "w1", "r1"), result("r1"))
+    Assertions.assertEquals((5L, "w2-updated", "r2"), result("r2"))
+    Assertions.assertEquals((1L, "w3", "r3"), result("r3"))
+    Assertions.assertEquals((2L, "w4", "r4"), result("r4"))
+    Assertions.assertEquals(2, completedCommits(path))
+
+    val keys = spark.read.format("hudi").load(path).select("_hoodie_record_key").collect().map(_.getString(0))
+    Assertions.assertEquals(keys.length, keys.distinct.length)
   }
 
   @Test
