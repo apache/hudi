@@ -164,12 +164,15 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
   private List<CommandProcessorResponse> updateHiveSQLs(List<String> sqls) {
     List<CommandProcessorResponse> responses = new ArrayList<>();
     HoodieTimer timer = HoodieTimer.start();
+    // Driver.compile() resolves its session from a thread local that every executor on this
+    // thread writes: the one constructed most recently wins, and one that is closed clears it.
+    // Bind ours, as Hive documents a thread running several sessions must, so these statements
+    // run under the session that owns hiveDriver. The thread is not ours to keep, though -- it
+    // may be another executor's or belong to an application that embeds this sync and holds its
+    // own session -- so hand it back in the state we found it.
+    SessionState previousSession = SessionState.get();
+    SessionState.setCurrentSessionState(sessionState);
     try {
-      // Driver.compile() resolves its session from a thread local that every executor on this
-      // thread writes: the one constructed most recently wins, and one that is closed clears it.
-      // Re-assert ours, as Hive documents a thread running several sessions must, so these
-      // statements run under the session that owns hiveDriver.
-      SessionState.setCurrentSessionState(sessionState);
       for (String sql : sqls) {
         if (hiveDriver != null) {
           responses.add(hiveDriver.run(sql));
@@ -177,6 +180,12 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       }
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed in executing SQL", e);
+    } finally {
+      if (previousSession != null) {
+        SessionState.setCurrentSessionState(previousSession);
+      } else {
+        SessionState.detachSession();
+      }
     }
     log.info("Executed {} SQL statements sequentially in {} ms", sqls.size(), timer.endTimer());
     return responses;

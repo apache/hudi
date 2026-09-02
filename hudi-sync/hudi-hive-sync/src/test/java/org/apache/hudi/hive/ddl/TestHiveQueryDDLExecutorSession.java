@@ -31,11 +31,14 @@ import org.mockito.InOrder;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
@@ -118,14 +121,40 @@ class TestHiveQueryDDLExecutorSession {
    */
   @Test
   void sqlRunsUnderTheSessionThisExecutorStarted() throws Exception {
-    Driver driver = mock(Driver.class);
     SessionState sessionState = mock(SessionState.class);
+    Driver driver = mock(Driver.class);
+    List<SessionState> sessionsSeenByDriver = new ArrayList<>();
+    when(driver.run(anyString())).thenAnswer(invocation -> {
+      sessionsSeenByDriver.add(SessionState.get());
+      return null;
+    });
     HiveQueryDDLExecutor executor = executorWith(driver, sessionState);
     SessionState.detachSession();
 
     executor.runSQL("SHOW TABLES");
 
-    assertSame(sessionState, SessionState.get(), "The executor must run under its own session");
+    assertEquals(Collections.singletonList(sessionState), sessionsSeenByDriver,
+        "The executor must run under its own session");
+    assertNull(SessionState.get(), "A thread that held no session must be left holding none");
+  }
+
+  /**
+   * The thread belongs to the caller, which may be another executor or an application that embeds
+   * the sync and holds a session of its own. Leaving this executor's session behind would silently
+   * run the caller's later Hive work under our database, configuration and transaction state.
+   */
+  @Test
+  void sqlHandsTheThreadBackToTheSessionItFound() throws Exception {
+    SessionState otherSession = mock(SessionState.class);
+    when(otherSession.getConf()).thenReturn(new HiveConf());
+    SessionState sessionState = mock(SessionState.class);
+    Driver driver = mock(Driver.class);
+    HiveQueryDDLExecutor executor = executorWith(driver, sessionState);
+    SessionState.setCurrentSessionState(otherSession);
+
+    executor.runSQL("SHOW TABLES");
+
+    assertSame(otherSession, SessionState.get(), "The session held before the statements must be put back");
     verify(driver, times(1)).run("SHOW TABLES");
   }
 
