@@ -26,6 +26,7 @@ import org.apache.hudi.exception.HoodieException
 
 import org.apache.parquet.hadoop.metadata.FileMetaData
 import org.apache.parquet.schema.{MessageType, Type, Types}
+import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.spark.sql.execution.datasources.parquet.VariantParquetTestFixtures.{shreddedVariant, stringKeyMap, threeLevelList, twoLevelList, unshreddedVariant}
 import org.apache.spark.sql.types.{ArrayType, BinaryType, IntegerType, MapType, MetadataBuilder, StringType, StructField, StructType}
 import org.junit.jupiter.api.{Assertions, Test}
@@ -263,6 +264,16 @@ class TestParquetSchemaEvolutionUtils {
     // A column added after the file was written has no footer field to walk.
     ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(
       new StructType().add("added", variantStruct), schemaOf(shreddedVariant("v")))
+
+    // The file side is anchored too: a user struct that merely holds a typed_value member has no
+    // binary metadata beside it, so even a request pruned down to `value` alone - which on the
+    // requested side is indistinguishable from a variant - is left to read.
+    val userStructWithTypedValue = Types.optionalGroup()
+      .addField(Types.optional(PrimitiveTypeName.BINARY).named("value"))
+      .addField(Types.optional(PrimitiveTypeName.INT32).named("typed_value"))
+      .named("v")
+    ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(
+      new StructType().add("v", new StructType().add("value", BinaryType)), schemaOf(userStructWithTypedValue))
   }
 
   /**

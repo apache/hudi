@@ -38,6 +38,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.parquet.hadoop.metadata.FileMetaData
 import org.apache.parquet.schema.{GroupType, MessageType, Type => ParquetType}
+import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.spark.sql.HoodieSchemaUtils
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, UnsafeProjection}
 import org.apache.spark.sql.execution.datasources.SparkSchemaTransformUtils
@@ -312,7 +313,7 @@ object ParquetSchemaEvolutionUtils {
       val group = parquetType.asGroupType()
       dataType match {
         case struct: StructType if isUnshreddedVariantStruct(struct) =>
-          if (group.containsField(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD)) {
+          if (isShreddedVariantGroup(group)) {
             throw new HoodieException(String.format(
               "Column '%s' is a shredded variant (typed_value present) requested as its unshredded "
                 + "struct shape; Spark 3.x cannot reconstruct shredded variants, and reading it "
@@ -332,6 +333,21 @@ object ParquetSchemaEvolutionUtils {
         case _ =>
       }
     }
+  }
+
+  /**
+   * Whether a file group is a shredded variant: typed_value next to a binary metadata, the two
+   * members every shredded variant group carries (value is optional under the spec). The same
+   * file-side anchor as the sibling Hive and Spark 4.0 guards, and needed for the same reason the
+   * requested side is exact: once pruning has narrowed a request to a lone `value`, only the
+   * file can tell a variant apart from a user struct that merely holds a typed_value member.
+   */
+  private def isShreddedVariantGroup(group: GroupType): Boolean = {
+    group.containsField(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD) &&
+      group.containsField(HoodieSchema.Variant.VARIANT_METADATA_FIELD) && {
+        val metadata = group.getType(HoodieSchema.Variant.VARIANT_METADATA_FIELD)
+        metadata.isPrimitive && metadata.asPrimitiveType().getPrimitiveTypeName == PrimitiveTypeName.BINARY
+      }
   }
 
   /**
