@@ -44,6 +44,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SaveMode, SQLContext}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.functions.{coalesce, col, concat, hash, lit, udf, when}
+import org.apache.spark.sql.hudi.execution.HoodieRoutingShuffle
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 
@@ -67,6 +68,13 @@ object HoodieDataFrameWriter extends Logging {
   val DATAFRAME_WRITE_PATH_ENABLE = "hoodie.datasource.write.dataframe.path.enable"
   val INSERT_BUCKETS_PER_PARTITION = "hoodie.datasource.write.dataframe.insert.buckets"
   val WRITE_TASKS = "hoodie.datasource.write.dataframe.write.tasks"
+  val PROFILER = "hoodie.datasource.write.dataframe.profiler"
+  val PROFILER_METADATA = "metadata"
+  val PROFILER_SHUFFLE_STATS = "shuffle_stats"
+  val SHUFFLE_UPDATE_REDUCERS = "hoodie.datasource.write.dataframe.shuffle.update.reducers"
+  val SHUFFLE_INSERT_REDUCERS = "hoodie.datasource.write.dataframe.shuffle.insert.reducers"
+  val SHUFFLE_BYTES_METADATA_KEY = "hoodie.dataframe.shuffle.bytes"
+  private val DEFAULT_SHUFFLE_SIZE_RATIO = 3.0d
 
   val OPERATION_KEY = "hoodie.datasource.write.operation"
   val RECORD_KEY_FIELD = "hoodie.datasource.write.recordkey.field"
@@ -124,9 +132,8 @@ object HoodieDataFrameWriter extends Logging {
       // across small-file padding slots and new-file buckets planned from table metadata.
       val insertPlan = MetadataSizingProfiler.plan(table, writeConfig,
         params.get(INSERT_BUCKETS_PER_PARTITION).map(_.toInt).getOrElse(1))
-      val numWriteTasks = params.get(WRITE_TASKS).map(_.toInt)
-        .getOrElse(spark.sparkContext.defaultParallelism)
-      val routed = routeRecords(tagged, insertPlan, numWriteTasks)
+      val withBucket = withRoutingBucket(tagged, insertPlan)
+      val bucketOrdinal = withBucket.schema.fieldIndex(ROUTING_BUCKET_COL)
 
       val actionType = CommitUtils.getCommitActionType(operation, HoodieTableType.COPY_ON_WRITE)
       table.getActiveTimeline.transitionRequestedToInflight(
@@ -140,17 +147,48 @@ object HoodieDataFrameWriter extends Logging {
       val sparkTable = table.asInstanceOf[HoodieTable[InternalRow, _, _, _]]
       val readerContextFactory = sparkTable.getReaderContextFactoryForWrite
       val task = new DataFrameWriteTask(
-        writeConfig, sparkTable, readerContextFactory, instantTime, routed.schema, writeSchemaLength,
-        routed.schema.fieldIndex(ROUTING_BUCKET_COL), UPDATE_BUCKET_PREFIX)
-      val statusRdd = HoodieSparkUtils.injectSQLConf(
-        routed.queryExecution.toRdd.mapPartitions(iter => task.execute(iter)), SQLConf.get)
+        writeConfig, sparkTable, readerContextFactory, instantTime, withBucket.schema,
+        writeSchemaLength, bucketOrdinal, UPDATE_BUCKET_PREFIX)
+
+      val profilerMode = params.getOrElse(PROFILER, PROFILER_METADATA)
+      val (statusRdd, extraMetadata) = if (profilerMode == PROFILER_SHUFFLE_STATS) {
+        // The routing shuffle doubles as the profiling pass: only its map stage runs first, the
+        // measured block sizes plan the write tasks, and the reduce side reads the shuffle files.
+        val pairs = HoodieSparkUtils.injectSQLConf(
+          withBucket.queryExecution.toRdd.map(row => (row.getString(bucketOrdinal), row.copy())),
+          SQLConf.get)
+        val sizeRatio = readShuffleSizeRatio(table.getMetaClient)
+        val binSize = math.max(1L, (writeConfig.getParquetMaxFileSize * sizeRatio).toLong)
+        val shuffle = HoodieRoutingShuffle.execute(pairs,
+          params.getOrElse(SHUFFLE_UPDATE_REDUCERS, "50").toInt,
+          params.getOrElse(SHUFFLE_INSERT_REDUCERS, "50").toInt,
+          UPDATE_BUCKET_PREFIX, binSize)
+        (HoodieSparkUtils.injectSQLConf(
+          shuffle.rows.mapPartitions(iter => task.execute(iter.map(_._2))), SQLConf.get),
+          Map(SHUFFLE_BYTES_METADATA_KEY -> shuffle.totalShuffleBytes.toString))
+      } else {
+        val numWriteTasks = params.get(WRITE_TASKS).map(_.toInt)
+          .getOrElse(spark.sparkContext.defaultParallelism)
+        val routed = withBucket
+          .repartition(numWriteTasks, col(ROUTING_BUCKET_COL))
+          .sortWithinPartitions(col(ROUTING_BUCKET_COL))
+        (HoodieSparkUtils.injectSQLConf(
+          routed.queryExecution.toRdd.mapPartitions(iter => task.execute(iter)), SQLConf.get),
+          Map.empty[String, String])
+      }
 
       val javaRdd = new org.apache.spark.api.java.JavaRDD[WriteStatus](statusRdd)
       HoodieJavaRDD.of(javaRdd).persist(
         writeConfig.getString(HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE),
         engineContext, HoodieDataCacheKey.of(basePath, instantTime))
 
-      client.commit(instantTime, javaRdd, HOption.empty(), actionType,
+      val extraMetadataOpt = if (extraMetadata.isEmpty) {
+        HOption.empty[java.util.Map[String, String]]()
+      } else {
+        val metadataMap: java.util.Map[String, String] = new java.util.HashMap[String, String](extraMetadata.asJava)
+        HOption.of(metadataMap)
+      }
+      client.commit(instantTime, javaRdd, extraMetadataOpt, actionType,
         java.util.Collections.emptyMap[String, java.util.List[String]](), HOption.empty())
     } finally {
       client.close()
@@ -366,25 +404,27 @@ object HoodieDataFrameWriter extends Logging {
   }
 
   /**
-   * Adds the routing-bucket column and co-locates each bucket through one shuffle, sorted within
-   * partitions so a write task sees each bucket as one contiguous run. Tagged updates pin to
-   * their file group; inserts hash across their partition's slots, where the leading slots pad
-   * existing small file groups (routed as update buckets, so they merge) and the remaining
-   * slots open new file groups.
+   * Adds the routing-bucket column. Tagged updates pin to their file group; inserts hash across
+   * their partition's slots, where the leading slots pad existing small file groups (routed as
+   * update buckets, so they merge) and the remaining slots open new file groups. The profiler
+   * mode decides how buckets then map to write tasks.
    */
-  private def routeRecords(tagged: Dataset[Row],
-                           insertPlan: InsertRoutingPlan,
-                           numWriteTasks: Int): Dataset[Row] = {
+  private def withRoutingBucket(tagged: Dataset[Row],
+                                insertPlan: InsertRoutingPlan): Dataset[Row] = {
     val smallFileSlots = insertPlan.smallFileSlotsByPartition
     val newFileBuckets = insertPlan.newFileBuckets
     val insertBucket = udf { (partitionPath: String, keyHash: Int) =>
       val padding = smallFileSlots.getOrElse(partitionPath, Array.empty[String])
-      val totalSlots = padding.length + newFileBuckets
+      // Padding-first: without a count pass there is no record budget per small file, so all of
+      // a partition's inserts fill its small file groups before any new one opens. A very large
+      // batch can overshoot the target file size; the measured-bytes budget of the shuffle-stats
+      // profiler is the eventual fix.
+      val totalSlots = if (padding.nonEmpty) padding.length else newFileBuckets
       val slot = ((keyHash % totalSlots) + totalSlots) % totalSlots
-      if (slot < padding.length) {
+      if (padding.nonEmpty) {
         padding(slot)
       } else {
-        INSERT_BUCKET_PREFIX + partitionPath + ":" + "%010d".format(slot - padding.length)
+        INSERT_BUCKET_PREFIX + partitionPath + ":" + "%010d".format(slot)
       }
     }
     val bucketCol = when(col(TAGGED_FILE_ID_COL).isNotNull,
@@ -393,8 +433,31 @@ object HoodieDataFrameWriter extends Logging {
         col(HoodieRecord.PARTITION_PATH_METADATA_FIELD),
         hash(col(HoodieRecord.RECORD_KEY_METADATA_FIELD))))
     tagged.withColumn(ROUTING_BUCKET_COL, bucketCol)
-      .repartition(numWriteTasks, col(ROUTING_BUCKET_COL))
-      .sortWithinPartitions(col(ROUTING_BUCKET_COL))
+  }
+
+  /**
+   * Calibrates the shuffle-bytes-to-parquet-bytes ratio from recent commit metadata, so bin
+   * sizes track this table's actual encoding and compression instead of a fixed guess.
+   */
+  private def readShuffleSizeRatio(metaClient: HoodieTableMetaClient): Double = {
+    val timeline = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
+    val ratio = timeline.getReverseOrderedInstants.iterator().asScala.take(5).flatMap { instant =>
+      try {
+        val metadata = metaClient.getActiveTimeline.readCommitMetadata(instant)
+        val shuffleBytes = Option(metadata.getExtraMetadata.get(SHUFFLE_BYTES_METADATA_KEY))
+          .map(_.toLong).getOrElse(0L)
+        val bytesWritten = metadata.fetchTotalBytesWritten()
+        if (shuffleBytes > 0 && bytesWritten > 0) {
+          Some(shuffleBytes.toDouble / bytesWritten)
+        } else {
+          None
+        }
+      } catch {
+        case _: Exception => None
+      }
+    }.toSeq.headOption.getOrElse(DEFAULT_SHUFFLE_SIZE_RATIO)
+    log.info(s"Shuffle-to-parquet size ratio for bin sizing: $ratio")
+    ratio
   }
 }
 

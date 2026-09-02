@@ -49,6 +49,13 @@ class TestHoodieDataFrameWriter {
 
   @BeforeAll
   def setUp(): Unit = {
+    // A stale hudi-spark-common on the classpath (e.g. reinstalled from another branch) lacks
+    // the datasource gate, and every write below would silently exercise the legacy path
+    // instead of the DataFrame write path under test.
+    Assertions.assertTrue(
+      classOf[org.apache.hudi.DefaultSource].getDeclaredMethods.exists(_.getName.contains("runDataFrameWritePath")),
+      "DefaultSource on the test classpath lacks the DataFrame write path gate; "
+        + "rebuild hudi-spark-common from this branch")
     spark = SparkSession.builder()
       .master("local[2]")
       .appName("hoodie-dataframe-write-path-test")
@@ -223,6 +230,49 @@ class TestHoodieDataFrameWriter {
     Assertions.assertEquals((1L, "w3", "r3"), result("r3"))
     Assertions.assertEquals((2L, "w4", "r4"), result("r4"))
     Assertions.assertEquals(2, completedCommits(path))
+
+    val keys = spark.read.format("hudi").load(path).select("_hoodie_record_key").collect().map(_.getString(0))
+    Assertions.assertEquals(keys.length, keys.distinct.length)
+  }
+
+  @Test
+  def testShuffleStatsProfilerEndToEnd(): Unit = {
+    val path = tempDir.resolve("test_table_shuffle_stats").toString
+    val extra = Map(
+      HoodieDataFrameWriter.PROFILER -> HoodieDataFrameWriter.PROFILER_SHUFFLE_STATS,
+      HoodieDataFrameWriter.SHUFFLE_UPDATE_REDUCERS -> "4",
+      HoodieDataFrameWriter.SHUFFLE_INSERT_REDUCERS -> "4")
+
+    writeHudi(Seq(
+      ("h1", "p1", 1L, "y1"),
+      ("h2", "p1", 1L, "y2"),
+      ("h3", "p2", 1L, "y3"),
+      ("h4", "p2", 1L, "y4")), "insert", path, extra)
+    writeHudi(Seq(
+      ("h2", "p1", 3L, "y2-updated"),
+      ("h4", "p2", 3L, "y4-updated"),
+      ("h5", "p2", 2L, "y5")), "upsert", path, extra)
+
+    val result = readAsMap(path)
+    Assertions.assertEquals(5, result.size)
+    Assertions.assertEquals((1L, "y1", "h1"), result("h1"))
+    Assertions.assertEquals((3L, "y2-updated", "h2"), result("h2"))
+    Assertions.assertEquals((1L, "y3", "h3"), result("h3"))
+    Assertions.assertEquals((3L, "y4-updated", "h4"), result("h4"))
+    Assertions.assertEquals((2L, "y5", "h5"), result("h5"))
+    Assertions.assertEquals(2, completedCommits(path))
+
+    // The shuffle bytes land in commit metadata so later writes can calibrate bin sizes.
+    val metaClient = HoodieTableMetaClient.builder()
+      .setConf(HadoopFSUtils.getStorageConfWithCopy(spark.sparkContext.hadoopConfiguration))
+      .setBasePath(path)
+      .build()
+    val lastInstant = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get()
+    val commitMetadata = metaClient.getActiveTimeline.readCommitMetadata(lastInstant)
+    Assertions.assertTrue(
+      commitMetadata.getExtraMetadata.containsKey(HoodieDataFrameWriter.SHUFFLE_BYTES_METADATA_KEY))
+    Assertions.assertTrue(
+      commitMetadata.getExtraMetadata.get(HoodieDataFrameWriter.SHUFFLE_BYTES_METADATA_KEY).toLong > 0)
 
     val keys = spark.read.format("hudi").load(path).select("_hoodie_record_key").collect().map(_.getString(0))
     Assertions.assertEquals(keys.length, keys.distinct.length)
