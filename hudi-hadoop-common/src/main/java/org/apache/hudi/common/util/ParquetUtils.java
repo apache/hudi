@@ -101,22 +101,22 @@ import static org.apache.parquet.hadoop.codec.ZstandardCodec.PARQUET_COMPRESS_ZS
 public class ParquetUtils extends FileFormatUtils {
 
   /**
-   * Prepares the storage and Hudi configurations used by a Parquet writer. Built-in writer configuration
-   * overrides are applied first so that the user-provided config injector remains the highest-priority extension point.
+   * Injects the storage and Hudi configurations used by a Parquet writer. Built-in writer configuration
+   * overrides are injected first so that the user-provided config injector remains the highest-priority extension point.
    */
-  public static Pair<StorageConfiguration, HoodieConfig> prepareParquetWriterConfigs(
+  public static Pair<StorageConfiguration, HoodieConfig> injectParquetWriterConfigs(
       StoragePath path, StorageConfiguration storageConf, HoodieConfig hoodieConfig) {
     StorageConfiguration nativeLogStorageConf =
-        applyNativeLogZstdCompressionLevel(path, storageConf, hoodieConfig);
+        injectDefaultZstdCompressionLevel(path, storageConf, hoodieConfig);
     return HoodieParquetConfigInjector.applyConfigInjector(path, nativeLogStorageConf, hoodieConfig);
   }
 
   /**
-   * Returns a storage configuration with the native Parquet log ZSTD compression level applied.
+   * Injects the default ZSTD compression level into the storage configuration for native Parquet log files.
    * The input configuration is copied only when its ZSTD level is absent or differs from the native log level,
    * so base file writers and other users of the shared configuration are not affected.
    */
-  public static <T> StorageConfiguration<T> applyNativeLogZstdCompressionLevel(
+  public static <T> StorageConfiguration<T> injectDefaultZstdCompressionLevel(
       StoragePath path, StorageConfiguration<T> storageConf, HoodieConfig hoodieConfig) {
     if (!FSUtils.isNativeLogFile(path.getName())) {
       return storageConf;

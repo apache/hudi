@@ -99,7 +99,7 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
     boolean withOperation = config.getBooleanOrDefault(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD);
 
     Pair<StorageConfiguration, HoodieConfig> injectedConfigs =
-        ParquetUtils.prepareParquetWriterConfigs(storagePath, storage.getConf(), config);
+        ParquetUtils.injectParquetWriterConfigs(storagePath, storage.getConf(), config);
     StorageConfiguration storageConfiguration = injectedConfigs.getLeft();
     HoodieConfig hoodieConfig = injectedConfigs.getRight();
 

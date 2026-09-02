@@ -112,7 +112,7 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
     MetaFieldsMode metaFieldsMode = MetaFieldsMode.resolve(config);
 
     Pair<StorageConfiguration, HoodieConfig> injectedConfigs =
-        ParquetUtils.prepareParquetWriterConfigs(path, storage.getConf(), config);
+        ParquetUtils.injectParquetWriterConfigs(path, storage.getConf(), config);
     StorageConfiguration storageConfiguration = injectedConfigs.getLeft();
     HoodieConfig hoodieConfig = injectedConfigs.getRight();
 

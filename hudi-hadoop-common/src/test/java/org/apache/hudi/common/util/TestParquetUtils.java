@@ -102,12 +102,12 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
   }
 
   @Test
-  void testApplyNativeLogZstdCompressionLevel() {
+  void testInjectDefaultZstdCompressionLevel() {
     HadoopStorageConfiguration storageConf = new HadoopStorageConfiguration(new Configuration(false));
     storageConf.set(PARQUET_COMPRESS_ZSTD_LEVEL, "7");
 
     StorageConfiguration<Configuration> nativeLogStorageConf =
-        ParquetUtils.applyNativeLogZstdCompressionLevel(
+        ParquetUtils.injectDefaultZstdCompressionLevel(
             new StoragePath("/tmp/file-id_1-0-1_001_1.log.parquet"), storageConf, new HoodieConfig());
 
     assertNotSame(storageConf, nativeLogStorageConf);
@@ -115,20 +115,20 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     assertEquals(1, nativeLogStorageConf.getInt(PARQUET_COMPRESS_ZSTD_LEVEL, -1));
 
     StorageConfiguration<Configuration> baseFileStorageConf =
-        ParquetUtils.applyNativeLogZstdCompressionLevel(
+        ParquetUtils.injectDefaultZstdCompressionLevel(
             new StoragePath("/tmp/file-id_001.parquet"), storageConf, new HoodieConfig());
     assertSame(storageConf, baseFileStorageConf);
 
     HoodieConfig configuredZstdLevel = new HoodieConfig();
     configuredZstdLevel.setValue(HoodieStorageConfig.LOGFILE_PARQUET_COMPRESSION_CODEC_ZSTD_LEVEL, "3");
     StorageConfiguration<Configuration> configuredNativeLogStorageConf =
-        ParquetUtils.applyNativeLogZstdCompressionLevel(
+        ParquetUtils.injectDefaultZstdCompressionLevel(
             new StoragePath("/tmp/file-id_1-0-1_001_1.log.parquet"), storageConf, configuredZstdLevel);
     assertEquals(3, configuredNativeLogStorageConf.getInt(PARQUET_COMPRESS_ZSTD_LEVEL, -1));
 
     configuredZstdLevel.setValue(HoodieStorageConfig.LOGFILE_PARQUET_COMPRESSION_CODEC_ZSTD_LEVEL, "7");
     StorageConfiguration<Configuration> sameLevelNativeLogStorageConf =
-        ParquetUtils.applyNativeLogZstdCompressionLevel(
+        ParquetUtils.injectDefaultZstdCompressionLevel(
             new StoragePath("/tmp/file-id_1-0-1_001_1.log.parquet"), storageConf, configuredZstdLevel);
     assertSame(storageConf, sameLevelNativeLogStorageConf);
 
@@ -136,7 +136,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
         new HadoopStorageConfiguration(new Configuration(false));
     configuredZstdLevel.setValue(HoodieStorageConfig.LOGFILE_PARQUET_COMPRESSION_CODEC_ZSTD_LEVEL, "3");
     StorageConfiguration<Configuration> storageConfWithExplicitNativeLevel =
-        ParquetUtils.applyNativeLogZstdCompressionLevel(
+        ParquetUtils.injectDefaultZstdCompressionLevel(
             new StoragePath("/tmp/file-id_1-0-1_001_1.log.parquet"),
             storageConfWithoutGlobalLevel, configuredZstdLevel);
     assertNotSame(storageConfWithoutGlobalLevel, storageConfWithExplicitNativeLevel);
@@ -145,20 +145,20 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
   }
 
   @Test
-  void testApplyNativeLogZstdCompressionLevelFailsForInvalidGlobalLevel() {
+  void testInjectDefaultZstdCompressionLevelFailsForInvalidGlobalLevel() {
     HadoopStorageConfiguration storageConf = new HadoopStorageConfiguration(new Configuration(false));
     storageConf.set(PARQUET_COMPRESS_ZSTD_LEVEL, "invalid");
 
     HoodieException exception = assertThrows(
         HoodieException.class,
-        () -> ParquetUtils.applyNativeLogZstdCompressionLevel(
+        () -> ParquetUtils.injectDefaultZstdCompressionLevel(
             new StoragePath("/tmp/file-id_1-0-1_001_1.log.parquet"),
             storageConf, new HoodieConfig()));
     assertTrue(exception.getMessage().contains(PARQUET_COMPRESS_ZSTD_LEVEL));
   }
 
   @Test
-  void testPrepareParquetWriterConfigsAppliesCustomInjectorLast() {
+  void testInjectParquetWriterConfigsAppliesCustomInjectorLast() {
     HadoopStorageConfiguration storageConf = new HadoopStorageConfiguration(new Configuration(false));
     storageConf.set(PARQUET_COMPRESS_ZSTD_LEVEL, "7");
     HoodieConfig hoodieConfig = new HoodieConfig();
@@ -166,11 +166,11 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
         HoodieStorageConfig.HOODIE_PARQUET_CONFIG_INJECTOR_CLASS,
         OverrideNativeLogZstdLevelInjector.class.getName());
 
-    Pair<StorageConfiguration, HoodieConfig> preparedConfigs =
-        ParquetUtils.prepareParquetWriterConfigs(
+    Pair<StorageConfiguration, HoodieConfig> injectedConfigs =
+        ParquetUtils.injectParquetWriterConfigs(
             new StoragePath("/tmp/file-id_1-0-1_001_1.log.parquet"), storageConf, hoodieConfig);
 
-    assertEquals(9, preparedConfigs.getLeft().getInt(PARQUET_COMPRESS_ZSTD_LEVEL, -1));
+    assertEquals(9, injectedConfigs.getLeft().getInt(PARQUET_COMPRESS_ZSTD_LEVEL, -1));
   }
 
   public static class OverrideNativeLogZstdLevelInjector implements HoodieParquetConfigInjector {
