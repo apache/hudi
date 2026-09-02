@@ -17,7 +17,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.Resources;
 import io.trino.Session;
-import io.trino.blob.cache.alluxio.AlluxioBlobCachePlugin;
 import io.trino.filesystem.Location;
 import io.trino.filesystem.TrinoFileSystemFactory;
 import io.trino.filesystem.TrinoInputFile;
@@ -110,7 +109,7 @@ public class TestHudiSmokeTest
     protected QueryRunner createQueryRunner()
             throws Exception
     {
-        HudiQueryRunner.Builder builder = HudiQueryRunner.builder()
+        return HudiQueryRunner.builder()
                 // The resource tables cover the connector's read surface; the second fixture is a table whose base
                 // file predates a type widening, which is what testPredicateOnColumnEvolvedFromFloatToDouble and its
                 // neighbours below read. Loading it here rather than from a suite of its own is what gets it run in
@@ -119,21 +118,13 @@ public class TestHudiSmokeTest
                 .setDataLoader(new CompositeHudiTablesInitializer(
                         new ResourceHudiTablesInitializer(),
                         new SchemaEvolutionHudiTablesInitializer()))
-                .addConnectorProperties(getAdditionalHudiProperties());
-        getBlobCacheProperties().ifPresent(cacheProperties -> builder
-                .withPlugin(new AlluxioBlobCachePlugin())
-                .withBlobCache("alluxio", cacheProperties));
-        return builder.build();
+                .addConnectorProperties(getAdditionalHudiProperties())
+                .build();
     }
 
     protected ImmutableMap<String, String> getAdditionalHudiProperties()
     {
         return ImmutableMap.of();
-    }
-
-    protected Optional<Map<String, String>> getBlobCacheProperties()
-    {
-        return Optional.empty();
     }
 
     @Test

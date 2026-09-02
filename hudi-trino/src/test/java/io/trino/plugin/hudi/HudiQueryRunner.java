@@ -17,7 +17,6 @@ import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import io.airlift.log.Level;
 import io.airlift.log.Logger;
 import io.airlift.log.Logging;
-import io.trino.blob.cache.memory.MemoryBlobCachePlugin;
 import io.trino.filesystem.Location;
 import io.trino.metastore.Database;
 import io.trino.metastore.HiveMetastoreFactory;
@@ -112,8 +111,6 @@ public final class HudiQueryRunner
             DistributedQueryRunner queryRunner = super.build();
             try {
                 queryRunner.installPlugin(new TestingHudiPlugin(queryRunner.getCoordinator().getBaseDataDir().resolve("hudi_data")));
-                queryRunner.installPlugin(new MemoryBlobCachePlugin());
-                queryRunner.loadBlobCacheManager("memory", Map.of("fs.memory-cache.max-size", "128MB"));
                 queryRunner.createCatalog("hudi", "hudi", connectorProperties);
 
                 // Hudi connector does not support creating schema or any other write operations

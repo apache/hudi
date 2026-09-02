@@ -22,7 +22,7 @@
     <parent>
         <groupId>org.apache.hudi</groupId>
         <artifactId>hudi</artifactId>
-        <version>1.2.0</version>
+        <version>1.2.1-rc1</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
@@ -448,18 +448,6 @@
         <dependency>
             <groupId>io.airlift</groupId>
             <artifactId>testing</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>io.trino</groupId>
-            <artifactId>trino-blob-cache-alluxio</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>io.trino</groupId>
-            <artifactId>trino-blob-cache-memory</artifactId>
             <scope>test</scope>
         </dependency>
 

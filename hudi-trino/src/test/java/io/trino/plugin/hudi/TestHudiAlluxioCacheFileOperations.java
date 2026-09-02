@@ -18,7 +18,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultiset;
 import com.google.common.collect.Multiset;
 import io.airlift.units.Duration;
-import io.trino.blob.cache.alluxio.AlluxioBlobCachePlugin;
 import io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer;
 import io.trino.plugin.hudi.util.FileOperationUtils.FileOperation;
 import io.trino.testing.AbstractTestQueryFramework;
@@ -64,6 +63,8 @@ public class TestHudiAlluxioCacheFileOperations
         Map<String, String> hudiProperties = ImmutableMap.<String, String>builder()
                 .put("hudi.metadata-enabled", "true")
                 .put("fs.cache.enabled", "true")
+                .put("fs.cache.directories", cacheDirectory.toAbsolutePath().toString())
+                .put("fs.cache.max-sizes", "100MB")
                 .put("hudi.metadata.cache.enabled", "false")
                 // Disable the async table-statistics refresh: on the first query it reads the index
                 // definitions and table-property files (and the metadata table) on a background
@@ -76,11 +77,6 @@ public class TestHudiAlluxioCacheFileOperations
         return HudiQueryRunner.builder()
                 .addConnectorProperties(hudiProperties)
                 .setDataLoader(new ResourceHudiTablesInitializer())
-                .withPlugin(new AlluxioBlobCachePlugin())
-                .withBlobCache("alluxio", ImmutableMap.<String, String>builder()
-                        .put("fs.cache.directories", cacheDirectory.toAbsolutePath().toString())
-                        .put("fs.cache.max-sizes", "100MB")
-                        .buildOrThrow())
                 .setWorkerCount(0)
                 .build();
     }

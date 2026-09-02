@@ -161,10 +161,8 @@ export MAVEN_OPTS="${MAVEN_OPTS:--Xmx4g}"
 #   -Dmaven.test.skip) is load-bearing: test-jars need compiled test classes.
 # - The -am closure also installs the trino-root pom, which the hudi-trino BOM
 #   import and the docker/trino/shim parent resolve.
-# - The blob-cache plugins back the cache managers the hudi-trino tests load
-#   (memory unconditionally via HudiQueryRunner, alluxio in the caching tests).
 echo "Building trino modules at $REF (version $ACTUAL_VERSION); this takes roughly 10-30 minutes"
 (cd "$TRINO_REPO" && ./mvnw install -am -DskipTests -Dair.check.skip-all=true -T1C \
-  -pl :trino-hive,:trino-filesystem-manager,:trino-parquet,:trino-plugin-toolkit,:trino-main,:trino-testing,:trino-testing-containers,:trino-testing-services,:trino-client,:trino-parser,:trino-hdfs,:trino-tpch,:trino-spi,:trino-filesystem,:trino-blob-cache-memory,:trino-blob-cache-alluxio)
+  -pl :trino-hive,:trino-filesystem-manager,:trino-parquet,:trino-plugin-toolkit,:trino-main,:trino-testing,:trino-testing-containers,:trino-testing-services,:trino-client,:trino-parser,:trino-hdfs,:trino-tpch,:trino-spi,:trino-filesystem)
 
 echo "Done. io.trino artifacts for $ACTUAL_VERSION are installed in ~/.m2."

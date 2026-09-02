@@ -43,7 +43,7 @@
     <parent>
         <groupId>io.trino</groupId>
         <artifactId>trino-root</artifactId>
-        <version>484-SNAPSHOT</version>
+        <version>483</version>
         <!-- Resolve the parent from the repositories, never the file system. -->
         <relativePath />
     </parent>
@@ -54,7 +54,7 @@
 
     <properties>
         <!-- Hudi connector under test; override with -Ddep.hudi.version=... -->
-        <dep.hudi.version>1.2.0</dep.hudi.version>
+        <dep.hudi.version>1.2.1-rc1</dep.hudi.version>
         <!-- Assembly-only project: skip airbase/basepom checks (license header
              style, checkstyle, enforcer, modernizer, duplicate-finder, dependency
              analysis). ASF headers are enforced separately by

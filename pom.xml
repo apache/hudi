@@ -29,7 +29,7 @@
   <groupId>org.apache.hudi</groupId>
   <artifactId>hudi</artifactId>
   <packaging>pom</packaging>
-  <version>1.2.0</version>
+  <version>1.2.1-rc1</version>
   <description>Apache Hudi brings stream style processing on big data</description>
   <url>https://github.com/apache/hudi</url>
   <name>Hudi</name>
@@ -140,8 +140,8 @@
          the latest released Trino (e2e server image, trino-jdbc for the integ tests); the nightly
          pin-advance job refreshes all three, humans merge its bot/trino-pin branch. Keep each
          property on one line: the workflows and scripts/trino/bootstrap_trino.sh read them with sed. -->
-    <trino.version>484-SNAPSHOT</trino.version>
-    <trino.sha>5b82ec9e7116ec1ed3a83f4cc2f8cf9aaa87b12f</trino.sha>
+    <trino.version>483</trino.version>
+    <trino.sha>50b0b50b75abd47f830b7805ee1b51716eb4065e</trino.sha>
     <trino.e2e.version>483</trino.e2e.version>
     <hive.exec.classifier>core</hive.exec.classifier>
     <metrics.version>4.1.1</metrics.version>
