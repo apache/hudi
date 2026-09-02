@@ -690,6 +690,12 @@ public class TestHoodieAvroUtils {
         HoodieAvroUtils.convertBytesToBigDecimal(new byte[] {0x01}, stringSchema));
   }
 
+  @Test
+  public void testConvertBytesToBigDecimalWithNullHoodieSchema() {
+    assertThrows(IllegalArgumentException.class, () ->
+        HoodieAvroUtils.convertBytesToBigDecimal(new byte[] {0x01}, (HoodieSchema) null));
+  }
+
   /**
    * Cross-Avro-version invariant for ordering-value extraction: a record whose timestamp/date field
    * holds the java.time form (Avro 1.12.1 fast reader) must yield the same comparable ordering value
@@ -1081,17 +1087,21 @@ public class TestHoodieAvroUtils {
 
   @Test
   void testGetRecordColumnValues() {
-    Schema schema = new Schema.Parser().parse(EXAMPLE_SCHEMA);
+    Schema schema = new Schema.Parser().parse(SCHEMA_WITH_NESTED_FIELD_STR);
     GenericRecord record = new GenericData.Record(schema);
-    record.put("non_pii_col", "val1");
-    record.put("pii_col", "val2");
-    record.put("timestamp", 3.5);
+    record.put("firstname", "first");
+    record.put("lastname", "last");
+    GenericRecord student = new GenericData.Record(schema.getField("student").schema());
+    student.put("firstnameNested", "person");
+    record.put("student", student);
     HoodieRecordPayload avroPayload = new RewriteAvroPayload(record);
     HoodieAvroRecord avroRecord = new HoodieAvroRecord(new HoodieKey("record1", "partition1"), avroPayload);
 
     Object[] columnValues = HoodieAvroUtils.getRecordColumnValues(
-        avroRecord, new String[] {"non_pii_col", "pii_col"}, HoodieSchema.parse(EXAMPLE_SCHEMA), false);
-    assertArrayEquals(new Object[] {"val1", "val2"}, columnValues);
+        avroRecord, new String[] {"firstname", "student.firstnameNested", "student.lastnameNested", "missing_col"},
+        HoodieSchema.parse(SCHEMA_WITH_NESTED_FIELD_STR), false);
+    // A missing column yields null rather than throwing: getRecordColumnValues hardcodes returnNullIfNotFound.
+    assertArrayEquals(new Object[] {"first", "person", null, null}, columnValues);
   }
 
   private static Stream<Arguments> recordNeedsRewriteForExtendedAvroTypePromotion() {

@@ -1043,6 +1043,11 @@ public class TestHoodieSchemaUtils {
     assertTrue(fieldNames1.contains("_row_key"));
     assertTrue(fieldNames1.contains("timestamp"));
 
+    // Field names are matched case-insensitively; HiveHoodieReaderContext lowercases names before calling this.
+    HoodieSchema schema2 = HoodieSchemaUtils.generateProjectionSchema(originalSchema, Arrays.asList("_ROW_KEY"));
+    assertEquals(1, schema2.getFields().size());
+    assertEquals("_row_key", schema2.getFields().get(0).name());
+
     Throwable caughtException = assertThrows(HoodieException.class, () ->
         HoodieSchemaUtils.generateProjectionSchema(originalSchema, Arrays.asList("_row_key", "timestamp", "fake_field")));
     assertTrue(caughtException.getMessage().contains("Field fake_field not found in log schema. Query cannot proceed!"));
@@ -2086,7 +2091,10 @@ public class TestHoodieSchemaUtils {
         null,
         Arrays.asList(
             HoodieSchemaField.of("ts", HoodieSchema.create(HoodieSchemaType.LONG), "ordering field doc", null),
-            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING))
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("seq", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("opt_ts", HoodieSchema.createUnion(
+                HoodieSchema.create(HoodieSchemaType.LONG), HoodieSchema.create(HoodieSchemaType.NULL)))
         )
     );
   }
@@ -2113,6 +2121,33 @@ public class TestHoodieSchemaUtils {
     assertEquals(HoodieSchemaType.LONG, orderingField.getNonNullSchema().getType());
     assertEquals("ordering field doc", orderingField.doc().get());
     assertEquals(HoodieSchema.NULL_VALUE, orderingField.defaultVal().get());
+  }
+
+  @Test
+  public void testCreateDeleteLogSchemaOrderingFieldVariants() {
+    HoodieSchema tableSchema = deleteLogTableSchema();
+
+    // Multiple ordering fields keep the caller's order and their own types.
+    HoodieSchema multiOrderingSchema = HoodieSchemaUtils.createDeleteLogSchema(tableSchema, Arrays.asList("ts", "seq"));
+    assertEquals(Arrays.asList(HoodieRecord.RECORD_KEY_METADATA_FIELD, "ts", "seq"),
+        multiOrderingSchema.getFields().stream().map(HoodieSchemaField::name).collect(Collectors.toList()));
+    HoodieSchemaField seqField = multiOrderingSchema.getFields().get(2);
+    assertEquals("seq", seqField.name());
+    assertTrue(seqField.isNullable());
+    assertEquals(HoodieSchemaType.STRING, seqField.getNonNullSchema().getType());
+    assertEquals(HoodieSchema.NULL_VALUE, seqField.defaultVal().get());
+
+    // No ordering fields leaves the record key alone.
+    assertEquals(1, HoodieSchemaUtils.createDeleteLogSchema(tableSchema, Collections.emptyList()).getFields().size());
+
+    // An already-nullable ordering field is left as-is rather than double-wrapped.
+    HoodieSchema optionalOrderingSchema =
+        HoodieSchemaUtils.createDeleteLogSchema(tableSchema, Collections.singletonList("opt_ts"));
+    HoodieSchemaField optTsField = optionalOrderingSchema.getFields().get(1);
+    assertTrue(optTsField.isNullable());
+    assertEquals(HoodieSchemaType.LONG, optTsField.getNonNullSchema().getType());
+    // Pins the current behaviour of HoodieSchemaField.of: it drops the NULL default for a non-null-first union.
+    assertFalse(optTsField.defaultVal().isPresent());
   }
 
   @Test

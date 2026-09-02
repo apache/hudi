@@ -34,7 +34,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
-import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -162,20 +161,6 @@ class TestLsmFileGroupRecordIterator {
     verify(recordContext, times(2)).getSchemaFromBufferRecord(any());
 
     iterator.close();
-  }
-
-  @Test
-  void testDeleteLogSchemaUsesRecordKeyAndOrderingFields() {
-    HoodieSchema deleteLogSchema = HoodieSchemaUtils.createDeleteLogSchema(tableSchema(), Arrays.asList("ts"));
-
-    assertEquals(Arrays.asList(HoodieRecord.RECORD_KEY_METADATA_FIELD, "ts"), deleteLogSchema.getFields().stream()
-        .map(HoodieSchemaField::name)
-        .collect(Collectors.toList()));
-    assertEquals(HoodieSchemaType.STRING, deleteLogSchema.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD).get().schema().getType());
-    HoodieSchemaField orderingField = deleteLogSchema.getField("ts").get();
-    assertTrue(orderingField.schema().isNullable());
-    assertEquals(HoodieSchemaType.LONG, orderingField.getNonNullSchema().getType());
-    assertEquals(HoodieSchema.NULL_VALUE, orderingField.defaultVal().get());
   }
 
   @Test
