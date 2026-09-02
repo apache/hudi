@@ -24,6 +24,15 @@ import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.avro.model.HoodieSecondaryIndexInfo;
+import org.apache.hudi.avro.model.HoodieVectorIndexActiveManifest;
+import org.apache.hudi.avro.model.HoodieVectorIndexCentroids;
+import org.apache.hudi.avro.model.HoodieVectorIndexClusterStats;
+import org.apache.hudi.avro.model.HoodieVectorIndexManifest;
+import org.apache.hudi.avro.model.HoodieVectorIndexPostingBlock;
+import org.apache.hudi.avro.model.HoodieVectorIndexPostingDelta;
+import org.apache.hudi.avro.model.HoodieVectorIndexQuantizer;
+import org.apache.hudi.avro.model.HoodieVectorIndexSourceInstantMarker;
+import org.apache.hudi.avro.model.HoodieVectorIndexTombstone;
 import org.apache.hudi.common.avro.AvroSchemaCache;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
@@ -121,6 +130,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private static final int COLUMN_STATS_METADATA_FIELD_OFFSET = BLOOM_FILTER_METADATA_FIELD_OFFSET + 1;
   private static final int RECORD_INDEX_METADATA_FIELD_OFFSET = COLUMN_STATS_METADATA_FIELD_OFFSET + 1;
   private static final int SECONDARY_INDEX_METADATA_FIELD_OFFSET = RECORD_INDEX_METADATA_FIELD_OFFSET + 1;
+  private static final int VECTOR_INDEX_METADATA_FIELD_OFFSET = SECONDARY_INDEX_METADATA_FIELD_OFFSET + 1;
 
   /**
    * HoodieMetadata schema field ids
@@ -132,6 +142,42 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   public static final String SCHEMA_FIELD_ID_BLOOM_FILTER = "BloomFilterMetadata";
   public static final String SCHEMA_FIELD_ID_RECORD_INDEX = "recordIndexMetadata";
   public static final String SCHEMA_FIELD_ID_SECONDARY_INDEX = "SecondaryIndexMetadata";
+
+  public static final String SCHEMA_FIELD_ID_VECTOR_INDEX = "VectorIndexMetadata";
+
+  /**
+   * HoodieMetadata vector index payload field ids
+   */
+  public static final String VECTOR_INDEX_FIELD_ENTRY_TYPE = "entryType";
+  public static final String VECTOR_INDEX_FIELD_GENERATION_ID = "generationId";
+  public static final String VECTOR_INDEX_FIELD_RECORD_KEY = "recordKey";
+  public static final String VECTOR_INDEX_FIELD_SHARD_ID = "shardId";
+  public static final String VECTOR_INDEX_FIELD_SHARD_COUNT = "shardCount";
+  public static final String VECTOR_INDEX_FIELD_CLUSTER_ID = "clusterId";
+  public static final String VECTOR_INDEX_FIELD_CENTROID_BYTES = "centroidBytes";
+  public static final String VECTOR_INDEX_FIELD_FILE_GROUP_ID = "fileGroupId";
+  public static final String VECTOR_INDEX_FIELD_PARTITION_PATH = "partitionPath";
+  public static final String VECTOR_INDEX_FIELD_BASE_INSTANT_TIME = "baseInstantTime";
+  public static final String VECTOR_INDEX_FIELD_FILE_GROUP_IDS = "fileGroupIds";
+  public static final String VECTOR_INDEX_FIELD_VECTOR_COUNT = "vectorCount";
+  public static final String VECTOR_INDEX_FIELD_LAST_UPDATED_TS = "lastUpdatedTs";
+  public static final String VECTOR_INDEX_FIELD_QUANTIZER_TYPE = "quantizerType";
+  public static final String VECTOR_INDEX_FIELD_QUANTIZED_CODE_BYTES = "quantizedCodeBytes";
+  public static final String VECTOR_INDEX_FIELD_RABITQ_BITS = "rabitqBits";
+  public static final String VECTOR_INDEX_FIELD_RANDOM_SEED = "randomSeed";
+  public static final String VECTOR_INDEX_FIELD_ASSUME_NORMALIZED = "assumeNormalized";
+  public static final String VECTOR_INDEX_FIELD_BINARY_CODE = "binaryCode";
+  public static final String VECTOR_INDEX_FIELD_EXTENDED_CODE = "extendedCode";
+  public static final String VECTOR_INDEX_FIELD_SCALAR = "scalar";
+  public static final String VECTOR_INDEX_FIELD_ADDITIVE_FACTOR = "additiveFactor";
+  public static final String VECTOR_INDEX_FIELD_RESCALE_FACTOR = "rescaleFactor";
+  public static final String VECTOR_INDEX_FIELD_IS_DELETED = "isDeleted";
+
+  public static final String VECTOR_INDEX_ENTRY_TYPE_CENTROIDS = "CENTROIDS";
+  public static final String VECTOR_INDEX_ENTRY_TYPE_QUANTIZER = "QUANTIZER";
+  public static final String VECTOR_INDEX_ENTRY_TYPE_MANIFEST = "MANIFEST";
+  public static final String VECTOR_INDEX_ENTRY_TYPE_CLUSTER = "CLUSTER";
+  public static final String VECTOR_INDEX_ENTRY_TYPE_POSTING = "POSTING";
 
   /**
    * HoodieMetadata bloom filter payload field ids
@@ -210,6 +256,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   protected HoodieMetadataColumnStats columnStatMetadata = null;
   protected HoodieRecordIndexInfo recordIndexMetadata;
   protected HoodieSecondaryIndexInfo secondaryIndexMetadata;
+  protected Object vectorIndexMetadata;
   private boolean isDeletedRecord = false;
 
   public HoodieMetadataPayload(@Nullable GenericRecord record, Comparable<?> orderingVal) {
@@ -251,6 +298,458 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
   protected HoodieMetadataPayload(String key, HoodieSecondaryIndexInfo secondaryIndexMetadata) {
     this(key, MetadataPartitionType.SECONDARY_INDEX.getRecordType(), null, null, null, null, secondaryIndexMetadata, secondaryIndexMetadata.getIsDeleted());
+  }
+
+  protected HoodieMetadataPayload(String key, Object vectorIndexInfo) {
+    this.key = key;
+    this.type = MetadataPartitionType.VECTOR_INDEX.getRecordType();
+    this.vectorIndexMetadata = vectorIndexInfo;
+    // Vector tombstones are logical overlay records. They must remain in the MDT until vector
+    // compaction removes the corresponding packed posting; treating them as physical Hudi deletes
+    // would allow that stale packed posting to reappear in search results.
+    this.isDeletedRecord = false;
+  }
+
+  /**
+   * Create the singleton reader-visible generation pointer.
+   */
+  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexActiveManifestRecord(
+      Integer activeGeneration, String metadataPartitionPath) {
+    String recordKey = VectorIndexMetadataKey.activeManifest();
+    HoodieVectorIndexActiveManifest manifest = new HoodieVectorIndexActiveManifest(1, activeGeneration);
+    return new HoodieAvroRecord<>(
+        new HoodieKey(recordKey, metadataPartitionPath),
+        new HoodieMetadataPayload(recordKey, manifest));
+  }
+
+  /**
+   * Create the generation-one centroid record for the given index partition.
+   */
+  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexCentroidsRecord(
+      ByteBuffer centroidBytes, String partitionPath) {
+    HoodieVectorIndexCentroids centroids = new HoodieVectorIndexCentroids(
+        ByteBuffer.allocate(0),
+        centroidBytes,
+        ByteBuffer.allocate(0));
+    String recordKey = VectorIndexMetadataKey.centroids(1, 0);
+    HoodieMetadataPayload payload = new HoodieMetadataPayload(recordKey, centroids);
+    HoodieKey key = new HoodieKey(recordKey, partitionPath);
+    return new HoodieAvroRecord<>(key, payload);
+  }
+
+  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexCentroidsRecord(
+      int generation,
+      int chunk,
+      ByteBuffer clusterIds,
+      ByteBuffer centroidBytes,
+      ByteBuffer clusterRadii,
+      String partitionPath) {
+    String recordKey = VectorIndexMetadataKey.centroids(generation, chunk);
+    HoodieVectorIndexCentroids centroids = new HoodieVectorIndexCentroids(
+        clusterIds, centroidBytes, clusterRadii);
+    return new HoodieAvroRecord<>(
+        new HoodieKey(recordKey, partitionPath),
+        new HoodieMetadataPayload(recordKey, centroids));
+  }
+
+  /**
+   * Create the generation-one quantizer metadata record for the given index partition.
+   */
+  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexQuantizerMetadataRecord(
+      String quantizerType,
+      int quantizedCodeBytes,
+      long randomSeed,
+      boolean assumeNormalized,
+      String partitionPath) {
+    return createVectorIndexQuantizerMetadataRecord(
+        quantizerType,
+        quantizedCodeBytes,
+        1,
+        randomSeed,
+        assumeNormalized,
+        partitionPath);
+  }
+
+  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexQuantizerMetadataRecord(
+      String quantizerType,
+      int quantizedCodeBytes,
+      int rabitqBits,
+      long randomSeed,
+      boolean assumeNormalized,
+      String partitionPath) {
+    return createVectorIndexQuantizerMetadataRecord(1, 0, quantizerType, randomSeed, null, partitionPath);
+  }
+
+  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexQuantizerMetadataRecord(
+      int generation,
+      int chunk,
+      String quantizerType,
+      long randomSeed,
+      ByteBuffer rotationBytes,
+      String partitionPath) {
+    String recordKey = VectorIndexMetadataKey.quantizer(generation, chunk);
+    HoodieVectorIndexQuantizer quantizer = new HoodieVectorIndexQuantizer(quantizerType, randomSeed, rotationBytes);
+    return new HoodieAvroRecord<>(
+        new HoodieKey(recordKey, partitionPath),
+        new HoodieMetadataPayload(recordKey, quantizer));
+  }
+
+  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexManifestRecord(
+      HoodieVectorIndexManifest manifest,
+      int generation,
+      String metadataPartitionPath) {
+    String recordKey = VectorIndexMetadataKey.manifest(generation);
+    return new HoodieAvroRecord<>(
+        new HoodieKey(recordKey, metadataPartitionPath),
+        new HoodieMetadataPayload(recordKey, manifest));
+  }
+
+  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexManifestRecord(
+      int generation,
+      String generationOrdinalText,
+      String state,
+      int dim,
+      int dimPadded,
+      int codeRowBytes,
+      int bitsTotal,
+      int numExPlanes,
+      int numClusters,
+      int routingVersion,
+      ByteBuffer routingCoarseCentroids,
+      ByteBuffer routingLeafOffsets,
+      float routingExpandRatio,
+      String routingArtifactDigest,
+      int shardCount,
+      int fileGroupCount,
+      String metric,
+      boolean assumeNormalized,
+      boolean residualEncoding,
+      String vectorColumn,
+      int targetBlockBytes,
+      int vectorsPerBlock,
+      int blockFormatVersion,
+      int factorVersion,
+      int rotationVersion,
+      String rotationDigest,
+      double kappa,
+      double gMin,
+      double eps1Max,
+      double epsNRel,
+      int centroidChunkCount,
+      String centroidChecksum,
+      int splitLimit,
+      int mergeFloor,
+      String bootstrapBaseline,
+      String lastContiguousSourceInstant,
+      long createdTs,
+      String metadataPartitionPath) {
+    HoodieVectorIndexManifest manifest = new HoodieVectorIndexManifest(
+        1,
+        generationOrdinalText,
+        state,
+        dim,
+        dimPadded,
+        codeRowBytes,
+        bitsTotal,
+        numExPlanes,
+        numClusters,
+        routingVersion,
+        routingCoarseCentroids,
+        routingLeafOffsets,
+        routingExpandRatio,
+        routingArtifactDigest,
+        shardCount,
+        fileGroupCount,
+        metric,
+        assumeNormalized,
+        residualEncoding,
+        vectorColumn == null ? "" : vectorColumn,
+        targetBlockBytes,
+        vectorsPerBlock,
+        blockFormatVersion,
+        factorVersion,
+        rotationVersion,
+        rotationDigest,
+        kappa,
+        gMin,
+        eps1Max,
+        epsNRel,
+        centroidChunkCount,
+        centroidChecksum,
+        splitLimit,
+        mergeFloor,
+        bootstrapBaseline,
+        lastContiguousSourceInstant,
+        createdTs);
+    return createVectorIndexManifestRecord(manifest, generation, metadataPartitionPath);
+  }
+
+  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexSourceInstantMarkerRecord(
+      int generation,
+      String sourceInstant,
+      long createdTs,
+      String metadataPartitionPath) {
+    checkArgument(sourceInstant != null && !sourceInstant.isEmpty(), "Source instant must not be empty");
+    String recordKey = VectorIndexMetadataKey.sourceInstantMarker(generation, sourceInstant);
+    HoodieVectorIndexSourceInstantMarker marker = new HoodieVectorIndexSourceInstantMarker(
+        generation, sourceInstant, createdTs);
+    return new HoodieAvroRecord<>(
+        new HoodieKey(recordKey, metadataPartitionPath),
+        new HoodieMetadataPayload(recordKey, marker));
+  }
+
+  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexClusterManifestRecord(
+      int generation,
+      int clusterId,
+      Collection<String> fileGroupIds,
+      long vectorCount,
+      long lastUpdatedTs,
+      String metadataPartitionPath) {
+    String recordKey = VectorIndexMetadataKey.clusterStats(generation, clusterId);
+    HoodieVectorIndexClusterStats stats = new HoodieVectorIndexClusterStats(
+        fileGroupIds == null ? java.util.Collections.emptyList() : fileGroupIds.stream().collect(Collectors.toList()),
+        vectorCount,
+        0L,
+        0L,
+        null,
+        lastUpdatedTs);
+    return new HoodieAvroRecord<>(
+        new HoodieKey(recordKey, metadataPartitionPath),
+        new HoodieMetadataPayload(recordKey, stats));
+  }
+
+  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexClusterStatsRecord(
+      int generation,
+      int clusterId,
+      long liveCount,
+      long deltaCount,
+      long tombstoneCount,
+      String metadataPartitionPath) {
+    String recordKey = VectorIndexMetadataKey.clusterStats(generation, clusterId);
+    HoodieVectorIndexClusterStats stats = new HoodieVectorIndexClusterStats(
+        java.util.Collections.emptyList(),
+        liveCount,
+        deltaCount,
+        tombstoneCount,
+        null,
+        0L);
+    return new HoodieAvroRecord<>(
+        new HoodieKey(recordKey, metadataPartitionPath),
+        new HoodieMetadataPayload(recordKey, stats));
+  }
+
+  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexPostingRecord(
+      int generation,
+      String recordKey,
+      int clusterId,
+      String fileGroupId,
+      String dataPartitionPath,
+      String baseInstantTime,
+      byte[] binaryCode,
+      Float scalar,
+      long lastUpdatedTs,
+      String metadataPartitionPath) {
+    return createVectorIndexPostingRecord(
+        generation,
+        recordKey,
+        clusterId,
+        0,
+        fileGroupId,
+        dataPartitionPath,
+        baseInstantTime,
+        binaryCode,
+        null,
+        scalar,
+        null,
+        null,
+        lastUpdatedTs,
+        metadataPartitionPath);
+  }
+
+  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexPostingRecord(
+      int generation,
+      String recordKey,
+      int clusterId,
+      int shardId,
+      String fileGroupId,
+      String dataPartitionPath,
+      String baseInstantTime,
+      byte[] binaryCode,
+      Float scalar,
+      long lastUpdatedTs,
+      String metadataPartitionPath) {
+    return createVectorIndexPostingRecord(
+        generation,
+        recordKey,
+        clusterId,
+        shardId,
+        fileGroupId,
+        dataPartitionPath,
+        baseInstantTime,
+        binaryCode,
+        null,
+        scalar,
+        null,
+        null,
+        lastUpdatedTs,
+        metadataPartitionPath);
+  }
+
+  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexPostingRecord(
+      int generation,
+      String recordKey,
+      int clusterId,
+      int shardId,
+      String fileGroupId,
+      String dataPartitionPath,
+      String baseInstantTime,
+      byte[] binaryCode,
+      byte[] extendedCode,
+      Float scalar,
+      Float additiveFactor,
+      Float rescaleFactor,
+      long lastUpdatedTs,
+      String metadataPartitionPath) {
+    return createVectorIndexPostingRecord(
+        generation,
+        recordKey,
+        clusterId,
+        shardId,
+        fileGroupId,
+        dataPartitionPath,
+        baseInstantTime,
+        binaryCode,
+        extendedCode,
+        scalar,
+        additiveFactor,
+        rescaleFactor,
+        0.0f,
+        0.0f,
+        0.0f,
+        lastUpdatedTs,
+        metadataPartitionPath);
+  }
+
+  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexPostingRecord(
+      int generation,
+      String recordKey,
+      int clusterId,
+      int shardId,
+      String fileGroupId,
+      String dataPartitionPath,
+      String baseInstantTime,
+      byte[] binaryCode,
+      byte[] extendedCode,
+      Float scalar,
+      Float additiveFactor,
+      Float rescaleFactor,
+      Float additiveFactor1,
+      Float rescaleFactor1,
+      Float error1,
+      long lastUpdatedTs,
+      String metadataPartitionPath) {
+    return createVectorIndexPostingRecord(
+        generation, recordKey, clusterId, shardId, fileGroupId, dataPartitionPath,
+        baseInstantTime, binaryCode, extendedCode, scalar, additiveFactor, rescaleFactor,
+        additiveFactor1, rescaleFactor1, error1, null, -1L, lastUpdatedTs,
+        metadataPartitionPath);
+  }
+
+  /** Creates an incremental posting delta with its authoritative row locator. */
+  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexPostingRecord(
+      int generation,
+      String recordKey,
+      int clusterId,
+      int shardId,
+      String fileGroupId,
+      String dataPartitionPath,
+      String baseInstantTime,
+      byte[] binaryCode,
+      byte[] extendedCode,
+      Float scalar,
+      Float additiveFactor,
+      Float rescaleFactor,
+      Float additiveFactor1,
+      Float rescaleFactor1,
+      Float error1,
+      Float vectorNorm,
+      long rowPosition,
+      long lastUpdatedTs,
+      String metadataPartitionPath) {
+    String metadataRecordKey = VectorIndexMetadataKey.postingDelta(generation, clusterId, shardId, recordKey);
+    byte[] code = mergeCodeRows(binaryCode, extendedCode);
+    HoodieVectorIndexPostingDelta delta = new HoodieVectorIndexPostingDelta(
+        recordKey,
+        ByteBuffer.wrap(code),
+        additiveFactor1 == null ? 0.0f : additiveFactor1,
+        rescaleFactor1 == null ? 0.0f : rescaleFactor1,
+        error1 == null ? 0.0f : error1,
+        additiveFactor == null ? 0.0f : additiveFactor,
+        rescaleFactor == null ? 0.0f : rescaleFactor,
+        scalar == null ? 0.0f : scalar,
+        vectorNorm,
+        fileGroupId == null ? "" : fileGroupId,
+        dataPartitionPath == null ? "" : dataPartitionPath,
+        baseInstantTime == null ? "" : baseInstantTime,
+        rowPosition);
+    HoodieMetadataPayload payload = new HoodieMetadataPayload(metadataRecordKey, delta);
+    HoodieKey key = new HoodieKey(metadataRecordKey, metadataPartitionPath);
+    return new HoodieAvroRecord<>(key, payload);
+  }
+
+  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexPostingBlockRecord(
+      int generation,
+      int clusterId,
+      int shardId,
+      long blockId,
+      HoodieVectorIndexPostingBlock postingBlock,
+      String metadataPartitionPath) {
+    String metadataRecordKey = VectorIndexMetadataKey.postingBlock(generation, clusterId, shardId, blockId);
+    HoodieMetadataPayload payload = new HoodieMetadataPayload(metadataRecordKey, postingBlock);
+    HoodieKey key = new HoodieKey(metadataRecordKey, metadataPartitionPath);
+    return new HoodieAvroRecord<>(key, payload);
+  }
+
+  /**
+   * Create a tombstone for a canonical vector posting record.
+   */
+  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexPostingDeleteRecord(
+      int generation,
+      String recordKey,
+      int clusterId,
+      int shardId,
+      String metadataPartitionPath) {
+    return createVectorIndexPostingDeleteRecord(
+        generation, recordKey, clusterId, shardId, "", metadataPartitionPath);
+  }
+
+  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexPostingDeleteRecord(
+      int generation,
+      String recordKey,
+      int clusterId,
+      int shardId,
+      String deleteInstant,
+      String metadataPartitionPath) {
+    String metadataRecordKey = VectorIndexMetadataKey.postingDelta(generation, clusterId, shardId, recordKey);
+    HoodieVectorIndexTombstone tombstone = new HoodieVectorIndexTombstone(deleteInstant, "MANUAL");
+    HoodieMetadataPayload payload = new HoodieMetadataPayload(metadataRecordKey, tombstone);
+    HoodieKey key = new HoodieKey(metadataRecordKey, metadataPartitionPath);
+    return new HoodieAvroRecord<>(key, payload);
+  }
+
+  /**
+   * Return the vector index metadata if present.
+   */
+  public Option<Object> getVectorIndexMetadata() {
+    return Option.ofNullable(vectorIndexMetadata);
+  }
+
+  private static byte[] mergeCodeRows(byte[] binaryCode, byte[] extendedCode) {
+    byte[] first = binaryCode == null ? new byte[0] : binaryCode;
+    byte[] second = extendedCode == null ? new byte[0] : extendedCode;
+    byte[] merged = Arrays.copyOf(first, first.length + second.length);
+    System.arraycopy(second, 0, merged, first.length, second.length);
+    return merged;
   }
 
   protected HoodieMetadataPayload(String key, int type,
@@ -429,7 +928,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     if (schema == null || schema == HOODIE_METADATA_AVRO_SCHEMA) {
       // If the schema is same or none is provided, we can return the record directly
       HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, bloomFilterMetadata,
-          columnStatMetadata, recordIndexMetadata, secondaryIndexMetadata);
+          columnStatMetadata, recordIndexMetadata, secondaryIndexMetadata, vectorIndexMetadata);
       return Option.of(record);
     } else {
       // Otherwise, the assumption is that the schema required contains the metadata fields so we construct a new GenericRecord with these fields
@@ -450,6 +949,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       }
       if (secondaryIndexMetadata != null) {
         record.put(SECONDARY_INDEX_METADATA_FIELD_OFFSET, secondaryIndexMetadata);
+      }
+      if (vectorIndexMetadata != null) {
+        record.put(VECTOR_INDEX_METADATA_FIELD_OFFSET, vectorIndexMetadata);
       }
       return Option.of(record);
     }

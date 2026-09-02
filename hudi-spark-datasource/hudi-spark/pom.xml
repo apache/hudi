@@ -270,9 +270,12 @@
       <artifactId>spark-hive_${scala.binary.version}</artifactId>
     </dependency>
 
+    <!-- Vector index bootstrap trains IVF centroids with Spark MLlib KMeans. -->
     <dependency>
       <groupId>org.apache.spark</groupId>
-      <artifactId>spark-mllib-local_${scala.binary.version}</artifactId>
+      <artifactId>spark-mllib_${scala.binary.version}</artifactId>
+      <version>${spark.version}</version>
+      <scope>provided</scope>
     </dependency>
 
     <dependency>

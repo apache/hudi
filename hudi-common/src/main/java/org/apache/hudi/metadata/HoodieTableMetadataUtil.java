@@ -29,6 +29,7 @@ import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
+import org.apache.hudi.avro.model.HoodieVectorIndexTombstone;
 import org.apache.hudi.avro.model.IntWrapper;
 import org.apache.hudi.avro.model.LongWrapper;
 import org.apache.hudi.avro.model.StringWrapper;
@@ -202,6 +203,8 @@ public class HoodieTableMetadataUtil {
   public static final String PARTITION_NAME_EXPRESSION_INDEX_PREFIX = "expr_index_";
   public static final String PARTITION_NAME_SECONDARY_INDEX = "secondary_index";
   public static final String PARTITION_NAME_SECONDARY_INDEX_PREFIX = "secondary_index_";
+  public static final String PARTITION_NAME_VECTOR_INDEX = "vector_index";
+  public static final String PARTITION_NAME_VECTOR_INDEX_PREFIX = "vector_index_";
 
   // Average size of a record saved within the record index.
   // Record index has a fixed size schema. This has been calculated based on experiments with default settings
@@ -212,6 +215,71 @@ public class HoodieTableMetadataUtil {
       HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName(),
       HoodieRecord.HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.getFieldName(),
       HoodieRecord.HoodieMetadataField.COMMIT_TIME_METADATA_FIELD.getFieldName()));
+
+  public static String getVectorIndexGenerationManifestKey(int generationId) {
+    return VectorIndexMetadataKey.manifest(generationId);
+  }
+
+  public static boolean isVectorIndexGenerationManifestKey(String recordKey) {
+    return hasVectorIndexFamily(recordKey, VectorIndexMetadataKey.FAMILY_MANIFEST);
+  }
+
+  public static boolean isVectorIndexQuantizerKey(String recordKey) {
+    return hasVectorIndexFamily(recordKey, VectorIndexMetadataKey.FAMILY_QUANTIZER);
+  }
+
+  public static boolean isVectorIndexCentroidsKey(String recordKey) {
+    return hasVectorIndexFamily(recordKey, VectorIndexMetadataKey.FAMILY_CENTROIDS);
+  }
+
+  public static String getVectorIndexClusterKey(int generationId, int clusterId) {
+    return VectorIndexMetadataKey.clusterStats(generationId, clusterId);
+  }
+
+  public static boolean isVectorIndexClusterKey(String recordKey) {
+    return hasVectorIndexFamily(recordKey, VectorIndexMetadataKey.FAMILY_CLUSTER_STATS);
+  }
+
+  public static String getVectorIndexPostingKey(int generationId, int clusterId, int shardId, String recordKey) {
+    return VectorIndexMetadataKey.postingDelta(generationId, clusterId, shardId, recordKey);
+  }
+
+  public static String getVectorIndexPostingPrefix(int generationId, int clusterId) {
+    return VectorIndexMetadataKey.postingPrefix(generationId, clusterId, 0).substring(0, 9);
+  }
+
+  public static int toVectorGenerationId(String generationId) {
+    try {
+      int parsed = Integer.parseInt(generationId);
+      if (parsed <= 0) {
+        throw new IllegalArgumentException(
+            "Vector generation id must be a positive ordinal, got: " + generationId);
+      }
+      return parsed;
+    } catch (NumberFormatException e) {
+      throw new IllegalArgumentException(
+          "Vector generation id must be a positive integer ordinal, got: " + generationId, e);
+    }
+  }
+
+  public static String getVectorIndexPostingPrefix(int generationId, int clusterId, int shardId) {
+    return VectorIndexMetadataKey.postingPrefix(generationId, clusterId, shardId);
+  }
+
+  public static boolean isVectorIndexPostingKey(String recordKey) {
+    return hasVectorIndexFamily(recordKey, VectorIndexMetadataKey.FAMILY_POSTING);
+  }
+
+  private static boolean hasVectorIndexFamily(String recordKey, int family) {
+    return recordKey != null && !recordKey.isEmpty()
+        && Byte.toUnsignedInt(VectorIndexMetadataKey.decode(recordKey)[0]) == family;
+  }
+
+  public static String getVectorIndexPostingRecordKey(String metadataRecordKey) {
+    return isVectorIndexPostingKey(metadataRecordKey)
+        ? VectorIndexMetadataKey.postingRecordKey(metadataRecordKey)
+        : null;
+  }
 
   // The maximum allowed precision and scale as per the payload schema. See DecimalWrapper in HoodieMetadata.avsc:
   // https://github.com/apache/hudi/blob/45dedd819e56e521148bde51a3dfa4e472ea70cd/hudi-common/src/main/avro/HoodieMetadata.avsc#L247
@@ -691,22 +759,49 @@ public class HoodieTableMetadataUtil {
     } else {
       metadataRecordsPair = metadataRecords.mapToPair(r -> Pair.of(r.getKey(), r));
     }
-    return metadataRecordsPair.reduceByKey((SerializableBiFunction<HoodieRecord, HoodieRecord, HoodieRecord>) (record1, record2) -> {
-      boolean isRecord1Deleted = record1.isDelete(DELETE_CONTEXT, CollectionUtils.emptyProps());
-      boolean isRecord2Deleted = record2.isDelete(DELETE_CONTEXT, CollectionUtils.emptyProps());
-      if (isRecord1Deleted && !isRecord2Deleted) {
+    return metadataRecordsPair.reduceByKey(
+        (SerializableBiFunction<HoodieRecord, HoodieRecord, HoodieRecord>) HoodieTableMetadataUtil::reduceIndexRecords,
+        parallelism).values();
+  }
+
+  @VisibleForTesting
+  static HoodieRecord reduceIndexRecords(HoodieRecord record1, HoodieRecord record2) {
+    boolean isRecord1VectorTombstone = isVectorIndexTombstone(record1);
+    boolean isRecord2VectorTombstone = isVectorIndexTombstone(record2);
+    if (isRecord1VectorTombstone || isRecord2VectorTombstone) {
+      // Logical vector tombstones are persisted records rather than physical Hudi deletes. When
+      // relocation emits a tombstone and a posting for the same canonical key, the live posting
+      // is authoritative regardless of partition reduction order.
+      if (isRecord1VectorTombstone && !isRecord2VectorTombstone) {
         return record2;
-      } else if (!isRecord1Deleted && isRecord2Deleted) {
+      } else if (!isRecord1VectorTombstone) {
         return record1;
-      } else if (isRecord1Deleted && isRecord2Deleted) {
-        // let's delete just 1 of them
-        return record1;
-      } else {
-        // Both records are non-deleted
-        throw new HoodieIOException("Two HoodieRecord updates to the index is seen for same record key " + record2.getRecordKey() + ", record 1 : "
-            + record1 + ", record 2 : " + record2);
       }
-    }, parallelism).values();
+      return record2;
+    }
+
+    boolean isRecord1Deleted = record1.isDelete(DELETE_CONTEXT, CollectionUtils.emptyProps());
+    boolean isRecord2Deleted = record2.isDelete(DELETE_CONTEXT, CollectionUtils.emptyProps());
+    if (isRecord1Deleted && !isRecord2Deleted) {
+      return record2;
+    } else if (!isRecord1Deleted && isRecord2Deleted) {
+      return record1;
+    } else if (isRecord1Deleted) {
+      // Both records are deleted; retain either one.
+      return record1;
+    }
+    throw new HoodieIOException("Two HoodieRecord updates to the index is seen for same record key " + record2.getRecordKey() + ", record 1 : "
+        + record1 + ", record 2 : " + record2);
+  }
+
+  private static boolean isVectorIndexTombstone(HoodieRecord record) {
+    if (!(record.getData() instanceof HoodieMetadataPayload)) {
+      return false;
+    }
+    HoodieMetadataPayload payload = (HoodieMetadataPayload) record.getData();
+    return payload.getVectorIndexMetadata()
+        .map(metadata -> metadata instanceof HoodieVectorIndexTombstone)
+        .orElse(false);
   }
 
   /**
@@ -958,6 +1053,39 @@ public class HoodieTableMetadataUtil {
     }
 
     return Math.abs(Math.abs(h) % numFileGroups);
+  }
+
+  public static int mapVectorPostingKeyToFileGroupIndex(String recordKey, int numFileGroups) {
+    if (numFileGroups <= 1) {
+      return 0;
+    }
+    // Route by the IVF cluster id so that all postings of a cluster (every shard, every
+    // record key) land in the same MDT file group. With fileGroupCount == num_clusters this
+    // yields exactly one cluster per file group; with fewer file groups, clusters are spread
+    // round-robin (clusterId % numFileGroups) while a single cluster still stays whole.
+    int clusterId = extractVectorClusterId(recordKey);
+    if (clusterId < 0) {
+      // Not a cluster-bearing posting key (e.g. manifest/centroid rows): fall back to stable
+      // string hashing on the routing key prefix.
+      return mapRecordKeyToFileGroupIndex(getVectorIndexPostingRoutingKey(recordKey), numFileGroups);
+    }
+    return Math.floorMod(clusterId, numFileGroups);
+  }
+
+  /**
+   * Extract the IVF cluster id from a vector posting key/prefix of the form
+   * {@code P|<generation>|<cluster>|...}. Returns {@code -1} when {@code recordKey} is not a
+   * vector posting key or the cluster segment cannot be parsed.
+   */
+  public static int extractVectorClusterId(String recordKey) {
+    return isVectorIndexPostingKey(recordKey) ? VectorIndexMetadataKey.postingClusterId(recordKey) : -1;
+  }
+
+  public static String getVectorIndexPostingRoutingKey(String metadataRecordKey) {
+    if (!isVectorIndexPostingKey(metadataRecordKey)) {
+      return metadataRecordKey;
+    }
+    return metadataRecordKey.length() >= 9 ? metadataRecordKey.substring(0, 9) : metadataRecordKey;
   }
 
   /**

@@ -1,3 +1,6 @@
+# Local Wibey test orchestration state
+.wibey-test/
+
 # Directories #
 /build/
 target/

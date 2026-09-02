@@ -218,6 +218,18 @@ public abstract class HFileBlock {
   }
 
   /**
+   * Returns this block's retained content span for byte-weighted caching. The backing array can
+   * contain multiple blocks, so weighing its full length would over-count sliced blocks.
+   */
+  public int heapSize() {
+    int contentSpan = HFILEBLOCK_HEADER_SIZE + Math.max(0, uncompressedSizeWithoutHeader);
+    if (contentSpan > HFILEBLOCK_HEADER_SIZE) {
+      return contentSpan;
+    }
+    return byteBuff != null ? byteBuff.length : getOnDiskSizeWithHeader();
+  }
+
+  /**
    * Decodes and decompresses the block content if the block content is compressed.
    * <p>
    * This must be called for an encoded and compressed block before any reads.

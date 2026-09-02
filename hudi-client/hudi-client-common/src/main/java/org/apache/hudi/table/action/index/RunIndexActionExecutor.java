@@ -45,7 +45,6 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -170,7 +169,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
                   info.getVersion(),
                   info.getMetadataPartitionPath(),
                   currentCaughtupInstant,
-                  Collections.emptyMap()))
+                  info.getExtraMetadata()))
               .collect(Collectors.toList());
         } catch (Exception e) {
           throw new HoodieMetadataException("Failed to index partition " + Arrays.toString(indexPartitionInfos.stream()
@@ -192,7 +191,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
                 info.getVersion(),
                 info.getMetadataPartitionPath(),
                 indexUptoInstant,
-                Collections.emptyMap()))
+                info.getExtraMetadata()))
             .collect(Collectors.toList());
       }
 

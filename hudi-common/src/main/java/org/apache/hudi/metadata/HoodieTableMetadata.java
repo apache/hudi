@@ -327,6 +327,13 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   int getNumFileGroupsForPartition(MetadataPartitionType partition);
 
   /**
+   * Returns whether the available record index uses partition-bucketed file groups.
+   */
+  default boolean isRecordIndexPartitioned() {
+    return false;
+  }
+
+  /**
    * Get file groups in the record index partition grouped by bucket
    * @param partition the metadata table partition type
    * @return map from data table partition to list of filegroups that index that partition

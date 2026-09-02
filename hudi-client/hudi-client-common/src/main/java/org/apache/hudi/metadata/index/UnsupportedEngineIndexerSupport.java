@@ -31,7 +31,9 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.index.vector.VectorIndexFileGroupUpdate;
 import org.apache.hudi.metadata.model.FileInfoAndPartition;
+import org.apache.hudi.metadata.model.FileSliceAndPartition;
 import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.StorageConfiguration;
 
@@ -82,5 +84,28 @@ public class UnsupportedEngineIndexerSupport implements EngineIndexerSupport {
       throw new HoodieNotSupportedException("Table version 7 and below does not support expression index");
     }
     throw new HoodieNotSupportedException(engineType + " engine does not support building expression index yet");
+  }
+
+  @Override
+  public HoodieData<HoodieRecord> generateVectorIndexRecords(
+      HoodieIndexDefinition indexDefinition,
+      HoodieTableMetaClient dataMetaClient,
+      List<FileSliceAndPartition> fileSlices,
+      HoodieSchema tableSchema,
+      int generation,
+      String sourceInstant) {
+    throw new HoodieNotSupportedException(engineType + " engine does not support building vector index yet");
+  }
+
+  @Override
+  public HoodieData<HoodieRecord> generateVectorIndexUpdateRecords(
+      HoodieIndexDefinition indexDefinition,
+      HoodieTableMetaClient dataMetaClient,
+      HoodieTableMetadata tableMetadata,
+      List<VectorIndexFileGroupUpdate> fileGroupUpdates,
+      HoodieSchema tableSchema,
+      int generation,
+      String instantTime) {
+    throw new HoodieNotSupportedException(engineType + " engine does not support updating vector index yet");
   }
 }

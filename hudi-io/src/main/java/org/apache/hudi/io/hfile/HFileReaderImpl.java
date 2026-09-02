@@ -325,6 +325,17 @@ public class HFileReaderImpl implements HFileReader {
     return (HFileDataBlock) blockReader.nextBlock(HFileBlockType.DATA);
   }
 
+  /**
+   * Reads an intermediate or leaf index block. This seam lets caching readers share immutable
+   * index blocks instead of reading them again whenever a reader is opened.
+   */
+  protected HFileBlock instantiateHFileIndexBlock(
+      BlockIndexEntry indexEntry, HFileBlockType blockType) throws IOException {
+    HFileBlockReader blockReader = new HFileBlockReader(
+        context, stream, indexEntry.getOffset(), indexEntry.getOffset() + (long) indexEntry.getSize());
+    return blockReader.nextBlock(blockType);
+  }
+
   private boolean isAtFirstKeyOfBlock(BlockIndexEntry indexEntry) {
     if (cursor.isValid()) {
       return cursor.getOffset() == indexEntry.getOffset() + HFILEBLOCK_HEADER_SIZE;
@@ -367,11 +378,9 @@ public class HFileReaderImpl implements HFileReader {
       // (3) BFS
       while (!queue.isEmpty()) {
         BlockIndexEntry indexEntry = queue.poll();
-        HFileBlockReader blockReader = new HFileBlockReader(
-            context, stream, indexEntry.getOffset(), indexEntry.getOffset() + indexEntry.getSize());
         HFileBlockType blockType = levels > 1
             ? HFileBlockType.INTERMEDIATE_INDEX : HFileBlockType.LEAF_INDEX;
-        HFileBlock tempBlock = blockReader.nextBlock(blockType);
+        HFileBlock tempBlock = instantiateHFileIndexBlock(indexEntry, blockType);
         indexEntryList.addAll(((HFileLeafIndexBlock) tempBlock).readBlockIndex());
       }
 

@@ -554,6 +554,154 @@
                 }
             ],
             "default" : null
+        },
+        {
+            "name": "VectorIndexMetadata",
+            "doc": "Typed metadata records for the MDT-backed IVF + RaBitQ vector index.",
+            "type": [
+                "null",
+                {
+                    "type": "record",
+                    "name": "HoodieVectorIndexActiveManifest",
+                    "fields": [
+                        {"name": "indexVersion", "type": "int", "doc": "Persisted vector-index format version."},
+                        {"name": "activeGeneration", "type": ["null", "int"], "default": null,
+                         "doc": "Reader-visible generation ordinal, or null before first activation."}
+                    ]
+                },
+                {
+                    "type": "record",
+                    "name": "HoodieVectorIndexManifest",
+                    "fields": [
+                        {"name": "indexVersion", "type": "int"},
+                        {"name": "generationId", "type": "string", "doc": "Creating Hudi instant + optional human tag. The gen ordinal lives in the key."},
+                        {"name": "state", "type": "string", "doc": "BUILDING | ACTIVE | RETIRED. Readers serve only the generation referenced by the singleton active manifest."},
+                        {"name": "dim", "type": "int"},
+                        {"name": "dimPadded", "type": "int", "doc": "nextPow2(dim) for hadamard quantizers, else dim. Authoritative for codeRowBytes."},
+                        {"name": "codeRowBytes", "type": "int", "doc": "ceil(dimPadded/64)*8. Long-aligned per-plane row width."},
+                        {"name": "bitsTotal", "type": "int", "doc": "B = 1 + numExPlanes."},
+                        {"name": "numExPlanes", "type": "int"},
+                        {"name": "numClusters", "type": "int"},
+                        {"name": "routingVersion", "type": "int", "doc": "Two-level assignment kernel version."},
+                        {"name": "routingCoarseCentroids", "type": "bytes", "doc": "Coarse centroids as row-major float32 LE values in assignment space."},
+                        {"name": "routingLeafOffsets", "type": "bytes", "doc": "One u32 LE boundary per coarse cell plus the terminal leaf-count boundary."},
+                        {"name": "routingExpandRatio", "type": "float", "doc": "Persisted coarse-neighbor expansion ratio used by every writer."},
+                        {"name": "routingArtifactDigest", "type": "string", "doc": "SHA-256 over the canonical routing version, expansion ratio, coarse centroids, leaf centroids, and leaf offsets."},
+                        {"name": "shardCount", "type": "int", "doc": "Generation-wide posting shard geometry frozen for all clusters."},
+                        {"name": "fileGroupCount", "type": "int", "doc": "MDT file-group geometry frozen for this generation; readers and writers never re-derive it."},
+                        {"name": "metric", "type": "string", "doc": "L2 | DOT | COSINE."},
+                        {"name": "assumeNormalized", "type": "boolean"},
+                        {"name": "residualEncoding", "type": "boolean", "default": false, "doc": "True when posting codes encode x - centroid and readers must use residual scoring."},
+                        {"name": "vectorColumn", "type": "string", "doc": "Authoritative base-table vector column used for bootstrap and exact rerank."},
+                        {"name": "targetBlockBytes", "type": "int", "doc": "Config input, e.g. 524288."},
+                        {"name": "vectorsPerBlock", "type": "int", "doc": "Resolved N. Frozen per generation; readers never re-derive."},
+                        {"name": "blockFormatVersion", "type": "int", "doc": "Expected posting-block layout version for this generation."},
+                        {"name": "factorVersion", "type": "int", "doc": "RaBitQ scalar-factor semantics version. Readers reject unsupported values."},
+                        {"name": "rotationVersion", "type": "int", "doc": "Deterministic orthogonal-rotation algorithm version."},
+                        {"name": "rotationDigest", "type": "string", "doc": "SHA-256 over the canonical row-major float32 rotation matrix reconstructed for this generation."},
+                        {"name": "kappa", "type": "double", "doc": "Generation-scoped pass-1 error scale."},
+                        {"name": "gMin", "type": "double", "doc": "Generation-scoped normalized alignment floor."},
+                        {"name": "eps1Max", "type": "double", "doc": "Maximum permitted relative pass-1 error."},
+                        {"name": "epsNRel", "type": "double", "doc": "Relative residual-norm floor."},
+                        {"name": "centroidChunkCount", "type": "int", "doc": "Expected number of size-bounded centroid chunks."},
+                        {"name": "centroidChecksum", "type": ["null", "string"], "default": null,
+                         "doc": "Checksum of the canonical centroid payload used to reject incomplete or mismatched builds."},
+                        {"name": "splitLimit", "type": "int"},
+                        {"name": "mergeFloor", "type": "int"},
+                        {"name": "bootstrapBaseline", "type": ["null", "string"], "default": null,
+                         "doc": "Source snapshot instant represented by this generation at bootstrap. Marker contiguity begins strictly after this immutable baseline."},
+                        {"name": "lastContiguousSourceInstant", "type": ["null", "string"], "default": null,
+                         "doc": "Latest source instant covered contiguously after bootstrapBaseline; equals bootstrapBaseline before the first post-bootstrap update."},
+                        {"name": "createdTs", "type": "long"}
+                    ]
+                },
+                {
+                    "type": "record",
+                    "name": "HoodieVectorIndexQuantizer",
+                    "fields": [
+                        {"name": "quantizerType", "type": "string", "doc": "Seeded orthogonal rotation used by RaBitQ encoding."},
+                        {"name": "randomSeed", "type": "long", "doc": "Deterministically reconstructs the orthogonal rotation when rotationBytes is null."},
+                        {"name": "rotationBytes", "type": ["null", "bytes"], "default": null,
+                         "doc": "Optional explicit row-major float32 LE orthogonal matrix; null selects seeded reconstruction."}
+                    ]
+                },
+                {
+                    "type": "record",
+                    "name": "HoodieVectorIndexCentroids",
+                    "fields": [
+                        {"name": "clusterIds", "type": "bytes", "doc": "k x u32 LE cluster ids in this chunk, parallel to centroidBytes rows."},
+                        {"name": "centroidBytes", "type": "bytes", "doc": "k x dim physical-vector elements, row-major, in original assignment space; rotated copies are derived and cached for scoring."},
+                        {"name": "clusterRadii", "type": "bytes", "doc": "k x float32 LE max residual norm per cluster."}
+                    ]
+                },
+                {
+                    "type": "record",
+                    "name": "HoodieVectorIndexPostingBlock",
+                    "fields": [
+                        {"name": "blockFormatVersion", "type": "int"},
+                        {"name": "numVectors", "type": "int"},
+                        {"name": "codeRowBytes", "type": "int", "doc": "Duplicated from manifest for self-description; MUST match."},
+                        {"name": "signPlane", "type": "bytes", "doc": "S1: N x codeRowBytes, row-major. Bit plane B-1 (MSB)."},
+                        {"name": "exPlanes", "type": "bytes", "doc": "S2: N x numExPlanes x codeRowBytes. Vector-major; planes MSB-first."},
+                        {"name": "scalarFactors", "type": "bytes", "doc": "S3: fAdd1 | fRescale1 | err1 | fAddEx | fRescaleEx | residualNorm | optional vectorNorm, float32 LE SoA."},
+                        {"name": "rowLocators", "type": "bytes", "doc": "S4: N x 8 B LE structs: fgDictIdx u16 | instantDictIdx u16 | rowPosition u32."},
+                        {"name": "fileGroupDict", "type": {"type": "array", "items": "string"}},
+                        {"name": "instantTimeDict", "type": {"type": "array", "items": "string"}},
+                        {"name": "partitionDict", "type": {"type": "array", "items": "string"}, "doc": "Parallel indexing with fileGroupDict."},
+                        {"name": "recordKeyOffsets", "type": "bytes", "doc": "S6a: (N+1) x u32 LE offsets into recordKeyBytes."},
+                        {"name": "recordKeyBytes", "type": "bytes", "doc": "S6b: concatenated UTF-8 keys. Must remain final field."}
+                    ]
+                },
+                {
+                    "type": "record",
+                    "name": "HoodieVectorIndexPostingDelta",
+                    "fields": [
+                        {"name": "recordKey", "type": "string"},
+                        {"name": "binaryCode", "type": "bytes", "doc": "MSB row followed by ex rows, identical row encoding and plane order as blocks."},
+                        {"name": "fAdd1", "type": "float"},
+                        {"name": "fRescale1", "type": "float"},
+                        {"name": "err1", "type": "float"},
+                        {"name": "fAddEx", "type": "float"},
+                        {"name": "fRescaleEx", "type": "float"},
+                        {"name": "residualNorm", "type": "float"},
+                        {"name": "vectorNorm", "type": ["null", "float"], "default": null},
+                        {"name": "fileGroupId", "type": "string"},
+                        {"name": "partitionPath", "type": "string"},
+                        {"name": "baseInstantTime", "type": "string"},
+                        {"name": "rowPosition", "type": "long"}
+                    ]
+                },
+                {
+                    "type": "record",
+                    "name": "HoodieVectorIndexClusterStats",
+                    "fields": [
+                        {"name": "fileGroupIds", "type": {"type": "array", "items": "string"}, "doc": "Candidate base-table file groups for this cluster."},
+                        {"name": "liveCount", "type": "long"},
+                        {"name": "deltaCount", "type": "long"},
+                        {"name": "tombstoneCount", "type": "long"},
+                        {"name": "lastRebalanceInstant", "type": ["null", "string"], "default": null},
+                        {"name": "lastUpdatedTs", "type": "long"}
+                    ]
+                },
+                {
+                    "type": "record",
+                    "name": "HoodieVectorIndexSourceInstantMarker",
+                    "fields": [
+                        {"name": "generation", "type": "int"},
+                        {"name": "sourceInstant", "type": "string"},
+                        {"name": "createdTs", "type": "long"}
+                    ]
+                },
+                {
+                    "type": "record",
+                    "name": "HoodieVectorIndexTombstone",
+                    "fields": [
+                        {"name": "deleteInstant", "type": "string"},
+                        {"name": "deleteReason", "type": "string", "doc": "SPLIT | MERGE | REBALANCE | GC | MANUAL."}
+                    ]
+                }
+            ],
+            "default" : null
         }
     ]
 }
