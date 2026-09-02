@@ -2094,7 +2094,9 @@ public class TestHoodieSchemaUtils {
             HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
             HoodieSchemaField.of("seq", HoodieSchema.create(HoodieSchemaType.STRING)),
             HoodieSchemaField.of("opt_ts", HoodieSchema.createUnion(
-                HoodieSchema.create(HoodieSchemaType.LONG), HoodieSchema.create(HoodieSchemaType.NULL)))
+                HoodieSchema.create(HoodieSchemaType.LONG), HoodieSchema.create(HoodieSchemaType.NULL))),
+            HoodieSchemaField.of("ts_ms", HoodieSchema.createTimestampMillis()),
+            HoodieSchemaField.of("amount", HoodieSchema.createDecimal(10, 2))
         )
     );
   }
@@ -2132,7 +2134,6 @@ public class TestHoodieSchemaUtils {
     assertEquals(Arrays.asList(HoodieRecord.RECORD_KEY_METADATA_FIELD, "ts", "seq"),
         multiOrderingSchema.getFields().stream().map(HoodieSchemaField::name).collect(Collectors.toList()));
     HoodieSchemaField seqField = multiOrderingSchema.getFields().get(2);
-    assertEquals("seq", seqField.name());
     assertTrue(seqField.isNullable());
     assertEquals(HoodieSchemaType.STRING, seqField.getNonNullSchema().getType());
     assertEquals(HoodieSchema.NULL_VALUE, seqField.defaultVal().get());
@@ -2140,14 +2141,25 @@ public class TestHoodieSchemaUtils {
     // No ordering fields leaves the record key alone.
     assertEquals(1, HoodieSchemaUtils.createDeleteLogSchema(tableSchema, Collections.emptyList()).getFields().size());
 
-    // An already-nullable ordering field is left as-is rather than double-wrapped.
+    // An already-nullable ordering field keeps its [long, null] branch order instead of being wrapped again.
     HoodieSchema optionalOrderingSchema =
         HoodieSchemaUtils.createDeleteLogSchema(tableSchema, Collections.singletonList("opt_ts"));
     HoodieSchemaField optTsField = optionalOrderingSchema.getFields().get(1);
+    assertEquals(Arrays.asList(HoodieSchemaType.LONG, HoodieSchemaType.NULL),
+        optTsField.schema().getTypes().stream().map(HoodieSchema::getType).collect(Collectors.toList()));
     assertTrue(optTsField.isNullable());
     assertEquals(HoodieSchemaType.LONG, optTsField.getNonNullSchema().getType());
     // Pins the current behaviour of HoodieSchemaField.of: it drops the NULL default for a non-null-first union.
     assertFalse(optTsField.defaultVal().isPresent());
+
+    // Logical types survive the nullable wrapping.
+    HoodieSchema logicalOrderingSchema = HoodieSchemaUtils.createDeleteLogSchema(tableSchema, Arrays.asList("ts_ms", "amount"));
+    HoodieSchema tsMsSchema = logicalOrderingSchema.getFields().get(1).getNonNullSchema();
+    assertEquals(HoodieSchemaType.TIMESTAMP, tsMsSchema.getType());
+    assertEquals(HoodieSchema.TimePrecision.MILLIS, ((HoodieSchema.Timestamp) tsMsSchema).getPrecision());
+    HoodieSchema.Decimal amountSchema = (HoodieSchema.Decimal) logicalOrderingSchema.getFields().get(2).getNonNullSchema();
+    assertEquals(10, amountSchema.getPrecision());
+    assertEquals(2, amountSchema.getScale());
   }
 
   @Test

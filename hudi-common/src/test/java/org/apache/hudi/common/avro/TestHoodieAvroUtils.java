@@ -595,12 +595,9 @@ public class TestHoodieAvroUtils {
 
   @Test
   public void testConvertValueForSpecificDataTypes_DateLogicalType() {
-    // Create date schema
-    Schema dateSchema = HoodieSchema.createDate().toAvroSchema();
-
     // Test value: epoch days for 2023-01-01
     int epochDays = 19358;
-    Object result = HoodieAvroUtils.convertValueForSpecificDataTypes(dateSchema, epochDays, false);
+    Object result = HoodieAvroUtils.convertValueForSpecificDataTypes(DATE_SCHEMA, epochDays, false);
     assertNotNull(result);
     assertTrue(result instanceof LocalDate);
     assertEquals(LocalDate.of(2023, 1, 1), result);
@@ -608,12 +605,9 @@ public class TestHoodieAvroUtils {
 
   @Test
   public void testConvertValueForSpecificDataTypes_TimestampMillis_Enabled() {
-    // Create timestamp-millis schema
-    Schema timestampMillisSchema = HoodieSchema.createTimestampMillis().toAvroSchema();
-
     // Test value: milliseconds for 2023-01-01 00:00:00
     long millis = 1672560000000L;
-    Object result = HoodieAvroUtils.convertValueForSpecificDataTypes(timestampMillisSchema, millis, true);
+    Object result = HoodieAvroUtils.convertValueForSpecificDataTypes(TS_MILLIS_SCHEMA, millis, true);
     assertNotNull(result);
     assertTrue(result instanceof Timestamp);
     assertEquals(new Timestamp(millis), result);
@@ -621,21 +615,16 @@ public class TestHoodieAvroUtils {
 
   @Test
   public void testConvertValueForSpecificDataTypes_TimestampMillis_Disabled() {
-    // Create timestamp-millis schema
-    Schema timestampMillisSchema = HoodieSchema.createTimestampMillis().toAvroSchema();
     long millis = 1672560000000L;
-    Object result = HoodieAvroUtils.convertValueForSpecificDataTypes(timestampMillisSchema, millis, false);
+    Object result = HoodieAvroUtils.convertValueForSpecificDataTypes(TS_MILLIS_SCHEMA, millis, false);
     assertEquals(millis, result);
   }
 
   @Test
   public void testConvertValueForSpecificDataTypes_TimestampMicros_Enabled() {
-    // Create timestamp-micros schema
-    Schema timestampMicrosSchema = HoodieSchema.createTimestampMicros().toAvroSchema();
-
     // Test value: microseconds for 2023-01-01 00:00:00
     long micros = 1672560000000000L;
-    Object result = HoodieAvroUtils.convertValueForSpecificDataTypes(timestampMicrosSchema, micros, true);
+    Object result = HoodieAvroUtils.convertValueForSpecificDataTypes(TS_MICROS_SCHEMA, micros, true);
     assertNotNull(result);
     assertTrue(result instanceof Timestamp);
     assertEquals(new Timestamp(micros / 1000), result);
