@@ -70,6 +70,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test cases for {@link HoodieTableFactory}.
@@ -847,6 +848,27 @@ public class TestHoodieTableFactory {
         (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(globalRLIConf));
     Configuration globalRLIWithBootstrapResolvedConf = globalRLIWithBootstrapSink.getConf();
     assertThat(globalRLIWithBootstrapResolvedConf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED), is(true));
+  }
+
+  @Test
+  void testFactoryBuiltSinkKeepsTimeBoundedRLIBootstrapEnabled() {
+    // HoodieTableFactory forces INDEX_BOOTSTRAP_ENABLED to false for RECORD_LEVEL_INDEX, but the
+    // time-bounded RLI bootstrap must still be reachable when it is configured, even though the
+    // factory never flips that flag back to true itself.
+    Configuration rliConf = new Configuration(this.conf);
+    rliConf.set(FlinkOptions.OPERATION, "upsert");
+    rliConf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
+    rliConf.set(FlinkOptions.METADATA_ENABLED, true);
+    rliConf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, false);
+    rliConf.set(FlinkOptions.INDEX_RLI_BACKEND_TYPE, "rocksdb");
+    rliConf.set(FlinkOptions.INDEX_RLI_CACHE_ROCKSDB_BOOTSTRAP_DAYS, 1);
+
+    HoodieTableSink rliSink =
+        (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(rliConf));
+    Configuration rliResolvedConf = rliSink.getConf();
+
+    assertThat(rliResolvedConf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED), is(false));
+    assertTrue(OptionsResolver.isTimeBoundedRLIBootstrapEnabled(rliResolvedConf));
   }
 
   @Test

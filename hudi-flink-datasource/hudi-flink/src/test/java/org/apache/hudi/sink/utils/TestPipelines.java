@@ -107,12 +107,14 @@ public class TestPipelines {
 
   @Test
   void testPartitionedRLIWithRocksDBBackendUsesPartitionedRLIBootstrapOperator() {
+    // Deliberately leave INDEX_BOOTSTRAP_ENABLED at its default (false), matching what
+    // HoodieTableFactory#setupWriteOptions forces for RECORD_LEVEL_INDEX, so this exercises
+    // the same gate a factory-built sink goes through.
     Configuration conf = defaultConf();
     conf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, false);
     conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
     conf.set(FlinkOptions.INDEX_RLI_BACKEND_TYPE, "rocksdb");
     conf.set(FlinkOptions.INDEX_RLI_CACHE_ROCKSDB_BOOTSTRAP_DAYS, 1);
-    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
     DataStream<RowData> input = rowDataInput();
 
     DataStream<HoodieFlinkInternalRow> streaming =
