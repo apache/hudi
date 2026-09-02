@@ -279,6 +279,82 @@ class TestHoodieDataFrameWriter {
   }
 
   @Test
+  def testComplexKeysWithHiveStylePartitioning(): Unit = {
+    val path = tempDir.resolve("test_table_complex").toString
+    val opts = writeOptions("insert", Map(
+      HoodieDataFrameWriter.RECORD_KEY_FIELD -> "key,partition",
+      "hoodie.datasource.write.hive_style_partitioning" -> "true"))
+    makeDf(Seq(("c1", "p1", 1L, "z1"), ("c2", "p2", 1L, "z2"))).write.format("hudi")
+      .options(opts).mode(SaveMode.Append).save(path)
+    makeDf(Seq(("c1", "p1", 5L, "z1-updated"))).write.format("hudi")
+      .options(opts + (HoodieDataFrameWriter.OPERATION_KEY -> "upsert")).mode(SaveMode.Append).save(path)
+
+    val rows = spark.read.format("hudi").load(path)
+      .select("_hoodie_record_key", "_hoodie_partition_path", "value").collect()
+      .map(r => (r.getString(0), r.getString(1), r.getString(2))).toSet
+    Assertions.assertEquals(Set(
+      ("key:c1,partition:p1", "partition=p1", "z1-updated"),
+      ("key:c2,partition:p2", "partition=p2", "z2")), rows)
+  }
+
+  @Test
+  def testTimestampKeyGeneratorPartitioning(): Unit = {
+    val path = tempDir.resolve("test_table_timestamp").toString
+    val opts = writeOptions("insert", Map(
+      "hoodie.datasource.write.keygenerator.class" -> "org.apache.hudi.keygen.TimestampBasedKeyGenerator",
+      HoodieDataFrameWriter.PARTITION_PATH_FIELD -> "ts",
+      "hoodie.keygen.timebased.timestamp.type" -> "UNIX_TIMESTAMP",
+      "hoodie.keygen.timebased.output.dateformat" -> "yyyyMMdd"))
+    makeDf(Seq(("t1", "unused", 0L, "a"), ("t2", "unused", 86400L, "b"))).write.format("hudi")
+      .options(opts).mode(SaveMode.Append).save(path)
+    makeDf(Seq(("t1", "unused", 3600L, "a-updated"))).write.format("hudi")
+      .options(opts + (HoodieDataFrameWriter.OPERATION_KEY -> "upsert")).mode(SaveMode.Append).save(path)
+
+    val rows = spark.read.format("hudi").load(path)
+      .select("key", "_hoodie_partition_path", "value").collect()
+      .map(r => (r.getString(0), r.getString(1), r.getString(2))).toSet
+    Assertions.assertEquals(Set(
+      ("t1", "19700101", "a-updated"),
+      ("t2", "19700102", "b")), rows)
+  }
+
+  @Test
+  def testUpsertWithoutPrecombineUsesCommitTimeOrdering(): Unit = {
+    val path = tempDir.resolve("test_table_no_precombine").toString
+    val opts = writeOptions("insert") - "hoodie.datasource.write.precombine.field"
+    makeDf(Seq(("n1", "p1", 1L, "before"))).write.format("hudi")
+      .options(opts).mode(SaveMode.Append).save(path)
+    makeDf(Seq(("n1", "p1", 1L, "after"), ("n2", "p1", 1L, "dup-a"), ("n2", "p1", 2L, "dup-b")))
+      .write.format("hudi")
+      .options(opts + (HoodieDataFrameWriter.OPERATION_KEY -> "upsert")).mode(SaveMode.Append).save(path)
+
+    val result = readAsMap(path)
+    Assertions.assertEquals(2, result.size)
+    Assertions.assertEquals("after", result("n1")._2)
+    Assertions.assertTrue(Set("dup-a", "dup-b").contains(result("n2")._2))
+    Assertions.assertEquals(2, completedCommits(path))
+  }
+
+  @Test
+  def testSecondWriteBackfillsOptionsFromTableConfig(): Unit = {
+    val path = tempDir.resolve("test_table_backfill").toString
+    writeHudi(Seq(("b1", "p1", 1L, "one"), ("b2", "p2", 1L, "two")), "insert", path)
+
+    // Only the path, the flag, and the operation: everything else comes from the table config.
+    makeDf(Seq(("b1", "p1", 9L, "one-updated"))).write.format("hudi")
+      .option(HoodieDataFrameWriter.DATAFRAME_WRITE_PATH_ENABLE, "true")
+      .option(HoodieDataFrameWriter.OPERATION_KEY, "upsert")
+      .option("hoodie.embed.timeline.server", "false")
+      .mode(SaveMode.Append)
+      .save(path)
+
+    val result = readAsMap(path)
+    Assertions.assertEquals(2, result.size)
+    Assertions.assertEquals((9L, "one-updated", "b1"), result("b1"))
+    Assertions.assertEquals(2, completedCommits(path))
+  }
+
+  @Test
   def testUpsertIntoNewTableBehavesAsInsert(): Unit = {
     val path = tempDir.resolve("test_table_upsert_first").toString
     writeHudi(Seq(("a1", "p1", 1L, "x1"), ("a2", "p2", 1L, "x2")), "upsert", path)

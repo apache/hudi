@@ -183,8 +183,9 @@ class DefaultSource extends RelationProvider
     try {
       if (effectiveOpts.get(OPERATION.key).contains(BOOTSTRAP_OPERATION_OPT_VAL)) {
         HoodieSparkSqlWriter.bootstrap(sqlContext, mode, effectiveOpts, df)
-      } else if (isDataFrameWritePathEnabled(effectiveOpts)) {
-        runDataFrameWritePath(sqlContext, mode, effectiveOpts, df)
+      } else if (isDataFrameWritePathEnabled(effectiveOpts, mode, sqlContext)) {
+        runDataFrameWritePath(sqlContext, mode,
+          DataSourceWriteOptions.mayBeDerivePartitionPath(effectiveOpts), df)
       } else {
         val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sqlContext, mode, effectiveOpts, df)
         if (!success) {
@@ -200,22 +201,58 @@ class DefaultSource extends RelationProvider
   }
 
   /**
-   * The DataFrame-native write path handles insert and upsert; anything else stays on the
-   * legacy writer even when the flag is on.
+   * The DataFrame-native write path handles plain insert and upsert appends; anything else
+   * (other operations, non-append save modes on existing tables, SQL-internal writes, dup
+   * policies, custom index classes, auto-generated keys) stays on the legacy writer even when
+   * the flag is on.
    */
-  private def isDataFrameWritePathEnabled(opts: Map[String, String]): Boolean = {
+  private def isDataFrameWritePathEnabled(opts: Map[String, String],
+                                          mode: SaveMode,
+                                          sqlContext: SQLContext): Boolean = {
     val enabled = opts.getOrElse(DefaultSource.DATAFRAME_WRITE_PATH_ENABLE, "false").toBoolean
     if (!enabled) {
       false
     } else {
-      val operation = opts.getOrElse(OPERATION.key, DataSourceWriteOptions.OPERATION.defaultValue())
-      val eligible = operation == DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL ||
-        operation == DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL
-      if (!eligible) {
-        log.warn(s"DataFrame write path is enabled but operation '$operation' is not supported "
-          + "by it; falling back to the legacy write path")
+      fallbackReason(opts, mode, sqlContext) match {
+        case Some(reason) =>
+          log.warn(s"DataFrame write path is enabled but $reason; falling back to the legacy write path")
+          false
+        case None => true
       }
-      eligible
+    }
+  }
+
+  private def fallbackReason(opts: Map[String, String],
+                             mode: SaveMode,
+                             sqlContext: SQLContext): scala.Option[String] = {
+    val operation = opts.getOrElse(OPERATION.key, DataSourceWriteOptions.OPERATION.defaultValue())
+    val keyGenClass = opts.getOrElse(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key(), "")
+    lazy val tableExists = opts.get("path").exists { path =>
+      val fsPath = new org.apache.hadoop.fs.Path(path, HoodieTableMetaClient.METAFOLDER_NAME)
+      fsPath.getFileSystem(sqlContext.sparkContext.hadoopConfiguration).exists(fsPath)
+    }
+    if (operation != DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL
+      && operation != DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL) {
+      Some(s"operation '$operation' is not supported by it")
+    } else if (mode != SaveMode.Append && tableExists) {
+      Some(s"save mode $mode on an existing table is not supported by it")
+    } else if (opts.getOrElse(DataSourceWriteOptions.INSERT_DROP_DUPS.key(), "false").toBoolean
+      || opts.getOrElse(DataSourceWriteOptions.INSERT_DUP_POLICY.key(),
+        DataSourceWriteOptions.NONE_INSERT_DUP_POLICY) != DataSourceWriteOptions.NONE_INSERT_DUP_POLICY) {
+      Some("insert dup policies are not supported by it")
+    } else if (opts.getOrElse(HoodieSparkSqlWriter.SQL_MERGE_INTO_WRITES.key(), "false").toBoolean
+      || opts.getOrElse(DataSourceWriteOptions.SPARK_SQL_WRITES_PREPPED_KEY, "false").toBoolean
+      || opts.getOrElse(org.apache.hudi.config.HoodieWriteConfig.SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false").toBoolean) {
+      Some("SQL-internal writes are not supported by it")
+    } else if (opts.contains(org.apache.spark.sql.hudi.command.SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME)
+      || keyGenClass.endsWith("SqlKeyGenerator") || keyGenClass.endsWith("MergeIntoKeyGenerator")) {
+      Some("SQL key generators are not supported by it")
+    } else if (opts.get(org.apache.hudi.config.HoodieIndexConfig.INDEX_CLASS_NAME.key()).exists(_.nonEmpty)) {
+      Some("custom index classes are not supported by it")
+    } else if (!opts.contains(DataSourceWriteOptions.RECORDKEY_FIELD.key()) && !tableExists) {
+      Some("auto-generated record keys are not supported by it")
+    } else {
+      None
     }
   }
 
