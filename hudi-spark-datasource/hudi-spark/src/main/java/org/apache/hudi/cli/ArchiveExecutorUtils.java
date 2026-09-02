@@ -54,6 +54,7 @@ public final class ArchiveExecutorUtils {
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(commitsRetained).build())
         .withEmbeddedTimelineServerEnabled(false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadata).build())
+        .withProperties(System.getProperties())
         .build();
     HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
     HoodieSparkTable<HoodieAvroPayload> table = HoodieSparkTable.create(config, context);
