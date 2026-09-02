@@ -1330,13 +1330,6 @@ public class TestHoodieSchemaUtils {
   }
 
   @Test
-  void testHasSmallPrecisionDecimalField() {
-    assertTrue(HoodieSchemaUtils.hasSmallPrecisionDecimalField(HoodieSchema.parse(SCHEMA_WITH_DECIMAL_FIELD)));
-    assertFalse(HoodieSchemaUtils.hasSmallPrecisionDecimalField(HoodieSchema.parse(SCHEMA_WITH_AVRO_TYPES_STR)));
-    assertFalse(HoodieSchemaUtils.hasSmallPrecisionDecimalField(HoodieSchema.parse(EXAMPLE_SCHEMA)));
-  }
-
-  @Test
   void testResolveUnionSchemaWithNonUnionSchema() {
     // Non-union schemas should be returned as-is
     HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);

@@ -38,7 +38,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -789,46 +788,25 @@ public final class HoodieSchemaUtils {
   }
 
   public static boolean hasDecimalField(HoodieSchema schema) {
-    return hasDecimalWithCondition(schema, unused -> true);
-  }
-
-  /**
-   * Checks whether the provided schema contains a decimal with a precision less than or equal to 18,
-   * which allows the decimal to be stored as int/long instead of a fixed size byte array in
-   * <a href="https://github.com/apache/parquet-format/blob/master/LogicalTypes.md">parquet logical types</a>
-   * @param schema the input schema to search
-   * @return true if the schema contains a small precision decimal field and false otherwise
-   */
-  @VisibleForTesting
-  static boolean hasSmallPrecisionDecimalField(HoodieSchema schema) {
-    return hasDecimalWithCondition(schema, HoodieSchemaUtils::isSmallPrecisionDecimalField);
-  }
-
-  private static boolean hasDecimalWithCondition(HoodieSchema schema, Function<HoodieSchema.Decimal, Boolean> condition) {
     switch (schema.getType()) {
       case RECORD:
         for (HoodieSchemaField field : schema.getFields()) {
-          if (hasDecimalWithCondition(field.schema(), condition)) {
+          if (hasDecimalField(field.schema())) {
             return true;
           }
         }
         return false;
       case ARRAY:
-        return hasDecimalWithCondition(schema.getElementType(), condition);
+        return hasDecimalField(schema.getElementType());
       case MAP:
-        return hasDecimalWithCondition(schema.getValueType(), condition);
+        return hasDecimalField(schema.getValueType());
       case UNION:
-        return hasDecimalWithCondition(schema.getNonNullType(), condition);
+        return hasDecimalField(schema.getNonNullType());
       case DECIMAL:
-        HoodieSchema.Decimal decimal = (HoodieSchema.Decimal) schema;
-        return condition.apply(decimal);
+        return true;
       default:
         return false;
     }
-  }
-
-  private static boolean isSmallPrecisionDecimalField(HoodieSchema.Decimal decimal) {
-    return decimal.getPrecision() <= 18;
   }
 
   /**
