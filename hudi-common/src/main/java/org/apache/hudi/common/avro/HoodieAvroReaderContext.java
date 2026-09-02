@@ -243,22 +243,25 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       HoodieSchema requiredSchema) throws IOException {
     HoodieSchema fileOutputSchema;
     Map<String, String> renamedColumns;
-    // Even when dataSchema equals requiredSchema, renamed columns still require schema rewriting
-    // to map old column names to new names during record reading. We only skip the lookup when
-    // both schemas match AND there are no renamed columns.
-    Pair<HoodieSchema, Map<String, String>> requiredSchemaForFileAndRenamedColumns = getSchemaHandler().getRequiredSchemaForFileAndRenamedColumns(filePath);
-    boolean hasNoRenamedColumns = requiredSchemaForFileAndRenamedColumns.getRight().isEmpty();
-    if (isLogFile || (dataSchema.equals(requiredSchema) && hasNoRenamedColumns)) {
-      // Skip per-file schema rewriting in these cases:
-      // 1. Log files: Schema evolution is handled during record merging (via rewriteRecordWithNewSchema),
-      //    not at the file reader level. Log records are read with their writer schema, then promoted later.
-      // 2. Bootstrap skeleton files (and other cases where dataSchema == requiredSchema with no renamed columns):
-      //    No schema rewriting is needed since schemas already match.
+    if (isLogFile) {
+      // Schema evolution for log files is handled during record merging (via rewriteRecordWithNewSchema),
+      // not at the file reader level. Log records are read with their writer schema, then promoted later.
       fileOutputSchema = requiredSchema;
       renamedColumns = Collections.emptyMap();
     } else {
-      fileOutputSchema = requiredSchemaForFileAndRenamedColumns.getLeft();
-      renamedColumns = requiredSchemaForFileAndRenamedColumns.getRight();
+      // Even when dataSchema equals requiredSchema, renamed columns still require schema rewriting
+      // to map old column names to new names during record reading. We only skip the lookup when
+      // both schemas match AND there are no renamed columns.
+      Pair<HoodieSchema, Map<String, String>> requiredSchemaForFileAndRenamedColumns =
+          getSchemaHandler().getRequiredSchemaForFileAndRenamedColumns(filePath);
+      boolean hasNoRenamedColumns = requiredSchemaForFileAndRenamedColumns.getRight().isEmpty();
+      if (dataSchema.equals(requiredSchema) && hasNoRenamedColumns) {
+        fileOutputSchema = requiredSchema;
+        renamedColumns = Collections.emptyMap();
+      } else {
+        fileOutputSchema = requiredSchemaForFileAndRenamedColumns.getLeft();
+        renamedColumns = requiredSchemaForFileAndRenamedColumns.getRight();
+      }
     }
     if (keyFilterOpt.isEmpty()) {
       return reader.getIndexedRecordIterator(dataSchema, fileOutputSchema, renamedColumns);

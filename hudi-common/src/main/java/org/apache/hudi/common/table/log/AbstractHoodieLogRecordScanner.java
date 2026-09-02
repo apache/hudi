@@ -37,7 +37,6 @@ import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.read.BufferedRecord;
-import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
@@ -248,19 +247,12 @@ public abstract class AbstractHoodieLogRecordScanner {
 
   private <T> void initializeReaderContext(HoodieReaderContext<T> readerContext) {
     if (!isReaderContextInitialized) {
-      TypedProperties readerProps = TypedProperties.copy(readerContext.getHoodieReaderConfig().getProps());
-      TypedProperties mergeProps = readerContext.getMergeProps(readerProps);
       readerContext.setHasLogFiles(true);
       readerContext.setHasBootstrapBaseFile(false);
       readerContext.setShouldMergeUseRecordPosition(false);
       readerContext.setTablePath(hoodieTableMetaClient.getBasePath().toString());
       readerContext.setLatestCommitTime(latestInstantTime);
       readerContext.getRecordContext().setPartitionPath(deletePartitionPathOpt.orElse(null));
-      readerContext.initRecordMerger(mergeProps);
-      Option<InternalSchema> internalSchemaOpt = internalSchema.isEmptySchema()
-          ? Option.empty() : Option.of(internalSchema);
-      readerContext.setSchemaHandler(new FileGroupReaderSchemaHandler<>(
-          readerContext, readerSchema, readerSchema, internalSchemaOpt, mergeProps, hoodieTableMetaClient));
       isReaderContextInitialized = true;
     }
   }

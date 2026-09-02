@@ -26,7 +26,9 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.core.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -35,6 +37,7 @@ import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -44,6 +47,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -62,6 +66,21 @@ class TestHoodieAvroReaderContext {
   @BeforeEach
   void setup() {
     when(tableConfig.getPayloadClass()).thenReturn(DefaultHoodieRecordPayload.class.getName());
+  }
+
+  @Test
+  void getLogFileRecordIteratorDoesNotRequireSchemaHandler() throws IOException {
+    HoodieAvroReaderContext avroReaderContext = getReaderContextWithMetaFields();
+    HoodieAvroFileReader reader = mock(HoodieAvroFileReader.class);
+    ClosableIterator<IndexedRecord> expectedIterator = ClosableIterator.wrap(Collections.emptyIterator());
+    when(reader.getIndexedRecordIterator(BASE_SCHEMA, LIMITED_BASE_SCHEMA, Collections.emptyMap()))
+        .thenReturn(expectedIterator);
+
+    ClosableIterator<IndexedRecord> actualIterator = avroReaderContext.getFileRecordIterator(
+        reader, new StoragePath("file:///tmp/test-fileid_1-0-1_100_1.deletes.parquet"),
+        true, BASE_SCHEMA, LIMITED_BASE_SCHEMA);
+
+    assertSame(expectedIterator, actualIterator);
   }
 
   @Test
