@@ -41,6 +41,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.MetadataConversionUtils;
@@ -68,12 +69,15 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.TreeMap;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
 import static org.apache.hudi.common.util.CleanerUtils.convertCleanMetadata;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -215,6 +219,51 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
     expected = removeNonWordAndStripSpace(expected);
     got = removeNonWordAndStripSpace(cmdResult.toString());
     assertEquals(expected, got);
+
+    // Test with Metadata and a limit, the path that loads only the rendered instants
+    cmdResult = shell.evaluate(() -> "show archived commits --skipMetadata false --limit 2");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(cmdResult));
+
+    rows.clear();
+    rows.add(new Comparable[] {"100", "commit", commitDetails("100")});
+    rows.add(new Comparable[] {CLEAN_INSTANT, "clean", cleanMetadata});
+    expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, 2, false, rows);
+    expected = removeNonWordAndStripSpace(expected);
+    got = removeNonWordAndStripSpace(cmdResult.toString());
+    assertEquals(expected, got);
+  }
+
+  /**
+   * With no sort field the printer only renders the leading rows, so the metadata of the
+   * instants past the limit is never loaded. isEmpty(instant) on the archived timeline reports
+   * whether that instant's details are held in memory.
+   */
+  @Test
+  public void testShowCommitsLoadsOnlyTheRenderedInstants() {
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+    HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline("", false);
+    Map<String, HoodieInstant> byTime = archivedTimeline.getInstants().stream()
+        .collect(Collectors.toMap(HoodieInstant::requestedTime, instant -> instant));
+
+    List<Comparable[]> rows = ArchivedCommitsCommand.readArchivedCommits(archivedTimeline, false, false, "", 2);
+    assertEquals(Arrays.asList("100", CLEAN_INSTANT),
+        rows.stream().map(row -> row[0]).collect(Collectors.toList()));
+    assertFalse(archivedTimeline.isEmpty(byTime.get("100")));
+    assertFalse(archivedTimeline.isEmpty(byTime.get(CLEAN_INSTANT)));
+    assertTrue(archivedTimeline.isEmpty(byTime.get(REPLACE_COMMIT_INSTANT)));
+    assertTrue(archivedTimeline.isEmpty(byTime.get("103")));
+
+    // a sort field makes every row a candidate, so everything is loaded
+    archivedTimeline = metaClient.getArchivedTimeline("", false);
+    rows = ArchivedCommitsCommand.readArchivedCommits(archivedTimeline, false, false, "CommitTime", 2);
+    assertEquals(4, rows.size());
+    assertFalse(archivedTimeline.isEmpty(byTime.get("103")));
+
+    // the stats fill a limit of one row from the two write stats of instant 100 and stop there
+    archivedTimeline = metaClient.getArchivedTimeline("", false);
+    List<Comparable[]> stats = ArchivedCommitsCommand.readCommitStatsFromArchivedTimeline(archivedTimeline, "", 1);
+    assertEquals(2, stats.size());
+    assertTrue(archivedTimeline.isEmpty(byTime.get("103")));
   }
 
   /**
