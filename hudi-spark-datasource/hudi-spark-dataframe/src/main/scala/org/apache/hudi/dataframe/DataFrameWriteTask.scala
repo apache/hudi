@@ -49,6 +49,7 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
                          routedSchema: StructType,
                          writeSchemaLength: Int,
                          bucketOrdinal: Int,
+                         rowOpOrdinal: Int,
                          updateBucketPrefix: String) extends Serializable {
 
   def execute(iter: Iterator[InternalRow]): Iterator[WriteStatus] = {
@@ -119,11 +120,19 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
           val key = new HoodieKey(
             row.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD),
             row.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD))
+          val isDelete = row.getString(rowOpOrdinal) == HoodieDataFrameWriter.ROW_OP_DELETE
           // The projection reuses its output buffer, and the merge machinery buffers incoming
           // records, so each record needs its own copy.
           val dataRow = dataProjection(row).copy()
-          new HoodieSparkRecord(key, dataRow, dataSchema, false)
-            .asInstanceOf[HoodieRecord[InternalRow]]
+          if (isDelete) {
+            new HoodieSparkRecord(key, dataRow, dataSchema, false,
+              null.asInstanceOf[org.apache.hudi.common.model.HoodieOperation],
+              null.asInstanceOf[Comparable[_]], true)
+              .asInstanceOf[HoodieRecord[InternalRow]]
+          } else {
+            new HoodieSparkRecord(key, dataRow, dataSchema, false)
+              .asInstanceOf[HoodieRecord[InternalRow]]
+          }
         }
       }
 

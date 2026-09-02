@@ -40,7 +40,7 @@ import org.apache.hudi.table.HoodieTable
 import org.apache.spark.Partitioner
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{DataFrame, Dataset, Row, SaveMode, SQLContext}
+import org.apache.spark.sql.{Column, DataFrame, Dataset, Row, SaveMode, SQLContext}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions.{coalesce, col, concat, hash, lit, row_number, udf, when}
@@ -81,7 +81,12 @@ object HoodieDataFrameWriter extends Logging {
   val PARTITION_PATH_FIELD = "hoodie.datasource.write.partitionpath.field"
 
   private val TAGGED_FILE_ID_COL = "_hoodie_tagged_file_id"
+  private val LOCATED_PARTITION_COL = "_hoodie_located_partition"
   private val ROUTING_BUCKET_COL = "_hoodie_routing_bucket"
+  val ROW_OP_COL = "_hoodie_row_op"
+  val ROW_OP_UPSERT = "U"
+  val ROW_OP_DELETE = "D"
+  private val DELETE_MARKER_COL = "_hoodie_is_deleted"
   val UPDATE_BUCKET_PREFIX = "u:"
   val INSERT_BUCKET_PREFIX = "i:"
 
@@ -147,7 +152,8 @@ object HoodieDataFrameWriter extends Logging {
       val readerContextFactory = sparkTable.getReaderContextFactoryForWrite
       val task = new DataFrameWriteTask(
         writeConfig, sparkTable, readerContextFactory, instantTime, withBucket.schema,
-        writeSchemaLength, bucketOrdinal, UPDATE_BUCKET_PREFIX)
+        writeSchemaLength, bucketOrdinal, withBucket.schema.fieldIndex(ROW_OP_COL),
+        UPDATE_BUCKET_PREFIX)
 
       val profilerMode = params.getOrElse(PROFILER, PROFILER_METADATA)
       val (statusRdd, extraMetadata) = if (profilerMode == PROFILER_SHUFFLE_STATS) {
@@ -220,6 +226,7 @@ object HoodieDataFrameWriter extends Logging {
 
   private val SUPPORTED_INDEX_TYPES: Set[HoodieIndex.IndexType] = Set(
     HoodieIndex.IndexType.SIMPLE,
+    HoodieIndex.IndexType.GLOBAL_SIMPLE,
     HoodieIndex.IndexType.BLOOM,
     HoodieIndex.IndexType.RECORD_INDEX,
     HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX,
@@ -235,17 +242,6 @@ object HoodieDataFrameWriter extends Logging {
     val indexType = writeConfig.getIndexType
     if (!SUPPORTED_INDEX_TYPES.contains(indexType)) {
       throw new HoodieException(s"Index type $indexType is not supported by the DataFrame write path yet")
-    }
-    val recordIndexConfigured = indexType == HoodieIndex.IndexType.RECORD_INDEX ||
-      indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX
-    if (recordIndexConfigured && operation == WriteOperationType.UPSERT
-      && !tableConfig.isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX)) {
-      throw new HoodieException("The record index is configured but its metadata partition is not "
-        + "initialized yet; the DataFrame write path does not fall back to another index")
-    }
-    if (recordIndexConfigured && writeConfig.getRecordIndexUpdatePartitionPath) {
-      throw new HoodieException("Updating partition paths via the record index is not supported "
-        + "by the DataFrame write path yet")
     }
     if (tableConfig.getTableType != HoodieTableType.COPY_ON_WRITE) {
       throw new HoodieException("The DataFrame write path only supports COPY_ON_WRITE tables yet, table type: "
@@ -385,14 +381,72 @@ object HoodieDataFrameWriter extends Logging {
                          operation: WriteOperationType,
                          writeConfig: HoodieWriteConfig,
                          table: HoodieTable[_, _, _, _]): Dataset[Row] = {
-    val recordIndexConfigured = writeConfig.getIndexType == HoodieIndex.IndexType.RECORD_INDEX ||
-      writeConfig.getIndexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX
-    if (operation == WriteOperationType.UPSERT && recordIndexConfigured
-      && table.getMetaClient.getTableConfig.isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX)) {
-      log.info("Tagging incoming records via the record-level index")
-      tagViaRecordIndex(spark, prepared, table)
+    val indexType = writeConfig.getIndexType
+    val recordIndexConfigured = indexType == HoodieIndex.IndexType.RECORD_INDEX ||
+      indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX
+    val recordIndexReady = recordIndexConfigured &&
+      table.getMetaClient.getTableConfig.isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX)
+    val globalIndex = recordIndexConfigured || indexType == HoodieIndex.IndexType.GLOBAL_SIMPLE
+    val deleteMarker: Column = if (prepared.columns.contains(DELETE_MARKER_COL)) {
+      coalesce(col(DELETE_MARKER_COL).cast("boolean"), lit(false))
     } else {
-      tagViaSimpleJoin(spark, prepared, operation, table)
+      lit(false)
+    }
+
+    if (operation != WriteOperationType.UPSERT) {
+      // Inserts never tag, and a delete-marker row has nothing to delete.
+      prepared.filter(!deleteMarker)
+        .withColumn(TAGGED_FILE_ID_COL, lit(null).cast(StringType))
+        .withColumn(ROW_OP_COL, lit(ROW_OP_UPSERT))
+    } else {
+      val joined = if (recordIndexReady) {
+        log.info("Tagging incoming records via the record-level index")
+        tagViaRecordIndex(spark, prepared, table)
+      } else {
+        // A configured-but-uninitialized record index keeps global semantics through the
+        // base-file join, mirroring the legacy fallback to the global simple index.
+        tagViaSimpleJoin(spark, prepared, table, globalIndex)
+      }
+      val updatePartitionPath = globalIndex && (if (recordIndexConfigured) {
+        writeConfig.getRecordIndexUpdatePartitionPath
+      } else {
+        writeConfig.getGlobalSimpleIndexUpdatePartitionPath
+      })
+      resolveTagged(joined, globalIndex, updatePartitionPath, deleteMarker)
+    }
+  }
+
+  /**
+   * Applies global-index semantics and the row-operation column on the tagged frame: no-op
+   * deletes are dropped; with update-partition-path off, located rows route to their original
+   * partition; with it on, a key that moved partitions fans out into a delete against the old
+   * file group plus an insert into the new partition.
+   */
+  private def resolveTagged(joined: Dataset[Row],
+                            globalIndex: Boolean,
+                            updatePartitionPath: Boolean,
+                            deleteMarker: Column): Dataset[Row] = {
+    val base = joined
+      .withColumn(ROW_OP_COL, when(deleteMarker, lit(ROW_OP_DELETE)).otherwise(lit(ROW_OP_UPSERT)))
+      .filter(col(ROW_OP_COL) === ROW_OP_UPSERT || col(TAGGED_FILE_ID_COL).isNotNull)
+    if (!globalIndex) {
+      base
+    } else if (!updatePartitionPath) {
+      base.withColumn(HoodieRecord.PARTITION_PATH_METADATA_FIELD,
+          coalesce(col(LOCATED_PARTITION_COL), col(HoodieRecord.PARTITION_PATH_METADATA_FIELD)))
+        .drop(LOCATED_PARTITION_COL)
+    } else {
+      val moved = col(TAGGED_FILE_ID_COL).isNotNull && col(LOCATED_PARTITION_COL).isNotNull &&
+        col(LOCATED_PARTITION_COL) =!= col(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
+      val staying = base.filter(!moved).drop(LOCATED_PARTITION_COL)
+      val oldCopyDeletes = base.filter(moved)
+        .withColumn(HoodieRecord.PARTITION_PATH_METADATA_FIELD, col(LOCATED_PARTITION_COL))
+        .withColumn(ROW_OP_COL, lit(ROW_OP_DELETE))
+        .drop(LOCATED_PARTITION_COL)
+      val newPartitionInserts = base.filter(moved && col(ROW_OP_COL) === ROW_OP_UPSERT)
+        .withColumn(TAGGED_FILE_ID_COL, lit(null).cast(StringType))
+        .drop(LOCATED_PARTITION_COL)
+      staying.unionByName(oldCopyDeletes).unionByName(newPartitionInserts)
     }
   }
 
@@ -445,9 +499,7 @@ object HoodieDataFrameWriter extends Logging {
     prepared.join(locations,
         prepared(HoodieRecord.RECORD_KEY_METADATA_FIELD) === locations("_hoodie_lookup_key"),
         "left_outer")
-      .withColumn(HoodieRecord.PARTITION_PATH_METADATA_FIELD,
-        coalesce(col("_hoodie_located_partition"), col(HoodieRecord.PARTITION_PATH_METADATA_FIELD)))
-      .drop("_hoodie_lookup_key", "_hoodie_located_partition")
+      .drop("_hoodie_lookup_key")
   }
 
   /**
@@ -457,33 +509,38 @@ object HoodieDataFrameWriter extends Logging {
    */
   private def tagViaSimpleJoin(spark: org.apache.spark.sql.SparkSession,
                                prepared: Dataset[Row],
-                               operation: WriteOperationType,
-                               table: HoodieTable[_, _, _, _]): Dataset[Row] = {
-    val latestBaseFiles = if (operation == WriteOperationType.UPSERT) {
-      // The view only serves partitions already loaded into it; load them all on the same view
-      // instance before asking for the latest base files across the table.
-      val fsView = table.getHoodieView
-      fsView.loadAllPartitions()
-      fsView.getLatestBaseFiles.iterator().asScala.map(_.getPath).toSeq
-    } else {
-      Seq.empty
-    }
+                               table: HoodieTable[_, _, _, _],
+                               globalIndex: Boolean): Dataset[Row] = {
+    // The view only serves partitions already loaded into it; load them all on the same view
+    // instance before asking for the latest base files across the table.
+    val fsView = table.getHoodieView
+    fsView.loadAllPartitions()
+    val latestBaseFiles = fsView.getLatestBaseFiles.iterator().asScala.map(_.getPath).toSeq
     if (latestBaseFiles.isEmpty) {
       log.info("Tagging skipped: no latest base files in the table")
-      prepared.withColumn(TAGGED_FILE_ID_COL, lit(null).cast("string"))
+      val untagged = prepared.withColumn(TAGGED_FILE_ID_COL, lit(null).cast(StringType))
+      if (globalIndex) {
+        untagged.withColumn(LOCATED_PARTITION_COL, lit(null).cast(StringType))
+      } else {
+        untagged
+      }
     } else {
-      log.info(s"Tagging incoming records against ${latestBaseFiles.size} latest base files")
+      log.info(s"Tagging incoming records against ${latestBaseFiles.size} latest base files"
+        + s" (${if (globalIndex) "global" else "partition-local"} key matching)")
       val fileIdFromName = udf((fileName: String) => FSUtils.getFileId(fileName))
       val existing = spark.read.parquet(latestBaseFiles: _*)
         .select(
           col(HoodieRecord.RECORD_KEY_METADATA_FIELD).as("_hoodie_existing_key"),
-          col(HoodieRecord.PARTITION_PATH_METADATA_FIELD).as("_hoodie_existing_partition"),
+          col(HoodieRecord.PARTITION_PATH_METADATA_FIELD).as(LOCATED_PARTITION_COL),
           fileIdFromName(col(HoodieRecord.FILENAME_METADATA_FIELD)).as(TAGGED_FILE_ID_COL))
-      prepared.join(existing,
-          prepared(HoodieRecord.RECORD_KEY_METADATA_FIELD) === existing("_hoodie_existing_key")
-            && prepared(HoodieRecord.PARTITION_PATH_METADATA_FIELD) === existing("_hoodie_existing_partition"),
-          "left_outer")
-        .drop("_hoodie_existing_key", "_hoodie_existing_partition")
+      val keyMatches = prepared(HoodieRecord.RECORD_KEY_METADATA_FIELD) === existing("_hoodie_existing_key")
+      val condition = if (globalIndex) {
+        keyMatches
+      } else {
+        keyMatches && prepared(HoodieRecord.PARTITION_PATH_METADATA_FIELD) === existing(LOCATED_PARTITION_COL)
+      }
+      val joined = prepared.join(existing, condition, "left_outer").drop("_hoodie_existing_key")
+      if (globalIndex) joined else joined.drop(LOCATED_PARTITION_COL)
     }
   }
 

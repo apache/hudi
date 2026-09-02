@@ -355,6 +355,67 @@ class TestHoodieDataFrameWriter {
   }
 
   @Test
+  def testGlobalSimpleIndexMovesRecordAcrossPartitions(): Unit = {
+    val path = tempDir.resolve("test_table_global_move").toString
+    writeHudi(Seq(("g1", "pA", 1L, "orig"), ("g2", "pA", 1L, "keep")), "insert", path,
+      Map("hoodie.index.type" -> "GLOBAL_SIMPLE"))
+    // Default update-partition-path for the global simple index is true: the key moves to pB.
+    writeHudi(Seq(("g1", "pB", 5L, "moved")), "upsert", path, Map("hoodie.index.type" -> "GLOBAL_SIMPLE"))
+
+    val rows = spark.read.format("hudi").load(path)
+      .select("key", "_hoodie_partition_path", "value").collect()
+      .map(r => (r.getString(0), r.getString(1), r.getString(2))).toSet
+    Assertions.assertEquals(Set(("g1", "pB", "moved"), ("g2", "pA", "keep")), rows)
+  }
+
+  @Test
+  def testGlobalSimpleIndexUpdatesOldPartitionWhenMigrationDisabled(): Unit = {
+    val path = tempDir.resolve("test_table_global_stay").toString
+    val extra = Map(
+      "hoodie.index.type" -> "GLOBAL_SIMPLE",
+      "hoodie.simple.index.update.partition.path" -> "false")
+    writeHudi(Seq(("s1", "pA", 1L, "orig")), "insert", path, extra)
+    writeHudi(Seq(("s1", "pB", 5L, "updated")), "upsert", path, extra)
+
+    val rows = spark.read.format("hudi").load(path)
+      .select("key", "_hoodie_partition_path", "value").collect()
+      .map(r => (r.getString(0), r.getString(1), r.getString(2))).toSet
+    Assertions.assertEquals(Set(("s1", "pA", "updated")), rows)
+  }
+
+  @Test
+  def testDeleteMarkerColumnDeletesRows(): Unit = {
+    val path = tempDir.resolve("test_table_delete_marker").toString
+    val deleteSchema = StructType(schema.fields :+ StructField("_hoodie_is_deleted", org.apache.spark.sql.types.BooleanType, nullable = false))
+    def df(rows: Seq[(String, String, Long, String, Boolean)]) = spark.createDataFrame(
+      rows.map(r => Row(r._1, r._2, r._3, r._4, r._5)).asJava, deleteSchema)
+
+    df(Seq(("d1", "p1", 1L, "one", false), ("d2", "p1", 1L, "two", false)))
+      .write.format("hudi").options(writeOptions("insert")).mode(SaveMode.Append).save(path)
+    // d1 flagged for delete, d9 is a no-op delete of a missing key, d3 is a live insert.
+    df(Seq(("d1", "p1", 2L, "gone", true), ("d9", "p1", 2L, "ghost", true), ("d3", "p1", 2L, "three", false)))
+      .write.format("hudi").options(writeOptions("upsert")).mode(SaveMode.Append).save(path)
+
+    val keys = spark.read.format("hudi").load(path).select("key").collect().map(_.getString(0)).toSet
+    Assertions.assertEquals(Set("d2", "d3"), keys)
+    Assertions.assertEquals(2, completedCommits(path))
+  }
+
+  @Test
+  def testRecordIndexConfigFallsBackToGlobalTaggingWhenNotReady(): Unit = {
+    val path = tempDir.resolve("test_table_rli_not_ready").toString
+    writeHudi(Seq(("f1", "pA", 1L, "orig")), "insert", path)
+    // The record index is configured but its metadata partition was never built; tagging keeps
+    // global semantics (default update-partition-path for the record index is false).
+    writeHudi(Seq(("f1", "pB", 5L, "updated")), "upsert", path, Map("hoodie.index.type" -> "RECORD_INDEX"))
+
+    val rows = spark.read.format("hudi").load(path)
+      .select("key", "_hoodie_partition_path", "value").collect()
+      .map(r => (r.getString(0), r.getString(1), r.getString(2))).toSet
+    Assertions.assertEquals(Set(("f1", "pA", "updated")), rows)
+  }
+
+  @Test
   def testUpsertIntoNewTableBehavesAsInsert(): Unit = {
     val path = tempDir.resolve("test_table_upsert_first").toString
     writeHudi(Seq(("a1", "p1", 1L, "x1"), ("a2", "p2", 1L, "x2")), "upsert", path)
