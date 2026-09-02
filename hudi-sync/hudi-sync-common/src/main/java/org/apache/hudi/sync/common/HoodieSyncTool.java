@@ -18,6 +18,7 @@
 package org.apache.hudi.sync.common;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HadoopConfigUtils;
 
 import org.apache.hadoop.conf.Configuration;
@@ -39,7 +40,9 @@ public abstract class HoodieSyncTool implements AutoCloseable {
   }
 
   public HoodieSyncTool(Properties props, Configuration hadoopConf) {
-    this.props = props;
+    TypedProperties mergedProps = ConfigUtils.loadGlobalProperties();
+    mergedProps.putAll(props);
+    this.props = mergedProps;
     this.hadoopConf = hadoopConf;
   }
 
