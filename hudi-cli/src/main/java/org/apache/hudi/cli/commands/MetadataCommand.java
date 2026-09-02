@@ -307,8 +307,8 @@ public class MetadataCommand {
 
     if (!fsPartitions.equals(metadataPartitions)) {
       log.error("FS partition listing is not matching with metadata partition listing!");
-      log.error("All FS partitions: " + Arrays.toString(fsPartitions.toArray()));
-      log.error("All Metadata partitions: " + Arrays.toString(metadataPartitions.toArray()));
+      log.error("All FS partitions: {}", Arrays.toString(fsPartitions.toArray()));
+      log.error("All Metadata partitions: {}", Arrays.toString(metadataPartitions.toArray()));
     }
 
     final List<Comparable[]> rows = new ArrayList<>();
@@ -351,34 +351,33 @@ public class MetadataCommand {
       }
 
       if (metadataPathInfoList.size() != pathInfoList.size()) {
-        log.error(" FS and metadata files count not matching for " + partition
-            + ". FS files count " + pathInfoList.size()
-            + ", metadata base files count " + metadataPathInfoList.size());
+        log.error(" FS and metadata files count not matching for {}. FS files count {}, metadata base files count {}", partition, pathInfoList.size(), metadataPathInfoList.size());
       }
 
       for (Map.Entry<String, StoragePathInfo> entry : pathInfoMap.entrySet()) {
         if (!metadataPathInfoMap.containsKey(entry.getKey())) {
-          log.error("FS file not found in metadata " + entry.getKey());
+          log.error("FS file not found in metadata {}", entry.getKey());
         } else {
           if (entry.getValue().getLength()
               != metadataPathInfoMap.get(entry.getKey()).getLength()) {
-            log.error(" FS file size mismatch " + entry.getKey() + ", size equality "
-                + (entry.getValue().getLength()
-                == metadataPathInfoMap.get(entry.getKey()).getLength())
-                + ". FS size " + entry.getValue().getLength()
-                + ", metadata size " + metadataPathInfoMap.get(entry.getKey()).getLength());
+            log.error(" FS file size mismatch {}, size equality {}. FS size {}, metadata size {}",
+                entry.getKey(),
+                entry.getValue().getLength() == metadataPathInfoMap.get(entry.getKey()).getLength(),
+                entry.getValue().getLength(),
+                metadataPathInfoMap.get(entry.getKey()).getLength());
           }
         }
       }
       for (Map.Entry<String, StoragePathInfo> entry : metadataPathInfoMap.entrySet()) {
         if (!pathInfoMap.containsKey(entry.getKey())) {
-          log.error("Metadata file not found in FS " + entry.getKey());
+          log.error("Metadata file not found in FS {}", entry.getKey());
         } else {
           if (entry.getValue().getLength() != pathInfoMap.get(entry.getKey()).getLength()) {
-            log.error(" Metadata file size mismatch " + entry.getKey() + ", size equality "
-                + (entry.getValue().getLength() == pathInfoMap.get(entry.getKey()).getLength())
-                + ". Metadata size " + entry.getValue().getLength() + ", FS size "
-                + metadataPathInfoMap.get(entry.getKey()).getLength());
+            log.error(" Metadata file size mismatch {}, size equality {}. Metadata size {}, FS size {}",
+                entry.getKey(),
+                entry.getValue().getLength() == pathInfoMap.get(entry.getKey()).getLength(),
+                entry.getValue().getLength(),
+                metadataPathInfoMap.get(entry.getKey()).getLength());
           }
         }
       }

@@ -88,6 +88,15 @@ public class HoodieArchivalConfig extends HoodieConfig {
       .withDocumentation("Archiving of instants is batched in best-effort manner, to pack more instants into a single"
           + " archive log. This config controls such archival batch size.");
 
+  public static final ConfigProperty<Integer> MIGRATION_COMMITS_ARCHIVAL_BATCH_SIZE = ConfigProperty
+      .key("hoodie.timeline.migration.commits.archival.batch")
+      .defaultValue(500)
+      .markAdvanced()
+      .withDocumentation("Batch size used when migrating the legacy archived timeline to the LSM timeline during a"
+          + " table version upgrade. A larger batch size minimizes the number of parquet files (and the associated"
+          + " remote storage operations like exists check, parquet write and manifest update) created during the"
+          + " one-time migration, which significantly reduces the total migration time.");
+
   public static final ConfigProperty<Integer> TIMELINE_COMPACTION_BATCH_SIZE = ConfigProperty
       .key("hoodie.timeline.compaction.batch.size")
       .defaultValue(10)
@@ -208,6 +217,11 @@ public class HoodieArchivalConfig extends HoodieConfig {
 
     public HoodieArchivalConfig.Builder withCommitsArchivalBatchSize(int batchSize) {
       archivalConfig.setValue(COMMITS_ARCHIVAL_BATCH_SIZE, String.valueOf(batchSize));
+      return this;
+    }
+
+    public HoodieArchivalConfig.Builder withMigrationCommitsArchivalBatchSize(int batchSize) {
+      archivalConfig.setValue(MIGRATION_COMMITS_ARCHIVAL_BATCH_SIZE, String.valueOf(batchSize));
       return this;
     }
 

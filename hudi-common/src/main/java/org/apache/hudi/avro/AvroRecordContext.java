@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieAvroSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -70,11 +71,22 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   public static Object getFieldValueFromIndexedRecord(
       IndexedRecord record,
       String fieldName) {
-    HoodieSchema currentSchema = HoodieSchema.fromAvroSchema(record.getSchema());
+    // Interning returns the canonical wrapper for this schema, whose lazily built field list and
+    // field map survive across calls, so the per-record cost is a cache hit instead of an
+    // O(schema width) wrapper rebuild.
+    HoodieSchema currentSchema = HoodieAvroSchemaCache.intern(record.getSchema());
     IndexedRecord currentRecord = record;
     String[] path = fieldName.split("\\.");
     for (int i = 0; i < path.length; i++) {
       currentSchema = currentSchema.getNonNullType();
+      // Value navigation here can only descend through RECORD fields. Column-stats field paths
+      // that traverse a MAP (".key_value.key" / ".key_value.value") or ARRAY (".list.element")
+      // synthetic accessor, or that hit a null intermediate value, cannot be resolved to a single
+      // value and yield null instead of throwing. This mirrors HoodieAvroUtils.getNestedFieldVal;
+      // statistics for such nested leaves are still collected from the base-file (Parquet) path.
+      if (currentRecord == null || !currentSchema.hasFields()) {
+        return null;
+      }
       Option<HoodieSchemaField> fieldOpt = currentSchema.getField(path[i]);
       if (fieldOpt.isEmpty()) {
         return null;
@@ -85,7 +97,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
         return value;
       }
       currentSchema = field.schema();
-      currentRecord = (IndexedRecord) value;
+      currentRecord = value instanceof IndexedRecord ? (IndexedRecord) value : null;
     }
     return null;
   }

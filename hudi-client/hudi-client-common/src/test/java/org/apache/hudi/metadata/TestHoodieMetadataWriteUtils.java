@@ -32,10 +32,16 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.metrics.MetricsReporterType;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
+import java.util.Collections;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -46,6 +52,46 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieMetadataWriteUtils {
+
+  @ParameterizedTest
+  @EnumSource(value = MetricsReporterType.class, names = {
+      "GRAPHITE", "JMX", "PROMETHEUS_PUSHGATEWAY", "M3", "PROMETHEUS"
+  })
+  void testCreateMetadataWriteConfigPropagatesSupportedMetricsReporter(MetricsReporterType reporterType) {
+    // Metadata writes must retain every reporter supported by the writer path.
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp/base_path/")
+        .withProps(Collections.singletonMap(
+            "hoodie.metrics.graphite.metric.prefix", "metadata-test"))
+        .withMetricsConfig(HoodieMetricsConfig.newBuilder()
+            .on(true)
+            .withReporterType(reporterType.name())
+            .build())
+        .build();
+
+    HoodieWriteConfig metadataWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(
+        writeConfig, HoodieFailedWritesCleaningPolicy.EAGER, HoodieTableVersion.EIGHT);
+
+    assertTrue(metadataWriteConfig.isMetricsOn());
+    assertEquals(reporterType, metadataWriteConfig.getMetricsReporterType());
+  }
+
+  @Test
+  void testCreateMetadataWriteConfigRejectsUnsupportedMetricsReporter() {
+    // Reject unsupported reporters before the metadata writer starts.
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp/base_path/")
+        .withMetricsConfig(HoodieMetricsConfig.newBuilder()
+            .on(true)
+            .withReporterType(MetricsReporterType.SLF4J.name())
+            .build())
+        .build();
+
+    HoodieMetadataException exception = assertThrows(HoodieMetadataException.class,
+        () -> HoodieMetadataWriteUtils.createMetadataWriteConfig(
+            writeConfig, HoodieFailedWritesCleaningPolicy.EAGER, HoodieTableVersion.EIGHT));
+    assertTrue(exception.getMessage().contains("Unsupported Metrics Reporter type SLF4J"));
+  }
 
   @Test
   public void testCreateMetadataWriteConfigForCleaner() {

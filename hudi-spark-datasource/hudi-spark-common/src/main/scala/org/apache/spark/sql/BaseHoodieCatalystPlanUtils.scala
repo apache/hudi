@@ -20,14 +20,14 @@ package org.apache.spark.sql
 import org.apache.hudi.SparkAdapterSupport
 
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.analysis.TableOutputResolver
+import org.apache.spark.sql.catalyst.analysis.{ResolvedTable, TableOutputResolver}
 import org.apache.spark.sql.catalyst.catalog.CatalogStorageFormat
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression, ProjectionOverSchema}
 import org.apache.spark.sql.catalyst.plans.JoinType
-import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, Join, JoinHint, LogicalPlan}
+import org.apache.spark.sql.catalyst.plans.logical.{CreateIndex, DropIndex, HoodieShowIndexes, InsertIntoStatement, Join, JoinHint, LogicalPlan, RefreshIndex}
 import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog}
 import org.apache.spark.sql.execution.{ExtendedMode, SimpleMode}
-import org.apache.spark.sql.execution.command.{CreateTableLikeCommand, ExplainCommand}
+import org.apache.spark.sql.execution.command.{CreateTableLikeCommand, ExplainCommand, RepairTableCommand}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
@@ -37,12 +37,17 @@ trait BaseHoodieCatalystPlanUtils extends HoodieCatalystPlansUtils {
   /**
    * Instantiates [[ProjectionOverSchema]] utility
    */
-  def projectOverSchema(schema: StructType, output: AttributeSet): ProjectionOverSchema
+  def projectOverSchema(schema: StructType, output: AttributeSet): ProjectionOverSchema =
+    ProjectionOverSchema(schema, output)
 
   /**
    * Un-applies [[ResolvedTable]] that had its signature changed in Spark 3.2
    */
-  def unapplyResolvedTable(plan: LogicalPlan): Option[(TableCatalog, Identifier, Table)]
+  def unapplyResolvedTable(plan: LogicalPlan): Option[(TableCatalog, Identifier, Table)] =
+    plan match {
+      case ResolvedTable(catalog, identifier, table, _) => Some((catalog, identifier, table))
+      case _ => None
+    }
 
   def resolveOutputColumns(tableName: String,
                            expected: Seq[Attribute],
@@ -77,7 +82,72 @@ trait BaseHoodieCatalystPlanUtils extends HoodieCatalystPlansUtils {
     a.sameOutput(b)
   }
 
-  override def createProjectForByNameQuery(lr: LogicalRelation, plan: LogicalPlan): Option[LogicalPlan] = None
+  override def isRepairTable(plan: LogicalPlan): Boolean = {
+    plan.isInstanceOf[RepairTableCommand]
+  }
+
+  override def getRepairTableChildren(plan: LogicalPlan): Option[(TableIdentifier, Boolean, Boolean, String)] = {
+    plan match {
+      case rtc: RepairTableCommand =>
+        Some((rtc.tableName, rtc.enableAddPartitions, rtc.enableDropPartitions, rtc.cmd))
+      case _ =>
+        None
+    }
+  }
+
+  override def unapplyCreateIndex(plan: LogicalPlan): Option[(LogicalPlan, String, String, Boolean, Seq[(Seq[String], Map[String, String])], Map[String, String])] = {
+    plan match {
+      case ci@CreateIndex(table, indexName, indexType, ignoreIfExists, columns, properties) =>
+        Some((table, indexName, indexType, ignoreIfExists, columns.map(col => (col._1.name, col._2)), properties))
+      case _ =>
+        None
+    }
+  }
+
+  override def unapplyDropIndex(plan: LogicalPlan): Option[(LogicalPlan, String, Boolean)] = {
+    plan match {
+      case ci@DropIndex(table, indexName, ignoreIfNotExists) =>
+        Some((table, indexName, ignoreIfNotExists))
+      case _ =>
+        None
+    }
+  }
+
+  override def unapplyShowIndexes(plan: LogicalPlan): Option[(LogicalPlan, Seq[Attribute])] = {
+    plan match {
+      case ci@HoodieShowIndexes(table, output) =>
+        Some((table, output))
+      case _ =>
+        None
+    }
+  }
+
+  override def unapplyRefreshIndex(plan: LogicalPlan): Option[(LogicalPlan, String)] = {
+    plan match {
+      case ci@RefreshIndex(table, indexName) =>
+        Some((table, indexName))
+      case _ =>
+        None
+    }
+  }
+
+  override def unapplyInsertIntoStatement(plan: LogicalPlan): Option[(LogicalPlan, Seq[String], Map[String, Option[String]], LogicalPlan, Boolean, Boolean)] = {
+    plan match {
+      case insert: InsertIntoStatement =>
+        Some((insert.table, insert.userSpecifiedCols, insert.partitionSpec, insert.query, insert.overwrite, insert.ifPartitionNotExists))
+      case _ =>
+        None
+    }
+  }
+
+  override def createProjectForByNameQuery(lr: LogicalRelation, plan: LogicalPlan): Option[LogicalPlan] = {
+    plan match {
+      case insert: InsertIntoStatement =>
+        Some(ResolveInsertionBase.createProjectForByNameQuery(lr.catalogTable.get.qualifiedName, insert))
+      case _ =>
+        None
+    }
+  }
 }
 
 object BaseHoodieCatalystPlanUtils extends SparkAdapterSupport {

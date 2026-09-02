@@ -27,6 +27,7 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.LockConfiguration;
@@ -79,11 +80,16 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.SchemaCompatibilityException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncClient;
+import org.apache.hudi.internal.schema.Type;
+import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
+import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
 import org.apache.hudi.io.storage.hadoop.HoodieAvroParquetReader;
 import org.apache.hudi.keygen.ComplexKeyGenerator;
 import org.apache.hudi.keygen.CustomKeyGenerator;
@@ -103,6 +109,7 @@ import org.apache.hudi.utilities.HoodieMetadataTableValidator;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 import org.apache.hudi.utilities.config.SourceTestConfig;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionException;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -128,6 +135,9 @@ import org.apache.hudi.utilities.transform.SqlQueryBasedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.avro.LogicalType;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -157,8 +167,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -199,6 +207,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -207,9 +216,13 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
 /**
  * Basic tests against {@link HoodieDeltaStreamer}, by issuing bulk_inserts, upserts, inserts. Check counts at the end.
  */
+@Slf4j
 public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
-  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieDeltaStreamer.class);
+  // Per-field verdict for the corrupt logical-repair fixtures: relabel ts_millis to millis and
+  // attach the local-timestamp logical types that 0.x dropped. ts_micros is already micros.
+  private static final String LOGICAL_REPAIR_TS_OVERRIDES =
+      "ts_millis:timestamp-millis,local_ts_millis:local-timestamp-millis,local_ts_micros:local-timestamp-micros";
 
   private void addRecordMerger(HoodieRecordType type, List<String> hoodieConfig) {
     if (type == HoodieRecordType.SPARK) {
@@ -434,7 +447,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       deltaStreamer.sync();
     }, "Should error out when setting the key generator class property to an invalid value");
     // expected
-    LOG.warn("Expected error during getting the key generator", e);
+    log.warn("Expected error during getting the key generator", e);
     assertTrue(e.getMessage().contains("Unable to load class"));
   }
 
@@ -464,17 +477,17 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         expectedKeyGeneratorClassName, metaClient.getTableConfig().getKeyGeneratorClassName());
     Dataset<Row> res = sqlContext.read().format("hudi").load(tableBasePath);
     assertEquals(1000, res.count());
-    assertUseV2Checkpoint(metaClient);
+    assertCheckpointVersion(metaClient);
   }
 
-  private static void assertUseV2Checkpoint(HoodieTableMetaClient metaClient) {
+  private static void assertCheckpointVersion(HoodieTableMetaClient metaClient) {
     metaClient.reloadActiveTimeline();
     Option<HoodieCommitMetadata> metadata = HoodieClientTestUtils.getCommitMetadataForInstant(
         metaClient, metaClient.getActiveTimeline().lastInstant().get());
     assertFalse(metadata.isEmpty());
     Map<String, String> extraMetadata = metadata.get().getExtraMetadata();
-    assertTrue(extraMetadata.containsKey(STREAMER_CHECKPOINT_KEY_V2));
-    assertFalse(extraMetadata.containsKey(STREAMER_CHECKPOINT_KEY_V1));
+    assertTrue(extraMetadata.containsKey(STREAMER_CHECKPOINT_KEY_V1));
+    assertFalse(extraMetadata.containsKey(STREAMER_CHECKPOINT_KEY_V2));
   }
 
   @Test
@@ -484,7 +497,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       syncOnce(TestHelpers.makeConfig(basePath + "/not_a_table", WriteOperationType.BULK_INSERT));
     }, "Should error out when pointed out at a dir thats not a table");
     // expected
-    LOG.debug("Expected error during table creation", e);
+    log.debug("Expected error during table creation", e);
   }
 
   @ParameterizedTest
@@ -561,7 +574,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.targetBasePath = newDatasetBasePath;
     syncOnce(cfg);
     Dataset<Row> res = sqlContext.read().format("org.apache.hudi").load(newDatasetBasePath);
-    LOG.info("Schema : {}", res.schema());
+    log.info("Schema : {}", res.schema());
 
     assertRecordCount(1950, newDatasetBasePath, sqlContext);
     res.registerTempTable("bootstrapped");
@@ -635,7 +648,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.configs.add(DataSourceWriteOptions.RECONCILE_SCHEMA().key() + "=true");
 
     syncOnce(cfg);
-    assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
+    assertCheckpointVersion(HoodieTestUtils.createMetaClient(storage, tableBasePath));
 
     assertRecordCount(1000, tableBasePath, sqlContext);
     TestHelpers.assertCommitMetadata("00000", tableBasePath, 1);
@@ -648,7 +661,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.configs.add("hoodie.streamer.schemaprovider.target.schema.file=" + basePath + "/source_evolved.avsc");
     cfg.configs.add(DataSourceWriteOptions.RECONCILE_SCHEMA().key() + "=true");
     syncOnce(cfg);
-    assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
+    assertCheckpointVersion(HoodieTestUtils.createMetaClient(storage, tableBasePath));
     // out of 1000 new records, 500 are inserts, 450 are updates and 50 are deletes.
     assertRecordCount(1450, tableBasePath, sqlContext);
     TestHelpers.assertCommitMetadata("00001", tableBasePath, 2);
@@ -713,7 +726,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
 
     syncOnce(cfg);
-    assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
+    assertCheckpointVersion(HoodieTestUtils.createMetaClient(storage, tableBasePath));
     assertRecordCount(1000, tableBasePath, sqlContext);
     TestHelpers.assertCommitMetadata("00000", tableBasePath, 1);
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(
@@ -737,7 +750,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.configs.add("hoodie.datasource.write.row.writer.enable=false");
 
     syncOnce(cfg);
-    assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
+    assertCheckpointVersion(HoodieTestUtils.createMetaClient(storage, tableBasePath));
     assertRecordCount(1450, tableBasePath, sqlContext);
     TestHelpers.assertCommitMetadata("00001", tableBasePath, 2);
     tableSchemaResolver = new TableSchemaResolver(
@@ -752,6 +765,97 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(1450, sqlContext.read().options(hudiOpts).format("org.apache.hudi").load(tableBasePath).filter("current_ts > '1980-01-01'").count());
     assertEquals(1450, sqlContext.read().options(hudiOpts).format("org.apache.hudi").load(tableBasePath).filter("current_ts < '2080-01-01'").count());
     assertEquals(0, sqlContext.read().options(hudiOpts).format("org.apache.hudi").load(tableBasePath).filter("current_ts < '1980-01-01'").count());
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testLongToTimestampPromotionGated(boolean setNullForMissingColumns) throws Exception {
+    // Promoting a plain long column to a timestamp logical type is override-gated: rejected without a
+    // per-field override for every target type, and applied with one. A bare long carries no precision
+    // signal, so the override is the explicit verdict that authorizes the promotion. One bare-long seed
+    // is reused: the rejection cases all throw (table stays bare long), and the accepted case runs last.
+    String tableBasePath = basePath + "/testLongToTs" + setNullForMissingColumns;
+    defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
+
+    // Sync 0: seed the table with `seconds_since_epoch` stored as a bare long.
+    HoodieDeltaStreamer.Config seed = TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT,
+        Collections.singletonList(TestIdentityTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE,
+        false, true, false, null, HoodieTableType.COPY_ON_WRITE.name());
+    seed.configs.add("hoodie.streamer.schemaprovider.source.schema.file=" + basePath + "/source-timestamp-millis.avsc");
+    seed.configs.add("hoodie.streamer.schemaprovider.target.schema.file=" + basePath + "/source-timestamp-millis.avsc");
+    seed.configs.add("hoodie.datasource.write.row.writer.enable=false");
+    seed.configs.add(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key() + "=" + setNullForMissingColumns);
+    new HoodieDeltaStreamer(seed, jsc).sync();
+
+    Schema tableSchema = new TableSchemaResolver(HoodieTestUtils.createMetaClient(storage, tableBasePath))
+        .getTableSchema(false).toAvroSchema();
+    assertNull(tableSchema.getField("seconds_since_epoch").schema().getLogicalType(),
+        "seconds_since_epoch must be seeded as a bare long in the table");
+    Schema baseSchema = new Schema.Parser().parse(fs.open(new Path(basePath + "/source-timestamp-millis.avsc")));
+
+    // Every target type is rejected without a per-field override.
+    for (LogicalType targetType : new LogicalType[] {LogicalTypes.timestampMillis(), LogicalTypes.timestampMicros(),
+        LogicalTypes.localTimestampMillis(), LogicalTypes.localTimestampMicros()}) {
+      String schemaFile = writePromotedSchema(baseSchema, targetType, setNullForMissingColumns);
+      HoodieDeltaStreamer.Config reject = promoteConfig(tableBasePath, schemaFile, setNullForMissingColumns, null);
+      HoodieDeltaStreamer streamer = new HoodieDeltaStreamer(reject, jsc);
+      // sync() wraps the guard's SchemaCompatibilityException in a HoodieIngestionException, so walk
+      // the cause chain to assert on the underlying exception.
+      Throwable thrown = assertThrows(Exception.class, streamer::sync,
+          "long -> " + targetType.getName() + " must be rejected without an override");
+      Throwable cause = thrown;
+      while (cause != null && !(cause instanceof SchemaCompatibilityException)) {
+        cause = cause.getCause();
+      }
+      assertTrue(cause instanceof SchemaCompatibilityException,
+          "Expected a SchemaCompatibilityException in the cause chain, got: " + thrown);
+      Type toType = SchemaChangeUtils.parseTimestampLogicalTypeOverrides("field:" + targetType.getName()).get("field");
+      assertEquals(AvroSchemaEvolutionUtils.timestampPrecisionChangeError(
+          "seconds_since_epoch", Types.LongType.get(), toType).getMessage(), cause.getMessage());
+    }
+
+    // With an override the promotion is authorized (local promotions are covered end-to-end by
+    // testCOWLogicalRepair / testMORLogicalRepair); verify a UTC promotion succeeds and lands on the
+    // table schema.
+    String utcSchemaFile = writePromotedSchema(baseSchema, LogicalTypes.timestampMicros(), setNullForMissingColumns);
+    HoodieDeltaStreamer.Config accept = promoteConfig(tableBasePath, utcSchemaFile, setNullForMissingColumns,
+        "seconds_since_epoch:timestamp-micros");
+    new HoodieDeltaStreamer(accept, jsc).sync();
+    Schema evolved = new TableSchemaResolver(HoodieTestUtils.createMetaClient(storage, tableBasePath))
+        .getTableSchema(false).toAvroSchema();
+    assertEquals("timestamp-micros", evolved.getField("seconds_since_epoch").schema().getLogicalType().getName());
+  }
+
+  private String writePromotedSchema(Schema baseSchema, LogicalType targetType, boolean setNull) throws IOException {
+    Schema incoming = replaceFieldType(baseSchema, "seconds_since_epoch",
+        targetType.addToSchema(Schema.create(Schema.Type.LONG)));
+    String schemaFile = basePath + "/promote-" + targetType.getName() + "-nul" + setNull + ".avsc";
+    UtilitiesTestBase.Helpers.saveStringsToDFS(new String[] {incoming.toString()}, storage, schemaFile);
+    return schemaFile;
+  }
+
+  private HoodieDeltaStreamer.Config promoteConfig(String tableBasePath, String schemaFile,
+                                                   boolean setNullForMissingColumns, String override) {
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT,
+        Collections.singletonList(TestIdentityTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE,
+        false, true, false, null, HoodieTableType.COPY_ON_WRITE.name());
+    cfg.configs.add("hoodie.streamer.schemaprovider.source.schema.file=" + schemaFile);
+    cfg.configs.add("hoodie.streamer.schemaprovider.target.schema.file=" + schemaFile);
+    cfg.configs.add("hoodie.datasource.write.row.writer.enable=false");
+    cfg.configs.add(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key() + "=" + setNullForMissingColumns);
+    if (override != null) {
+      cfg.configs.add(HoodieCommonConfig.TIMESTAMP_LOGICAL_TYPE_OVERRIDES.key() + "=" + override);
+    }
+    return cfg;
+  }
+
+  private static Schema replaceFieldType(Schema recordSchema, String fieldName, Schema newFieldType) {
+    List<Schema.Field> fields = new ArrayList<>();
+    for (Schema.Field field : recordSchema.getFields()) {
+      Schema fieldSchema = field.name().equals(fieldName) ? newFieldType : field.schema();
+      fields.add(new Schema.Field(field.name(), fieldSchema, field.doc(), field.defaultVal()));
+    }
+    return Schema.createRecord(recordSchema.getName(), recordSchema.getDoc(), recordSchema.getNamespace(), false, fields);
   }
 
   @Test
@@ -780,7 +884,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       cfg.configs.add("hoodie.datasource.write.row.writer.enable=false");
 
       syncOnce(cfg);
-      assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
+      assertCheckpointVersion(HoodieTestUtils.createMetaClient(storage, tableBasePath));
       assertRecordCount(1000, tableBasePath, sqlContext);
       TestHelpers.assertCommitMetadata("00000", tableBasePath, 1);
       TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(
@@ -800,7 +904,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       cfg.configs.add("hoodie.datasource.write.row.writer.enable=false");
 
       syncOnce(cfg);
-      assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
+      assertCheckpointVersion(HoodieTestUtils.createMetaClient(storage, tableBasePath));
       assertRecordCount(1450, tableBasePath, sqlContext);
       TestHelpers.assertCommitMetadata("00001", tableBasePath, 2);
       tableSchemaResolver = new TableSchemaResolver(
@@ -875,7 +979,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
           tableBasePath, WriteOperationType.INSERT, hasTransformer, orderingField, recordType, tableType);
       syncOnce(cfg);
       // Validate.
-      assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
+      assertCheckpointVersion(HoodieTestUtils.createMetaClient(storage, tableBasePath));
       assertRecordCount(1000, tableBasePath, sqlContext);
       TestHelpers.assertCommitMetadata(topicName + ",0:500,1:500", tableBasePath, 1);
       TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(
@@ -891,7 +995,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
           tableBasePath, WriteOperationType.UPSERT, hasTransformer, orderingField, recordType, tableType);
       syncOnce(cfg);
       // Validate.
-      assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
+      assertCheckpointVersion(HoodieTestUtils.createMetaClient(storage, tableBasePath));
       assertRecordCount(1500, tableBasePath, sqlContext);
       TestHelpers.assertCommitMetadata(topicName + ",0:1250,1:1250", tableBasePath, 2);
       tableSchemaResolver = new TableSchemaResolver(
@@ -968,6 +1072,13 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       String schemaPath = zipOutput + "/schema.avsc";
       cfg.configs.add(String.format(("%s=%s"), "hoodie.streamer.schemaprovider.source.schema.file", schemaPath));
       cfg.configs.add(String.format(("%s=%s"), "hoodie.streamer.schemaprovider.target.schema.file", schemaPath));
+      // The v6/v8 col-stats fixture reuses the same trips_logical_types_json corrupt schema as
+      // the logical-repair tests — 0.x collapsed ts_millis to timestamp-micros and dropped the
+      // local-timestamp logical types entirely. Provide the same explicit verdict so the guard
+      // in HoodieSchemaUtils.deduceWriterSchema authorizes the repair rather than rejecting the
+      // unverified precision change.
+      cfg.configs.add(String.format(("%s=%s"),
+          HoodieCommonConfig.TIMESTAMP_LOGICAL_TYPE_OVERRIDES.key(), LOGICAL_REPAIR_TS_OVERRIDES));
       cfg.forceDisableCompaction = true;
       cfg.sourceLimit = 100_000;
       cfg.ignoreCheckpoint = "12345";
@@ -1110,8 +1221,19 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @ParameterizedTest
-  @CsvSource(value = {"SIX,AVRO,CLUSTER", "EIGHT,AVRO,CLUSTER", "CURRENT,AVRO,NONE", "CURRENT,AVRO,CLUSTER", "CURRENT,SPARK,NONE", "CURRENT,SPARK,CLUSTER"})
-  void testCOWLogicalRepair(String tableVersion, String recordType, String operation) throws Exception {
+  @CsvSource(value = {
+      // Repair succeeds when a per-field verdict is set, on the default (non-reconcile) write path...
+      "SIX,AVRO,CLUSTER,false,true", "EIGHT,AVRO,CLUSTER,false,true",
+      "CURRENT,AVRO,NONE,false,true", "CURRENT,AVRO,CLUSTER,false,true",
+      "CURRENT,SPARK,NONE,false,true", "CURRENT,SPARK,CLUSTER,false,true",
+      // ...and on the reconcile path (setNullForMissingColumns=true).
+      "SIX,AVRO,CLUSTER,true,true", "EIGHT,AVRO,CLUSTER,true,true", "CURRENT,AVRO,CLUSTER,true,true",
+      // Guard: with no verdict, the mislabeled timestamp/local-timestamp columns must be rejected on
+      // the first sync, on both the reconcile path and the default path.
+      "SIX,AVRO,CLUSTER,true,false", "SIX,AVRO,CLUSTER,false,false"})
+  void testCOWLogicalRepair(String tableVersion, String recordType, String operation,
+                            boolean setNullForMissingColumns,
+                            boolean setTimestampOverride) throws Exception {
     TestMercifulJsonToRowConverterBase.timestampNTZCompatibility(() -> {
       String dirName = "trips_logical_types_json_cow_write";
       String dataPath = basePath + "/" + dirName;
@@ -1140,8 +1262,35 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       properties.setProperty("hoodie.parquet.small.file.limit", "-1");
       properties.setProperty("hoodie.cleaner.commits.retained", "10");
       properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersionString);
+      properties.setProperty(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key(),
+          Boolean.toString(setNullForMissingColumns));
+      if (setTimestampOverride) {
+        // Per-field verdict authorizing the repair: relabel ts_millis to millis and attach the
+        // local-timestamp logical types 0.x dropped. ts_micros stays micros (no entry needed).
+        properties.setProperty(HoodieCommonConfig.TIMESTAMP_LOGICAL_TYPE_OVERRIDES.key(),
+            LOGICAL_REPAIR_TS_OVERRIDES);
+      }
 
       Option<TypedProperties> propt = Option.of(properties);
+
+      if (!setTimestampOverride) {
+        // No per-field verdict. The mislabeled timestamp/local-timestamp columns must be rejected on
+        // the first sync rather than silently flipped, on both the reconcile and default write paths.
+        // syncOnce wraps the guard's SchemaCompatibilityException in a HoodieIngestionException, so
+        // walk the cause chain to assert on the underlying exception.
+        Throwable thrown = assertThrows(Exception.class,
+            () -> syncOnce(prepCfgForCowLogicalRepair(tableBasePath, "456"), propt));
+        Throwable cause = thrown;
+        while (cause != null && !(cause instanceof SchemaCompatibilityException)) {
+          cause = cause.getCause();
+        }
+        assertTrue(cause instanceof SchemaCompatibilityException,
+            "Expected a SchemaCompatibilityException in the cause chain, got: " + thrown);
+        assertTrue(cause.getMessage().contains("column 'ts_millis'")
+                && cause.getMessage().contains("without an explicit"),
+            "Unexpected message: " + cause.getMessage());
+        return;
+      }
 
       syncOnce(prepCfgForCowLogicalRepair(tableBasePath, "456"), propt);
 
@@ -1190,11 +1339,17 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @ParameterizedTest
-  @CsvSource(value = {"SIX,AVRO,CLUSTER,AVRO", "EIGHT,AVRO,CLUSTER,AVRO",
-      "CURRENT,AVRO,NONE,AVRO", "CURRENT,AVRO,CLUSTER,AVRO", "CURRENT,AVRO,COMPACT,AVRO",
-      "CURRENT,AVRO,NONE,PARQUET", "CURRENT,AVRO,CLUSTER,PARQUET", "CURRENT,AVRO,COMPACT,PARQUET",
-      "CURRENT,SPARK,NONE,PARQUET", "CURRENT,SPARK,CLUSTER,PARQUET", "CURRENT,SPARK,COMPACT,PARQUET"})
-  void testMORLogicalRepair(String tableVersion, String recordType, String operation, String logBlockType) throws Exception {
+  @CsvSource(value = {"SIX,AVRO,CLUSTER,AVRO,false,true", "EIGHT,AVRO,CLUSTER,AVRO,false,true",
+      "CURRENT,AVRO,NONE,AVRO,false,true", "CURRENT,AVRO,CLUSTER,AVRO,false,true", "CURRENT,AVRO,COMPACT,AVRO,false,true",
+      "CURRENT,AVRO,NONE,PARQUET,false,true", "CURRENT,AVRO,CLUSTER,PARQUET,false,true", "CURRENT,AVRO,COMPACT,PARQUET,false,true",
+      "CURRENT,SPARK,NONE,PARQUET,false,true", "CURRENT,SPARK,CLUSTER,PARQUET,false,true", "CURRENT,SPARK,COMPACT,PARQUET,false,true",
+      // Variants that exercise the schema-reconcile path (setNullForMissingColumns=true) with a verdict.
+      "SIX,AVRO,CLUSTER,AVRO,true,true", "EIGHT,AVRO,CLUSTER,AVRO,true,true", "CURRENT,AVRO,CLUSTER,AVRO,true,true",
+      // Guard: with no verdict, the first sync must throw, on both the reconcile and default paths.
+      "SIX,AVRO,CLUSTER,AVRO,true,false", "SIX,AVRO,CLUSTER,AVRO,false,false"})
+  void testMORLogicalRepair(String tableVersion, String recordType, String operation, String logBlockType,
+                            boolean setNullForMissingColumns,
+                            boolean setTimestampOverride) throws Exception {
     TestMercifulJsonToRowConverterBase.timestampNTZCompatibility(() -> {
       String tableSuffix;
       String logFormatValue;
@@ -1242,6 +1397,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       properties.setProperty("hoodie.cleaner.commits.retained", "10");
       properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersionString);
       properties.setProperty(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logFormatValue);
+      properties.setProperty(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key(),
+          Boolean.toString(setNullForMissingColumns));
+      if (setTimestampOverride) {
+        properties.setProperty(HoodieCommonConfig.TIMESTAMP_LOGICAL_TYPE_OVERRIDES.key(),
+            LOGICAL_REPAIR_TS_OVERRIDES);
+      }
 
       boolean disableCompaction;
       if ("COMPACT".equals(operation)) {
@@ -1262,6 +1423,25 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       }
 
       Option<TypedProperties> propt = Option.of(properties);
+
+      if (!setTimestampOverride) {
+        // No per-field verdict. The mislabeled timestamp/local-timestamp columns must be rejected on
+        // the first sync rather than silently flipped, on both the reconcile and default write paths.
+        // syncOnce wraps the guard's SchemaCompatibilityException in a HoodieIngestionException, so
+        // walk the cause chain to assert on the underlying exception.
+        Throwable thrown = assertThrows(Exception.class,
+            () -> syncOnce(prepCfgForMorLogicalRepair(tableBasePath, dirName, "123", disableCompaction), propt));
+        Throwable cause = thrown;
+        while (cause != null && !(cause instanceof SchemaCompatibilityException)) {
+          cause = cause.getCause();
+        }
+        assertTrue(cause instanceof SchemaCompatibilityException,
+            "Expected a SchemaCompatibilityException in the cause chain, got: " + thrown);
+        assertTrue(cause.getMessage().contains("column 'ts_millis'")
+                && cause.getMessage().contains("without an explicit"),
+            "Unexpected message: " + cause.getMessage());
+        return;
+      }
 
       syncOnce(prepCfgForMorLogicalRepair(tableBasePath, dirName, "123", disableCompaction), propt);
 
@@ -1474,7 +1654,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.configs.add(String.format("%s=%s", HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE.key(), MetricsReporterType.INMEMORY.name()));
     cfg.continuousMode = false;
     syncOnce(cfg);
-    assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
+    assertCheckpointVersion(HoodieTestUtils.createMetaClient(storage, tableBasePath));
     assertRecordCount(SQL_SOURCE_NUM_RECORDS, tableBasePath, sqlContext);
     assertFalse(Metrics.isInitialized(tableBasePath), "Metrics should be shutdown");
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
@@ -1503,7 +1683,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.configs.add(String.format("%s=%s", HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE.key(), MetricsReporterType.INMEMORY.name()));
     cfg.continuousMode = false;
     syncOnce(cfg);
-    assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
+    assertCheckpointVersion(HoodieTestUtils.createMetaClient(storage, tableBasePath));
     assertRecordCount(SQL_SOURCE_NUM_RECORDS, tableBasePath, sqlContext);
     assertFalse(Metrics.isInitialized(tableBasePath), "Metrics should be shutdown");
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
@@ -1568,7 +1748,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       try {
         ds.sync();
       } catch (Exception ex) {
-        LOG.warn("DS continuous job failed, hence not proceeding with condition check for " + jobId);
+        log.warn("DS continuous job failed, hence not proceeding with condition check for {}", jobId);
         throw new RuntimeException(ex.getMessage(), ex);
       }
     });
@@ -1966,19 +2146,19 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
             buildIndexerConfig(tableBasePath, ds.getConfig().targetTableName, null, UtilHelpers.SCHEDULE, "COLUMN_STATS"));
         scheduleIndexInstantTime = scheduleIndexingJob.doSchedule();
       } catch (Exception e) {
-        LOG.info("Schedule indexing failed", e);
+        log.info("Schedule indexing failed", e);
         return false;
       }
       if (scheduleIndexInstantTime.isPresent()) {
         TestHelpers.assertPendingIndexCommit(tableBasePath);
-        LOG.info("Schedule indexing success, now build index with instant time " + scheduleIndexInstantTime.get());
+        log.info("Schedule indexing success, now build index with instant time {}", scheduleIndexInstantTime.get());
         HoodieIndexer runIndexingJob = new HoodieIndexer(jsc,
             buildIndexerConfig(tableBasePath, ds.getConfig().targetTableName, scheduleIndexInstantTime.get(), UtilHelpers.EXECUTE, "COLUMN_STATS"));
         runIndexingJob.start(0);
-        LOG.info("Metadata indexing success");
+        log.info("Metadata indexing success");
         TestHelpers.assertCompletedIndexCommit(tableBasePath);
       } else {
-        LOG.warn("Metadata indexing failed");
+        log.warn("Metadata indexing failed");
       }
       return true;
     });
@@ -2006,7 +2186,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
                 Arrays.asList(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key() + "=true", HoodieWriteConfig.MARKERS_TYPE.key() + "=DIRECT")));
         scheduleIndexInstantTime = scheduleIndexingJob.doSchedule();
         TestHelpers.assertPendingIndexCommit(tableBasePath);
-        LOG.info("Schedule indexing success, now build index with instant time " + scheduleIndexInstantTime.get());
+        log.info("Schedule indexing success, now build index with instant time {}", scheduleIndexInstantTime.get());
         // Wait for a pending commit before starting execution phase for the executor. This ensures that indexer waits for the commit to complete.
         TestHelpers.waitFor(() -> {
           HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storage.getConf(), tableBasePath);
@@ -2017,7 +2197,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
             buildIndexerConfig(tableBasePath, ds.getConfig().targetTableName, scheduleIndexInstantTime.get(), UtilHelpers.EXECUTE, "RECORD_INDEX",
                 Arrays.asList(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key() + "=true", HoodieWriteConfig.MARKERS_TYPE.key() + "=DIRECT")));
         runIndexingJob.start(0);
-        LOG.info("Metadata indexing success");
+        log.info("Metadata indexing success");
         TestHelpers.assertCompletedIndexCommit(tableBasePath);
         // Assert no pending commits before indexing instant
         HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storage.getConf(), tableBasePath);
@@ -2066,7 +2246,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
             buildIndexerConfig(tableBasePath, ds.getConfig().targetTableName, null, UtilHelpers.SCHEDULE, "RECORD_INDEX"));
         scheduleIndexInstantTime = scheduleIndexingJob.doSchedule();
         TestHelpers.assertPendingIndexCommit(tableBasePath);
-        LOG.info("Schedule indexing success, now build index with instant time " + scheduleIndexInstantTime.get());
+        log.info("Schedule indexing success, now build index with instant time {}", scheduleIndexInstantTime.get());
         // Wait for clustering instant to be scheduled before starting execution phase of the executor
         TestHelpers.waitFor(() -> {
           HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storage, tableBasePath);
@@ -2083,7 +2263,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
           boolean res = JavaTestUtils.checkNestedExceptionContains(t, "Index catchup failed");
           assertTrue(res, "Indexing catchup task should have timed out");
         }
-        LOG.info("Metadata indexing timed out");
+        log.info("Metadata indexing timed out");
       } catch (Exception e) {
         fail("Indexing job should not have failed", e);
       }
@@ -2113,19 +2293,19 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
             initialHoodieClusteringJob(tableBasePath, null, true, null);
         scheduleClusteringInstantTime = scheduleClusteringJob.doSchedule();
       } catch (Exception e) {
-        LOG.warn("Schedule clustering failed", e);
+        log.warn("Schedule clustering failed", e);
         Assertions.fail("Schedule clustering failed", e);
       }
       if (scheduleClusteringInstantTime.isPresent()) {
-        LOG.info("Schedule clustering success, now cluster with instant time " + scheduleClusteringInstantTime.get());
+        log.info("Schedule clustering success, now cluster with instant time {}", scheduleClusteringInstantTime.get());
         HoodieClusteringJob.Config clusterClusteringConfig = buildHoodieClusteringUtilConfig(tableBasePath,
             shouldPassInClusteringInstantTime ? scheduleClusteringInstantTime.get() : null, false);
         HoodieClusteringJob clusterClusteringJob = new HoodieClusteringJob(jsc, clusterClusteringConfig);
         clusterClusteringJob.cluster(clusterClusteringConfig.retry);
         TestHelpers.assertAtLeastNReplaceCommits(1, tableBasePath);
-        LOG.info("Cluster success");
+        log.info("Cluster success");
       } else {
-        LOG.warn("Clustering execution failed");
+        log.warn("Clustering execution failed");
         Assertions.fail("Clustering execution failed");
       }
     } else {
@@ -2295,15 +2475,15 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       try {
         int result = scheduleClusteringJob.cluster(0);
         if (result == 0) {
-          LOG.info("Cluster success");
+          log.info("Cluster success");
         } else {
-          LOG.warn("Cluster failed");
+          log.warn("Cluster failed");
           if (!runningMode.toLowerCase().equals(UtilHelpers.EXECUTE)) {
             return false;
           }
         }
       } catch (Exception e) {
-        LOG.warn("ScheduleAndExecute clustering failed", e);
+        log.warn("ScheduleAndExecute clustering failed", e);
         exception = e;
         if (!runningMode.equalsIgnoreCase(UtilHelpers.EXECUTE)) {
           return false;
@@ -2416,7 +2596,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
                   entry, metaClient, WriteOperationType.BULK_INSERT));
         }
       }
-      assertUseV2Checkpoint(createMetaClient(jsc, tableBasePath));
+      assertCheckpointVersion(createMetaClient(jsc, tableBasePath));
     } finally {
       deltaStreamer.shutdownGracefully();
     }
@@ -2463,13 +2643,13 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       try {
         int counter = 2;
         while (counter < 100) { // lets keep going. if the test times out, we will cancel the future within finally. So, safe to generate 100 batches.
-          LOG.info("Generating data for batch {}", counter);
+          log.info("Generating data for batch {}", counter);
           prepareParquetDFSFiles(100, PARQUET_SOURCE_ROOT, Integer.toString(counter) + ".parquet", false, null, null, makeDatesAmbiguous);
           counter++;
           Thread.sleep(2000);
         }
       } catch (Exception ex) {
-        LOG.warn("Input data generation failed", ex);
+        log.warn("Input data generation failed", ex);
         throw new RuntimeException(ex.getMessage(), ex);
       }
     });
@@ -2536,7 +2716,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertRecordCount(1000, downstreamTableBasePath, sqlContext);
     assertDistanceCount(1000, downstreamTableBasePath, sqlContext);
     assertDistanceCountWithExactValue(1000, downstreamTableBasePath, sqlContext);
-    TestHelpers.assertCommitMetadata(lastInstantForUpstreamTable.getCompletionTime(), downstreamTableBasePath, 1);
+    TestHelpers.assertCommitMetadataForIncrSource(lastInstantForUpstreamTable.getCompletionTime(), downstreamTableBasePath, 1);
 
     // No new data => no commits for upstream table
     cfg.sourceLimit = 0;
@@ -2554,7 +2734,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertRecordCount(1000, downstreamTableBasePath, sqlContext);
     assertDistanceCount(1000, downstreamTableBasePath, sqlContext);
     assertDistanceCountWithExactValue(1000, downstreamTableBasePath, sqlContext);
-    TestHelpers.assertCommitMetadata(lastInstantForUpstreamTable.getCompletionTime(), downstreamTableBasePath, 1);
+    TestHelpers.assertCommitMetadataForIncrSource(lastInstantForUpstreamTable.getCompletionTime(), downstreamTableBasePath, 1);
 
     // upsert() #1 on upstream hudi table
     cfg.sourceLimit = 2000;
@@ -2578,7 +2758,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertDistanceCount(2000, downstreamTableBasePath, sqlContext);
     assertDistanceCountWithExactValue(2000, downstreamTableBasePath, sqlContext);
     HoodieInstant finalInstant =
-        TestHelpers.assertCommitMetadata(lastInstantForUpstreamTable.getCompletionTime(), downstreamTableBasePath, 2);
+        TestHelpers.assertCommitMetadataForIncrSource(lastInstantForUpstreamTable.getCompletionTime(), downstreamTableBasePath, 2);
     counts = countsPerCommit(downstreamTableBasePath, sqlContext);
     assertEquals(2000, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
 
@@ -2610,11 +2790,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT,
         Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, true,
         false, false, null, null);
-    Exception e = assertThrows(HoodieException.class, () -> {
+    Exception e = assertThrows(HoodieIngestionException.class, () -> {
       syncOnce(new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()));
     }, "Should error out when schema provider is not provided");
-    LOG.debug("Expected error during reading data from source ", e);
-    assertTrue(e.getMessage().contains("Schema provider is required for this operation and for the source of interest. "
+    log.debug("Expected error during reading data from source ", e);
+    String errorMsg = e.getCause() != null ? e.getCause().getMessage() : e.getMessage();
+    assertTrue(errorMsg.contains("Schema provider is required for this operation and for the source of interest. "
         + "Please set '--schemaprovider-class' in the top level HoodieStreamer config for the source of interest. "
         + "Based on the schema provider class chosen, additional configs might be required. "
         + "For eg, if you choose 'org.apache.hudi.utilities.schema.SchemaRegistryProvider', "
@@ -2845,7 +3026,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // Ensure it is empty
     HoodieCommitMetadata commitMetadata =
         mClient.getActiveTimeline().readCommitMetadata(newLastFinished);
-    LOG.info("New Commit Metadata={}", commitMetadata);
+    log.info("New Commit Metadata={}", commitMetadata);
     assertTrue(commitMetadata.getPartitionToWriteStats().isEmpty());
 
     // Try UPSERT with filterDupes true. Expect exception
@@ -3153,28 +3334,56 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   @Test
   public void testKafkaTimestampType() throws Exception {
-    topicName = "topic" + testNum;
+    // Timestamp-based Kafka checkpoints have two distinct fallback behaviors we need to cover:
+    //   (1) Checkpoint captured BEFORE records are produced: every record has ts >= checkpoint,
+    //       so `offsetsForTimes` returns concrete offsets and ingestion consumes all of them.
+    //   (2) Checkpoint captured AFTER records are produced: no record has ts >= checkpoint, so
+    //       `offsetsForTimes` returns null for every partition and we fall back to the end offset
+    //       of each partition. Nothing should be ingested, and a subsequent batch produced *after*
+    //       the checkpoint should be picked up on the next sync — this proves that the fallback
+    //       stored a usable checkpoint at the partition tip (not offset 0, which would replay the
+    //       original records).
     kafkaCheckpointType = "timestamp";
-    prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, true, topicName);
-    prepareJsonKafkaDFSSource(PROPS_FILENAME_TEST_JSON_KAFKA, "earliest", topicName);
-    String tableBasePath = basePath + "/test_json_kafka_table" + testNum;
-    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
-        TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
-            Collections.emptyList(), PROPS_FILENAME_TEST_JSON_KAFKA, false,
-            true, 100000, false, null,
-            null, "timestamp", String.valueOf(System.currentTimeMillis())), jsc);
-    deltaStreamer.sync();
-    assertRecordCount(JSON_KAFKA_NUM_RECORDS, tableBasePath, sqlContext);
 
-    prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, false, topicName);
-    deltaStreamer = new HoodieDeltaStreamer(
-        TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
-            Collections.emptyList(), PROPS_FILENAME_TEST_JSON_KAFKA, false,
-            true, 100000, false, null, null,
-            "timestamp", String.valueOf(System.currentTimeMillis())), jsc);
-    deltaStreamer.sync();
-    assertRecordCount(JSON_KAFKA_NUM_RECORDS * 2, tableBasePath, sqlContext);
-    deltaStreamer.shutdownGracefully();
+    // ---- Case 1: checkpoint captured BEFORE producing records ----
+    long checkpointBeforeProduction = System.currentTimeMillis();
+    prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, true, "topic" + testNum);
+    prepareJsonKafkaDFSSource(PROPS_FILENAME_TEST_JSON_KAFKA, "earliest", "topic" + testNum);
+    String tableBasePath1 = basePath + "/test_json_kafka_table" + testNum;
+    syncOnce(TestHelpers.makeConfig(tableBasePath1, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
+        Collections.emptyList(), PROPS_FILENAME_TEST_JSON_KAFKA, false,
+        true, 100000, false, null,
+        null, "timestamp", String.valueOf(checkpointBeforeProduction)));
+    assertRecordCount(JSON_KAFKA_NUM_RECORDS, tableBasePath1, sqlContext);
+
+    // ---- Case 2: checkpoint captured AFTER producing records ----
+    // First batch predates the checkpoint => fallback path returns end offsets (partition tips).
+    // Nothing should be ingested in the first sync; a second batch produced after the checkpoint
+    // should be fully consumed on the follow-up sync (which reuses the checkpoint stored by the
+    // first sync). This asserts we resumed at the tip, not at offset 0.
+    String topicName2 = "topic_after_" + testNum;
+    prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, true, topicName2);
+    // Small pause so the timestamp is guaranteed to be after the last produced record's ts.
+    Thread.sleep(10);
+    long checkpointAfterProduction = System.currentTimeMillis();
+    prepareJsonKafkaDFSSource(PROPS_FILENAME_TEST_JSON_KAFKA, "earliest", topicName2);
+    String tableBasePath2 = basePath + "/test_json_kafka_table_after_" + testNum;
+    syncOnce(TestHelpers.makeConfig(tableBasePath2, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
+        Collections.emptyList(), PROPS_FILENAME_TEST_JSON_KAFKA, false,
+        true, 100000, false, null, null,
+        "timestamp", String.valueOf(checkpointAfterProduction)));
+    assertRecordCount(0, tableBasePath2, sqlContext);
+
+    // Produce a fresh batch strictly after the checkpoint and sync again with no --checkpoint
+    // override, so the streamer picks up from the offsets we stored in the first sync.
+    prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, false, topicName2);
+    syncOnce(TestHelpers.makeConfig(tableBasePath2, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
+        Collections.emptyList(), PROPS_FILENAME_TEST_JSON_KAFKA, false,
+        true, 100000, false, null, null,
+        "timestamp", null));
+    // Only the second batch should be ingested; the first batch (which predates the checkpoint)
+    // stays skipped, confirming the fallback resumed at the partition tip.
+    assertRecordCount(JSON_KAFKA_NUM_RECORDS, tableBasePath2, sqlContext);
   }
 
   @Disabled("HUDI-6609")
@@ -3361,7 +3570,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         try {
           fs.delete(entry.getPath());
         } catch (IOException e) {
-          LOG.warn("Failed to delete " + entry.getPath().toString(), e);
+          log.warn("Failed to delete: {}", entry.getPath().toString(), e);
         }
       });
     }
@@ -3534,16 +3743,18 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // Target schema is determined based on the Dataframe after transformation
     // No CSV header and no schema provider at the same time are not recommended,
     // as the transformer behavior may be unexpected
-    Exception e = assertThrows(AnalysisException.class, () -> {
+    Exception e = assertThrows(HoodieIngestionException.class, () -> {
       testCsvDFSSource(false, '\t', false, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
     }, "Should error out when doing the transformation.");
-    LOG.debug("Expected error during transformation", e);
+    log.debug("Expected error during transformation", e);
+    Throwable cause = e.getCause();
+    assertTrue(cause instanceof AnalysisException, "Expected cause to be AnalysisException but was: " + cause.getClass());
     // First message for Spark 3.4 and above, second message for Spark 3.3, third message for Spark 3.2 and below
     assertTrue(
-        e.getMessage().contains("[UNRESOLVED_COLUMN.WITH_SUGGESTION] A column or function parameter "
+        cause.getMessage().contains("[UNRESOLVED_COLUMN.WITH_SUGGESTION] A column or function parameter "
             + "with name `begin_lat` cannot be resolved. Did you mean one of the following?")
-            || e.getMessage().contains("Column 'begin_lat' does not exist. Did you mean one of the following?")
-            || e.getMessage().contains("cannot resolve 'begin_lat' given input columns:"));
+            || cause.getMessage().contains("Column 'begin_lat' does not exist. Did you mean one of the following?")
+            || cause.getMessage().contains("cannot resolve 'begin_lat' given input columns:"));
   }
 
   @Test
@@ -3904,9 +4115,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         .build();
     Properties hoodieProps = new Properties();
     hoodieProps.load(fs.open(new Path(cfg.targetBasePath + "/.hoodie/hoodie.properties")));
-    LOG.info("old props: {}", hoodieProps);
+    log.info("old props: {}", hoodieProps);
     hoodieProps.put("hoodie.table.type", HoodieTableType.MERGE_ON_READ.name());
-    LOG.info("new props: {}", hoodieProps);
+    log.info("new props: {}", hoodieProps);
     StoragePath metaPathDir = new StoragePath(metaClient.getBasePath(), HoodieTableMetaClient.METAFOLDER_NAME);
     HoodieTableConfig.create(metaClient.getStorage(), metaPathDir, hoodieProps);
 
@@ -3975,9 +4186,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         .build();
     Properties hoodieProps = new Properties();
     hoodieProps.load(fs.open(new Path(cfg.targetBasePath + "/.hoodie/hoodie.properties")));
-    LOG.info("old props: " + hoodieProps);
+    log.info("Old props: {}", hoodieProps);
     hoodieProps.put("hoodie.table.type", HoodieTableType.COPY_ON_WRITE.name());
-    LOG.info("new props: " + hoodieProps);
+    log.info("New props: {}", hoodieProps);
     StoragePath metaPathDir = new StoragePath(metaClient.getBasePath(), ".hoodie");
     HoodieTableConfig.create(metaClient.getStorage(), metaPathDir, hoodieProps);
 
@@ -4271,13 +4482,13 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   /**
    * Return empty table.
    */
+  @Slf4j
   public static class DropAllTransformer implements Transformer {
-    private static final Logger LOG = LoggerFactory.getLogger(DropAllTransformer.class);
 
     @Override
     public Dataset apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
                          TypedProperties properties) {
-      LOG.info("DropAllTransformer called !!");
+      log.info("DropAllTransformer called !!");
       return sparkSession.createDataFrame(jsc.emptyRDD(), rowDataset.schema());
     }
   }

@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
@@ -42,6 +43,7 @@ import org.apache.hudi.storage.StorageSchemes;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -63,15 +65,51 @@ import static org.apache.hudi.common.table.HoodieTableMetaClient.AUXILIARYFOLDER
  */
 @Slf4j
 public class FileSystemBasedLockProvider implements LockProvider<String>, Serializable {
+  private static final long serialVersionUID = 1L;
   private static final String LOCK_FILE_NAME = "lock";
+  /**
+   * Guards this provider's lock-file operations.
+   *
+   * <p>These blocks used to synchronize on {@link #LOCK_FILE_NAME}. That is a compile-time String constant,
+   * so it is interned: any class anywhere in the JVM that synchronizes on the same {@code "lock"} literal
+   * contends on the very same monitor and silently couples itself to Hudi's lock acquisition. A private
+   * object cannot be aliased that way.
+   *
+   * <p>Kept static so that, within a classloader, the mutual-exclusion scope is unchanged by this fix.
+   * The interned literal was additionally shared across classloaders. Losing that wider scope matters
+   * only for what the exclusive create does not protect: the expiry-reclaim sequence in
+   * {@code tryLock} (exists, checkIfExpired, delete, create), the release path ({@code unlock}'s
+   * exists-then-delete and {@code close}'s unconditional delete), plus the exists-then-create window
+   * on a store whose create is not atomic. All are already unsafe across processes, the normal
+   * multi-writer deployment; the monitor never made them safe. Cross-process mutual exclusion rests
+   * entirely on the exclusive-mode {@code storage.create(path, false)} in {@code acquireLock} being
+   * atomic on the underlying store, which HDFS guarantees and local FS does not (its create is a
+   * check-then-act); this monitor is defense in depth for in-JVM callers, not the correctness
+   * mechanism.
+   */
+  private static final Object LOCK_FILE_MONITOR = new Object();
   private final int lockTimeoutMinutes;
   private final transient HoodieStorage storage;
   private final transient StoragePath lockFile;
   protected LockConfiguration lockConfiguration;
-  private final SimpleDateFormat sdf;
-  private final LockInfo lockInfo;
+  // Transient because LockInfo is not Serializable and the constructor used to build it eagerly, so
+  // every instance since 0.13.0 (HUDI-5377) failed Spark closure capture with
+  // NotSerializableException, the HUDI-7782 bug class. Pinning serialVersionUID is compat-safe:
+  // 0.12.x, the only line that ever serialized this class, computed a UID no 0.13.0+ build could
+  // read anyway, and no Hudi code persists a provider outside intra-job closure capture.
+  // Null-guarded in initLockInfo() for the deserialized copy; such a copy still cannot lock, since
+  // storage and lockFile are transient with no readObject to rebuild them, as before this change.
+  private transient SimpleDateFormat sdf;
+  private transient LockInfo lockInfo;
+  /**
+   * Written under {@link #LOCK_FILE_MONITOR} on the {@code tryLock} path, with no monitor at all when
+   * {@code reloadCurrentOwnerLockInfo()} is called directly, and exposed through the generated getter
+   * without synchronization. Every in-repo caller reads it on the thread that called {@code tryLock}, so they
+   * would be safe either way; {@code getCurrentOwnerLockInfo()} is public {@link LockProvider} API, and a
+   * plugged-in caller may read it from another thread, which is what the modifier is for.
+   */
   @Getter
-  private String currentOwnerLockInfo;
+  private volatile String currentOwnerLockInfo = "";
 
   public FileSystemBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> configuration) {
     checkRequiredProps(lockConfiguration);
@@ -83,8 +121,6 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
     }
     this.lockTimeoutMinutes = lockConfiguration.getConfig().getInteger(FILESYSTEM_LOCK_EXPIRE_PROP_KEY);
     this.lockFile = new StoragePath(lockDirectory + StoragePath.SEPARATOR + LOCK_FILE_NAME);
-    this.lockInfo = new LockInfo();
-    this.sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
     this.storage = HoodieStorageUtils.getStorage(this.lockFile.toString(), configuration);
     List<String> customSupportedFSs = lockConfiguration.getConfig().getStringList(HoodieCommonConfig.HOODIE_FS_ATOMIC_CREATION_SUPPORT.key(), ",", new ArrayList<>());
     if (!customSupportedFSs.contains(this.storage.getScheme()) && !StorageSchemes.isAtomicCreationSupported(this.storage.getScheme())) {
@@ -98,7 +134,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
 
   @Override
   public void close() {
-    synchronized (LOCK_FILE_NAME) {
+    synchronized (LOCK_FILE_MONITOR) {
       try {
         storage.deleteFile(this.lockFile);
       } catch (IOException e) {
@@ -121,7 +157,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   @Override
   public boolean tryLock(long time, TimeUnit unit) {
     try {
-      synchronized (LOCK_FILE_NAME) {
+      synchronized (LOCK_FILE_MONITOR) {
         // Check whether lock is already expired, if so try to delete lock file
         if (storage.exists(this.lockFile)) {
           if (checkIfExpired()) {
@@ -143,7 +179,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
 
   @Override
   public void unlock() {
-    synchronized (LOCK_FILE_NAME) {
+    synchronized (LOCK_FILE_MONITOR) {
       try {
         if (storage.exists(this.lockFile)) {
           storage.deleteFile(this.lockFile);
@@ -159,6 +195,11 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
     return this.lockFile.toString();
   }
 
+  /**
+   * A stat failure degrades to "not expired", failing safe toward the current holder rather than
+   * reclaiming a lock whose age is unknown. {@code StorageBasedLockProvider} makes the same choice
+   * for transient errors via {@code LockGetResult.UNKNOWN_ERROR}.
+   */
   private boolean checkIfExpired() {
     if (lockTimeoutMinutes == 0) {
       return false;
@@ -169,35 +210,58 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
         return true;
       }
     } catch (IOException | HoodieIOException e) {
-      log.error(generateLogStatement(LockState.ALREADY_RELEASED) + " failed to get lockFile's modification time", e);
+      log.error("{} failed to get lockFile's modification time", generateLogStatement(LockState.ACQUIRING), e);
     }
     return false;
   }
 
-  private void acquireLock() {
+  /**
+   * Creates the lock file, failing if it already exists. The {@code false} in
+   * {@code storage.create(path, false)} requests an exclusive-mode create, the provider's entire
+   * cross-process mutual exclusion on stores whose create is atomic; every other check in this
+   * class is advisory. Package-private so a test can pin the exclusive mode.
+   */
+  @VisibleForTesting
+  void acquireLock() {
     try (OutputStream os = storage.create(this.lockFile, false)) {
-      if (!storage.exists(this.lockFile)) {
-        initLockInfo();
-        os.write(StringUtils.getUTF8Bytes(lockInfo.toString()));
-      }
+      initLockInfo();
+      os.write(StringUtils.getUTF8Bytes(lockInfo.toString()));
     } catch (IOException e) {
       throw new HoodieIOException(generateLogStatement(LockState.FAILED_TO_ACQUIRE), e);
     }
   }
 
   public void initLockInfo() {
-    lockInfo.setLockCreateTime(sdf.format(System.currentTimeMillis()));
-    lockInfo.setLockThreadName(Thread.currentThread().getName());
-    lockInfo.setLockStacksInfo(Thread.currentThread().getStackTrace());
+    // Guarded: sdf and lockInfo are lazily built, SimpleDateFormat is not thread safe, and the
+    // fields lost the final modifier's free safe publication when they became lazy.
+    synchronized (LOCK_FILE_MONITOR) {
+      if (lockInfo == null) {
+        lockInfo = new LockInfo();
+      }
+      if (sdf == null) {
+        sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+      }
+      lockInfo.setLockCreateTime(sdf.format(System.currentTimeMillis()));
+      lockInfo.setLockThreadName(Thread.currentThread().getName());
+      lockInfo.setLockStacksInfo(Thread.currentThread().getStackTrace());
+    }
   }
 
+  /**
+   * Reloads the payload written by whoever currently holds the lock file.
+   *
+   * <p>A missing lock file must clear the field rather than throw: the caller swallows exceptions from
+   * this method, so an escaping {@link FileNotFoundException} would leave the previous owner's payload
+   * behind for {@link LockManager} to report as the current owner. The miss can surface at {@code open}
+   * or, on a store opted in via {@code hoodie.fs.atomic_creation.support} that fetches lazily (S3A,
+   * for example), at the first read, so the catch spans the whole read instead of an up-front
+   * existence check that leaves the delete-after-check window open.
+   */
   public void reloadCurrentOwnerLockInfo() {
     try (InputStream is = storage.open(this.lockFile)) {
-      if (storage.exists(this.lockFile)) {
-        this.currentOwnerLockInfo = FileIOUtils.readAsUTFString(is);
-      } else {
-        this.currentOwnerLockInfo = "";
-      }
+      this.currentOwnerLockInfo = FileIOUtils.readAsUTFString(is);
+    } catch (FileNotFoundException e) {
+      this.currentOwnerLockInfo = "";
     } catch (IOException e) {
       throw new HoodieIOException(generateLogStatement(LockState.FAILED_TO_ACQUIRE), e);
     }

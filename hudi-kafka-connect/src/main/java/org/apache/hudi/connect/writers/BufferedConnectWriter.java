@@ -40,7 +40,6 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.List;
 
 /**
@@ -109,11 +108,11 @@ public class BufferedConnectWriter extends AbstractConnectWriter {
       if (!bufferedRecords.isEmpty()) {
         if (isMorTable) {
           writeStatuses = writeClient.upsertPreppedRecords(
-              new LinkedList<>(bufferedRecords.values()),
+              new ArrayList<>(bufferedRecords.values()),
               instantTime);
         } else {
           writeStatuses = writeClient.bulkInsertPreppedRecords(
-              new LinkedList<>(bufferedRecords.values()),
+              new ArrayList<>(bufferedRecords.values()),
               instantTime, Option.empty());
         }
       }

@@ -176,14 +176,16 @@ public enum MetadataPartitionType {
       if (recordIndexRecord.hasField(RECORD_INDEX_FIELD_POSITION)) {
         recordIndexPosition = recordIndexRecord.get(RECORD_INDEX_FIELD_POSITION);
       }
+      // Numeric RLI fields are long/int per HoodieMetadata.avsc, so read them directly instead of
+      // round-tripping through String (toString + parse) for every materialized record.
       payload.recordIndexMetadata = new HoodieRecordIndexInfo(recordIndexRecord.get(RECORD_INDEX_FIELD_PARTITION).toString(),
-          Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_HIGH_BITS).toString()),
-          Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_LOW_BITS).toString()),
-          Integer.parseInt(recordIndexRecord.get(RECORD_INDEX_FIELD_FILE_INDEX).toString()),
+          ((Number) recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_HIGH_BITS)).longValue(),
+          ((Number) recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_LOW_BITS)).longValue(),
+          ((Number) recordIndexRecord.get(RECORD_INDEX_FIELD_FILE_INDEX)).intValue(),
           recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID).toString(),
-          Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_INSTANT_TIME).toString()),
-          Integer.parseInt(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_ENCODING).toString()),
-          recordIndexPosition != null ? Long.parseLong(recordIndexPosition.toString()) : null);
+          ((Number) recordIndexRecord.get(RECORD_INDEX_FIELD_INSTANT_TIME)).longValue(),
+          ((Number) recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_ENCODING)).intValue(),
+          recordIndexPosition != null ? ((Number) recordIndexPosition).longValue() : null);
     }
   },
   EXPRESSION_INDEX(PARTITION_NAME_EXPRESSION_INDEX_PREFIX, "expr-index-", -1) {
@@ -427,11 +429,15 @@ public enum MetadataPartitionType {
         && partitionType != COLUMN_STATS;
   }
 
+  // Cache values() once; it clones the constant array on every call, and get(int) runs once per
+  // record materialized from the metadata table (RLI/SI/col-stats lookups, MDT log merges).
+  private static final MetadataPartitionType[] VALUES = values();
+
   /**
    * Get the metadata partition type for the given record type.
    */
   public static MetadataPartitionType get(int type) {
-    for (MetadataPartitionType partitionType : values()) {
+    for (MetadataPartitionType partitionType : VALUES) {
       if (partitionType.getRecordType() == type) {
         return partitionType;
       }
@@ -504,7 +510,7 @@ public enum MetadataPartitionType {
       return false;
     }
     // check the index definition already exists or not for this column
-    List<HoodieIndexDefinition> indexDefinitions = getIndexDefinitions(secondaryIndexColumn, PARTITION_NAME_SECONDARY_INDEX, dataMetaClient);
+    List<HoodieIndexDefinition> indexDefinitions = getIndexDefinitions(PARTITION_NAME_SECONDARY_INDEX, secondaryIndexColumn, dataMetaClient);
     return indexDefinitions.isEmpty();
   }
 
@@ -525,7 +531,7 @@ public enum MetadataPartitionType {
 
     // get all index definitions for this column and index type
     // check if none of the index definitions has index function matching the expression
-    List<HoodieIndexDefinition> indexDefinitions = getIndexDefinitions(expressionIndexColumn, PARTITION_NAME_EXPRESSION_INDEX, dataMetaClient);
+    List<HoodieIndexDefinition> indexDefinitions = getIndexDefinitions(PARTITION_NAME_EXPRESSION_INDEX, expressionIndexColumn, dataMetaClient);
     return indexDefinitions.isEmpty()
         || indexDefinitions.stream().noneMatch(indexDefinition -> indexDefinition.getIndexFunction().equals(expressionIndexOptions.get(HoodieExpressionIndex.EXPRESSION_OPTION)));
   }
@@ -541,11 +547,6 @@ public enum MetadataPartitionType {
           .forEach(indexDefinitions::add);
     }
     return indexDefinitions;
-  }
-
-  private static boolean isIndexDefinitionPresentForColumn(String indexedColumn, String indexType, HoodieTableMetaClient dataMetaClient) {
-    return dataMetaClient.getIndexMetadata().isPresent() && dataMetaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
-        .anyMatch(indexDefinition -> indexDefinition.getSourceFields().contains(indexedColumn) && indexDefinition.getIndexType().equals(indexType));
   }
 
   @Override

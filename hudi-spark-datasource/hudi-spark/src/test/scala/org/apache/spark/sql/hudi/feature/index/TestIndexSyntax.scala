@@ -26,7 +26,7 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.spark.sql.catalyst.analysis.Analyzer
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.parser.ParserInterface
-import org.apache.spark.sql.hudi.command.{CreateIndexCommand, DropIndexCommand, ShowIndexesCommand}
+import org.apache.spark.sql.hudi.command.{CreateIndexCommand, DropIndexCommand, RefreshIndexCommand, ShowIndexesCommand}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
 
@@ -90,6 +90,11 @@ class TestIndexSyntax extends HoodieSparkSqlTestBase {
         assertTableIdentifier(resolvedLogicalPlan.asInstanceOf[DropIndexCommand].table, databaseName, tableName)
         assertResult("idx_name")(resolvedLogicalPlan.asInstanceOf[DropIndexCommand].indexName)
         assertResult(true)(resolvedLogicalPlan.asInstanceOf[DropIndexCommand].ignoreIfNotExists)
+
+        logicalPlan = sqlParser.parsePlan(s"refresh index idx_name on $tableName")
+        resolvedLogicalPlan = analyzer.execute(logicalPlan)
+        assertTableIdentifier(resolvedLogicalPlan.asInstanceOf[RefreshIndexCommand].table, databaseName, tableName)
+        assertResult("idx_name")(resolvedLogicalPlan.asInstanceOf[RefreshIndexCommand].indexName)
       }
     }
   }

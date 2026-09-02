@@ -171,7 +171,7 @@ public class EventBuffers implements Serializable {
    */
   public Map<Long, Pair<String, EventBuffer>> getAllCompletedEvents() {
     return this.eventBuffers.entrySet().stream()
-        .filter(entry -> entry.getValue().getRight().allEventsCompleted())
+        .filter(entry -> entry.getValue().getRight().allEventsReceived())
         .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
   }
 
@@ -239,14 +239,6 @@ public class EventBuffers implements Serializable {
       if (eventBuffer.length > event.getTaskID()) {
         eventBuffer[event.getTaskID()] = null;
       }
-    }
-
-    /**
-     * Return true if there is no event sent by eager flushing from writers.
-     */
-    public boolean allEventsCompleted() {
-      return Stream.concat(Arrays.stream(dataWriteEventBuffer), Arrays.stream(indexWriteEventBuffer))
-          .allMatch(event -> event == null || event.isLastBatch());
     }
 
     /**

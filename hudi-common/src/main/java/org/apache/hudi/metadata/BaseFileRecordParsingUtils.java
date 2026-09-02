@@ -77,9 +77,10 @@ public class BaseFileRecordParsingUtils {
         recordStatuses);
     List<HoodieRecord> hoodieRecords = new ArrayList<>();
     if (recordStatusListMap.containsKey(RecordStatus.INSERT)) {
+      long instantTimeMillis = HoodieMetadataPayload.parseRecordIndexInstantTime(instantTime);
       hoodieRecords.addAll(recordStatusListMap.get(RecordStatus.INSERT).stream()
           .map(recordKey -> (HoodieRecord) HoodieMetadataPayload.createRecordIndexUpdate(recordKey, partition, fileId,
-              instantTime, writesFileIdEncoding)).collect(toList()));
+              instantTimeMillis, writesFileIdEncoding)).collect(toList()));
     }
 
     if (recordStatusListMap.containsKey(RecordStatus.DELETE)) {

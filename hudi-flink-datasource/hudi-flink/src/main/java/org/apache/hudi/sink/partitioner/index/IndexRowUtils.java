@@ -70,7 +70,7 @@ public class IndexRowUtils {
     return indexRow;
   }
 
-  public static HoodieRecord convertToHoodieRecord(String instant, RowData indexRow, HoodieWriteConfig dataWriteConfig) {
+  public static HoodieRecord convertToHoodieRecord(long instantMillis, RowData indexRow, HoodieWriteConfig dataWriteConfig) {
     if (indexRow.getByte(INDEX_TYPE_ORD) == RLI_TYPE) {
       switch (indexRow.getRowKind()) {
         case INSERT:
@@ -78,7 +78,7 @@ public class IndexRowUtils {
               String.valueOf(indexRow.getString(KEY_ORD)),
               String.valueOf(indexRow.getString(PARTITION_ORD)),
               String.valueOf(indexRow.getString(FILE_ID_ORD)),
-              instant,
+              instantMillis,
               dataWriteConfig.getWritesFileIdEncoding());
         case DELETE:
           return HoodieMetadataPayload.createRecordIndexDelete(

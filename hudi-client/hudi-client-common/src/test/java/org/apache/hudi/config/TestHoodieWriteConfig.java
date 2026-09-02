@@ -37,6 +37,7 @@ import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig.Builder;
+import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
@@ -617,6 +618,25 @@ public class TestHoodieWriteConfig {
         .withLayoutConfig(HoodieLayoutConfig.newBuilder().withLayoutPartitioner("org.apache.hudi.table.action.commit.UpsertPartitioner").build())
         .build();
     assertEquals("org.apache.hudi.table.action.commit.UpsertPartitioner", overwritePartitioner.getString(HoodieLayoutConfig.LAYOUT_PARTITIONER_CLASS_NAME));
+  }
+
+  @Test
+  public void testBucketIndexKeyFieldValidationTrimsFields() {
+    Properties props = new Properties();
+    props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid, name");
+
+    HoodieIndexConfig indexConfig = HoodieIndexConfig.newBuilder()
+        .fromProperties(props)
+        .withIndexType(HoodieIndex.IndexType.BUCKET)
+        .withIndexKeyField(" name")
+        .build();
+    assertEquals(" name", indexConfig.getString(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD));
+
+    assertThrows(HoodieIndexException.class, () -> HoodieIndexConfig.newBuilder()
+        .fromProperties(props)
+        .withIndexType(HoodieIndex.IndexType.BUCKET)
+        .withIndexKeyField("missing")
+        .build());
   }
 
   @Test

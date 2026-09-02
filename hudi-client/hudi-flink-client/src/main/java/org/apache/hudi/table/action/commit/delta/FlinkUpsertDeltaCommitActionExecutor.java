@@ -54,7 +54,7 @@ public class FlinkUpsertDeltaCommitActionExecutor<T> extends BaseFlinkCommitActi
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
+  public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId, long numUpdates, Iterator<HoodieRecord<T>> recordItr) {
     return handleWrite();
   }
 

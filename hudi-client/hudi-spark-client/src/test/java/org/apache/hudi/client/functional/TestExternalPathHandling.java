@@ -339,8 +339,14 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
   }
 
   private HoodieCleanStat createCleanStat(String partitionPath, List<String> deletePaths, String earliestCommitToRetain, String lastCompletedCommitTimestamp) {
-    return new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_COMMITS, partitionPath, deletePaths, deletePaths, Collections.emptyList(),
-        earliestCommitToRetain, lastCompletedCommitTimestamp);
+    return HoodieCleanStat.builder()
+        .withPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
+        .withPartitionPath(partitionPath)
+        .withDeletePathPatterns(deletePaths)
+        .withSuccessDeleteFiles(deletePaths)
+        .withEarliestCommitToRetain(earliestCommitToRetain)
+        .withLastCompletedCommitTimestamp(lastCompletedCommitTimestamp)
+        .build();
   }
 
   private HoodieCleanerPlan cleanerPlan(HoodieActionInstant earliestInstantToRetain, String latestCommit, Map<String, List<HoodieCleanFileInfo>> filePathsToBeDeletedPerPartition) {

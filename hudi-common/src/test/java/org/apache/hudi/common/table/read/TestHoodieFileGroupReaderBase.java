@@ -1040,15 +1040,17 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
                                                             HoodieSchema schema,
                                                             FileSlice fileSlice,
                                                             int start, TypedProperties props, boolean sortOutput) {
-    return HoodieFileGroupReader.<T>newBuilder()
+    return HoodieFileGroupReader.<T>builder()
         .withReaderContext(getHoodieReaderContext(tablePath, schema, storageConf, metaClient))
         .withHoodieTableMetaClient(metaClient)
         .withLatestCommitTime(metaClient.getActiveTimeline().lastInstant().get().requestedTime())
-        .withFileSlice(fileSlice)
+        .withBaseFileOption(fileSlice.getBaseFile())
+        .withLogFiles(fileSlice.getLogFiles())
+        .withPartitionPath(fileSlice.getPartitionPath())
         .withDataSchema(schema)
         .withRequestedSchema(schema)
         .withProps(props)
-        .withStart(start)
+        .withStart((long) start)
         .withLength(fileSlice.getTotalFileSize())
         .withShouldUseRecordPosition(false)
         .withAllowInflightInstants(false)

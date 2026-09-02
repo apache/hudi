@@ -86,7 +86,7 @@ public abstract class BaseRestoreActionExecutor<T, I, K, O> extends BaseActionEx
 
       instantsToRollback.forEach(instant -> {
         instantToMetadata.put(instant.requestedTime(), Collections.singletonList(rollbackInstant(instant)));
-        log.info("Deleted instant " + instant);
+        log.info("Deleted instant {}", instant);
       });
 
       return finishRestore(instantToMetadata,
@@ -143,7 +143,7 @@ public abstract class BaseRestoreActionExecutor<T, I, K, O> extends BaseActionEx
       table.getActiveTimeline().deletePending(instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.ROLLBACK_ACTION, entry.requestedTime()));
       table.getActiveTimeline().deletePending(instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, entry.requestedTime()));
     });
-    log.info("Commits " + instantsRolledBack + " rollback is complete. Restored table to " + savepointToRestoreTimestamp);
+    log.info("Commits {} rollback is complete. Restored table to {}", instantsRolledBack, savepointToRestoreTimestamp);
     return restoreMetadata;
   }
 

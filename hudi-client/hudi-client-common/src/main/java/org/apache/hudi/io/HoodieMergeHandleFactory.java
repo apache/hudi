@@ -35,7 +35,6 @@ import org.apache.hudi.table.HoodieTable;
 
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
 
@@ -55,7 +54,7 @@ public class HoodieMergeHandleFactory {
       HoodieWriteConfig writeConfig,
       String instantTime,
       HoodieTable<T, I, K, O> table,
-      Iterator<HoodieRecord<T>> recordItr,
+      MergeContext<T> mergeContext,
       String partitionPath,
       String fileId,
       TaskContextSupplier taskContextSupplier,
@@ -67,13 +66,13 @@ public class HoodieMergeHandleFactory {
     log.info("Create HoodieMergeHandle implementation {} {}", mergeHandleClasses.getLeft(), logContext);
 
     Class<?>[] constructorParamTypes = new Class<?>[] {
-        HoodieWriteConfig.class, String.class, HoodieTable.class, Iterator.class,
+        HoodieWriteConfig.class, String.class, HoodieTable.class, MergeContext.class,
         String.class, String.class, TaskContextSupplier.class, Option.class
     };
 
     return instantiateMergeHandle(
         isFallbackEnabled, mergeHandleClasses.getLeft(), mergeHandleClasses.getRight(), logContext, constructorParamTypes,
-        writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
+        writeConfig, instantTime, table, mergeContext, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
   }
 
   /**

@@ -30,6 +30,8 @@ import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
@@ -71,8 +73,8 @@ public class HoodieRollbackTestBase {
   void setup() throws IOException {
     MockitoAnnotations.openMocks(this);
     when(table.getMetaClient()).thenReturn(metaClient);
-    basePath = new StoragePath(tmpDir.toString(), UUID.randomUUID().toString());
-    storage = HoodieTestUtils.getStorage(basePath);
+    basePath = createBasePath();
+    storage = HoodieStorageUtils.getStorage(basePath, createStorageConf());
     when(table.getStorage()).thenReturn(storage);
     when(metaClient.getBasePath()).thenReturn(basePath);
     when(metaClient.getTempFolderPath())
@@ -89,6 +91,23 @@ public class HoodieRollbackTestBase {
     HoodieTableMetaClient.newTableBuilder()
         .fromProperties(props)
         .initTable(storage.getConf(), metaClient.getBasePath());
+  }
+
+  /**
+   * Base path of the table under test. Override to place the table on a scheme other than
+   * {@code file}, so that a test can tell apart storage resolved from a path and storage resolved
+   * from the default URI.
+   */
+  protected StoragePath createBasePath() {
+    return new StoragePath(tmpDir.toString(), UUID.randomUUID().toString());
+  }
+
+  /**
+   * Storage configuration used to resolve {@link #basePath}. Override to register the filesystem
+   * implementation that backs a non-default scheme returned by {@link #createBasePath()}.
+   */
+  protected StorageConfiguration<?> createStorageConf() {
+    return HoodieTestUtils.getDefaultStorageConf();
   }
 
   protected void prepareMetaClient(HoodieTableVersion tableVersion) {

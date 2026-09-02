@@ -94,7 +94,7 @@ public class HoodieHiveUtils {
   public static boolean stopAtCompaction(JobContext job, String tableName) {
     String compactionPropName = String.format(HOODIE_STOP_AT_COMPACTION_PATTERN, tableName);
     boolean stopAtCompaction = job.getConfiguration().getBoolean(compactionPropName, true);
-    LOG.info("Read stop at compaction - " + stopAtCompaction);
+    LOG.info("Read stop at compaction - {}", stopAtCompaction);
     return stopAtCompaction;
   }
 
@@ -104,13 +104,13 @@ public class HoodieHiveUtils {
     if (maxCommits == MAX_COMMIT_ALL) {
       maxCommits = Integer.MAX_VALUE;
     }
-    LOG.info("Read max commits - " + maxCommits);
+    LOG.info("Read max commits - {}", maxCommits);
     return maxCommits;
   }
 
   public static String readStartCommitTime(JobContext job, String tableName) {
     String startCommitTimestampName = String.format(HOODIE_START_COMMIT_PATTERN, tableName);
-    LOG.info("Read start commit time - " + job.getConfiguration().get(startCommitTimestampName));
+    LOG.info("Read start commit time - {}", job.getConfiguration().get(startCommitTimestampName));
     return job.getConfiguration().get(startCommitTimestampName);
   }
 

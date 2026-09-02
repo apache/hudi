@@ -112,7 +112,7 @@ public class HoodieTableSink implements
         DataStream<RowData> pipeline = Pipelines.append(conf, rowType, dataStream);
         if (OptionsResolver.needsAsyncClustering(conf)) {
           return Pipelines.cluster(conf, rowType, pipeline);
-        } else if (OptionsResolver.isLazyFailedWritesCleanPolicy(conf)) {
+        } else if (OptionsResolver.isLazyFailedWritesCleaning(conf)) {
           // add clean function to rollback failed writes for lazy failed writes cleaning policy
           return Pipelines.clean(conf, pipeline);
         } else {
@@ -131,8 +131,10 @@ public class HoodieTableSink implements
           conf.set(FlinkOptions.COMPACTION_OPERATION_EXECUTE_ASYNC_ENABLED, false);
         }
         return Pipelines.compact(conf, pipeline);
-      } else {
+      } else if (OptionsResolver.needsAsyncCleaning(conf)) {
         return Pipelines.clean(conf, pipeline);
+      } else {
+        return Pipelines.dummySink(pipeline);
       }
     };
   }

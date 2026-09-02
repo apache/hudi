@@ -101,7 +101,7 @@ public class ZookeeperTestService {
 
     // NOTE: Changed from the original, where InetSocketAddress was
     // originally created to bind to the wildcard IP, we now configure it.
-    log.info("Zookeeper force binding to: " + this.bindIP);
+    log.info("Zookeeper force binding to: {}", this.bindIP);
     standaloneServerFactory.configure(new InetSocketAddress(bindIP, clientPort), 1000);
 
     // Start up this ZK server
@@ -118,7 +118,7 @@ public class ZookeeperTestService {
     }
 
     started = true;
-    log.info("Zookeeper Minicluster service started on client port: " + clientPort);
+    log.info("Zookeeper Minicluster service started on client port: {}", clientPort);
     return zooKeeperServer;
   }
 
@@ -217,7 +217,7 @@ public class ZookeeperTestService {
         }
       } catch (IOException e) {
         // ignore as this is expected
-        log.info("server " + hostname + ":" + port + " not up " + e);
+        log.info("server {}:{} not up {}", hostname, port, e.toString());
       }
 
       if (System.currentTimeMillis() > start + timeout) {

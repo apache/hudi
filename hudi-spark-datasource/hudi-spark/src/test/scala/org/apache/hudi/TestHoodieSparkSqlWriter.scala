@@ -23,7 +23,7 @@ import org.apache.hudi.common.config.{HoodieConfig, HoodieMetadataConfig, Record
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieFileFormat, HoodieRecord, HoodieRecordPayload, HoodieReplaceCommitMetadata, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.table.timeline.TimelineUtils
+import org.apache.hudi.common.table.timeline.{HoodieTimeline, TimelineUtils}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
@@ -387,6 +387,39 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     } catch {
       case e: HoodieException => assertTrue(e.getMessage.contains("Dropping duplicates with bulk_insert in row writer path is not supported yet"))
     }
+  }
+
+  /**
+   * Regression test for MOR row-writer bulk_insert commit action.
+   *
+   * The writer receives table type through the datasource option
+   * hoodie.datasource.write.table.type. mergeParamsAndGetHoodieConfig must also
+   * propagate it to hoodie.table.type, because HoodieWriteConfig#getTableType
+   * reads the table-config key when row-writer bulk_insert chooses the commit action.
+   */
+  @Test
+  def testMorRowWriterBulkInsertUsesDeltaCommitAction(): Unit = {
+    val fooTableModifier = commonTableModifier
+      .updated("hoodie.bulkinsert.shuffle.parallelism", "4")
+      .updated(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .updated(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
+      .updated(DataSourceWriteOptions.ENABLE_ROW_WRITER.key, "true")
+      // Keep the timeline focused on the write instant; otherwise compaction instants can obscure
+      // the commit action selected by the row-writer bulk_insert path.
+      .updated(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE.key, "true")
+
+    val schema = DataSourceTestUtils.getStructTypeExampleSchema
+    val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
+    val records = DataSourceTestUtils.generateRandomRows(100)
+    val recordsSeq = convertRowListToSeq(records)
+    val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
+
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, df)
+
+    val metaClient = createMetaClient(spark, tempBasePath)
+    assertEquals(HoodieTableType.MERGE_ON_READ, metaClient.getTableConfig.getTableType)
+    val lastCompletedWrite = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get()
+    assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, lastCompletedWrite.getAction)
   }
 
   /**
@@ -1382,6 +1415,57 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
   private def fetchActualSchema(): HoodieSchema = {
     val tableMetaClient = createMetaClient(spark, tempBasePath)
     new TableSchemaResolver(tableMetaClient).getTableSchema(false)
+  }
+
+  /**
+   * Test that upsert works correctly when partition path contains Unicode characters.
+   * Reproduces a bug where UTF-8 bytes for characters like "ü" (U+00FC) get misinterpreted
+   * as Latin-1 during the String-to-Path round-trip, causing file-not-found errors on the
+   * second write.
+   */
+  @Test
+  def testUpsertWithUnicodePartitionPath(): Unit = {
+    val options = Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.COPY_ON_WRITE.name(),
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "uuid",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "company",
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.SimpleKeyGenerator",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      "hoodie.insert.shuffle.parallelism" -> "1",
+      "hoodie.upsert.shuffle.parallelism" -> "1",
+      "hoodie.filesystem.view.remote.response.charset" -> "UTF-8"
+    )
+
+    // Unicode partition value containing German umlaut ü (U+00FC)
+    val unicodePartition = "M\u00fcnchen"
+
+    // First write - insert with Overwrite
+    val df = spark.createDataFrame(Seq(
+      ("id1", 100L, unicodePartition),
+      ("id2", 200L, unicodePartition)
+    )).toDF("uuid", "ts", "company")
+
+    df.write.format("hudi")
+      .options(options)
+      .mode(SaveMode.Overwrite)
+      .save(tempBasePath)
+
+    // Second write - upsert with Append (triggers reading existing Parquet data)
+    val dfUpdate = spark.createDataFrame(Seq(
+      ("id1", 300L, unicodePartition),
+      ("id2", 400L, unicodePartition)
+    )).toDF("uuid", "ts", "company")
+
+    dfUpdate.write.format("hudi")
+      .options(options)
+      .mode(SaveMode.Append)
+      .save(tempBasePath)
+
+    // Verify upserted data can be read back
+    val dfResult = spark.read.format("hudi").load(tempBasePath)
+    assert(dfResult.count() == 2)
+    assert(dfResult.where("ts >= 300").count() == 2)
   }
 }
 

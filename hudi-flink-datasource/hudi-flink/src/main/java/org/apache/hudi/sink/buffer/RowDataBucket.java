@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.buffer;
 
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.table.action.commit.BucketInfo;
 
 import lombok.Getter;
@@ -39,6 +40,8 @@ public class RowDataBucket {
   private final BufferSizeDetector detector;
   @Getter
   private final String bucketId;
+  @Getter
+  private boolean diverged;
 
   public RowDataBucket(
       String bucketId,
@@ -56,9 +59,16 @@ public class RowDataBucket {
   }
 
   public boolean writeRow(RowData rowData) throws IOException {
+    ValidationUtils.checkState(
+        !diverged,
+        "RowData bucket " + bucketId + " diverged after a failed write and cannot be reused");
     boolean success = dataBuffer.write(rowData);
     if (success) {
       detector.detect(rowData);
+    } else {
+      // BinaryInMemorySortBuffer may have partially appended variable-length data before
+      // returning false. Its internal pointers can no longer be trusted for another write.
+      diverged = true;
     }
     return success;
   }

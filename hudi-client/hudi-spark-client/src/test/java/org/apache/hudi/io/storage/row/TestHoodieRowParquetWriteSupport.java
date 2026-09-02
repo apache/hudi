@@ -18,16 +18,21 @@
 
 package org.apache.hudi.io.storage.row;
 
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
+import org.apache.spark.sql.types.Decimal;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.TimeZone;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 /**
  * Coverage for {@link HoodieRowParquetWriteSupport#resolveSessionLocalTimeZone()}.
@@ -41,6 +46,36 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 class TestHoodieRowParquetWriteSupport extends HoodieClientTestBase {
 
   private static final String SESSION_LOCAL_TIME_ZONE_KEY = "spark.sql.session.timeZone";
+
+  @Test
+  void testResolveDecimalByteLength() {
+    int minWidth = Decimal.minBytesForPrecision()[20];
+    // A non-decimal schema falls back to the precision-minimal width.
+    assertEquals(minWidth,
+        HoodieRowParquetWriteSupport.resolveDecimalByteLength(HoodieSchema.create(HoodieSchemaType.STRING), 20));
+    // A bytes-backed decimal (no declared fixed size) also falls back to the minimum.
+    assertEquals(minWidth,
+        HoodieRowParquetWriteSupport.resolveDecimalByteLength(HoodieSchema.createDecimal(20, 2), 20));
+    // An Avro fixed decimal wider than the minimum is honored.
+    assertEquals(10,
+        HoodieRowParquetWriteSupport.resolveDecimalByteLength(
+            HoodieSchema.createDecimal("dec", null, null, 20, 2, 10), 20));
+  }
+
+  @Test
+  void testPadDecimalToFixedLength() {
+    byte[] buffer = new byte[16];
+    // Already the full width: returned as-is, no copy into the buffer.
+    byte[] exact = new byte[] {1, 2, 3, 4};
+    assertSame(exact, HoodieRowParquetWriteSupport.padDecimalToFixedLength(exact, 4, buffer));
+    // Positive magnitude: left-padded with zero sign bytes.
+    byte[] positive = HoodieRowParquetWriteSupport.padDecimalToFixedLength(new byte[] {0x12, 0x34}, 4, buffer);
+    assertArrayEquals(new byte[] {0, 0, 0x12, 0x34}, Arrays.copyOf(positive, 4));
+    // Negative magnitude: left-padded with 0xFF sign bytes.
+    byte[] negative = HoodieRowParquetWriteSupport.padDecimalToFixedLength(
+        new byte[] {(byte) 0xFF, (byte) 0x80}, 4, buffer);
+    assertArrayEquals(new byte[] {(byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0x80}, Arrays.copyOf(negative, 4));
+  }
 
   @Test
   void testResolveSessionLocalTimeZoneWithoutOverride() {
