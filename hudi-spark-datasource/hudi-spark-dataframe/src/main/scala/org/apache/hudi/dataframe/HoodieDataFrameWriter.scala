@@ -112,6 +112,7 @@ object HoodieDataFrameWriter extends Logging {
     val tableName = Option(tableConfig.getTableName).filter(!StringUtils.isNullOrEmpty(_))
       .orElse(params.get(HoodieWriteConfig.TBL_NAME.key()))
       .getOrElse(throw new HoodieException(s"'${HoodieWriteConfig.TBL_NAME.key()}' must be set"))
+    validateNoConfigConflicts(params, tableConfig)
     val writeConfig = buildWriteConfig(basePath, tableName, operation, params, tableConfig, input)
     validateTableConfig(tableConfig, operation, writeConfig)
     val engineContext = new org.apache.hudi.client.common.HoodieSparkEngineContext(
@@ -237,6 +238,22 @@ object HoodieDataFrameWriter extends Logging {
     HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX,
     HoodieIndex.IndexType.RECORD_LEVEL_INDEX)
 
+  /** Write options must not silently alter identity configs an existing table already fixed. */
+  private def validateNoConfigConflicts(params: Map[String, String], tableConfig: HoodieTableConfig): Unit = {
+    def conflict(optKey: String, tableValue: String, what: String): Unit = {
+      params.get(optKey)
+        .filter(v => !StringUtils.isNullOrEmpty(tableValue) && v != tableValue)
+        .foreach(v => throw new HoodieException(
+          s"Config conflict for $what: option value '$v' differs from the table config value '$tableValue'"))
+    }
+    val tableOrdering = ConfigUtils.getOrderingFieldsStrDuringWrite(tableConfig.getProps)
+    conflict(RECORD_KEY_FIELD, tableConfig.getRecordKeyFieldProp, "record key fields")
+    conflict(PARTITION_PATH_FIELD, tableConfig.getPartitionFieldProp, "partition path fields")
+    conflict(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), tableConfig.getKeyGeneratorClassName, "the key generator")
+    conflict("hoodie.table.ordering.fields", tableOrdering, "ordering fields")
+    conflict("hoodie.datasource.write.precombine.field", tableOrdering, "ordering fields")
+  }
+
   /**
    * Rejects table configurations outside the current scope up front, so unsupported tables fail
    * cleanly instead of writing inconsistent data.
@@ -337,6 +354,16 @@ object HoodieDataFrameWriter extends Logging {
     if (recordKeyFields.isEmpty) {
       throw new HoodieException("A record key field is required on the DataFrame write path")
     }
+    recordKeyFields.foreach { field =>
+      if (scala.util.Try(input(field)).isFailure) {
+        if (recordKeyFields.size == 1 && kind != KeyGenExpressions.ComplexKind) {
+          throw new HoodieException(
+            s"""recordKey value: "null" for field: "$field" cannot be null or empty.""")
+        } else {
+          throw new HoodieException(s"Record key field '$field' does not exist in the input record")
+        }
+      }
+    }
     val partitionFields = props.getString(PARTITION_PATH_FIELD, "").split(",").map(_.trim).filter(_.nonEmpty).toSeq
     val hiveStyle = props.getString("hoodie.datasource.write.hive_style_partitioning", "false").toBoolean
     val urlEncode = props.getString("hoodie.datasource.write.partitionpath.urlencode", "false").toBoolean
@@ -395,7 +422,11 @@ object HoodieDataFrameWriter extends Logging {
       table.getMetaClient.getTableConfig.isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX)
     val globalIndex = recordIndexConfigured || indexType == HoodieIndex.IndexType.GLOBAL_SIMPLE
     val deleteMarker: Column = if (prepared.columns.contains(DELETE_MARKER_COL)) {
-      coalesce(col(DELETE_MARKER_COL).cast("boolean"), lit(false))
+      val markerType = prepared.schema(DELETE_MARKER_COL).dataType
+      if (markerType != org.apache.spark.sql.types.BooleanType) {
+        throw new HoodieException(s"$DELETE_MARKER_COL field must be of BOOLEAN type, found $markerType")
+      }
+      coalesce(col(DELETE_MARKER_COL), lit(false))
     } else {
       lit(false)
     }

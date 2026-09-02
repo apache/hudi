@@ -244,11 +244,18 @@ class DefaultSource extends RelationProvider
       || opts.getOrElse(DataSourceWriteOptions.SPARK_SQL_WRITES_PREPPED_KEY, "false").toBoolean
       || opts.getOrElse(org.apache.hudi.config.HoodieWriteConfig.SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false").toBoolean) {
       Some("SQL-internal writes are not supported by it")
-    } else if (opts.contains(org.apache.spark.sql.hudi.command.SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME)
-      || keyGenClass.endsWith("SqlKeyGenerator") || keyGenClass.endsWith("MergeIntoKeyGenerator")) {
+    } else if (opts.contains(org.apache.spark.sql.hudi.command.SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME)) {
       Some("SQL key generators are not supported by it")
+    } else if (keyGenClass.nonEmpty
+      && !DefaultSource.DATAFRAME_PATH_KEY_GENERATORS.contains(keyGenClass.substring(keyGenClass.lastIndexOf('.') + 1))) {
+      Some(s"key generator $keyGenClass is not supported by it")
     } else if (opts.get(org.apache.hudi.config.HoodieIndexConfig.INDEX_CLASS_NAME.key()).exists(_.nonEmpty)) {
       Some("custom index classes are not supported by it")
+    } else if (opts.getOrElse("hoodie.datasource.write.drop.partition.columns", "false").toBoolean) {
+      Some("dropping partition columns is not supported by it")
+    } else if (Set("BUCKET", "INMEMORY", "GLOBAL_BLOOM", "HBASE")
+      .contains(opts.getOrElse("hoodie.index.type", "").toUpperCase(java.util.Locale.ROOT))) {
+      Some(s"index type ${opts("hoodie.index.type")} is not supported by it")
     } else if (!opts.contains(DataSourceWriteOptions.RECORDKEY_FIELD.key()) && !tableExists) {
       Some("auto-generated record keys are not supported by it")
     } else {
@@ -390,6 +397,13 @@ object DefaultSource {
   val DATAFRAME_WRITE_PATH_ENABLE = "hoodie.datasource.write.dataframe.path.enable"
 
   val DATAFRAME_WRITER_CLASS = "org.apache.hudi.dataframe.HoodieDataFrameWriter"
+
+  val DATAFRAME_PATH_KEY_GENERATORS: Set[String] = Set(
+    "SimpleKeyGenerator", "SimpleAvroKeyGenerator",
+    "ComplexKeyGenerator", "ComplexAvroKeyGenerator",
+    "TimestampBasedKeyGenerator", "TimestampBasedAvroKeyGenerator",
+    "CustomKeyGenerator", "CustomAvroKeyGenerator",
+    "NonpartitionedKeyGenerator", "NonpartitionedAvroKeyGenerator")
 
   def createRelation(sqlContext: SQLContext,
                      metaClient: HoodieTableMetaClient,
