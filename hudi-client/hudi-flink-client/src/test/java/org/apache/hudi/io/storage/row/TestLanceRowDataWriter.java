@@ -18,15 +18,20 @@
 
 package org.apache.hudi.io.storage.row;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.io.storage.row.lance.HoodieFlinkLanceArrowUtils;
 import org.apache.hudi.io.storage.row.lance.LanceRowDataWriter;
+import org.apache.hudi.util.HoodieSchemaConverter;
 
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
+import org.apache.arrow.vector.Float4Vector;
+import org.apache.arrow.vector.Float8Vector;
 import org.apache.arrow.vector.IntVector;
 import org.apache.arrow.vector.TimeStampMicroVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.complex.FixedSizeListVector;
 import org.apache.arrow.vector.complex.ListVector;
 import org.apache.arrow.vector.complex.StructVector;
 import org.apache.arrow.vector.types.TimeUnit;
@@ -65,6 +70,8 @@ import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -75,14 +82,15 @@ public class TestLanceRowDataWriter {
 
   @Test
   public void testPrimitiveValuesAndNulls() {
-    RowType rowType = primitiveRowType();
+    HoodieSchema hoodieSchema = HoodieSchemaConverter.convertToSchema(primitiveRowType(), "record");
+    RowType rowType = HoodieSchemaConverter.convertToRowType(hoodieSchema.getNonNullType());
     TimestampData timestamp = TimestampData.fromEpochMillis(1234L, 567000);
     TimestampData localTimestamp = TimestampData.fromEpochMillis(5678L, 123000);
     DecimalData decimal = DecimalData.fromBigDecimal(new BigDecimal("12345.67"), 10, 2);
     GenericRowData values = GenericRowData.of(
         true,
-        (byte) 12,
-        (short) 1234,
+        12,
+        1234,
         123456,
         20000,
         12345678,
@@ -100,9 +108,9 @@ public class TestLanceRowDataWriter {
 
     try (BufferAllocator allocator = new RootAllocator();
          VectorSchemaRoot root = VectorSchemaRoot.create(
-             HoodieFlinkLanceArrowUtils.toArrowSchema(rowType), allocator)) {
+             HoodieFlinkLanceArrowUtils.toArrowSchema(hoodieSchema), allocator)) {
       root.allocateNew();
-      LanceRowDataWriter writer = new LanceRowDataWriter(rowType, root.getFieldVectors(), true);
+      LanceRowDataWriter writer = new LanceRowDataWriter(hoodieSchema, root.getFieldVectors(), true);
       writer.write(values, 0);
       writer.write(nulls, 1);
       root.getFieldVectors().forEach(vector -> vector.setValueCount(2));
@@ -110,8 +118,8 @@ public class TestLanceRowDataWriter {
 
       RowData actual = HoodieFlinkLanceArrowUtils.toRowData(rowType, root.getFieldVectors(), 0);
       assertEquals(true, actual.getBoolean(0));
-      assertEquals((byte) 12, actual.getByte(1));
-      assertEquals((short) 1234, actual.getShort(2));
+      assertEquals(12, actual.getInt(1));
+      assertEquals(1234, actual.getInt(2));
       assertEquals(123456, actual.getInt(3));
       assertEquals(20000, actual.getInt(4));
       assertEquals(12345678, actual.getInt(5));
@@ -144,10 +152,11 @@ public class TestLanceRowDataWriter {
              FieldType.nullable(new ArrowType.Timestamp(TimeUnit.MICROSECOND, null)),
              allocator)) {
       RowType rowType = RowType.of(new LogicalType[] {new TimestampType(6)}, new String[] {"ts"});
-      new LanceRowDataWriter(rowType, Collections.singletonList(vector), true).write(rowData, 0);
+      HoodieSchema hoodieSchema = HoodieSchemaConverter.convertToSchema(rowType, "record");
+      new LanceRowDataWriter(hoodieSchema, Collections.singletonList(vector), true).write(rowData, 0);
       assertEquals(1234567L, vector.get(0));
 
-      new LanceRowDataWriter(rowType, Collections.singletonList(vector), false).write(rowData, 1);
+      new LanceRowDataWriter(hoodieSchema, Collections.singletonList(vector), false).write(rowData, 1);
       assertEquals(timestampData.toTimestamp().getTime() * 1000L, vector.get(1));
     }
   }
@@ -155,6 +164,7 @@ public class TestLanceRowDataWriter {
   @Test
   public void testNestedValueRoundTripAndListValueCount() {
     RowType rowType = nestedRowType();
+    HoodieSchema hoodieSchema = HoodieSchemaConverter.convertToSchema(rowType, "record");
     GenericRowData first = GenericRowData.of(
         GenericRowData.of(
             StringData.fromString("alice"),
@@ -180,9 +190,9 @@ public class TestLanceRowDataWriter {
 
     try (BufferAllocator allocator = new RootAllocator();
          VectorSchemaRoot root = VectorSchemaRoot.create(
-             HoodieFlinkLanceArrowUtils.toArrowSchema(rowType), allocator)) {
+             HoodieFlinkLanceArrowUtils.toArrowSchema(hoodieSchema), allocator)) {
       root.allocateNew();
-      LanceRowDataWriter writer = new LanceRowDataWriter(rowType, root.getFieldVectors(), true);
+      LanceRowDataWriter writer = new LanceRowDataWriter(hoodieSchema, root.getFieldVectors(), true);
       writer.write(first, 0);
       writer.write(second, 1);
       writer.write(third, 2);
@@ -205,15 +215,89 @@ public class TestLanceRowDataWriter {
   @Test
   public void testRejectsMapType() {
     MapType mapType = new MapType(new VarCharType(), new IntType());
+    HoodieSchema hoodieSchema = HoodieSchemaConverter.convertToSchema(
+        RowType.of(new LogicalType[] {mapType}, new String[] {"attributes"}), "record");
 
     try (BufferAllocator allocator = new RootAllocator();
          IntVector vector = new IntVector("attributes", allocator)) {
       HoodieNotSupportedException exception = assertThrows(HoodieNotSupportedException.class,
           () -> new LanceRowDataWriter(
-              RowType.of(new LogicalType[] {mapType}, new String[] {"attributes"}),
+              hoodieSchema,
               Collections.singletonList(vector),
               true));
       assertTrue(exception.getMessage().contains(mapUnsupportedMessage()));
+    }
+  }
+
+  @Test
+  public void testWritesFloatAndDoubleVectors() {
+    RowType rowType = RowType.of(
+        new LogicalType[] {
+            new ArrayType(new FloatType(false)),
+            new ArrayType(new DoubleType(false)),
+            new ArrayType(new IntType())},
+        new String[] {"embedding", "scores", "values"});
+    HoodieSchema hoodieSchema = HoodieSchemaConverter.convertToSchema(
+        rowType, "vector_record", "embedding:2,scores:3");
+    GenericRowData first = GenericRowData.of(
+        new GenericArrayData(new Object[] {1.25F, 2.5F}),
+        new GenericArrayData(new Object[] {3.0D, 4.0D, 5.0D}),
+        new GenericArrayData(new Object[] {6, null}));
+    GenericRowData second = GenericRowData.of(
+        null,
+        new GenericArrayData(new Object[] {7.0D, 8.0D, 9.0D}),
+        new GenericArrayData(new Object[0]));
+
+    try (BufferAllocator allocator = new RootAllocator();
+         VectorSchemaRoot root = VectorSchemaRoot.create(
+             HoodieFlinkLanceArrowUtils.toArrowSchema(hoodieSchema), allocator)) {
+      root.allocateNew();
+      LanceRowDataWriter writer = new LanceRowDataWriter(
+          hoodieSchema, root.getFieldVectors(), true);
+      writer.write(first, 0);
+      writer.write(second, 1);
+      root.getFieldVectors().forEach(vector -> vector.setValueCount(2));
+      root.setRowCount(2);
+
+      FixedSizeListVector floatVector = (FixedSizeListVector) root.getVector("embedding");
+      Float4Vector floatElements = (Float4Vector) floatVector.getDataVector();
+      assertFalse(floatVector.isNull(0));
+      assertTrue(floatVector.isNull(1));
+      assertEquals(1.25F, floatElements.get(0));
+      assertEquals(2.5F, floatElements.get(1));
+
+      FixedSizeListVector doubleVector = (FixedSizeListVector) root.getVector("scores");
+      Float8Vector doubleElements = (Float8Vector) doubleVector.getDataVector();
+      assertEquals(3, doubleVector.getListSize());
+      assertEquals(3.0D, doubleElements.get(0));
+      assertEquals(5.0D, doubleElements.get(2));
+      assertEquals(7.0D, doubleElements.get(3));
+      assertEquals(9.0D, doubleElements.get(5));
+
+      assertInstanceOf(ListVector.class, root.getVector("values"));
+    }
+  }
+
+  @Test
+  public void testRejectsInvalidVectorDimension() {
+    RowType rowType = RowType.of(
+        new LogicalType[] {new ArrayType(new FloatType(false))},
+        new String[] {"embedding"});
+    HoodieSchema hoodieSchema = HoodieSchemaConverter.convertToSchema(
+        rowType, "vector_record", "embedding:2");
+
+    try (BufferAllocator allocator = new RootAllocator();
+         VectorSchemaRoot root = VectorSchemaRoot.create(
+             HoodieFlinkLanceArrowUtils.toArrowSchema(hoodieSchema), allocator)) {
+      root.allocateNew();
+      LanceRowDataWriter writer = new LanceRowDataWriter(
+          hoodieSchema, root.getFieldVectors(), true);
+
+      IllegalArgumentException dimensionError = assertThrows(
+          IllegalArgumentException.class,
+          () -> writer.write(GenericRowData.of(
+              new GenericArrayData(new Object[] {1.0F})), 0));
+      assertTrue(dimensionError.getMessage().contains("requires dimension 2"));
     }
   }
 

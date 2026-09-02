@@ -36,9 +36,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
-import org.apache.hudi.util.HoodieSchemaConverter;
 
-import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 
@@ -125,10 +123,9 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
     boolean withOperation = config.getBooleanOrDefault(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD);
     Option<org.apache.hudi.common.bloom.BloomFilter> bloomFilter = enableBloomFilter(metaFieldsMode, config)
         ? Option.of(createBloomFilter(config)) : Option.empty();
-    RowType rowType = HoodieSchemaConverter.convertToRowType(schema);
     return new HoodieRowDataLanceWriter(
         path,
-        rowType,
+        schema,
         instantTime,
         taskContextSupplier,
         bloomFilter,
