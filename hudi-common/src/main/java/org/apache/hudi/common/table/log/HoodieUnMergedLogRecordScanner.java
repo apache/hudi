@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -48,10 +49,11 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
                                          String latestInstantTime, boolean reverseReader, int bufferSize,
                                          LogRecordScannerCallback callback, RecordDeletionCallback recordDeletionCallback,
                                          Option<InstantRange> instantRange, InternalSchema internalSchema,
-                                         HoodieRecordMerger recordMerger, Option<HoodieTableMetaClient> hoodieTableMetaClientOption) {
+                                         HoodieRecordMerger recordMerger, HoodieReaderContext<?> readerContext,
+                                         Option<HoodieTableMetaClient> hoodieTableMetaClientOption) {
     super(storage, basePath, logFilePaths, readerSchema, latestInstantTime, reverseReader, bufferSize, instantRange,
         false, true, Option.empty(), internalSchema, Option.empty(), recordMerger,
-         hoodieTableMetaClientOption);
+        readerContext, hoodieTableMetaClientOption);
     this.callback = callback;
     this.recordDeletionCallback = recordDeletionCallback;
   }
@@ -126,6 +128,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
     private LogRecordScannerCallback callback;
     private RecordDeletionCallback recordDeletionCallback;
     private HoodieRecordMerger recordMerger = new HoodiePreCombineAvroRecordMerger();
+    private HoodieReaderContext<?> readerContext;
     private HoodieTableMetaClient hoodieTableMetaClient;
 
     public Builder withStorage(HoodieStorage storage) {
@@ -206,12 +209,19 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
     }
 
     @Override
+    public HoodieUnMergedLogRecordScanner.Builder withReaderContext(HoodieReaderContext<?> readerContext) {
+      this.readerContext = readerContext;
+      return this;
+    }
+
+    @Override
     public HoodieUnMergedLogRecordScanner build() {
       ValidationUtils.checkArgument(recordMerger != null);
+      ValidationUtils.checkArgument(readerContext != null, "Reader context is required");
 
       return new HoodieUnMergedLogRecordScanner(storage, basePath, logFilePaths, readerSchema,
           latestInstantTime, reverseReader, bufferSize, callback, recordDeletionCallback, instantRange,
-          internalSchema, recordMerger, Option.ofNullable(hoodieTableMetaClient));
+          internalSchema, recordMerger, readerContext, Option.ofNullable(hoodieTableMetaClient));
     }
   }
 }

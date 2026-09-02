@@ -25,9 +25,11 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
+import org.apache.hudi.common.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -35,6 +37,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
@@ -236,6 +239,7 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
         .withStorage(storage)
         .withBasePath(tablePath)
         .withLogFilePaths(logFilePaths)
+        .withReaderContext(createReaderContext())
         .withReaderSchema(schema)
         .withLatestInstantTime(INSTANT_TIME)
         .withMaxMemorySizeInBytes(
@@ -265,5 +269,12 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
     expected = removeNonWordAndStripSpace(expected);
     String got = removeNonWordAndStripSpace(result.toString());
     assertEquals(expected, got);
+  }
+
+  private HoodieAvroReaderContext createReaderContext() {
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+    TypedProperties readerProps = TypedProperties.copy(metaClient.getTableConfig().getProps(true));
+    return new HoodieAvroReaderContext(
+        metaClient.getStorageConf(), metaClient.getTableConfig(), Option.empty(), Option.empty(), readerProps);
   }
 }

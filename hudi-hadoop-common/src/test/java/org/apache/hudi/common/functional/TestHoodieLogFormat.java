@@ -18,8 +18,11 @@
 
 package org.apache.hudi.common.functional;
 
+import org.apache.hudi.common.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
@@ -783,6 +786,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withLogFilePaths(
             logFiles.stream()
                 .map(logFile -> logFile.getPath().toString()).collect(Collectors.toList()))
+        .withReaderContext(createReaderContext())
         .withReaderSchema(schema)
         .withLatestInstantTime("200")
         .withMaxMemorySizeInBytes(1024000L)
@@ -858,6 +862,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withBasePath(basePath)
         .withLogFilePaths(Arrays.asList(
             nativeDataLog.getPath().toString(), nativeDeleteLog.getPath().toString()))
+        .withReaderContext(createReaderContext())
         .withReaderSchema(HoodieTestDataGenerator.HOODIE_SCHEMA_WITH_METADATA_FIELDS)
         .withLatestInstantTime("100")
         .withMaxMemorySizeInBytes(1024000L)
@@ -915,6 +920,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withLogFilePaths(
             logFiles.stream()
                 .map(logFile -> logFile.getPath().toString()).collect(Collectors.toList()))
+        .withReaderContext(createReaderContext())
         .withReaderSchema(schema)
         .withLatestInstantTime("100")
         .withMaxMemorySizeInBytes(1024000L)
@@ -1001,6 +1007,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withLogFilePaths(
             logFiles.stream()
                 .map(logFile -> logFile.getPath().toString()).collect(Collectors.toList()))
+        .withReaderContext(createReaderContext())
         .withReaderSchema(schema)
         .withLatestInstantTime("100")
         .withMaxMemorySizeInBytes(1024000L)
@@ -1534,6 +1541,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(allLogFiles)
+        .withReaderContext(createReaderContext())
         .withReaderSchema(schema)
         .withLatestInstantTime("102")
         .withMaxMemorySizeInBytes(1024000L)
@@ -1580,6 +1588,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(allLogFiles)
+        .withReaderContext(createReaderContext())
         .withReaderSchema(schema)
         .withLatestInstantTime("103")
         .withMaxMemorySizeInBytes(1024000L)
@@ -1693,6 +1702,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(allLogFiles)
+        .withReaderContext(createReaderContext())
         .withReaderSchema(schema)
         .withLatestInstantTime("103")
         .withMaxMemorySizeInBytes(1024000L)
@@ -1821,6 +1831,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(allLogFiles)
+        .withReaderContext(createReaderContext())
         .withReaderSchema(schema)
         .withLatestInstantTime("104")
         .withMaxMemorySizeInBytes(1024000L)
@@ -2172,6 +2183,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(allLogFiles)
+        .withReaderContext(createReaderContext())
         .withReaderSchema(schema)
         .withLatestInstantTime("103")
         .withMaxMemorySizeInBytes(1024000L)
@@ -2545,6 +2557,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(allLogFiles)
+        .withReaderContext(createReaderContext())
         .withReaderSchema(schema)
         .withLatestInstantTime("108")
         .withMaxMemorySizeInBytes(1024000L)
@@ -2639,6 +2652,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
           .withStorage(storage)
           .withBasePath(basePath)
           .withLogFilePaths(allLogFiles)
+          .withReaderContext(createReaderContext())
           .withReaderSchema(schema)
           .withLatestInstantTime("100")
           .withMaxMemorySizeInBytes(10240L)
@@ -3089,6 +3103,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(Collections.singletonList(writer.getLogFile().getPath().toString()))
+        .withReaderContext(createReaderContext())
         .withReaderSchema(schema)
         .withLatestInstantTime("100")
         .withReverseReader(false)
@@ -3167,6 +3182,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withBasePath(basePath)
         .withLogFilePaths(Arrays.asList(
             legacyDataWriter.getLogFile().getPath().toString(), nativeDeleteLog.getPath().toString()))
+        .withReaderContext(createReaderContext())
         .withReaderSchema(schema)
         .withLatestInstantTime("100")
         .withReverseReader(false)
@@ -3227,6 +3243,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(Collections.singletonList(writer.getLogFile().getPath().toString()))
+        .withReaderContext(createReaderContext(Option.of(instantRange)))
         .withReaderSchema(schema)
         .withLatestInstantTime("101")
         .withReverseReader(false)
@@ -3401,6 +3418,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(allLogFiles)
+        .withReaderContext(createReaderContext())
         .withReaderSchema(schema)
         .withLatestInstantTime(latestInstantTime)
         .withMaxMemorySizeInBytes(10240L)
@@ -3419,5 +3437,16 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         assertEquals(expectedKeys.get(), readKeys, "Keys read from log file should match written keys");
       }
     }
+  }
+
+  private HoodieReaderContext<IndexedRecord> createReaderContext() {
+    return createReaderContext(Option.empty());
+  }
+
+  private HoodieReaderContext<IndexedRecord> createReaderContext(Option<InstantRange> instantRange) {
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storage, basePath);
+    TypedProperties readerProps = TypedProperties.copy(metaClient.getTableConfig().getProps(true));
+    return new HoodieAvroReaderContext(
+        metaClient.getStorageConf(), metaClient.getTableConfig(), instantRange, Option.empty(), readerProps);
   }
 }

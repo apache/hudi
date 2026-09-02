@@ -20,6 +20,7 @@ package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.avro.AvroRecordContext;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -112,11 +113,12 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
                                          InternalSchema internalSchema,
                                          Option<String> keyFieldOverride,
                                          HoodieRecordMerger recordMerger,
+                                         HoodieReaderContext<?> readerContext,
                                          Option<HoodieTableMetaClient> hoodieTableMetaClientOption,
                                          boolean allowInflightInstants) {
     super(storage, basePath, logFilePaths, readerSchema, latestInstantTime, reverseReader, bufferSize,
         instantRange, withOperationField, forceFullScan, partitionName, internalSchema, keyFieldOverride, recordMerger,
-        hoodieTableMetaClientOption);
+        readerContext, hoodieTableMetaClientOption);
     try {
       this.maxMemorySizeInBytes = maxMemorySizeInBytes;
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
@@ -354,6 +356,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     private boolean forceFullScan = true;
     protected boolean allowInflightInstants = false;
     private HoodieRecordMerger recordMerger = new HoodiePreCombineAvroRecordMerger();
+    private HoodieReaderContext<?> readerContext;
     protected HoodieTableMetaClient hoodieTableMetaClient;
 
     @Override
@@ -471,6 +474,12 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
       return this;
     }
 
+    @Override
+    public Builder withReaderContext(HoodieReaderContext<?> readerContext) {
+      this.readerContext = readerContext;
+      return this;
+    }
+
     public Builder withAllowInflightInstants(boolean allowInflightInstants) {
       this.allowInflightInstants = allowInflightInstants;
       return this;
@@ -483,13 +492,14 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
             new StoragePath(basePath), new StoragePath(this.logFilePaths.get(0)).getParent());
       }
       checkArgument(recordMerger != null);
+      checkArgument(readerContext != null, "Reader context is required");
 
       return new HoodieMergedLogRecordScanner(storage, basePath, logFilePaths, readerSchema,
           latestInstantTime, maxMemorySizeInBytes, reverseReader,
           bufferSize, spillableMapBasePath, instantRange,
           diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, forceFullScan,
           Option.ofNullable(partitionName), internalSchema, Option.ofNullable(keyFieldOverride), recordMerger,
-          Option.ofNullable(hoodieTableMetaClient), allowInflightInstants);
+          readerContext, Option.ofNullable(hoodieTableMetaClient), allowInflightInstants);
     }
   }
 }

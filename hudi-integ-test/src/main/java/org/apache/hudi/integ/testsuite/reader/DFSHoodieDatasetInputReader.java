@@ -19,10 +19,12 @@
 package org.apache.hudi.integ.testsuite.reader;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -286,6 +288,7 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
           .withLogFilePaths(
               fileSlice.getLogFiles().map(l -> l.getPath().getName())
                   .collect(Collectors.toList()))
+          .withReaderContext(createReaderContext())
           .withReaderSchema(HoodieSchema.parse(schemaStr))
           .withLatestInstantTime(metaClient.getActiveTimeline().getCommitsTimeline()
               .filterCompletedInstants().lastInstant().get().requestedTime())
@@ -310,6 +313,15 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
             }
           }).iterator();
     }
+  }
+
+  private HoodieAvroReaderContext createReaderContext() {
+    TypedProperties readerProps = TypedProperties.copy(metaClient.getTableConfig().getProps(true));
+    jsc.hadoopConfiguration().forEach(entry -> readerProps.setProperty(entry.getKey(), entry.getValue()));
+    Arrays.stream(jsc.getConf().getAll())
+        .forEach(entry -> readerProps.setProperty(entry._1(), entry._2()));
+    return new HoodieAvroReaderContext(
+        metaClient.getStorageConf(), metaClient.getTableConfig(), Option.empty(), Option.empty(), readerProps);
   }
 
   /**

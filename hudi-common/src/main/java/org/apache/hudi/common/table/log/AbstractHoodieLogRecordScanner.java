@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.hudi.common.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -40,7 +39,6 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -56,7 +54,6 @@ import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.util.ArrayDeque;
@@ -165,8 +162,9 @@ public abstract class AbstractHoodieLogRecordScanner {
   private HoodieTimeline commitsTimeline = null;
   private HoodieTimeline completedInstantsTimeline = null;
   private HoodieTimeline inflightInstantsTimeline = null;
-  // Reader context used to materialize delete records through the engine-agnostic reader APIs.
-  private HoodieReaderContext<IndexedRecord> deleteReaderContext;
+  // Caller-owned reader context used to materialize delete records through the engine-agnostic reader APIs.
+  private final HoodieReaderContext<?> readerContext;
+  private boolean isReaderContextInitialized;
   // Physical partition path of the log files, used to restore HoodieKey for buffered deletes.
   private final Option<String> deletePartitionPathOpt;
 
@@ -178,6 +176,7 @@ public abstract class AbstractHoodieLogRecordScanner {
                                            InternalSchema internalSchema,
                                            Option<String> keyFieldOverride,
                                            HoodieRecordMerger recordMerger,
+                                           HoodieReaderContext<?> readerContext,
                                            Option<HoodieTableMetaClient> hoodieTableMetaClientOption) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
@@ -232,6 +231,7 @@ public abstract class AbstractHoodieLogRecordScanner {
     this.partitionNameOverrideOpt = partitionNameOverride;
     this.deletePartitionPathOpt = resolveDeletePartitionPath(basePath, logFilePaths, partitionNameOverride);
     this.recordType = recordMerger.getRecordType();
+    this.readerContext = readerContext;
   }
 
   private static Option<String> resolveDeletePartitionPath(String basePath, List<String> logFilePaths,
@@ -246,12 +246,10 @@ public abstract class AbstractHoodieLogRecordScanner {
         new StoragePath(basePath), new StoragePath(logFilePaths.get(0)).getParent()));
   }
 
-  private HoodieReaderContext<IndexedRecord> getOrCreateDeleteReaderContext() {
-    if (deleteReaderContext == null) {
-      HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
-      TypedProperties mergeProps = ConfigUtils.getMergeProps(payloadProps, tableConfig);
-      HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(
-          hoodieTableMetaClient.getStorageConf(), tableConfig, instantRange, Option.empty(), mergeProps);
+  private <T> void initializeReaderContext(HoodieReaderContext<T> readerContext) {
+    if (!isReaderContextInitialized) {
+      TypedProperties readerProps = TypedProperties.copy(readerContext.getHoodieReaderConfig().getProps());
+      TypedProperties mergeProps = readerContext.getMergeProps(readerProps);
       readerContext.setHasLogFiles(true);
       readerContext.setHasBootstrapBaseFile(false);
       readerContext.setShouldMergeUseRecordPosition(false);
@@ -263,9 +261,8 @@ public abstract class AbstractHoodieLogRecordScanner {
           ? Option.empty() : Option.of(internalSchema);
       readerContext.setSchemaHandler(new FileGroupReaderSchemaHandler<>(
           readerContext, readerSchema, readerSchema, internalSchemaOpt, mergeProps, hoodieTableMetaClient));
-      deleteReaderContext = readerContext;
+      isReaderContextInitialized = true;
     }
-    return deleteReaderContext;
   }
 
   private HoodieTimeline getOrCreateCompletedInstantsTimeline() {
@@ -554,10 +551,11 @@ public abstract class AbstractHoodieLogRecordScanner {
    */
   protected abstract void processNextDeletedRecord(BufferedRecord<?> deleteRecord, String partitionPath);
 
-  private void processDeleteBlock(HoodieDeleteBlock deleteBlock) {
+  private <T> void processDeleteBlock(HoodieDeleteBlock deleteBlock, HoodieReaderContext<T> readerContext) {
     checkState(deletePartitionPathOpt.isPresent(), "Partition path is required when processing delete records");
+    initializeReaderContext(readerContext);
     String partitionPath = deletePartitionPathOpt.get();
-    for (BufferedRecord<IndexedRecord> deleteRecord : deleteBlock.getRecordsToDelete(getOrCreateDeleteReaderContext())) {
+    for (BufferedRecord<T> deleteRecord : deleteBlock.getRecordsToDelete(readerContext)) {
       processNextDeletedRecord(deleteRecord, partitionPath);
     }
   }
@@ -578,7 +576,7 @@ public abstract class AbstractHoodieLogRecordScanner {
           processDataBlock((HoodieDataBlock) lastBlock, keySpecOpt);
           break;
         case DELETE_BLOCK:
-          processDeleteBlock((HoodieDeleteBlock) lastBlock);
+          processDeleteBlock((HoodieDeleteBlock) lastBlock, readerContext);
           break;
         case CORRUPT_BLOCK:
           log.warn("Found a corrupt block which was not rolled back");
@@ -782,6 +780,10 @@ public abstract class AbstractHoodieLogRecordScanner {
     }
 
     public Builder withTableMetaClient(HoodieTableMetaClient hoodieTableMetaClient) {
+      throw new UnsupportedOperationException();
+    }
+
+    public Builder withReaderContext(HoodieReaderContext<?> readerContext) {
       throw new UnsupportedOperationException();
     }
 

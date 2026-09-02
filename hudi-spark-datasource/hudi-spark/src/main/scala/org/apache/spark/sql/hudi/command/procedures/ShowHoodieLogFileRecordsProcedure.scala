@@ -17,15 +17,17 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMemoryConfig, HoodieReaderConfig}
+import org.apache.hudi.common.avro.HoodieAvroReaderContext
+import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMemoryConfig, HoodieReaderConfig, TypedProperties}
+import org.apache.hudi.common.expression.Predicate
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieLogFile, HoodieRecordPayload}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.TableSchemaResolver
-import org.apache.hudi.common.table.log.{HoodieLogFormat, HoodieMergedLogRecordScanner}
+import org.apache.hudi.common.table.log.{HoodieLogFormat, HoodieMergedLogRecordScanner, InstantRange}
 import org.apache.hudi.common.table.log.block.HoodieDataBlock
-import org.apache.hudi.common.util.ValidationUtils
+import org.apache.hudi.common.util.{Option => HOption, ValidationUtils}
 import org.apache.hudi.io.util.FileIOUtils
 import org.apache.hudi.storage.StoragePath
 
@@ -71,10 +73,16 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
     val allRecords: java.util.List[IndexedRecord] = new java.util.ArrayList[IndexedRecord]
     if (merge) {
       val schema = Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(client, new StoragePath(logFilePaths.last)))
+      val readerProps = TypedProperties.copy(client.getTableConfig.getProps(true))
+      jsc.hadoopConfiguration.iterator.asScala.foreach(entry => readerProps.setProperty(entry.getKey, entry.getValue))
+      TypedProperties.putAll(readerProps, spark.sessionState.conf.getAllConfs.asJava)
+      val readerContext = new HoodieAvroReaderContext(
+        client.getStorageConf, client.getTableConfig, HOption.empty[InstantRange](), HOption.empty[Predicate](), readerProps)
       val scanner = HoodieMergedLogRecordScanner.newBuilder
         .withStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(logFilePaths.asJava)
+        .withReaderContext(readerContext)
         .withReaderSchema(schema)
         .withLatestInstantTime(client.getActiveTimeline.getCommitAndReplaceTimeline.lastInstant.get.requestedTime)
         .withReverseReader(java.lang.Boolean.parseBoolean(HoodieReaderConfig.COMPACTION_REVERSE_LOG_READ_ENABLE.defaultValue))

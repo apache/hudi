@@ -81,6 +81,7 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
                 split.getPath().toString(), HadoopFSUtils.getStorageConf(this.jobConf)))
             .withBasePath(split.getBasePath())
             .withLogFilePaths(split.getDeltaLogPaths())
+            .withReaderContext(createReaderContext())
             .withReaderSchema(getReaderSchema())
             .withLatestInstantTime(split.getMaxCommitTime())
             .withReverseReader(false)

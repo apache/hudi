@@ -18,8 +18,10 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import org.apache.hudi.common.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -38,6 +40,7 @@ import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 
 import lombok.Getter;
 import lombok.Setter;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ArrayWritableObjectInspector;
 import org.apache.hadoop.hive.serde.serdeConstants;
@@ -213,5 +216,15 @@ public abstract class AbstractRealtimeRecordReader {
 
   protected HoodieSchema getLogScannerReaderSchema() {
     return usesCustomPayload ? writerSchema : readerSchema;
+  }
+
+  /**
+   * Creates a reader context using the table configuration and the complete Hadoop runtime configuration.
+   */
+  protected HoodieReaderContext<IndexedRecord> createReaderContext() {
+    TypedProperties readerProps = TypedProperties.copy(metaClient.getTableConfig().getProps(true));
+    jobConf.forEach(entry -> readerProps.setProperty(entry.getKey(), entry.getValue()));
+    return new HoodieAvroReaderContext(
+        metaClient.getStorageConf(), metaClient.getTableConfig(), Option.empty(), Option.empty(), readerProps);
   }
 }

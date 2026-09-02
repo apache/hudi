@@ -103,6 +103,7 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
             split.getPath().toString(), HadoopFSUtils.getStorageConf(jobConf)))
         .withBasePath(split.getBasePath())
         .withLogFilePaths(split.getDeltaLogPaths())
+        .withReaderContext(createReaderContext())
         .withReaderSchema(getLogScannerReaderSchema())
         .withLatestInstantTime(split.getMaxCommitTime())
         .withMaxMemorySizeInBytes(HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes(jobConf))
