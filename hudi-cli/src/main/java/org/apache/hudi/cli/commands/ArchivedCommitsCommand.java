@@ -40,6 +40,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -126,7 +127,7 @@ public class ArchivedCommitsCommand {
       allStats = readCommitStatsFromLegacyArchive(
           metaClient, new StoragePath(metaClient.getArchivePath(), ".commits_.archive*"));
     } else {
-      allStats = readCommitStatsFromArchivedTimeline(metaClient);
+      allStats = readCommitStatsFromArchivedTimeline(newArchivedTimeline(metaClient), sortByField, limit);
     }
     TableHeader header = new TableHeader().addTableHeaderField("action").addTableHeaderField("instant")
         .addTableHeaderField("partition").addTableHeaderField("file_id").addTableHeaderField("prev_instant")
@@ -152,15 +153,8 @@ public class ArchivedCommitsCommand {
 
     System.out.println("===============> Showing only " + limit + " archived commits <===============");
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
-    HoodieArchivedTimeline archivedTimeline = newArchivedTimeline(metaClient);
-    if (!skipMetadata) {
-      archivedTimeline.loadCompletedInstantDetailsInMemory();
-    }
-    final boolean legacyArchive = isLegacyArchive(metaClient);
-    List<Comparable[]> allCommits = archivedTimeline.getInstants().stream()
-        .filter(HoodieInstant::isCompleted)
-        .map(instant -> readArchivedCommit(archivedTimeline, instant, skipMetadata, legacyArchive))
-        .collect(Collectors.toList());
+    List<Comparable[]> allCommits = readArchivedCommits(
+        newArchivedTimeline(metaClient), skipMetadata, isLegacyArchive(metaClient), sortByField, limit);
 
     TableHeader header = new TableHeader().addTableHeaderField("CommitTime").addTableHeaderField("CommitType");
 
@@ -172,18 +166,89 @@ public class ArchivedCommitsCommand {
   }
 
   /**
+   * Renders the completed archived instants as rows, loading metadata only for the rows that
+   * can reach the output.
+   * <p>
+   * Without a sort field the printer keeps the timeline order and cuts at the limit, so only
+   * the leading instants can be shown, and an archive that has grown for years holds far more
+   * payload than those few rows need. With a sort field, or no limit, every row takes part
+   * and everything has to be loaded.
+   */
+  @VisibleForTesting
+  static List<Comparable[]> readArchivedCommits(HoodieArchivedTimeline archivedTimeline, boolean skipMetadata,
+                                                boolean legacyArchive, String sortByField, int limit) {
+    List<HoodieInstant> completed = archivedTimeline.getInstants().stream()
+        .filter(HoodieInstant::isCompleted)
+        .collect(Collectors.toList());
+    List<HoodieInstant> shown = boundedByLimit(completed, sortByField, limit);
+    if (!skipMetadata) {
+      loadInstantDetails(archivedTimeline, shown, shown.size() < completed.size());
+    }
+    return shown.stream()
+        .map(instant -> readArchivedCommit(archivedTimeline, instant, skipMetadata, legacyArchive))
+        .collect(Collectors.toList());
+  }
+
+  /**
+   * Returns the leading instants that the printer can render, or all of them when a sort field
+   * or a non-positive limit makes every row a candidate.
+   */
+  private static List<HoodieInstant> boundedByLimit(List<HoodieInstant> instants, String sortByField, int limit) {
+    if (!sortByField.isEmpty() || limit <= 0 || limit >= instants.size()) {
+      return instants;
+    }
+    return instants.subList(0, limit);
+  }
+
+  /**
+   * Loads the details of the given instants, through the closed time range they span when they
+   * are a strict subset of the archive, so that the archive files outside the range are never
+   * opened and the payloads outside it never held.
+   */
+  private static void loadInstantDetails(HoodieArchivedTimeline archivedTimeline, List<HoodieInstant> instants,
+                                         boolean subset) {
+    if (instants.isEmpty()) {
+      return;
+    }
+    if (subset) {
+      archivedTimeline.loadCompletedInstantDetailsInMemory(
+          instants.get(0).requestedTime(), instants.get(instants.size() - 1).requestedTime());
+    } else {
+      archivedTimeline.loadCompletedInstantDetailsInMemory();
+    }
+  }
+
+  /**
    * Reads the write stats of the archived commit and delta commit instants through the
    * archived timeline, the LSM timeline that table version 8 and above are written with.
+   * <p>
+   * Without a sort field the printer keeps the timeline order and cuts at the limit, so the
+   * rows come from a leading run of the write instants. Each of them contributes a row per
+   * write stat, so their details are loaded a limit-sized window of instants at a time until
+   * the rows reach the limit, instead of materializing every archived payload. With a sort
+   * field, or no limit, every row takes part and everything has to be loaded.
    */
-  private List<Comparable[]> readCommitStatsFromArchivedTimeline(HoodieTableMetaClient metaClient) {
-    HoodieArchivedTimeline archivedTimeline = newArchivedTimeline(metaClient);
-    archivedTimeline.loadCompletedInstantDetailsInMemory();
-    return archivedTimeline.getInstants().stream()
+  @VisibleForTesting
+  static List<Comparable[]> readCommitStatsFromArchivedTimeline(HoodieArchivedTimeline archivedTimeline,
+                                                                String sortByField, int limit) {
+    List<HoodieInstant> writes = archivedTimeline.getInstants().stream()
         .filter(HoodieInstant::isCompleted)
         .filter(instant -> HoodieTimeline.COMMIT_ACTION.equals(instant.getAction())
             || HoodieTimeline.DELTA_COMMIT_ACTION.equals(instant.getAction()))
-        .flatMap(instant -> readWriteStatRows(archivedTimeline, instant))
         .collect(Collectors.toList());
+    if (!sortByField.isEmpty() || limit <= 0) {
+      archivedTimeline.loadCompletedInstantDetailsInMemory();
+      return writes.stream()
+          .flatMap(instant -> readWriteStatRows(archivedTimeline, instant))
+          .collect(Collectors.toList());
+    }
+    List<Comparable[]> rows = new ArrayList<>();
+    for (int from = 0; from < writes.size() && rows.size() < limit; from += limit) {
+      List<HoodieInstant> window = writes.subList(from, Math.min(from + limit, writes.size()));
+      loadInstantDetails(archivedTimeline, window, window.size() < writes.size());
+      window.forEach(instant -> readWriteStatRows(archivedTimeline, instant).forEach(rows::add));
+    }
+    return rows;
   }
 
   /**
@@ -203,7 +268,7 @@ public class ArchivedCommitsCommand {
     return metaClient.getArchivedTimeline(StringUtils.EMPTY_STRING, false);
   }
 
-  private Stream<Comparable[]> readWriteStatRows(HoodieArchivedTimeline archivedTimeline, HoodieInstant instant) {
+  private static Stream<Comparable[]> readWriteStatRows(HoodieArchivedTimeline archivedTimeline, HoodieInstant instant) {
     HoodieCommitMetadata metadata;
     try {
       metadata = archivedTimeline.readCommitMetadataToAvro(instant);
@@ -289,8 +354,8 @@ public class ArchivedCommitsCommand {
     return actionState == null || HoodieInstant.State.COMPLETED.name().equals(actionState.toString());
   }
 
-  private Comparable[] readArchivedCommit(HoodieArchivedTimeline archivedTimeline, HoodieInstant instant,
-                                          boolean skipMetadata, boolean legacyArchive) {
+  private static Comparable[] readArchivedCommit(HoodieArchivedTimeline archivedTimeline, HoodieInstant instant,
+                                                 boolean skipMetadata, boolean legacyArchive) {
     List<Comparable> commitDetails = new ArrayList<>();
     commitDetails.add(instant.requestedTime());
     commitDetails.add(instant.getAction());
@@ -300,8 +365,8 @@ public class ArchivedCommitsCommand {
     return commitDetails.toArray(new Comparable[commitDetails.size()]);
   }
 
-  private String readArchivedMetadataString(HoodieArchivedTimeline archivedTimeline, HoodieInstant instant,
-                                            boolean legacyArchive) {
+  private static String readArchivedMetadataString(HoodieArchivedTimeline archivedTimeline, HoodieInstant instant,
+                                                   boolean legacyArchive) {
     Option<byte[]> details = archivedTimeline.getInstantDetails(instant);
     if (!details.isPresent() || details.get().length == 0) {
       // instants can be archived with no metadata, e.g. from an empty completed
