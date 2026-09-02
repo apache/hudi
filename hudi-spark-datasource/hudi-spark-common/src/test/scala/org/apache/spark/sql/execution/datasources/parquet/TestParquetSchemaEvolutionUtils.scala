@@ -283,6 +283,29 @@ class TestParquetSchemaEvolutionUtils {
     }
   }
 
+  /**
+   * The Spark 3.x readers force spark.sql.caseSensitive=false, so a request spelled in another case
+   * still resolves onto the file's lower-case group - at the column, at the member, and below a
+   * struct. The guard has to follow the same resolution or the mixed-case spelling reads past it.
+   */
+  @Test
+  def testValidateNoShreddedVariantStructsIgnoresCase(): Unit = {
+    val mixedCaseVariant = new StructType().add("Value", BinaryType).add("Metadata", BinaryType)
+    Seq(
+      ("column", new StructType().add("V", mixedCaseVariant), schemaOf(shreddedVariant("v")), "'V'"),
+      ("nested", new StructType().add("S", new StructType().add("Inner", mixedCaseVariant)),
+        schemaOf(Types.optionalGroup().addField(shreddedVariant("inner")).named("s")), "'S.Inner'")
+    ).foreach { case (leg, requiredSchema, fileSchema, path) =>
+      val failure = Assertions.assertThrows(classOf[HoodieException], () =>
+        ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(requiredSchema, fileSchema))
+      Assertions.assertTrue(failure.getMessage.contains(path),
+        s"The mixed-case $leg error must name $path as requested, got: ${failure.getMessage}")
+    }
+
+    ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(
+      new StructType().add("V", mixedCaseVariant), schemaOf(unshreddedVariant("v")))
+  }
+
   /** How a variant column is declared on Spark 3.x, which has no VariantType. */
   private def variantStruct: StructType =
     new StructType().add("value", BinaryType).add("metadata", BinaryType)

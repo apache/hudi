@@ -37,7 +37,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.parquet.hadoop.metadata.FileMetaData
-import org.apache.parquet.schema.{MessageType, Type => ParquetType}
+import org.apache.parquet.schema.{GroupType, MessageType, Type => ParquetType}
 import org.apache.spark.sql.HoodieSchemaUtils
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, UnsafeProjection}
 import org.apache.spark.sql.execution.datasources.SparkSchemaTransformUtils
@@ -292,12 +292,20 @@ object ParquetSchemaEvolutionUtils {
    */
   def validateNoShreddedVariantStructs(requiredSchema: StructType, fileParquetSchema: MessageType): Unit = {
     requiredSchema.fields.foreach { field =>
-      if (fileParquetSchema.containsField(field.name)) {
-        validateNoShreddedVariantStruct(
-          field.dataType, fileParquetSchema.getType(fileParquetSchema.getFieldIndex(field.name)), field.name)
-      }
+      parquetFieldIgnoreCase(fileParquetSchema, field.name)
+        .foreach(validateNoShreddedVariantStruct(field.dataType, _, field.name))
     }
   }
+
+  /**
+   * The file field a requested name resolves to. Case-insensitive on purpose: the Spark 3.x
+   * readers this guards force spark.sql.caseSensitive=false (SparkParquetReaderBase.read), so a
+   * column declared `V` or a member declared `Value` still lands on the file's lower-case group,
+   * and a guard that only matched exactly would let that request straight through to the
+   * null-value read.
+   */
+  private def parquetFieldIgnoreCase(group: GroupType, name: String): Option[ParquetType] =
+    group.getFields.find(_.getName.equalsIgnoreCase(name))
 
   private def validateNoShreddedVariantStruct(dataType: DataType, parquetType: ParquetType, path: String): Unit = {
     if (!parquetType.isPrimitive) {
@@ -314,9 +322,8 @@ object ParquetSchemaEvolutionUtils {
           }
         case struct: StructType =>
           struct.fields.foreach { field =>
-            if (group.containsField(field.name)) {
-              validateNoShreddedVariantStruct(field.dataType, group.getType(field.name), concatPath(path, field.name))
-            }
+            parquetFieldIgnoreCase(group, field.name)
+              .foreach(validateNoShreddedVariantStruct(field.dataType, _, concatPath(path, field.name)))
           }
         case array: ArrayType =>
           parquetListElement(group).foreach(validateNoShreddedVariantStruct(array.elementType, _, concatPath(path, "element")))
@@ -340,10 +347,11 @@ object ParquetSchemaEvolutionUtils {
    * since nothing then distinguishes it from the variant request this guards.
    */
   private def isUnshreddedVariantStruct(struct: StructType): Boolean = {
+    // Names compared case-insensitively for the same reason parquetFieldIgnoreCase resolves them so.
     struct.fields.nonEmpty && struct.fields.forall(field =>
       field.dataType == BinaryType
-        && (field.name == HoodieSchema.Variant.VARIANT_METADATA_FIELD
-        || field.name == HoodieSchema.Variant.VARIANT_VALUE_FIELD))
+        && (field.name.equalsIgnoreCase(HoodieSchema.Variant.VARIANT_METADATA_FIELD)
+        || field.name.equalsIgnoreCase(HoodieSchema.Variant.VARIANT_VALUE_FIELD)))
   }
 
   /**

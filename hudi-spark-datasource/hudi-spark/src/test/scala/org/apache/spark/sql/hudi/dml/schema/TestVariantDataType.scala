@@ -1332,6 +1332,9 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
 
     withRecordType()(withTempDir { tmp =>
       val tableName = generateTableName
+      // Deliberately no hoodie.parquet.variant.shredding.schema.inference.enabled here: this leg
+      // relies on the default (on since #19690) so the flip is pinned end to end - the inferred
+      // footers asserted below would stop appearing if the default went back to false.
       spark.sql(
         s"""
            |create table $tableName (
@@ -1345,8 +1348,7 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
            | tblproperties (
            |  primaryKey = 'id',
            |  type = 'cow',
-           |  preCombineField = 'ts',
-           |  hoodie.parquet.variant.shredding.schema.inference.enabled = 'true'
+           |  preCombineField = 'ts'
            | )
         """.stripMargin)
 
