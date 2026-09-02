@@ -37,7 +37,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.parquet.hadoop.metadata.FileMetaData
-import org.apache.parquet.schema.{Type => ParquetType}
+import org.apache.parquet.schema.{MessageType, Type => ParquetType}
 import org.apache.spark.sql.HoodieSchemaUtils
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, UnsafeProjection}
 import org.apache.spark.sql.execution.datasources.SparkSchemaTransformUtils
@@ -284,14 +284,13 @@ object ParquetSchemaEvolutionUtils {
    * classpath carries no VariantShreddingProvider (the only implementation ships in spark4-common),
    * so the read fails instead, as it already does on Spark 4.0, Flink and Hive.
    *
-   * The anchor is two-sided: the requested side must be exactly two binary members named
-   * `metadata` and `value` (a struct carrying any further member is a plain user struct, exempt
-   * here as it is in the sibling Hive and Spark 4.0 guards), and the file side must carry
+   * The anchor is two-sided: the requested side must be binary members named `metadata` and
+   * `value`, either or both and nothing else (a struct carrying any further member is a plain user
+   * struct, exempt here as it is in the sibling Hive and Spark 4.0 guards), and the file must carry
    * typed_value at that same path. A column the query does not project is never walked, so a read
    * that does not touch the variant keeps working, as does an unshredded file.
    */
-  def validateNoShreddedVariantStructs(requiredSchema: StructType, footerFileMetaData: FileMetaData): Unit = {
-    val fileParquetSchema = footerFileMetaData.getSchema
+  def validateNoShreddedVariantStructs(requiredSchema: StructType, fileParquetSchema: MessageType): Unit = {
     requiredSchema.fields.foreach { field =>
       if (fileParquetSchema.containsField(field.name)) {
         validateNoShreddedVariantStruct(
@@ -329,17 +328,22 @@ object ParquetSchemaEvolutionUtils {
   }
 
   /**
-   * Whether `struct` is the unshredded variant shape: exactly the two binary members a variant
-   * group carries, in either order. The member count is exact on purpose: a struct holding a third
-   * member is a user struct that happens to carry those two names, including the
-   * {metadata, value, typed_value} shape, whose caller already sees the shredded layout and is
-   * reading it deliberately.
+   * Whether `struct` is the unshredded variant shape: a non-empty set of the binary members a
+   * variant group carries, in any order. A subset counts because Spark's nested schema pruning
+   * narrows the request to the leaves a query touches - `SELECT v.value` reaches this guard as a
+   * one-member struct (see TestNestedSchemaPruningOptimization for the pruning itself), and that
+   * single member is exactly the one a shredded file would return null for.
+   *
+   * Any member outside those two names exempts the struct, so a plain user struct is untouched, as
+   * is the {metadata, value, typed_value} shape whose caller already sees the shredded layout and
+   * is reading it deliberately - though pruning that shape down to `value` alone does land here,
+   * since nothing then distinguishes it from the variant request this guards.
    */
   private def isUnshreddedVariantStruct(struct: StructType): Boolean = {
-    struct.fields.length == 2 &&
-      struct.fields.forall(_.dataType == BinaryType) &&
-      struct.fields.exists(_.name == HoodieSchema.Variant.VARIANT_METADATA_FIELD) &&
-      struct.fields.exists(_.name == HoodieSchema.Variant.VARIANT_VALUE_FIELD)
+    struct.fields.nonEmpty && struct.fields.forall(field =>
+      field.dataType == BinaryType
+        && (field.name == HoodieSchema.Variant.VARIANT_METADATA_FIELD
+        || field.name == HoodieSchema.Variant.VARIANT_VALUE_FIELD))
   }
 
   /**

@@ -25,7 +25,7 @@ import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter
 import org.apache.hudi.exception.HoodieException
 
 import org.apache.parquet.hadoop.metadata.FileMetaData
-import org.apache.parquet.schema.{Type, Types}
+import org.apache.parquet.schema.{MessageType, Type, Types}
 import org.apache.spark.sql.execution.datasources.parquet.VariantParquetTestFixtures.{shreddedVariant, stringKeyMap, threeLevelList, twoLevelList, unshreddedVariant}
 import org.apache.spark.sql.types.{ArrayType, BinaryType, IntegerType, MapType, MetadataBuilder, StringType, StructField, StructType}
 import org.junit.jupiter.api.{Assertions, Test}
@@ -201,6 +201,9 @@ class TestParquetSchemaEvolutionUtils {
   private def footerOf(column: Type): FileMetaData =
     new FileMetaData(Types.buildMessage().addField(column).named("test"), new HashMap[String, String](), "test")
 
+  /** The parquet schema of a file of one top-level column. */
+  private def schemaOf(column: Type): MessageType = Types.buildMessage().addField(column).named("test")
+
   /**
    * The Spark 3.x shape: no VariantType there, so a variant column is declared as
    * struct&lt;value: binary, metadata: binary&gt; (the shape Hive sync also writes). Either member
@@ -214,12 +217,12 @@ class TestParquetSchemaEvolutionUtils {
     ).foreach { case (order, variant) =>
       val requiredSchema = new StructType().add("v", variant)
       val failure = Assertions.assertThrows(classOf[HoodieException], () =>
-        ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(requiredSchema, footerOf(shreddedVariant("v"))))
+        ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(requiredSchema, schemaOf(shreddedVariant("v"))))
       Assertions.assertTrue(
         failure.getMessage.contains("shredded variant") && failure.getMessage.contains("'v'"),
         s"The $order error must name the shredded variant column, got: ${failure.getMessage}")
 
-      ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(requiredSchema, footerOf(unshreddedVariant("v")))
+      ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(requiredSchema, schemaOf(unshreddedVariant("v")))
     }
   }
 
@@ -228,11 +231,11 @@ class TestParquetSchemaEvolutionUtils {
   def testValidateNoShreddedVariantStructsRejectsNestedShreddedVariant(): Unit = {
     Seq(
       ("struct", new StructType().add("s", new StructType().add("inner", variantStruct)),
-        footerOf(Types.optionalGroup().addField(shreddedVariant("inner")).named("s")), "'s.inner'"),
+        schemaOf(Types.optionalGroup().addField(shreddedVariant("inner")).named("s")), "'s.inner'"),
       ("list", new StructType().add("v", ArrayType(variantStruct)),
-        footerOf(threeLevelList("v", shreddedVariant("element"))), "'v.element'"),
+        schemaOf(threeLevelList("v", shreddedVariant("element"))), "'v.element'"),
       ("map", new StructType().add("v", MapType(StringType, variantStruct)),
-        footerOf(stringKeyMap("v", shreddedVariant("value"))), "'v.value'")
+        schemaOf(stringKeyMap("v", shreddedVariant("value"))), "'v.value'")
     ).foreach { case (leg, requiredSchema, footer, path) =>
       val failure = Assertions.assertThrows(classOf[HoodieException], () =>
         ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(requiredSchema, footer))
@@ -254,12 +257,30 @@ class TestParquetSchemaEvolutionUtils {
       new StructType().add("a", BinaryType).add("b", BinaryType)
     ).foreach { requested =>
       ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(
-        new StructType().add("v", requested), footerOf(shreddedVariant("v")))
+        new StructType().add("v", requested), schemaOf(shreddedVariant("v")))
     }
 
     // A column added after the file was written has no footer field to walk.
     ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(
-      new StructType().add("added", variantStruct), footerOf(shreddedVariant("v")))
+      new StructType().add("added", variantStruct), schemaOf(shreddedVariant("v")))
+  }
+
+  /**
+   * Nested schema pruning narrows the request to the leaves a query touches, so `SELECT v.value`
+   * arrives here as a one-member struct. That member is exactly the one a shredded file returns
+   * null for, so a subset has to be rejected too.
+   */
+  @Test
+  def testValidateNoShreddedVariantStructsRejectsPrunedVariantStruct(): Unit = {
+    Seq("value", "metadata").foreach { member =>
+      val requiredSchema = new StructType().add("v", new StructType().add(member, BinaryType))
+      val failure = Assertions.assertThrows(classOf[HoodieException], () =>
+        ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(requiredSchema, schemaOf(shreddedVariant("v"))))
+      Assertions.assertTrue(failure.getMessage.contains("'v'"),
+        s"The pruned-to-$member error must name the column, got: ${failure.getMessage}")
+
+      ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(requiredSchema, schemaOf(unshreddedVariant("v")))
+    }
   }
 
   /** How a variant column is declared on Spark 3.x, which has no VariantType. */

@@ -1090,6 +1090,49 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
     }
   }
 
+  test(s"Test Backward Compatibility: Shredded Variant Table Read Fails Fast in Spark 3.x") {
+    // The compat recipe above (declare the variant column as its two binary members) returns a null
+    // `value` for every shredded row, because parquet matches the request against the file by name
+    // and simply leaves typed_value behind. Spark 3.x cannot reconstruct one - no
+    // VariantShreddingProvider on its classpath - so the read must fail instead, through
+    // ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs. This is the leg that pins the
+    // guard's call sites; the schema walk itself is covered by TestParquetSchemaEvolutionUtils.
+    assume(HoodieSparkUtils.isSpark3, "This test verifies Spark 3.x rejects shredded Variant tables")
+
+    withTempDir { tmpDir =>
+      // The fixture's first file group is shredded and its second is not, so the failure has to come
+      // from the shredded file rather than from the table being uniformly unreadable.
+      HoodieTestUtils.extractZipToDirectory(
+        "variant_backward_compat/variant_shredded_mixed_cow.zip", tmpDir.toPath, getClass)
+      val tablePath = tmpDir.toPath.resolve("variant_shredded_mixed_cow").toString
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  v struct<value: binary, metadata: binary>,
+           |  ts long
+           |) using hudi
+           |location '$tablePath'
+           |tblproperties (
+           |  primaryKey = 'id',
+           |  tableType = 'cow',
+           |  preCombineField = 'ts'
+           |)
+       """.stripMargin)
+
+      Seq("select id, v from %s order by id", "select id, v.value from %s order by id").foreach { query =>
+        val failure = intercept[Exception](spark.sql(query.format(tableName)).collect())
+        // Assert the guard's own message, not just any failure naming the column: the second query
+        // is pruned to a single member, which must land on the guard rather than read past it.
+        val messages = Iterator.iterate[Throwable](failure)(_.getCause).takeWhile(_ != null)
+          .map(t => if (t.getMessage == null) "" else t.getMessage)
+        assert(messages.exists(m => m.contains("shredded variant") && m.contains("'v'")),
+          s"The read must fail with the shredded-variant guard, got: ${failure}")
+      }
+    }
+  }
+
   /**
    * Helper method to verify backward compatibility of reading Spark 4.0 Variant tables in Spark 3.x
    */

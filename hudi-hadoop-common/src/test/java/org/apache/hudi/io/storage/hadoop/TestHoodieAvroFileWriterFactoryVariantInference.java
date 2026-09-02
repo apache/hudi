@@ -54,11 +54,14 @@ import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 /**
  * Pins the no-inferrer degradation of shredding-schema inference in
- * {@link HoodieAvroFileWriterFactory}. Inference is on by default, so this gate is reached by every
- * engine's Avro write path with a stock config; a classpath without a Spark 4.1+ version module
- * (Flink, Java, and Spark 3.x and 4.0 in production) must degrade to the plain unshredded writer.
- * This module's classpath carries no Spark version module, so
- * {@link VariantShreddingRuntime#lookupInferrer()} is empty here, which is what those engines see.
+ * {@link HoodieAvroFileWriterFactory}. Inference is on by default, so the inferrer gate decides what
+ * a Spark 4.0 classpath writes: the shredding provider ships in hudi-spark4-common and is therefore
+ * present there, which carries the factory past its provider gate and up to this one. Flink, Java
+ * and Spark 3.x classpaths carry no provider either and stop one gate earlier, which is why the test
+ * below names a provider class explicitly - it isolates the inferrer gate rather than passing
+ * through whichever gate happens to fire first. This module's classpath carries no Spark version
+ * module, so {@link VariantShreddingRuntime#lookupInferrer()} is empty here, and a write must
+ * degrade to the plain unshredded writer.
  */
 public class TestHoodieAvroFileWriterFactoryVariantInference {
 

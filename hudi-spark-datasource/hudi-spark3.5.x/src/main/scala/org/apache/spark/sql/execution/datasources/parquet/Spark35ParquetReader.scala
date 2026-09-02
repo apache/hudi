@@ -121,7 +121,7 @@ class Spark35ParquetReader(enableVectorizedReader: Boolean,
     // reject a file that shreds it here, before the reader is built, so the read fails naming the
     // column instead of projecting the group by name and returning a null value for every
     // shredded row.
-    ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(requiredSchema, footerFileMetaData)
+    ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(requiredSchema, footerFileMetaData.getSchema)
     val datetimeRebaseSpec = DataSourceUtils.datetimeRebaseSpec(
       footerFileMetaData.getKeyValueMetaData.get,
       datetimeRebaseModeInRead)

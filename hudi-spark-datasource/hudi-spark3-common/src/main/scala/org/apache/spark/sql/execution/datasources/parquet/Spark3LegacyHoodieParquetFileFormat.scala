@@ -253,7 +253,7 @@ abstract class Spark3LegacyHoodieParquetFileFormat(shouldAppendPartitionValues: 
       // shredded row. Gated like the schema-on-read guard: an empty projection (count(*)) reads no
       // column data and must not pay a footer read.
       if (requiredSchema.nonEmpty) {
-        ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(requiredSchema, footerFileMetaData)
+        ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(requiredSchema, footerFileMetaData.getSchema)
       }
       val typeChangeInfos: java.util.Map[Integer, Pair[DataType, DataType]] = if (shouldUseInternalSchema) {
         // Same guard as ParquetSchemaEvolutionUtils.getHadoopConfClone: schema-on-read cannot

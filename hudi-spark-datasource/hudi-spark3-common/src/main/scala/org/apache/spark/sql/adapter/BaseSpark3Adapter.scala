@@ -23,9 +23,11 @@ import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
+import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.common.util.JsonUtils
 import org.apache.hudi.spark.internal.ReflectUtil
 
+import org.apache.parquet.schema.MessageType
 import org.apache.parquet.schema.Type
 import org.apache.parquet.schema.Type.Repetition
 import org.apache.spark.api.java.JavaSparkContext
@@ -42,9 +44,10 @@ import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.trees.Origin
 import org.apache.spark.sql.catalyst.util.DateFormatter
+import org.apache.spark.sql.catalyst.util.RebaseDateTime.RebaseSpec
 import org.apache.spark.sql.execution.{PartitionedFileUtil, QueryExecution, SQLExecution}
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.parquet.HoodieFormatTrait
+import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, HoodieParquetReadSupport, Spark3HoodieParquetReadSupport}
 import org.apache.spark.sql.execution.streaming.MemoryStream
 import org.apache.spark.sql.hudi.{HoodieMemoryStream, SparkAdapter}
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
@@ -220,6 +223,20 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
   ): Type = {
     throw new UnsupportedOperationException("Spark 3.x does not support VariantType")
   }
+  override def createParquetReadSupport(convertTz: Option[java.time.ZoneId],
+                                       enableVectorizedReader: Boolean,
+                                       enableTimestampFieldRepair: Boolean,
+                                       datetimeRebaseSpec: RebaseSpec,
+                                       tableSchemaOpt: HOption[MessageType])
+      : HoodieParquetReadSupport = {
+    // Spark 3.x reads a variant as its unshredded struct shape and cannot reconstruct a shredded
+    // one; the subclass rejects such a file rather than returning null values. Needed on this route
+    // specifically because log blocks are read through the read support rather than through the
+    // per-version parquet reader that guards base files.
+    new Spark3HoodieParquetReadSupport(convertTz, enableVectorizedReader, enableTimestampFieldRepair,
+      datetimeRebaseSpec, getRebaseSpec("LEGACY"), tableSchemaOpt)
+  }
+
   override def isVariantShreddingStruct(structType: StructType): Boolean = {
     // Spark 3.x does not support Variant shredding
     false
