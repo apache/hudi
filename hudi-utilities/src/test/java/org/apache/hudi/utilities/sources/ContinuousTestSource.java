@@ -96,8 +96,10 @@ public class ContinuousTestSource extends ParquetDFSSource {
 
   // Blocks until fail fast interrupts this table, records that it observed the interrupt, then propagates it.
   private void blockUntilInterrupted() {
+    // Nothing counts this down. Only an interrupt can end.
+    CountDownLatch blockIndefinitely = new CountDownLatch(1);
     try {
-      new CountDownLatch(1).await();
+      blockIndefinitely.await();
     } catch (InterruptedException e) {
       blockedTableInterrupted.countDown();
       Thread.currentThread().interrupt();
