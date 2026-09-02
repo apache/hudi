@@ -147,7 +147,7 @@ public class TimeBoundedRLIBootstrapOperator
 
     long startTime = System.currentTimeMillis();
     for (String partitionPath : partitionsInWindow) {
-      preLoadPartition(partitionPath, partitionedFileGroups.get(partitionPath), taskID, parallelism);
+      preLoadPartition(partitionPath, partitionedFileGroups.get(partitionPath), taskID);
     }
     long costMs = System.currentTimeMillis() - startTime;
     log.info("Finish preloading partitioned RLI records, total records: {}, cost: {} ms, taskId = {}", loadedCnt, costMs, taskID);
@@ -159,7 +159,7 @@ public class TimeBoundedRLIBootstrapOperator
     closeMetadataTable();
   }
 
-  private void preLoadPartition(String partitionPath, List<FileSlice> fileSlices, int taskID, int parallelism) {
+  private void preLoadPartition(String partitionPath, List<FileSlice> fileSlices, int taskID) {
     List<FileSlice> filteredFileSlices = new ArrayList<>();
     for (int i = 0; i < fileSlices.size(); i++) {
       if (shouldLoadBucket(partitionPath, fileSlices.size(), i, taskID)) {
