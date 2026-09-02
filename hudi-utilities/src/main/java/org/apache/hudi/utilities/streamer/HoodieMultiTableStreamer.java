@@ -89,6 +89,8 @@ public class HoodieMultiTableStreamer {
   private final Set<String> failedTables;
   @Getter(AccessLevel.NONE)
   private final boolean failFastOnContinuousMode;
+  @Getter(AccessLevel.NONE)
+  private final boolean continuousMode;
 
   public HoodieMultiTableStreamer(Config config, JavaSparkContext jssc) throws IOException {
     this.tableExecutionContexts = new ArrayList<>();
@@ -97,6 +99,7 @@ public class HoodieMultiTableStreamer {
     this.failedTables = ConcurrentHashMap.newKeySet();
     this.jssc = jssc;
     this.failFastOnContinuousMode = config.failFastOnContinuousMode;
+    this.continuousMode = config.continuousMode;
     String commonPropsFile = config.propsFilePath;
     String configFolder = config.configFolder;
     ValidationUtils.checkArgument(!config.filterDupes || config.operation != WriteOperationType.UPSERT,
@@ -484,8 +487,7 @@ public class HoodieMultiTableStreamer {
    * Otherwise the tables are synced sequentially, one after another.
    */
   public void sync() {
-    boolean isContinuous = !tableExecutionContexts.isEmpty() && tableExecutionContexts.get(0).getConfig().continuousMode;
-    if (isContinuous) {
+    if (continuousMode) {
       syncContinuously();
     } else {
       syncSequentially();
@@ -544,7 +546,12 @@ public class HoodieMultiTableStreamer {
                 return;
               }
               streamer.sync();
-              successTables.add(Helpers.getTableWithDatabase(context));
+              // A streamer registered just before fail fast tripped can reach here without ever ingesting.
+              // shutdown() call will be a no-op because its ingestion service hadn't started yet.
+              // Don't count that as a success.
+              if (!shutdownRequested.get()) {
+                successTables.add(Helpers.getTableWithDatabase(context));
+              }
             } catch (Exception e) {
               log.error("error while running MultiTableDeltaStreamer for table: {}", context.getTableName(), e);
               failedTables.add(Helpers.getTableWithDatabase(context));

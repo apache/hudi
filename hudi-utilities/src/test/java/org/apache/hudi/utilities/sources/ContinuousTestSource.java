@@ -74,9 +74,9 @@ public class ContinuousTestSource extends ParquetDFSSource {
     blockedTableInterrupted = new CountDownLatch(1);
   }
 
-  // Waits until a blocking table has observed the fail-fast interrupt, or the timeout elapses.
-  public static boolean awaitBlockedTableInterrupted(long timeoutSeconds) throws InterruptedException {
-    return blockedTableInterrupted.await(timeoutSeconds, TimeUnit.SECONDS);
+  // Whether a blocking table has already observed the fail-fast interrupt.
+  public static boolean wasBlockedTableInterrupted() {
+    return blockedTableInterrupted.getCount() == 0;
   }
 
   @Override

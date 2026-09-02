@@ -268,7 +268,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
   }
 
   @Test
-  public void testFailFastOnContinuousThrowsWhenATableFails() throws IOException, InterruptedException {
+  public void testFailFastOnContinuousThrowsWhenATableFails() throws IOException {
     HoodieMultiTableDeltaStreamer streamer = setupContinuousStreamer("parquetFailFast", true);
     List<TableExecutionContext> contexts = streamer.getTableExecutionContexts();
     // Table 1 blocks after the barrier, so only fail fast interrupting it can end its sync. Table 2 fails after the
@@ -279,7 +279,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     assertThrows(HoodieException.class, streamer::sync);
     assertFalse(streamer.getFailedTables().isEmpty());
     // sync() returns only after the blocked sibling was interrupted, so the latch must already be counted down.
-    assertTrue(ContinuousTestSource.awaitBlockedTableInterrupted(0));
+    assertTrue(ContinuousTestSource.wasBlockedTableInterrupted());
   }
 
   @Test
