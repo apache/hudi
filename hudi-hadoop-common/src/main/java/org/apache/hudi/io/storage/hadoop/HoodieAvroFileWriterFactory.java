@@ -38,7 +38,6 @@ import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.core.io.HoodieParquetConfigInjector;
 import org.apache.hudi.core.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.core.io.storage.HoodieFileWriter;
 import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
@@ -112,10 +111,8 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
       TaskContextSupplier taskContextSupplier) throws IOException {
     MetaFieldsMode metaFieldsMode = MetaFieldsMode.resolve(config);
 
-    StorageConfiguration storageConf =
-        ParquetUtils.applyNativeLogZstdCompressionLevel(path, storage.getConf(), config);
     Pair<StorageConfiguration, HoodieConfig> injectedConfigs =
-        HoodieParquetConfigInjector.applyConfigInjector(path, storageConf, config);
+        ParquetUtils.prepareParquetWriterConfigs(path, storage.getConf(), config);
     StorageConfiguration storageConfiguration = injectedConfigs.getLeft();
     HoodieConfig hoodieConfig = injectedConfigs.getRight();
 

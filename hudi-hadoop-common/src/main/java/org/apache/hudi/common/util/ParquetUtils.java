@@ -31,8 +31,10 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.io.HoodieParquetConfigInjector;
 import org.apache.hudi.core.io.storage.HoodieFileWriter;
 import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -90,6 +92,7 @@ import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
 import static org.apache.parquet.format.converter.ParquetMetadataConverter.NO_FILTER;
 import static org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS;
+import static org.apache.parquet.hadoop.codec.ZstandardCodec.PARQUET_COMPRESS_ZSTD_LEVEL;
 
 /**
  * Utility functions involving with parquet.
@@ -97,7 +100,16 @@ import static org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_
 @Slf4j
 public class ParquetUtils extends FileFormatUtils {
 
-  private static final String PARQUET_COMPRESSION_CODEC_ZSTD_LEVEL = "parquet.compression.codec.zstd.level";
+  /**
+   * Prepares the storage and Hudi configurations used by a Parquet writer. Built-in writer configuration
+   * overrides are applied first so that the user-provided config injector remains the highest-priority extension point.
+   */
+  public static Pair<StorageConfiguration, HoodieConfig> prepareParquetWriterConfigs(
+      StoragePath path, StorageConfiguration storageConf, HoodieConfig hoodieConfig) {
+    StorageConfiguration nativeLogStorageConf =
+        applyNativeLogZstdCompressionLevel(path, storageConf, hoodieConfig);
+    return HoodieParquetConfigInjector.applyConfigInjector(path, nativeLogStorageConf, hoodieConfig);
+  }
 
   /**
    * Returns a storage configuration with the native Parquet log ZSTD compression level applied.
@@ -112,14 +124,23 @@ public class ParquetUtils extends FileFormatUtils {
 
     int nativeLogZstdLevel =
         hoodieConfig.getIntOrDefault(HoodieStorageConfig.LOGFILE_PARQUET_COMPRESSION_CODEC_ZSTD_LEVEL);
-    Option<String> globalZstdLevel = storageConf.getString(PARQUET_COMPRESSION_CODEC_ZSTD_LEVEL);
-    if (globalZstdLevel.isPresent() && nativeLogZstdLevel == Integer.parseInt(globalZstdLevel.get())) {
-      return storageConf;
+    Option<String> globalZstdLevel = storageConf.getString(PARQUET_COMPRESS_ZSTD_LEVEL);
+    if (globalZstdLevel.isPresent()) {
+      int parsedGlobalZstdLevel;
+      try {
+        parsedGlobalZstdLevel = Integer.parseInt(globalZstdLevel.get());
+      } catch (NumberFormatException e) {
+        throw new HoodieException("Invalid value for " + PARQUET_COMPRESS_ZSTD_LEVEL + ": "
+            + globalZstdLevel.get() + ". Expected an integer.", e);
+      }
+      if (nativeLogZstdLevel == parsedGlobalZstdLevel) {
+        return storageConf;
+      }
     }
 
     StorageConfiguration<T> nativeLogStorageConf = storageConf.newInstance();
     nativeLogStorageConf.set(
-        PARQUET_COMPRESSION_CODEC_ZSTD_LEVEL, String.valueOf(nativeLogZstdLevel));
+        PARQUET_COMPRESS_ZSTD_LEVEL, String.valueOf(nativeLogZstdLevel));
     return nativeLogStorageConf;
   }
 

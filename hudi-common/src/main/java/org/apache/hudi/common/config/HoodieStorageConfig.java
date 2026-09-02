@@ -218,9 +218,9 @@ public class HoodieStorageConfig extends HoodieConfig {
       .defaultValue("gzip")
       .withDocumentation("Compression Codec for parquet files");
 
-  public static final ConfigProperty<String> LOGFILE_PARQUET_COMPRESSION_CODEC_ZSTD_LEVEL = ConfigProperty
+  public static final ConfigProperty<Integer> LOGFILE_PARQUET_COMPRESSION_CODEC_ZSTD_LEVEL = ConfigProperty
       .key("hoodie.logfile.parquet.compression.codec.zstd.level")
-      .defaultValue("1")
+      .defaultValue(1)
       .markAdvanced()
       .sinceVersion("1.3.0")
       .withDocumentation("Zstandard compression level for native Parquet log files. This setting overrides "

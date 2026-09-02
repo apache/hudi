@@ -30,7 +30,6 @@ import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.core.io.HoodieParquetConfigInjector;
 import org.apache.hudi.core.io.storage.HoodieFileWriter;
 import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.storage.HoodieStorage;
@@ -99,10 +98,8 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
     boolean populateMetaFields = MetaFieldsMode.resolve(config).toLegacyPopulateMetaFields();
     boolean withOperation = config.getBooleanOrDefault(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD);
 
-    StorageConfiguration storageConf =
-        ParquetUtils.applyNativeLogZstdCompressionLevel(storagePath, storage.getConf(), config);
     Pair<StorageConfiguration, HoodieConfig> injectedConfigs =
-        HoodieParquetConfigInjector.applyConfigInjector(storagePath, storageConf, config);
+        ParquetUtils.prepareParquetWriterConfigs(storagePath, storage.getConf(), config);
     StorageConfiguration storageConfiguration = injectedConfigs.getLeft();
     HoodieConfig hoodieConfig = injectedConfigs.getRight();
 
