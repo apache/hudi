@@ -39,7 +39,7 @@ import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SaveMode, SQLContext}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.functions.{col, concat, hash, lit, lpad, pmod, udf, when}
+import org.apache.spark.sql.functions.{col, concat, hash, lit, udf, when}
 import org.apache.spark.sql.internal.SQLConf
 
 import scala.collection.JavaConverters._
@@ -69,8 +69,8 @@ object HoodieDataFrameWriter extends Logging {
 
   private val TAGGED_FILE_ID_COL = "_hoodie_tagged_file_id"
   private val ROUTING_BUCKET_COL = "_hoodie_routing_bucket"
-  private val UPDATE_BUCKET_PREFIX = "u:"
-  private val INSERT_BUCKET_PREFIX = "i:"
+  val UPDATE_BUCKET_PREFIX = "u:"
+  val INSERT_BUCKET_PREFIX = "i:"
 
   def write(sqlContext: SQLContext,
             mode: SaveMode,
@@ -115,11 +115,13 @@ object HoodieDataFrameWriter extends Logging {
       // Stage 3: index tagging as a join against the latest base-file meta columns.
       val tagged = tagRecords(spark, prepared, operation, table)
 
-      // Stage 4: routing on a bucket column; updates pin to their file group, inserts bucket
-      // per partition path.
+      // Stage 4: routing on a bucket column; updates pin to their file group, inserts hash
+      // across small-file padding slots and new-file buckets planned from table metadata.
+      val insertPlan = MetadataSizingProfiler.plan(table, writeConfig,
+        params.get(INSERT_BUCKETS_PER_PARTITION).map(_.toInt).getOrElse(1))
       val numWriteTasks = params.get(WRITE_TASKS).map(_.toInt)
         .getOrElse(spark.sparkContext.defaultParallelism)
-      val routed = routeRecords(tagged, params, numWriteTasks)
+      val routed = routeRecords(tagged, insertPlan, numWriteTasks)
 
       val actionType = CommitUtils.getCommitActionType(operation, HoodieTableType.COPY_ON_WRITE)
       table.getActiveTimeline.transitionRequestedToInflight(
@@ -284,21 +286,32 @@ object HoodieDataFrameWriter extends Logging {
   }
 
   /**
-   * Adds the routing-bucket column (updates keyed by their file group, inserts by partition path
-   * and a coarse key-hash bucket) and co-locates each bucket through one shuffle, sorted within
-   * partitions so a write task sees each bucket as one contiguous run.
+   * Adds the routing-bucket column and co-locates each bucket through one shuffle, sorted within
+   * partitions so a write task sees each bucket as one contiguous run. Tagged updates pin to
+   * their file group; inserts hash across their partition's slots, where the leading slots pad
+   * existing small file groups (routed as update buckets, so they merge) and the remaining
+   * slots open new file groups.
    */
   private def routeRecords(tagged: Dataset[Row],
-                           params: Map[String, String],
+                           insertPlan: InsertRoutingPlan,
                            numWriteTasks: Int): Dataset[Row] = {
-    val insertBuckets = params.get(INSERT_BUCKETS_PER_PARTITION).map(_.toInt).getOrElse(1)
+    val smallFileSlots = insertPlan.smallFileSlotsByPartition
+    val newFileBuckets = insertPlan.newFileBuckets
+    val insertBucket = udf { (partitionPath: String, keyHash: Int) =>
+      val padding = smallFileSlots.getOrElse(partitionPath, Array.empty[String])
+      val totalSlots = padding.length + newFileBuckets
+      val slot = ((keyHash % totalSlots) + totalSlots) % totalSlots
+      if (slot < padding.length) {
+        padding(slot)
+      } else {
+        INSERT_BUCKET_PREFIX + partitionPath + ":" + "%010d".format(slot - padding.length)
+      }
+    }
     val bucketCol = when(col(TAGGED_FILE_ID_COL).isNotNull,
         concat(lit(UPDATE_BUCKET_PREFIX), col(TAGGED_FILE_ID_COL)))
-      .otherwise(concat(
-        lit(INSERT_BUCKET_PREFIX),
-        col(HoodieRecord.PARTITION_PATH_METADATA_FIELD), lit(":"),
-        lpad(pmod(hash(col(HoodieRecord.RECORD_KEY_METADATA_FIELD)), lit(insertBuckets))
-          .cast("string"), 10, "0")))
+      .otherwise(insertBucket(
+        col(HoodieRecord.PARTITION_PATH_METADATA_FIELD),
+        hash(col(HoodieRecord.RECORD_KEY_METADATA_FIELD))))
     tagged.withColumn(ROUTING_BUCKET_COL, bucketCol)
       .repartition(numWriteTasks, col(ROUTING_BUCKET_COL))
       .sortWithinPartitions(col(ROUTING_BUCKET_COL))

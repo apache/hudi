@@ -171,6 +171,23 @@ class TestHoodieDataFrameWriter {
   }
 
   @Test
+  def testInsertsPadExistingSmallFiles(): Unit = {
+    val path = tempDir.resolve("test_table_padding").toString
+
+    writeHudi(Seq(("s1", "p1", 1L, "x1"), ("s2", "p1", 1L, "x2")), "insert", path)
+    writeHudi(Seq(("s3", "p1", 1L, "x3"), ("s4", "p1", 1L, "x4")), "insert", path)
+
+    val snapshot = spark.read.format("hudi").load(path)
+    Assertions.assertEquals(4, snapshot.count())
+    // The second insert pads the small file group from the first commit instead of opening a
+    // new one.
+    val fileIds = snapshot.select("_hoodie_file_name").collect()
+      .map(r => org.apache.hudi.common.fs.FSUtils.getFileId(r.getString(0))).distinct
+    Assertions.assertEquals(1, fileIds.length)
+    Assertions.assertEquals(2, completedCommits(path))
+  }
+
+  @Test
   def testUpsertIntoNewTableBehavesAsInsert(): Unit = {
     val path = tempDir.resolve("test_table_upsert_first").toString
     writeHudi(Seq(("a1", "p1", 1L, "x1"), ("a2", "p2", 1L, "x2")), "upsert", path)
