@@ -44,6 +44,11 @@ private case class LegacyTestRow(id: String,
                                  nested: LegacyNested,
                                  tags: Seq[Int])
 
+/** Flat, all-atomic-type row shape, used where a nested schema (see [[LegacyTestRow]]) is not
+ * needed. Must stay top-level: a case class local to a method has no TypeTag, and
+ * `spark.createDataFrame` needs one. */
+private case class FlatTestRow(id: String, name: String, partition: String)
+
 /**
  * Functional tests for the legacy (pre-file-group-reader) Spark read path:
  * [[BaseFileOnlyRelation]], [[IncrementalRelationV1]], [[IncrementalRelationV2]] and the
@@ -305,7 +310,6 @@ class TestLegacyParquetReadPath extends HoodieSparkClientTestBase with ScalaAsse
   def testBroadcastJoinHonorsPlanTimeBatchingDecision(): Unit = {
     // Regression test: broadcast joins used to crash with a ColumnarBatch/InternalRow cast error
     // once whole-stage codegen was off, because the reader ignored the plan's OPTION_RETURNING_BATCH.
-    case class FlatTestRow(id: String, name: String, partition: String)
     spark.createDataFrame(Seq(FlatTestRow("1", "a", "p0"), FlatTestRow("2", "b", "p0")))
       .write.format("hudi")
       .options(Map(
