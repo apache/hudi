@@ -20,6 +20,7 @@ package org.apache.spark.sql.execution.datasources.parquet
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.schema.internal.{InternalSchema, Type => InternalType}
 import org.apache.hudi.common.schema.internal.Types
 import org.apache.hudi.common.schema.internal.action.InternalSchemaMerger
@@ -36,13 +37,14 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.parquet.hadoop.metadata.FileMetaData
-import org.apache.parquet.schema.{Type => ParquetType}
+import org.apache.parquet.schema.{GroupType, MessageType, Type => ParquetType}
+import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.spark.sql.HoodieSchemaUtils
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, UnsafeProjection}
 import org.apache.spark.sql.execution.datasources.SparkSchemaTransformUtils
 import org.apache.spark.sql.execution.datasources.parquet.ParquetSchemaEvolutionUtils.pruneInternalSchema
 import org.apache.spark.sql.sources._
-import org.apache.spark.sql.types.{ArrayType, AtomicType, DataType, MapType, StructType}
+import org.apache.spark.sql.types.{ArrayType, AtomicType, BinaryType, DataType, MapType, StructType}
 
 import java.time.ZoneId
 
@@ -269,6 +271,103 @@ object ParquetSchemaEvolutionUtils {
           field.`type`(), fileParquetSchema.getType(fileParquetSchema.getFieldIndex(field.name())), field.name())
       }
     }
+  }
+
+  /**
+   * Fails the read when a column requested as the unshredded variant struct sits over a parquet
+   * group that carries typed_value. This is the shape Spark 3.x readers use for a variant column:
+   * Spark 3.x has no VariantType, so the table's own schema does not convert (see
+   * BaseSpark3Adapter) and the documented way to read such a table is to declare the column as
+   * struct&lt;value: binary, metadata: binary&gt; - the same shape Hive sync writes to the
+   * metastore. Parquet reconciles requested against file fields by name, so without this guard a
+   * shredded group's typed_value is simply not projected and the rows come back with a null
+   * `value`: the payload is dropped silently. Reconstruction is not an option on Spark 3.x, whose
+   * classpath carries no VariantShreddingProvider (the only implementation ships in spark4-common),
+   * so the read fails instead, as it already does on Spark 4.0, Flink and Hive.
+   *
+   * The anchor is two-sided: the requested side must be binary members named `metadata` and
+   * `value`, either or both and nothing else (a struct carrying any further member is a plain user
+   * struct, exempt here as it is in the sibling Hive and Spark 4.0 guards), and the file must carry
+   * typed_value at that same path. A column the query does not project is never walked, so a read
+   * that does not touch the variant keeps working, as does an unshredded file.
+   */
+  def validateNoShreddedVariantStructs(requiredSchema: StructType, fileParquetSchema: MessageType): Unit = {
+    requiredSchema.fields.foreach { field =>
+      parquetFieldIgnoreCase(fileParquetSchema, field.name)
+        .foreach(validateNoShreddedVariantStruct(field.dataType, _, field.name))
+    }
+  }
+
+  /**
+   * The file field a requested name resolves to. Case-insensitive on purpose: the Spark 3.x
+   * readers this guards force spark.sql.caseSensitive=false (SparkParquetReaderBase.read), so a
+   * column declared `V` or a member declared `Value` still lands on the file's lower-case group,
+   * and a guard that only matched exactly would let that request straight through to the
+   * null-value read.
+   */
+  private def parquetFieldIgnoreCase(group: GroupType, name: String): Option[ParquetType] =
+    group.getFields.find(_.getName.equalsIgnoreCase(name))
+
+  private def validateNoShreddedVariantStruct(dataType: DataType, parquetType: ParquetType, path: String): Unit = {
+    if (!parquetType.isPrimitive) {
+      val group = parquetType.asGroupType()
+      dataType match {
+        case struct: StructType if isUnshreddedVariantStruct(struct) =>
+          if (isShreddedVariantGroup(group)) {
+            throw new HoodieException(String.format(
+              "Column '%s' is a shredded variant (typed_value present) requested as its unshredded "
+                + "struct shape; Spark 3.x cannot reconstruct shredded variants, and reading it "
+                + "here would return a null value for every shredded row. Read the table with "
+                + "Spark 4.1+, or rewrite it unshredded (e.g. cluster with "
+                + "hoodie.parquet.variant.write.shredding.enabled=false).", path))
+          }
+        case struct: StructType =>
+          struct.fields.foreach { field =>
+            parquetFieldIgnoreCase(group, field.name)
+              .foreach(validateNoShreddedVariantStruct(field.dataType, _, concatPath(path, field.name)))
+          }
+        case array: ArrayType =>
+          parquetListElement(group).foreach(validateNoShreddedVariantStruct(array.elementType, _, concatPath(path, "element")))
+        case map: MapType =>
+          parquetMapValue(group).foreach(validateNoShreddedVariantStruct(map.valueType, _, concatPath(path, "value")))
+        case _ =>
+      }
+    }
+  }
+
+  /**
+   * Whether a file group is a shredded variant: typed_value next to a binary metadata, the two
+   * members every shredded variant group carries (value is optional under the spec). The same
+   * file-side anchor as the sibling Hive and Spark 4.0 guards, and needed for the same reason the
+   * requested side is exact: once pruning has narrowed a request to a lone `value`, only the
+   * file can tell a variant apart from a user struct that merely holds a typed_value member.
+   */
+  private def isShreddedVariantGroup(group: GroupType): Boolean = {
+    group.containsField(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD) &&
+      group.containsField(HoodieSchema.Variant.VARIANT_METADATA_FIELD) && {
+        val metadata = group.getType(HoodieSchema.Variant.VARIANT_METADATA_FIELD)
+        metadata.isPrimitive && metadata.asPrimitiveType().getPrimitiveTypeName == PrimitiveTypeName.BINARY
+      }
+  }
+
+  /**
+   * Whether `struct` is the unshredded variant shape: a non-empty set of the binary members a
+   * variant group carries, in any order. A subset counts because Spark's nested schema pruning
+   * narrows the request to the leaves a query touches - `SELECT v.value` reaches this guard as a
+   * one-member struct (see TestNestedSchemaPruningOptimization for the pruning itself), and that
+   * single member is exactly the one a shredded file would return null for.
+   *
+   * Any member outside those two names exempts the struct, so a plain user struct is untouched, as
+   * is the {metadata, value, typed_value} shape whose caller already sees the shredded layout and
+   * is reading it deliberately - though pruning that shape down to `value` alone does land here,
+   * since nothing then distinguishes it from the variant request this guards.
+   */
+  private def isUnshreddedVariantStruct(struct: StructType): Boolean = {
+    // Names compared case-insensitively for the same reason parquetFieldIgnoreCase resolves them so.
+    struct.fields.nonEmpty && struct.fields.forall(field =>
+      field.dataType == BinaryType
+        && (field.name.equalsIgnoreCase(HoodieSchema.Variant.VARIANT_METADATA_FIELD)
+        || field.name.equalsIgnoreCase(HoodieSchema.Variant.VARIANT_VALUE_FIELD)))
   }
 
   /**
