@@ -416,6 +416,50 @@ class TestHoodieDataFrameWriter {
   }
 
   @Test
+  def testMergeOnReadInsertAndUpserts(): Unit = {
+    val path = tempDir.resolve("test_table_mor").toString
+    val mor = Map("hoodie.datasource.write.table.type" -> "MERGE_ON_READ")
+
+    writeHudi(Seq(("m1", "p1", 1L, "one"), ("m2", "p1", 1L, "two"), ("m3", "p2", 1L, "three")),
+      "insert", path, mor)
+    writeHudi(Seq(("m2", "p1", 5L, "two-updated"), ("m4", "p2", 2L, "four")), "upsert", path, mor)
+    writeHudi(Seq(("m2", "p1", 9L, "two-final")), "upsert", path, mor)
+
+    val result = readAsMap(path)
+    Assertions.assertEquals(4, result.size)
+    Assertions.assertEquals((1L, "one", "m1"), result("m1"))
+    Assertions.assertEquals((9L, "two-final", "m2"), result("m2"))
+    Assertions.assertEquals((1L, "three", "m3"), result("m3"))
+    Assertions.assertEquals((2L, "four", "m4"), result("m4"))
+
+    val metaClient = HoodieTableMetaClient.builder()
+      .setConf(HadoopFSUtils.getStorageConfWithCopy(spark.sparkContext.hadoopConfiguration))
+      .setBasePath(path)
+      .build()
+    Assertions.assertEquals("MERGE_ON_READ", metaClient.getTableConfig.getTableType.name())
+    Assertions.assertEquals(3,
+      metaClient.getActiveTimeline.getDeltaCommitTimeline.filterCompletedInstants().countInstants())
+
+    val keys = spark.read.format("hudi").load(path).select("_hoodie_record_key").collect().map(_.getString(0))
+    Assertions.assertEquals(keys.length, keys.distinct.length)
+  }
+
+  @Test
+  def testMergeOnReadInsertsPadSmallBaseFiles(): Unit = {
+    val path = tempDir.resolve("test_table_mor_padding").toString
+    val mor = Map("hoodie.datasource.write.table.type" -> "MERGE_ON_READ")
+
+    writeHudi(Seq(("mp1", "p1", 1L, "a"), ("mp2", "p1", 1L, "b")), "insert", path, mor)
+    writeHudi(Seq(("mp3", "p1", 1L, "c"), ("mp4", "p1", 1L, "d")), "insert", path, mor)
+
+    val snapshot = spark.read.format("hudi").load(path)
+    Assertions.assertEquals(4, snapshot.count())
+    val fileIds = snapshot.select("_hoodie_file_name").collect()
+      .map(r => org.apache.hudi.common.fs.FSUtils.getFileId(r.getString(0))).distinct
+    Assertions.assertEquals(1, fileIds.length)
+  }
+
+  @Test
   def testUpsertIntoNewTableBehavesAsInsert(): Unit = {
     val path = tempDir.resolve("test_table_upsert_first").toString
     writeHudi(Seq(("a1", "p1", 1L, "x1"), ("a2", "p2", 1L, "x2")), "upsert", path)

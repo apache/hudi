@@ -88,6 +88,7 @@ object HoodieDataFrameWriter extends Logging {
   val ROW_OP_DELETE = "D"
   private val DELETE_MARKER_COL = "_hoodie_is_deleted"
   val UPDATE_BUCKET_PREFIX = "u:"
+  val MERGE_BUCKET_PREFIX = "s:"
   val INSERT_BUCKET_PREFIX = "i:"
 
   def write(sqlContext: SQLContext,
@@ -134,12 +135,15 @@ object HoodieDataFrameWriter extends Logging {
 
       // Stage 4: routing on a bucket column; updates pin to their file group, inserts hash
       // across small-file padding slots and new-file buckets planned from table metadata.
+      val mergeOnRead = table.getMetaClient.getTableConfig.getTableType == HoodieTableType.MERGE_ON_READ
       val insertPlan = MetadataSizingProfiler.plan(table, writeConfig,
-        params.get(INSERT_BUCKETS_PER_PARTITION).map(_.toInt).getOrElse(1))
+        params.get(INSERT_BUCKETS_PER_PARTITION).map(_.toInt).getOrElse(1),
+        mergeOnRead,
+        if (mergeOnRead) MERGE_BUCKET_PREFIX else UPDATE_BUCKET_PREFIX)
       val withBucket = withRoutingBucket(tagged, insertPlan)
       val bucketOrdinal = withBucket.schema.fieldIndex(ROUTING_BUCKET_COL)
 
-      val actionType = CommitUtils.getCommitActionType(operation, HoodieTableType.COPY_ON_WRITE)
+      val actionType = CommitUtils.getCommitActionType(operation, table.getMetaClient.getTableConfig.getTableType)
       table.getActiveTimeline.transitionRequestedToInflight(
         table.getMetaClient.createNewInstant(HoodieInstant.State.REQUESTED, actionType, instantTime),
         HOption.empty())
@@ -153,7 +157,7 @@ object HoodieDataFrameWriter extends Logging {
       val task = new DataFrameWriteTask(
         writeConfig, sparkTable, readerContextFactory, instantTime, withBucket.schema,
         writeSchemaLength, bucketOrdinal, withBucket.schema.fieldIndex(ROW_OP_COL),
-        UPDATE_BUCKET_PREFIX)
+        mergeOnRead)
 
       val profilerMode = params.getOrElse(PROFILER, PROFILER_METADATA)
       val (statusRdd, extraMetadata) = if (profilerMode == PROFILER_SHUFFLE_STATS) {
@@ -167,7 +171,7 @@ object HoodieDataFrameWriter extends Logging {
         val shuffle = HoodieRoutingShuffle.execute(pairs,
           params.getOrElse(SHUFFLE_UPDATE_REDUCERS, "50").toInt,
           params.getOrElse(SHUFFLE_INSERT_REDUCERS, "50").toInt,
-          UPDATE_BUCKET_PREFIX, binSize)
+          INSERT_BUCKET_PREFIX, binSize)
         (HoodieSparkUtils.injectSQLConf(
           shuffle.rows.mapPartitions(iter => task.execute(iter.map(_._2))), SQLConf.get),
           Map(SHUFFLE_BYTES_METADATA_KEY -> shuffle.totalShuffleBytes.toString))
@@ -213,7 +217,8 @@ object HoodieDataFrameWriter extends Logging {
       val tableName = params.getOrElse(HoodieWriteConfig.TBL_NAME.key(),
         throw new HoodieException(s"'${HoodieWriteConfig.TBL_NAME.key()}' must be set to create a table"))
       val builder = HoodieTableMetaClient.newTableBuilder()
-        .setTableType(HoodieTableType.COPY_ON_WRITE)
+        .setTableType(params.getOrElse("hoodie.datasource.write.table.type",
+          HoodieTableType.COPY_ON_WRITE.name()))
         .setTableName(tableName)
         .setRecordKeyFields(params.getOrElse(RECORD_KEY_FIELD, null))
         .setPartitionFields(params.getOrElse(PARTITION_PATH_FIELD, null))
@@ -242,10 +247,6 @@ object HoodieDataFrameWriter extends Logging {
     val indexType = writeConfig.getIndexType
     if (!SUPPORTED_INDEX_TYPES.contains(indexType)) {
       throw new HoodieException(s"Index type $indexType is not supported by the DataFrame write path yet")
-    }
-    if (tableConfig.getTableType != HoodieTableType.COPY_ON_WRITE) {
-      throw new HoodieException("The DataFrame write path only supports COPY_ON_WRITE tables yet, table type: "
-        + tableConfig.getTableType)
     }
     if (!tableConfig.populateMetaFields()) {
       throw new HoodieException("The DataFrame write path requires populated meta fields")
@@ -305,6 +306,12 @@ object HoodieDataFrameWriter extends Logging {
     if (!props.containsKey(HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY)) {
       props.setProperty(HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY,
         "org.apache.hudi.DefaultSparkRecordMerger")
+    }
+    // Avro log blocks cannot be read back as engine-native records; parquet blocks keep MOR
+    // logs on InternalRow when the write version predates native logs.
+    if (tableConfig.getTableType == HoodieTableType.MERGE_ON_READ
+      && !props.containsKey("hoodie.logfile.data.block.format")) {
+      props.setProperty("hoodie.logfile.data.block.format", "parquet")
     }
     HoodieWriteConfig.newBuilder()
       .withPath(basePath)

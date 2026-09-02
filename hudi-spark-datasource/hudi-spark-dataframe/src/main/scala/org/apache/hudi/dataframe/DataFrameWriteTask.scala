@@ -19,9 +19,9 @@ package org.apache.hudi.dataframe
 
 import org.apache.hudi.client.WriteStatus
 import org.apache.hudi.common.engine.ReaderContextFactory
-import org.apache.hudi.common.model.{HoodieKey, HoodieRecord, HoodieSparkRecord, WriteOperationType}
+import org.apache.hudi.common.model.{HoodieKey, HoodieRecord, HoodieRecordLocation, HoodieSparkRecord, WriteOperationType}
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.io.{HoodieMergeHandleFactory, HoodieWriteMergeHandle, MergeContext, MergeUtils}
+import org.apache.hudi.io.{AppendHandleFactory, HoodieMergeHandleFactory, HoodieWriteMergeHandle, MergeContext, MergeUtils}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.table.HoodieTable
 import org.apache.hudi.table.action.commit.BulkInsertDataInternalWriterHelper
@@ -50,7 +50,7 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
                          writeSchemaLength: Int,
                          bucketOrdinal: Int,
                          rowOpOrdinal: Int,
-                         updateBucketPrefix: String) extends Serializable {
+                         mergeOnRead: Boolean) extends Serializable {
 
   def execute(iter: Iterator[InternalRow]): Iterator[WriteStatus] = {
     if (!iter.hasNext) {
@@ -78,8 +78,14 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
 
     while (buffered.hasNext) {
       val bucket = buffered.head.getString(bucketOrdinal)
-      if (bucket.startsWith(updateBucketPrefix)) {
+      if (bucket.startsWith(HoodieDataFrameWriter.MERGE_BUCKET_PREFIX)) {
         statuses ++= mergeBucket(buffered, bucket, dataProjection, dataSchema, taskContextSupplier)
+      } else if (bucket.startsWith(HoodieDataFrameWriter.UPDATE_BUCKET_PREFIX)) {
+        if (mergeOnRead) {
+          statuses ++= appendBucket(buffered, bucket, dataProjection, dataSchema, taskContextSupplier)
+        } else {
+          statuses ++= mergeBucket(buffered, bucket, dataProjection, dataSchema, taskContextSupplier)
+        }
       } else {
         if (insertHelper == null) {
           val partitionId = taskContextSupplier.getPartitionIdSupplier.get
@@ -102,39 +108,46 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
    * Merges one contiguous run of update rows (all tagged to the same file group) into that file
    * group by streaming engine-native records into the merge handle.
    */
+  private def bucketRecordIterator(buffered: BufferedIterator[InternalRow],
+                                   bucket: String,
+                                   dataProjection: UnsafeProjection,
+                                   dataSchema: StructType,
+                                   location: Option[HoodieRecordLocation]): java.util.Iterator[HoodieRecord[InternalRow]] = {
+    new java.util.Iterator[HoodieRecord[InternalRow]] {
+      override def hasNext: Boolean =
+        buffered.hasNext && buffered.head.getString(bucketOrdinal) == bucket
+
+      override def next(): HoodieRecord[InternalRow] = {
+        val row = buffered.next()
+        val key = new HoodieKey(
+          row.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD),
+          row.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD))
+        val isDelete = row.getString(rowOpOrdinal) == HoodieDataFrameWriter.ROW_OP_DELETE
+        // The projection reuses its output buffer, and the merge machinery buffers incoming
+        // records, so each record needs its own copy.
+        val dataRow = dataProjection(row).copy()
+        val record = if (isDelete) {
+          new HoodieSparkRecord(key, dataRow, dataSchema, false,
+            null.asInstanceOf[org.apache.hudi.common.model.HoodieOperation],
+            null.asInstanceOf[Comparable[_]], true)
+        } else {
+          new HoodieSparkRecord(key, dataRow, dataSchema, false)
+        }
+        // Append handles book records with a current location as updates in the delta stats.
+        location.foreach(record.setCurrentLocation)
+        record.asInstanceOf[HoodieRecord[InternalRow]]
+      }
+    }
+  }
+
   private def mergeBucket(buffered: BufferedIterator[InternalRow],
                           bucket: String,
                           dataProjection: UnsafeProjection,
                           dataSchema: StructType,
                           taskContextSupplier: org.apache.hudi.common.engine.TaskContextSupplier): Seq[WriteStatus] = {
-    val fileId = bucket.substring(updateBucketPrefix.length)
+    val fileId = bucket.substring(2)
     val partitionPath = buffered.head.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD)
-
-    val recordItr: java.util.Iterator[HoodieRecord[InternalRow]] =
-      new java.util.Iterator[HoodieRecord[InternalRow]] {
-        override def hasNext: Boolean =
-          buffered.hasNext && buffered.head.getString(bucketOrdinal) == bucket
-
-        override def next(): HoodieRecord[InternalRow] = {
-          val row = buffered.next()
-          val key = new HoodieKey(
-            row.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD),
-            row.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD))
-          val isDelete = row.getString(rowOpOrdinal) == HoodieDataFrameWriter.ROW_OP_DELETE
-          // The projection reuses its output buffer, and the merge machinery buffers incoming
-          // records, so each record needs its own copy.
-          val dataRow = dataProjection(row).copy()
-          if (isDelete) {
-            new HoodieSparkRecord(key, dataRow, dataSchema, false,
-              null.asInstanceOf[org.apache.hudi.common.model.HoodieOperation],
-              null.asInstanceOf[Comparable[_]], true)
-              .asInstanceOf[HoodieRecord[InternalRow]]
-          } else {
-            new HoodieSparkRecord(key, dataRow, dataSchema, false)
-              .asInstanceOf[HoodieRecord[InternalRow]]
-          }
-        }
-      }
+    val recordItr = bucketRecordIterator(buffered, bucket, dataProjection, dataSchema, None)
 
     val mergeHandle = HoodieMergeHandleFactory.create(
       WriteOperationType.UPSERT, writeConfig, instantTime,
@@ -148,5 +161,23 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
       case _ =>
     }
     MergeUtils.runMerge(mergeHandle, instantTime, fileId).asScala.flatMap(_.asScala).toSeq
+  }
+
+  /** MOR update run: append the bucket's records as a new log file of its file group. */
+  private def appendBucket(buffered: BufferedIterator[InternalRow],
+                           bucket: String,
+                           dataProjection: UnsafeProjection,
+                           dataSchema: StructType,
+                           taskContextSupplier: org.apache.hudi.common.engine.TaskContextSupplier): Seq[WriteStatus] = {
+    val fileId = bucket.substring(2)
+    val partitionPath = buffered.head.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD)
+    val recordItr = bucketRecordIterator(buffered, bucket, dataProjection, dataSchema,
+      Some(new HoodieRecordLocation(instantTime, fileId)))
+    val appendHandle = new AppendHandleFactory[InternalRow, AnyRef, AnyRef, AnyRef]().create(
+      writeConfig, instantTime,
+      table.asInstanceOf[HoodieTable[InternalRow, AnyRef, AnyRef, AnyRef]],
+      partitionPath, fileId, recordItr, taskContextSupplier)
+    appendHandle.doAppend()
+    appendHandle.close().asScala.toSeq
   }
 }

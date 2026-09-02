@@ -48,26 +48,44 @@ object MetadataSizingProfiler extends Logging {
 
   def plan(table: HoodieTable[_, _, _, _],
            writeConfig: HoodieWriteConfig,
-           newFileBuckets: Int): InsertRoutingPlan = {
+           newFileBuckets: Int,
+           mergeOnRead: Boolean,
+           paddingBucketPrefix: String): InsertRoutingPlan = {
     val smallFileLimit = writeConfig.getParquetSmallFileLimit
     val maxFileSize = writeConfig.getParquetMaxFileSize
-    val hasCompletedCommits = table.getMetaClient.getActiveTimeline
-      .getCommitsTimeline.filterCompletedInstants().countInstants() > 0
-    if (smallFileLimit <= 0 || !hasCompletedCommits) {
+    val completedCommits = table.getMetaClient.getActiveTimeline
+      .getCommitsTimeline.filterCompletedInstants()
+    if (smallFileLimit <= 0 || completedCommits.countInstants() == 0) {
       InsertRoutingPlan(Map.empty, newFileBuckets)
     } else {
       val avgRecordSize = averageRecordSize(table, writeConfig)
-      val basePath = new StoragePath(writeConfig.getBasePath)
       val fsView = table.getHoodieView
       fsView.loadAllPartitions()
-      val smallFileSlots = fsView.getLatestBaseFiles.iterator().asScala
-        .filter(baseFile => baseFile.getFileSize > 0
-          && baseFile.getFileSize < smallFileLimit
-          && (maxFileSize - baseFile.getFileSize) / avgRecordSize > 0)
-        .map(baseFile => (
-          FSUtils.getRelativePartitionPath(basePath, baseFile.getStoragePath.getParent),
-          HoodieDataFrameWriter.UPDATE_BUCKET_PREFIX + baseFile.getFileId))
-        .toSeq
+      val candidates: Iterator[(String, String)] = if (mergeOnRead) {
+        // Slice-based sizing, and never pad a slice that has log files: the write-path merge
+        // handle reads only the base file, so padding a logged slice would drop its log records.
+        // Pending-compaction slices are excluded so the rewrite cannot race the compactor.
+        val latestCompleted = completedCommits.lastInstant().get().requestedTime()
+        table.getTableMetadata.getAllPartitionPaths.asScala.iterator.flatMap { partition =>
+          fsView.getLatestFileSlicesBeforeOrOn(partition, latestCompleted, false).iterator().asScala
+            .filter(slice => slice.getLogFiles.count() == 0
+              && slice.getBaseFile.isPresent
+              && slice.getBaseFile.get().getFileSize > 0
+              && slice.getTotalFileSizeAsParquetFormat(writeConfig) < smallFileLimit
+              && (maxFileSize - slice.getTotalFileSizeAsParquetFormat(writeConfig)) / avgRecordSize > 0)
+            .map(slice => (partition, paddingBucketPrefix + slice.getFileId))
+        }
+      } else {
+        val basePath = new StoragePath(writeConfig.getBasePath)
+        fsView.getLatestBaseFiles.iterator().asScala
+          .filter(baseFile => baseFile.getFileSize > 0
+            && baseFile.getFileSize < smallFileLimit
+            && (maxFileSize - baseFile.getFileSize) / avgRecordSize > 0)
+          .map(baseFile => (
+            FSUtils.getRelativePartitionPath(basePath, baseFile.getStoragePath.getParent),
+            paddingBucketPrefix + baseFile.getFileId))
+      }
+      val smallFileSlots = candidates.toSeq
         .groupBy(_._1)
         .map { case (partition, slots) => (partition, slots.map(_._2).toArray) }
       log.info(s"Insert routing plan: ${smallFileSlots.values.map(_.length).sum} small-file "

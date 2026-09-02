@@ -33,15 +33,15 @@ import scala.concurrent.duration.Duration
  */
 class BucketRangePartitioner(updateReducers: Int,
                              insertReducers: Int,
-                             updateBucketPrefix: String) extends Partitioner {
+                             insertBucketPrefix: String) extends Partitioner {
   override def numPartitions: Int = updateReducers + insertReducers
 
   override def getPartition(key: Any): Int = {
     val bucket = key.asInstanceOf[String]
-    if (bucket.startsWith(updateBucketPrefix)) {
-      nonNegativeMod(bucket.hashCode, updateReducers)
-    } else {
+    if (bucket.startsWith(insertBucketPrefix)) {
       updateReducers + nonNegativeMod(bucket.hashCode, insertReducers)
+    } else {
+      nonNegativeMod(bucket.hashCode, updateReducers)
     }
   }
 
@@ -91,10 +91,10 @@ object HoodieRoutingShuffle extends Logging {
   def execute(pairs: RDD[(String, InternalRow)],
               updateReducers: Int,
               insertReducers: Int,
-              updateBucketPrefix: String,
+              insertBucketPrefix: String,
               binSizeBytes: Long): RoutingShuffleResult = {
     val sc = pairs.sparkContext
-    val partitioner = new BucketRangePartitioner(updateReducers, insertReducers, updateBucketPrefix)
+    val partitioner = new BucketRangePartitioner(updateReducers, insertReducers, insertBucketPrefix)
     val dependency = new ShuffleDependency[String, InternalRow, InternalRow](
       pairs, partitioner, SparkEnv.get.serializer, Option(implicitly[Ordering[String]]))
 
