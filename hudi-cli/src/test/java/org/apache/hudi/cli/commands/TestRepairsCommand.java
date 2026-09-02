@@ -18,6 +18,9 @@
 
 package org.apache.hudi.cli.commands;
 
+import org.apache.hudi.avro.model.HoodieActionInstant;
+import org.apache.hudi.avro.model.HoodieCleanFileInfo;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
@@ -29,6 +32,7 @@ import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -36,14 +40,20 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.testutils.Assertions;
 
 import org.apache.avro.generic.GenericRecord;
@@ -65,10 +75,15 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.shell.Shell;
 
 import java.io.FileInputStream;
+import java.io.FilterInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -83,7 +98,9 @@ import static org.apache.hudi.common.table.HoodieTableConfig.validateChecksum;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -259,21 +276,91 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     // Create four requested files
     for (int i = 100; i < 104; i++) {
       String timestamp = String.valueOf(i);
-      // Write corrupted requested Clean File
+      // Write an empty requested Clean File
       HoodieTestCommitMetadataGenerator.createEmptyCleanRequestedFile(tablePath, timestamp, conf);
     }
 
+    // A plan cut short mid-write, so that its bytes stop inside the Avro header. The file is
+    // overwritten in place rather than deleted and rewritten, because both the emptiness check
+    // and the file name generator resolve the file from the instant itself.
+    FileCreateUtils.createRequestedCleanFile(metaClient, "104", validCleanerPlan());
+    StoragePath truncatedPath = requestedCleanPath(metaClient, "104");
+    byte[] plan;
+    try (InputStream in = metaClient.getStorage().open(truncatedPath)) {
+      plan = FileIOUtils.readAsByteArray(in);
+    }
+    try (OutputStream out = metaClient.getStorage().create(truncatedPath, true)) {
+      out.write(plan, 0, plan.length / 2);
+    }
+
+    // A plan that decodes, which the command has to leave in place
+    FileCreateUtils.createRequestedCleanFile(metaClient, "105", validCleanerPlan());
+
     // reload meta client
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    // first, there are four instants
-    assertEquals(4, metaClient.getActiveTimeline().filterInflightsAndRequested().countInstants());
+    // first, there are six pending instants
+    assertEquals(6, metaClient.getActiveTimeline().filterInflightsAndRequested().countInstants());
 
     Object cleanResult = shell.evaluate(() -> "repair corrupted clean files");
     assertTrue(ShellEvaluationResultUtil.isSuccess(cleanResult));
 
     // reload meta client
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    assertEquals(0, metaClient.getActiveTimeline().filterInflightsAndRequested().countInstants());
+    // the empty and the truncated plans are gone and the readable one is untouched
+    List<HoodieInstant> remaining =
+        metaClient.getActiveTimeline().filterInflightsAndRequested().getInstants();
+    assertEquals(1, remaining.size());
+    assertEquals("105", remaining.get(0).requestedTime());
+  }
+
+  /**
+   * A transient read failure on a valid pending clean plan must not be taken for corruption:
+   * the timeline serde wraps any exception raised while it streams the plan file in the same
+   * "unable to read commit metadata" IOException that an empty or truncated file raises.
+   */
+  @Test
+  public void testRemoveCorruptedPendingCleanActionKeepsPlanOnReadFailure() throws IOException {
+    HoodieCLI.conf = storageConf();
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+    FileCreateUtils.createRequestedCleanFile(metaClient, "100", validCleanerPlan());
+    StoragePath planPath = requestedCleanPath(metaClient, "100");
+
+    HoodieTableMetaClient timingOutClient = HoodieTableMetaClient.builder()
+        .setStorage(new TimingOutStorage(fs, planPath)).setBasePath(tablePath).build();
+    HoodieIOException thrown = assertThrows(HoodieIOException.class,
+        () -> RepairsCommand.removeCorruptedPendingCleanAction(timingOutClient));
+    assertInstanceOf(SocketTimeoutException.class, thrown.getCause());
+    assertTrue(metaClient.getStorage().exists(planPath));
+
+    // the same plan read through a healthy storage is left alone as well
+    RepairsCommand.removeCorruptedPendingCleanAction(HoodieTableMetaClient.reload(metaClient));
+    assertEquals(1, HoodieTableMetaClient.reload(metaClient).getActiveTimeline()
+        .filterInflightsAndRequested().countInstants());
+  }
+
+  /**
+   * The path of the requested file of a clean instant.
+   */
+  private static StoragePath requestedCleanPath(HoodieTableMetaClient metaClient, String instantTime) {
+    return new StoragePath(metaClient.getTimelinePath(),
+        metaClient.getInstantFileNameGenerator().makeRequestedCleanerFileName(instantTime));
+  }
+
+  /**
+   * A clean plan that decodes into the latest plan version.
+   */
+  private static HoodieCleanerPlan validCleanerPlan() {
+    return HoodieCleanerPlan.newBuilder()
+        .setEarliestInstantToRetain(HoodieActionInstant.newBuilder()
+            .setAction(HoodieTimeline.COMMIT_ACTION).setTimestamp("001")
+            .setState(HoodieInstant.State.COMPLETED.name()).build())
+        .setFilesToBeDeletedPerPartition(Collections.singletonMap("partition1", Collections.singletonList("file1")))
+        .setFilePathsToBeDeletedPerPartition(Collections.singletonMap("partition1",
+            Collections.singletonList(HoodieCleanFileInfo.newBuilder().setFilePath("file1").build())))
+        .setLastCompletedCommitTimestamp("002")
+        .setPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
+        .setVersion(TimelineLayoutVersion.CURR_VERSION)
+        .build();
   }
 
   /**
@@ -444,6 +531,51 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
       totalRecs = sqlContext.read().format("hudi").load(tablePath)
           .filter(HoodieRecord.PARTITION_PATH_METADATA_FIELD + " == \"" + "2016/03/18" + "\"").count();
       assertEquals(totalRecs, totalRecsInOldPartition);
+    }
+  }
+
+  /**
+   * Storage whose read of one file times out part-way, the way a remote store does under a
+   * transient outage: the open succeeds and the stream fails after the first bytes.
+   */
+  private static class TimingOutStorage extends HoodieHadoopStorage {
+    private final StoragePath timingOutPath;
+
+    TimingOutStorage(FileSystem fs, StoragePath timingOutPath) {
+      super(fs);
+      this.timingOutPath = timingOutPath;
+    }
+
+    @Override
+    public InputStream open(StoragePath path) throws IOException {
+      InputStream in = super.open(path);
+      if (!path.equals(timingOutPath)) {
+        return in;
+      }
+      return new FilterInputStream(in) {
+        private int remaining = 32;
+
+        @Override
+        public int read() throws IOException {
+          if (remaining <= 0) {
+            throw new SocketTimeoutException("Read timed out");
+          }
+          remaining--;
+          return super.read();
+        }
+
+        @Override
+        public int read(byte[] buffer, int offset, int length) throws IOException {
+          if (remaining <= 0) {
+            throw new SocketTimeoutException("Read timed out");
+          }
+          int read = super.read(buffer, offset, Math.min(length, remaining));
+          if (read > 0) {
+            remaining -= read;
+          }
+          return read;
+        }
+      };
     }
   }
 
