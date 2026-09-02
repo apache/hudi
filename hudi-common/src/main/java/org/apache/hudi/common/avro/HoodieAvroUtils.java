@@ -950,7 +950,7 @@ public class HoodieAvroUtils {
    *
    * @param record  Hoodie record.
    * @param columns Names of the columns to get values.
-   * @param schema  {@link Schema} instance.
+   * @param schema  {@link HoodieSchema} instance.
    * @return Column value.
    */
   public static Object[] getSortColumnValuesWithPartitionPathAndRecordKey(HoodieRecord record,

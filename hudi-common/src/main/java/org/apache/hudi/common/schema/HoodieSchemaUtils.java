@@ -461,6 +461,12 @@ public final class HoodieSchemaUtils {
   /**
    * Generates a projection schema from the original schema, including only the specified fields.
    *
+   * <p>Field names are matched case-insensitively and the projected field keeps the schema's original casing:
+   * Avro field names are case-sensitive while Hive lowercases column projections before they reach the reader
+   * (see {@code HoodieRealtimeRecordReaderUtils#generateProjectionSchema}), so both sides are lowercased for the
+   * lookup. A schema with two fields that differ only in case cannot be projected and fails on the duplicate
+   * lowercase key.</p>
+   *
    * @param originalSchema the source schema
    * @param fieldNames     the list of field names to include in the projection
    * @return new HoodieSchema containing only the specified fields
