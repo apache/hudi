@@ -29,13 +29,19 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 
 import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -114,7 +120,6 @@ class TestHiveQueryDDLExecutorSession {
   void sqlRunsUnderTheSessionThisExecutorStarted() throws Exception {
     Driver driver = mock(Driver.class);
     SessionState sessionState = mock(SessionState.class);
-    when(sessionState.getConf()).thenReturn(new HiveConf());
     HiveQueryDDLExecutor executor = executorWith(driver, sessionState);
     SessionState.detachSession();
 
@@ -125,10 +130,45 @@ class TestHiveQueryDDLExecutorSession {
   }
 
   /**
+   * Driver.close() clears the current session's lineage state and Driver.destroy() takes its
+   * transaction manager to release locks, so both have to see the session that owns the Driver.
+   * SessionState.close() then detaches whatever is attached, which would leave an executor
+   * constructed later on this thread with no session at all.
+   */
+  @Test
+  void closeTearsDownUnderItsOwnSessionAndLeavesTheOtherAttached() throws Exception {
+    SessionState otherSession = mock(SessionState.class);
+    when(otherSession.getConf()).thenReturn(new HiveConf());
+    SessionState sessionState = mock(SessionState.class);
+    Driver driver = mock(Driver.class);
+    List<SessionState> sessionsSeenByDriver = new ArrayList<>();
+    when(driver.close()).thenAnswer(invocation -> {
+      sessionsSeenByDriver.add(SessionState.get());
+      return 0;
+    });
+    doAnswer(invocation -> {
+      sessionsSeenByDriver.add(SessionState.get());
+      return null;
+    }).when(driver).destroy();
+    HiveQueryDDLExecutor executor = executorWith(driver, sessionState);
+    SessionState.setCurrentSessionState(otherSession);
+
+    executor.close();
+
+    assertEquals(Arrays.asList(sessionState, sessionState), sessionsSeenByDriver,
+        "Driver teardown must run under the session that owns the Driver");
+    assertSame(otherSession, SessionState.get(), "The session attached before close() must be put back");
+    verify(otherSession, never()).close();
+  }
+
+  /**
    * Builds an executor without running its constructor, which would need a live metastore. A null
    * metaStoreClient keeps close() away from Hive.closeCurrent() and its static thread-local state.
    */
   private static HiveQueryDDLExecutor executorWith(Driver driver, SessionState sessionState) throws Exception {
+    // SessionState.setCurrentSessionState() reads the session's conf to swap the thread's
+    // context classloader.
+    when(sessionState.getConf()).thenReturn(new HiveConf());
     HiveQueryDDLExecutor executor = mock(HiveQueryDDLExecutor.class, CALLS_REAL_METHODS);
     setField(executor, "driverPool", Option.empty());
     setField(executor, "metaStoreClientPool", Option.empty());

@@ -83,15 +83,11 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       this.sessionState.setCurrentDatabase(databaseName);
       this.hiveDriver = new org.apache.hadoop.hive.ql.Driver(config.getHiveConf());
     } catch (Exception e) {
-      if (this.hiveDriver != null) {
-        try {
-          this.hiveDriver.close();
-        } catch (Exception driverCloseException) {
-          log.error("Error while closing Hive Driver", driverCloseException);
-        }
-        destroyQuietly(this.hiveDriver);
+      try {
+        closeDriverAndSession();
+      } catch (Exception teardownException) {
+        log.error("Error while closing Hive Driver and SessionState", teardownException);
       }
-      closeQuietly(this.sessionState);
       // driverPool (if present) was already constructed by the caller before this
       // ctor ran; since we're about to throw, no one else will call close() on it.
       driverPool.ifPresent(pool -> {
@@ -316,6 +312,22 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
     if (metaStoreClient != null) {
       Hive.closeCurrent();
     }
+    closeDriverAndSession();
+  }
+
+  /**
+   * Tears down the Driver and the SessionState this executor owns, with that session bound for the
+   * duration. Both Driver methods act on whichever session the thread currently holds:
+   * {@code close()} clears its lineage state and {@code destroy()} takes its transaction manager to
+   * release locks. {@code SessionState.close()} then detaches, again regardless of whose session is
+   * attached. So an executor constructed later on this thread would have its session damaged and
+   * then unattached by this teardown unless ours is bound first and its own put back afterwards.
+   */
+  private void closeDriverAndSession() {
+    SessionState previousSession = SessionState.get();
+    if (sessionState != null) {
+      SessionState.setCurrentSessionState(sessionState);
+    }
     try {
       if (hiveDriver != null) {
         try {
@@ -326,15 +338,17 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       }
     } finally {
       closeQuietly(sessionState);
+      if (previousSession != null && previousSession != sessionState) {
+        SessionState.setCurrentSessionState(previousSession);
+      }
     }
   }
 
   /**
    * Closes the SessionState this executor started. Hive derives the session's four scratch
    * directory roots from hive.session.id and only reclaims them in close(), so a HiveSyncTool that
-   * runs per commit leaves a directory set behind on every sync. Runs after the Driver teardown
-   * above, because close() detaches the session from this thread and {@code Driver.destroy()} can
-   * reach {@code SessionState.get()} while releasing locks.
+   * runs per commit leaves a directory set behind on every sync. Called only from
+   * {@link #closeDriverAndSession()}, which documents why the session goes last.
    */
   private static void closeQuietly(SessionState state) {
     if (state == null) {
