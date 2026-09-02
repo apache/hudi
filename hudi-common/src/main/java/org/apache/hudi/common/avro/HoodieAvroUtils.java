@@ -23,8 +23,8 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.schema.HoodieAvroSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.DateTimeUtils;
@@ -932,8 +932,9 @@ public class HoodieAvroUtils {
                                                HoodieSchema schema,
                                                boolean consistentLogicalTimestampEnabled) {
     try {
-      // Intern so the identity fast path in BaseAvroPayload#getRecord hits across callers that parse their own copy of the schema.
-      GenericRecord genericRecord = (GenericRecord) (record.toIndexedRecord(HoodieSchemaCache.intern(schema), new Properties()).get()).getData();
+      // Intern through the Avro-keyed cache: its identity front keeps the repeat lookups on the per-record sort and
+      // col-stats paths O(1), and the canonical instance keeps the identity fast path in BaseAvroPayload#getRecord.
+      GenericRecord genericRecord = (GenericRecord) (record.toIndexedRecord(HoodieAvroSchemaCache.intern(schema.toAvroSchema()), new Properties()).get()).getData();
       List<Object> list = new ArrayList<>();
       for (String col : columns) {
         list.add(HoodieAvroUtils.getNestedFieldVal(genericRecord, col, true, consistentLogicalTimestampEnabled));

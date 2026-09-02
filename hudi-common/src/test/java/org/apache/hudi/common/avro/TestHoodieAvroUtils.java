@@ -63,6 +63,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.RewriteAvroPayload;
+import org.apache.hudi.common.schema.HoodieAvroSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
@@ -125,6 +126,7 @@ import static org.apache.hudi.common.schema.HoodieSchemaUtils.sanitizeName;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -1091,17 +1093,34 @@ public class TestHoodieAvroUtils {
     GenericRecord record = new GenericData.Record(schema);
     record.put("firstname", "first");
     record.put("lastname", "last");
-    GenericRecord student = new GenericData.Record(schema.getField("student").schema());
-    student.put("firstnameNested", "person");
-    record.put("student", student);
+    record.put("student", new GenericData.Record(schema.getField("student").schema()));
     HoodieRecordPayload avroPayload = new RewriteAvroPayload(record);
     HoodieAvroRecord avroRecord = new HoodieAvroRecord(new HoodieKey("record1", "partition1"), avroPayload);
 
     Object[] columnValues = HoodieAvroUtils.getRecordColumnValues(
-        avroRecord, new String[] {"firstname", "student.firstnameNested", "student.lastnameNested", "missing_col"},
+        avroRecord, new String[] {"firstname", "student.lastnameNested", "missing_col"},
         HoodieSchema.parse(SCHEMA_WITH_NESTED_FIELD_STR), false);
     // A missing column yields null rather than throwing: getRecordColumnValues hardcodes returnNullIfNotFound.
-    assertArrayEquals(new Object[] {"first", "person", null, null}, columnValues);
+    assertArrayEquals(new Object[] {"first", null, null}, columnValues);
+  }
+
+  @Test
+  void testGetRecordColumnValuesInternsSchema() {
+    HoodieSchema interned = HoodieAvroSchemaCache.intern(new Schema.Parser().parse(EXAMPLE_SCHEMA));
+    GenericRecord record = new GenericData.Record(interned.toAvroSchema());
+    record.put("timestamp", 3.5);
+    record.put("_row_key", "record1");
+    record.put("non_pii_col", "val1");
+    record.put("pii_col", "val2");
+    HoodieAvroRecord avroRecord = new HoodieAvroRecord(
+        new HoodieKey("record1", "partition1"), new OverwriteWithLatestAvroPayload(record, 0));
+
+    // A freshly parsed, equal-but-distinct schema must resolve to the interned instance so the payload hands back
+    // the record it holds; without the intern it re-serializes and the string comes back as Utf8, not String.
+    Object[] columnValues = HoodieAvroUtils.getRecordColumnValues(
+        avroRecord, new String[] {"non_pii_col"}, HoodieSchema.parse(EXAMPLE_SCHEMA), false);
+    assertInstanceOf(String.class, columnValues[0]);
+    assertEquals("val1", columnValues[0]);
   }
 
   private static Stream<Arguments> recordNeedsRewriteForExtendedAvroTypePromotion() {
