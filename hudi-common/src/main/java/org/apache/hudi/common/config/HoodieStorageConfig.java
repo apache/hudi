@@ -240,7 +240,9 @@ public class HoodieStorageConfig extends HoodieConfig {
       .key("hoodie.parquet.outputtimestamptype")
       .defaultValue("TIMESTAMP_MICROS")
       .markAdvanced()
-      .withDocumentation("Sets spark.sql.parquet.outputTimestampType. Parquet timestamp type to use when Spark writes data to Parquet files.");
+      .withDocumentation("Sets spark.sql.parquet.outputTimestampType for the Spark row-writer Parquet path (for example bulk insert). "
+          + "Writes that go through the Avro path, such as insert and upsert, derive the Parquet timestamp type from the table's "
+          + "Avro schema and are unaffected by this config.");
 
   // SPARK-38094 Spark 3.3 checks if this field is enabled. Hudi has to provide this or there would be NPE thrown
   // Would ONLY be effective with Spark 3.3+
