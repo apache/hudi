@@ -90,7 +90,7 @@ probe("mor", morLeft, morRight)
 if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
   var failures = 0
   var checksRun = 0
-  val expectedChecks = 8
+  val expectedChecks = 12
   def check(label: String, condition: Boolean, detail: => String): Unit = {
     checksRun += 1
     if (condition) {
@@ -156,6 +156,28 @@ if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
         !nativePlan.contains("CometSparkRowToColumnar"), nativePlan)
     }
   }
+  def joined(native: Boolean): (Array[String], String) = {
+    spark.conf.set("spark.comet.scan.hudi.enabled", native.toString)
+    val left = spark.read.format("hudi").load(nativeCow).selectExpr("uuid", "fare as cow_fare")
+    val right = spark.read.format("hudi").load(nativeMor).selectExpr("uuid", "fare as mor_fare")
+    val df = left.join(right, "uuid").selectExpr("uuid", "cow_fare", "mor_fare").orderBy("uuid")
+    val result = (df.collect().map(_.toString), df.queryExecution.executedPlan.toString)
+    spark.conf.set("spark.comet.scan.hudi.enabled", "false")
+    result
+  }
+  val (joinJvm, _) = joined(native = false)
+  val (joinNative, joinPlan) = joined(native = true)
+  check("join rows match the JVM read", joinJvm.sameElements(joinNative),
+    s"jvm n=${joinJvm.length} native n=${joinNative.length}")
+  check("join runs as a native sort-merge join", joinPlan.contains("CometSortMergeJoin"), joinPlan)
+  // The adaptive plan string repeats the tree in its Final and Initial
+  // sections, so count within the final plan only.
+  val joinFinalPlan = joinPlan.split("== Initial Plan ==").head
+  check("join reads both sides through the native scan",
+    "CometHudiNativeScan".r.findAllIn(joinFinalPlan).length >= 2, joinPlan)
+  check("join plan has no row-to-columnar bridge",
+    !joinPlan.contains("CometSparkRowToColumnar"), joinPlan)
+
   if (failures > 0 || checksRun != expectedChecks) {
     println(s"::error::native hudi scan probes: failures=$failures checksRun=$checksRun expected=$expectedChecks")
     System.exit(1)
