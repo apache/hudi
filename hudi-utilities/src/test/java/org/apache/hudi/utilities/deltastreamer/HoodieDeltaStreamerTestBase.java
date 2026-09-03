@@ -81,6 +81,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
@@ -769,32 +770,40 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     /**
      * Polls {@code condition} until it holds, the deltastreamer future finishes, or the timeout expires.
      *
-     * <p>On timeout the last error the condition threw is attached to the failure. Without it the only
-     * output is a bare {@link TimeoutException} pointing at this method, which says nothing about which
-     * assertion never held - the reason HUDI-6843 stayed open: every report of it looks identical.
+     * <p>On timeout the last error the condition threw is attached to the failure, so the report names the
+     * assertion that never held rather than only this method.
      */
+    /** Bound for {@link #waitFor}; generous, since it only exists to stop a hung poll running forever. */
+    private static final long WAIT_FOR_TIMEOUT_SECS = 120;
+
     static void waitTillCondition(Function<Boolean, Boolean> condition, Future dsFuture, long timeoutInSecs) throws Exception {
       AtomicReference<Throwable> lastError = new AtomicReference<>();
+      AtomicInteger completedEvaluations = new AtomicInteger();
       ExecutorService executor = Executors.newSingleThreadExecutor();
       try {
         Future<Boolean> res = executor.submit(() -> {
           boolean ret = false;
-          while (!ret && !dsFuture.isDone() && !Thread.currentThread().isInterrupted()) {
+          // The executor check matters as well as the interrupt flag: the interrupt from shutdownNow is
+          // delivered once, and a condition that swallows it would otherwise leave the flag clear and keep
+          // this thread polling for the lifetime of the JVM.
+          while (!ret && !dsFuture.isDone() && !Thread.currentThread().isInterrupted() && !executor.isShutdown()) {
             try {
               Thread.sleep(2000);
               ret = condition.apply(true);
+              completedEvaluations.incrementAndGet();
               if (ret) {
                 log.info("Condition completed successfully");
               }
             } catch (InterruptedException interrupted) {
-              // shutdownNow below interrupts this thread once the wait has given up. Thread.sleep clears
-              // the interrupt flag when it throws, so catching this with everything else would re-enter
-              // the loop and keep polling forever. Restore the flag and stop; this is not a condition
-              // failure, so it is deliberately not recorded as one.
+              // Thread.sleep clears the interrupt flag when it throws, so catching this with everything
+              // else would re-enter the loop. Restore the flag and stop; this is not a condition failure,
+              // so it is deliberately not recorded as one.
               Thread.currentThread().interrupt();
               break;
             } catch (Throwable error) {
+              log.debug("Got error waiting for condition", error);
               lastError.set(error);
+              completedEvaluations.incrementAndGet();
               ret = false;
             }
           }
@@ -804,9 +813,18 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
           res.get(timeoutInSecs, TimeUnit.SECONDS);
         } catch (TimeoutException e) {
           Throwable last = lastError.get();
-          String detail = last == null
-              ? "The condition returned false without throwing, so there is no further detail."
-              : "The last failure it reported was: " + last;
+          int completed = completedEvaluations.get();
+          String detail;
+          if (completed == 0) {
+            // Distinguishes a condition that is stuck part-way through its first evaluation - a hung Spark
+            // read, say - from one that simply kept returning false.
+            detail = "No evaluation of the condition completed, so it was still running or never started.";
+          } else if (last == null) {
+            detail = String.format("%d evaluations completed and returned false without throwing, "
+                + "so there is no further detail.", completed);
+          } else {
+            detail = String.format("%d evaluations completed; the last failure reported was: %s", completed, last);
+          }
           Throwable cause = last == null ? e : last;
           throw new AssertionError(
               String.format("Condition was not met within %d seconds. %s", timeoutInSecs, detail), cause);
@@ -822,11 +840,19 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
      * @param booleanSupplier Boolean supplier
      */
     static void waitFor(BooleanSupplier booleanSupplier) {
+      // Bounded, and the interrupt is restored rather than swallowed: this runs inside conditions passed to
+      // waitTillCondition, so swallowing it would defeat the stop that shutdownNow signals.
+      long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(WAIT_FOR_TIMEOUT_SECS);
       while (!booleanSupplier.getAsBoolean()) {
+        if (System.nanoTime() > deadline) {
+          throw new AssertionError(
+              String.format("Condition did not hold within %d seconds", WAIT_FOR_TIMEOUT_SECS));
+        }
         try {
           Thread.sleep(5);
-        } catch (Throwable error) {
-          log.debug("Got error waiting for condition", error);
+        } catch (InterruptedException interrupted) {
+          Thread.currentThread().interrupt();
+          throw new AssertionError("Interrupted while waiting for condition", interrupted);
         }
       }
     }

@@ -1744,28 +1744,43 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   static void deltaStreamerTestRunner(HoodieDeltaStreamer ds, HoodieDeltaStreamer.Config cfg, Function<Boolean, Boolean> condition, String jobId) throws Exception {
     ExecutorService executor = Executors.newSingleThreadExecutor();
-    Future dsFuture = executor.submit(() -> {
+    try {
+      Future dsFuture = executor.submit(() -> {
+        try {
+          ds.sync();
+        } catch (Exception ex) {
+          log.warn("DS continuous job failed, hence not proceeding with condition check for {}", jobId);
+          throw new RuntimeException(ex.getMessage(), ex);
+        }
+      });
       try {
-        ds.sync();
-      } catch (Exception ex) {
-        log.warn("DS continuous job failed, hence not proceeding with condition check for {}", jobId);
-        throw new RuntimeException(ex.getMessage(), ex);
+        TestHelpers.waitTillCondition(condition, dsFuture, 360);
+      } catch (Throwable failure) {
+        // Surefire runs this module with forkCount=1 and reuseForks=true, so a continuous streamer left
+        // running here reads on into the next test, whose setup deletes basePath and whose teardown closes
+        // the data generators underneath it. Stop it before letting the failure out.
+        try {
+          ds.shutdownGracefully();
+        } catch (Exception shutdownFailure) {
+          failure.addSuppressed(shutdownFailure);
+        }
+        throw failure;
       }
-    });
-    TestHelpers.waitTillCondition(condition, dsFuture, 360);
-    if (cfg != null && !cfg.postWriteTerminationStrategyClass.isEmpty()) {
-      // If the streamer died, waitTillCondition returns as soon as the future completes. Surface that
-      // failure here rather than letting awaitDeltaStreamerShutdown time out and report the misleading
-      // "Deltastreamer should have shutdown by now" two minutes later.
-      if (dsFuture.isDone()) {
+      if (cfg != null && !cfg.postWriteTerminationStrategyClass.isEmpty()) {
+        // If the streamer died, waitTillCondition returns as soon as the future completes. Surface that
+        // failure here rather than letting awaitDeltaStreamerShutdown time out and report the misleading
+        // "Deltastreamer should have shutdown by now" two minutes later.
+        if (dsFuture.isDone()) {
+          dsFuture.get();
+        }
+        awaitDeltaStreamerShutdown(ds);
+      } else {
+        ds.shutdownGracefully();
         dsFuture.get();
       }
-      awaitDeltaStreamerShutdown(ds);
-    } else {
-      ds.shutdownGracefully();
-      dsFuture.get();
+    } finally {
+      executor.shutdown();
     }
-    executor.shutdown();
   }
 
   static void awaitDeltaStreamerShutdown(HoodieDeltaStreamer ds) throws InterruptedException {

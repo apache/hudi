@@ -28,7 +28,10 @@ public class JavaTestUtils {
     Throwable throwable = t;
     boolean res = false;
     while (throwable != null) {
-      if (throwable.getMessage().contains(errorMsg)) {
+      // String.valueOf rather than getMessage().contains: a null message anywhere in the chain would
+      // otherwise NPE here and lose the failure the caller was trying to assert on. A TimeoutException
+      // raised before its condition ever threw is one such case, and NPEs in a chain are another.
+      if (String.valueOf(throwable.getMessage()).contains(errorMsg)) {
         res = true;
         break;
       }

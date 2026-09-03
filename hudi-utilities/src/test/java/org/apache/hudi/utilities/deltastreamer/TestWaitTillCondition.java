@@ -19,9 +19,13 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
+import org.apache.hudi.common.testutils.JavaTestUtils;
+
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -34,10 +38,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Covers {@code HoodieDeltaStreamerTestBase.TestHelpers#waitTillCondition}, the helper every
  * continuous-mode deltastreamer test waits on.
  *
- * <p>HUDI-6843 is a flaky timeout in that wait whose only output was
- * {@code java.util.concurrent.TimeoutException} at this method, with no indication of which assertion in
- * the condition never held - the condition's error was logged at debug and discarded. That is why every
- * report of the flake looks the same and none of them is actionable.
+ * <p>The wait used to fail with a bare {@code TimeoutException} naming only the helper, with the
+ * condition's own error logged at debug and discarded, so a timeout said nothing about which assertion
+ * never held (HUDI-6843).
  */
 class TestWaitTillCondition {
 
@@ -45,11 +48,11 @@ class TestWaitTillCondition {
   private static final Future<?> RUNNING = new CompletableFuture<>();
 
   /**
-   * The helper polls every 2s, so the timeout has to leave room for several evaluations. A value close to
-   * one interval would make this test itself flaky on a loaded machine - if the worker started late and the
-   * first evaluation landed after the timeout, nothing would have been recorded to report.
+   * The helper polls every 2s, so the timeout has to leave room for at least one evaluation to be recorded.
+   * 5s is the same margin {@link #pollingStopsOnceTheWaitHasGivenUp} already relies on, and keeps the four
+   * tests in this class from spending half a minute asleep in the shared utilities job.
    */
-  private static final int CONDITION_TIMEOUT_SECS = 15;
+  private static final int CONDITION_TIMEOUT_SECS = 5;
 
   @Test
   void timeoutFailureNamesTheLastConditionFailure() {
@@ -66,6 +69,9 @@ class TestWaitTillCondition {
     assertTrue(error.getMessage().contains(assertionText),
         () -> "The failure should carry the condition's own error, which is the only clue to why the "
             + "wait timed out, but was: " + error.getMessage());
+    assertTrue(error.getMessage().contains("evaluations completed"),
+        () -> "The failure should say how many evaluations completed, which separates a condition that "
+            + "kept failing from one that never finished an evaluation, but was: " + error.getMessage());
   }
 
   /**
@@ -85,9 +91,56 @@ class TestWaitTillCondition {
             }, RUNNING, 5));
 
     int pollsWhenItGaveUp = polls.get();
+    assertTrue(pollsWhenItGaveUp > 0,
+        "the condition should have been evaluated at least once before the wait gave up, otherwise the "
+            + "comparison below passes trivially");
     Thread.sleep(5000);
     assertEquals(pollsWhenItGaveUp, polls.get(),
         "the polling thread should have stopped when the wait gave up, not carried on in the background");
+  }
+
+  /**
+   * A condition that hangs part-way through its first evaluation is a different failure from one that keeps
+   * returning false, and the report has to say which: with no completed evaluation there is no last error,
+   * and claiming the condition "returned false without throwing" would assert the wrong thing.
+   */
+  @Test
+  void timeoutDistinguishesAConditionThatNeverCompletedAnEvaluation() {
+    AssertionError error = assertThrows(AssertionError.class,
+        () -> HoodieDeltaStreamerTestBase.TestHelpers.waitTillCondition(
+            ignored -> {
+              try {
+                Thread.sleep(60_000);
+              } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+              }
+              return true;
+            }, RUNNING, CONDITION_TIMEOUT_SECS));
+
+    assertTrue(error.getMessage().contains("No evaluation of the condition completed"),
+        () -> "a condition still running its first evaluation should be reported as such, but was: "
+            + error.getMessage());
+  }
+
+  /**
+   * When a streamer configured with a post-write termination strategy dies, the wait returns because the
+   * future is done, and {@code deltaStreamerTestRunner} has to surface that failure. Without the
+   * {@code dsFuture.isDone()} guard it would instead call {@code awaitDeltaStreamerShutdown} and report the
+   * misleading "Deltastreamer should have shutdown by now" two minutes later - here, on a mock with no
+   * ingestion service, it would NPE.
+   */
+  @Test
+  void dyingStreamerWithTerminationStrategyIsSurfacedNotWaitedOut() throws Exception {
+    HoodieDeltaStreamer ds = Mockito.mock(HoodieDeltaStreamer.class);
+    Mockito.doThrow(new IllegalStateException("source is unreachable")).when(ds).sync();
+    HoodieDeltaStreamer.Config cfg = new HoodieDeltaStreamer.Config();
+    cfg.postWriteTerminationStrategyClass = "org.apache.hudi.utilities.streamer.NoNewDataTerminationStrategy";
+
+    ExecutionException failure = assertThrows(ExecutionException.class,
+        () -> TestHoodieDeltaStreamer.deltaStreamerTestRunner(ds, cfg, ignored -> false, "dying_ds_job"));
+
+    assertTrue(JavaTestUtils.checkNestedExceptionContains(failure, "source is unreachable"),
+        () -> "the streamer's own failure should be surfaced, but was: " + failure);
   }
 
   @Test
