@@ -42,8 +42,6 @@ package org.apache.hudi.common.schema;
  * {@link #isDecimalWidening(HoodieSchema, HoodieSchema)} additionally requires the same backing (fixed
  * versus bytes) and, for fixed, an equal fixed size, whereas the decimal check in
  * {@code HoodieSchemaCompatibilityChecker} compares only precision and scale.</p>
- *
- * <p>This class is package-private and used only by {@link HoodieSchemaProjectionChecker}.</p>
  */
 class HoodieSchemaTypePromotion {
 

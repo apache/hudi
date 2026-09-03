@@ -258,7 +258,9 @@ public final class HoodieSchemaUtils {
    * and the updated InternalSchema is converted back under the original full name. Only the top level
    * changes - the inner fields of a nested record keep the nullability they had. Because the record is
    * rebuilt from the InternalSchema, its full name, field order and per-field docs survive, while the
-   * record-level doc and any custom record properties do not.</p>
+   * record-level doc and any custom record properties do not. Three more effects of that round trip are
+   * pre-existing and pinned by tests: a non-null field default becomes {@code null}, an ENUM field comes
+   * back as STRING, and an already-nullable null-last union is reordered null-first.</p>
    *
    * <p>When every top-level field is already nullable the input instance itself is returned and no
    * conversion runs.</p>
@@ -266,10 +268,12 @@ public final class HoodieSchemaUtils {
    * @param schema original schema
    * @return a schema with all the top-level fields updated as nullable, or {@code schema} itself when
    *         there is nothing to change
-   * @throws IllegalArgumentException if schema is null
+   * @throws IllegalArgumentException if schema is null or not a RECORD
    */
   public static HoodieSchema asNullable(HoodieSchema schema) {
     ValidationUtils.checkArgument(schema != null, "Schema cannot be null");
+    ValidationUtils.checkArgument(schema.getType() == HoodieSchemaType.RECORD,
+        "asNullable expects a RECORD schema, got: " + schema.getType());
 
     // NOTE: HoodieSchema#isNullable is false for a bare NULL type, unlike Avro's Schema#isNullable, so a
     //       NULL-typed field is excluded explicitly to keep it out of the update list as it always was.
