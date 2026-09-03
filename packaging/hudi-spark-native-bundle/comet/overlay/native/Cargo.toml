@@ -55,11 +55,11 @@ rand = "0.10"
 regex = "1.12.3"
 thiserror = "2"
 object_store = { version = "0.13.2", features = ["gcp", "azure", "aws", "http"] }
-hudi = { git = "https://github.com/apache/hudi-rs.git", rev = "d2c91ab30cc3d393f83f162ac6937fe38cdda83a" }
-# hudi-rs is on the arrow 57 line while this workspace is on 58. Batches cross
-# between the two through the Arrow C data interface, which is ABI-stable across
-# major versions; this renamed dep provides the 57-side ffi export.
-arrow-57 = { package = "arrow", version = "57", features = ["ffi"] }
+hudi = { git = "https://github.com/apache/hudi-rs.git", rev = "eb95599c29dc9859c62294335e51d302a59d10e7" }
+# hudi-rs currently pins the same arrow major as this workspace, so cargo
+# unifies the two and its batches are this workspace's RecordBatch. If the
+# lines diverge again, reintroduce a renamed arrow dep on hudi-rs's line and
+# cross batches through the Arrow C data interface (ABI-stable across majors).
 url = "2.2"
 aws-config = "1.8.18"
 aws-credential-types = "1.2.13"
