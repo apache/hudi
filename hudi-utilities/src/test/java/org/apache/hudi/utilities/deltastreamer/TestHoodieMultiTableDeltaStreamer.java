@@ -38,6 +38,7 @@ import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -252,6 +253,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     assertFalse(cfg.failFastOnContinuousMode);
   }
 
+  @Timeout(600)
   @Test
   public void testMultiTableContinuousModeSyncsAllTablesInParallel() throws IOException {
     HoodieMultiTableDeltaStreamer streamer = setupContinuousStreamer("parquetContinuous", false);
@@ -267,6 +269,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     assertRecordCount(5, contexts.get(1).getConfig().targetBasePath, sqlContext);
   }
 
+  @Timeout(600)
   @Test
   public void testFailFastOnContinuousThrowsWhenATableFails() throws IOException {
     HoodieMultiTableDeltaStreamer streamer = setupContinuousStreamer("parquetFailFast", true);
@@ -282,6 +285,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     assertTrue(ContinuousTestSource.wasBlockedTableInterrupted());
   }
 
+  @Timeout(600)
   @Test
   public void testContinuousModeDefaultDoesNotStopSiblingsWhenATableFails() throws IOException {
     HoodieMultiTableDeltaStreamer streamer = setupContinuousStreamer("parquetNoFailFast", false);

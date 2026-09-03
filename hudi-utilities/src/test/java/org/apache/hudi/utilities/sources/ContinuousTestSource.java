@@ -68,7 +68,7 @@ public class ContinuousTestSource extends ParquetDFSSource {
     this.blockUntilInterrupted = props.getBoolean(BLOCK_UNTIL_INTERRUPTED, false);
   }
 
-  // Resets the shared barrier to expect one arrival per table, and the interrupt latch. Call before each sync.
+  // Resets the shared barrier and latch used to coordinate tables. Call before each sync.
   public static void resetBarrier(int numTables) {
     startBarrier = new CyclicBarrier(numTables);
     blockedTableInterrupted = new CountDownLatch(1);
@@ -88,14 +88,14 @@ public class ContinuousTestSource extends ParquetDFSSource {
         throw new HoodieException("Simulated table sync failure after all tables started");
       }
       if (blockUntilInterrupted) {
-        blockUntilInterrupted();
+        blockUntilFailFastInterrupts();
       }
     }
     return super.fetchNextBatch(lastCheckpoint, sourceLimit);
   }
 
   // Blocks until fail fast interrupts this table, records that it observed the interrupt, then propagates it.
-  private void blockUntilInterrupted() {
+  private void blockUntilFailFastInterrupts() {
     // Nothing counts this down. Only an interrupt can end.
     CountDownLatch blockIndefinitely = new CountDownLatch(1);
     try {

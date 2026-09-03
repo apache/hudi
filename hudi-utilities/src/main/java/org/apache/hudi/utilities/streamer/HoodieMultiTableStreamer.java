@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.CustomizedThreadFactory;
+import org.apache.hudi.common.util.FutureUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -63,6 +64,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.HoodieSchemaProviderConfig.SCHEMA_REGISTRY_BASE_URL;
@@ -538,7 +540,7 @@ public class HoodieMultiTableStreamer {
         new CustomizedThreadFactory("multi-table-streamer", true));
     boolean terminated = false;
     try {
-      final CompletableFuture<?>[] tableFutures = tableExecutionContexts.stream()
+      final List<CompletableFuture<Void>> tableFutures = tableExecutionContexts.stream()
           .map(context -> CompletableFuture.runAsync(() -> {
             HoodieStreamer streamer = null;
             try {
@@ -566,13 +568,13 @@ public class HoodieMultiTableStreamer {
                 streamer.shutdownGracefully();
               }
             }
-          }, executor)).toArray(CompletableFuture[]::new);
+          }, executor)).collect(Collectors.toList());
 
       if (failFastOnContinuousMode) {
         log.info("Fail fast enabled in continuous mode. The whole job fails on any single table failure");
         awaitFailFast(tableFutures, streamerInstances, shutdownRequested);
       } else {
-        CompletableFuture.allOf(tableFutures).join();
+        CompletableFuture.allOf(tableFutures.toArray(new CompletableFuture[0])).join();
       }
       log.info("Successful tables: {}, Failed tables: {}", successTables, failedTables);
     } finally {
@@ -589,37 +591,30 @@ public class HoodieMultiTableStreamer {
 
   /**
    * Waits until either every table sync finishes successfully or the first one fails. On the first failure, the
-   * remaining streamers are shut down and a {@link HoodieException} is thrown. Unlike {@code anyOf(...)}, this only
-   * trips on an <em>exceptional</em> completion, so a table that terminates normally (e.g. via a
+   * remaining streamers are shut down and a {@link HoodieException} is thrown. {@link FutureUtils#allOf} only trips
+   * on an <em>exceptional</em> completion, so a table that terminates normally (e.g. via a
    * {@link PostWriteTerminationStrategy}) does not abort its siblings.
    */
-  private void awaitFailFast(CompletableFuture<?>[] tableFutures, List<HoodieStreamer> streamerInstances, AtomicBoolean shutdownRequested) {
-    final CompletableFuture<Void> firstOutcome = new CompletableFuture<>();
-    // Trip as soon as any table fails ...
-    for (CompletableFuture<?> tableFuture : tableFutures) {
-      tableFuture.whenComplete((result, throwable) -> {
-        if (throwable != null) {
-          firstOutcome.completeExceptionally(throwable);
-        }
-      });
-    }
-    // ... or complete normally once every table has finished without failure.
-    CompletableFuture.allOf(tableFutures).whenComplete((result, throwable) -> {
-      if (throwable == null) {
-        firstOutcome.complete(null);
-      }
-    });
-
+  private void awaitFailFast(List<CompletableFuture<Void>> tableFutures, List<HoodieStreamer> streamerInstances, AtomicBoolean shutdownRequested) {
     try {
-      firstOutcome.join();
+      FutureUtils.allOf(tableFutures).join();
     } catch (CompletionException e) {
-      Throwable cause = e.getCause() != null ? e.getCause() : e;
+      Throwable cause = unwrapFailFastFailure(e);
       log.error("error while running MultiTableDeltaStreamer, shutting down remaining tables as fail fast is enabled", cause);
       shutdownRequested.set(true);
       // shutdownStreamers only interrupts; the executor teardown in syncContinuously() waits for the siblings to stop.
       shutdownStreamers(streamerInstances);
       throw new HoodieException("Fail fast is enabled and a table sync failed in continuous mode.", cause);
     }
+  }
+
+  // FutureUtils.allOf can wrap the real failure in more than one layer of CompletionException.
+  private static Throwable unwrapFailFastFailure(CompletionException e) {
+    Throwable cause = e;
+    while (cause instanceof CompletionException && cause.getCause() != null) {
+      cause = cause.getCause();
+    }
+    return cause;
   }
 
   /**
@@ -650,9 +645,7 @@ public class HoodieMultiTableStreamer {
   private void shutdownStreamers(List<HoodieStreamer> streamerInstances) {
     for (HoodieStreamer streamer : streamerInstances) {
       try {
-        if (!streamer.getIngestionService().isShutdown()) {
-          streamer.getIngestionService().shutdown(true);
-        }
+        streamer.shutdownForcefully();
       } catch (Exception e) {
         log.warn("error while shutting down a streamer instance during fail fast handling", e);
       }
