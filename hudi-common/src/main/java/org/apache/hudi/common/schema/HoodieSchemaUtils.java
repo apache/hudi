@@ -48,7 +48,8 @@ import java.util.stream.Stream;
  * <p>What lives here:</p>
  * <ul>
  *   <li>metadata fields: {@link #addMetadataFields(HoodieSchema, boolean)},
- *       {@link #removeMetadataFields(HoodieSchema)}, {@link #isMetadataField(String)}</li>
+ *       {@link #removeMetadataFields(HoodieSchema)}, {@link #createHoodieWriteSchema(String, boolean)},
+ *       {@link #isMetadataField(String)}</li>
  *   <li>record-key and delete-log schemas: {@link #getRecordKeySchema()},
  *       {@link #getRecordKeyPartitionPathSchema()}, {@link #createDeleteLogSchema(HoodieSchema, List)}</li>
  *   <li>projection and pruning: {@link #generateProjectionSchema(HoodieSchema, List)},
@@ -56,20 +57,26 @@ import java.util.stream.Stream;
  *       {@link #removeFields(HoodieSchema, Set)}</li>
  *   <li>appending and merging fields: {@link #appendFieldsToSchema(HoodieSchema, List)},
  *       {@link #appendFieldsToSchemaDedupNested(HoodieSchema, List)},
- *       {@link #mergeSchemas(HoodieSchema, HoodieSchema)}</li>
+ *       {@link #mergeSchemas(HoodieSchema, HoodieSchema)},
+ *       {@link #createNewSchemaFromFieldsWithReference(HoodieSchema, List)}</li>
+ *   <li>field copies and defaults: {@link #createNewSchemaField(HoodieSchemaField)} (the other
+ *       {@code createNewSchemaField} overloads are validated aliases of {@code HoodieSchemaField.of}),
+ *       {@link #toJavaDefaultValue(HoodieSchemaField)}</li>
  *   <li>nullability: {@link #asNullable(HoodieSchema)}</li>
- *   <li>name sanitizing: {@link #sanitizeName(String)}</li>
- *   <li>lookups that need more than {@link HoodieSchema} offers on its own:
- *       {@link #getNestedField(HoodieSchema, String)}, {@link #findNestedField(HoodieSchema, String)},
- *       {@link #findMissingFields(HoodieSchema, HoodieSchema)},
- *       {@link #resolveUnionSchema(HoodieSchema, String)}</li>
+ *   <li>naming: {@link #sanitizeName(String)}, {@link #getRecordQualifiedName(String)}</li>
+ *   <li>lookups and predicates that need more than {@link HoodieSchema} offers on its own:
+ *       {@link #findNestedField(HoodieSchema, String)}, {@link #findMissingFields(HoodieSchema, HoodieSchema)},
+ *       {@link #resolveUnionSchema(HoodieSchema, String)}, {@link #hasDecimalField(HoodieSchema)}</li>
  * </ul>
  *
  * <p>Not here:</p>
  * <ul>
  *   <li>value and record operations: {@link org.apache.hudi.common.avro.HoodieAvroUtils}</li>
  *   <li>reader/writer compatibility checks: {@link HoodieSchemaCompatibility}</li>
- *   <li>questions about a single schema: instance methods on {@link HoodieSchema}</li>
+ *   <li>questions about a single schema: instance methods on {@link HoodieSchema}.
+ *       {@link #getFieldSchema(HoodieSchema, String)} and {@link #getNestedField(HoodieSchema, String)} are
+ *       argument-checking facades over {@link HoodieSchema#getField(String)} and
+ *       {@link HoodieSchema#getNestedField(String)}, not lookups of their own</li>
  *   <li>the field-id InternalSchema (schema-on-read) domain: {@code org.apache.hudi.common.schema.internal}</li>
  * </ul>
  *
