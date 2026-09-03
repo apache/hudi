@@ -527,6 +527,9 @@ public class HoodieMultiTableStreamer {
    * Otherwise, every table is synced independently and a single failure does not affect the others.
    */
   private void syncContinuously() {
+    if (tableExecutionContexts.isEmpty()) {
+      return;
+    }
     // Streamer instances are registered from worker threads, so a thread-safe list is required.
     final List<HoodieStreamer> streamerInstances = new CopyOnWriteArrayList<>();
     // Set once fail fast trips, so tasks that register their streamer afterwards stop before starting the sync.
