@@ -24,20 +24,20 @@
 //! the plan; this operator only reads the named slices and projects the
 //! requested columns.
 //!
-//! hudi-rs is on the arrow 57 line while this workspace is on 58. Every batch
-//! crosses between the two through the Arrow C data interface, whose layout is
-//! fixed by the Arrow specification and therefore identical across arrow crate
-//! majors; the transfer is pointer-level, not a copy.
+//! Every batch crosses from hudi-rs into this workspace through the Arrow C
+//! data interface, whose layout is fixed by the Arrow specification and is
+//! identical across arrow crate majors; the transfer is pointer-level, not a
+//! copy. hudi-rs currently pins the same arrow major, so the crossing is a
+//! same-crate round trip; if the lines diverge again, only the export side
+//! switches to a renamed dep on hudi-rs's line.
 
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 
-use arrow::array::{RecordBatch, RecordBatchOptions, StructArray};
+use arrow::array::{Array as _, RecordBatch, RecordBatchOptions, StructArray};
 use arrow::compute::cast;
 use arrow::datatypes::SchemaRef;
-use arrow_57::array::{Array as _, StructArray as StructArray57};
-use arrow_57::record_batch::RecordBatch as RecordBatch57;
 use datafusion::common::{DataFusionError, Result as DFResult};
 use datafusion::execution::{SendableRecordBatchStream, TaskContext};
 use datafusion::physical_expr::EquivalenceProperties;
@@ -95,19 +95,16 @@ impl HudiScanExec {
     }
 }
 
-/// Moves a batch from hudi-rs's arrow 57 into this workspace's arrow 58 over
-/// the Arrow C data interface.
-fn batch_across_ffi(batch: RecordBatch57) -> DFResult<RecordBatch> {
-    let data = StructArray57::from(batch).into_data();
-    let (ffi_array, ffi_schema) = arrow_57::ffi::to_ffi(&data)
+/// Moves a batch from hudi-rs's arrow into this workspace's arrow over the
+/// Arrow C data interface.
+fn batch_across_ffi(batch: RecordBatch) -> DFResult<RecordBatch> {
+    let data = StructArray::from(batch).into_data();
+    let (ffi_array, ffi_schema) = arrow::ffi::to_ffi(&data)
         .map_err(|e| DataFusionError::Execution(format!("Hudi scan arrow export failed: {e}")))?;
     // SAFETY: FFI_ArrowArray and FFI_ArrowSchema are the #[repr(C)] structs of
     // the Arrow C data interface; their layout is defined by the Arrow
-    // specification and is the same in both crate versions. Ownership moves
-    // with the structs, so the release callbacks fire exactly once, on the
-    // arrow 58 side.
-    let (ffi_array, ffi_schema): (arrow::ffi::FFI_ArrowArray, arrow::ffi::FFI_ArrowSchema) =
-        unsafe { (std::mem::transmute(ffi_array), std::mem::transmute(ffi_schema)) };
+    // specification and is identical across arrow crate versions. Ownership
+    // moves with the structs, so the release callbacks fire exactly once.
     let data = unsafe { arrow::ffi::from_ffi(ffi_array, &ffi_schema) }
         .map_err(|e| DataFusionError::Execution(format!("Hudi scan arrow import failed: {e}")))?;
     Ok(RecordBatch::from(StructArray::from(data)))
