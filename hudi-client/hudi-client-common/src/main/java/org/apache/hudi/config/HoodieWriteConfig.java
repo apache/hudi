@@ -2535,10 +2535,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED);
   }
 
-  public String parquetOutputTimestampType() {
-    return getString(HoodieStorageConfig.PARQUET_OUTPUT_TIMESTAMP_TYPE);
-  }
-
   public String parquetFieldIdWriteEnabled() {
     return getString(HoodieStorageConfig.PARQUET_FIELD_ID_WRITE_ENABLED);
   }
