@@ -37,7 +37,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.HoodieSchemas;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
@@ -388,7 +388,7 @@ public class HoodieFileSliceTestUtils {
       HoodieSchema tableSchema,
       String logInstantTime
   ) throws IOException {
-    HoodieSchema deleteLogSchema = HoodieSchemas.createDeleteLogSchema(tableSchema, Arrays.asList(TIMESTAMP));
+    HoodieSchema deleteLogSchema = HoodieSchemaUtils.createDeleteLogSchema(tableSchema, Arrays.asList(TIMESTAMP));
     try (HoodieAvroFileWriter writer = createNativeLogWriter(storage, logFilePath, deleteLogSchema, logInstantTime)) {
       for (IndexedRecord record : records) {
         String recordKey = record.get(record.getSchema().getField(ROW_KEY).pos()).toString();

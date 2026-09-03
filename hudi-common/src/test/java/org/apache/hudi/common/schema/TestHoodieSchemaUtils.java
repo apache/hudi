@@ -31,11 +31,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.nio.ByteBuffer;
-import java.sql.Timestamp;
-import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -1047,6 +1043,11 @@ public class TestHoodieSchemaUtils {
     assertTrue(fieldNames1.contains("_row_key"));
     assertTrue(fieldNames1.contains("timestamp"));
 
+    // Field names are matched case-insensitively; HiveHoodieReaderContext lowercases names before calling this.
+    HoodieSchema schema2 = HoodieSchemaUtils.generateProjectionSchema(originalSchema, Arrays.asList("_ROW_KEY"));
+    assertEquals(1, schema2.getFields().size());
+    assertEquals("_row_key", schema2.getFields().get(0).name());
+
     Throwable caughtException = assertThrows(HoodieException.class, () ->
         HoodieSchemaUtils.generateProjectionSchema(originalSchema, Arrays.asList("_row_key", "timestamp", "fake_field")));
     assertTrue(caughtException.getMessage().contains("Field fake_field not found in log schema. Query cannot proceed!"));
@@ -1307,115 +1308,6 @@ public class TestHoodieSchemaUtils {
   }
 
   @Test
-  public void testConvertValueForSpecificDataTypes_NullSchema() {
-    // Test with null schema - should return value unchanged
-    String testValue = "test_value";
-    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(null, testValue, false);
-    assertEquals(testValue, result);
-  }
-
-  @Test
-  public void testConvertValueForSpecificDataTypes_NullValue_NullableSchema() {
-    // Test with null value and nullable schema - should return null
-    HoodieSchema nullableIntSchema = HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.INT));
-    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(nullableIntSchema, null, false);
-    assertNull(result);
-  }
-
-  @Test
-  public void testConvertValueForSpecificDataTypes_NullValue_NonNullableSchema() {
-    // Test with null value and non-nullable schema - should throw exception
-    HoodieSchema nonNullableSchema = HoodieSchema.create(HoodieSchemaType.STRING);
-    assertThrows(IllegalStateException.class, () ->
-        HoodieSchemaUtils.convertValueForSpecificDataTypes(nonNullableSchema, null, false));
-  }
-
-  @Test
-  public void testConvertValueForSpecificDataTypes_DateLogicalType() {
-    // Create date schema
-    HoodieSchema dateSchema = HoodieSchema.createDate();
-
-    // Test value: epoch days for 2023-01-01
-    int epochDays = 19358;
-    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(dateSchema, epochDays, false);
-    assertNotNull(result);
-    assertTrue(result instanceof LocalDate);
-    assertEquals(LocalDate.of(2023, 1, 1), result);
-  }
-
-  @Test
-  public void testConvertValueForSpecificDataTypes_TimestampMillis_Enabled() {
-    // Create timestamp-millis schema
-    HoodieSchema timestampMillisSchema = HoodieSchema.createTimestampMillis();
-
-    // Test value: milliseconds for 2023-01-01 00:00:00
-    long millis = 1672560000000L;
-    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(timestampMillisSchema, millis, true);
-    assertNotNull(result);
-    assertTrue(result instanceof Timestamp);
-    assertEquals(new Timestamp(millis), result);
-  }
-
-  @Test
-  public void testConvertValueForSpecificDataTypes_TimestampMillis_Disabled() {
-    // Create timestamp-millis schema
-    HoodieSchema timestampMillisSchema = HoodieSchema.createTimestampMillis();
-    long millis = 1672560000000L;
-    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(timestampMillisSchema, millis, false);
-    assertEquals(millis, result);
-  }
-
-  @Test
-  public void testConvertValueForSpecificDataTypes_TimestampMicros_Enabled() {
-    // Create timestamp-micros schema
-    HoodieSchema timestampMicrosSchema = HoodieSchema.createTimestampMicros();
-
-    // Test value: microseconds for 2023-01-01 00:00:00
-    long micros = 1672560000000000L;
-    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(timestampMicrosSchema, micros, true);
-    assertNotNull(result);
-    assertTrue(result instanceof Timestamp);
-    assertEquals(new Timestamp(micros / 1000), result);
-  }
-
-  @Test
-  public void testConvertValueForSpecificDataTypes_DecimalBytes() {
-    // Create decimal schema with precision=10, scale=2
-    HoodieSchema decimalSchema = HoodieSchema.createDecimal(10, 2);
-
-    // Create test value: 1234.56
-    BigDecimal expectedDecimal = new BigDecimal("1234.56");
-    ByteBuffer byteBuffer = ByteBuffer.wrap(expectedDecimal.unscaledValue().toByteArray());
-    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(decimalSchema, byteBuffer, false);
-    assertNotNull(result);
-    assertTrue(result instanceof BigDecimal);
-    assertEquals(expectedDecimal, result);
-  }
-
-  @Test
-  public void testConvertValueForSpecificDataTypes_NonLogicalType() {
-    // Test with non-logical type (plain string) - should return unchanged
-    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
-    String testValue = "test_string";
-    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(stringSchema, testValue, false);
-    assertEquals(testValue, result);
-  }
-
-  @Test
-  public void testConvertValueForSpecificDataTypes_UnionWithNull() {
-    // Test with union type containing null
-    HoodieSchema dateSchema = HoodieSchema.createDate();
-    HoodieSchema nullableDateSchema = HoodieSchema.createNullable(dateSchema);
-
-    // Test with non-null value
-    int epochDays = 19358; // 2023-01-01
-    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(nullableDateSchema, epochDays, false);
-    assertNotNull(result);
-    assertTrue(result instanceof LocalDate);
-    assertEquals(LocalDate.of(2023, 1, 1), result);
-  }
-
-  @Test
   void testHasDecimalField() {
     assertTrue(HoodieSchemaUtils.hasDecimalField(HoodieSchema.parse(SCHEMA_WITH_DECIMAL_FIELD)));
     assertFalse(HoodieSchemaUtils.hasDecimalField(HoodieSchema.parse(EVOLVED_SCHEMA)));
@@ -1440,13 +1332,6 @@ public class TestHoodieSchemaUtils {
             HoodieSchemaField.of("arrayfield", HoodieSchema.createArray(HoodieSchema.createDecimal(10, 6)), null, null)
         ));
     assertTrue(HoodieSchemaUtils.hasDecimalField(recordWithMapAndDecArray));
-  }
-
-  @Test
-  void testHasSmallPrecisionDecimalField() {
-    assertTrue(HoodieSchemaUtils.hasSmallPrecisionDecimalField(HoodieSchema.parse(SCHEMA_WITH_DECIMAL_FIELD)));
-    assertFalse(HoodieSchemaUtils.hasSmallPrecisionDecimalField(HoodieSchema.parse(SCHEMA_WITH_AVRO_TYPES_STR)));
-    assertFalse(HoodieSchemaUtils.hasSmallPrecisionDecimalField(HoodieSchema.parse(EXAMPLE_SCHEMA)));
   }
 
   @Test
@@ -2197,5 +2082,91 @@ public class TestHoodieSchemaUtils {
     assertEquals("complex_field.key_value.value.list.element.value", result.get().getLeft());
     assertEquals("value", result.get().getRight().name());
     assertEquals(HoodieSchemaType.LONG, result.get().getRight().schema().getType());
+  }
+
+  private static HoodieSchema deleteLogTableSchema() {
+    return HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("ts", HoodieSchema.create(HoodieSchemaType.LONG), "ordering field doc", null),
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("seq", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("opt_ts", HoodieSchema.createUnion(
+                HoodieSchema.create(HoodieSchemaType.LONG), HoodieSchema.create(HoodieSchemaType.NULL))),
+            HoodieSchemaField.of("ts_ms", HoodieSchema.createTimestampMillis()),
+            HoodieSchemaField.of("amount", HoodieSchema.createDecimal(10, 2))
+        )
+    );
+  }
+
+  @Test
+  public void testCreateDeleteLogSchema() {
+    HoodieSchema deleteLogSchema =
+        HoodieSchemaUtils.createDeleteLogSchema(deleteLogTableSchema(), Collections.singletonList("ts"));
+
+    assertEquals("hudi_delete_log_record", deleteLogSchema.getName());
+    assertEquals(2, deleteLogSchema.getFields().size());
+
+    // The record key is always present and never nullable.
+    HoodieSchemaField recordKeyField = deleteLogSchema.getFields().get(0);
+    assertEquals(HoodieRecord.RECORD_KEY_METADATA_FIELD, recordKeyField.name());
+    assertEquals(HoodieSchemaType.STRING, recordKeyField.schema().getType());
+    assertFalse(recordKeyField.isNullable());
+
+    // The ordering field keeps its doc but is made nullable with a null default, even though
+    // the table schema marks it required.
+    HoodieSchemaField orderingField = deleteLogSchema.getFields().get(1);
+    assertEquals("ts", orderingField.name());
+    assertTrue(orderingField.isNullable());
+    assertEquals(HoodieSchemaType.LONG, orderingField.getNonNullSchema().getType());
+    assertEquals("ordering field doc", orderingField.doc().get());
+    assertEquals(HoodieSchema.NULL_VALUE, orderingField.defaultVal().get());
+  }
+
+  @Test
+  public void testCreateDeleteLogSchemaOrderingFieldVariants() {
+    HoodieSchema tableSchema = deleteLogTableSchema();
+
+    // Multiple ordering fields keep the caller's order and their own types.
+    HoodieSchema multiOrderingSchema = HoodieSchemaUtils.createDeleteLogSchema(tableSchema, Arrays.asList("ts", "seq"));
+    assertEquals(Arrays.asList(HoodieRecord.RECORD_KEY_METADATA_FIELD, "ts", "seq"),
+        multiOrderingSchema.getFields().stream().map(HoodieSchemaField::name).collect(Collectors.toList()));
+    HoodieSchemaField seqField = multiOrderingSchema.getFields().get(2);
+    assertTrue(seqField.isNullable());
+    assertEquals(HoodieSchemaType.STRING, seqField.getNonNullSchema().getType());
+    assertEquals(HoodieSchema.NULL_VALUE, seqField.defaultVal().get());
+
+    // No ordering fields leaves the record key alone.
+    assertEquals(1, HoodieSchemaUtils.createDeleteLogSchema(tableSchema, Collections.emptyList()).getFields().size());
+
+    // An already-nullable ordering field keeps its [long, null] branch order instead of being wrapped again.
+    HoodieSchema optionalOrderingSchema =
+        HoodieSchemaUtils.createDeleteLogSchema(tableSchema, Collections.singletonList("opt_ts"));
+    HoodieSchemaField optTsField = optionalOrderingSchema.getFields().get(1);
+    assertEquals(Arrays.asList(HoodieSchemaType.LONG, HoodieSchemaType.NULL),
+        optTsField.schema().getTypes().stream().map(HoodieSchema::getType).collect(Collectors.toList()));
+    assertTrue(optTsField.isNullable());
+    assertEquals(HoodieSchemaType.LONG, optTsField.getNonNullSchema().getType());
+    // Pins the current behaviour of HoodieSchemaField.of: it drops the NULL default for a non-null-first union.
+    assertFalse(optTsField.defaultVal().isPresent());
+
+    // Logical types survive the nullable wrapping.
+    HoodieSchema logicalOrderingSchema = HoodieSchemaUtils.createDeleteLogSchema(tableSchema, Arrays.asList("ts_ms", "amount"));
+    HoodieSchema tsMsSchema = logicalOrderingSchema.getFields().get(1).getNonNullSchema();
+    assertEquals(HoodieSchemaType.TIMESTAMP, tsMsSchema.getType());
+    assertEquals(HoodieSchema.TimePrecision.MILLIS, ((HoodieSchema.Timestamp) tsMsSchema).getPrecision());
+    HoodieSchema.Decimal amountSchema = (HoodieSchema.Decimal) logicalOrderingSchema.getFields().get(2).getNonNullSchema();
+    assertEquals(10, amountSchema.getPrecision());
+    assertEquals(2, amountSchema.getScale());
+  }
+
+  @Test
+  public void testCreateDeleteLogSchemaWithUnknownOrderingField() {
+    HoodieSchema tableSchema = deleteLogTableSchema();
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+        () -> HoodieSchemaUtils.createDeleteLogSchema(tableSchema, Collections.singletonList("not_a_field")));
+    assertEquals("Ordering field not_a_field not found in table schema", exception.getMessage());
   }
 }

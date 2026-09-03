@@ -65,7 +65,7 @@ public class HoodieSchemaCompatibilityChecker {
   /**
    * Message to annotate reader/writer schema pairs that are compatible.
    */
-  public static final String READER_WRITER_COMPATIBLE_MESSAGE = "Reader schema can always successfully decode data written using the writer schema.";
+  private static final String READER_WRITER_COMPATIBLE_MESSAGE = "Reader schema can always successfully decode data written using the writer schema.";
 
   /**
    * Validates that the provided reader schema can be used to decode avro data

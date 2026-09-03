@@ -24,6 +24,25 @@ import org.apache.hudi.common.util.Option;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Repairs the logical types of a file schema using the table schema as the reference.
+ *
+ * <p>Some writers persist a field without the logical type the table declares, or with a coarser one: a
+ * bare {@code long} where the table says local-timestamp, or timestamp-micros where the table says
+ * timestamp-millis. This class walks the file schema against the table schema and restores the table's
+ * logical type wherever the two only differ that way, returning an interned schema. When nothing needs
+ * repairing the input instance is returned as-is, so callers can compare by reference.</p>
+ *
+ * <p>This is neither a compatibility check nor schema evolution: no field is added, removed or promoted,
+ * and a genuine type mismatch is left alone. For reader/writer compatibility use
+ * {@link HoodieSchemaCompatibility}; for evolution use
+ * {@code org.apache.hudi.common.schema.internal.utils.AvroSchemaEvolutionUtils}.</p>
+ *
+ * <p>{@link #hasTimestampMillisField(HoodieSchema)} is the cheap pre-check used to decide whether the
+ * repair is worth wiring in at all. Its sibling in the metadata-table domain is
+ * {@code HoodieTableMetadataUtil#isTimestampMillisField}, which answers the same question for one field
+ * schema rather than recursively for a whole table schema.</p>
+ */
 public class HoodieSchemaRepair {
   public static HoodieSchema repairLogicalTypes(HoodieSchema fileSchema, HoodieSchema tableSchema) {
     HoodieSchema repairedSchema = repairSchema(fileSchema, tableSchema);

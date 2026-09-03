@@ -19,22 +19,30 @@
 package org.apache.hudi.common.schema;
 
 /**
- * Defines type promotion rules for HoodieSchema compatibility checking.
+ * The single table of primitive widening promotions, used by {@link HoodieSchemaProjectionChecker}.
  *
- * <p>Type promotion allows a reader schema with a "wider" type to read data
- * written with a "narrower" type. This follows Avro's type promotion rules.</p>
- *
- * <p>Supported promotions:
+ * <p>A promotion lets a reader schema with a wider type read data written with a narrower one:</p>
  * <ul>
- *   <li>INT → LONG, FLOAT, DOUBLE</li>
- *   <li>LONG → FLOAT, DOUBLE</li>
- *   <li>FLOAT → DOUBLE</li>
- *   <li>STRING ↔ BYTES (bidirectional)</li>
- *   <li>Decimal precision widening: (p2-s2) ≥ (p1-s1) and s2 ≥ s1</li>
+ *   <li>INT -&gt; LONG, FLOAT, DOUBLE</li>
+ *   <li>LONG -&gt; FLOAT, DOUBLE</li>
+ *   <li>FLOAT -&gt; DOUBLE</li>
+ *   <li>STRING &lt;-&gt; BYTES (bidirectional)</li>
+ *   <li>STRING &lt;- any numeric type</li>
+ *   <li>decimal widening, see {@link #isDecimalWidening(HoodieSchema, HoodieSchema)}</li>
  * </ul>
- * </p>
  *
- * <p>This class is package-private and used internally by schema compatibility checkers.</p>
+ * <p>Logical-type-over-primitive promotions are deliberately NOT in this table. A TIMESTAMP reader over a
+ * LONG writer, or a UUID reader over a STRING writer, is accepted by
+ * {@link HoodieSchemaCompatibilityChecker} for reader/writer compatibility, but it must not make a bare
+ * long a "compatible projection" of a timestamp: writer-schema deduction would then silently drop the
+ * logical type. Compatibility and projection are different questions, so they use different tables.</p>
+ *
+ * <p>One more difference is documented rather than resolved:
+ * {@link #isDecimalWidening(HoodieSchema, HoodieSchema)} additionally requires the same backing (fixed
+ * versus bytes) and, for fixed, an equal fixed size, whereas the decimal check in
+ * {@code HoodieSchemaCompatibilityChecker} compares only precision and scale.</p>
+ *
+ * <p>This class is package-private and used only by {@link HoodieSchemaProjectionChecker}.</p>
  */
 class HoodieSchemaTypePromotion {
 
@@ -44,7 +52,7 @@ class HoodieSchemaTypePromotion {
 
   /**
    * Checks if the reader type can be promoted from the writer type.
-   * This allows type widening (e.g., int → long) but not narrowing.
+   * This allows type widening (e.g., int -&gt; long) but not narrowing.
    *
    * @param readerType the type in the reader schema
    * @param writerType the type in the writer schema
@@ -90,8 +98,8 @@ class HoodieSchemaTypePromotion {
    * <ul>
    *   <li>Both schemas are decimals with the same underlying type (FIXED or BYTES)</li>
    *   <li>Reader precision and scale are equal or wider than writer's</li>
-   *   <li>Specifically: (readerPrecision - readerScale) ≥ (writerPrecision - writerScale)</li>
-   *   <li>And: readerScale ≥ writerScale</li>
+   *   <li>Specifically: (readerPrecision - readerScale) &gt;= (writerPrecision - writerScale)</li>
+   *   <li>And: readerScale &gt;= writerScale</li>
    * </ul>
    * </p>
    *

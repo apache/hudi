@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.schema.HoodieAvroSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
@@ -32,6 +33,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieException;
@@ -112,7 +114,44 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
- * Helper class to do common stuff across Avro.
+ * Operations on Avro records and values.
+ *
+ * <p>This class owns the record-level half of the Avro world:</p>
+ * <ul>
+ *   <li>serialization: {@code avroToBytes} / {@code bytesToAvro} and the JSON converters</li>
+ *   <li>record rewriting between schemas: {@code rewriteRecord*}, {@code projectRecordToNewSchemaShallow},
+ *       {@code stitchRecords}</li>
+ *   <li>value coercion for logical types: {@code convertValueFor*}, {@code convertBytesToBigDecimal}</li>
+ *   <li>record-key, metadata-column and nested-value access: {@code getNestedFieldVal},
+ *       {@code addHoodieKeyToRecord}, {@code getRecordColumnValues}, {@code createHoodieRecordFromAvro}</li>
+ * </ul>
+ *
+ * <p>Raw {@link Schema} helpers live here only when they serve a record operation on this class (for example
+ * {@code createNewSchemaField}, {@code unwrapNullable}). This is not the place for table-schema
+ * manipulation.</p>
+ *
+ * <p>Where else to look:</p>
+ * <ul>
+ *   <li>{@link org.apache.hudi.common.schema.HoodieSchema} - questions about one schema: navigation,
+ *       nullability, type predicates, and the {@code create*} / {@code parse} factories</li>
+ *   <li>{@link org.apache.hudi.common.schema.HoodieSchemaUtils} - HoodieSchema-typed structural transforms
+ *       of table schemas</li>
+ *   <li>{@link org.apache.hudi.common.schema.HoodieSchemaCompatibility} - reader/writer compatibility and
+ *       projection checks</li>
+ *   <li>{@code org.apache.hudi.common.schema.internal} - the field-id InternalSchema (schema-on-read) domain</li>
+ * </ul>
+ *
+ * <p>Union unwrapping is deliberately not one helper. Pick by contract:</p>
+ * <ul>
+ *   <li>{@code unwrapNullable} (this class) - lenient: the first non-null branch of any union</li>
+ *   <li>{@code getActualSchemaFromUnion} (this class, private) - resolves complex unions against the datum</li>
+ *   <li>{@code AvroSchemaUtils#getNonNullTypeFromUnion} - strict: throws unless the union is exactly one null
+ *       branch and one non-null branch</li>
+ *   <li>{@link HoodieSchema#getNonNullType()} - strips null branches and never throws</li>
+ *   <li>{@code HoodieSchemaUtils#resolveUnionSchema} - selects a branch by full name</li>
+ *   <li>{@code AvroOrcUtils#getActualSchemaType} - maps an all-null union to NULL</li>
+ * </ul>
+ * <p>These semantics differ on purpose (see #19212) and must not be merged into one helper.</p>
  */
 @Slf4j
 public class HoodieAvroUtils {
@@ -189,7 +228,7 @@ public class HoodieAvroUtils {
     return indexedRecordToBytesStream(record);
   }
 
-  public static <T extends IndexedRecord> ByteArrayOutputStream indexedRecordToBytesStream(T record) {
+  private static <T extends IndexedRecord> ByteArrayOutputStream indexedRecordToBytesStream(T record) {
     GenericDatumWriter<T> writer = new GenericDatumWriter<>(record.getSchema(), ConvertingGenericData.INSTANCE);
     try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
       BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, BINARY_ENCODER.get());
@@ -221,13 +260,12 @@ public class HoodieAvroUtils {
    * @param record The GenericRecord to convert
    * @param pretty Whether to pretty-print the json output
    */
-  public static String avroToJsonString(GenericRecord record, boolean pretty) throws IOException {
+  private static String avroToJsonString(GenericRecord record, boolean pretty) throws IOException {
     return avroToJsonHelper(record, pretty).toString();
   }
 
   /**
    * Convert a given avro record to a JSON string. If the record contents are invalid, return the record.toString().
-   * Use this method over {@link HoodieAvroUtils#avroToJsonString} when simply trying to print the record contents without any guarantees around their correctness.
    *
    * @param record The GenericRecord to convert
    * @return a JSON string
@@ -359,6 +397,7 @@ public class HoodieAvroUtils {
     return AvroSchemaUtils.createNewSchemaFromFieldsWithReference(schema, filteredFields);
   }
 
+  @VisibleForTesting
   public static Schema makeFieldNonNull(Schema schema, String fieldName, Object fieldDefaultValue) {
     ValidationUtils.checkArgument(fieldDefaultValue != null);
     List<Schema.Field> filteredFields = schema.getFields()
@@ -494,7 +533,7 @@ public class HoodieAvroUtils {
   /**
    * Wraps schema as nullable if original was a nullable union.
    */
-  public static Schema wrapNullable(Schema original, Schema updated) {
+  private static Schema wrapNullable(Schema original, Schema updated) {
     if (original.getType() == Schema.Type.UNION) {
       List<Schema> types = original.getTypes();
       if (types.stream().anyMatch(s -> s.getType() == Schema.Type.NULL)) {
@@ -575,6 +614,7 @@ public class HoodieAvroUtils {
    * <p>
    * To better understand conversion rules please check {@link #rewriteRecord(GenericRecord, Schema)}
    */
+  @VisibleForTesting
   public static List<GenericRecord> rewriteRecords(List<GenericRecord> records, Schema newSchema) {
     return records.stream().map(r -> rewriteRecord(r, newSchema)).collect(Collectors.toList());
   }
@@ -698,7 +738,7 @@ public class HoodieAvroUtils {
    * @return the string form of the field
    * or empty if the schema does not contain the field name or the value is null
    */
-  public static Option<String> getNullableValAsString(GenericRecord rec, String fieldName) {
+  private static Option<String> getNullableValAsString(GenericRecord rec, String fieldName) {
     Schema.Field field = rec.getSchema().getField(fieldName);
     String fieldVal = field == null ? null : StringUtils.objToString(rec.get(field.pos()));
     return Option.ofNullable(fieldVal);
@@ -883,20 +923,22 @@ public class HoodieAvroUtils {
    *
    * @param record  Hoodie record.
    * @param columns Names of the columns to get values.
-   * @param schema  {@link Schema} instance.
+   * @param schema  {@link HoodieSchema} instance.
    * @return Column value.
    */
   public static Object[] getRecordColumnValues(HoodieRecord record,
                                                String[] columns,
-                                               Schema schema,
+                                               HoodieSchema schema,
                                                boolean consistentLogicalTimestampEnabled) {
     try {
-      GenericRecord genericRecord = (GenericRecord) (record.toIndexedRecord(HoodieAvroSchemaCache.intern(schema), new Properties()).get()).getData();
-      List<Object> list = new ArrayList<>();
-      for (String col : columns) {
-        list.add(HoodieAvroUtils.getNestedFieldVal(genericRecord, col, true, consistentLogicalTimestampEnabled));
+      // Intern through the Avro-keyed cache so the per-comparison lookups in RDDBucketIndexPartitioner's sort
+      // comparator and the per-record lookups in HoodieTableMetadataUtil#collectColumnRangeMetadata stay O(1).
+      GenericRecord genericRecord = (GenericRecord) (record.toIndexedRecord(HoodieAvroSchemaCache.intern(schema.toAvroSchema()), PROPERTIES).get()).getData();
+      Object[] values = new Object[columns.length];
+      for (int i = 0; i < columns.length; i++) {
+        values[i] = HoodieAvroUtils.getNestedFieldVal(genericRecord, columns[i], true, consistentLogicalTimestampEnabled);
       }
-      return list.toArray();
+      return values;
     } catch (IOException e) {
       throw new HoodieIOException("Unable to read record with key:" + record.getKey(), e);
     }
@@ -907,7 +949,7 @@ public class HoodieAvroUtils {
    *
    * @param record  Hoodie record.
    * @param columns Names of the columns to get values.
-   * @param schema  {@link Schema} instance.
+   * @param schema  {@link HoodieSchema} instance.
    * @return Column value.
    */
   public static Object[] getSortColumnValuesWithPartitionPathAndRecordKey(HoodieRecord record,
@@ -1108,6 +1150,7 @@ public class HoodieAvroUtils {
     return result;
   }
 
+  @VisibleForTesting
   public static Object rewritePrimaryType(Object oldValue, Schema oldSchema, Schema newSchema) {
     // Normalize any java.time form (LocalDate / Instant / LocalDateTime) to the Avro primitive
     // form (Integer / Long) before doing any numeric / string conversion. The legacy branches
@@ -1274,7 +1317,8 @@ public class HoodieAvroUtils {
    * bytes is the result of BigDecimal.unscaledValue().toByteArray();
    * This is also what Conversions.DecimalConversion.toBytes() outputs inside a byte buffer
    */
-  public static Object convertBytesToFixed(byte[] bytes, Schema schema) {
+  @VisibleForTesting
+  static Object convertBytesToFixed(byte[] bytes, Schema schema) {
     LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) schema.getLogicalType();
     BigDecimal bigDecimal = convertBytesToBigDecimal(bytes, decimal);
     return DECIMAL_CONVERSION.toFixed(bigDecimal, schema, decimal);
@@ -1286,13 +1330,31 @@ public class HoodieAvroUtils {
    * bytes is the result of BigDecimal.unscaledValue().toByteArray();
    * This is also what Conversions.DecimalConversion.toBytes() outputs inside a byte buffer
    */
-  public static BigDecimal convertBytesToBigDecimal(byte[] value, LogicalTypes.Decimal decimal) {
+  @VisibleForTesting
+  static BigDecimal convertBytesToBigDecimal(byte[] value, LogicalTypes.Decimal decimal) {
     return convertBytesToBigDecimal(value, decimal.getPrecision(), decimal.getScale());
   }
 
   public static BigDecimal convertBytesToBigDecimal(byte[] value, int precision, int scale) {
     return new BigDecimal(new BigInteger(value),
         scale, new MathContext(precision, RoundingMode.HALF_UP));
+  }
+
+  /**
+   * Converts a byte array to a BigDecimal using the given decimal schema.
+   *
+   * @param value         the byte array to convert
+   * @param decimalSchema the decimal schema containing precision and scale
+   * @return the resulting BigDecimal
+   * @throws IllegalArgumentException if the schema is not a DECIMAL type
+   */
+  public static BigDecimal convertBytesToBigDecimal(byte[] value, HoodieSchema decimalSchema) {
+    ValidationUtils.checkArgument(decimalSchema != null, "Decimal schema cannot be null");
+    ValidationUtils.checkArgument(decimalSchema.getType() == HoodieSchemaType.DECIMAL,
+        () -> "Schema must be of DECIMAL type, but is " + decimalSchema.getType());
+
+    HoodieSchema.Decimal decimal = (HoodieSchema.Decimal) decimalSchema;
+    return convertBytesToBigDecimal(value, decimal.getPrecision(), decimal.getScale());
   }
 
   /**
@@ -1403,10 +1465,6 @@ public class HoodieAvroUtils {
 
   /**
    * convert days to Date
-   * <p>
-   * NOTE: This method could only be used in tests
-   *
-   * @VisibleForTesting
    */
   public static java.sql.Date toJavaDate(int days) {
     LocalDate date = LocalDate.ofEpochDay(days);
@@ -1417,10 +1475,6 @@ public class HoodieAvroUtils {
 
   /**
    * convert Date to days
-   * <p>
-   * NOTE: This method could only be used in tests
-   *
-   * @VisibleForTesting
    */
   public static int fromJavaDate(Date date) {
     long millisUtc = date.getTime();
@@ -1477,17 +1531,19 @@ public class HoodieAvroUtils {
   /**
    * Utility method to convert bytes to HoodieRecord using schema and payload class.
    */
-  public static <R> HoodieRecord<R> convertToRecord(GenericRecord rec, String payloadClazz, String[] preCombineFields, boolean withOperationField) {
+  @VisibleForTesting
+  static <R> HoodieRecord<R> convertToRecord(GenericRecord rec, String payloadClazz, String[] preCombineFields, boolean withOperationField) {
     return convertToRecord(rec, payloadClazz, preCombineFields,
         Pair.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD),
         withOperationField, Option.empty(), Option.empty());
   }
 
-  public static <R> HoodieRecord<R> convertToRecord(GenericRecord record, String payloadClazz,
-                                                                 String[] preCombineFields,
-                                                                 boolean withOperationField,
-                                                                 Option<String> partitionName,
-                                                                 Option<HoodieSchema> schemaWithoutMetaFields) {
+  @VisibleForTesting
+  static <R> HoodieRecord<R> convertToRecord(GenericRecord record, String payloadClazz,
+                                                          String[] preCombineFields,
+                                                          boolean withOperationField,
+                                                          Option<String> partitionName,
+                                                          Option<HoodieSchema> schemaWithoutMetaFields) {
     return convertToRecord(record, payloadClazz, preCombineFields,
         Pair.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD),
         withOperationField, partitionName, schemaWithoutMetaFields);
@@ -1496,6 +1552,7 @@ public class HoodieAvroUtils {
   /**
    * Utility method to convert bytes to HoodieRecord using schema and payload class.
    */
+  @VisibleForTesting
   public static <R> HoodieRecord<R> convertToRecord(GenericRecord record, String payloadClazz,
                                                                  String[] preCombineFields,
                                                                  Pair<String, String> recordKeyPartitionPathFieldPair,
@@ -1581,15 +1638,17 @@ public class HoodieAvroUtils {
     return rewriteRecordWithNewSchema(oldRecord, newSchema, Collections.EMPTY_MAP, validate);
   }
 
+  @VisibleForTesting
   public static boolean gteqAvro1_9() {
     return AVRO_VERSION != null && StringUtils.compareVersions(AVRO_VERSION, "1.9") >= 0;
   }
 
-  public static boolean gteqAvro1_10() {
+  @VisibleForTesting
+  static boolean gteqAvro1_10() {
     return AVRO_VERSION != null && StringUtils.compareVersions(AVRO_VERSION, "1.10") >= 0;
   }
 
-  static boolean gteqAvro1_12() {
+  private static boolean gteqAvro1_12() {
     return AVRO_VERSION != null && StringUtils.compareVersions(AVRO_VERSION, "1.12") >= 0;
   }
 

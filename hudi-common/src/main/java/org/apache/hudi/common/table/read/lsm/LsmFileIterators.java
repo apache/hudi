@@ -25,7 +25,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.HoodieSchemas;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.read.BufferedRecord;
@@ -173,7 +173,7 @@ final class LsmFileIterators {
       StoragePath storagePath,
       long fileSize,
       List<String> orderingFieldNames) throws IOException {
-    HoodieSchema deleteLogSchema = HoodieSchemas.createDeleteLogSchema(
+    HoodieSchema deleteLogSchema = HoodieSchemaUtils.createDeleteLogSchema(
         readerContext.getSchemaHandler().getTableSchema(), orderingFieldNames);
     ClosableIterator<T> recordIterator = createFileRecordIterator(
         readerContext, storage, pathInfo, storagePath, fileSize, deleteLogSchema, deleteLogSchema);
