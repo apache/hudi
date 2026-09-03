@@ -50,6 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.doAnswer;
@@ -270,6 +271,27 @@ class TestHiveQueryDDLExecutorSession {
     // could no longer load classes.
     assertSame(callerLoader, Thread.currentThread().getContextClassLoader(),
         "close() must not leave the closed loader of its session on the caller's thread");
+  }
+
+  /**
+   * The config outlives this executor and is copied by the driver and metastore client pools, so
+   * the session must not leave its id or its class loader on that config: close() deletes the
+   * scratch directories the id names and closes the loader.
+   */
+  @Test
+  void theSessionKeepsItsIdAndLoaderOffTheCallersConfig(@TempDir Path tempDir) throws Exception {
+    HiveSyncConfig config = hiveSyncConfig(tempDir);
+    ClassLoader callerConfLoader = config.getHiveConf().getClassLoader();
+
+    HiveQueryDDLExecutor executor = new HiveQueryDDLExecutor(config, mock(IMetaStoreClient.class));
+    executor.close();
+
+    String sessionId = config.getHiveConf().getVar(HiveConf.ConfVars.HIVESESSIONID);
+    assertTrue(sessionId == null || sessionId.isEmpty(),
+        "A session id on the caller's config is inherited by every session built from a copy of it, "
+            + "and those sessions would share the scratch directories this one deletes");
+    assertSame(callerConfLoader, config.getHiveConf().getClassLoader(),
+        "close() closes the loader its session's conf carries, so that conf cannot be the caller's");
   }
 
   /**

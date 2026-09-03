@@ -28,6 +28,7 @@ import org.apache.hudi.hive.util.HiveMetaStoreClientPool;
 import org.apache.hudi.hive.util.HivePartitionUtil;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.Table;
@@ -84,11 +85,19 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
     SessionState previousSession = SessionState.get();
     ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
     try {
-      this.sessionState = new SessionState(config.getHiveConf(),
+      // The session gets a conf of its own because it does not just read one: its constructor
+      // writes hive.session.id into it and swaps in a UDFClassLoader, and close() then deletes the
+      // scratch directories that id names and closes that loader. Given config's HiveConf, which
+      // outlives this executor, close() would leave the caller holding a closed loader, and every
+      // later copy of that conf -- the driver and metastore client pools each take one -- would
+      // inherit our session id and, with it, scratch directories we delete. HiveDriverPool's
+      // workers own their conf for the same reason.
+      HiveConf sessionConf = new HiveConf(config.getHiveConf());
+      this.sessionState = new SessionState(sessionConf,
           UserGroupInformation.getCurrentUser().getShortUserName());
       SessionState.start(this.sessionState);
       this.sessionState.setCurrentDatabase(databaseName);
-      this.hiveDriver = new org.apache.hadoop.hive.ql.Driver(config.getHiveConf());
+      this.hiveDriver = new org.apache.hadoop.hive.ql.Driver(sessionConf);
     } catch (Exception e) {
       try {
         closeDriverAndSession();
