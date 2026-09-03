@@ -346,6 +346,12 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
    * release locks. {@code SessionState.close()} then detaches, again regardless of whose session is
    * attached. So an executor constructed later on this thread would have its session damaged and
    * then unattached by this teardown unless ours is bound first and its own put back afterwards.
+   *
+   * <p>The session goes last for the same reason. Closing it first detaches it, which leaves
+   * {@code close()} to skip the lineage clear it null-checks for, and leaves {@code destroy()}
+   * dereferencing a null session to reach the transaction manager -- before it has removed the
+   * Driver's shutdown hook, so a query holding locks would leak the hook this teardown is here to
+   * remove.
    */
   private void closeDriverAndSession() {
     SessionState previousSession = SessionState.get();
