@@ -33,18 +33,15 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import software.amazon.awssdk.services.glue.model.Column;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.Instant;
 import java.util.Arrays;
 
-import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_SYNC_DATABASE_NAME;
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_SYNC_TABLE_NAME;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
@@ -125,21 +122,17 @@ public class GlueTestUtil {
     metaClient.reloadActiveTimeline();
   }
 
+  /** The doc on {@code name} is load bearing: it is the only place a real Avro doc reaches
+   * {@code AWSGlueCatalogSyncClient.getStorageFieldSchemas()}, which is what actually sources the
+   * comments the sync applies. Every other test hand-builds its {@code FieldSchema}s. */
+  public static final String NAME_FIELD_DOC = "the person's name";
+
   public static HoodieSchema getSimpleSchema() {
     return HoodieSchema.createRecord("example_schema", null, null,
         Arrays.asList(
             HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
-            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING))
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), NAME_FIELD_DOC, null)
         ));
-  }
-
-  private static void createMetaFile(String basePath, String fileName, HoodieCommitMetadata metadata)
-      throws IOException {
-    byte[] bytes = metadata.toJsonString().getBytes(StandardCharsets.UTF_8);
-    Path fullPath = new Path(basePath + "/" + METAFOLDER_NAME + "/" + fileName);
-    FSDataOutputStream fsout = fileSystem.create(fullPath, true);
-    fsout.write(bytes);
-    fsout.close();
   }
 
   public static Column getColumn(String name, String type, String comment) {

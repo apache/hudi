@@ -98,7 +98,6 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NA
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -206,6 +205,47 @@ class TestAWSGlueSyncClient {
     verify(mockAwsGlue, times(1)).createTable(any(CreateTableRequest.class));
   }
 
+  /**
+   * Thread on #19488: HiveSyncTool.syncHoodieTable runs syncFirstTime without syncSchema, so a table
+   * created with empty comments would only pick them up on the second sync. createTable therefore has to
+   * carry the docs itself, gated on hoodie.datasource.hive_sync.sync_comment.
+   */
+  @Test
+  void testCreateTableCarriesColumnCommentsOnTheFirstSync() {
+    String tableName = "testTable";
+    HoodieSchema storageSchema = GlueTestUtil.getSimpleSchema();
+    Mockito.when(mockAwsGlue.getTable(any(GetTableRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(GetTableResponse.builder().build()));
+    Mockito.when(mockAwsGlue.createTable(any(CreateTableRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(CreateTableResponse.builder().build()));
+
+    awsGlueSyncClient.createOrReplaceTable(tableName, storageSchema, "inputFormat", "outputFormat", "serde",
+        new HashMap<>(), new HashMap<>());
+
+    ArgumentCaptor<CreateTableRequest> captor = ArgumentCaptor.forClass(CreateTableRequest.class);
+    verify(mockAwsGlue, times(1)).createTable(captor.capture());
+    Map<String, String> commentsByName = captor.getValue().tableInput().storageDescriptor().columns().stream()
+        .collect(HashMap::new, (m, c) -> m.put(c.name(), c.comment()), HashMap::putAll);
+    assertEquals(GlueTestUtil.NAME_FIELD_DOC, commentsByName.get("name"),
+        "a column whose Avro field carries a doc must be created with that comment");
+    assertEquals("", commentsByName.get("id"), "a column with no doc keeps an empty comment");
+  }
+
+  /**
+   * getStorageFieldSchemas is what actually sources the comments the sync applies, from the Avro doc on the
+   * table schema. Every other test hand-builds its FieldSchemas, so this is the only place a real doc is read.
+   */
+  @Test
+  void testGetStorageFieldSchemasSurfacesTheAvroDoc() {
+    List<FieldSchema> fields = awsGlueSyncClient.getStorageFieldSchemas();
+
+    Map<String, Option<String>> docsByName = fields.stream()
+        .collect(HashMap::new, (m, f) -> m.put(f.getName(), f.getComment()), HashMap::putAll);
+    assertEquals(GlueTestUtil.NAME_FIELD_DOC, docsByName.get("name").get(),
+        "the Avro doc on the table schema must reach the sync as a field comment");
+    assertFalse(docsByName.get("id").isPresent(), "a field with no doc must surface no comment");
+  }
+
   @Test
   void testDropTable() {
     DeleteTableResponse response = DeleteTableResponse.builder().build();
@@ -287,6 +327,9 @@ class TestAWSGlueSyncClient {
 
     ArgumentCaptor<UpdateTableRequest> captor = ArgumentCaptor.forClass(UpdateTableRequest.class);
     verify(mockAwsGlue, times(1)).updateTable(captor.capture());
+    // hoodie.datasource.meta.sync.glue.skip_table_archive defaults to true and the other update paths
+    // honour it; without this the comment sync would archive a Glue table version on every run.
+    assertTrue(captor.getValue().skipArchive(), "the comment sync must honour skip_table_archive");
     TableInput sent = captor.getValue().tableInput();
     assertEquals("person's name", sent.storageDescriptor().columns().get(0).comment(),
         "the rebuilt storage descriptor must be the one sent, carrying the column comment");
@@ -354,17 +397,55 @@ class TestAWSGlueSyncClient {
   @Test
   void testWithCommentsAppliesTheStorageComment() {
     List<Column> columns = Arrays.asList(GlueTestUtil.getColumn("name", "string", null),
-        GlueTestUtil.getColumn("age", "int", "stale comment"));
+        GlueTestUtil.getColumn("age", "int", "stale comment"),
+        GlueTestUtil.getColumn("city", "string", "person's city"));
     Map<String, Option<String>> comments = new HashMap<>();
     comments.put("name", Option.of("person's name"));
     comments.put("age", Option.of("person's age"));
+    comments.put("city", Option.of("person's city"));
 
     List<Column> updated = AWSGlueCatalogSyncClient.withComments(columns, comments);
 
     assertEquals("person's name", updated.get(0).comment(), "a missing comment should be applied");
     assertEquals("person's age", updated.get(1).comment(), "an out-of-date comment should be replaced");
+    assertSame(columns.get(2), updated.get(2), "an already-correct column should be returned as-is");
     assertNull(columns.get(0).comment(), "the input columns must not be mutated");
     assertEquals("stale comment", columns.get(1).comment(), "the input columns must not be mutated");
+  }
+
+  /**
+   * Hudi's own createTable writes {@code comment("")}, and a storage field with no doc yields null, so
+   * comparing the two directly would rebuild every doc-less column and send an updateTable whose only
+   * effect is swapping "" for null - one redundant write per table after each create or schema evolution.
+   */
+  @Test
+  void testWithCommentsTreatsAnEmptyCommentAndNoCommentAsTheSame() {
+    List<Column> columns = Arrays.asList(GlueTestUtil.getColumn("name", "string", ""),
+        GlueTestUtil.getColumn("age", "int", null));
+    Map<String, Option<String>> comments = new HashMap<>();
+    comments.put("name", Option.empty());
+    comments.put("age", Option.of(""));
+
+    List<Column> updated = AWSGlueCatalogSyncClient.withComments(columns, comments);
+
+    assertSame(columns.get(0), updated.get(0), "\"\" in the catalog and no doc in storage is not a change");
+    assertSame(columns.get(1), updated.get(1), "null in the catalog and an empty doc in storage is not a change");
+  }
+
+  /**
+   * Names are matched case-insensitively, as {@code HoodieHiveSyncClient.updateTableComments} does. A table
+   * created out of band with lowercased column names would otherwise never receive its comments.
+   */
+  @Test
+  void testWithCommentsMatchesNamesCaseInsensitively() {
+    List<Column> columns = Collections.singletonList(GlueTestUtil.getColumn("Name", "string", null));
+    Map<String, Option<String>> comments = new HashMap<>();
+    comments.put("name", Option.of("person's name"));
+
+    List<Column> updated = AWSGlueCatalogSyncClient.withComments(columns, comments);
+
+    assertEquals("person's name", updated.get(0).comment(),
+        "a catalog column differing only in case must still be matched");
   }
 
   @Test
@@ -392,41 +473,6 @@ class TestAWSGlueSyncClient {
 
     assertEquals("keep me", updated.get(0).comment(), "an unknown column's comment must be preserved");
     assertSame(columns.get(0), updated.get(0), "and the column should be returned as-is");
-  }
-
-  @Test
-  void testWithCommentsLeavesAnUpToDateColumnAlone() {
-    List<Column> columns = Collections.singletonList(GlueTestUtil.getColumn("name", "string", "person's name"));
-    Map<String, Option<String>> comments = new HashMap<>();
-    comments.put("name", Option.of("person's name"));
-
-    List<Column> updated = AWSGlueCatalogSyncClient.withComments(columns, comments);
-
-    assertSame(columns.get(0), updated.get(0), "an unchanged column should be returned as-is");
-  }
-
-  /**
-   * Why the storage descriptor itself has to be rebuilt, not just the column list: its {@code columns()} is
-   * unmodifiable, and a descriptor built with new columns is a different object. Editing a copy of the list
-   * and then sending the original descriptor would silently drop the comments.
-   */
-  @Test
-  void testRebuildingColumnsRequiresRebuildingTheStorageDescriptor() {
-    Column column = GlueTestUtil.getColumn("name", "string", null);
-    StorageDescriptor original = StorageDescriptor.builder().columns(Collections.singletonList(column)).build();
-
-    assertThrows(UnsupportedOperationException.class,
-        () -> original.columns().set(0, column.toBuilder().comment("person's name").build()),
-        "SDK v2 returns an unmodifiable column list, so comments cannot be applied in place");
-
-    Map<String, Option<String>> comments = new HashMap<>();
-    comments.put("name", Option.of("person's name"));
-    StorageDescriptor updated =
-        original.toBuilder().columns(AWSGlueCatalogSyncClient.withComments(original.columns(), comments)).build();
-
-    assertNull(original.columns().get(0).comment(), "the original descriptor stays untouched");
-    assertEquals("person's name", updated.columns().get(0).comment(), "the rebuilt descriptor carries the comment");
-    assertNotEquals(original, updated, "the rebuilt descriptor must differ, which is what signals a change");
   }
 
   @Test
