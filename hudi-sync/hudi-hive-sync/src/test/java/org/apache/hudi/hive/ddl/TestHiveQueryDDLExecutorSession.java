@@ -226,23 +226,27 @@ class TestHiveQueryDDLExecutorSession {
   }
 
   /**
-   * The teardown binds the owned session first, but a session that cannot be bound still has to be
-   * closed and its Driver still destroyed: those are the shutdown hook and the scratch directories
-   * this teardown exists to reclaim.
+   * A session that cannot be bound is still closed and the thread still handed back, but the
+   * Driver is left alone: it reads its session from the thread, so tearing it down here would
+   * clear another session's lineage and release our locks through its transaction manager. The
+   * caller hears about it, as it does for any other failure to close.
    */
   @Test
-  void closeTearsDownEvenWhenTheSessionCannotBeBound() throws Exception {
+  void sessionThatCannotBeBoundIsStillClosedAndNothingElseIsTouched() throws Exception {
     Driver driver = mock(Driver.class);
     SessionState sessionState = mock(SessionState.class);
     HiveQueryDDLExecutor executor = executorWith(driver, sessionState);
+    SessionState otherSession = mock(SessionState.class);
+    when(otherSession.getConf()).thenReturn(new HiveConf());
+    SessionState.setCurrentSessionState(otherSession);
     when(sessionState.getConf()).thenThrow(new RuntimeException("conf unavailable"));
 
-    executor.close();
+    assertThrows(RuntimeException.class, executor::close);
 
-    InOrder inOrder = inOrder(driver, sessionState);
-    inOrder.verify(driver).close();
-    inOrder.verify(driver).destroy();
-    inOrder.verify(sessionState).close();
+    verify(sessionState, times(1)).close();
+    verify(driver, never()).close();
+    verify(driver, never()).destroy();
+    assertSame(otherSession, SessionState.get(), "The session the thread came in with must be put back");
   }
 
   /**
