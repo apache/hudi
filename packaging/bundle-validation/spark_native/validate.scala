@@ -83,4 +83,83 @@ val morRight = write("native_mor_2", "MERGE_ON_READ", Overwrite, rows(0, 300))
 write("native_mor_2", "MERGE_ON_READ", Append, rows(0, 150, 1000))
 probe("mor", morLeft, morRight)
 
+// Probes for the native Hudi scan (hudi-rs inside Comet). Only meaningful for a
+// bundle built with the Hudi-built Comet (-Dcomet.hudi.build), so gated on the
+// environment; the probes self-assert and exit non-zero on any failure or when
+// a probe was skipped by an exception spark-shell swallowed.
+if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
+  var failures = 0
+  var checksRun = 0
+  val expectedChecks = 8
+  def check(label: String, condition: Boolean, detail: => String): Unit = {
+    checksRun += 1
+    if (condition) {
+      println(s"::warning::native hudi scan check passed: $label")
+    } else {
+      println(s"::error::native hudi scan check failed: $label")
+      println(detail)
+      failures += 1
+    }
+  }
+  // The reader in this bundle's Comet build supports table versions 6/8/9, so
+  // the probes write their own version 8 tables, with updates in log files and
+  // a delete so the merge-on-read probe exercises real native log merging.
+  def writeV8(name: String, tableType: String, mode: org.apache.spark.sql.SaveMode,
+              df: org.apache.spark.sql.DataFrame, operation: String): String = {
+    val path = "file:///tmp/hudi-bundles/tests/" + name
+    df.write.format("hudi").
+      option("hoodie.write.table.version", "8").
+      option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+      option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+      option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+      option(TABLE_TYPE_OPT_KEY, tableType).
+      option("hoodie.datasource.write.operation", operation).
+      option(TABLE_NAME, name).
+      mode(mode).
+      save(path)
+    path
+  }
+  def updatedRows(from: Int, to: Int) = spark.range(from, to).selectExpr(
+    "concat('id-', cast(id as string)) as uuid",
+    "cast(id % 3 as string) as partitionpath",
+    "cast(id + 100000 as double) as fare",
+    "id + 100000 as ts")
+  val nativeCow = writeV8("native_scan_cow_v8", "COPY_ON_WRITE", Overwrite, rows(0, 300), "upsert")
+  writeV8("native_scan_cow_v8", "COPY_ON_WRITE", Append, updatedRows(0, 100), "upsert")
+  val nativeMor = writeV8("native_scan_mor_v8", "MERGE_ON_READ", Overwrite, rows(0, 300), "upsert")
+  writeV8("native_scan_mor_v8", "MERGE_ON_READ", Append, updatedRows(0, 150), "upsert")
+  writeV8("native_scan_mor_v8", "MERGE_ON_READ", Append, rows(280, 300), "delete")
+
+  def readSorted(path: String, native: Boolean): (Array[String], String) = {
+    spark.conf.set("spark.comet.scan.hudi.enabled", native.toString)
+    val df = spark.read.format("hudi").load(path)
+      .selectExpr("uuid", "partitionpath", "fare", "ts").orderBy("uuid")
+    val result = (df.collect().map(_.toString), df.queryExecution.executedPlan.toString)
+    spark.conf.set("spark.comet.scan.hudi.enabled", "false")
+    result
+  }
+  for ((label, path, isMor) <- Seq(
+      ("cow", nativeCow, false),
+      ("mor", nativeMor, true))) {
+    val (jvmRows, _) = readSorted(path, native = false)
+    val (nativeRows, nativePlan) = readSorted(path, native = true)
+    check(s"$label rows match the JVM read (n=${jvmRows.length})",
+      jvmRows.sameElements(nativeRows),
+      s"jvm n=${jvmRows.length} native n=${nativeRows.length}\n" +
+        s"only-jvm=${jvmRows.diff(nativeRows).take(5).mkString(";")}\n" +
+        s"only-native=${nativeRows.diff(jvmRows).take(5).mkString(";")}")
+    check(s"$label row count reflects the writes",
+      jvmRows.length == (if (isMor) 280 else 300), s"n=${jvmRows.length}")
+    check(s"$label scan is native", nativePlan.contains("CometHudiNativeScan"), nativePlan)
+    if (isMor) {
+      check(s"$label read has no row-to-columnar bridge",
+        !nativePlan.contains("CometSparkRowToColumnar"), nativePlan)
+    }
+  }
+  if (failures > 0 || checksRun != expectedChecks) {
+    println(s"::error::native hudi scan probes: failures=$failures checksRun=$checksRun expected=$expectedChecks")
+    System.exit(1)
+  }
+}
+
 System.exit(0)

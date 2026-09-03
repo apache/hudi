@@ -3327,5 +3327,20 @@
         </plugins>
       </build>
     </profile>
+    <!-- Adds the Comet glue module for the native Hudi scan. Requires the
+         Hudi-built Comet artifact in the local repository (see
+         packaging/hudi-spark-native-bundle/comet/build_comet.sh) and an
+         explicit -Ddatafusion.comet.version naming it. -->
+    <profile>
+      <id>comet-hudi-build</id>
+      <activation>
+        <property>
+          <name>comet.hudi.build</name>
+        </property>
+      </activation>
+      <modules>
+        <module>hudi-spark-datasource/hudi-spark-comet</module>
+      </modules>
+    </profile>
   </profiles>
 </project>
