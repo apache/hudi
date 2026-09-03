@@ -130,7 +130,7 @@ public class InternalSchemaConverter {
         return;
 
       case UNION:
-        collectColNamesFromSchema(schema.getNonNullType(), visited, resultSet);
+        schema.getTypes().forEach(branch -> collectColNamesFromSchema(branch, visited, resultSet));
         return;
 
       case ARRAY:

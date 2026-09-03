@@ -1382,7 +1382,12 @@ public class HoodieTableMetadataUtil {
     switch (schemaType) {
       case UNION:
         // TODO we need to handle unions in general case as well
-        return coerceToComparable(schema.getNonNullType(), val);
+        HoodieSchema nonNullSchema = schema.getNonNullType();
+        if (nonNullSchema.getType() == HoodieSchemaType.UNION) {
+          throw new HoodieNotSupportedException("Unsupported union type " + schema
+              + ": only a union of null and one non-null type is supported");
+        }
+        return coerceToComparable(nonNullSchema, val);
 
       case FIXED:
       case BYTES:

@@ -533,6 +533,15 @@ class TestHoodieTableMetadataUtil {
         HoodieSchema.create(HoodieSchemaType.DOUBLE), false));
     assertNull(HoodieTableMetadataUtil.coerceToComparable(
         HoodieSchema.create(HoodieSchemaType.NULL), "ignored"));
+    assertEquals(1, HoodieTableMetadataUtil.coerceToComparable(
+        HoodieSchema.createNullable(HoodieSchemaType.INT), true));
+    // A union with two or more non-null branches cannot be coerced and used to recurse forever (#19825)
+    HoodieSchema multiBranchUnion = HoodieSchema.createUnion(
+        HoodieSchema.create(HoodieSchemaType.NULL),
+        HoodieSchema.create(HoodieSchemaType.STRING),
+        HoodieSchema.create(HoodieSchemaType.INT));
+    assertThrows(HoodieNotSupportedException.class,
+        () -> HoodieTableMetadataUtil.coerceToComparable(multiBranchUnion, "ignored"));
   }
 
   @Test

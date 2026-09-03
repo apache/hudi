@@ -1379,9 +1379,13 @@ public class HoodieSchema implements Serializable {
   }
 
   /**
-   * If this is a union schema, returns the non-null type. Otherwise, returns this schema.
+   * Strips the null branch from a nullable union. For {@code ["null", T]} (in either order) this returns
+   * {@code T}. For a union with two or more non-null branches it returns a union of just those branches,
+   * or this schema when there is no null branch to strip, so the result can itself be a UNION. Callers
+   * that recurse on the result must check for that, or they will recurse forever. Non-union schemas are
+   * returned as-is.
    *
-   * @return the non-null schema from a union or the current schema
+   * @return the non-null schema from a nullable union, a union of the non-null branches, or this schema
    */
   public HoodieSchema getNonNullType() {
     if (type != HoodieSchemaType.UNION) {

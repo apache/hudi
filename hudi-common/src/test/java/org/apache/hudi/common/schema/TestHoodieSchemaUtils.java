@@ -1124,6 +1124,20 @@ public class TestHoodieSchemaUtils {
   }
 
   @Test
+  public void testFindNestedFieldThroughMultiBranchUnion() {
+    // A field typed ["null", "string", "int"] has no record to descend into and used to recurse forever (#19825)
+    HoodieSchema schema = HoodieSchema.createRecord("record", null, null, false,
+        Collections.singletonList(
+            HoodieSchemaField.of("u", HoodieSchema.createUnion(
+                HoodieSchema.create(HoodieSchemaType.NULL),
+                HoodieSchema.create(HoodieSchemaType.STRING),
+                HoodieSchema.create(HoodieSchemaType.INT)), null, null)
+        ));
+    assertTrue(HoodieSchemaUtils.findNestedField(schema, "u").isPresent());
+    assertFalse(HoodieSchemaUtils.findNestedField(schema, "u.x").isPresent());
+  }
+
+  @Test
   public void testCreateNewSchemaFromFieldsWithReference_NullSchema() {
     // This test should throw an IllegalArgumentException
     assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.createNewSchemaFromFieldsWithReference(null, Collections.emptyList()));
@@ -1332,6 +1346,26 @@ public class TestHoodieSchemaUtils {
             HoodieSchemaField.of("arrayfield", HoodieSchema.createArray(HoodieSchema.createDecimal(10, 6)), null, null)
         ));
     assertTrue(HoodieSchemaUtils.hasDecimalField(recordWithMapAndDecArray));
+    // Unions with two or more non-null branches used to recurse forever (#19825)
+    HoodieSchema recordWithMultiBranchUnions = HoodieSchema.createRecord("recordWithMultiBranchUnions", null, null, false,
+        Arrays.asList(
+            HoodieSchemaField.of("nullableStringOrInt", HoodieSchema.createUnion(
+                HoodieSchema.create(HoodieSchemaType.NULL),
+                HoodieSchema.create(HoodieSchemaType.STRING),
+                HoodieSchema.create(HoodieSchemaType.INT)), null, null),
+            HoodieSchemaField.of("stringOrInt", HoodieSchema.createUnion(
+                HoodieSchema.create(HoodieSchemaType.STRING),
+                HoodieSchema.create(HoodieSchemaType.INT)), null, null)
+        ));
+    assertFalse(HoodieSchemaUtils.hasDecimalField(recordWithMultiBranchUnions));
+    HoodieSchema recordWithDecimalInLastBranch = HoodieSchema.createRecord("recordWithDecimalInLastBranch", null, null, false,
+        Collections.singletonList(
+            HoodieSchemaField.of("nullableStringOrDecimal", HoodieSchema.createUnion(
+                HoodieSchema.create(HoodieSchemaType.NULL),
+                HoodieSchema.create(HoodieSchemaType.STRING),
+                HoodieSchema.createDecimal(10, 6)), null, null)
+        ));
+    assertTrue(HoodieSchemaUtils.hasDecimalField(recordWithDecimalInLastBranch));
   }
 
   @Test

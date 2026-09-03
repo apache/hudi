@@ -662,7 +662,12 @@ public final class HoodieSchemaUtils {
 
   private static Option<HoodieSchemaField> findNestedField(HoodieSchema schema, String[] fieldParts, int index) {
     if (schema.getType() == HoodieSchemaType.UNION) {
-      Option<HoodieSchemaField> notUnion = findNestedField(schema.getNonNullType(), fieldParts, index);
+      HoodieSchema nonNullSchema = schema.getNonNullType();
+      if (nonNullSchema.getType() == HoodieSchemaType.UNION) {
+        // A union with two or more non-null branches has no single record to descend into
+        return Option.empty();
+      }
+      Option<HoodieSchemaField> notUnion = findNestedField(nonNullSchema, fieldParts, index);
       if (!notUnion.isPresent()) {
         return Option.empty();
       }
@@ -800,6 +805,13 @@ public final class HoodieSchemaUtils {
     return "hoodie." + sanitizedTableName + "." + sanitizedTableName + "_record";
   }
 
+  /**
+   * Checks whether the schema is, or nests, a DECIMAL at any depth, descending through records, arrays,
+   * maps and every branch of a union.
+   *
+   * @param schema the schema to search
+   * @return true if a decimal type is found anywhere in the schema
+   */
   public static boolean hasDecimalField(HoodieSchema schema) {
     switch (schema.getType()) {
       case RECORD:
@@ -814,7 +826,7 @@ public final class HoodieSchemaUtils {
       case MAP:
         return hasDecimalField(schema.getValueType());
       case UNION:
-        return hasDecimalField(schema.getNonNullType());
+        return schema.getTypes().stream().anyMatch(HoodieSchemaUtils::hasDecimalField);
       case DECIMAL:
         return true;
       default:
