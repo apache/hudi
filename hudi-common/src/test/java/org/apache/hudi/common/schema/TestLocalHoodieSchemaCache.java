@@ -29,6 +29,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestLocalHoodieSchemaCache {
@@ -64,5 +65,22 @@ public class TestLocalHoodieSchemaCache {
     assertEquals(cacheNum, secondSchemaCacheNum);
     assertTrue(schemaCache.getSchema(cacheNum).isPresent());
     assertEquals(testSchema1, schemaCache.getSchema(cacheNum).get());
+  }
+
+  @Test
+  public void testCreateReturnsIndependentCaches() {
+    LocalHoodieSchemaCache first = LocalHoodieSchemaCache.create();
+    LocalHoodieSchemaCache second = LocalHoodieSchemaCache.create();
+    assertNotSame(first, second);
+
+    Integer firstId = first.cacheSchema(HoodieTestDataGenerator.HOODIE_SCHEMA);
+    // the second cache has not seen the schema: a shared instance would resolve the id
+    assertFalse(second.getSchema(firstId).isPresent());
+
+    // each cache starts its own id space, so the same id resolves to a different schema per cache
+    Integer secondId = second.cacheSchema(HoodieTestDataGenerator.NESTED_SCHEMA);
+    assertEquals(firstId, secondId);
+    assertEquals(HoodieTestDataGenerator.HOODIE_SCHEMA, first.getSchema(firstId).get());
+    assertEquals(HoodieTestDataGenerator.NESTED_SCHEMA, second.getSchema(secondId).get());
   }
 }
