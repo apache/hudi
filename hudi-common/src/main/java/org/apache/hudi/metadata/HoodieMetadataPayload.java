@@ -425,7 +425,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     }
 
     // TODO: feature(schema): Swap this over to HOODIE_METADATA_SCHEMA after HoodieRecordPayload implementations are using HoodieSchema
-    // Uses cached Avro schema reference for O(1) equality check.
+    // Reference equality against the generated class's SCHEMA$ singleton held in HOODIE_METADATA_AVRO_SCHEMA.
     if (schema == null || schema == HOODIE_METADATA_AVRO_SCHEMA) {
       // If the schema is same or none is provided, we can return the record directly
       HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, bloomFilterMetadata,

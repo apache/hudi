@@ -931,14 +931,14 @@ public class HoodieAvroUtils {
                                                HoodieSchema schema,
                                                boolean consistentLogicalTimestampEnabled) {
     try {
-      // Intern through the Avro-keyed cache: its identity front keeps the repeat lookups on the per-record sort and
-      // col-stats paths O(1), and the canonical instance keeps the identity fast path in BaseAvroPayload#getRecord.
-      GenericRecord genericRecord = (GenericRecord) (record.toIndexedRecord(HoodieAvroSchemaCache.intern(schema.toAvroSchema()), new Properties()).get()).getData();
-      List<Object> list = new ArrayList<>();
-      for (String col : columns) {
-        list.add(HoodieAvroUtils.getNestedFieldVal(genericRecord, col, true, consistentLogicalTimestampEnabled));
+      // Intern through the Avro-keyed cache so the per-comparison lookups in RDDBucketIndexPartitioner's sort
+      // comparator and the per-record lookups in HoodieTableMetadataUtil#collectColumnRangeMetadata stay O(1).
+      GenericRecord genericRecord = (GenericRecord) (record.toIndexedRecord(HoodieAvroSchemaCache.intern(schema.toAvroSchema()), PROPERTIES).get()).getData();
+      Object[] values = new Object[columns.length];
+      for (int i = 0; i < columns.length; i++) {
+        values[i] = HoodieAvroUtils.getNestedFieldVal(genericRecord, columns[i], true, consistentLogicalTimestampEnabled);
       }
-      return list.toArray();
+      return values;
     } catch (IOException e) {
       throw new HoodieIOException("Unable to read record with key:" + record.getKey(), e);
     }
