@@ -29,12 +29,15 @@ import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.ql.Driver;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.InOrder;
 
 import java.io.File;
 import java.lang.reflect.Field;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -65,9 +68,21 @@ import static org.mockito.Mockito.when;
  */
 class TestHiveQueryDDLExecutorSession {
 
+  private ClassLoader testLoader;
+
+  @BeforeEach
+  void rememberTestLoader() {
+    testLoader = Thread.currentThread().getContextClassLoader();
+  }
+
+  /**
+   * These tests attach sessions, and attaching one swaps the thread's class loader, so a test that
+   * fails mid-way would otherwise hand the next one a thread it does not expect.
+   */
   @AfterEach
   void detachTestSession() {
     SessionState.detachSession();
+    Thread.currentThread().setContextClassLoader(testLoader);
   }
 
   /**
@@ -133,18 +148,25 @@ class TestHiveQueryDDLExecutorSession {
     SessionState sessionState = mock(SessionState.class);
     Driver driver = mock(Driver.class);
     List<SessionState> sessionsSeenByDriver = new ArrayList<>();
+    List<ClassLoader> loadersSeenByDriver = new ArrayList<>();
     when(driver.run(anyString())).thenAnswer(invocation -> {
       sessionsSeenByDriver.add(SessionState.get());
+      loadersSeenByDriver.add(Thread.currentThread().getContextClassLoader());
       return null;
     });
     HiveQueryDDLExecutor executor = executorWith(driver, sessionState);
     SessionState.detachSession();
+    ClassLoader callerLoader = Thread.currentThread().getContextClassLoader();
 
     executor.runSQL("SHOW TABLES");
 
     assertEquals(Collections.singletonList(sessionState), sessionsSeenByDriver,
         "The executor must run under its own session");
+    assertEquals(Collections.singletonList(sessionState.getConf().getClassLoader()), loadersSeenByDriver,
+        "Binding the session swaps the thread's class loader for the session's, which is what has to be undone");
     assertNull(SessionState.get(), "A thread that held no session must be left holding none");
+    assertSame(callerLoader, Thread.currentThread().getContextClassLoader(),
+        "detachSession() leaves the session's class loader on the thread, so the operation must take it off");
   }
 
   /**
@@ -160,10 +182,13 @@ class TestHiveQueryDDLExecutorSession {
     Driver driver = mock(Driver.class);
     HiveQueryDDLExecutor executor = executorWith(driver, sessionState);
     SessionState.setCurrentSessionState(otherSession);
+    ClassLoader callerLoader = Thread.currentThread().getContextClassLoader();
 
     executor.runSQL("SHOW TABLES");
 
     assertSame(otherSession, SessionState.get(), "The session held before the statements must be put back");
+    assertSame(callerLoader, Thread.currentThread().getContextClassLoader(),
+        "The class loader held before the statements must be put back");
     verify(driver, times(1)).run("SHOW TABLES");
   }
 
@@ -208,16 +233,23 @@ class TestHiveQueryDDLExecutorSession {
   void constructionGivesTheThreadBackToTheCallersSession(@TempDir Path tempDir) throws Exception {
     SessionState callerSession = new SessionState(new HiveConf());
     SessionState.setCurrentSessionState(callerSession);
+    ClassLoader callerLoader = Thread.currentThread().getContextClassLoader();
 
     HiveQueryDDLExecutor executor =
         new HiveQueryDDLExecutor(hiveSyncConfig(tempDir), mock(IMetaStoreClient.class));
     try {
       assertSame(callerSession, SessionState.get(), "Construction must not keep the caller's thread");
+      assertSame(callerLoader, Thread.currentThread().getContextClassLoader(),
+          "Construction must not leave its session's class loader on the caller's thread");
     } finally {
       executor.close();
     }
 
     assertSame(callerSession, SessionState.get(), "close() must not take the caller's session with it");
+    // SessionState.close() closes the loader its session carries, so a thread left pointing at it
+    // could no longer load classes.
+    assertSame(callerLoader, Thread.currentThread().getContextClassLoader(),
+        "close() must not leave the closed loader of its session on the caller's thread");
   }
 
   /**
@@ -233,11 +265,14 @@ class TestHiveQueryDDLExecutorSession {
         Files.createFile(tempDir.resolve("not-a-directory")).toUri().toString() + "/scratch");
     SessionState callerSession = new SessionState(new HiveConf());
     SessionState.setCurrentSessionState(callerSession);
+    ClassLoader callerLoader = Thread.currentThread().getContextClassLoader();
 
     assertThrows(HoodieHiveSyncException.class,
         () -> new HiveQueryDDLExecutor(config, mock(IMetaStoreClient.class)));
 
     assertSame(callerSession, SessionState.get(), "A failed construction must not take the caller's session");
+    assertSame(callerLoader, Thread.currentThread().getContextClassLoader(),
+        "A failed construction must not take the caller's class loader");
   }
 
   /**
@@ -261,9 +296,13 @@ class TestHiveQueryDDLExecutorSession {
    * metaStoreClient keeps close() away from Hive.closeCurrent() and its static thread-local state.
    */
   private static HiveQueryDDLExecutor executorWith(Driver driver, SessionState sessionState) throws Exception {
-    // SessionState.setCurrentSessionState() reads the session's conf to swap the thread's
-    // context classloader.
-    when(sessionState.getConf()).thenReturn(new HiveConf());
+    // SessionState.setCurrentSessionState() swaps the thread's context class loader for the one on
+    // the session's conf. A real SessionState puts its own UDFClassLoader there, so give the stub a
+    // loader of its own too, otherwise the conf would carry this thread's loader and the swap would
+    // be invisible.
+    HiveConf sessionConf = new HiveConf();
+    sessionConf.setClassLoader(new URLClassLoader(new URL[0], sessionConf.getClassLoader()));
+    when(sessionState.getConf()).thenReturn(sessionConf);
     HiveQueryDDLExecutor executor = mock(HiveQueryDDLExecutor.class, CALLS_REAL_METHODS);
     setField(executor, "driverPool", Option.empty());
     setField(executor, "metaStoreClientPool", Option.empty());

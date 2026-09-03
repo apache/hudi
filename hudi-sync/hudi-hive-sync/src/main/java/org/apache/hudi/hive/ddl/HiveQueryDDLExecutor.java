@@ -82,6 +82,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
     // explicitly, so give the thread back once the Driver, whose constructor reads
     // SessionState.get(), has been built.
     SessionState previousSession = SessionState.get();
+    ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
     try {
       this.sessionState = new SessionState(config.getHiveConf(),
           UserGroupInformation.getCurrentUser().getShortUserName());
@@ -105,7 +106,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       });
       throw new HoodieHiveSyncException("Failed to create HiveQueryDDL object", e);
     } finally {
-      restoreSession(previousSession);
+      restoreThread(previousSession, previousLoader);
     }
   }
 
@@ -179,6 +180,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
     // may be another executor's or belong to an application that embeds this sync and holds its
     // own session -- so hand it back in the state we found it.
     SessionState previousSession = SessionState.get();
+    ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
     SessionState.setCurrentSessionState(sessionState);
     try {
       for (String sql : sqls) {
@@ -189,7 +191,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed in executing SQL", e);
     } finally {
-      restoreSession(previousSession);
+      restoreThread(previousSession, previousLoader);
     }
     log.info("Executed {} SQL statements sequentially in {} ms", sqls.size(), timer.endTimer());
     return responses;
@@ -338,6 +340,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
    */
   private void closeDriverAndSession() {
     SessionState previousSession = SessionState.get();
+    ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
     if (sessionState != null) {
       SessionState.setCurrentSessionState(sessionState);
     }
@@ -351,25 +354,30 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       }
     } finally {
       closeQuietly(sessionState);
-      // Unless the thread was holding ours, in which case closeQuietly has just detached the
-      // session it would restore.
+      // Unless the thread was holding ours, in which case there is nothing left to put back:
+      // closeQuietly has detached that session and closed the loader that came with it.
       if (previousSession != sessionState) {
-        restoreSession(previousSession);
+        restoreThread(previousSession, previousLoader);
       }
     }
   }
 
   /**
-   * Puts the thread's session back to what an operation found there, so that binding this
-   * executor's session is scoped to the operation that needs it. Hive has no notion of an empty
-   * slot to assign, hence the detach.
+   * Puts the thread back the way an operation found it, so that binding this executor's session is
+   * scoped to the operation that needs it. Hive has no notion of an empty session slot to assign,
+   * hence the detach. The class loader has to be restored separately because
+   * {@code setCurrentSessionState()} swaps in the session conf's loader -- a UDFClassLoader that
+   * belongs to that one session -- while {@code detachSession()} only clears the session, and
+   * {@code SessionState.close()} closes that loader on the way out. Left alone, the thread keeps a
+   * loader it does not own, or a closed one, and class loading breaks for whoever owns the thread.
    */
-  private static void restoreSession(SessionState previousSession) {
+  private static void restoreThread(SessionState previousSession, ClassLoader previousLoader) {
     if (previousSession != null) {
       SessionState.setCurrentSessionState(previousSession);
     } else {
       SessionState.detachSession();
     }
+    Thread.currentThread().setContextClassLoader(previousLoader);
   }
 
   /**
