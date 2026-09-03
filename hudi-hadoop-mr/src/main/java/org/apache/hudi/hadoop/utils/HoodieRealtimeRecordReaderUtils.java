@@ -63,6 +63,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
@@ -135,7 +136,7 @@ public class HoodieRealtimeRecordReaderUtils {
      */
     List<HoodieSchemaField> projectedFields = new ArrayList<>();
     for (String fn : fieldNames) {
-      HoodieSchemaField field = schemaFieldsMap.get(fn.toLowerCase());
+      HoodieSchemaField field = schemaFieldsMap.get(fn.toLowerCase(Locale.ROOT));
       if (field == null) {
         throw new HoodieException("Field " + fn + " not found in log schema. Query cannot proceed! "
             + "Derived Schema Fields: " + new ArrayList<>(schemaFieldsMap.keySet()));
@@ -150,7 +151,7 @@ public class HoodieRealtimeRecordReaderUtils {
   }
 
   public static Map<String, HoodieSchemaField> getNameToFieldMap(HoodieSchema schema) {
-    return schema.getFields().stream().map(r -> Pair.of(r.name().toLowerCase(), r))
+    return schema.getFields().stream().map(r -> Pair.of(r.name().toLowerCase(Locale.ROOT), r))
         .collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
   }
 
@@ -311,8 +312,8 @@ public class HoodieRealtimeRecordReaderUtils {
    */
   public static HoodieSchema addPartitionFields(HoodieSchema schema, List<String> partitioningFields) {
     final Set<String> firstLevelFieldNames =
-        schema.getFields().stream().map(HoodieSchemaField::name).map(String::toLowerCase).collect(Collectors.toSet());
-    List<String> fieldsToAdd = partitioningFields.stream().map(String::toLowerCase)
+        schema.getFields().stream().map(f -> f.name().toLowerCase(Locale.ROOT)).collect(Collectors.toSet());
+    List<String> fieldsToAdd = partitioningFields.stream().map(f -> f.toLowerCase(Locale.ROOT))
         .filter(x -> !firstLevelFieldNames.contains(x)).collect(Collectors.toList());
 
     return appendNullSchemaFields(schema, fieldsToAdd);

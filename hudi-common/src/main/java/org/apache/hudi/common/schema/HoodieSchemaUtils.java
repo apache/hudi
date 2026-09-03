@@ -35,6 +35,7 @@ import org.apache.avro.generic.GenericData;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -470,9 +471,11 @@ public final class HoodieSchemaUtils {
    *
    * <p>Field names are matched case-insensitively and the projected field keeps the schema's original casing:
    * Avro field names are case-sensitive while Hive lowercases column projections before they reach the reader
-   * (see {@code HoodieRealtimeRecordReaderUtils#generateProjectionSchema}), so both sides are lowercased for the
-   * lookup. A schema with two fields that differ only in case cannot be projected and fails on the duplicate
-   * lowercase key.</p>
+   * (see {@code HoodieRealtimeRecordReaderUtils#generateProjectionSchema}), so both sides are lowercased with
+   * {@code Locale.ROOT} for the lookup. The default locale would map an upper-case I to dotless-i under a Turkish
+   * or Azeri locale and break the match with {@code HiveHoodieReaderContext}, which pre-lowercases with
+   * {@code Locale.ROOT}. A schema with two fields that differ only in case cannot be projected and fails on the
+   * duplicate lowercase key.</p>
    *
    * @param originalSchema the source schema
    * @param fieldNames     the list of field names to include in the projection
@@ -485,10 +488,11 @@ public final class HoodieSchemaUtils {
     ValidationUtils.checkArgument(fieldNames != null, "Field names cannot be null");
 
     Map<String, HoodieSchemaField> schemaFieldsMap = originalSchema.getFields().stream()
-        .map(r -> Pair.of(r.name().toLowerCase(), r)).collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
+        .map(r -> Pair.of(r.name().toLowerCase(Locale.ROOT), r))
+        .collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
     List<HoodieSchemaField> projectedFields = new ArrayList<>(fieldNames.size());
     for (String fn : fieldNames) {
-      HoodieSchemaField field = schemaFieldsMap.get(fn.toLowerCase());
+      HoodieSchemaField field = schemaFieldsMap.get(fn.toLowerCase(Locale.ROOT));
       if (field == null) {
         throw new HoodieException("Field " + fn + " not found in log schema. Query cannot proceed! "
             + "Derived Schema Fields: " + new ArrayList<>(schemaFieldsMap.keySet()));
