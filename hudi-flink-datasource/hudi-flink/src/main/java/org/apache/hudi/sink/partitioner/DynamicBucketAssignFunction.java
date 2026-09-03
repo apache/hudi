@@ -55,6 +55,11 @@ import org.apache.flink.util.Collector;
  * {@code recordKey -> fileGroupId} mapping. Existing keys are routed as updates to
  * the recorded file group; new keys are assigned by {@link BucketAssigner} and then
  * written back to the backend so the streaming metadata writer can persist the assignment to RLI.
+ *
+ * <p>Preloaded index records emitted by the bootstrap operators (e.g. {@code RLIBootstrapOperator},
+ * {@code TimeBoundedRLIBootstrapOperator}) carry an already known {@code recordKey -> fileGroupId}
+ * mapping and no row data. They are applied directly to the index backend to warm up the cache and
+ * are never routed through {@link BucketAssigner} or emitted downstream.
  */
 public class DynamicBucketAssignFunction
     extends KeyedProcessFunctionAdapter<String, HoodieFlinkInternalRow, HoodieFlinkInternalRow>
@@ -118,6 +123,11 @@ public class DynamicBucketAssignFunction
 
   @Override
   public void processElement(HoodieFlinkInternalRow record, Context ctx, Collector<HoodieFlinkInternalRow> out) throws Exception {
+    if (record.isIndexRecord()) {
+      indexBackend.bootstrap(record.getPartitionPath(), record.getRecordKey(), record.getFileId());
+      return;
+    }
+
     String partitionPath = record.getPartitionPath();
     String recordKey = record.getRecordKey();
     String fileGroupId = indexBackend.get(partitionPath, recordKey);

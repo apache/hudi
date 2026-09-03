@@ -121,6 +121,12 @@ public class RecordLevelIndexBackend implements PartitionedIndexBackend {
     cleanExecutor.runIfNecessary(() -> cleanIfNecessary(0L, partitionPath));
   }
 
+  @Override
+  public void bootstrap(String partitionPath, String recordKey, String fileId) {
+    BucketCache cache = getOrCreatePartitionCache(partitionPath);
+    cache.bootstrapRecordKey(recordKey, fileId);
+  }
+
   /**
    * Records the latest checkpoint id seen by this assign subtask.
    *
@@ -159,6 +165,24 @@ public class RecordLevelIndexBackend implements PartitionedIndexBackend {
     }
 
     cache = bootstrapPartition(partitionPath);
+    partitionBucketCaches.put(partitionPath, cache);
+    return cache;
+  }
+
+  /**
+   * Returns the partition cache, creating an empty one without scanning the persisted index if it
+   * does not exist yet.
+   *
+   * <p>Used for preloaded mappings that are already known to be complete for the partition, e.g. one
+   * emitted by a bootstrap operator that has already scanned the persisted index upstream.
+   */
+  private BucketCache getOrCreatePartitionCache(String partitionPath) {
+    BucketCache cache = partitionBucketCaches.get(partitionPath);
+    if (cache != null) {
+      return cache;
+    }
+
+    cache = createBucketCache(partitionPath);
     partitionBucketCaches.put(partitionPath, cache);
     return cache;
   }
