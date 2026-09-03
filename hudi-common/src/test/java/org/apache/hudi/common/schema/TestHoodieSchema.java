@@ -75,6 +75,17 @@ public class TestHoodieSchema {
           + "  ]"
           + "}";
 
+  // The Blob schema is persisted in the table schema of every BLOB table, so its serialized shape is pinned literally.
+  private static final String BLOB_SCHEMA_JSON = "{\"type\":\"record\",\"name\":\"blob\",\"fields\":["
+      + "{\"name\":\"type\",\"type\":{\"type\":\"enum\",\"name\":\"blob_storage_type\",\"symbols\":[\"INLINE\",\"OUT_OF_LINE\"]}},"
+      + "{\"name\":\"data\",\"type\":[\"null\",\"bytes\"],\"default\":null},"
+      + "{\"name\":\"reference\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"reference\",\"fields\":["
+      + "{\"name\":\"external_path\",\"type\":\"string\"},"
+      + "{\"name\":\"offset\",\"type\":[\"null\",\"long\"]},"
+      + "{\"name\":\"length\",\"type\":[\"null\",\"long\"]},"
+      + "{\"name\":\"managed\",\"type\":\"boolean\"}]}],\"default\":null}],"
+      + "\"logicalType\":\"blob\"}";
+
   /**
    * Checks if the given Avro schema is a Variant schema. This checks for the Variant logical type.
    *
@@ -2552,26 +2563,10 @@ public class TestHoodieSchema {
     assertTrue(managedOpt.isPresent());
     assertEquals(HoodieSchemaType.BOOLEAN, managedOpt.get().schema().getType());
     assertFalse(managedOpt.get().schema().isNullable());
-  }
 
-  @Test
-  public void testBlobNullableFieldsPutNullFirst() {
-    HoodieSchema.Blob blob = HoodieSchema.createBlob();
-
-    HoodieSchema refSchema = blob.getField("reference").get().schema().getNonNullType();
-    List<HoodieSchemaField> nullableFields = Arrays.asList(
-        blob.getField("data").get(),
-        blob.getField("reference").get(),
-        refSchema.getField("offset").get(),
-        refSchema.getField("length").get());
-
-    for (HoodieSchemaField field : nullableFields) {
-      HoodieSchema fieldSchema = field.schema();
-      assertEquals(HoodieSchemaType.UNION, fieldSchema.getType(), field.name() + " must be a union");
-      List<HoodieSchema> branches = fieldSchema.getTypes();
-      assertEquals(2, branches.size(), field.name() + " must be a two-branch union");
-      assertEquals(HoodieSchemaType.NULL, branches.get(0).getType(), field.name() + " must put null first");
-    }
+    // Enum symbols, null-first unions, the null defaults on data/reference (and none on offset/length),
+    // the reference record name and the blob logical type, pinned as the persisted string.
+    assertEquals(BLOB_SCHEMA_JSON, blob.toAvroSchema().toString());
   }
 
   @Test

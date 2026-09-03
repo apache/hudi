@@ -725,6 +725,13 @@ public class TestHoodieSchemaCompatibility {
     // Primitive widening, delegated to HoodieSchemaTypePromotion.
     assertCompatible(HoodieSchema.create(HoodieSchemaType.DOUBLE), HoodieSchema.create(HoodieSchemaType.FLOAT));
     assertIncompatible(HoodieSchema.create(HoodieSchemaType.FLOAT), HoodieSchema.create(HoodieSchemaType.DOUBLE));
+    // The narrowing direction is rejected for every numeric pair. The hudi-spark guard for the reversed
+    // argument bug class (TestTableSchemaEvolution, HUDI-1493) never runs, so the pairs are pinned here.
+    assertIncompatible(HoodieSchema.create(HoodieSchemaType.INT), HoodieSchema.create(HoodieSchemaType.LONG));
+    assertIncompatible(HoodieSchema.create(HoodieSchemaType.INT), HoodieSchema.create(HoodieSchemaType.FLOAT));
+    assertIncompatible(HoodieSchema.create(HoodieSchemaType.INT), HoodieSchema.create(HoodieSchemaType.DOUBLE));
+    assertIncompatible(HoodieSchema.create(HoodieSchemaType.LONG), HoodieSchema.create(HoodieSchemaType.FLOAT));
+    assertIncompatible(HoodieSchema.create(HoodieSchemaType.LONG), HoodieSchema.create(HoodieSchemaType.DOUBLE));
     assertCompatible(HoodieSchema.create(HoodieSchemaType.STRING), HoodieSchema.create(HoodieSchemaType.BYTES));
     assertCompatible(HoodieSchema.create(HoodieSchemaType.BYTES), HoodieSchema.create(HoodieSchemaType.STRING));
     assertCompatible(HoodieSchema.create(HoodieSchemaType.STRING), HoodieSchema.create(HoodieSchemaType.INT));
@@ -732,8 +739,8 @@ public class TestHoodieSchemaCompatibility {
 
   @Test
   public void testAreSchemasCompatibleReaderIsFirstArgument() {
-    HoodieSchema longRecord = singleFieldRecord(HoodieSchema.create(HoodieSchemaType.LONG));
-    HoodieSchema intRecord = singleFieldRecord(HoodieSchema.create(HoodieSchemaType.INT));
+    HoodieSchema longRecord = HoodieSchemaTestUtils.createRecord("R", HoodieSchemaField.of("f", HoodieSchema.create(HoodieSchemaType.LONG), null, null));
+    HoodieSchema intRecord = HoodieSchemaTestUtils.createRecord("R", HoodieSchemaField.of("f", HoodieSchema.create(HoodieSchemaType.INT), null, null));
 
     // A long reader can read int data ...
     assertTrue(HoodieSchemaCompatibility.areSchemasCompatible(longRecord, intRecord));
@@ -751,6 +758,11 @@ public class TestHoodieSchemaCompatibility {
     assertEquals("a", writerField.name());
   }
 
+  /**
+   * The alias path is also driven end to end through the sole production caller,
+   * {@code HoodieTable#validateSchema} (see {@code TestHoodieTableSchemaEvolution#testFieldWithAlias}); this
+   * case pins the facade on its own.
+   */
   @Test
   public void testLookupWriterFieldAliasMatch() {
     HoodieSchemaField readerField = readerFieldWithAlias();
@@ -802,19 +814,16 @@ public class TestHoodieSchemaCompatibility {
 
   private static void assertCompatible(HoodieSchema readerFieldSchema, HoodieSchema writerFieldSchema) {
     assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(
-        singleFieldRecord(writerFieldSchema), singleFieldRecord(readerFieldSchema), true, true),
+        HoodieSchemaTestUtils.createRecord("R", HoodieSchemaField.of("f", writerFieldSchema, null, null)),
+        HoodieSchemaTestUtils.createRecord("R", HoodieSchemaField.of("f", readerFieldSchema, null, null)), true, true),
         "reader " + readerFieldSchema + " should read writer " + writerFieldSchema);
   }
 
   private static void assertIncompatible(HoodieSchema readerFieldSchema, HoodieSchema writerFieldSchema) {
     assertFalse(HoodieSchemaCompatibility.isSchemaCompatible(
-        singleFieldRecord(writerFieldSchema), singleFieldRecord(readerFieldSchema), true, true),
+        HoodieSchemaTestUtils.createRecord("R", HoodieSchemaField.of("f", writerFieldSchema, null, null)),
+        HoodieSchemaTestUtils.createRecord("R", HoodieSchemaField.of("f", readerFieldSchema, null, null)), true, true),
         "reader " + readerFieldSchema + " should not read writer " + writerFieldSchema);
-  }
-
-  private static HoodieSchema singleFieldRecord(HoodieSchema fieldSchema) {
-    return HoodieSchema.createRecord("R", null, null, false,
-        Collections.singletonList(HoodieSchemaField.of("f", fieldSchema, null, null)));
   }
 
   @Test

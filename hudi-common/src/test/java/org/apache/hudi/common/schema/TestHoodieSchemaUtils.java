@@ -2220,6 +2220,44 @@ public class TestHoodieSchemaUtils {
     assertTrue(exception.getMessage().contains("nothing"), exception.getMessage());
   }
 
+  @Test
+  public void testAsNullablePinsTheInternalSchemaRoundTripLosses() {
+    // All three losses are what the previous Avro-typed implementation produced as well: the
+    // InternalSchema has no field defaults, no ENUM type and no union branch order of its own.
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "Lossy",
+        "ns.test",
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("count", HoodieSchema.create(HoodieSchemaType.INT), null, 0),
+            HoodieSchemaField.of("kind", HoodieSchema.createEnum("Kind", "ns.test", null, Arrays.asList("A", "B")), null, null),
+            HoodieSchemaField.of("null_last",
+                HoodieSchema.createUnion(HoodieSchema.create(HoodieSchemaType.STRING), HoodieSchema.create(HoodieSchemaType.NULL)), null, null),
+            HoodieSchemaField.of("embedding", HoodieSchema.createVector(3), null, null)));
+
+    HoodieSchema nullable = HoodieSchemaUtils.asNullable(schema);
+
+    // A non-null default is replaced by the null default of the new union.
+    assertEquals(HoodieSchema.NULL_VALUE, nullable.getField("count").get().defaultVal().get());
+    // ENUM is lowered to STRING.
+    assertEquals(HoodieSchemaType.STRING, nullable.getField("kind").get().getNonNullSchema().getType());
+    // An already-nullable null-last union comes back null-first.
+    assertEquals(Arrays.asList(HoodieSchemaType.NULL, HoodieSchemaType.STRING),
+        nullable.getField("null_last").get().schema().getTypes().stream().map(HoodieSchema::getType).collect(Collectors.toList()));
+    // A VECTOR column, the Flink clustering case, survives with its logical type and dimension.
+    HoodieSchema embedding = nullable.getField("embedding").get().getNonNullSchema();
+    assertEquals(HoodieSchemaType.VECTOR, embedding.getType());
+    assertEquals(3, ((HoodieSchema.Vector) embedding).getDimension());
+  }
+
+  @Test
+  public void testAsNullableRejectsNonRecordSchema() {
+    assertThrows(IllegalArgumentException.class,
+        () -> HoodieSchemaUtils.asNullable(HoodieSchema.create(HoodieSchemaType.STRING)));
+    assertThrows(IllegalArgumentException.class,
+        () -> HoodieSchemaUtils.asNullable(HoodieSchema.createNullable(allRequiredPersonSchema())));
+  }
+
   private static HoodieSchema deleteLogTableSchema() {
     return HoodieSchema.createRecord(
         "TestRecord",
