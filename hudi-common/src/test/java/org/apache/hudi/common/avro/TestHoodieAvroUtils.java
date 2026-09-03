@@ -1079,18 +1079,25 @@ public class TestHoodieAvroUtils {
   @Test
   void testGetRecordColumnValues() {
     Schema schema = new Schema.Parser().parse(SCHEMA_WITH_NESTED_FIELD_STR);
+    GenericRecord student = new GenericData.Record(schema.getField("student").schema());
+    student.put("lastnameNested", "nested-last");
     GenericRecord record = new GenericData.Record(schema);
     record.put("firstname", "first");
     record.put("lastname", "last");
-    record.put("student", new GenericData.Record(schema.getField("student").schema()));
+    record.put("student", student);
     HoodieRecordPayload avroPayload = new RewriteAvroPayload(record);
     HoodieAvroRecord avroRecord = new HoodieAvroRecord(new HoodieKey("record1", "partition1"), avroPayload);
+    HoodieSchema hoodieSchema = HoodieSchema.parse(SCHEMA_WITH_NESTED_FIELD_STR);
 
-    Object[] columnValues = HoodieAvroUtils.getRecordColumnValues(
-        avroRecord, new String[] {"firstname", "student.lastnameNested", "missing_col"},
-        HoodieSchema.parse(SCHEMA_WITH_NESTED_FIELD_STR), false);
-    // A missing column yields null rather than throwing: getRecordColumnValues hardcodes returnNullIfNotFound.
-    assertArrayEquals(new Object[] {"first", null, null}, columnValues);
+    // A nested column resolves through the intermediate record; a missing column yields null rather than
+    // throwing because getRecordColumnValues hardcodes returnNullIfNotFound.
+    assertArrayEquals(new Object[] {"first", "nested-last", null}, HoodieAvroUtils.getRecordColumnValues(
+        avroRecord, new String[] {"firstname", "student.lastnameNested", "missing_col"}, hoodieSchema, false));
+
+    // A null intermediate record and a non-record intermediate both yield null instead of throwing.
+    record.put("student", null);
+    assertArrayEquals(new Object[] {null, null}, HoodieAvroUtils.getRecordColumnValues(
+        avroRecord, new String[] {"student.lastnameNested", "firstname.nested"}, hoodieSchema, false));
   }
 
   @Test
