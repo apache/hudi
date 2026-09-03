@@ -220,6 +220,16 @@ public class HoodieStreamer implements Serializable {
     });
   }
 
+  // Interrupts an in-progress ingestion, unlike shutdownGracefully() which lets the current round finish.
+  public void shutdownForcefully() {
+    ingestionService.ifPresent(ds -> {
+      if (!ds.isShutdown()) {
+        log.info("Forcefully shutting down DeltaStreamer");
+        ds.shutdown(true);
+      }
+    });
+  }
+
   /**
    * Main method to start syncing.
    */
