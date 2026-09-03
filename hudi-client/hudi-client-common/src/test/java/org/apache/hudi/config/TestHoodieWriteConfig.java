@@ -1015,12 +1015,12 @@ public class TestHoodieWriteConfig {
       logger.removeAppender(appender);
       appender.stop();
     }
-    boolean foundHint = captured.stream()
+    boolean warningFound = captured.stream()
         .filter(e -> e.getLevel() == Level.WARN)
         .map(e -> e.getMessage().getFormattedMessage())
         .anyMatch(msg -> msg.contains(HoodiePayloadConfig.EVENT_TIME_FIELD.key())
             && msg.contains(HoodieWriteConfig.TRACK_EVENT_TIME_WATERMARK.key()));
-    assertTrue(foundHint,
-        "Expected warning hint about TRACK_EVENT_TIME_WATERMARK when event-time field is set without tracking");
+    assertTrue(warningFound,
+        "Expected warning about TRACK_EVENT_TIME_WATERMARK when event-time field is set without tracking");
   }
 }
