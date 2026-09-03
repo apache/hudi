@@ -266,8 +266,10 @@ public class HoodieStorageConfig extends HoodieConfig {
       .defaultValue(true)
       .sinceVersion("1.1.0")
       .withDocumentation("Controls whether variant columns are written in shredded format. "
-          + "When enabled (default), variant columns with shredding information in the schema will be written "
-          + "in shredded format with typed_value columns. When disabled, variant columns are always written "
+          + "When enabled (default), variant columns are written in shredded format with typed_value "
+          + "columns when the write schema carries shredding information or when "
+          + "hoodie.parquet.variant.shredding.schema.inference.enabled (on by default) infers one for "
+          + "a top-level column. When disabled, variant columns are always written "
           + "in unshredded format regardless of the schema. "
           + "Equivalent to Spark's spark.sql.variant.writeShredding.enabled.");
 
@@ -308,22 +310,28 @@ public class HoodieStorageConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> PARQUET_VARIANT_SHREDDING_SCHEMA_INFERENCE_ENABLED = ConfigProperty
       .key("hoodie.parquet.variant.shredding.schema.inference.enabled")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("1.3.0")
-      .withDocumentation("When enabled, the shredding schema for variant columns without an explicit "
-          + "typed_value in the write schema is inferred automatically per parquet file from a sample of "
-          + "the records written to that file, mirroring Spark 4.1's "
-          + "spark.sql.variant.inferShreddingSchema. Requires Spark 4.1+ on the writer classpath; "
-          + "writes stay unshredded otherwise (Spark 4.0, Flink, Java engines). Applies to every "
-          + "parquet file the writer produces: base files and, on table version 10+, the native "
+      .withDocumentation("Infers the shredding schema of variant columns that have no explicit "
+          + "typed_value in the write schema, per parquet file, from a sample of the records written "
+          + "to that file, mirroring Spark 4.1's spark.sql.variant.inferShreddingSchema (also on by "
+          + "default there). Takes effect only when a Spark 4.1+ writer is on the classpath; other "
+          + "writers (Spark 3.x, Spark 4.0, Flink, Java) ignore it and write unshredded. Applies to "
+          + "every parquet file the writer produces: base files and, on table version 10+, the native "
           + "parquet log files of MOR tables (each infers its own schema). Data blocks inside "
           + "Avro-format log files, whether Avro or parquet (hoodie.logfile.data.block.format), stay "
           + "unshredded and shred at compaction. Applies to top-level variant columns only; a variant "
-          + "nested inside a struct, array or map stays unshredded. This is a write config rather than "
-          + "a table config: SQL DML and procedures called by table name pick it up from the table's "
-          + "catalog properties, while path-based procedures, the DataSource writer and the streamer "
-          + "must be handed it explicitly. Up to 4096 records or 64MB are buffered per "
-          + "open file writer before the writer is created, on top of parquet's own row-group "
+          + "nested inside a struct, array or map stays unshredded. Shredded files can only be read "
+          + "back by Spark 4.1+: Spark 4.0, Spark 3.x, Hive and Flink readers fail fast on them, so "
+          + "disable this option (or hoodie.parquet.variant.write.shredding.enabled) on tables those "
+          + "engines read, and rewrite already shredded files by clustering with "
+          + "hoodie.parquet.variant.write.shredding.enabled=false - that key, not this one, is what "
+          + "strips typed_value from a schema read back off shredded files - to return to the "
+          + "unshredded layout. This is a write config rather than a table config: SQL DML and "
+          + "procedures called by table name pick it up from the table's catalog properties, while "
+          + "path-based procedures, the DataSource writer and the streamer must be handed it "
+          + "explicitly when a non-default value is wanted. Up to 4096 records or 64MB are buffered "
+          + "per open file writer before the writer is created, on top of parquet's own row-group "
           + "buffer, so size executor memory for concurrently open handles accordingly. Ignored when "
           + "hoodie.parquet.variant.force.shredding.schema.for.test is set, when write shredding "
           + "is disabled, or when the table has a schema-on-read internal schema "

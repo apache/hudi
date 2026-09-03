@@ -173,7 +173,7 @@ public class InternalSchemaConverter {
    * if we compare a schema that has not been converted to internal schema
    * at any stage, the difference in ordering can cause issues. To resolve this,
    * we order null to be first for any HoodieSchema that enters into hudi.
-   * AvroSchemaUtils.isProjectionOfInternal uses index based comparison for unions.
+   * {@code HoodieSchemaProjectionChecker}'s isProjectionOfInternal uses index based comparison for unions.
    * Spark and flink don't support complex unions so this would not be an issue
    * but for the metadata table HoodieMetadata.avsc uses a trick where we have a bunch of
    * different types wrapped in record for col stats.

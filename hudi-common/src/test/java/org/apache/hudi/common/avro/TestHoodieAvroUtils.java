@@ -63,7 +63,9 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.RewriteAvroPayload;
+import org.apache.hudi.common.schema.HoodieAvroSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
@@ -124,6 +126,7 @@ import static org.apache.hudi.common.schema.HoodieSchemaUtils.sanitizeName;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -566,6 +569,124 @@ public class TestHoodieAvroUtils {
     assertEquals(FIXTURE_EPOCH_MICROS, HoodieAvroUtils.convertValueForAvroLogicalTypes(LOCAL_TS_MICROS_SCHEMA, FIXTURE_LOCAL_DT_MICROS, false));
   }
 
+  @Test
+  public void testConvertValueForSpecificDataTypes_NullSchema() {
+    // Test with null schema - should return value unchanged
+    String testValue = "test_value";
+    Object result = HoodieAvroUtils.convertValueForSpecificDataTypes(null, testValue, false);
+    assertEquals(testValue, result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_NullValue_NullableSchema() {
+    // Test with null value and nullable schema - should return null
+    Schema nullableIntSchema = HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.INT)).toAvroSchema();
+    Object result = HoodieAvroUtils.convertValueForSpecificDataTypes(nullableIntSchema, null, false);
+    assertNull(result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_NullValue_NonNullableSchema() {
+    // Test with null value and non-nullable schema - should throw exception
+    Schema nonNullableSchema = Schema.create(Schema.Type.STRING);
+    assertThrows(IllegalStateException.class, () ->
+        HoodieAvroUtils.convertValueForSpecificDataTypes(nonNullableSchema, null, false));
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_DateLogicalType() {
+    // Test value: epoch days for 2023-01-01
+    int epochDays = 19358;
+    Object result = HoodieAvroUtils.convertValueForSpecificDataTypes(DATE_SCHEMA, epochDays, false);
+    assertNotNull(result);
+    assertTrue(result instanceof LocalDate);
+    assertEquals(LocalDate.of(2023, 1, 1), result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_TimestampMillis_Enabled() {
+    // Test value: milliseconds for 2023-01-01 00:00:00
+    long millis = 1672560000000L;
+    Object result = HoodieAvroUtils.convertValueForSpecificDataTypes(TS_MILLIS_SCHEMA, millis, true);
+    assertNotNull(result);
+    assertTrue(result instanceof Timestamp);
+    assertEquals(new Timestamp(millis), result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_TimestampMillis_Disabled() {
+    long millis = 1672560000000L;
+    Object result = HoodieAvroUtils.convertValueForSpecificDataTypes(TS_MILLIS_SCHEMA, millis, false);
+    assertEquals(millis, result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_TimestampMicros_Enabled() {
+    // Test value: microseconds for 2023-01-01 00:00:00
+    long micros = 1672560000000000L;
+    Object result = HoodieAvroUtils.convertValueForSpecificDataTypes(TS_MICROS_SCHEMA, micros, true);
+    assertNotNull(result);
+    assertTrue(result instanceof Timestamp);
+    assertEquals(new Timestamp(micros / 1000), result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_DecimalBytes() {
+    // Create decimal schema with precision=10, scale=2
+    Schema decimalSchema = HoodieSchema.createDecimal(10, 2).toAvroSchema();
+
+    // Create test value: 1234.56
+    BigDecimal expectedDecimal = new BigDecimal("1234.56");
+    ByteBuffer byteBuffer = ByteBuffer.wrap(expectedDecimal.unscaledValue().toByteArray());
+    Object result = HoodieAvroUtils.convertValueForSpecificDataTypes(decimalSchema, byteBuffer, false);
+    assertNotNull(result);
+    assertTrue(result instanceof BigDecimal);
+    assertEquals(expectedDecimal, result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_NonLogicalType() {
+    // Test with non-logical type (plain string) - should return unchanged
+    Schema stringSchema = Schema.create(Schema.Type.STRING);
+    String testValue = "test_string";
+    Object result = HoodieAvroUtils.convertValueForSpecificDataTypes(stringSchema, testValue, false);
+    assertEquals(testValue, result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_UnionWithNull() {
+    // Test with union type containing null
+    Schema nullableDateSchema = HoodieSchema.createNullable(HoodieSchema.createDate()).toAvroSchema();
+
+    // Test with non-null value
+    int epochDays = 19358; // 2023-01-01
+    Object result = HoodieAvroUtils.convertValueForSpecificDataTypes(nullableDateSchema, epochDays, false);
+    assertNotNull(result);
+    assertTrue(result instanceof LocalDate);
+    assertEquals(LocalDate.of(2023, 1, 1), result);
+  }
+
+  @Test
+  public void testConvertBytesToBigDecimalWithHoodieSchema() {
+    HoodieSchema decimalSchema = HoodieSchema.createDecimal(10, 2);
+    BigDecimal expected = new BigDecimal("1234.56");
+    assertEquals(expected,
+        HoodieAvroUtils.convertBytesToBigDecimal(expected.unscaledValue().toByteArray(), decimalSchema));
+  }
+
+  @Test
+  public void testConvertBytesToBigDecimalWithNonDecimalHoodieSchema() {
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    assertThrows(IllegalArgumentException.class, () ->
+        HoodieAvroUtils.convertBytesToBigDecimal(new byte[] {0x01}, stringSchema));
+  }
+
+  @Test
+  public void testConvertBytesToBigDecimalWithNullHoodieSchema() {
+    assertThrows(IllegalArgumentException.class, () ->
+        HoodieAvroUtils.convertBytesToBigDecimal(new byte[] {0x01}, (HoodieSchema) null));
+  }
+
   /**
    * Cross-Avro-version invariant for ordering-value extraction: a record whose timestamp/date field
    * holds the java.time form (Avro 1.12.1 fast reader) must yield the same comparable ordering value
@@ -953,6 +1074,49 @@ public class TestHoodieAvroUtils {
     } else {
       assertArrayEquals(new Object[] {"partition1", "val1", 3.5}, sortColumnValues);
     }
+  }
+
+  @Test
+  void testGetRecordColumnValues() {
+    Schema schema = new Schema.Parser().parse(SCHEMA_WITH_NESTED_FIELD_STR);
+    GenericRecord student = new GenericData.Record(schema.getField("student").schema());
+    student.put("lastnameNested", "nested-last");
+    GenericRecord record = new GenericData.Record(schema);
+    record.put("firstname", "first");
+    record.put("lastname", "last");
+    record.put("student", student);
+    HoodieRecordPayload avroPayload = new RewriteAvroPayload(record);
+    HoodieAvroRecord avroRecord = new HoodieAvroRecord(new HoodieKey("record1", "partition1"), avroPayload);
+    HoodieSchema hoodieSchema = HoodieSchema.parse(SCHEMA_WITH_NESTED_FIELD_STR);
+
+    // A nested column resolves through the intermediate record; a missing column yields null rather than
+    // throwing because getRecordColumnValues hardcodes returnNullIfNotFound.
+    assertArrayEquals(new Object[] {"first", "nested-last", null}, HoodieAvroUtils.getRecordColumnValues(
+        avroRecord, new String[] {"firstname", "student.lastnameNested", "missing_col"}, hoodieSchema, false));
+
+    // A null intermediate record and a non-record intermediate both yield null instead of throwing.
+    record.put("student", null);
+    assertArrayEquals(new Object[] {null, null}, HoodieAvroUtils.getRecordColumnValues(
+        avroRecord, new String[] {"student.lastnameNested", "firstname.nested"}, hoodieSchema, false));
+  }
+
+  @Test
+  void testGetRecordColumnValuesInternsSchema() {
+    HoodieSchema interned = HoodieAvroSchemaCache.intern(new Schema.Parser().parse(EXAMPLE_SCHEMA));
+    GenericRecord record = new GenericData.Record(interned.toAvroSchema());
+    record.put("timestamp", 3.5);
+    record.put("_row_key", "record1");
+    record.put("non_pii_col", "val1");
+    record.put("pii_col", "val2");
+    HoodieAvroRecord avroRecord = new HoodieAvroRecord(
+        new HoodieKey("record1", "partition1"), new OverwriteWithLatestAvroPayload(record, 0));
+
+    // A freshly parsed, equal-but-distinct schema must resolve to the interned instance so the payload hands back
+    // the record it holds; without the intern it re-serializes and the string comes back as Utf8, not String.
+    Object[] columnValues = HoodieAvroUtils.getRecordColumnValues(
+        avroRecord, new String[] {"non_pii_col"}, HoodieSchema.parse(EXAMPLE_SCHEMA), false);
+    assertInstanceOf(String.class, columnValues[0]);
+    assertEquals("val1", columnValues[0]);
   }
 
   private static Stream<Arguments> recordNeedsRewriteForExtendedAvroTypePromotion() {

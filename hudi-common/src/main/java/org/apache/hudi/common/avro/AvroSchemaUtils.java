@@ -39,7 +39,14 @@ import static org.apache.hudi.common.util.CollectionUtils.reduce;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
- * Utils for Avro Schema.
+ * Avro-typed schema helpers, retained only as the delegate target of the call sites that have not moved to
+ * HoodieSchema yet: {@link org.apache.hudi.common.schema.HoodieSchemaUtils#asNullable(HoodieSchema)} and
+ * {@code HoodieSchemaUtils#createNullableSchema}, the field construction inside {@link HoodieSchema.Blob},
+ * and a handful of internal uses in {@link HoodieAvroUtils}.
+ *
+ * <p>This class is being retired under #16639. Do not add methods here: every method on this class except
+ * {@link #getNonNullTypeFromUnion(Schema)} already has a HoodieSchema twin, so use
+ * {@link org.apache.hudi.common.schema.HoodieSchema} or {@link org.apache.hudi.common.schema.HoodieSchemaUtils} instead.</p>
  */
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 @Slf4j
@@ -87,6 +94,10 @@ public class AvroSchemaUtils {
   /**
    * Resolves typical Avro's nullable schema definition: {@code Union(Schema.Type.NULL, <NonNullType>)},
    * decomposing union and returning the target non-null type
+   * <p>
+   * This is the strict variant: it throws unless the union has exactly one null branch and one non-null
+   * branch. See the union-unwrapping note on {@link HoodieAvroUtils} for the lenient alternatives.
+   * </p>
    */
   public static Schema getNonNullTypeFromUnion(Schema schema) {
     if (schema.getType() != Schema.Type.UNION) {

@@ -374,7 +374,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Integer> INDEX_RLI_CACHE_ROCKSDB_BOOTSTRAP_DAYS = ConfigOptions
       .key("index.rli.cache.rocksdb.bootstrap.days")
       .intType()
-      .defaultValue(7)
+      .defaultValue(-1)
       .withDescription("Number of days of Partitioned Record Index to load during bootstrap. Only partitions "
           + "within this window are pre-loaded; older partitions are loaded on demand when updates are observed.");
 

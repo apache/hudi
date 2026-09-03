@@ -18,23 +18,18 @@
 
 package org.apache.hudi.sink.bootstrap;
 
-import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.StateInitializationContext;
-import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -51,10 +46,7 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 public class RLIBootstrapOperator
-    extends AbstractBootstrapOperator {
-
-  private transient HoodieBackedTableMetadata tableMetadata;
-  private transient long loadedCnt;
+    extends AbstractRLIBootstrapOperator {
 
   public RLIBootstrapOperator(Configuration conf) {
     super(conf);
@@ -64,19 +56,9 @@ public class RLIBootstrapOperator
   public void initializeState(StateInitializationContext context) throws Exception {
     loadedCnt = 0;
     HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
-    this.tableMetadata = new HoodieBackedTableMetadata(
-        HoodieFlinkEngineContext.DEFAULT,
-        metaClient.getStorage(),
-        StreamerUtil.metadataConfig(conf),
-        conf.get(FlinkOptions.PATH));
+    this.tableMetadata = createTableMetadata(metaClient);
     // Load RLI records
     preLoadRLIRecords(metaClient.getTableConfig());
-  }
-
-  @Override
-  public void close() throws Exception {
-    closeMetadataTable();
-    super.close();
   }
 
   // -------------------------------------------------------------------------
@@ -133,24 +115,7 @@ public class RLIBootstrapOperator
     return fileGroupIdx % parallelism == taskID;
   }
 
-  private void emitIndexRecord(String recordKey, HoodieRecordGlobalLocation location) {
-    output.collect(new StreamRecord<>(
-        new HoodieFlinkInternalRow(
-            recordKey,
-            location.getPartitionPath(),
-            location.getFileId(),
-            String.valueOf(location.getInstantTime()))));
-    loadedCnt += 1;
-  }
-
-  private void closeMetadataTable() {
-    if (tableMetadata != null) {
-      try {
-        tableMetadata.close();
-      } catch (Exception e) {
-        log.warn("Failed to close metadata table", e);
-      }
-      tableMetadata = null;
-    }
+  protected void emitIndexRecord(String recordKey, HoodieRecordGlobalLocation location) {
+    emitIndexRecord(location.getPartitionPath(), recordKey, location);
   }
 }

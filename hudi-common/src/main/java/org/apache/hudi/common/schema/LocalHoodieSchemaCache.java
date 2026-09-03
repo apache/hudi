@@ -16,9 +16,9 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.util;
+package org.apache.hudi.common.schema;
 
-import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.util.Option;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -46,7 +46,10 @@ public class LocalHoodieSchemaCache implements Serializable {
     this.schemaToVersionId = new HashMap<>();
   }
 
-  public static LocalHoodieSchemaCache getInstance() {
+  /**
+   * Returns a new, empty cache. Each caller owns its own version-id space.
+   */
+  public static LocalHoodieSchemaCache create() {
     return new LocalHoodieSchemaCache();
   }
 
