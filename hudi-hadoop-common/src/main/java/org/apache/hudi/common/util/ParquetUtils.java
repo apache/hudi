@@ -21,8 +21,6 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.config.HoodieStorageConfig;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -32,9 +30,9 @@ import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.core.io.HoodieParquetConfigInjector;
+import org.apache.hudi.core.io.ParquetZstdCompressionLevelInjector;
 import org.apache.hudi.core.io.storage.HoodieFileWriter;
 import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -92,7 +90,6 @@ import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
 import static org.apache.parquet.format.converter.ParquetMetadataConverter.NO_FILTER;
 import static org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS;
-import static org.apache.parquet.hadoop.codec.ZstandardCodec.PARQUET_COMPRESS_ZSTD_LEVEL;
 
 /**
  * Utility functions involving with parquet.
@@ -101,47 +98,14 @@ import static org.apache.parquet.hadoop.codec.ZstandardCodec.PARQUET_COMPRESS_ZS
 public class ParquetUtils extends FileFormatUtils {
 
   /**
-   * Injects the storage and Hudi configurations used by a Parquet writer. Built-in writer configuration
-   * overrides are injected first so that the user-provided config injector remains the highest-priority extension point.
+   * Applies built-in injectors followed by the user-defined injector to the configurations used by a Parquet writer.
    */
   public static Pair<StorageConfiguration, HoodieConfig> injectParquetWriterConfigs(
       StoragePath path, StorageConfiguration storageConf, HoodieConfig hoodieConfig) {
-    StorageConfiguration nativeLogStorageConf =
-        injectDefaultZstdCompressionLevel(path, storageConf, hoodieConfig);
-    return HoodieParquetConfigInjector.applyConfigInjector(path, nativeLogStorageConf, hoodieConfig);
-  }
-
-  /**
-   * Injects the default ZSTD compression level into the storage configuration for native Parquet log files.
-   * The input configuration is copied only when its ZSTD level is absent or differs from the native log level,
-   * so base file writers and other users of the shared configuration are not affected.
-   */
-  public static <T> StorageConfiguration<T> injectDefaultZstdCompressionLevel(
-      StoragePath path, StorageConfiguration<T> storageConf, HoodieConfig hoodieConfig) {
-    if (!FSUtils.isNativeLogFile(path.getName())) {
-      return storageConf;
-    }
-
-    int nativeLogZstdLevel =
-        hoodieConfig.getIntOrDefault(HoodieStorageConfig.LOGFILE_PARQUET_COMPRESSION_CODEC_ZSTD_LEVEL);
-    Option<String> globalZstdLevel = storageConf.getString(PARQUET_COMPRESS_ZSTD_LEVEL);
-    if (globalZstdLevel.isPresent()) {
-      int parsedGlobalZstdLevel;
-      try {
-        parsedGlobalZstdLevel = Integer.parseInt(globalZstdLevel.get());
-      } catch (NumberFormatException e) {
-        throw new HoodieException("Invalid value for " + PARQUET_COMPRESS_ZSTD_LEVEL + ": "
-            + globalZstdLevel.get() + ". Expected an integer.", e);
-      }
-      if (nativeLogZstdLevel == parsedGlobalZstdLevel) {
-        return storageConf;
-      }
-    }
-
-    StorageConfiguration<T> nativeLogStorageConf = storageConf.newInstance();
-    nativeLogStorageConf.set(
-        PARQUET_COMPRESS_ZSTD_LEVEL, String.valueOf(nativeLogZstdLevel));
-    return nativeLogStorageConf;
+    Pair<StorageConfiguration, HoodieConfig> injectedConfigs =
+        ParquetZstdCompressionLevelInjector.INSTANCE.injectConfig(path, storageConf, hoodieConfig);
+    return HoodieParquetConfigInjector.applyConfigInjector(
+        path, injectedConfigs.getLeft(), injectedConfigs.getRight());
   }
 
   /**
