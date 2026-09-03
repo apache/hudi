@@ -21,14 +21,19 @@ package org.apache.hudi.table.format;
 
 import org.apache.hudi.common.bloom.SimpleBloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.schema.internal.InternalSchema;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
+import org.apache.hudi.io.storage.row.HoodieRowDataLanceWriter;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.RowDataQueryContexts;
 
 import org.apache.arrow.memory.BufferAllocator;
@@ -37,14 +42,25 @@ import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.arrow.vector.types.pojo.Schema;
+import org.apache.flink.table.data.ArrayData;
+import org.apache.flink.table.data.GenericArrayData;
+import org.apache.flink.table.data.GenericRowData;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
+import org.apache.flink.table.types.logical.ArrayType;
+import org.apache.flink.table.types.logical.DoubleType;
+import org.apache.flink.table.types.logical.FloatType;
+import org.apache.flink.table.types.logical.IntType;
+import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.lance.file.LanceFileReader;
 import org.mockito.MockedStatic;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -76,6 +92,113 @@ import static org.mockito.Mockito.when;
  */
 class TestHoodieRowDataLanceReader {
   private static final StoragePath PATH = new StoragePath("/tmp/test.lance");
+
+  @TempDir
+  Path tempDir;
+
+  @Test
+  void testReadsVectorsAndRestoresSchemaIdentity() throws Exception {
+    RowType rowType = RowType.of(
+        new LogicalType[] {
+            new IntType(false),
+            new ArrayType(true, new FloatType(false)),
+            new ArrayType(false, new DoubleType(false)),
+            new ArrayType(false, new IntType(false))
+        },
+        new String[] {"id", "embedding", "features", "values"});
+    HoodieSchema hoodieSchema = HoodieSchemaConverter.convertToSchema(
+        rowType, "vector_record", "embedding:2,features:3");
+    StoragePath path = new StoragePath(tempDir.resolve("vectors.lance").toUri());
+
+    try (HoodieRowDataLanceWriter writer = new HoodieRowDataLanceWriter(
+        path,
+        hoodieSchema,
+        "001",
+        mock(TaskContextSupplier.class),
+        Option.empty(),
+        128 * 1024 * 1024L,
+        64 * 1024 * 1024L,
+        16 * 1024 * 1024L,
+        true,
+        false,
+        false)) {
+      writer.writeRow("key1", GenericRowData.of(
+          1,
+          new GenericArrayData(new Object[] {1.25F, 2.5F}),
+          new GenericArrayData(new Object[] {3.5D, 4.5D, 5.5D}),
+          new GenericArrayData(new Object[] {10, 20})));
+      writer.writeRow("key2", GenericRowData.of(
+          2,
+          null,
+          new GenericArrayData(new Object[] {6.5D, 7.5D, 8.5D}),
+          new GenericArrayData(new Object[] {30})));
+    }
+
+    try (HoodieRowDataLanceReader reader = new HoodieRowDataLanceReader(path, new HoodieConfig())) {
+      HoodieSchema readSchema = reader.getSchema().getNonNullType();
+      HoodieSchema.Vector floatVector = (HoodieSchema.Vector) readSchema.getField("embedding")
+          .get().schema().getNonNullType();
+      HoodieSchema.Vector doubleVector = (HoodieSchema.Vector) readSchema.getField("features")
+          .get().schema().getNonNullType();
+      assertEquals(HoodieSchemaType.VECTOR, floatVector.getType());
+      assertEquals(2, floatVector.getDimension());
+      assertEquals(HoodieSchema.Vector.VectorElementType.FLOAT, floatVector.getVectorElementType());
+      assertEquals(3, doubleVector.getDimension());
+      assertEquals(HoodieSchema.Vector.VectorElementType.DOUBLE, doubleVector.getVectorElementType());
+      assertEquals(HoodieSchemaType.ARRAY,
+          readSchema.getField("values").get().schema().getNonNullType().getType());
+
+      try (ClosableIterator<RowData> rows = reader.getRowDataIterator(
+          RowDataQueryContexts.fromSchema(hoodieSchema).getRowType(), hoodieSchema)) {
+        RowData first = rows.next();
+        assertEquals(1, first.getInt(0));
+        assertFloatArray(first.getArray(1), 1.25F, 2.5F);
+        assertDoubleArray(first.getArray(2), 3.5D, 4.5D, 5.5D);
+        assertIntArray(first.getArray(3), 10, 20);
+
+        RowData second = rows.next();
+        assertEquals(2, second.getInt(0));
+        assertTrue(second.isNullAt(1));
+        assertDoubleArray(second.getArray(2), 6.5D, 7.5D, 8.5D);
+        assertIntArray(second.getArray(3), 30);
+        assertFalse(rows.hasNext());
+      }
+    }
+
+    RowType projectedRowType = RowType.of(
+        new LogicalType[] {
+            new ArrayType(false, new IntType(false)),
+            new ArrayType(false, new DoubleType(false)),
+            new IntType(false),
+            new ArrayType(true, new FloatType(false))
+        },
+        new String[] {"values", "features", "id", "embedding"});
+    HoodieSchema projectedSchema = HoodieSchemaConverter.convertToSchema(
+        projectedRowType, "projected_record", "features:3,embedding:2");
+    try (HoodieRowDataLanceReader reader = new HoodieRowDataLanceReader(path, new HoodieConfig());
+         ClosableIterator<RowData> rows = reader.getRowDataIterator(
+             RowDataQueryContexts.fromSchema(projectedSchema).getRowType(), projectedSchema)) {
+      RowData first = rows.next();
+      assertIntArray(first.getArray(0), 10, 20);
+      assertDoubleArray(first.getArray(1), 3.5D, 4.5D, 5.5D);
+      assertEquals(1, first.getInt(2));
+      assertFloatArray(first.getArray(3), 1.25F, 2.5F);
+    }
+
+    RowType incompatibleRowType = RowType.of(
+        new LogicalType[] {new ArrayType(true, new FloatType(false))},
+        new String[] {"embedding"});
+    HoodieSchema incompatibleSchema = HoodieSchemaConverter.convertToSchema(
+        incompatibleRowType, "incompatible_record", "embedding:3");
+    try (HoodieRowDataLanceReader reader = new HoodieRowDataLanceReader(path, new HoodieConfig())) {
+      HoodieValidationException exception = assertThrows(
+          HoodieValidationException.class,
+          () -> reader.getRowDataIterator(
+              RowDataQueryContexts.fromSchema(incompatibleSchema).getRowType(), incompatibleSchema));
+      assertTrue(exception.getMessage().contains("requested VECTOR(3)"));
+      assertTrue(exception.getMessage().contains("file contains VECTOR(2)"));
+    }
+  }
 
   @Test
   void testReadsMetadataAndClosesIdempotently() throws Exception {
@@ -200,6 +323,27 @@ class TestHoodieRowDataLanceReader {
           RowDataQueryContexts.fromSchema(schema).getRowType(), schema));
       verify(dataReader).close();
       reader.close();
+    }
+  }
+
+  private static void assertFloatArray(ArrayData array, float... expected) {
+    assertEquals(expected.length, array.size());
+    for (int i = 0; i < expected.length; i++) {
+      assertEquals(expected[i], array.getFloat(i));
+    }
+  }
+
+  private static void assertDoubleArray(ArrayData array, double... expected) {
+    assertEquals(expected.length, array.size());
+    for (int i = 0; i < expected.length; i++) {
+      assertEquals(expected[i], array.getDouble(i));
+    }
+  }
+
+  private static void assertIntArray(ArrayData array, int... expected) {
+    assertEquals(expected.length, array.size());
+    for (int i = 0; i < expected.length; i++) {
+      assertEquals(expected[i], array.getInt(i));
     }
   }
 

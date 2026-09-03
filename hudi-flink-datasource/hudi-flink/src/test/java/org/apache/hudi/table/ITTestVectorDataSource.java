@@ -51,6 +51,7 @@ import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.FlinkMiniCluster;
 import org.apache.hudi.utils.TestTableEnvs;
+import org.apache.hudi.utils.TestUtils;
 
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
@@ -164,6 +165,65 @@ public class ITTestVectorDataSource {
     List<Row> vectorProjection = collect(tableEnv, "SELECT id, embedding FROM vector_table WHERE id = 'id2'");
     assertEquals(1, vectorProjection.size());
     assertFloatArray(vectorProjection.get(0).getField(1), new float[] {-1.0f, -2.0f, -3.0f, -4.0f});
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  public void testLanceVectorUpsertRead(HoodieTableType tableType) throws Exception {
+    TableEnvironment tableEnv = TestTableEnvs.getBatchTableEnv();
+    String tablePath = tempDir.resolve("lance_upsert_" + tableType.name()).toUri().toString();
+    Map<String, String> extraOptions = new LinkedHashMap<>();
+    extraOptions.put("hoodie.table.base.file.format", "LANCE");
+    if (tableType == HoodieTableType.MERGE_ON_READ) {
+      extraOptions.put(FlinkOptions.COMPACTION_SCHEDULE_ENABLED.key(), "true");
+      extraOptions.put(FlinkOptions.COMPACTION_ASYNC_ENABLED.key(), "true");
+      extraOptions.put(FlinkOptions.COMPACTION_DELTA_COMMITS.key(), "1");
+    }
+    createVectorTable(
+        tableEnv,
+        "vector_table",
+        tablePath,
+        tableType,
+        "embedding:2,features:3,nullable_embedding:2",
+        null,
+        extraOptions);
+
+    execInsertSql(tableEnv,
+        "INSERT INTO vector_table(id, embedding, features, nullable_embedding, label, tags, ts) VALUES "
+            + "('id1', ARRAY[CAST(1.0 AS FLOAT), CAST(1.5 AS FLOAT)], "
+            + " ARRAY[CAST(10.0 AS DOUBLE), CAST(10.5 AS DOUBLE), CAST(11.0 AS DOUBLE)], "
+            + " ARRAY[CAST(7.0 AS FLOAT), CAST(7.5 AS FLOAT)], 'old1', ARRAY['red', 'blue'], 1), "
+            + "('id2', ARRAY[CAST(2.0 AS FLOAT), CAST(2.5 AS FLOAT)], "
+            + " ARRAY[CAST(20.0 AS DOUBLE), CAST(20.5 AS DOUBLE), CAST(21.0 AS DOUBLE)], "
+            + " CAST(NULL AS ARRAY<FLOAT>), 'old2', ARRAY['green'], 2)");
+    execInsertSql(tableEnv,
+        "INSERT INTO vector_table(id, embedding, features, nullable_embedding, label, tags, ts) VALUES "
+            + "('id1', ARRAY[CAST(9.0 AS FLOAT), CAST(9.5 AS FLOAT)], "
+            + " ARRAY[CAST(90.0 AS DOUBLE), CAST(90.5 AS DOUBLE), CAST(91.0 AS DOUBLE)], "
+            + " CAST(NULL AS ARRAY<FLOAT>), 'new1', ARRAY['black'], 10)");
+
+    if (tableType == HoodieTableType.MERGE_ON_READ) {
+      assertTrue(TestUtils.hasCompleteCompactionInstant(tablePath));
+    }
+
+    List<Row> rows = collect(tableEnv,
+        "SELECT tags, features, id, nullable_embedding, embedding, label "
+            + "FROM vector_table ORDER BY id");
+    assertEquals(2, rows.size());
+
+    assertObjectArray(rows.get(0).getField(0), new Object[] {"black"});
+    assertDoubleArray(rows.get(0).getField(1), new double[] {90.0D, 90.5D, 91.0D});
+    assertEquals("id1", rows.get(0).getField(2));
+    assertNull(rows.get(0).getField(3));
+    assertFloatArray(rows.get(0).getField(4), new float[] {9.0F, 9.5F});
+    assertEquals("new1", rows.get(0).getField(5));
+
+    assertObjectArray(rows.get(1).getField(0), new Object[] {"green"});
+    assertDoubleArray(rows.get(1).getField(1), new double[] {20.0D, 20.5D, 21.0D});
+    assertEquals("id2", rows.get(1).getField(2));
+    assertNull(rows.get(1).getField(3));
+    assertFloatArray(rows.get(1).getField(4), new float[] {2.0F, 2.5F});
+    assertEquals("old2", rows.get(1).getField(5));
   }
 
   @Test
