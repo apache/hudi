@@ -19,8 +19,8 @@
 # content changed) and re-running the native bundle validation.
 COMET_REPO=https://github.com/apache/datafusion-comet.git
 COMET_COMMIT=3a7a2c437cc771621b6040a308657573dbc1b9c2
-COMET_VERSION=1.0.0-hudi-1
+COMET_VERSION=1.0.0-hudi-2
 # The hudi-rs revision is pinned in overlay/native/Cargo.toml (git dependency)
 # and locked with its full transitive graph in overlay/native/Cargo.lock. This
 # line documents it for humans; the Cargo files are the source of truth.
-HUDI_RS_COMMIT=d2c91ab30cc3d393f83f162ac6937fe38cdda83a
+HUDI_RS_COMMIT=eb95599c29dc9859c62294335e51d302a59d10e7
