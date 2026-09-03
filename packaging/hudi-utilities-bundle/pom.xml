@@ -158,8 +158,6 @@
                   <include>org.apache.hive:hive-service-rpc</include>
                   <include>org.apache.hive:hive-metastore</include>
                   <include>org.apache.hive:hive-jdbc</include>
-                  <!-- MapredParquetInputFormat, superclass of the bundled hudi-hadoop-mr input formats -->
-                  <include>org.apache.hive:hive-exec</include>
 
                   <include>org.apache.curator:curator-framework</include>
                   <include>org.apache.curator:curator-client</include>
@@ -355,31 +353,6 @@
       <artifactId>hive-common</artifactId>
       <version>${hive.version}</version>
       <scope>${utilities.bundle.hive.scope}</scope>
-    </dependency>
-
-    <!--
-      Supplies org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat, which is the superclass of
-      HoodieParquetInputFormatBase in hudi-hadoop-mr, which is whitelisted in the shade artifactSet above. Without
-      this, the bundle ships those subclasses with their superclass missing and any use of the Hive input formats fails
-      with ClassNotFoundException on MapredParquetInputFormat (HUDI-7321).
-
-      The core classifier is what the rest of the build uses (hive.exec.classifier): it carries Hive's own
-      classes without Hive's shaded copies of third-party libraries, so it does not drag protobuf, guava and
-      friends into this bundle. Scope follows utilities.bundle.hive.scope like the hive artifacts above, so it
-      is provided by default and only packaged under -Putilities-bundle-shade-hive.
-    -->
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-exec</artifactId>
-      <version>${hive.version}</version>
-      <classifier>${hive.exec.classifier}</classifier>
-      <scope>${utilities.bundle.hive.scope}</scope>
-      <!--
-        Deliberately no <exclusions> here. The root pom's dependencyManagement entry for hive-exec already
-        excludes javax.mail, the jetty aggregate, pentaho, log4j 1.x, log4j2, slf4j-log4j12 and hbase, several
-        of which the enforcer bans outright. Declaring exclusions locally replaces that managed set rather
-        than adding to it, which would quietly let those back in.
-      -->
     </dependency>
 
     <dependency>
