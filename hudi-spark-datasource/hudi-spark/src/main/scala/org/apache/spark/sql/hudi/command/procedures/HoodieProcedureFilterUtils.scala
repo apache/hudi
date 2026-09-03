@@ -18,10 +18,10 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.spark.sql.{Row, SparkSession}
-import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.expressions.{Expression, GenericInternalRow}
+import org.apache.spark.sql.catalyst.analysis.{TypeCoercion, UnresolvedAttribute}
+import org.apache.spark.sql.catalyst.expressions.{Cast, Expression, GenericInternalRow}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
-import org.apache.spark.sql.types.{DataType, StructType}
+import org.apache.spark.sql.types.{DataType, NumericType, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 
 import scala.collection.JavaConverters._
@@ -496,11 +496,15 @@ object HoodieProcedureFilterUtils {
                                                                                             right: org.apache.spark.sql.catalyst.expressions.Expression,
                                                                                             constructor: (org.apache.spark.sql.catalyst.expressions.Expression, org.apache.spark.sql.catalyst.expressions.Expression) => T,
                                                                                             original: T): T = {
-    (left, right) match {
-      case (boundRef: org.apache.spark.sql.catalyst.expressions.BoundReference, literal: org.apache.spark.sql.catalyst.expressions.Literal)
-        if boundRef.dataType == org.apache.spark.sql.types.LongType && literal.dataType == org.apache.spark.sql.types.IntegerType =>
-        val castExpr = org.apache.spark.sql.catalyst.expressions.Cast(boundRef, org.apache.spark.sql.types.IntegerType)
-        constructor(castExpr, literal)
+    (left.dataType, right.dataType) match {
+      case (_: NumericType, _: NumericType) =>
+        TypeCoercion.findWiderTypeForTwo(left.dataType, right.dataType)
+          .map { widerType =>
+            val coercedLeft = if (left.dataType == widerType) left else Cast(left, widerType)
+            val coercedRight = if (right.dataType == widerType) right else Cast(right, widerType)
+            constructor(coercedLeft, coercedRight)
+          }
+          .getOrElse(original)
       case _ => original
     }
   }
