@@ -1,0 +1,85 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+[workspace]
+default-members = ["core", "spark-expr", "common", "proto", "jni-bridge", "shuffle"]
+members = ["core", "spark-expr", "common", "proto", "jni-bridge", "shuffle"]
+resolver = "2"
+
+[workspace.package]
+version = "1.0.0"
+homepage = "https://datafusion.apache.org/comet"
+repository = "https://github.com/apache/datafusion-comet"
+authors = ["Apache DataFusion <dev@datafusion.apache.org>"]
+description = "Apache DataFusion Comet: High performance accelerator for Apache Spark"
+readme = "README.md"
+license = "Apache-2.0"
+edition = "2021"
+
+# Comet uses the same minimum Rust version as DataFusion
+rust-version = "1.88"
+
+[workspace.dependencies]
+arrow = { version = "58.4.0", features = ["prettyprint", "ffi", "chrono-tz"] }
+async-trait = { version = "0.1" }
+bytes = { version = "1.11.1" }
+parquet = { version = "58.4.0", default-features = false, features = ["experimental"] }
+datafusion = { version = "54.1.0", default-features = false, features = ["unicode_expressions", "crypto_expressions", "nested_expressions", "parquet"] }
+datafusion-datasource = { version = "54.1.0" }
+datafusion-physical-expr-adapter = { version = "54.1.0" }
+datafusion-spark = { version = "54.1.0", features = ["core"] }
+datafusion-comet-spark-expr = { path = "spark-expr" }
+datafusion-comet-common = { path = "common" }
+datafusion-comet-jni-bridge = { path = "jni-bridge" }
+datafusion-comet-proto = { path = "proto" }
+datafusion-comet-shuffle = { path = "shuffle" }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+chrono-tz = { version = "0.10" }
+futures = "0.3.32"
+num = "0.4"
+rand = "0.10"
+regex = "1.12.3"
+thiserror = "2"
+object_store = { version = "0.13.2", features = ["gcp", "azure", "aws", "http"] }
+hudi = { git = "https://github.com/apache/hudi-rs.git", rev = "d2c91ab30cc3d393f83f162ac6937fe38cdda83a" }
+# hudi-rs is on the arrow 57 line while this workspace is on 58. Batches cross
+# between the two through the Arrow C data interface, which is ABI-stable across
+# major versions; this renamed dep provides the 57-side ffi export.
+arrow-57 = { package = "arrow", version = "57", features = ["ffi"] }
+url = "2.2"
+aws-config = "1.8.18"
+aws-credential-types = "1.2.13"
+iceberg = { git = "https://github.com/apache/iceberg-rust", rev = "3d84c81353b1b23b6e4ae8eea8f8a021cc6927a7" }
+iceberg-storage-opendal = { git = "https://github.com/apache/iceberg-rust", rev = "3d84c81353b1b23b6e4ae8eea8f8a021cc6927a7", features = ["opendal-memory", "opendal-fs", "opendal-s3", "opendal-gcs", "opendal-oss", "opendal-azdls"] }
+reqsign-core = "3"
+
+[profile.release]
+debug = true
+overflow-checks = false
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"
+
+# CI profile: faster compilation, same overflow behavior as release
+# Use with: cargo build --profile ci
+[profile.ci]
+inherits = "release"
+lto = false          # Skip LTO for faster linking
+codegen-units = 16   # Parallel codegen (faster compile, slightly larger binary)
+debug-assertions = true
+panic = "unwind"     # Allow panics to be caught and logged across FFI boundary
+# overflow-checks inherited as false from release

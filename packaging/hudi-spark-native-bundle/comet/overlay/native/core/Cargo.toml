@@ -1,0 +1,115 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+[package]
+name = "datafusion-comet"
+version = { workspace = true }
+homepage = "https://datafusion.apache.org/comet"
+repository = "https://github.com/apache/datafusion-comet"
+authors = ["Apache DataFusion <dev@datafusion.apache.org>"]
+description = "Apache DataFusion Comet: High performance accelerator for Apache Spark"
+readme = "README.md"
+license = "Apache-2.0"
+edition = "2021"
+include = [
+    "benches/*.rs",
+    "src/**/*.rs",
+    "Cargo.toml",
+]
+
+# this crate is used in the Spark plugin and does not contain public Rust APIs so we do not publish this crate
+publish = false
+
+[dependencies]
+arrow = { workspace = true }
+bytes = { workspace = true }
+parquet = { workspace = true, default-features = false, features = ["experimental", "arrow", "snap", "lz4", "zstd", "flate2-zlib-rs"] }
+futures = { workspace = true }
+mimalloc = { version = "*", default-features = false, optional = true }
+tikv-jemallocator = { version = "0.6.1", optional = true, features = ["disable_initial_exec_tls"] }
+tikv-jemalloc-ctl = { version = "0.6.1", optional = true, features = ["disable_initial_exec_tls", "stats"] }
+tokio = { version = "1", features = ["rt-multi-thread"] }
+async-trait = { workspace = true }
+log = "0.4"
+log4rs = "1.4.0"
+prost = "0.14.3"
+jni = "0.22.4"
+rand = { workspace = true }
+num = { workspace = true }
+tempfile = "3.26.0"
+itertools = "0.15.0"
+paste = "1.0.14"
+datafusion = { workspace = true, features = ["parquet_encryption", "sql"] }
+datafusion-physical-expr-adapter = { workspace = true }
+datafusion-datasource = { workspace = true }
+datafusion-spark = { workspace = true }
+once_cell = "1.18.0"
+datafusion-comet-common = { workspace = true }
+datafusion-comet-spark-expr = { workspace = true }
+datafusion-comet-jni-bridge = { workspace = true }
+datafusion-comet-proto = { workspace = true }
+datafusion-comet-shuffle = { workspace = true }
+object_store = { workspace = true }
+url = { workspace = true }
+aws-config = { workspace = true }
+aws-credential-types = { workspace = true }
+parking_lot = "0.12.5"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "http2"] }
+object_store_opendal = { version = "0.57.0", optional = true }
+hdfs-sys = {version = "0.3", optional = true, features = ["hdfs_3_3"]}
+opendal = { version = "0.57.0", optional = true, features = ["services-hdfs"] }
+iceberg = { workspace = true }
+hudi = { workspace = true }
+arrow-57 = { workspace = true }
+iceberg-storage-opendal = { workspace = true }
+reqsign-core = { workspace = true }
+serde_json = "1.0"
+uuid = "1.23.3"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+procfs = "0.18.0"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+hdrs = { version = "0.3.2", features = ["vendored"] }
+
+[dev-dependencies]
+pprof = { version = "0.15", features = ["flamegraph"] }
+criterion = { version = "0.7", features = ["async", "async_tokio", "async_std"] }
+jni = { version = "0.22.4", features = ["invocation"] }
+lazy_static = "1.4"
+assertables = "10"
+hex = "0.4.3"
+datafusion-functions-nested = { version = "54.1.0" }
+
+[features]
+backtrace = ["datafusion/backtrace"]
+default = ["hdfs-opendal"]
+hdfs-opendal = ["opendal", "object_store_opendal", "hdfs-sys"]
+jemalloc = ["tikv-jemallocator", "tikv-jemalloc-ctl"]
+
+# exclude optional packages from cargo machete verifications
+[package.metadata.cargo-machete]
+ignored = ["hdfs-sys", "paste"]
+
+[lib]
+name = "comet"
+# "rlib" is for benchmarking with criterion.
+crate-type = ["cdylib", "rlib"]
+
+[[bench]]
+name = "array_element_append"
+harness = false

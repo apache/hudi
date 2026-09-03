@@ -238,5 +238,47 @@
         </dependency>
       </dependencies>
     </profile>
+
+    <!-- Bundles the native Hudi scan glue when the bundle is built against the
+         Hudi-built Comet (comet.hudi.build set, datafusion.comet.version naming
+         the artifact build_comet.sh installed). The includes are restated in full
+         because the main artifactSet overrides the parent's as a whole. -->
+    <profile>
+      <id>comet-hudi-scan</id>
+      <activation>
+        <property>
+          <name>comet.hudi.build</name>
+        </property>
+      </activation>
+      <dependencies>
+        <dependency>
+          <groupId>org.apache.hudi</groupId>
+          <artifactId>hudi-spark-comet_${scala.binary.version}</artifactId>
+          <version>${project.version}</version>
+        </dependency>
+      </dependencies>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-shade-plugin</artifactId>
+            <version>${maven-shade-plugin.version}</version>
+            <executions>
+              <execution>
+                <configuration>
+                  <artifactSet combine.self="override">
+                    <includes>
+                      <include>org.apache.hudi:hudi-spark${sparkbundle.version}-bundle_${scala.binary.version}</include>
+                      <include>org.apache.datafusion:*</include>
+                      <include>org.apache.hudi:hudi-spark-comet_${scala.binary.version}</include>
+                    </includes>
+                  </artifactSet>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
   </profiles>
 </project>
