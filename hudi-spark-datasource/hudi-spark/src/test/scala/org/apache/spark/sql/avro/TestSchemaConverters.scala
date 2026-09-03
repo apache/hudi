@@ -20,8 +20,9 @@ package org.apache.spark.sql.avro
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats
-import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaField, HoodieSchemaType}
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaField, HoodieSchemaRepair, HoodieSchemaType, HoodieSchemaUtils}
 import org.apache.hudi.common.schema.internal.HoodieSchemaException
+import org.apache.hudi.metadata.stats.ValueType
 
 import org.apache.avro.JsonProperties
 import org.apache.spark.sql.types.{ArrayType, DataTypes, FloatType, MetadataBuilder, StructField, StructType}
@@ -52,6 +53,38 @@ class TestSchemaConverters extends SparkAdapterSupport {
         assertEquals(JsonProperties.NULL_VALUE, convertedField.defaultVal().get())
       }
     }
+  }
+
+  @Test
+  def testMemberStructBecomesMultiBranchUnionThatSchemaWalksCanTraverse(): Unit = {
+    // A struct of nullable member0..memberN fields is spark-avro's encoding of a complex union and
+    // toHoodieType turns it back into one, so a datasource write can land ["null","string","int"] in a
+    // table schema. The recursive schema walks used to loop forever on that shape (#19825).
+    val structType = StructType(Seq(
+      StructField("id", DataTypes.LongType, nullable = false),
+      StructField("choice", StructType(Seq(
+        StructField("member0", DataTypes.StringType, nullable = true),
+        StructField("member1", DataTypes.IntegerType, nullable = true))), nullable = true),
+      StructField("amount", StructType(Seq(
+        StructField("member0", DataTypes.StringType, nullable = true),
+        StructField("member1", DataTypes.createDecimalType(10, 6), nullable = true))), nullable = true)))
+
+    val hoodieSchema = HoodieSparkSchemaConverters.toHoodieType(structType)
+
+    val choice = hoodieSchema.getField("choice").get().schema()
+    assertEquals(HoodieSchemaType.UNION, choice.getType)
+    assertEquals(3, choice.getTypes.size())
+    // getNonNullType() cannot reduce this union to a single branch, which is what tripped the walkers
+    assertEquals(HoodieSchemaType.UNION, choice.getNonNullType.getType)
+
+    assertFalse(HoodieSchemaRepair.hasTimestampMillisField(hoodieSchema))
+    assertTrue(HoodieSchemaUtils.hasDecimalField(hoodieSchema))
+    assertTrue(HoodieSchemaUtils.findNestedField(hoodieSchema, "choice").isPresent)
+    assertFalse(HoodieSchemaUtils.findNestedField(hoodieSchema, "choice.member0").isPresent)
+    assertThrows(classOf[IllegalArgumentException], () => ValueType.fromSchema(choice))
+
+    // and the union still converts back to the member struct it came from
+    assertEquals(structType("choice").dataType, HoodieSparkSchemaConverters.toSqlType(hoodieSchema)._1.asInstanceOf[StructType]("choice").dataType)
   }
 
   @Test
