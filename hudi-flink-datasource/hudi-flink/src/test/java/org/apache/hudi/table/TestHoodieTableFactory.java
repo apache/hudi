@@ -68,6 +68,7 @@ import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -851,10 +852,25 @@ public class TestHoodieTableFactory {
   }
 
   @Test
+  void testRecordLevelIndexBootstrapEnabledDefaultsToFalseWhenUnset() {
+    // HoodieTableFactory no longer forces INDEX_BOOTSTRAP_ENABLED for RECORD_LEVEL_INDEX; when the
+    // user never sets it, the option's own default (false) should simply pass through untouched.
+    Configuration rliConf = new Configuration(this.conf);
+    rliConf.set(FlinkOptions.OPERATION, "upsert");
+    rliConf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
+    rliConf.set(FlinkOptions.METADATA_ENABLED, true);
+    rliConf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, false);
+
+    HoodieTableSink noBootstrapSink =
+        (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(rliConf));
+    assertThat(noBootstrapSink.getConf().get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED), is(false));
+  }
+
+  @Test
   void testFactoryBuiltSinkKeepsTimeBoundedRLIBootstrapEnabled() {
-    // HoodieTableFactory forces INDEX_BOOTSTRAP_ENABLED to false for RECORD_LEVEL_INDEX, but the
-    // time-bounded RLI bootstrap must still be reachable when it is configured, even though the
-    // factory never flips that flag back to true itself.
+    // The user is responsible for turning INDEX_BOOTSTRAP_ENABLED on for time-bounded RLI
+    // bootstrap; HoodieTableFactory must pass that choice through unchanged rather than
+    // overriding it, so the bootstrap pipeline stays reachable.
     Configuration rliConf = new Configuration(this.conf);
     rliConf.set(FlinkOptions.OPERATION, "upsert");
     rliConf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
@@ -862,13 +878,36 @@ public class TestHoodieTableFactory {
     rliConf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, false);
     rliConf.set(FlinkOptions.INDEX_RLI_BACKEND_TYPE, "rocksdb");
     rliConf.set(FlinkOptions.INDEX_RLI_CACHE_ROCKSDB_BOOTSTRAP_DAYS, 1);
+    rliConf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
 
     HoodieTableSink rliSink =
         (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(rliConf));
     Configuration rliResolvedConf = rliSink.getConf();
 
-    assertThat(rliResolvedConf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED), is(false));
+    assertThat(rliResolvedConf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED), is(true));
     assertTrue(OptionsResolver.isTimeBoundedRLIBootstrapEnabled(rliResolvedConf));
+  }
+
+  @Test
+  void testFactoryDoesNotForceDisableExplicitBootstrapEnabledForRecordLevelIndex() {
+    // Documents the behavior change from this revision: previously the factory always reset
+    // INDEX_BOOTSTRAP_ENABLED to false for RECORD_LEVEL_INDEX. Now a user-set true survives even
+    // when the rocksdb time-bounded config isn't present, though isTimeBoundedRLIBootstrapEnabled
+    // still requires the full rocksdb + bootstrap-days configuration to select the time-bounded
+    // bootstrap operator.
+    Configuration rliConf = new Configuration(this.conf);
+    rliConf.set(FlinkOptions.OPERATION, "upsert");
+    rliConf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
+    rliConf.set(FlinkOptions.METADATA_ENABLED, true);
+    rliConf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, false);
+    rliConf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+
+    HoodieTableSink rliSink =
+        (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(rliConf));
+    Configuration rliResolvedConf = rliSink.getConf();
+
+    assertThat(rliResolvedConf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED), is(true));
+    assertFalse(OptionsResolver.isTimeBoundedRLIBootstrapEnabled(rliResolvedConf));
   }
 
   @Test

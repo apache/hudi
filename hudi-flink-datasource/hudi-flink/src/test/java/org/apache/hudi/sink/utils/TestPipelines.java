@@ -107,9 +107,29 @@ public class TestPipelines {
 
   @Test
   void testPartitionedRLIWithRocksDBBackendUsesPartitionedRLIBootstrapOperator() {
-    // Deliberately leave INDEX_BOOTSTRAP_ENABLED at its default (false), matching what
-    // HoodieTableFactory#setupWriteOptions forces for RECORD_LEVEL_INDEX, so this exercises
-    // the same gate a factory-built sink goes through.
+    // HoodieTableFactory no longer forces INDEX_BOOTSTRAP_ENABLED to false for RECORD_LEVEL_INDEX,
+    // so a user that wants time-bounded RLI bootstrap sets the flag explicitly alongside the
+    // rocksdb backend config; set it here to exercise the same gate a factory-built sink goes through.
+    Configuration conf = defaultConf();
+    conf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, false);
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
+    conf.set(FlinkOptions.INDEX_RLI_BACKEND_TYPE, "rocksdb");
+    conf.set(FlinkOptions.INDEX_RLI_CACHE_ROCKSDB_BOOTSTRAP_DAYS, 1);
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+    DataStream<RowData> input = rowDataInput();
+
+    DataStream<HoodieFlinkInternalRow> streaming =
+        Pipelines.bootstrap(conf, TestConfigurations.ROW_TYPE, input, false, false);
+
+    assertEquals("index_bootstrap", streaming.getTransformation().getName());
+    assertInstanceOf(TimeBoundedRLIBootstrapOperator.class, bootstrapOperator(streaming));
+  }
+
+  @Test
+  void testPartitionedRLIWithRocksDBBackendSkipsBootstrapWhenNotExplicitlyEnabled() {
+    // With the forced false removed from HoodieTableFactory, INDEX_BOOTSTRAP_ENABLED is now the
+    // single source of truth in Pipelines: rocksdb backend + bootstrap-days config alone must not
+    // wire in a bootstrap operator unless the flag itself is turned on.
     Configuration conf = defaultConf();
     conf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, false);
     conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
@@ -120,8 +140,7 @@ public class TestPipelines {
     DataStream<HoodieFlinkInternalRow> streaming =
         Pipelines.bootstrap(conf, TestConfigurations.ROW_TYPE, input, false, false);
 
-    assertEquals("index_bootstrap", streaming.getTransformation().getName());
-    assertInstanceOf(TimeBoundedRLIBootstrapOperator.class, bootstrapOperator(streaming));
+    assertNotEquals("index_bootstrap", streaming.getTransformation().getName());
   }
 
   private Object bootstrapOperator(DataStream<HoodieFlinkInternalRow> stream) {

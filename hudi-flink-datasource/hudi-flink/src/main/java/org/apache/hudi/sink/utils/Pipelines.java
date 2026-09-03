@@ -426,8 +426,7 @@ public class Pipelines {
     DataStream<HoodieFlinkInternalRow> dataStream1 = rowDataToHoodieRecord(conf, rowType, dataStream);
 
     boolean isGlobalRLI = OptionsResolver.isGlobalRecordLevelIndex(conf);
-    boolean isTimeBoundedRLIBootstrap = OptionsResolver.isTimeBoundedRLIBootstrapEnabled(conf);
-    if (conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED) || (bounded && !isGlobalRLI) || isTimeBoundedRLIBootstrap) {
+    if (conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED) || (bounded && !isGlobalRLI)) {
       AbstractBootstrapOperator bootstrapOperator = BootstrapOperatorFactory.createInstance(conf);
       dataStream1 = dataStream1
           .transform(

@@ -270,7 +270,7 @@ public class OptionsResolver {
    * partitioned index cache, i.e. {@link FlinkOptions#INDEX_RLI_BACKEND_TYPE} is configured as {@code rocksdb}.
    */
   public static boolean isTimeBoundedRLIBootstrapEnabled(Configuration conf) {
-    return isRecordLevelIndex(conf)
+    return conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)
             && ROCKSDB_INDEX_RLI_BACKEND_TYPE.equalsIgnoreCase(conf.get(FlinkOptions.INDEX_RLI_BACKEND_TYPE))
             && conf.get(FlinkOptions.INDEX_RLI_CACHE_ROCKSDB_BOOTSTRAP_DAYS) > 0;
   }

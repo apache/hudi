@@ -409,19 +409,33 @@ public class TestOptionsResolver {
 
   @Test
   void testPartitionedRLIWithRocksDBBackend() {
+    // isTimeBoundedRLIBootstrapEnabled requires all three of: INDEX_BOOTSTRAP_ENABLED explicitly
+    // turned on by the user (HoodieTableFactory no longer forces this for RECORD_LEVEL_INDEX),
+    // a rocksdb-backed RLI cache, and a positive bootstrap-days window.
     Configuration conf = new Configuration();
     conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+    conf.set(FlinkOptions.INDEX_RLI_CACHE_ROCKSDB_BOOTSTRAP_DAYS, 1);
+
+    // Wrong backend type.
     conf.set(FlinkOptions.INDEX_RLI_BACKEND_TYPE, "mdt");
     assertFalse(OptionsResolver.isTimeBoundedRLIBootstrapEnabled(conf));
 
+    // Backend type matches, case-insensitively.
     conf.set(FlinkOptions.INDEX_RLI_BACKEND_TYPE, "rocksdb");
-    assertFalse(OptionsResolver.isTimeBoundedRLIBootstrapEnabled(conf));
+    assertTrue(OptionsResolver.isTimeBoundedRLIBootstrapEnabled(conf));
     conf.set(FlinkOptions.INDEX_RLI_BACKEND_TYPE, "RocksDB");
-    assertFalse(OptionsResolver.isTimeBoundedRLIBootstrapEnabled(conf));
+    assertTrue(OptionsResolver.isTimeBoundedRLIBootstrapEnabled(conf));
 
-    // Only applies to partitioned (non-global) record level index.
-    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    // Bootstrap days must be positive.
+    conf.set(FlinkOptions.INDEX_RLI_CACHE_ROCKSDB_BOOTSTRAP_DAYS, 0);
     assertFalse(OptionsResolver.isTimeBoundedRLIBootstrapEnabled(conf));
+    conf.set(FlinkOptions.INDEX_RLI_CACHE_ROCKSDB_BOOTSTRAP_DAYS, 1);
+
+    // INDEX_BOOTSTRAP_ENABLED must be explicitly turned on, even with the rest configured.
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, false);
+    assertFalse(OptionsResolver.isTimeBoundedRLIBootstrapEnabled(conf));
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
   }
 
   @Test
