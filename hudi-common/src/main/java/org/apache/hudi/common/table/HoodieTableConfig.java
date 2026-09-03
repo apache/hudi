@@ -466,6 +466,29 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Relative path to table base path where the index definitions are stored");
 
+  /**
+   * Keys of the write-time index configuration (defined in {@code HoodieIndexConfig} in
+   * hudi-client-common). {@code HoodieTableConfig} lives in hudi-common and must not depend
+   * on the client module, so these are referenced by literal key (HUDI-37).
+   */
+  private static final String INDEX_TYPE_WRITE_KEY = "hoodie.index.type";
+  private static final String INDEX_CLASS_WRITE_KEY = "hoodie.index.class";
+
+  /**
+   * Index configuration the table was created with, persisted into {@code hoodie.properties}.
+   * The write-time {@code hoodie.index.type} / {@code hoodie.index.class} are per-job settings
+   * and can legitimately differ between jobs; this namespaced, creation-time record makes the
+   * index choice observable and stable for readers that need to reason about the index layout.
+   */
+  public static final ConfigProperty<String> INDEX_TYPE = ConfigProperty
+      .key("hoodie.table.index.type")
+      .noDefaultValue()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Index type the table was created with, derived from the write-time "
+          + "`hoodie.index.class` (takes precedence) or `hoodie.index.type` at table initialization. "
+          + "Absent for tables created before this property existed or when no index configuration "
+          + "was explicitly supplied at creation time.");
+
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
   static List<ConfigProperty<?>> definedTableConfigs() {
@@ -679,6 +702,18 @@ public class HoodieTableConfig extends HoodieConfig {
         HoodieInstantTimeGenerator.setCommitTimeZone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getString(TIMELINE_TIMEZONE)));
       }
       hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS);
+
+      // Record the index configuration the table was created with (HUDI-37). Only persisted
+      // when explicitly configured, so existing callers see no extra properties and the
+      // property is never guessed from an engine-specific default.
+      if (!hoodieConfig.contains(INDEX_TYPE)) {
+        if (hoodieConfig.contains(INDEX_CLASS_WRITE_KEY)) {
+          // A custom index class takes precedence over the index type (same rule as HoodieIndexConfig).
+          hoodieConfig.setValue(INDEX_TYPE, hoodieConfig.getString(INDEX_CLASS_WRITE_KEY));
+        } else if (hoodieConfig.contains(INDEX_TYPE_WRITE_KEY)) {
+          hoodieConfig.setValue(INDEX_TYPE, hoodieConfig.getString(INDEX_TYPE_WRITE_KEY));
+        }
+      }
 
       MetaFieldsMode metaFieldsMode = MetaFieldsMode.resolve(hoodieConfig);
       if (tableVersion.lesserThan(HoodieTableVersion.TEN)) {
@@ -1391,6 +1426,13 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public Option<String> getRelativeIndexDefinitionPath() {
     return Option.ofNullable(getString(RELATIVE_INDEX_DEFINITION_PATH));
+  }
+
+  /**
+   * @returns the index type recorded at table creation time, if any (see {@link #INDEX_TYPE}).
+   */
+  public Option<String> getIndexType() {
+    return Option.ofNullable(getString(INDEX_TYPE));
   }
 
   /**
