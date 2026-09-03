@@ -160,6 +160,22 @@ Kerberos authentication success
 
 If you see "Kerberos authentication success" in the command output, it means Kerberos authentication has been successful.
 
+**kerberos kdestroy** is the counterpart: it logs the current user out of the keytab and resets the cached
+`UserGroupInformation`, which is what you want before authenticating as a different principal in the same session.
+
+```shell
+hudi->kerberos kdestroy --krb5conf /etc/krb5.conf
+Destroy Kerberos authentication
+Parameters:
+--krb5conf: /etc/krb5.conf
+Current user: user (auth:SIMPLE)
+Login user: user (auth:SIMPLE)
+Destroy Kerberos authentication success
+```
+
+`--krb5conf` defaults to `/etc/krb5.conf`. If no user is currently logged in with Kerberos, the command prints
+`Currently, no user login with kerberos, do nothing` and still reports success, so it is safe to run twice.
+
 
 ## Using hudi-cli
 
@@ -253,29 +269,43 @@ hudi:trips->help
 * create - Create a hoodie table if not present
 * date - Displays the local date and time
 * desc - Describe Hoodie Table properties
+* diff file - Check how file differs across range of commits
+* diff partition - Check how file differs across range of commits. It is meant to be used only for partitioned tables.
 * downgrade table - Downgrades a table
 * exit - Exits the shell
 * export instants - Export Instants and their metadata from the Timeline
 * fetch table schema - Fetches latest table schema
 * hdfsparquetimport - Imports Parquet table to a hoodie table
 * help - List all commands usage
+* kerberos kdestroy - Destroy Kerberos authentication
+* locks audit cleanup - Clean up old audit lock files
+* locks audit disable - Disable storage lock audit service for the current table
+* locks audit enable - Enable storage lock audit service for the current table
+* locks audit status - Show the current status of lock audit service
+* locks audit validate - Validate audit lock files for consistency and integrity
 * marker delete - Delete the marker
 * metadata create - Create the Metadata Table if it does not exist
 * metadata delete - Remove the Metadata Table
+* metadata delete-record-index - Delete the record index from Metadata Table
 * metadata init - Update the metadata table from commits since the creation
 * metadata list-files - Print a list of all files in a partition from the metadata
 * metadata list-partitions - List all partitions from metadata
 * metadata refresh - Refresh table metadata
 * metadata set - Set options for Metadata Table
 * metadata stats - Print stats about the metadata
+* metadata timeline show active - List all instants in active timeline of metadata table
+* metadata timeline show incomplete - List all incomplete instants in active timeline of metadata table
 * metadata validate-files - Validate all files in all partitions from the metadata
 * quit - Exits the shell
 * refresh - Refresh table metadata
+* rename partition - Rename partition. Usage: rename partition --oldPartition <oldPartition> --newPartition <newPartition>
 * repair addpartitionmeta - Add partition metadata to a table, if not present
 * repair corrupted clean files - repair corrupted clean files
 * repair deduplicate - De-duplicate a partition path contains duplicates & produce repaired files to replace with
+* repair deprecated partition - Repair deprecated partition ("default"). Re-writes data from the deprecated partition into __HIVE_DEFAULT_PARTITION__
 * repair migrate-partition-meta - Migrate all partition meta file currently stored in text format to be stored in base file format. See HoodieTableConfig#PARTITION_METAFILE_USE_DATA_FORMAT.
 * repair overwrite-hoodie-props - Overwrite hoodie.properties with provided file. Risky operation. Proceed with caution!
+* repair show empty commit metadata - show failed commits
 * savepoint create - Savepoint a commit
 * savepoint delete - Delete the savepoint
 * savepoint rollback - Savepoint a commit
@@ -291,6 +321,8 @@ hudi:trips->help
 * show fsview latest - Show latest file-system view
 * show logfile metadata - Read commit metadata from log files
 * show logfile records - Read records from log files
+* show restore - Show details of a restore instant
+* show restores - List all restore instants
 * show rollback - Show details of a rollback instant
 * show rollbacks - List all rollback instants
 * stats filesizes - File Sizes. Display summary stats on sizes of files
@@ -299,6 +331,7 @@ hudi:trips->help
 * system properties - Shows the shell's properties
 * table delete-configs - Delete the supplied table configs from the table.
 * table recover-configs - Recover table configs, from update/delete that failed midway.
+* table set-meta-fields-mode - Set hoodie.meta.fields.mode on an existing table.
 * table update-configs - Update the table configs with configs with provided file.
 * temp_delete - Delete view name
 * temp_query - query against created temp view
@@ -306,6 +339,9 @@ hudi:trips->help
 * temp query - query against created temp view
 * temps_show - Show all views name
 * temps show - Show all views name
+* timeline show active - List all instants in active timeline
+* timeline show incomplete - List all incomplete instants in active timeline
+* trigger archival - trigger archival
 * upgrade table - Upgrades a table
 * utils loadClass - Load a class
 * version - Displays shell version
@@ -432,6 +468,27 @@ hudi:trips->stats wa
 
 In order to limit the amount of growth of .commit files on DFS, Hudi archives older .commit files (with due respect to the cleaner policy) into a commits.archived file.
 This is a sequence file that contains a mapping from commitNumber => json with raw information about the commit (same that is nicely rolled up above).
+
+Archival normally runs inline with writes. `trigger archival` runs it on demand, as a Spark job, for the table you are
+connected to. The retention options mirror the write configs of the same name, so passing nothing here archives with
+Hudi's defaults rather than with whatever your writer is configured to use.
+
+```java
+hudi:trips->trigger archival --minCommits 20 --maxCommits 30 --commitsRetainedByCleaner 10 --enableMetadata true
+Archival successfully triggered
+```
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `--minCommits` | `20` | Minimum number of instants to retain in the active timeline. Mirrors `hoodie.keep.min.commits`. |
+| `--maxCommits` | `30` | Maximum number of instants to retain in the active timeline. Mirrors `hoodie.keep.max.commits`. |
+| `--commitsRetainedByCleaner` | `10` | Number of commits to retain without cleaning. |
+| `--enableMetadata` | `true` | Whether the metadata table is enabled for this run. |
+| `--sparkMemory` | `1G` | Spark executor memory. |
+| `--sparkMaster` | `local` | Spark master. |
+
+The command reports `Archival successfully triggered` on a zero exit code from the Spark job, and
+`Failed to trigger archival` otherwise. Check the Spark logs for why.
 
 
 ### Compactions
@@ -614,6 +671,20 @@ savepoints show
 savepoint rollback --savepoint 20220128160245447 --sparkMaster local[2]
 ```
 
+A rollback to a savepoint writes a `restore` instant on the timeline. `show restores` lists them, and `show restore`
+expands a single one into the commits it reverted, which is how you confirm after the fact what a restore actually
+undid.
+
+```java
+hudi:trips->show restores --limit 10 --includeInflights false
+hudi:trips->show restore --instant 20220128170512331
+```
+
+`show restores` accepts `--limit` (default `10`), `--sortBy` (default unset), `--desc` (default `false`),
+`--headeronly` (default `false`), and `--includeInflights` (default `false`, so only completed restores are listed).
+`show restore` takes the instant to expand via `--instant` and the same `--limit` / `--sortBy` / `--desc` /
+`--headeronly` display options; it has no `--includeInflights`.
+
 ### Upgrade and Downgrade Table
 In case the user needs to downgrade the version of Hudi library used, the Hudi table needs to be manually downgraded
 on the newer version of Hudi CLI before library downgrade.  To downgrade a Hudi table through CLI, user needs to specify
@@ -697,6 +768,23 @@ hudi:trips->metadata lookup-record-index --record_key <key> --partition_path <pa
 ```
 
 The `--partition_path` argument is optional for a global RLI (where record keys are unique across all partitions) and required for a partitioned RLI. If `--partition_path` is omitted for a partitioned RLI, the command will return an error. The output columns are `Record key`, `Partition path`, `File Id`, and `Instant time`.
+
+To drop the record index partition from the Metadata Table entirely, for example before rebuilding it:
+
+```shell
+hudi:trips->metadata delete-record-index --backup true
+Record Index has been deleted from the Metadata Table and backed up to /user/hive/warehouse/table1/.hoodie/.metadata_record_index_20260831090412345
+```
+
+`--backup` defaults to `true`. The backup is a rename rather than a copy, so it is cheap: the
+`.hoodie/metadata/record_index` partition is moved to `.hoodie/.metadata_record_index_<instantTime>`, where
+`<instantTime>` is the current instant in `yyyyMMddHHmmssSSS` form. Pass `--backup false` to delete the partition
+outright, in which case the output is just `Record Index has been deleted from the Metadata Table` and the only way
+back is to rebuild the index.
+
+Either way the command first flips the partition off in the table config, so readers stop consulting the index before
+the files go away. If the record index partition does not exist, nothing is deleted and the message still prints, with
+`null` in place of the backup path.
 
 ### Change Hudi Table Type
 There are cases we want to change the hudi table type. For example, change COW table to MOR for more efficient and 
@@ -784,6 +872,431 @@ table change-table-type COW
 ║ hoodie.timeline.layout.version                 │ 1                                    │ 1                                    ║
 ╚════════════════════════════════════════════════╧══════════════════════════════════════╧══════════════════════════════════════╝
 ```
+
+### Changing the Meta Fields Mode
+
+`hoodie.meta.fields.mode` decides which of Hudi's meta columns are physically written into base files. It is a
+storage-layout decision baked in at write time, so a write can never change it on an existing table.
+`table set-meta-fields-mode` is the sanctioned way to change it.
+
+```java
+hudi:trips->table set-meta-fields-mode --target-mode COMMIT_TIME_ONLY
+```
+
+`--target-mode` accepts `ALL`, `NONE`, `COMMIT_TIME_ONLY`, `FILE_NAME_ONLY` or `COMMIT_TIME_AND_FILE_NAME`. The value
+is resolved case-insensitively and trimmed, so `commit_time_only` is accepted too. Setting the mode the table is
+already in is a no-op and reports as much.
+
+On a table that already has commits, two guards apply, because this command changes the table property without
+rewriting a single existing file:
+
+- **Widening is refused outright**, and `--force` does not override it. Widening means the target mode populates a
+  meta column the current mode does not. Since earlier files are not rewritten, the table would advertise a column
+  that is null for every row written so far, and incremental queries and file-name lookups silently skip exactly
+  those rows. To widen, recreate the table. The CLI uses the same predicate as the write path
+  (`BaseHoodieWriteClient#validateAgainstTableProperties`), so the two cannot disagree about which transitions are
+  legal.
+- **Narrowing needs `--force`** (default `false`). It leaves mixed-mode files: old commits keep the old layout, new
+  commits use the new one, and incremental and file-pruning semantics differ between the two sets. Passing `--force`
+  logs a warning recording the transition and the commit count.
+
+Neither guard applies to a table with no commits, where the mode can be set freely.
+
+### Inspecting the Timeline
+
+`commits show` lists completed commits. The timeline commands show every instant regardless of action and state, which
+is what you want when diagnosing a stuck table: a compaction sitting in `REQUESTED`, or a rollback that never
+completed, never appears in `commits show`.
+
+```java
+hudi:trips->timeline show active --limit 10
+hudi:trips->timeline show incomplete
+```
+
+Both print `Instant`, `Action`, `State`, and the `Requested` / `Inflight` / `Completed` file modification times.
+`timeline show incomplete` restricts the listing to instants that are not yet completed.
+
+| Option | Default | Applies to | Description |
+| --- | --- | --- | --- |
+| `--limit` | `10` | both | Number of rows to display. |
+| `--sortBy` | unset | both | Field to sort by. |
+| `--desc` | `false` | both | Reverse the ordering. |
+| `--headeronly` | `false` | both | Print the header only. |
+| `--show-rollback-info` | `false` | both | For rollback instants, also show the instant being rolled back. |
+| `--show-time-seconds` | `false` | both | Include seconds in the instant file modification times. |
+| `--with-metadata-table` | `false` | `timeline show active` only | Show the metadata table timeline alongside the data table, adding `MT Action`, `MT State` and the three matching MT time columns. |
+
+The metadata table has its own timeline, and the two can disagree when a metadata commit fails. To read it directly:
+
+```java
+hudi:trips->metadata timeline show active --limit 10
+hudi:trips->metadata timeline show incomplete
+```
+
+These accept `--limit`, `--sortBy`, `--desc`, `--headeronly` and `--show-time-seconds`. They have no
+`--show-rollback-info` and no `--with-metadata-table`, since they are already scoped to the metadata table.
+
+### Diffing a File or Partition
+
+`diff file` and `diff partition` replay the timeline and show every commit that touched a given file group or
+partition, which is the quickest way to answer "what has been writing to this file". Both report the standard commit
+columns plus the write statistics for the matching entries only.
+
+```java
+hudi:trips->diff file --fileId 5f8a1e0b-1b4b-4a3f-9b1a-2c7d6e5f4a3b-0 --limit 10
+hudi:trips->diff partition --partitionPath 2026/08/26 --includeArchivedTimeline true
+```
+
+`diff file` takes `--fileId` and `diff partition` takes `--partitionPath` as a partition path relative to the table
+base path. `diff partition` is only meaningful on a partitioned table. Both then share these options:
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `--includeArchivedTimeline` | `false` | Also scan archived instants, not just the active timeline. |
+| `--startTs` | unset, meaning now minus 10 days | Start of the instant range. Only applied when `--includeArchivedTimeline` is `true`. |
+| `--endTs` | unset, meaning now minus 1 day | End of the instant range. Only applied when `--includeArchivedTimeline` is `true`. |
+| `--limit` | `-1`, meaning no limit | Number of rows to display. |
+| `--sortBy` | unset | Field to sort by. |
+| `--desc` | `false` | Reverse the ordering. |
+| `--headeronly` | `false` | Print the header only. |
+
+Note the interaction between the three range options, which is easy to get wrong. `--startTs` and `--endTs` are used
+to select archived instants only. With the default `--includeArchivedTimeline false` the whole active timeline is
+scanned and both bounds are ignored, so passing a narrow range does not restrict the output. Set
+`--includeArchivedTimeline true` for the bounds to take effect, and note that the archived range is then merged with
+the full active timeline rather than replacing it.
+
+### Repairing a Table
+
+`repair show empty commit metadata` scans completed instants on the active timeline and reports the ones whose
+metadata file is empty, which is what a commit interrupted between file creation and metadata write leaves behind.
+
+```java
+hudi:trips->repair show empty commit metadata
+```
+
+Note that this command writes its findings to the CLI log at `WARN` level rather than returning a table, so with the
+default logging configuration you will see the `Empty Commit: ...` lines in the console log rather than in a rendered
+result. It only reports; it does not modify the timeline.
+
+`rename partition` rewrites the data under one partition value into another, as a Spark job, and deletes the old
+partition on success.
+
+```java
+hudi:trips->set --conf SPARK_HOME=<SPARK_HOME>
+hudi:trips->rename partition --oldPartition 2026/08/26 --newPartition 2026-08-26 --sparkMaster local[2]
+```
+
+`repair deprecated partition` is the special case of that rename for tables written before Hudi settled on its
+placeholder for the null partition value: it rewrites data from the deprecated `default` partition into
+`__HIVE_DEFAULT_PARTITION__`.
+
+```java
+hudi:trips->repair deprecated partition --sparkMaster local[2]
+```
+
+Both take `--sparkProperties` (a Spark properties file path, empty by default), `--sparkMaster` (empty by default) and
+`--sparkMemory` (`4G` by default). Both read the old partition, rewrite those records under the new partition value,
+and then issue a `delete_partition` write against the old one, so the change goes through the timeline rather than
+behind it. Both are a no-op when the old partition holds no records.
+
+They differ in one respect worth knowing: `rename partition` additionally removes the old partition directory from
+storage after the delete write, logging a warning if that removal fails, whereas `repair deprecated partition` leaves
+the emptied `default` directory in place. Either way these rewrite data, so take a savepoint first if the table
+matters.
+
+### Auditing Storage Locks
+
+When a table uses a storage-based lock provider, the lock provider can record every lock transition to a set of JSONL
+files, so that a suspected concurrency violation can be reconstructed after the fact. The audit is off by default and
+is controlled by a config file next to the locks themselves, at
+`<basePath>/.hoodie/.locks/audit_enabled.json`; the audit records land in `<basePath>/.hoodie/.locks/audit/`.
+
+```java
+hudi:trips->locks audit enable
+Lock audit enabled successfully.
+Audit config written to: /user/hive/warehouse/table1/.hoodie/.locks/audit_enabled.json
+Audit files will be stored at: /user/hive/warehouse/table1/.hoodie/.locks/audit
+```
+
+`locks audit status` reports whether auditing is on, and where both the config and the records live. A table that has
+never had auditing enabled reports `DISABLED` with the config file marked `(not found)`.
+
+```java
+hudi:trips->locks audit status
+Lock Audit Status: ENABLED
+Table: /user/hive/warehouse/table1
+Config file: /user/hive/warehouse/table1/.hoodie/.locks/audit_enabled.json
+Audit files location: /user/hive/warehouse/table1/.hoodie/.locks/audit
+```
+
+`locks audit validate` is the reason to collect the records. It parses every `.jsonl` file in the audit folder into
+transaction windows and checks them against each other. Overlapping windows are reported as errors, since two writers
+holding the lock at once is exactly the violation the lock provider exists to prevent. A transaction that never
+released its lock is reported as a warning, which usually means a driver OOM or a non-graceful shutdown rather than a
+correctness problem. The verdict is `PASSED`, `WARNING` when only warnings were found, or `FAILED` when any error was.
+
+```java
+hudi:trips->locks audit validate
+Validation Result: PASSED
+Audit Files: 12 total, 12 parsed successfully, 0 failed to parse
+Transactions Validated: 12
+Issues Found: 0
+Details: All audit lock transactions validated successfully
+```
+
+With no audit folder or no audit files the command reports `PASSED` with zero transactions validated, so a `PASSED`
+verdict on its own does not prove that auditing was ever on. Check `locks audit status` first.
+
+`locks audit cleanup` prunes old records. `--ageDays` defaults to `7` and `--dryRun` defaults to `false`, so run it
+with `--dryRun true` first to see what it would remove.
+
+```java
+hudi:trips->locks audit cleanup --dryRun true --ageDays 30
+```
+
+`locks audit disable` turns auditing off. It keeps the existing records by default; pass `--keepAuditFiles false` to
+delete them at the same time, which internally runs the same cleanup with no age threshold.
+
+```java
+hudi:trips->locks audit disable --keepAuditFiles true
+```
+
+All five commands require a table to be connected, and report `No Hudi table loaded. Please connect to a table first.`
+otherwise.
+
+## Command reference
+
+Every command `hudi-cli` exposes, grouped by area, with its options and their defaults. An option marked
+`(required)` has no default and must be supplied; a value in backticks after an option is its default.
+The sections above cover the commonly used ones in more depth.
+
+Some entries are aliases of the same command rather than distinct ones. `refresh`, `metadata refresh`,
+`commits refresh`, `cleans refresh` and `savepoints refresh` are five names for one method that reloads the table
+metadata, and `temp query` / `temp_query`, `temp delete` / `temp_delete` and `temps show` / `temps_show` are
+underscore and space spellings of the same three commands.
+
+### Table and session
+
+- **`cleans refresh`** Refresh table metadata.
+- **`commits refresh`** Refresh table metadata.
+- **`connect`** Connect to a hoodie table.
+  <br />Options: `--path` (required), `--eventuallyConsistent` (`false`), `--initialCheckIntervalMs` (`2000`), `--maxWaitIntervalMs` (`300000`), `--maxCheckIntervalMs` (`7`), `--timeGeneratorType` (`WAIT_TO_ADJUST_SKEW`), `--maxExpectedClockSkewMs` (`200`), `--useDefaultLockProvider` (`false`)
+- **`create`** Create a hoodie table if not present.
+  <br />Options: `--path` (required), `--tableName` (required), `--tableType` (`COPY_ON_WRITE`), `--archiveLogFolder`, `--tableVersion`, `--payloadClass` (`org.apache.hudi.common.model.HoodieAvroPayload`)
+- **`desc`** Describe Hoodie Table properties.
+- **`fetch table schema`** Fetches latest table schema.
+  <br />Options: `--outputFilePath`
+- **`kerberos kdestroy`** Destroy Kerberos authentication.
+  <br />Options: `--krb5conf` (`/etc/krb5.conf`)
+- **`kerberos kinit`** Perform Kerberos authentication.
+  <br />Options: `--krb5conf` (`/etc/krb5.conf`), `--principal` (required), `--keytab` (required)
+- **`metadata refresh`** Refresh table metadata.
+- **`refresh`** Refresh table metadata.
+- **`savepoints refresh`** Refresh table metadata.
+- **`set`** Set spark launcher env to cli.
+  <br />Options: `--conf` (required)
+- **`show env`** Show spark launcher env by key.
+  <br />Options: `--key` (required)
+- **`show envs all`** Show spark launcher envs.
+- **`table change-table-type`** Change hudi table type to target type: COW or MOR.
+  <br />Options: `--target-type` (required), `--enable-compaction` (`true`), `--parallelism` (`3`), `--sparkMaster` (`local`), `--sparkMemory` (`4G`), `--retry` (`1`), `--propsFilePath`, `--hoodieConfigs`
+- **`table delete-configs`** Delete the supplied table configs from the table.
+  <br />Options: `--comma-separated-configs` (required)
+- **`table recover-configs`** Recover table configs, from update/delete that failed midway.
+- **`table set-meta-fields-mode`** Set hoodie.meta.fields.mode on an existing table. This is the sanctioned way to change.
+  <br />Options: `--target-mode` (required), `--force` (`false`)
+- **`table update-configs`** Update the table configs with configs with provided file.
+  <br />Options: `--props-file` (required)
+- **`utils loadClass`** Load a class.
+  <br />Options: `--class` (required)
+
+### Commits and the timeline
+
+- **`commit show_write_stats`** Show write stats of a commit.
+  <br />Options: `--createView`, `--commit` (required), `--limit` (`-1`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`), `--includeArchivedTimeline` (`false`)
+- **`commit showfiles`** Show file level details of a commit.
+  <br />Options: `--createView`, `--commit` (required), `--limit` (`-1`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`), `--includeArchivedTimeline` (`false`)
+- **`commit showpartitions`** Show partition level details of a commit.
+  <br />Options: `--createView`, `--commit` (required), `--limit` (`-1`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`), `--includeArchivedTimeline` (`false`)
+- **`commits compare`** Compare commits with another Hoodie table.
+  <br />Options: `--path` (required)
+- **`commits show`** Show the commits.
+  <br />Options: `--includeExtraMetadata` (`false`), `--createView`, `--limit` (`-1`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`), `--partition`, `--includeArchivedTimeline` (`false`)
+- **`commits show_inflights`** Show inflight instants that are left longer than a certain duration.
+  <br />Options: `--lookbackInMins` (`0`)
+- **`commits showarchived`** Show the archived commits.
+  <br />Options: `--includeExtraMetadata` (`false`), `--createView`, `--startTs`, `--endTs`, `--limit` (`-1`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`), `--partition`
+- **`commits sync`** Sync commits with another Hoodie table.
+  <br />Options: `--path` (required)
+- **`diff file`** Check how file differs across range of commits.
+  <br />Options: `--fileId` (required), `--startTs`, `--endTs`, `--limit` (`-1`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`), `--includeArchivedTimeline` (`false`)
+- **`diff partition`** Check how file differs across range of commits. It is meant to be used only for partitioned tables.
+  <br />Options: `--partitionPath` (required), `--startTs`, `--endTs`, `--limit` (`-1`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`), `--includeArchivedTimeline` (`false`)
+- **`metadata timeline show active`** List all instants in active timeline of metadata table.
+  <br />Options: `--limit` (`10`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`), `--show-time-seconds` (`false`)
+- **`metadata timeline show incomplete`** List all incomplete instants in active timeline of metadata table.
+  <br />Options: `--limit` (`10`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`), `--show-time-seconds` (`false`)
+- **`show archived commit stats`** Read commits from archived files and show file group details.
+  <br />Options: `--archiveFolderPattern`, `--limit` (`10`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`)
+- **`show archived commits`** Read commits from archived files and show details.
+  <br />Options: `--skipMetadata` (`true`), `--limit` (`10`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`)
+- **`timeline show active`** List all instants in active timeline.
+  <br />Options: `--limit` (`10`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`), `--with-metadata-table` (`false`), `--show-rollback-info` (`false`), `--show-time-seconds` (`false`)
+- **`timeline show incomplete`** List all incomplete instants in active timeline.
+  <br />Options: `--limit` (`10`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`), `--show-rollback-info` (`false`), `--show-time-seconds` (`false`)
+- **`trigger archival`** Trigger archival.
+  <br />Options: `--minCommits` (`20`), `--maxCommits` (`30`), `--commitsRetainedByCleaner` (`10`), `--enableMetadata` (`true`), `--sparkMemory` (`1G`), `--sparkMaster` (`local`)
+
+### Files, stats and log files
+
+- **`show fsview all`** Show entire file-system view.
+  <br />Options: `--pathRegex` (`*`), `--baseFileOnly` (`false`), `--maxInstant`, `--includeMax` (`false`), `--includeInflight` (`false`), `--excludeCompaction` (`false`), `--limit` (`-1`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`)
+- **`show fsview latest`** Show latest file-system view.
+  <br />Options: `--partitionPath`, `--baseFileOnly` (`false`), `--maxInstant`, `--merge` (`true`), `--includeMax` (`false`), `--includeInflight` (`false`), `--excludeCompaction` (`false`), `--limit` (`-1`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`)
+- **`show logfile metadata`** Read commit metadata from log files.
+  <br />Options: `--logFilePathPattern` (required), `--limit` (`-1`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`)
+- **`show logfile records`** Read records from log files.
+  <br />Options: `--limit` (`10`), `--logFilePathPattern` (required), `--mergeRecords` (`false`)
+- **`stats filesizes`** File Sizes. Display summary stats on sizes of files.
+  <br />Options: `--partitionPath` (`*/*/*`), `--limit` (`-1`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`)
+- **`stats wa`** Write Amplification. Ratio of how many records were upserted to how many.
+  <br />Options: `--limit` (`-1`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`)
+
+### Table services
+
+- **`clean showpartitions`** Show partition level details of a clean.
+  <br />Options: `--clean` (required), `--limit` (`-1`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`)
+- **`cleans run`** Run clean.
+  <br />Options: `--sparkMemory` (`4G`), `--propsFilePath`, `--hoodieConfigs`, `--sparkMaster`
+- **`cleans show`** Show the cleans.
+  <br />Options: `--limit` (`-1`), `--sortBy`, `--startTs`, `--endTs`, `--includeArchivedTimeline` (`false`), `--desc` (`false`), `--headeronly` (`false`)
+- **`clustering run`** Run Clustering.
+  <br />Options: `--sparkMaster` (`SparkUtil.DEFAULT_SPARK_MASTER`), `--sparkMemory` (`4g`), `--parallelism` (`1`), `--retry` (`1`), `--clusteringInstant`, `--propsFilePath`, `--hoodieConfigs`
+- **`clustering schedule`** Schedule Clustering.
+  <br />Options: `--sparkMaster` (`SparkUtil.DEFAULT_SPARK_MASTER`), `--sparkMemory` (`1g`), `--propsFilePath`, `--hoodieConfigs`
+- **`clustering scheduleAndExecute`** Run Clustering. Make a cluster plan first and execute that plan immediately.
+  <br />Options: `--sparkMaster` (`SparkUtil.DEFAULT_SPARK_MASTER`), `--sparkMemory` (`4g`), `--parallelism` (`1`), `--retry` (`1`), `--propsFilePath`, `--hoodieConfigs`
+- **`compaction repair`** Renames the files to make them consistent with the timeline as.
+  <br />Options: `--instant` (required), `--parallelism` (`3`), `--sparkMaster` (`local`), `--sparkMemory` (`2G`), `--dryRun` (`false`), `--limit` (`-1`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`)
+- **`compaction run`** Run Compaction for given instant time.
+  <br />Options: `--parallelism` (`3`), `--schemaFilePath`, `--sparkMaster` (`local`), `--sparkMemory` (`4G`), `--retry` (`1`), `--compactionInstant`, `--propsFilePath`, `--hoodieConfigs`
+- **`compaction schedule`** Schedule Compaction.
+  <br />Options: `--sparkMemory` (`1G`), `--propsFilePath`, `--hoodieConfigs`, `--sparkMaster` (`local`)
+- **`compaction scheduleAndExecute`** Schedule compaction plan and execute this plan.
+  <br />Options: `--parallelism` (`3`), `--schemaFilePath`, `--sparkMaster` (`local`), `--sparkMemory` (`4G`), `--retry` (`1`), `--propsFilePath`, `--hoodieConfigs`
+- **`compaction show`** Shows compaction details for a specific compaction instant.
+  <br />Options: `--instant` (required), `--limit` (`-1`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`), `--partition`
+- **`compaction showarchived`** Shows compaction details for a specific compaction instant.
+  <br />Options: `--instant` (required), `--limit` (`-1`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`), `--partition`
+- **`compaction unschedule`** Unschedule Compaction.
+  <br />Options: `--instant` (required), `--parallelism` (`3`), `--sparkMaster` (`local`), `--sparkMemory` (`2G`), `--skipValidation` (`false`), `--dryRun` (`false`), `--limit` (`-1`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`)
+- **`compaction unscheduleFileId`** UnSchedule Compaction for a fileId.
+  <br />Options: `--fileId` (required), `--partitionPath`, `--sparkMaster` (`local`), `--sparkMemory` (`2G`), `--skipValidation` (`false`), `--dryRun` (`false`), `--limit` (`-1`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`)
+- **`compaction validate`** Validate Compaction.
+  <br />Options: `--instant` (required), `--parallelism` (`3`), `--sparkMaster` (`local`), `--sparkMemory` (`2G`), `--limit` (`-1`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`)
+- **`compactions show all`** Shows all compactions that are in active timeline.
+  <br />Options: `--includeExtraMetadata` (`false`), `--limit` (`-1`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`)
+- **`compactions showarchived`** Shows compaction details for specified time window.
+  <br />Options: `--includeExtraMetadata` (`false`), `--startTs`, `--endTs`, `--limit` (`-1`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`)
+- **`marker delete`** Delete the marker.
+  <br />Options: `--commit` (required), `--sparkProperties`, `--sparkMaster`, `--sparkMemory` (`1G`)
+
+### Rollback, savepoint, restore and repair
+
+- **`commit rollback`** Rollback a commit.
+  <br />Options: `--commit` (required), `--sparkProperties`, `--sparkMaster`, `--sparkMemory` (`4G`), `--rollbackUsingMarkers` (`false`)
+- **`downgrade table`** Downgrades a table.
+  <br />Options: `--toVersion`, `--sparkProperties`, `--sparkMaster`, `--sparkMemory` (`4G`)
+- **`rename partition`** Rename partition. Usage: rename partition --oldPartition &lt;oldPartition&gt; --newPartition &lt;newPartition&gt;.
+  <br />Options: `--oldPartition` (required), `--newPartition` (required), `--sparkProperties`, `--sparkMaster`, `--sparkMemory` (`4G`)
+- **`repair addpartitionmeta`** Add partition metadata to a table, if not present.
+  <br />Options: `--dryrun` (`true`)
+- **`repair corrupted clean files`** Repair corrupted clean files.
+- **`repair deduplicate`** De-duplicate a partition path contains duplicates & produce repaired files to replace with.
+  <br />Options: `--duplicatedPartitionPath`, `--repairedOutputPath` (required), `--sparkProperties`, `--sparkMaster`, `--sparkMemory` (`4G`), `--dryrun` (`true`), `--dedupeType` (`insert_type`)
+- **`repair deprecated partition`** Repair deprecated partition ("default"). Re-writes data from the deprecated partition into.
+  <br />Options: `--sparkProperties`, `--sparkMaster`, `--sparkMemory` (`4G`)
+- **`repair migrate-partition-meta`** Migrate all partition meta file currently stored in text format.
+  <br />Options: `--dryrun` (`true`)
+- **`repair overwrite-hoodie-props`** Overwrite hoodie.properties with provided file. Risky operation. Proceed with caution!.
+  <br />Options: `--new-props-file` (required)
+- **`repair show empty commit metadata`** Show failed commits.
+- **`savepoint create`** Savepoint a commit.
+  <br />Options: `--commit` (required), `--user` (`default`), `--comments` (`default`), `--sparkProperties`, `--sparkMaster`, `--sparkMemory` (`4G`)
+- **`savepoint delete`** Delete the savepoint.
+  <br />Options: `--commit` (required), `--sparkProperties`, `--sparkMaster`, `--sparkMemory` (`4G`)
+- **`savepoint rollback`** Savepoint a commit.
+  <br />Options: `--savepoint` (required), `--sparkProperties`, `--sparkMaster`, `--lazyFailedWritesCleanPolicy` (`false`), `--sparkMemory` (`4G`)
+- **`savepoints show`** Show the savepoints.
+- **`show restore`** Show details of a restore instant.
+  <br />Options: `--instant` (required), `--limit` (`10`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`)
+- **`show restores`** List all restore instants.
+  <br />Options: `--limit` (`10`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`), `--includeInflights` (`false`)
+- **`show rollback`** Show details of a rollback instant.
+  <br />Options: `--instant` (required), `--limit` (`10`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`)
+- **`show rollbacks`** List all rollback instants.
+  <br />Options: `--limit` (`10`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`)
+- **`upgrade table`** Upgrades a table.
+  <br />Options: `--toVersion`, `--sparkProperties`, `--sparkMaster`, `--sparkMemory` (`4G`)
+
+### Metadata table
+
+- **`metadata create`** Create the Metadata Table if it does not exist.
+  <br />Options: `--sparkMaster` (`SparkUtil.DEFAULT_SPARK_MASTER`)
+- **`metadata delete`** Remove the Metadata Table.
+  <br />Options: `--backup` (`true`)
+- **`metadata delete-record-index`** Delete the record index from Metadata Table.
+  <br />Options: `--backup` (`true`)
+- **`metadata init`** Update the metadata table from commits since the creation.
+  <br />Options: `--sparkMaster` (`SparkUtil.DEFAULT_SPARK_MASTER`), `--readonly` (`false`)
+- **`metadata list-files`** Print a list of all files in a partition from the metadata.
+  <br />Options: `--partition`
+- **`metadata list-partitions`** List all partitions from metadata.
+  <br />Options: `--sparkMaster` (`SparkUtil.DEFAULT_SPARK_MASTER`)
+- **`metadata lookup-record-index`** Print Record index information for a record_key.
+  <br />Options: `--record_key` (required), `--partition_path` (required)
+- **`metadata set`** Set options for Metadata Table.
+  <br />Options: `--metadataDir`
+- **`metadata stats`** Print stats about the metadata.
+- **`metadata validate-files`** Validate all files in all partitions from the metadata.
+  <br />Options: `--verbose` (`false`)
+
+### Bootstrap
+
+- **`bootstrap index showmapping`** Show bootstrap index mapping.
+  <br />Options: `--partitionPath`, `--fileIds`, `--limit` (`-1`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`)
+- **`bootstrap index showpartitions`** Show bootstrap indexed partitions.
+- **`bootstrap run`** Run a bootstrap action for current Hudi table.
+  <br />Options: `--srcPath` (required), `--targetPath` (required), `--tableName` (required), `--tableType` (required), `--rowKeyField` (required), `--partitionPathField`, `--bootstrapIndexClass` (`org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex`), `--selectorClass` (`org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector`), `--keyGeneratorClass` (`org.apache.hudi.keygen.SimpleKeyGenerator`), `--fullBootstrapInputProvider` (`org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider`), `--schemaProviderClass`, `--payloadClass`, `--merge-mode`, `--merge-strategy-id`, `--merge-impl-classes`, `--parallelism` (`1500`), `--sparkMaster`, `--sparkMemory` (`4G`), `--enableHiveSync` (`false`), `--propsFilePath`, `--hoodieConfigs`
+
+### Lock auditing
+
+- **`locks audit cleanup`** Clean up old audit lock files.
+  <br />Options: `--dryRun` (`false`), `--ageDays` (`7`)
+- **`locks audit disable`** Disable storage lock audit service for the current table.
+  <br />Options: `--keepAuditFiles` (`true`)
+- **`locks audit enable`** Enable storage lock audit service for the current table.
+- **`locks audit status`** Show the current status of lock audit service.
+- **`locks audit validate`** Validate audit lock files for consistency and integrity.
+
+### Export, temp views and sync
+
+- **`export instants`** Export Instants and their metadata from the Timeline.
+  <br />Options: `--limit` (`-1`), `--actions` (`clean,commit,deltacommit,rollback,savepoint,restore`), `--desc` (`false`), `--localFolder` (required)
+- **`sync validate`** Validate the sync by counting the number of records.
+  <br />Options: `--mode` (`complete`), `--sourceDb` (`rawdata`), `--targetDb` (`dwh_hoodie`), `--partitionCount` (`5`), `--hiveServerUrl` (required), `--hiveUser`, `--hivePass`
+- **`temp delete`** Delete view name.
+  <br />Options: `--view` (required)
+- **`temp query`** Query against created temp view.
+  <br />Options: `--sql` (required)
+- **`temp_delete`** Delete view name.
+  <br />Options: `--view` (required)
+- **`temp_query`** Query against created temp view.
+  <br />Options: `--sql` (required)
+- **`temps show`** Show all views name.
+- **`temps_show`** Show all views name.
+
 
 ## Related Resources
 
