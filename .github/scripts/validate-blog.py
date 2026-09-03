@@ -29,7 +29,7 @@ ALLOWED_TAGS = {
     'debezium', 'data skipping', 'daft', 'ai',
     'table format', 'starrocks', 'halodoc', 'gdpr', 'schema', 'scd',
     'observability', 'metadata', 'meetup', 'key generation', 'docker',
-    'cleaner', 'apache hive', 'apache doris', 'vector search', 'upstox',
+    'cleaner', 'apache hive', 'apache doris', 'vector search', 'upstox', 'twilio',
     'tla specification', 'streamlit', 'rag', 'presto', 'postgres',
     'file sizing', 'etl', 'databricks', 'data warehouse', 'applied intuition',
     'conference', 'compaction', 'bootstrap', 'apache parquet', 'announcement',
@@ -145,9 +145,7 @@ def validate_blog(filepath: str) -> list[str]:
     # Check required fields
     for field in REQUIRED_FIELDS:
         if field not in frontmatter:
-            # author or authors is acceptable
-            if field == 'author' and 'authors' not in frontmatter:
-                errors.append("Missing required field: 'author' or 'authors'")
+            errors.append(f"Missing required field: '{field}'")
         elif not frontmatter[field]:
             errors.append(f"Field '{field}' is empty")
 
