@@ -34,9 +34,7 @@ import org.apache.hudi.sink.StreamWriteOperator;
 import org.apache.hudi.sink.append.AppendWriteFunctions;
 import org.apache.hudi.sink.append.AppendWriteOperator;
 import org.apache.hudi.sink.bootstrap.AbstractBootstrapOperator;
-import org.apache.hudi.sink.bootstrap.BootstrapOperator;
-import org.apache.hudi.sink.bootstrap.RLIBootstrapOperator;
-import org.apache.hudi.sink.bootstrap.TimeBoundedRLIBootstrapOperator;
+import org.apache.hudi.sink.bootstrap.BootstrapOperatorFactory;
 import org.apache.hudi.sink.bootstrap.batch.BatchBootstrapOperator;
 import org.apache.hudi.sink.bucket.BucketBulkInsertWriterHelper;
 import org.apache.hudi.sink.bucket.BucketStreamWriteOperator;
@@ -430,14 +428,7 @@ public class Pipelines {
     boolean isGlobalRLI = OptionsResolver.isGlobalRecordLevelIndex(conf);
     boolean isTimeBoundedRLIBootstrap = OptionsResolver.isTimeBoundedRLIBootstrapEnabled(conf);
     if (conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED) || (bounded && !isGlobalRLI) || isTimeBoundedRLIBootstrap) {
-      AbstractBootstrapOperator bootstrapOperator;
-      if (isGlobalRLI) {
-        bootstrapOperator = new RLIBootstrapOperator(conf);
-      } else if (isTimeBoundedRLIBootstrap) {
-        bootstrapOperator = new TimeBoundedRLIBootstrapOperator(conf);
-      } else {
-        bootstrapOperator = new BootstrapOperator(conf);
-      }
+      AbstractBootstrapOperator bootstrapOperator = BootstrapOperatorFactory.createInstance(conf);
       dataStream1 = dataStream1
           .transform(
               "index_bootstrap",

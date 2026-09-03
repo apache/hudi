@@ -18,8 +18,6 @@
 
 package org.apache.hudi.sink.bootstrap;
 
-import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.model.FileSlice;
@@ -30,7 +28,6 @@ import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.hash.BucketIndexUtil;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.RuntimeContextUtils;
@@ -38,7 +35,6 @@ import org.apache.hudi.utils.RuntimeContextUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.StateInitializationContext;
-import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -63,10 +59,8 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 public class TimeBoundedRLIBootstrapOperator
-    extends AbstractBootstrapOperator {
+    extends AbstractRLIBootstrapOperator {
 
-  private transient HoodieBackedTableMetadata tableMetadata;
-  private transient long loadedCnt;
   private int parallelism;
   private int taskID;
   /**
@@ -100,24 +94,9 @@ public class TimeBoundedRLIBootstrapOperator
     preLoadPartitionedRLIRecords(metaClient.getTableConfig(), bootstrapDays);
   }
 
-  @Override
-  public void close() throws Exception {
-    closeMetadataTable();
-    super.close();
-  }
-
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
-
-  @VisibleForTesting
-  HoodieBackedTableMetadata createTableMetadata(HoodieTableMetaClient metaClient) {
-    return new HoodieBackedTableMetadata(
-        HoodieFlinkEngineContext.DEFAULT,
-        metaClient.getStorage(),
-        StreamerUtil.metadataConfig(conf),
-        conf.get(FlinkOptions.PATH));
-  }
 
   private void preLoadPartitionedRLIRecords(HoodieTableConfig tableConfig, int bootstrapDays) {
     if (!tableMetadata.enabled()) {
@@ -181,16 +160,6 @@ public class TimeBoundedRLIBootstrapOperator
     rliData.forEach(locationPair -> emitIndexRecord(partitionPath, locationPair.getLeft(), locationPair.getRight()));
   }
 
-  private void emitIndexRecord(String partitionPath, String recordKey, HoodieRecordGlobalLocation location) {
-    output.collect(new StreamRecord<>(
-        new HoodieFlinkInternalRow(
-            recordKey,
-            partitionPath,
-            location.getFileId(),
-            String.valueOf(location.getInstantTime()))));
-    loadedCnt += 1;
-  }
-
   /**
    * Determines if the given file group should be loaded by this task, using the same
    * partition-aware assignment as the write path (see {@link BucketIndexUtil#getPartitionIndexFunc}),
@@ -221,16 +190,5 @@ public class TimeBoundedRLIBootstrapOperator
       }
     }
     return partitionsInWindow;
-  }
-
-  private void closeMetadataTable() {
-    if (tableMetadata != null) {
-      try {
-        tableMetadata.close();
-      } catch (Exception e) {
-        log.warn("Failed to close metadata table", e);
-      }
-      tableMetadata = null;
-    }
   }
 }
