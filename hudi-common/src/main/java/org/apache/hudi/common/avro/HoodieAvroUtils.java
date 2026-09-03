@@ -1151,6 +1151,7 @@ public class HoodieAvroUtils {
     return result;
   }
 
+  @VisibleForTesting
   public static Object rewritePrimaryType(Object oldValue, Schema oldSchema, Schema newSchema) {
     // Normalize any java.time form (LocalDate / Instant / LocalDateTime) to the Avro primitive
     // form (Integer / Long) before doing any numeric / string conversion. The legacy branches
@@ -1330,7 +1331,8 @@ public class HoodieAvroUtils {
    * bytes is the result of BigDecimal.unscaledValue().toByteArray();
    * This is also what Conversions.DecimalConversion.toBytes() outputs inside a byte buffer
    */
-  public static BigDecimal convertBytesToBigDecimal(byte[] value, LogicalTypes.Decimal decimal) {
+  @VisibleForTesting
+  static BigDecimal convertBytesToBigDecimal(byte[] value, LogicalTypes.Decimal decimal) {
     return convertBytesToBigDecimal(value, decimal.getPrecision(), decimal.getScale());
   }
 
@@ -1530,17 +1532,19 @@ public class HoodieAvroUtils {
   /**
    * Utility method to convert bytes to HoodieRecord using schema and payload class.
    */
-  public static <R> HoodieRecord<R> convertToRecord(GenericRecord rec, String payloadClazz, String[] preCombineFields, boolean withOperationField) {
+  @VisibleForTesting
+  static <R> HoodieRecord<R> convertToRecord(GenericRecord rec, String payloadClazz, String[] preCombineFields, boolean withOperationField) {
     return convertToRecord(rec, payloadClazz, preCombineFields,
         Pair.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD),
         withOperationField, Option.empty(), Option.empty());
   }
 
-  public static <R> HoodieRecord<R> convertToRecord(GenericRecord record, String payloadClazz,
-                                                                 String[] preCombineFields,
-                                                                 boolean withOperationField,
-                                                                 Option<String> partitionName,
-                                                                 Option<HoodieSchema> schemaWithoutMetaFields) {
+  @VisibleForTesting
+  static <R> HoodieRecord<R> convertToRecord(GenericRecord record, String payloadClazz,
+                                                          String[] preCombineFields,
+                                                          boolean withOperationField,
+                                                          Option<String> partitionName,
+                                                          Option<HoodieSchema> schemaWithoutMetaFields) {
     return convertToRecord(record, payloadClazz, preCombineFields,
         Pair.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD),
         withOperationField, partitionName, schemaWithoutMetaFields);
@@ -1549,6 +1553,7 @@ public class HoodieAvroUtils {
   /**
    * Utility method to convert bytes to HoodieRecord using schema and payload class.
    */
+  @VisibleForTesting
   public static <R> HoodieRecord<R> convertToRecord(GenericRecord record, String payloadClazz,
                                                                  String[] preCombineFields,
                                                                  Pair<String, String> recordKeyPartitionPathFieldPair,
