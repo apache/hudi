@@ -26,6 +26,7 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.net.JarURLConnection;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayList;
@@ -35,6 +36,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 import java.util.stream.Stream;
 
 /**
@@ -134,13 +137,60 @@ public class ReflectionUtils {
     String path = packageName.replace('.', '/');
     try {
       return Collections.list(classLoader.getResources(path)).stream()
-          .map(ReflectionUtils::toDirectory)
-          .filter(Objects::nonNull)
-          .flatMap(directory -> findClasses(directory, packageName).stream());
+          .flatMap(resource -> findClasses(resource, packageName).stream());
     } catch (IOException e) {
       log.error("Unable to fetch Resources in package {}", packageName, e);
       return Stream.empty();
     }
+  }
+
+  /**
+   * Finds all top-level classes in {@code packageName} reachable from a package resource URL.
+   *
+   * <p>Supports both {@code file:} URLs (exploded class directories) and {@code jar:} URLs
+   * (JAR-backed class loaders, e.g. the shaded bundles whose {@code Main} calls this method).
+   * JAR-backed resources must be scanned through the JAR entries rather than {@code new File(uri)},
+   * which does not accept {@code jar:} URIs.
+   *
+   * @param resource    the package resource URL
+   * @param packageName the package whose classes should be discovered
+   * @return the classes found in {@code packageName} and its subpackages, or an empty list
+   */
+  private static List<String> findClasses(URL resource, String packageName) {
+    if ("jar".equals(resource.getProtocol())) {
+      try {
+        JarURLConnection connection = (JarURLConnection) resource.openConnection();
+        try (JarFile jarFile = connection.getJarFile()) {
+          return findClassesInJar(jarFile, packageName);
+        }
+      } catch (IOException e) {
+        log.error("Unable to read JAR resource {} for package {}", resource, packageName, e);
+        return Collections.emptyList();
+      }
+    }
+    return findClasses(toDirectory(resource), packageName);
+  }
+
+  /**
+   * Scans a JAR file for class entries under {@code packageName} and its subpackages.
+   *
+   * @param jarFile     the JAR to scan
+   * @param packageName the package whose classes should be discovered
+   * @return the classes found in {@code packageName} and its subpackages
+   */
+  private static List<String> findClassesInJar(JarFile jarFile, String packageName) {
+    String prefix = packageName.replace('.', '/') + "/";
+    List<String> classes = new ArrayList<>();
+    java.util.Enumeration<JarEntry> entries = jarFile.entries();
+    while (entries.hasMoreElements()) {
+      JarEntry entry = entries.nextElement();
+      String name = entry.getName();
+      if (name.startsWith(prefix) && name.endsWith(".class") && !name.contains("$")) {
+        String className = name.substring(0, name.length() - ".class".length()).replace('/', '.');
+        classes.add(className);
+      }
+    }
+    return classes;
   }
 
   /**

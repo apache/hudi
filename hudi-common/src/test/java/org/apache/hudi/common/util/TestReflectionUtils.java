@@ -29,9 +29,15 @@ import org.apache.hudi.storage.StoragePathFilter;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URL;
+import java.net.URLClassLoader;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.jar.JarEntry;
+import java.util.jar.JarOutputStream;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ReflectionUtils.getMethod;
@@ -90,6 +96,42 @@ public class TestReflectionUtils {
       assertTrue(classes.isEmpty());
     } finally {
       Thread.currentThread().setContextClassLoader(parent);
+    }
+  }
+
+  @Test
+  void testGetTopLevelClassesInClasspathFromJar() throws Exception {
+    // Regression for JAR-backed package resources: the bundle `Main` callers
+    // load this package from a shaded jar, where `new File(jar:...)` is not
+    // supported. The class must still be discoverable via the jar entries.
+    String classResource = TestReflectionUtils.class.getName().replace('.', '/') + ".class";
+    URL classUrl = TestReflectionUtils.class.getClassLoader().getResource(classResource);
+    assertTrue(classUrl != null, "test class resource must exist on the classpath");
+
+    // Build a temporary jar containing only this test class.
+    Path jarPath = Files.createTempFile("hudi-reflect-test-", ".jar");
+    try (JarOutputStream jos = new JarOutputStream(Files.newOutputStream(jarPath))) {
+      jos.putNextEntry(new JarEntry(classResource));
+      try (InputStream in = classUrl.openStream()) {
+        in.transferTo(jos);
+      }
+      jos.closeEntry();
+    }
+
+    // A class loader whose classpath is *only* the jar: the package resource
+    // is then reachable exclusively as a jar: URL.
+    ClassLoader originalLoader = Thread.currentThread().getContextClassLoader();
+    URLClassLoader jarLoader = new URLClassLoader(new URL[]{jarPath.toUri().toURL()}, null);
+    Thread.currentThread().setContextClassLoader(jarLoader);
+    try {
+      List<String> classes = ReflectionUtils.getTopLevelClassesInClasspath(TestReflectionUtils.class)
+          .collect(Collectors.toList());
+      assertTrue(classes.contains(TestReflectionUtils.class.getName()),
+          "class in a JAR-only class loader must be discovered: " + classes);
+    } finally {
+      Thread.currentThread().setContextClassLoader(originalLoader);
+      jarLoader.close();
+      Files.deleteIfExists(jarPath);
     }
   }
 }
