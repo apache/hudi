@@ -20,19 +20,28 @@
 package org.apache.hudi.hive.ddl;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hive.HiveSyncConfig;
+import org.apache.hudi.hive.HoodieHiveSyncException;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.ql.Driver;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.InOrder;
 
+import java.io.File;
 import java.lang.reflect.Field;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -188,6 +197,63 @@ class TestHiveQueryDDLExecutorSession {
         "Driver teardown must run under the session that owns the Driver");
     assertSame(otherSession, SessionState.get(), "The session attached before close() must be put back");
     verify(otherSession, never()).close();
+  }
+
+  /**
+   * SessionState.start() displaces the session the calling thread already holds, so construction
+   * has to put it back: the tests above bind explicitly for every statement and for the teardown,
+   * which is only a complete story if the thread is the caller's between those operations.
+   */
+  @Test
+  void constructionGivesTheThreadBackToTheCallersSession(@TempDir Path tempDir) throws Exception {
+    SessionState callerSession = new SessionState(new HiveConf());
+    SessionState.setCurrentSessionState(callerSession);
+
+    HiveQueryDDLExecutor executor =
+        new HiveQueryDDLExecutor(hiveSyncConfig(tempDir), mock(IMetaStoreClient.class));
+    try {
+      assertSame(callerSession, SessionState.get(), "Construction must not keep the caller's thread");
+    } finally {
+      executor.close();
+    }
+
+    assertSame(callerSession, SessionState.get(), "close() must not take the caller's session with it");
+  }
+
+  /**
+   * The failed constructor closes the session it started, and SessionState.close() detaches
+   * whatever is attached, so the caller would lose its session to a failure it did not cause.
+   */
+  @Test
+  void failedConstructionGivesTheThreadBackToTheCallersSession(@TempDir Path tempDir) throws Exception {
+    // SessionState.start() attaches before it creates the session directories, so a scratch dir
+    // that cannot be created fails construction with our session attached.
+    HiveSyncConfig config = hiveSyncConfig(tempDir);
+    config.getHiveConf().setVar(HiveConf.ConfVars.SCRATCHDIR,
+        Files.createFile(tempDir.resolve("not-a-directory")).toUri().toString() + "/scratch");
+    SessionState callerSession = new SessionState(new HiveConf());
+    SessionState.setCurrentSessionState(callerSession);
+
+    assertThrows(HoodieHiveSyncException.class,
+        () -> new HiveQueryDDLExecutor(config, mock(IMetaStoreClient.class)));
+
+    assertSame(callerSession, SessionState.get(), "A failed construction must not take the caller's session");
+  }
+
+  /**
+   * A config whose Hive session directories all land under the test's temp dir, so starting a real
+   * SessionState needs neither a metastore nor a writable /tmp/hive.
+   */
+  private static HiveSyncConfig hiveSyncConfig(Path tempDir) {
+    Configuration hadoopConf = new Configuration();
+    hadoopConf.set("fs.defaultFS", "file:///");
+    HiveSyncConfig config = new HiveSyncConfig(new Properties(), hadoopConf);
+    HiveConf hiveConf = config.getHiveConf();
+    hiveConf.setVar(HiveConf.ConfVars.SCRATCHDIR, new File(tempDir.toFile(), "scratch").toURI().toString());
+    hiveConf.setVar(HiveConf.ConfVars.LOCALSCRATCHDIR, new File(tempDir.toFile(), "local").getAbsolutePath());
+    hiveConf.setVar(HiveConf.ConfVars.DOWNLOADED_RESOURCES_DIR,
+        new File(tempDir.toFile(), "resources").getAbsolutePath());
+    return config;
   }
 
   /**

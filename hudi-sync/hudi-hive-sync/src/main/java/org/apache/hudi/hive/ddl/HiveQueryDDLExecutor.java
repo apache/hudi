@@ -76,6 +76,12 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
     this.metaStoreClient = metaStoreClient;
     this.driverPool = driverPool;
     this.metaStoreClientPool = metaStoreClientPool;
+    // SessionState.start() attaches the session it starts to this thread, displacing whatever the
+    // caller had there -- another executor's session, or that of an application embedding this
+    // sync. Ours is not the thread's to keep: every statement and the teardown bind it
+    // explicitly, so give the thread back once the Driver, whose constructor reads
+    // SessionState.get(), has been built.
+    SessionState previousSession = SessionState.get();
     try {
       this.sessionState = new SessionState(config.getHiveConf(),
           UserGroupInformation.getCurrentUser().getShortUserName());
@@ -98,6 +104,8 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
         }
       });
       throw new HoodieHiveSyncException("Failed to create HiveQueryDDL object", e);
+    } finally {
+      restoreSession(previousSession);
     }
   }
 
@@ -181,11 +189,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed in executing SQL", e);
     } finally {
-      if (previousSession != null) {
-        SessionState.setCurrentSessionState(previousSession);
-      } else {
-        SessionState.detachSession();
-      }
+      restoreSession(previousSession);
     }
     log.info("Executed {} SQL statements sequentially in {} ms", sqls.size(), timer.endTimer());
     return responses;
@@ -347,9 +351,24 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       }
     } finally {
       closeQuietly(sessionState);
-      if (previousSession != null && previousSession != sessionState) {
-        SessionState.setCurrentSessionState(previousSession);
+      // Unless the thread was holding ours, in which case closeQuietly has just detached the
+      // session it would restore.
+      if (previousSession != sessionState) {
+        restoreSession(previousSession);
       }
+    }
+  }
+
+  /**
+   * Puts the thread's session back to what an operation found there, so that binding this
+   * executor's session is scoped to the operation that needs it. Hive has no notion of an empty
+   * slot to assign, hence the detach.
+   */
+  private static void restoreSession(SessionState previousSession) {
+    if (previousSession != null) {
+      SessionState.setCurrentSessionState(previousSession);
+    } else {
+      SessionState.detachSession();
     }
   }
 
