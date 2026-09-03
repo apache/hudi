@@ -145,9 +145,7 @@ def validate_blog(filepath: str) -> list[str]:
     # Check required fields
     for field in REQUIRED_FIELDS:
         if field not in frontmatter:
-            # author or authors is acceptable
-            if field == 'author' and 'authors' not in frontmatter:
-                errors.append("Missing required field: 'author' or 'authors'")
+            errors.append(f"Missing required field: '{field}'")
         elif not frontmatter[field]:
             errors.append(f"Field '{field}' is empty")
 
