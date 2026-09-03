@@ -23,6 +23,7 @@ import org.apache.hudi.common.data.HoodieListPairData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,6 +33,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -107,13 +109,20 @@ public class TestHoodieFlinkEngineContext {
     AtomicBoolean executedOutsideForkJoinPool = new AtomicBoolean(false);
 
     HoodieData<Integer> result = context.mapGroupsByKey(input, values -> {
-      ForkJoinPool executingPool = ForkJoinTask.getPool();
-      if (executingPool == null) {
-        executedOutsideForkJoinPool.set(true);
-      } else {
-        executingPools.add(executingPool);
-      }
-      return values;
+      recordExecutingPool(executingPools, executedOutsideForkJoinPool);
+      return new Iterator<Integer>() {
+        @Override
+        public boolean hasNext() {
+          recordExecutingPool(executingPools, executedOutsideForkJoinPool);
+          return values.hasNext();
+        }
+
+        @Override
+        public Integer next() {
+          recordExecutingPool(executingPools, executedOutsideForkJoinPool);
+          return values.next();
+        }
+      };
     }, Arrays.asList(1, 2, 3), false);
 
     Assertions.assertFalse(executedOutsideForkJoinPool.get());
@@ -133,6 +142,35 @@ public class TestHoodieFlinkEngineContext {
         input, values -> values, Collections.emptyList(), false);
 
     Assertions.assertTrue(result.collectAsList().isEmpty());
+  }
+
+  @Test
+  public void testMapGroupsByKeyWrapsProcessFunctionFailure() {
+    HoodiePairData<Integer, Integer> input = HoodieListPairData.eager(
+        Collections.singletonList(Pair.of(1, 1)));
+    IllegalStateException originalFailure = new IllegalStateException("process function failure");
+
+    HoodieException failure = Assertions.assertThrows(HoodieException.class, () ->
+        context.mapGroupsByKey(input, values -> {
+          throw originalFailure;
+        }, Collections.singletonList(1), false));
+
+    Assertions.assertEquals("Failed to execute parallel stream with dedicated ForkJoinPool.", failure.getMessage());
+    Throwable rootCause = failure;
+    while (rootCause.getCause() != null) {
+      rootCause = rootCause.getCause();
+    }
+    Assertions.assertSame(originalFailure, rootCause);
+  }
+
+  private static void recordExecutingPool(Set<ForkJoinPool> executingPools,
+                                          AtomicBoolean executedOutsideForkJoinPool) {
+    ForkJoinPool executingPool = ForkJoinTask.getPool();
+    if (executingPool == null) {
+      executedOutsideForkJoinPool.set(true);
+    } else {
+      executingPools.add(executingPool);
+    }
   }
 
 }
