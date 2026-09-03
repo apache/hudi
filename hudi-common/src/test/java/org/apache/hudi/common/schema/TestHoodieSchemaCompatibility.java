@@ -812,6 +812,23 @@ public class TestHoodieSchemaCompatibility {
     return readerSchema.getField("a").get();
   }
 
+  /**
+   * Asserts that a field written as {@code writerFieldSchema} can be read back as {@code readerFieldSchema},
+   * that is, the {@code writer -> reader} conversion is allowed.
+   *
+   * <p>Arguments are in reader-first ("to", "from") order, matching
+   * {@link HoodieSchemaCompatibility#areSchemasCompatible(HoodieSchema, HoodieSchema)}. That is the reverse
+   * of the (prev = writer, new = reader) order taken by
+   * {@link HoodieSchemaCompatibility#isSchemaCompatible(HoodieSchema, HoodieSchema, boolean, boolean)};
+   * the helper flips the pair before calling it.</p>
+   *
+   * <p>Both schemas are wrapped in a single-field record {@code R { f }}, so only the per-field type rules
+   * are exercised here. Naming checks and projection are both enabled; field addition, removal and renaming
+   * are covered by the other tests in this class.</p>
+   *
+   * @param readerFieldSchema type the field is read as (the "to" side of the conversion)
+   * @param writerFieldSchema type the field was written with (the "from" side)
+   */
   private static void assertCompatible(HoodieSchema readerFieldSchema, HoodieSchema writerFieldSchema) {
     assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(
         HoodieSchemaTestUtils.createRecord("R", HoodieSchemaField.of("f", writerFieldSchema, null, null)),
@@ -819,6 +836,15 @@ public class TestHoodieSchemaCompatibility {
         "reader " + readerFieldSchema + " should read writer " + writerFieldSchema);
   }
 
+  /**
+   * Negative counterpart of {@link #assertCompatible(HoodieSchema, HoodieSchema)}: asserts that a field
+   * written as {@code writerFieldSchema} cannot be read back as {@code readerFieldSchema}, that is, the
+   * {@code writer -> reader} conversion is rejected. Same reader-first argument order and same single-field
+   * record wrapping.
+   *
+   * @param readerFieldSchema type the field would be read as (the "to" side of the conversion)
+   * @param writerFieldSchema type the field was written with (the "from" side)
+   */
   private static void assertIncompatible(HoodieSchema readerFieldSchema, HoodieSchema writerFieldSchema) {
     assertFalse(HoodieSchemaCompatibility.isSchemaCompatible(
         HoodieSchemaTestUtils.createRecord("R", HoodieSchemaField.of("f", writerFieldSchema, null, null)),
