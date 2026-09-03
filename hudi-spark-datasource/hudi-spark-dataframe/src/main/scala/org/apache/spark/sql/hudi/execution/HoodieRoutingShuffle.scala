@@ -21,6 +21,8 @@ import org.apache.spark.{MapOutputTrackerMaster, Partition, Partitioner, Shuffle
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.Attribute
+import org.apache.spark.sql.execution.{SparkPlan, UnaryExecNode}
 import org.apache.spark.util.ThreadUtils
 
 import scala.collection.mutable.ArrayBuffer
@@ -78,6 +80,51 @@ class HoodieRoutingShuffledRdd(@transient sc: SparkContext,
 }
 
 case class RoutingShuffleResult(rows: RDD[(String, InternalRow)], totalShuffleBytes: Long, binCount: Int)
+
+/**
+ * The routing shuffle as a physical-plan node (the DeltaOptimizedWriterExec shape): the child
+ * plan stays catalyst end to end and the shuffle, map-stage profiling, and bin planning happen
+ * inside doExecute, so the writer never dereferences the query into an RDD itself.
+ */
+case class HoodieRoutingShuffleExec(child: SparkPlan,
+                                    bucketOrdinal: Int,
+                                    updateReducers: Int,
+                                    insertReducers: Int,
+                                    insertBucketPrefix: String,
+                                    binSizeBytes: Long) extends UnaryExecNode {
+
+  override def output: Seq[Attribute] = child.output
+
+  @transient private var planned: RoutingShuffleResult = _
+
+  /** Populated once doExecute has planned the shuffle; carries calibration bytes and bin count. */
+  def shuffleStats: RoutingShuffleResult = planned
+
+  override protected def doExecute(): RDD[InternalRow] = {
+    val ordinal = bucketOrdinal
+    val pairs = child.execute().mapPartitions { rows =>
+      // The child's rows are reused buffers; the sorter buffers them, so copy per record.
+      rows.map(row => (row.getString(ordinal), row.copy()))
+    }
+    planned = HoodieRoutingShuffle.execute(
+      pairs, updateReducers, insertReducers, insertBucketPrefix, binSizeBytes)
+    planned.rows.map(_._2)
+  }
+
+  override protected def withNewChildInternal(newChild: SparkPlan): HoodieRoutingShuffleExec =
+    copy(child = newChild)
+}
+
+/**
+ * Runs a body under a Spark SQL execution id so the catalyst plan of the write shows up in the
+ * SQL tab and its jobs link to it (SQLExecution is private[sql], hence this shim's package).
+ */
+object HoodieSqlExecution {
+  def withExecutionId[T](queryExecution: org.apache.spark.sql.execution.QueryExecution,
+                         name: String)(body: => T): T = {
+    org.apache.spark.sql.execution.SQLExecution.withNewExecutionId(queryExecution, Some(name))(body)
+  }
+}
 
 /**
  * The shuffle-stats profiler mechanism: materialize only the map stage of the routing shuffle,

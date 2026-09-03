@@ -44,7 +44,6 @@ import org.apache.spark.sql.{Column, DataFrame, Dataset, Row, SaveMode, SQLConte
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions.{coalesce, col, concat, hash, lit, row_number, udf, when}
-import org.apache.spark.sql.hudi.execution.HoodieRoutingShuffle
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 
@@ -162,19 +161,33 @@ object HoodieDataFrameWriter extends Logging {
 
       val profilerMode = params.getOrElse(PROFILER, PROFILER_METADATA)
       val (statusRdd, extraMetadata) = if (profilerMode == PROFILER_SHUFFLE_STATS) {
-        // The routing shuffle doubles as the profiling pass: only its map stage runs first, the
-        // measured block sizes plan the write tasks, and the reduce side reads the shuffle files.
-        val pairs = HoodieSparkUtils.injectSQLConf(
-          withBucket.queryExecution.toRdd.map(row => (row.getString(bucketOrdinal), row.copy())),
-          SQLConf.get)
+        // The routing shuffle doubles as the profiling pass and lives inside a physical-plan
+        // node over the catalyst plan (the Delta optimized-writer shape): only its map stage
+        // runs first, measured block sizes plan the write tasks, and the reduce side reads the
+        // shuffle files. The execution id makes the plan visible in the SQL tab and propagates
+        // the SQL conf to its tasks.
         val sizeRatio = readShuffleSizeRatio(table.getMetaClient)
         val binSize = math.max(1L, (writeConfig.getParquetMaxFileSize * sizeRatio).toLong)
-        val shuffle = HoodieRoutingShuffle.execute(pairs,
+        val shuffleExec = org.apache.spark.sql.hudi.execution.HoodieRoutingShuffleExec(
+          withBucket.queryExecution.executedPlan, bucketOrdinal,
           params.getOrElse(SHUFFLE_UPDATE_REDUCERS, "50").toInt,
           params.getOrElse(SHUFFLE_INSERT_REDUCERS, "50").toInt,
           INSERT_BUCKET_PREFIX, binSize)
+        val routedRows = org.apache.spark.sql.hudi.execution.HoodieSqlExecution.withExecutionId(
+          withBucket.queryExecution, s"hudi dataframe write: prepare, tag and profile ($operation)") {
+          spark.sparkContext.setJobDescription(
+            s"hudi dataframe write: routing shuffle map stage with sizing profile ($operation)")
+          try {
+            shuffleExec.execute()
+          } finally {
+            spark.sparkContext.setJobDescription(null)
+          }
+        }
+        val shuffle = shuffleExec.shuffleStats
+        spark.sparkContext.setJobDescription(
+          s"hudi dataframe write: ${shuffle.binCount} write tasks and commit ($operation)")
         (HoodieSparkUtils.injectSQLConf(
-          shuffle.rows.mapPartitions(iter => task.execute(iter.map(_._2))), SQLConf.get),
+          routedRows.mapPartitions(iter => task.execute(iter)), SQLConf.get),
           Map(SHUFFLE_BYTES_METADATA_KEY -> shuffle.totalShuffleBytes.toString))
       } else {
         val numWriteTasks = params.get(WRITE_TASKS).map(_.toInt)
