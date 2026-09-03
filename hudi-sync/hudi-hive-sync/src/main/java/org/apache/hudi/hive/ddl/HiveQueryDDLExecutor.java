@@ -181,8 +181,8 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
     // own session -- so hand it back in the state we found it.
     SessionState previousSession = SessionState.get();
     ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
-    SessionState.setCurrentSessionState(sessionState);
     try {
+      SessionState.setCurrentSessionState(sessionState);
       for (String sql : sqls) {
         if (hiveDriver != null) {
           responses.add(hiveDriver.run(sql));
@@ -341,9 +341,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
   private void closeDriverAndSession() {
     SessionState previousSession = SessionState.get();
     ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
-    if (sessionState != null) {
-      SessionState.setCurrentSessionState(sessionState);
-    }
+    bindQuietly(sessionState);
     try {
       if (hiveDriver != null) {
         try {
@@ -359,6 +357,24 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       if (previousSession != sessionState) {
         restoreThread(previousSession, previousLoader);
       }
+    }
+  }
+
+  /**
+   * Binds this executor's session for a teardown that has to run either way: a bind failure must
+   * not cost us the Driver's shutdown hook and the session's scratch directories, which are what
+   * the teardown is for. The statement path reports a failed bind instead, since running SQL under
+   * someone else's session is worse than not running it. A null session comes from the
+   * constructor's error path, where the session is what failed.
+   */
+  private static void bindQuietly(SessionState state) {
+    if (state == null) {
+      return;
+    }
+    try {
+      SessionState.setCurrentSessionState(state);
+    } catch (Exception e) {
+      log.error("Error while binding SessionState for teardown", e);
     }
   }
 
