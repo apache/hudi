@@ -2535,6 +2535,13 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED);
   }
 
+  /**
+   * @deprecated the underlying config has had no effect since 1.1.0. Both the Spark row writer and
+   *     the Avro Parquet writer take the Parquet timestamp unit from the writer schema's logical
+   *     type, so the value returned here does not describe what gets written. Declare the precision
+   *     in the writer schema instead. Scheduled for removal.
+   */
+  @Deprecated
   public String parquetOutputTimestampType() {
     return getString(HoodieStorageConfig.PARQUET_OUTPUT_TIMESTAMP_TYPE);
   }

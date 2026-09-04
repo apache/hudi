@@ -244,11 +244,15 @@ public class HoodieStorageConfig extends HoodieConfig {
           + "For example, decimal values will be written in Parquet's fixed-length byte array format which other systems such as Apache Hive and Apache Impala use. "
           + "If false, the newer format in Parquet will be used. For example, decimals will be written in int-based format.");
 
+  @Deprecated
   public static final ConfigProperty<String> PARQUET_OUTPUT_TIMESTAMP_TYPE = ConfigProperty
       .key("hoodie.parquet.outputtimestamptype")
       .defaultValue("TIMESTAMP_MICROS")
       .markAdvanced()
-      .withDocumentation("Sets spark.sql.parquet.outputTimestampType. Parquet timestamp type to use when Spark writes data to Parquet files.");
+      .deprecatedAfter("1.1.0")
+      .withDocumentation("No effect since 1.1.0. Both the Spark row writer and the Avro Parquet writer derive the "
+          + "Parquet timestamp unit from the writer schema's logical type (timestamp-micros or timestamp-millis), "
+          + "so declare the precision in the writer schema (for example via hoodie.write.schema) instead.");
 
   // SPARK-38094 Spark 3.3 checks if this field is enabled. Hudi has to provide this or there would be NPE thrown
   // Would ONLY be effective with Spark 3.3+
@@ -671,6 +675,12 @@ public class HoodieStorageConfig extends HoodieConfig {
       return this;
     }
 
+    /**
+     * @deprecated since 1.1.0; the config has no effect. Both the Spark row writer and the Avro
+     *     Parquet writer take the Parquet timestamp unit from the writer schema's logical type, so
+     *     declare the precision in the writer schema instead.
+     */
+    @Deprecated
     public Builder parquetOutputTimestampType(String parquetOutputTimestampType) {
       storageConfig.setValue(PARQUET_OUTPUT_TIMESTAMP_TYPE, parquetOutputTimestampType);
       return this;
