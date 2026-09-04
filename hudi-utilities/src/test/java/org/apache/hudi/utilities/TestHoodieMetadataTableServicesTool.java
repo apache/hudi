@@ -106,6 +106,35 @@ class TestHoodieMetadataTableServicesTool {
   }
 
   @Test
+  void validatesInstantRequests() {
+    for (TableServiceType service : EnumSet.of(TableServiceType.COMPACT, TableServiceType.LOG_COMPACT)) {
+      assertDoesNotThrow(() -> HoodieMetadataTableServicesTool.validateRequest(
+          MetadataTableServiceMode.EXECUTE, EnumSet.of(service), "instant"));
+      for (MetadataTableServiceMode mode : EnumSet.of(
+          MetadataTableServiceMode.SCHEDULE, MetadataTableServiceMode.SCHEDULE_AND_EXECUTE)) {
+        assertThrows(IllegalArgumentException.class, () -> HoodieMetadataTableServicesTool.validateRequest(
+            mode, EnumSet.of(service), "instant"));
+      }
+      assertThrows(IllegalArgumentException.class, () -> HoodieMetadataTableServicesTool.validateRequest(
+          MetadataTableServiceMode.EXECUTE, EnumSet.of(service, TableServiceType.CLEAN), "instant"));
+    }
+    assertThrows(IllegalArgumentException.class, () -> HoodieMetadataTableServicesTool.validateRequest(
+        MetadataTableServiceMode.EXECUTE, EnumSet.of(TableServiceType.COMPACT, TableServiceType.LOG_COMPACT), "instant"));
+    for (TableServiceType service : EnumSet.of(TableServiceType.CLEAN, TableServiceType.ARCHIVE)) {
+      assertThrows(IllegalArgumentException.class, () -> HoodieMetadataTableServicesTool.validateRequest(
+          MetadataTableServiceMode.EXECUTE, EnumSet.of(service), "instant"));
+    }
+  }
+
+  @Test
+  void rejectsEmptyServiceRequests() {
+    for (MetadataTableServiceMode mode : MetadataTableServiceMode.values()) {
+      assertThrows(IllegalArgumentException.class, () -> HoodieMetadataTableServicesTool.validateRequest(
+          mode, EnumSet.noneOf(TableServiceType.class), null));
+    }
+  }
+
+  @Test
   void validatesSharedDataTableLockConfiguration() {
     HoodieWriteConfig singleWriterConfig = HoodieWriteConfig.newBuilder()
         .withPath("/tmp/data-table")

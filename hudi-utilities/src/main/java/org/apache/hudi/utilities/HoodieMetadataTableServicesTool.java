@@ -82,7 +82,7 @@ public class HoodieMetadataTableServicesTool {
         .build();
     this.services = parseServices(cfg.services);
     this.mode = MetadataTableServiceMode.fromValue(cfg.mode);
-    validateRequest();
+    validateRequest(mode, services, cfg.instantTime);
   }
 
   public void run() {
@@ -115,8 +115,7 @@ public class HoodieMetadataTableServicesTool {
         scheduleAndExecuteCompactionService(TableServiceType.LOG_COMPACT, compactionServices);
       } else {
         // Pure scheduling only publishes plans while holding the data-table lock.
-        runLockedSingleWriterPhase(writer ->
-            writer.scheduleTableServices(newRequest(MetadataTableServiceMode.SCHEDULE, compactionServices)));
+        scheduleTableServicesPhase(compactionServices);
       }
     }
 
@@ -133,8 +132,7 @@ public class HoodieMetadataTableServicesTool {
     }
     Set<TableServiceType> serviceSet = EnumSet.of(service);
     // Publish the plan under the data-table lock, then release it before expensive OCC execution.
-    runLockedSingleWriterPhase(writer ->
-        writer.scheduleTableServices(newRequest(MetadataTableServiceMode.SCHEDULE, serviceSet)));
+    scheduleTableServicesPhase(serviceSet);
     executeTableServicesPhase(serviceSet);
   }
 
@@ -149,7 +147,7 @@ public class HoodieMetadataTableServicesTool {
     }
   }
 
-  private void runLockedSingleWriterPhase(WriterOperation operation) {
+  private void scheduleTableServicesPhase(Set<TableServiceType> schedulingServices) {
     // The outer transaction owns the shared data-table lock; the SINGLE_WRITER MDT writer must not reacquire it.
     HoodieWriteConfig schedulingConfig = buildWriteConfig(WriteConcurrencyMode.SINGLE_WRITER);
     try (TransactionManager transactionManager = createTransactionManager(schedulingConfig)) {
@@ -157,7 +155,7 @@ public class HoodieMetadataTableServicesTool {
       // Close the writer before releasing the lock, preserving any primary failure if either close fails.
       try (AutoCloseable lock = () -> transactionManager.endStateChange(Option.empty());
            HoodieTableMetadataWriter writer = createWriter(schedulingConfig)) {
-        operation.run(writer);
+        writer.scheduleTableServices(newRequest(MetadataTableServiceMode.SCHEDULE, schedulingServices));
       } catch (Exception e) {
         throw new HoodieException("Failed to run lock-protected metadata table services", e);
       }
@@ -225,29 +223,18 @@ public class HoodieMetadataTableServicesTool {
     HoodieLockConfig.deriveLockConfigForDifferentTable(lockProviderClass, writeConfig);
   }
 
-  private void validateRequest() {
-    validateRequest(mode, services, cfg.instantTime);
-  }
-
   static void validateRequest(MetadataTableServiceMode mode,
                               Set<TableServiceType> services,
                               String instantTime) {
-    if (services.isEmpty()) {
-      throw new IllegalArgumentException("At least one metadata table service must be selected");
-    }
-    boolean containsCompactionService = services.contains(TableServiceType.COMPACT)
-        || services.contains(TableServiceType.LOG_COMPACT);
+    MetadataTableServiceRequest request = MetadataTableServiceRequest.newBuilder()
+        .withMode(mode)
+        .withServices(services)
+        .withInstantTime(Option.ofNullable(instantTime))
+        .build();
+    boolean containsCompactionService = request.includes(TableServiceType.COMPACT)
+        || request.includes(TableServiceType.LOG_COMPACT);
     if (mode == MetadataTableServiceMode.SCHEDULE && !containsCompactionService) {
       throw new IllegalArgumentException("Schedule mode requires compaction or logcompaction");
-    }
-    if (instantTime != null) {
-      long executableCompactionServices = services.stream()
-          .filter(service -> service == TableServiceType.COMPACT || service == TableServiceType.LOG_COMPACT)
-          .count();
-      if (mode != MetadataTableServiceMode.EXECUTE || executableCompactionServices != 1 || services.size() != 1) {
-        throw new IllegalArgumentException(
-            "--instant-time requires execute mode and exactly one of compaction or logcompaction");
-      }
     }
     if (mode == MetadataTableServiceMode.SCHEDULE) {
       Set<TableServiceType> skippedServices = EnumSet.copyOf(services);
@@ -284,11 +271,6 @@ public class HoodieMetadataTableServicesTool {
       }
     }
     return result;
-  }
-
-  @FunctionalInterface
-  private interface WriterOperation {
-    void run(HoodieTableMetadataWriter writer);
   }
 
   /** CLI configuration. */
