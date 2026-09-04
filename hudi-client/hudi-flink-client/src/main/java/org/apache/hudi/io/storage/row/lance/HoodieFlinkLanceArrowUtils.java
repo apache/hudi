@@ -18,8 +18,12 @@
 
 package org.apache.hudi.io.storage.row.lance;
 
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.util.HoodieSchemaConverter;
 
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.BitVector;
@@ -72,6 +76,7 @@ import org.apache.flink.table.types.logical.VarCharType;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -88,10 +93,22 @@ public final class HoodieFlinkLanceArrowUtils {
   private HoodieFlinkLanceArrowUtils() {
   }
 
-  public static Schema toArrowSchema(RowType rowType) {
+  /**
+   * Converts a Hoodie write schema to the Arrow schema used by Lance.
+   *
+   * <p>This method distinguishes a Hoodie VECTOR from an ordinary Flink ARRAY and encodes
+   * top-level FLOAT/DOUBLE vectors as Arrow FixedSizeList fields.
+   */
+  public static Schema toArrowSchema(HoodieSchema hoodieSchema) {
+    HoodieSchema recordSchema = hoodieSchema.getNonNullType();
+    RowType rowType = HoodieSchemaConverter.convertToRowType(recordSchema);
+    List<HoodieSchemaField> hoodieFields = recordSchema.getFields();
+
     List<Field> fields = new ArrayList<>(rowType.getFieldCount());
-    for (RowType.RowField field : rowType.getFields()) {
-      fields.add(toArrowField(field.getName(), field.getType()));
+    for (int i = 0; i < rowType.getFieldCount(); i++) {
+      RowType.RowField rowField = rowType.getFields().get(i);
+      fields.add(toArrowField(
+          rowField.getName(), rowField.getType(), hoodieFields.get(i).schema().getNonNullType()));
     }
     return new Schema(fields);
   }
@@ -178,6 +195,36 @@ public final class HoodieFlinkLanceArrowUtils {
         break;
     }
     return new Field(name, new FieldType(type.isNullable(), toArrowType(type), null), children);
+  }
+
+  private static Field toArrowField(String name, LogicalType type, HoodieSchema hoodieSchema) {
+    if (hoodieSchema.getType() != HoodieSchemaType.VECTOR) {
+      return toArrowField(name, type);
+    }
+
+    HoodieSchema.Vector vectorSchema = (HoodieSchema.Vector) hoodieSchema;
+    validateLanceVector(name, vectorSchema);
+    ValidationUtils.checkArgument(type instanceof ArrayType,
+        "VECTOR column '" + name + "' must map to a Flink ARRAY type");
+    ArrayType arrayType = (ArrayType) type;
+    Field elementField = toArrowField("element", arrayType.getElementType());
+    return new Field(
+        name,
+        new FieldType(
+            type.isNullable(),
+            new ArrowType.FixedSizeList(vectorSchema.getDimension()),
+            null),
+        Collections.singletonList(elementField));
+  }
+
+  private static void validateLanceVector(String fieldName, HoodieSchema.Vector vectorSchema) {
+    HoodieSchema.Vector.VectorElementType elementType = vectorSchema.getVectorElementType();
+    if (elementType != HoodieSchema.Vector.VectorElementType.FLOAT
+        && elementType != HoodieSchema.Vector.VectorElementType.DOUBLE) {
+      throw new HoodieNotSupportedException(
+          "Lance base-file format currently supports FLOAT/DOUBLE VECTOR columns only; "
+              + "got element type " + elementType + " for field '" + fieldName + "'");
+    }
   }
 
   private static ArrowType toArrowType(LogicalType type) {
