@@ -35,7 +35,6 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +42,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieTableServiceManagerConfig.parseTableServiceActions;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
@@ -98,10 +98,15 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .defaultValue(false)
       .markAdvanced()
       .withDocumentation("If true, delegate the configured metadata table service scheduling and/or execution actions "
-          + "to a separate table service manager instead of running them inline.");
+          + "to a separate table service manager instead of running them inline. "
+          + "Users must arrange external execution, for example by scheduling HoodieMetadataTableServicesTool; "
+          + "this setting alone does not deploy or start an external job.");
+
+  /** Metadata service delegation name; archival has no corresponding timeline action. */
+  public static final String ARCHIVE_ACTION = "archive";
 
   private static final Set<String> SUPPORTED_TABLE_SERVICE_MANAGER_EXECUTION_ACTIONS = CollectionUtils.createImmutableSet(
-      ActionType.compaction.name(), ActionType.logcompaction.name(), ActionType.clean.name(), "archive");
+      ActionType.compaction.name(), ActionType.logcompaction.name(), ActionType.clean.name(), ARCHIVE_ACTION);
 
   private static final Set<String> SUPPORTED_TABLE_SERVICE_MANAGER_SCHEDULE_ACTIONS = CollectionUtils.createImmutableSet(
       ActionType.compaction.name(), ActionType.logcompaction.name());
@@ -112,7 +117,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Comma-separated list of table service actions on the metadata table "
           + "whose inline execution should be delegated to the table service manager. "
-          + "Supported actions are: compaction, logcompaction, clean, archive.");
+          + "Supported actions are: compaction, logcompaction, clean, archive. "
+          + "Clean and archive extend the previously supported compaction and logcompaction actions; existing valid configurations retain their behavior. "
+          + "When metadata table service delegation is enabled, adding clean or archive disables that service's inline execution. "
+          + "Users must run it externally, for example with HoodieMetadataTableServicesTool. "
+          + "Delegating clean or archive does not submit an HTTP table-service-manager request or start an external job.");
 
   public static final ConfigProperty<String> TABLE_SERVICE_MANAGER_SCHEDULE_ACTIONS = ConfigProperty
       .key(METADATA_PREFIX + ".table.service.manager.schedule.actions")
@@ -1515,16 +1524,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
         }
       }
     }
-  }
-
-  private static Set<String> parseTableServiceActions(String actions) {
-    if (StringUtils.isNullOrEmpty(actions)) {
-      return Collections.emptySet();
-    }
-    return Arrays.stream(actions.split(","))
-        .map(String::trim)
-        .filter(action -> !action.isEmpty())
-        .collect(Collectors.toSet());
   }
 
   /**

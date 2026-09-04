@@ -97,7 +97,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -111,7 +110,9 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.common.config.HoodieMetadataConfig.ARCHIVE_ACTION;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_POPULATE_META_FIELDS;
+import static org.apache.hudi.common.config.HoodieTableServiceManagerConfig.parseTableServiceActions;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_HISTORY_PATH;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
@@ -1536,11 +1537,11 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     MetadataTableServiceRequest request = MetadataTableServiceRequest.newBuilder()
         .withMode(MetadataTableServiceMode.SCHEDULE_AND_EXECUTE)
         .build();
-    runTableServicesInternal(request, requiresTimelineRefresh);
+    runTableServicesInternal(request, requiresTimelineRefresh, true);
   }
 
   private void runTableServicesInternal(MetadataTableServiceRequest request,
-                                        boolean requiresTimelineRefresh) {
+                                        boolean requiresTimelineRefresh, boolean isInline) {
     HoodieTimer metadataTableServicesTimer = HoodieTimer.start();
     boolean allTableServicesExecutedSuccessfullyOrSkipped = true;
     BaseHoodieWriteClient<?, I, ?, O> writeClient = getWriteClient();
@@ -1553,15 +1554,16 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         activeTimeline = metadataMetaClient.reloadActiveTimeline();
       }
 
-      Option<HoodieInstant> lastInstant = activeTimeline.getDeltaCommitTimeline()
+      Option<String> latestDeltaCommitTime = activeTimeline.getDeltaCommitTimeline()
           .filterCompletedInstants()
-          .lastInstant();
-      if (!lastInstant.isPresent()) {
+          .lastInstant().map(HoodieInstant::requestedTime);
+      // Preserve inline behavior; explicit service requests need not depend on a delta commit.
+      if (isInline && !latestDeltaCommitTime.isPresent()) {
+        LOG.warn("Skipping inline MDT maintenance after pending services: no completed delta commit is available.");
         return;
       }
 
       // Check and run clean operations.
-      String latestDeltaCommitTime = lastInstant.get().requestedTime();
       if (request.getMode().includesExecute()
           && request.includes(TableServiceType.CLEAN)
           && !shouldDelegateExecution(request, TableServiceType.CLEAN)) {
@@ -1569,11 +1571,14 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       }
 
       if (request.getMode().includesSchedule()
-          && (request.includes(TableServiceType.COMPACT) || request.includes(TableServiceType.LOG_COMPACT))
+          && (request.includes(TableServiceType.COMPACT) || request.includes(TableServiceType.LOG_COMPACT))) {
+        if (!latestDeltaCommitTime.isPresent()) {
+          LOG.warn("Skipping requested MDT compaction/log-compaction scheduling: no completed delta commit is available.");
+        } else if (validateCompactionScheduling(latestDeltaCommitTime.get())) {
           // Do timeline validation before scheduling compaction/logCompaction operations.
-          && validateCompactionScheduling(latestDeltaCommitTime)) {
-        LOG.info("Latest delta commit time found is {}, scheduling compaction operations.", latestDeltaCommitTime);
-        runCompactionServicesIfNecessary(writeClient, Option.of(latestDeltaCommitTime), request);
+          LOG.info("Latest delta commit time found is {}, scheduling compaction operations.", latestDeltaCommitTime.get());
+          runCompactionServicesIfNecessary(writeClient, latestDeltaCommitTime, request);
+        }
       }
 
       if (request.getMode().includesExecute() && request.includes(TableServiceType.ARCHIVE)) {
@@ -1583,7 +1588,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
           writeClient.archive();
         }
       }
-      LOG.info("All the table services operations on MDT completed successfully");
+      LOG.info("Requested table services operations on MDT completed successfully or were skipped");
     } catch (Exception e) {
       LOG.error("Exception in running table services on metadata table", e);
       allTableServicesExecutedSuccessfullyOrSkipped = false;
@@ -1612,13 +1617,13 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   @Override
   public void scheduleTableServices(MetadataTableServiceRequest request) {
     MetadataTableServiceRequest scheduleRequest = request.copy(MetadataTableServiceMode.SCHEDULE);
-    runTableServicesInternal(scheduleRequest, true);
+    runTableServicesInternal(scheduleRequest, true, false);
   }
 
   @Override
   public void executeTableServices(MetadataTableServiceRequest request) {
     MetadataTableServiceRequest executeRequest = request.copy(MetadataTableServiceMode.EXECUTE);
-    runTableServicesInternal(executeRequest, true);
+    runTableServicesInternal(executeRequest, true, false);
   }
 
   private boolean executePendingCompactionServices(MetadataTableServiceRequest request,
@@ -1658,9 +1663,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   }
 
   private void runCleanService(BaseHoodieWriteClient<?, I, ?, O> writeClient,
-                               String latestDeltaCommitTime) {
-    if (shouldRunClean()) {
-      executeClean(writeClient, latestDeltaCommitTime);
+                               Option<String> latestDeltaCommitTime) {
+    if (shouldRunClean() && executeClean(writeClient, latestDeltaCommitTime)) {
       writeClient.lazyRollbackFailedIndexing();
     }
   }
@@ -1672,20 +1676,17 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
   protected boolean shouldDelegateScheduling(MetadataTableServiceRequest request, TableServiceType service) {
     return shouldDelegate(request, service,
-        config -> config.getMetadataConfig().getTableServiceManagerScheduleActions());
+        config -> config.getTableServiceManagerConfig().getTableServiceManagerScheduleActions());
   }
 
   private boolean shouldDelegate(MetadataTableServiceRequest request, TableServiceType service,
                                  Function<HoodieWriteConfig, String> actionsProvider) {
     if (request.shouldDisableTableServiceManagerDelegation()
-        || metadataWriteConfig == null
         || !metadataWriteConfig.getTableServiceManagerConfig().isTableServiceManagerEnabled()) {
       return false;
     }
     String action = actionName(service);
-    return Arrays.stream(actionsProvider.apply(metadataWriteConfig).split(","))
-        .map(String::trim)
-        .anyMatch(action::equals);
+    return parseTableServiceActions(actionsProvider.apply(metadataWriteConfig)).contains(action);
   }
 
   private static String actionName(TableServiceType service) {
@@ -1697,7 +1698,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       case CLEAN:
         return ActionType.clean.name();
       case ARCHIVE:
-        return "archive";
+        return ARCHIVE_ACTION;
       default:
         throw new IllegalArgumentException("Unsupported MDT table service: " + service);
     }
@@ -1803,8 +1804,12 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     return true;
   }
 
-  protected void executeClean(BaseHoodieWriteClient writeClient, String instantTime) {
+  /**
+   * Invokes clean if the table version's instant requirements are met, returning whether clean was invoked.
+   */
+  protected boolean executeClean(BaseHoodieWriteClient writeClient, Option<String> latestDeltaCommitTime) {
     writeClient.clean();
+    return true;
   }
 
   /**

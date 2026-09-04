@@ -22,6 +22,9 @@ import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.util.Option;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.EnumSet;
 
@@ -77,5 +80,43 @@ class TestMetadataTableServiceRequest {
     assertThrows(IllegalArgumentException.class, () -> MetadataTableServiceRequest.newBuilder()
         .withInstantTime(Option.of("instant"))
         .build());
+  }
+
+  @ParameterizedTest
+  @CsvSource({"COMPACT,SCHEDULE", "COMPACT,SCHEDULE_AND_EXECUTE",
+      "LOG_COMPACT,SCHEDULE", "LOG_COMPACT,SCHEDULE_AND_EXECUTE"})
+  void rejectsCopyingExecutionInstantToSchedulingMode(TableServiceType service, MetadataTableServiceMode mode) {
+    MetadataTableServiceRequest request = MetadataTableServiceRequest.newBuilder()
+        .withMode(MetadataTableServiceMode.EXECUTE)
+        .withServices(EnumSet.of(service))
+        .withInstantTime(Option.of("instant"))
+        .disableTableServiceManagerDelegation(true)
+        .build();
+
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> request.copy(mode));
+
+    assertTrue(exception.getMessage().contains("An instant time requires execute mode"));
+    assertEquals(MetadataTableServiceMode.EXECUTE, request.getMode());
+    assertEquals(Option.of("instant"), request.getInstantTime());
+    assertEquals(EnumSet.of(service), request.getServices());
+    assertTrue(request.shouldDisableTableServiceManagerDelegation());
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = TableServiceType.class, names = {"COMPACT", "LOG_COMPACT"})
+  void preservesInstantWhenCopyingExecutionRequest(TableServiceType service) {
+    MetadataTableServiceRequest request = MetadataTableServiceRequest.newBuilder()
+        .withMode(MetadataTableServiceMode.EXECUTE)
+        .withServices(EnumSet.of(service))
+        .withInstantTime(Option.of("instant"))
+        .disableTableServiceManagerDelegation(true)
+        .build();
+
+    MetadataTableServiceRequest copy = request.copy(MetadataTableServiceMode.EXECUTE);
+
+    assertEquals(MetadataTableServiceMode.EXECUTE, copy.getMode());
+    assertEquals(request.getInstantTime(), copy.getInstantTime());
+    assertEquals(request.getServices(), copy.getServices());
+    assertTrue(copy.shouldDisableTableServiceManagerDelegation());
   }
 }

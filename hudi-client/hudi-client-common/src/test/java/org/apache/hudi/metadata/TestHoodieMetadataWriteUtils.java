@@ -24,6 +24,7 @@ import org.apache.hudi.client.transaction.lock.ZookeeperBasedImplicitBasePathLoc
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.HoodieTableServiceManagerConfig;
 import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -143,23 +144,32 @@ public class TestHoodieMetadataWriteUtils {
     assertEquals("snappy", metadataWriteConfig.getParquetCompressionCodec());
   }
 
-  @Test
-  void testCreateMetadataWriteConfigPropagatesTableServiceSchedulingDelegation() {
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT"})
+  void testCreateMetadataWriteConfigPropagatesTableServiceSchedulingDelegation(HoodieTableVersion version) {
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
         .withTableServiceManagerEnabled(true)
         .withTableServiceManagerScheduleActions(ActionType.compaction.name())
         .build();
+    // DT-level manager settings must not replace MDT-specific delegation settings.
+    Properties dataTableManagerProperties = new Properties();
+    dataTableManagerProperties.setProperty(HoodieTableServiceManagerConfig.TABLE_SERVICE_MANAGER_ACTIONS.key(), "clean");
+    dataTableManagerProperties.setProperty(HoodieTableServiceManagerConfig.TABLE_SERVICE_MANAGER_SCHEDULE_ACTIONS.key(), "logcompaction");
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath("/tmp/base_path/")
+        .withProperties(dataTableManagerProperties)
         .withMetadataConfig(metadataConfig)
         .build();
 
     HoodieWriteConfig metadataWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(
-        writeConfig, HoodieFailedWritesCleaningPolicy.EAGER, HoodieTableVersion.EIGHT);
+        writeConfig, HoodieFailedWritesCleaningPolicy.EAGER, version);
 
     assertTrue(metadataWriteConfig.getTableServiceManagerConfig().isTableServiceManagerEnabled());
     assertEquals(ActionType.compaction.name(),
-        metadataWriteConfig.getMetadataConfig().getTableServiceManagerScheduleActions());
+        metadataWriteConfig.getTableServiceManagerConfig().getTableServiceManagerScheduleActions());
+    assertEquals("", metadataWriteConfig.getTableServiceManagerConfig().getTableServiceManagerActions());
+    assertEquals("", metadataWriteConfig.getMetadataConfig().getTableServiceManagerScheduleActions());
+    assertEquals("logcompaction", writeConfig.getTableServiceManagerConfig().getTableServiceManagerScheduleActions());
   }
 
   @ParameterizedTest
@@ -387,6 +397,7 @@ public class TestHoodieMetadataWriteUtils {
         writeConfig, HoodieFailedWritesCleaningPolicy.EAGER, HoodieTableVersion.EIGHT);
     assertFalse(metadataWriteConfig.getTableServiceManagerConfig().isTableServiceManagerEnabled());
     assertFalse(metadataWriteConfig.getTableServiceManagerConfig().isEnabledAndActionSupported(ActionType.compaction));
+    assertEquals("", metadataWriteConfig.getTableServiceManagerConfig().getTableServiceManagerScheduleActions());
   }
 
   @Test

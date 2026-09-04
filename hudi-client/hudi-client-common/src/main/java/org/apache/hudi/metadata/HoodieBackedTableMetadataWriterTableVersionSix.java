@@ -301,7 +301,7 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
     // let's say we trigger compaction after C5 in MDT and so compaction completes with C4001. but C5 crashed before completing in MDT.
     // and again w/ C6, we will re-attempt compaction at which point latest delta commit is C4 in MDT.
     // and so we try compaction w/ instant C4001. So, we can avoid compaction if we already have compaction w/ same instant time.
-    boolean scheduledCompaction = false;
+    boolean compactionSchedulingHandled = false;
     if (metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(compactionInstantTime)) {
       LOG.info("Compaction with same {} time is already present in the timeline.", compactionInstantTime);
       return;
@@ -311,9 +311,10 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
       if (request.includes(TableServiceType.COMPACT) && request.getMode().includesSchedule()) {
         if (shouldDelegateScheduling(request, TableServiceType.COMPACT)) {
           LOG.info("Skipping scheduling of compaction on MDT as it is delegated to table service manager.");
+          compactionSchedulingHandled = true;
         } else if (writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
           LOG.info("Compaction is scheduled for timestamp {}", compactionInstantTime);
-          scheduledCompaction = true;
+          compactionSchedulingHandled = true;
           if (request.getMode().includesExecute()) {
             if (shouldDelegateExecution(request, TableServiceType.COMPACT)) {
               LOG.info("Skipping execution of compaction on MDT as it is delegated to table service manager.");
@@ -329,7 +330,8 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
       throw e;
     }
 
-    if (!scheduledCompaction
+    // Preserve compaction priority when scheduling is delegated, but allow log-compaction-only requests.
+    if (!compactionSchedulingHandled
         && request.includes(TableServiceType.LOG_COMPACT)
         && request.getMode().includesSchedule()
         && metadataWriteConfig.isLogCompactionEnabled()) {
@@ -363,8 +365,13 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
   }
 
   @Override
-  protected void executeClean(BaseHoodieWriteClient writeClient, String instantTime) {
-    writeClient.clean(createCleanTimestamp(instantTime));
+  protected boolean executeClean(BaseHoodieWriteClient writeClient, Option<String> latestDeltaCommitTime) {
+    if (!latestDeltaCommitTime.isPresent()) {
+      LOG.warn("Skipping requested MDT clean for table version six: no completed delta commit is available to derive the clean instant.");
+      return false;
+    }
+    writeClient.clean(createCleanTimestamp(latestDeltaCommitTime.get()));
+    return true;
   }
 
   @Override

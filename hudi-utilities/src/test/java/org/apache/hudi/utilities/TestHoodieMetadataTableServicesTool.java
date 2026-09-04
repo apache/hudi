@@ -26,15 +26,59 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.MetadataTableServiceMode;
 
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.Logger;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestHoodieMetadataTableServicesTool {
+
+  @Test
+  void warnsWhenScheduleModeSkipsCleanAndArchive() {
+    Logger logger = (Logger) LogManager.getLogger(HoodieMetadataTableServicesTool.class);
+    Level originalLevel = logger.getLevel();
+    List<LogEvent> events = new ArrayList<>();
+    AbstractAppender appender = new AbstractAppender("metadata-services-test", null, null, false, null) {
+      @Override
+      public void append(LogEvent event) {
+        events.add(event.toImmutable());
+      }
+    };
+    appender.start();
+    logger.addAppender(appender);
+    logger.setLevel(Level.WARN);
+    try {
+      HoodieMetadataTableServicesTool.validateRequest(MetadataTableServiceMode.SCHEDULE,
+          EnumSet.of(TableServiceType.COMPACT, TableServiceType.CLEAN, TableServiceType.ARCHIVE), null);
+      assertEquals(1, events.size());
+      assertEquals(Level.WARN, events.get(0).getLevel());
+      String message = events.get(0).getMessage().getFormattedMessage();
+      assertTrue(message.contains("CLEAN"));
+      assertTrue(message.contains("ARCHIVE"));
+      assertTrue(message.contains("schedule-only"));
+      events.clear();
+      HoodieMetadataTableServicesTool.validateRequest(MetadataTableServiceMode.SCHEDULE,
+          EnumSet.of(TableServiceType.COMPACT), null);
+      HoodieMetadataTableServicesTool.validateRequest(MetadataTableServiceMode.EXECUTE,
+          EnumSet.of(TableServiceType.CLEAN, TableServiceType.ARCHIVE), null);
+      assertTrue(events.isEmpty());
+    } finally {
+      logger.removeAppender(appender);
+      logger.setLevel(originalLevel);
+      appender.stop();
+    }
+  }
 
   @Test
   void parsesAllAndSelectedServices() {

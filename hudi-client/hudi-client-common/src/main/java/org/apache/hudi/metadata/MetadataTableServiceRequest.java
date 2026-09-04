@@ -57,7 +57,13 @@ public final class MetadataTableServiceRequest implements Serializable {
     return disableTableServiceManagerDelegation;
   }
 
-  /** Returns a copy of this request with the specified mode. */
+  /**
+   * Returns a copy with the specified mode, preserving all other fields and validating the resulting request.
+   * The original request is unchanged. An instant time is never discarded: a request containing one can
+   * only be copied in {@link MetadataTableServiceMode#EXECUTE} mode.
+   *
+   * @throws IllegalArgumentException if the resulting request is invalid for the specified mode
+   */
   public MetadataTableServiceRequest copy(MetadataTableServiceMode mode) {
     return newBuilder()
         .withMode(mode)
@@ -91,6 +97,10 @@ public final class MetadataTableServiceRequest implements Serializable {
       return this;
     }
 
+    /**
+     * Sets an optional instant to execute. A present instant requires {@link MetadataTableServiceMode#EXECUTE}
+     * mode and exactly one service: compaction or log compaction. These constraints are checked by {@link #build()}.
+     */
     public Builder withInstantTime(Option<String> instantTime) {
       this.instantTime = instantTime;
       return this;

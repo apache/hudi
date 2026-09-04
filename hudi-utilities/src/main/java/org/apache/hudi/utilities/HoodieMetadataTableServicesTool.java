@@ -51,7 +51,11 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/** Standalone Spark tool for scheduling and executing metadata table services. */
+/**
+ * Standalone Spark tool for scheduling and executing metadata table services directly through MDT writer APIs.
+ * This tool does not require an HTTP table-service-manager server. Users must submit and schedule the job
+ * separately; enabling ingestion-side metadata table service delegation does not launch it automatically.
+ */
 @Slf4j
 public class HoodieMetadataTableServicesTool {
 
@@ -148,19 +152,23 @@ public class HoodieMetadataTableServicesTool {
   private void runLockedSingleWriterPhase(WriterOperation operation) {
     // The outer transaction owns the shared data-table lock; the SINGLE_WRITER MDT writer must not reacquire it.
     HoodieWriteConfig schedulingConfig = buildWriteConfig(WriteConcurrencyMode.SINGLE_WRITER);
-    try (TransactionManager transactionManager = new TransactionManager(schedulingConfig, dataMetaClient.getStorage())) {
+    try (TransactionManager transactionManager = createTransactionManager(schedulingConfig)) {
       transactionManager.beginStateChange(Option.empty(), Option.empty());
-      try (HoodieTableMetadataWriter writer = createWriter(schedulingConfig)) {
+      // Close the writer before releasing the lock, preserving any primary failure if either close fails.
+      try (AutoCloseable lock = () -> transactionManager.endStateChange(Option.empty());
+           HoodieTableMetadataWriter writer = createWriter(schedulingConfig)) {
         operation.run(writer);
       } catch (Exception e) {
         throw new HoodieException("Failed to run lock-protected metadata table services", e);
-      } finally {
-        transactionManager.endStateChange(Option.empty());
       }
     }
   }
 
-  private HoodieTableMetadataWriter createWriter(HoodieWriteConfig writeConfig) {
+  TransactionManager createTransactionManager(HoodieWriteConfig writeConfig) {
+    return new TransactionManager(writeConfig, dataMetaClient.getStorage());
+  }
+
+  HoodieTableMetadataWriter createWriter(HoodieWriteConfig writeConfig) {
     HoodieTableMetadataWriter writer = SparkMetadataWriterFactory.create(
         storageConf, writeConfig, engineContext, Option.empty(), dataMetaClient.getTableConfig());
     if (!writer.isInitialized()) {
@@ -174,7 +182,7 @@ public class HoodieMetadataTableServicesTool {
     return writer;
   }
 
-  private HoodieWriteConfig buildWriteConfig(WriteConcurrencyMode metadataConcurrencyMode) {
+  HoodieWriteConfig buildWriteConfig(WriteConcurrencyMode metadataConcurrencyMode) {
     Properties profileProps = new Properties();
     profileProps.putAll(props);
     profileProps.setProperty(HoodieMetadataConfig.ENABLE.key(), "true");
@@ -239,6 +247,14 @@ public class HoodieMetadataTableServicesTool {
       if (mode != MetadataTableServiceMode.EXECUTE || executableCompactionServices != 1 || services.size() != 1) {
         throw new IllegalArgumentException(
             "--instant-time requires execute mode and exactly one of compaction or logcompaction");
+      }
+    }
+    if (mode == MetadataTableServiceMode.SCHEDULE) {
+      Set<TableServiceType> skippedServices = EnumSet.copyOf(services);
+      skippedServices.retainAll(EnumSet.of(TableServiceType.CLEAN, TableServiceType.ARCHIVE));
+      if (!skippedServices.isEmpty()) {
+        log.warn("Skipping services {} in schedule-only mode; clean and archive require execute or schedule-and-execute mode",
+            skippedServices);
       }
     }
   }
