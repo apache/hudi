@@ -49,6 +49,7 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_REC
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -379,7 +380,10 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
     HoodieMetadataPayload payload = newBloomFilterPayload();
 
     // The class schema singleton (and no schema) takes the reference-equality fast path and returns the generated record.
-    assertInstanceOf(HoodieMetadataRecord.class, payload.getInsertValue(HoodieMetadataRecord.getClassSchema()).get());
+    IndexedRecord fastPath = payload.getInsertValue(HoodieMetadataRecord.getClassSchema()).get();
+    assertInstanceOf(HoodieMetadataRecord.class, fastPath);
+    // Implied by the check above (the generated class returns SCHEMA$ from both accessors); pins the invariant.
+    assertSame(HoodieMetadataRecord.getClassSchema(), fastPath.getSchema());
     assertInstanceOf(HoodieMetadataRecord.class, payload.getInsertValue(null).get());
 
     // Any other instance takes the slow path, which fills a GenericRecord at the metadata-field offsets.
