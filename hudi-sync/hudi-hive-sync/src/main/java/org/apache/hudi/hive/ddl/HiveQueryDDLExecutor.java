@@ -87,6 +87,8 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       // UDFClassLoader onto the conf it is handed, and close() deletes the directories that id
       // names and closes that loader. config's HiveConf outlives us and both pools copy it.
       HiveConf sessionConf = new HiveConf(config.getHiveConf());
+      // An inherited ID would make close() delete the caller's session directories.
+      sessionConf.setVar(HiveConf.ConfVars.HIVESESSIONID, "");
       this.sessionState = new SessionState(sessionConf,
           UserGroupInformation.getCurrentUser().getShortUserName());
       SessionState.start(this.sessionState);

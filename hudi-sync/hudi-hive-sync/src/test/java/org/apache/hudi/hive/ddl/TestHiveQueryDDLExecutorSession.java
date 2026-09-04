@@ -42,6 +42,7 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -334,6 +335,34 @@ class TestHiveQueryDDLExecutorSession {
             + "and those sessions would share the scratch directories this one deletes");
     assertSame(callerConfLoader, config.getHiveConf().getClassLoader(),
         "close() closes the loader its session's conf carries, so that conf cannot be the caller's");
+  }
+
+  @Test
+  void closePreservesCallerScratchWhenConfigHasSessionId(@TempDir Path tempDir) throws Exception {
+    SessionState callerSession = SessionState.start(hiveSyncConfig(tempDir).getHiveConf());
+    HiveConf callerConf = callerSession.getConf();
+    String callerSessionId = callerSession.getSessionId();
+    // Only metastore access is stubbed; real sessions create and delete the scratch directories.
+    try (MockedStatic<Hive> ignored = mockStatic(Hive.class)) {
+      try {
+        Path localMarker = Files.write(Paths.get(SessionState.getLocalSessionPath(callerConf).toUri().getPath())
+            .resolve("caller-query-data"), new byte[] {1});
+        Path hdfsMarker = Files.write(Paths.get(SessionState.getHDFSSessionPath(callerConf).toUri().getPath())
+            .resolve("caller-query-data"), new byte[] {1});
+        HiveSyncConfig config = new HiveSyncConfig(new Properties(), callerConf);
+        try (HiveQueryDDLExecutor executor = new HiveQueryDDLExecutor(config, mock(IMetaStoreClient.class))) {
+          assertSame(callerSession, SessionState.get());
+          assertEquals(callerSessionId, config.getHiveConf().getVar(HiveConf.ConfVars.HIVESESSIONID),
+              "The caller's configuration must retain its session ID");
+        }
+
+        assertSame(callerSession, SessionState.get());
+        assertTrue(Files.exists(localMarker), "Closing the executor must preserve the caller's local scratch files");
+        assertTrue(Files.exists(hdfsMarker), "Closing the executor must preserve the caller's HDFS scratch files");
+      } finally {
+        callerSession.close();
+      }
+    }
   }
 
   /**
