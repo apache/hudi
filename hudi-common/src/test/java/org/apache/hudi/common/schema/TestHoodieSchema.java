@@ -75,6 +75,17 @@ public class TestHoodieSchema {
           + "  ]"
           + "}";
 
+  // The Blob schema is persisted in the table schema of every BLOB table, so its serialized shape is pinned literally.
+  private static final String EXPECTED_BLOB_SCHEMA_JSON = "{\"type\":\"record\",\"name\":\"blob\",\"fields\":["
+      + "{\"name\":\"type\",\"type\":{\"type\":\"enum\",\"name\":\"blob_storage_type\",\"symbols\":[\"INLINE\",\"OUT_OF_LINE\"]}},"
+      + "{\"name\":\"data\",\"type\":[\"null\",\"bytes\"],\"default\":null},"
+      + "{\"name\":\"reference\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"reference\",\"fields\":["
+      + "{\"name\":\"external_path\",\"type\":\"string\"},"
+      + "{\"name\":\"offset\",\"type\":[\"null\",\"long\"]},"
+      + "{\"name\":\"length\",\"type\":[\"null\",\"long\"]},"
+      + "{\"name\":\"managed\",\"type\":\"boolean\"}]}],\"default\":null}],"
+      + "\"logicalType\":\"blob\"}";
+
   /**
    * Checks if the given Avro schema is a Variant schema. This checks for the Variant logical type.
    *
@@ -2485,8 +2496,10 @@ public class TestHoodieSchema {
 
   @Test
   public void testBlobFieldCountMethods() {
-    assertTrue(HoodieSchema.Blob.getFieldCount() > 0);
-    assertTrue(HoodieSchema.Blob.getReferenceFieldCount() > 0);
+    // type, data, reference
+    assertEquals(3, HoodieSchema.Blob.getFieldCount());
+    // external_path, offset, length, managed
+    assertEquals(4, HoodieSchema.Blob.getReferenceFieldCount());
   }
 
   @Test
@@ -2550,6 +2563,10 @@ public class TestHoodieSchema {
     assertTrue(managedOpt.isPresent());
     assertEquals(HoodieSchemaType.BOOLEAN, managedOpt.get().schema().getType());
     assertFalse(managedOpt.get().schema().isNullable());
+
+    // Enum symbols, null-first unions, the null defaults on data/reference (and none on offset/length),
+    // the reference record name and the blob logical type, pinned as the persisted string.
+    assertEquals(EXPECTED_BLOB_SCHEMA_JSON, blob.toAvroSchema().toString());
   }
 
   @Test

@@ -68,6 +68,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 
@@ -119,7 +120,7 @@ import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.avro.AvroSchemaUtils.getNonNullTypeFromUnion;
+import static org.apache.hudi.common.avro.HoodieAvroUtils.getNonNullTypeFromUnion;
 import static org.apache.hudi.common.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper;
 import static org.apache.hudi.common.avro.HoodieAvroWrapperUtils.wrapValueIntoAvro;
 import static org.apache.hudi.common.schema.HoodieSchemaUtils.sanitizeName;
@@ -129,6 +130,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -1365,5 +1367,75 @@ public class TestHoodieAvroUtils {
     assertNotNull(HoodieAvroUtils.AVRO_VERSION);
     // the pom.properties lookup must agree with the jar that actually defines Schema
     assertEquals(Schema.class.getPackage().getImplementationVersion(), HoodieAvroUtils.AVRO_VERSION);
+  }
+
+  @Test
+  public void testCreateNewSchemaFromFieldsWithReference_NullSchema() {
+    // This test should throw an IllegalArgumentException
+    assertThrows(IllegalArgumentException.class, () -> HoodieAvroUtils.createNewSchemaFromFieldsWithReference(null, Collections.emptyList()));
+  }
+
+  @Test
+  public void testCreateNewSchemaFromFieldsWithReference_NullObjectProps() {
+    // Create a schema without any object properties
+    String schemaStr = "{ \"type\": \"record\", \"name\": \"TestRecord\", \"fields\": [] }";
+    Schema schema = new Schema.Parser().parse(schemaStr);
+
+    // Ensure getObjectProps returns null by mocking or creating a schema without props
+    Schema newSchema = HoodieAvroUtils.createNewSchemaFromFieldsWithReference(schema, Collections.emptyList());
+
+    // Validate the new schema
+    assertEquals("TestRecord", newSchema.getName());
+    assertEquals(0, newSchema.getFields().size());
+  }
+
+  @Test
+  public void testCreateNewSchemaFromFieldsWithReference_WithObjectProps() {
+    // Create a schema with object properties
+    String schemaStr = "{ \"type\": \"record\", \"name\": \"TestRecord\", \"fields\": [], \"prop1\": \"value1\" }";
+    Schema schema = new Schema.Parser().parse(schemaStr);
+
+    // Add an object property to the schema
+    schema.addProp("prop1", "value1");
+
+    // Create new fields to add
+    Schema.Field newField = new Schema.Field("newField", Schema.create(Schema.Type.STRING), null, (Object) null);
+    Schema newSchema = HoodieAvroUtils.createNewSchemaFromFieldsWithReference(schema, Collections.singletonList(newField));
+
+    // Validate the new schema
+    assertEquals("TestRecord", newSchema.getName());
+    assertEquals(1, newSchema.getFields().size());
+    assertEquals("value1", newSchema.getProp("prop1"));
+    assertEquals("newField", newSchema.getFields().get(0).name());
+  }
+
+  @Test
+  public void testGetNonNullTypeFromUnionReturnsNonUnionAsIs() {
+    Schema intSchema = Schema.create(Schema.Type.INT);
+    assertSame(intSchema, getNonNullTypeFromUnion(intSchema));
+  }
+
+  @Test
+  public void testGetNonNullTypeFromUnionUnwrapsBothBranchOrders() {
+    Schema intSchema = Schema.create(Schema.Type.INT);
+    Schema nullSchema = Schema.create(Schema.Type.NULL);
+    assertSame(intSchema, getNonNullTypeFromUnion(Schema.createUnion(nullSchema, intSchema)));
+    assertSame(intSchema, getNonNullTypeFromUnion(Schema.createUnion(intSchema, nullSchema)));
+  }
+
+  @Test
+  public void testGetNonNullTypeFromUnionRejectsUnsupportedUnions() {
+    List<Schema> unsupported = Arrays.asList(
+        // more than two branches, even with a null one
+        Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.INT), Schema.create(Schema.Type.STRING)),
+        // exactly two branches, but neither of them is null
+        Schema.createUnion(Schema.create(Schema.Type.INT), Schema.create(Schema.Type.STRING)),
+        // a single branch is not a nullable union either
+        Schema.createUnion(Schema.create(Schema.Type.INT)));
+    for (Schema schema : unsupported) {
+      HoodieAvroSchemaException e =
+          assertThrows(HoodieAvroSchemaException.class, () -> getNonNullTypeFromUnion(schema));
+      assertTrue(e.getMessage().contains("Only UNION of a null type and a non-null type"), e.getMessage());
+    }
   }
 }

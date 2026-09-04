@@ -19,7 +19,8 @@
 package org.apache.hudi.common.schema;
 
 /**
- * The single table of primitive widening promotions, used by {@link HoodieSchemaProjectionChecker}.
+ * The single table of primitive widening promotions, used by {@link HoodieSchemaProjectionChecker} and, for the
+ * primitive cases, by {@link HoodieSchemaCompatibilityChecker}.
  *
  * <p>A promotion lets a reader schema with a wider type read data written with a narrower one:</p>
  * <ul>
@@ -33,16 +34,16 @@ package org.apache.hudi.common.schema;
  *
  * <p>Logical-type-over-primitive promotions are deliberately NOT in this table. A TIMESTAMP reader over a
  * LONG writer, or a UUID reader over a STRING writer, is accepted by
- * {@link HoodieSchemaCompatibilityChecker} for reader/writer compatibility, but it must not make a bare
- * long a "compatible projection" of a timestamp: writer-schema deduction would then silently drop the
- * logical type. Compatibility and projection are different questions, so they use different tables.</p>
+ * {@link HoodieSchemaCompatibilityChecker} for reader/writer compatibility, but it must not make a
+ * timestamp a "compatible projection" of a bare long -- {@code isCompatibleProjectionOf(source, target)}
+ * tests {@code canPromote(target, source)}, so the entry would let writer-schema deduction keep the
+ * table's long as the writer schema and silently drop the logical type. Compatibility and projection are
+ * different questions, so they use different tables.</p>
  *
  * <p>One more difference is documented rather than resolved:
  * {@link #isDecimalWidening(HoodieSchema, HoodieSchema)} additionally requires the same backing (fixed
  * versus bytes) and, for fixed, an equal fixed size, whereas the decimal check in
  * {@code HoodieSchemaCompatibilityChecker} compares only precision and scale.</p>
- *
- * <p>This class is package-private and used only by {@link HoodieSchemaProjectionChecker}.</p>
  */
 class HoodieSchemaTypePromotion {
 
