@@ -113,7 +113,14 @@ public class TestReflectionUtils {
     try (JarOutputStream jos = new JarOutputStream(Files.newOutputStream(jarPath))) {
       jos.putNextEntry(new JarEntry(classResource));
       try (InputStream in = classUrl.openStream()) {
-        in.transferTo(jos);
+        // Use a manual copy loop instead of InputStream.transferTo(OutputStream):
+        // transferTo was added in Java 9, but Hudi still compiles the Scala 2.12
+        // (Java 8) build, where it is unavailable.
+        byte[] buf = new byte[8192];
+        int n;
+        while ((n = in.read(buf)) != -1) {
+          jos.write(buf, 0, n);
+        }
       }
       jos.closeEntry();
     }
