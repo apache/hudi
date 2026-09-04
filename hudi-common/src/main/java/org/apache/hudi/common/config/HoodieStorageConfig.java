@@ -222,6 +222,14 @@ public class HoodieStorageConfig extends HoodieConfig {
           + "off-heap memory; upgrade to Spark 3.5 or newer before using ZSTD. An explicitly configured value "
           + "always takes precedence over the engine default.");
 
+  public static final ConfigProperty<Integer> LOGFILE_PARQUET_COMPRESSION_CODEC_ZSTD_LEVEL = ConfigProperty
+      .key("hoodie.logfile.parquet.compression.codec.zstd.level")
+      .defaultValue(1)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Zstandard compression level for native Parquet log files. This setting overrides "
+          + "parquet.compression.codec.zstd.level from the storage configuration for native log files.");
+
   public static final ConfigProperty<Boolean> PARQUET_DICTIONARY_ENABLED = ConfigProperty
       .key("hoodie.parquet.dictionary.enabled")
       .defaultValue(true)
@@ -645,6 +653,11 @@ public class HoodieStorageConfig extends HoodieConfig {
 
     public Builder parquetCompressionCodec(String parquetCompressionCodec) {
       storageConfig.setValue(PARQUET_COMPRESSION_CODEC_NAME, parquetCompressionCodec);
+      return this;
+    }
+
+    public Builder logFileParquetCompressionCodecZstdLevel(int zstdLevel) {
+      storageConfig.setValue(LOGFILE_PARQUET_COMPRESSION_CODEC_ZSTD_LEVEL, String.valueOf(zstdLevel));
       return this;
     }
 

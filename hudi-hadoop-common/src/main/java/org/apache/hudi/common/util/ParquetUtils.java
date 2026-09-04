@@ -29,6 +29,8 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.io.HoodieParquetConfigInjector;
+import org.apache.hudi.core.io.ParquetZstdCompressionLevelInjector;
 import org.apache.hudi.core.io.storage.HoodieFileWriter;
 import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.exception.HoodieIOException;
@@ -39,6 +41,7 @@ import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.metadata.stats.ValueMetadata;
 import org.apache.hudi.metadata.stats.ValueType;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import lombok.extern.slf4j.Slf4j;
@@ -93,6 +96,17 @@ import static org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_
  */
 @Slf4j
 public class ParquetUtils extends FileFormatUtils {
+
+  /**
+   * Applies built-in injectors followed by the user-defined injector to the configurations used by a Parquet writer.
+   */
+  public static Pair<StorageConfiguration, HoodieConfig> injectParquetWriterConfigs(
+      StoragePath path, StorageConfiguration storageConf, HoodieConfig hoodieConfig) {
+    Pair<StorageConfiguration, HoodieConfig> injectedConfigs =
+        ParquetZstdCompressionLevelInjector.INSTANCE.injectConfig(path, storageConf, hoodieConfig);
+    return HoodieParquetConfigInjector.applyConfigInjector(
+        path, injectedConfigs.getLeft(), injectedConfigs.getRight());
+  }
 
   /**
    * Read the rowKey list matching the given filter, from the given parquet file. If the filter is empty, then this will
