@@ -760,8 +760,10 @@ public class TestHoodieSchemaCompatibility {
 
   /**
    * The alias path is also driven end to end through the sole production caller,
-   * {@code HoodieTable#validateSchema} (see {@code TestHoodieTableSchemaEvolution#testFieldWithAlias}); this
-   * case pins the facade on its own.
+   * {@code HoodieTable#validateSecondaryIndexSchemaEvolution} (see
+   * {@code TestHoodieTableSchemaEvolution#testFieldWithAlias}, whose type-change half is what makes the alias
+   * match decide the outcome: an unresolved alias returns null and is skipped by that caller's
+   * {@code writerField != null} guard); this case pins the facade on its own.
    */
   @Test
   public void testLookupWriterFieldAliasMatch() {

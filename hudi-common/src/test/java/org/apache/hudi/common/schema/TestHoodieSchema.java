@@ -76,7 +76,7 @@ public class TestHoodieSchema {
           + "}";
 
   // The Blob schema is persisted in the table schema of every BLOB table, so its serialized shape is pinned literally.
-  private static final String BLOB_SCHEMA_JSON = "{\"type\":\"record\",\"name\":\"blob\",\"fields\":["
+  private static final String EXPECTED_BLOB_SCHEMA_JSON = "{\"type\":\"record\",\"name\":\"blob\",\"fields\":["
       + "{\"name\":\"type\",\"type\":{\"type\":\"enum\",\"name\":\"blob_storage_type\",\"symbols\":[\"INLINE\",\"OUT_OF_LINE\"]}},"
       + "{\"name\":\"data\",\"type\":[\"null\",\"bytes\"],\"default\":null},"
       + "{\"name\":\"reference\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"reference\",\"fields\":["
@@ -2566,7 +2566,7 @@ public class TestHoodieSchema {
 
     // Enum symbols, null-first unions, the null defaults on data/reference (and none on offset/length),
     // the reference record name and the blob logical type, pinned as the persisted string.
-    assertEquals(BLOB_SCHEMA_JSON, blob.toAvroSchema().toString());
+    assertEquals(EXPECTED_BLOB_SCHEMA_JSON, blob.toAvroSchema().toString());
   }
 
   @Test

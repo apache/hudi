@@ -358,10 +358,12 @@ public class HoodieSchemaCompatibilityChecker {
           case DECIMAL:
             return result.mergedWith(typeMismatch(reader, writer, locations));
           // TIMESTAMP over LONG and UUID over STRING are reader/writer compatibility rules only. They are deliberately
-          // absent from HoodieSchemaTypePromotion: the projection checker must not treat a bare long as a compatible
-          // projection of a timestamp, or writer-schema deduction (HoodieSchemaUtils.scala) would silently drop the
-          // logical type. The deduction that produces a TIMESTAMP-reader / LONG-writer pair is gated per field by
-          // hoodie.write.timestamp.logical.type.overrides (#19384); this checker accepts the pair once produced.
+          // absent from HoodieSchemaTypePromotion: isCompatibleProjectionOf(source, target) tests
+          // canPromote(target, source), so the entry would make a timestamp a compatible projection of a bare long,
+          // and writer-schema deduction (HoodieSchemaUtils.scala) would then keep the table's long as the writer
+          // schema and silently drop the logical type. The deduction that produces a TIMESTAMP-reader / LONG-writer
+          // pair is gated per field by hoodie.write.timestamp.logical.type.overrides (#19384); this checker accepts
+          // the pair once produced.
           case TIMESTAMP:
             return (writer.getType() == HoodieSchemaType.LONG) ? result : result.mergedWith(typeMismatch(reader, writer, locations));
           case UUID:
