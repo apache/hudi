@@ -333,10 +333,21 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
         log.warn("Error closing HiveDriverPool", e);
       }
     });
-    if (metaStoreClient != null) {
-      Hive.closeCurrent();
+    // The session goes before this thread's Hive is cleared. SessionState.close() reaches for that
+    // Hive to uncache DataNucleus class loaders, and finds it gone if we clear it first, so it
+    // opens a metastore connection of its own to do the lookup -- a connect, and retries against a
+    // metastore that is down, in the middle of a teardown. Left in place, the session reuses the
+    // client the Driver has been using and closes it on the way out, since SessionState.close()
+    // ends in Hive.closeCurrent() itself. That leaves the call below as the one that clears this
+    // thread when there was no session to do it, and in a finally so a failed teardown cannot
+    // strand the client here either.
+    try {
+      closeDriverAndSession();
+    } finally {
+      if (metaStoreClient != null) {
+        Hive.closeCurrent();
+      }
     }
-    closeDriverAndSession();
   }
 
   /**

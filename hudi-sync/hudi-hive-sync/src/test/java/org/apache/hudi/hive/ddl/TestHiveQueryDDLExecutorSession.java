@@ -27,12 +27,14 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.ql.Driver;
+import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.InOrder;
+import org.mockito.MockedStatic;
 
 import java.io.File;
 import java.lang.reflect.Field;
@@ -45,6 +47,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -57,6 +60,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -223,6 +227,39 @@ class TestHiveQueryDDLExecutorSession {
         "Driver teardown must run under the session that owns the Driver");
     assertSame(otherSession, SessionState.get(), "The session attached before close() must be put back");
     verify(otherSession, never()).close();
+  }
+
+  /**
+   * SessionState.close() reaches for this thread's Hive to uncache DataNucleus class loaders, and
+   * ends by clearing that thread local itself. Clearing it first therefore costs a metastore
+   * connection: the session opens one of its own just to do that lookup, in the middle of a
+   * teardown, where a metastore that is down turns the lookup into a retry loop.
+   */
+  @Test
+  void theThreadLocalHiveOutlastsTheSessionThatReachesForIt() throws Exception {
+    Driver driver = mock(Driver.class);
+    SessionState sessionState = mock(SessionState.class);
+    HiveQueryDDLExecutor executor = executorWith(driver, sessionState);
+    setField(executor, "metaStoreClient", mock(IMetaStoreClient.class));
+    AtomicBoolean sessionClosed = new AtomicBoolean();
+    doAnswer(invocation -> {
+      sessionClosed.set(true);
+      return null;
+    }).when(sessionState).close();
+
+    try (MockedStatic<Hive> hive = mockStatic(Hive.class)) {
+      AtomicBoolean sessionWasClosedFirst = new AtomicBoolean();
+      hive.when(Hive::closeCurrent)
+          .thenAnswer(invocation -> {
+            sessionWasClosedFirst.set(sessionClosed.get());
+            return null;
+          });
+
+      executor.close();
+
+      assertTrue(sessionWasClosedFirst.get(),
+          "The session must be closed while the Hive it reaches for is still on the thread");
+    }
   }
 
   /**
