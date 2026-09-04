@@ -165,6 +165,7 @@ public class TestHoodieInternalRowParquetWriter extends HoodieSparkClientTestHar
   }
 
   /** Builds the write support for the given writer schema and returns the Parquet timestamp unit it emits. */
+  @SuppressWarnings("deprecation")
   private LogicalTypeAnnotation.TimeUnit timestampUnitOf(String avroSchemaJson, String outputTimestampType) {
     StructType structType = new StructType().add("ts", DataTypes.TimestampType, false);
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()

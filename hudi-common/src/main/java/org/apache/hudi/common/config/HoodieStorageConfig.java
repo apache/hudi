@@ -662,6 +662,12 @@ public class HoodieStorageConfig extends HoodieConfig {
       return this;
     }
 
+    /**
+     * @deprecated since 1.1.0; the config has no effect. Both the Spark row writer and the Avro
+     *     Parquet writer take the Parquet timestamp unit from the writer schema's logical type, so
+     *     declare the precision in the writer schema instead.
+     */
+    @Deprecated
     public Builder parquetOutputTimestampType(String parquetOutputTimestampType) {
       storageConfig.setValue(PARQUET_OUTPUT_TIMESTAMP_TYPE, parquetOutputTimestampType);
       return this;
