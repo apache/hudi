@@ -226,10 +226,11 @@ class TestHiveQueryDDLExecutorSession {
   }
 
   /**
-   * A session that cannot be bound is still closed and the thread still handed back, but the
-   * Driver is left alone: it reads its session from the thread, so tearing it down here would
-   * clear another session's lineage and release our locks through its transaction manager. The
-   * caller hears about it, as it does for any other failure to close.
+   * A session that cannot be bound is still closed and the thread still handed back: Hive attaches
+   * the session before the part of the bind that can throw, so a failed bind leaves the thread
+   * holding it until the close and the restore take it off. The Driver is left alone, since it
+   * reads its session from the thread and a half-applied bind promises nothing about what is
+   * there. The caller hears about it, as it does for any other failure to close.
    */
   @Test
   void sessionThatCannotBeBoundIsStillClosedAndNothingElseIsTouched() throws Exception {

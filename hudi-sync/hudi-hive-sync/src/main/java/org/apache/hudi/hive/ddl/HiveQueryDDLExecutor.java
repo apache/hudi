@@ -357,10 +357,11 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
     SessionState previousSession = SessionState.get();
     ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
     try {
-      // Inside the try so that a bind that fails still reaches the finally, which closes the
-      // session and gives the thread back. The Driver calls below are skipped in that case, by
-      // design: they act on the session the thread holds, so without ours bound they would clear
-      // another session's lineage and release our locks through its transaction manager. A null
+      // Inside the try so that a failed bind still reaches the finally, which is what repairs it:
+      // Hive attaches the session before the conf and class loader swap that can throw, so even a
+      // bind that fails leaves the thread holding ours, and only the close and restore below take
+      // it back off. The Driver calls are skipped in that case because they read their session
+      // from the thread, and a half-applied bind promises nothing about what is there. A null
       // session comes from the constructor's error path, where the session is what failed.
       if (sessionState != null) {
         SessionState.setCurrentSessionState(sessionState);
