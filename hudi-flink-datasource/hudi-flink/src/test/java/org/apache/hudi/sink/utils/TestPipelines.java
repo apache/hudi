@@ -106,6 +106,53 @@ public class TestPipelines {
   }
 
   @Test
+  void testBoundedGlobalRLISkipsBootstrapOperator() {
+    // Global RLI bucket assignment queries the metadata table directly, so the generic
+    // index-bootstrap step (which loads existing keys into state for the default bucket
+    // assigner) must not be wired in for bounded/batch execution.
+    Configuration conf = defaultConf();
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, false);
+    DataStream<RowData> input = rowDataInput();
+
+    DataStream<HoodieFlinkInternalRow> bounded =
+        Pipelines.bootstrap(conf, TestConfigurations.ROW_TYPE, input, true, false);
+
+    assertEquals("row_data_to_hoodie_record", bounded.getTransformation().getName());
+  }
+
+  @Test
+  void testBoundedPartitionedRLISkipsBootstrapOperator() {
+    // Partitioned (non-global) RLI is routed to the DynamicBucketAssignOperator, which also
+    // looks up the record index directly rather than consuming bootstrapped state, so it must
+    // be treated the same as global RLI and skip the generic bootstrap operator when bounded.
+    Configuration conf = defaultConf();
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, false);
+    DataStream<RowData> input = rowDataInput();
+
+    DataStream<HoodieFlinkInternalRow> bounded =
+        Pipelines.bootstrap(conf, TestConfigurations.ROW_TYPE, input, true, false);
+
+    assertEquals("row_data_to_hoodie_record", bounded.getTransformation().getName());
+  }
+
+  @Test
+  void testBoundedPartitionedRLIStillBootstrapsWhenExplicitlyEnabled() {
+    // INDEX_BOOTSTRAP_ENABLED is an explicit override and must still wire in the bootstrap
+    // operator even for RLI index types.
+    Configuration conf = defaultConf();
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+    DataStream<RowData> input = rowDataInput();
+
+    DataStream<HoodieFlinkInternalRow> bounded =
+        Pipelines.bootstrap(conf, TestConfigurations.ROW_TYPE, input, true, false);
+
+    assertEquals("index_bootstrap", bounded.getTransformation().getName());
+  }
+
+  @Test
   void testPartitionedRLIWithRocksDBBackendUsesPartitionedRLIBootstrapOperator() {
     // HoodieTableFactory no longer forces INDEX_BOOTSTRAP_ENABLED to false for RECORD_LEVEL_INDEX,
     // so a user that wants time-bounded RLI bootstrap sets the flag explicitly alongside the
