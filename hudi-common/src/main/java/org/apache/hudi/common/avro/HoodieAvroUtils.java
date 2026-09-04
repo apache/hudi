@@ -994,7 +994,7 @@ public class HoodieAvroUtils {
    * @param record  Hoodie record.
    * @param columns Names of the columns to get values.
    * @param schema  {@link HoodieSchema} instance.
-   * @return Column value.
+   * @return the column values, in the order of {@code columns}.
    */
   public static Object[] getRecordColumnValues(HoodieRecord record,
                                                String[] columns,
@@ -1020,7 +1020,7 @@ public class HoodieAvroUtils {
    * @param record  Hoodie record.
    * @param columns Names of the columns to get values.
    * @param schema  {@link HoodieSchema} instance.
-   * @return Column value.
+   * @return the column values, in the order of {@code columns}.
    */
   public static Object[] getSortColumnValuesWithPartitionPathAndRecordKey(HoodieRecord record,
                                                                           String[] columns,

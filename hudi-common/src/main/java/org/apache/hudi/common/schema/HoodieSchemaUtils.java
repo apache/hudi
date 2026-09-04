@@ -68,6 +68,7 @@ import java.util.stream.Stream;
  *       {@link #toJavaDefaultValue(HoodieSchemaField)}</li>
  *   <li>nullability: {@link #asNullable(HoodieSchema)}</li>
  *   <li>naming: {@link #sanitizeName(String)}, {@link #getRecordQualifiedName(String)}</li>
+ *   <li>error text: {@link #createSchemaErrorString(String, HoodieSchema, HoodieSchema)}</li>
  *   <li>lookups and predicates that need more than {@link HoodieSchema} offers on its own:
  *       {@link #findNestedField(HoodieSchema, String)}, {@link #findMissingFields(HoodieSchema, HoodieSchema)},
  *       {@link #resolveUnionSchema(HoodieSchema, String)}, {@link #hasDecimalField(HoodieSchema)}</li>
@@ -963,6 +964,15 @@ public final class HoodieSchemaUtils {
     return INVALID_AVRO_CHARS_IN_NAMES_PATTERN.matcher(name).replaceAll(invalidCharMask);
   }
 
+  /**
+   * Formats a schema error with the writer and table schemas appended on their own lines, so callers
+   * throwing {@code SchemaCompatibilityException} report both sides in a consistent shape.
+   *
+   * @param errorMessage the message to lead with
+   * @param writerSchema the incoming writer schema
+   * @param tableSchema  the current table schema
+   * @return the message followed by both schemas, one per line
+   */
   public static String createSchemaErrorString(String errorMessage, HoodieSchema writerSchema, HoodieSchema tableSchema) {
     return String.format("%s\nwriterSchema: %s\ntableSchema: %s", errorMessage, writerSchema, tableSchema);
   }
