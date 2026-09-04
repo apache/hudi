@@ -86,8 +86,10 @@ import java.util.stream.Stream;
  *
  * <p>A couple of methods here still delegate to Avro-typed implementations
  * ({@link #projectSchema(HoodieSchema, List)} and the 5-arg
- * {@link #createNewSchemaField(String, HoodieSchema, String, Object, HoodieFieldOrder)}). Those delegations
- * are being retired under #16639; new methods must be implemented on HoodieSchema directly.</p>
+ * {@link #createNewSchemaField(String, HoodieSchema, String, Object, HoodieFieldOrder)}). An internal
+ * toAvroSchema/fromAvroSchema hop is not one of the conversion boundaries RFC-99 allows (memory to disk,
+ * disk to memory, engine boundary), so those delegations are being retired under #14263; new methods must
+ * be implemented on HoodieSchema directly. Where a helper belongs, by contrast, is #16639.</p>
  *
  * @since 1.2.0
  */
@@ -411,7 +413,7 @@ public final class HoodieSchemaUtils {
    * Alias of {@link HoodieSchemaField#of(String, HoodieSchema, String, Object, HoodieFieldOrder)} with
    * argument validation. Prefer {@code HoodieSchemaField.of} directly in new code; this overload still
    * round-trips through the Avro-typed {@code HoodieAvroUtils#createNewSchemaField} and is being retired
-   * under #16639.
+   * under #14263.
    *
    * @param name         field name
    * @param schema       field schema
