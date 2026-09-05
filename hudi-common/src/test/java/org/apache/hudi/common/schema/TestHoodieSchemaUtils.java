@@ -880,6 +880,52 @@ public class TestHoodieSchemaUtils {
   }
 
   @Test
+  void testPruningPreservesMultiBranchUnion() {
+    // A field typed ["null", "string", "int"] reaches the pruner as a union even after the null branch
+    // is stripped. A union branch is picked by type, so there is nothing to narrow: the pruner must pass
+    // the data schema through rather than reject it (#19825).
+    HoodieSchema unionSchema = HoodieSchema.createUnion(
+        HoodieSchema.create(HoodieSchemaType.NULL),
+        HoodieSchema.create(HoodieSchemaType.STRING),
+        HoodieSchema.create(HoodieSchemaType.INT));
+    HoodieSchema dataSchema = HoodieSchema.createRecord("test_record", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.LONG)),
+        HoodieSchemaField.of("choice", unionSchema)
+    ));
+    HoodieSchema requiredSchema = HoodieSchema.createRecord("test_record", null, null, Collections.singletonList(
+        HoodieSchemaField.of("choice", unionSchema)
+    ));
+
+    HoodieSchema pruned = HoodieSchemaUtils.pruneDataSchema(dataSchema, requiredSchema, Collections.emptySet());
+
+    assertEquals(1, pruned.getFields().size());
+    assertEquals(unionSchema, pruned.getFields().get(0).schema());
+  }
+
+  @Test
+  void testPruningPreservesRecordWhenRequiredIsMemberUnion() {
+    // HoodieSparkSchemaConverters reads a struct of nullable member0..memberN fields back as a union, so
+    // the Spark-side required schema can be a union where the data schema still holds the record it was
+    // written from. The pruner must pass the record through instead of rejecting the mismatch (#19825).
+    HoodieSchema memberRecord = HoodieSchema.createRecord("choice", null, null, Arrays.asList(
+        HoodieSchemaField.of("member0", HoodieSchema.createNullable(HoodieSchemaType.STRING), null, null),
+        HoodieSchemaField.of("member1", HoodieSchema.createNullable(HoodieSchemaType.INT), null, null)
+    ));
+    HoodieSchema dataSchema = HoodieSchema.createRecord("test_record", null, null, Collections.singletonList(
+        HoodieSchemaField.of("choice", memberRecord)
+    ));
+    HoodieSchema requiredSchema = HoodieSchema.createRecord("test_record", null, null, Collections.singletonList(
+        HoodieSchemaField.of("choice", HoodieSchema.createUnion(
+            HoodieSchema.create(HoodieSchemaType.STRING),
+            HoodieSchema.create(HoodieSchemaType.INT)))
+    ));
+
+    HoodieSchema pruned = HoodieSchemaUtils.pruneDataSchema(dataSchema, requiredSchema, Collections.emptySet());
+
+    assertEquals(memberRecord, pruned.getFields().get(0).schema());
+  }
+
+  @Test
   void testPruningPreserveNullable() {
     String dataSchemaStr = "{"
         + "\"type\": \"record\","
@@ -1153,6 +1199,20 @@ public class TestHoodieSchemaUtils {
   }
 
   @Test
+  public void testFindNestedFieldThroughMultiBranchUnion() {
+    // A field typed ["null", "string", "int"] has no record to descend into and used to recurse forever (#19825)
+    HoodieSchema schema = HoodieSchema.createRecord("record", null, null, false,
+        Collections.singletonList(
+            HoodieSchemaField.of("u", HoodieSchema.createUnion(
+                HoodieSchema.create(HoodieSchemaType.NULL),
+                HoodieSchema.create(HoodieSchemaType.STRING),
+                HoodieSchema.create(HoodieSchemaType.INT)), null, null)
+        ));
+    assertTrue(HoodieSchemaUtils.findNestedField(schema, "u").isPresent());
+    assertFalse(HoodieSchemaUtils.findNestedField(schema, "u.x").isPresent());
+  }
+
+  @Test
   public void testCreateNewSchemaFromFieldsWithReference_NullSchema() {
     // This test should throw an IllegalArgumentException
     assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.createNewSchemaFromFieldsWithReference(null, Collections.emptyList()));
@@ -1361,6 +1421,26 @@ public class TestHoodieSchemaUtils {
             HoodieSchemaField.of("arrayfield", HoodieSchema.createArray(HoodieSchema.createDecimal(10, 6)), null, null)
         ));
     assertTrue(HoodieSchemaUtils.hasDecimalField(recordWithMapAndDecArray));
+    // Unions with two or more non-null branches used to recurse forever (#19825)
+    HoodieSchema recordWithMultiBranchUnions = HoodieSchema.createRecord("recordWithMultiBranchUnions", null, null, false,
+        Arrays.asList(
+            HoodieSchemaField.of("nullableStringOrInt", HoodieSchema.createUnion(
+                HoodieSchema.create(HoodieSchemaType.NULL),
+                HoodieSchema.create(HoodieSchemaType.STRING),
+                HoodieSchema.create(HoodieSchemaType.INT)), null, null),
+            HoodieSchemaField.of("stringOrInt", HoodieSchema.createUnion(
+                HoodieSchema.create(HoodieSchemaType.STRING),
+                HoodieSchema.create(HoodieSchemaType.INT)), null, null)
+        ));
+    assertFalse(HoodieSchemaUtils.hasDecimalField(recordWithMultiBranchUnions));
+    HoodieSchema recordWithDecimalInMultiBranchUnion = HoodieSchema.createRecord("recordWithDecimalInMultiBranchUnion", null, null, false,
+        Collections.singletonList(
+            HoodieSchemaField.of("nullableStringOrDecimal", HoodieSchema.createUnion(
+                HoodieSchema.create(HoodieSchemaType.NULL),
+                HoodieSchema.create(HoodieSchemaType.STRING),
+                HoodieSchema.createDecimal(10, 6)), null, null)
+        ));
+    assertTrue(HoodieSchemaUtils.hasDecimalField(recordWithDecimalInMultiBranchUnion));
   }
 
   @Test

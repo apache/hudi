@@ -209,6 +209,16 @@ public class TestInternalSchemaConverter {
     expectedOutput = getDeeplyNestedFieldSchemaExpectedColumnNames();
     assertEquals(expectedOutput.size(), fieldNames.size());
     assertTrue(fieldNames.containsAll(expectedOutput));
+
+    // A primitive union with two or more non-null branches is a leaf and used to recurse forever (#19825)
+    HoodieSchema schemaWithMultiBranchUnion = createRecord("schemaWithMultiBranchUnion",
+        HoodieSchemaField.of("field1", HoodieSchema.createUnion(
+            HoodieSchema.create(HoodieSchemaType.NULL),
+            HoodieSchema.create(HoodieSchemaType.STRING),
+            HoodieSchema.create(HoodieSchemaType.INT)), null, null),
+        createPrimitiveField("field2", HoodieSchemaType.STRING));
+    fieldNames = InternalSchemaConverter.collectColNamesFromSchema(schemaWithMultiBranchUnion);
+    assertEquals(Arrays.asList("field1", "field2"), fieldNames);
   }
 
   @Test

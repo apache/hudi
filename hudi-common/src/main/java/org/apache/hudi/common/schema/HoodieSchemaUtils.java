@@ -594,7 +594,12 @@ public final class HoodieSchemaUtils {
         return HoodieSchema.createMap(pruneDataSchema(dataSchema.getValueType(), requiredSchema.getValueType(), Collections.emptySet()));
 
       case UNION:
-        throw new IllegalArgumentException("Data schema is a union");
+        // A union is a leaf as far as pruning goes: Avro resolves a branch by its type, so dropping a
+        // branch changes the column's type instead of narrowing it. Hand back the data schema unpruned,
+        // which is what the default arm below already does when Spark projects a single member out of
+        // the member-struct encoding of a union. This also covers a plain record whose fields happen to
+        // be named member0..memberN, which HoodieSparkSchemaConverters reads back as a union.
+        return dataSchema;
 
       default:
         return dataSchema;
@@ -682,7 +687,12 @@ public final class HoodieSchemaUtils {
 
   private static Option<HoodieSchemaField> findNestedField(HoodieSchema schema, String[] fieldParts, int index) {
     if (schema.getType() == HoodieSchemaType.UNION) {
-      Option<HoodieSchemaField> notUnion = findNestedField(schema.getNonNullType(), fieldParts, index);
+      HoodieSchema nonNullSchema = schema.getNonNullType();
+      if (nonNullSchema.getType() == HoodieSchemaType.UNION) {
+        // A union with two or more non-null branches has no single record to descend into
+        return Option.empty();
+      }
+      Option<HoodieSchemaField> notUnion = findNestedField(nonNullSchema, fieldParts, index);
       if (!notUnion.isPresent()) {
         return Option.empty();
       }
@@ -820,6 +830,13 @@ public final class HoodieSchemaUtils {
     return "hoodie." + sanitizedTableName + "." + sanitizedTableName + "_record";
   }
 
+  /**
+   * Checks whether the schema is, or nests, a DECIMAL at any depth, descending through records, arrays,
+   * maps and every branch of a union.
+   *
+   * @param schema the schema to search
+   * @return true if a decimal type is found anywhere in the schema
+   */
   public static boolean hasDecimalField(HoodieSchema schema) {
     switch (schema.getType()) {
       case RECORD:
@@ -834,7 +851,7 @@ public final class HoodieSchemaUtils {
       case MAP:
         return hasDecimalField(schema.getValueType());
       case UNION:
-        return hasDecimalField(schema.getNonNullType());
+        return schema.getTypes().stream().anyMatch(HoodieSchemaUtils::hasDecimalField);
       case DECIMAL:
         return true;
       default:
