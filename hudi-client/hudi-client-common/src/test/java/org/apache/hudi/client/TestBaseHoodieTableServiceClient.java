@@ -190,12 +190,12 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     HoodieCleanMetadata metadata;
     if (generatesPlan) {
       HoodieCleanerPlan plan = new HoodieCleanerPlan();
-      when(mockTable.createCleanerPlan(any(), eq(Option.empty()))).thenReturn(Option.of(plan));
+      when(mockTable.createCleanerPlan(any(), any())).thenReturn(Option.of(plan));
       // create default clean metadata
       metadata = new HoodieCleanMetadata();
       when(mockTable.clean(any(), eq(cleanInstantTime))).thenReturn(metadata);
     } else {
-      when(mockTable.createCleanerPlan(any(), eq(Option.empty()))).thenReturn(Option.empty());
+      when(mockTable.createCleanerPlan(any(), any())).thenReturn(Option.empty());
       metadata = null;
     }
 
@@ -243,14 +243,14 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     when(mockTable.getActiveTimeline().getCleanerTimeline().filterInflightsAndRequested().firstInstant()).thenReturn(Option.of(inflightCleaning));
     // mock planning
     HoodieCleanerPlan plan = new HoodieCleanerPlan();
-    when(mockTable.createCleanerPlan(any(), eq(Option.empty()))).thenReturn(Option.of(plan));
+    when(mockTable.createCleanerPlan(any(), any())).thenReturn(Option.of(plan));
     // create default clean metadata
     HoodieCleanMetadata metadata = new HoodieCleanMetadata();
     when(mockTable.clean(any(), eq(cleanInstantTime))).thenReturn(metadata);
 
     TestTableServiceClient tableServiceClient = new TestTableServiceClient(writeConfig, Collections.singletonList(mockTable).iterator(), Option.empty(), expectedRollbackInfo,
         Collections.singletonList(cleanInstantTime).iterator());
-    assertEquals(metadata, tableServiceClient.clean(Option.empty(), true));
+    assertSame(metadata, tableServiceClient.clean(Option.empty(), true));
     verify(mockMetaClient).reloadActiveTimeline();
   }
 
