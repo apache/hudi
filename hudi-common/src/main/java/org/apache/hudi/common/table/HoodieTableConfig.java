@@ -300,11 +300,13 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<String> TIMELINE_HISTORY_PATH = ConfigProperty
       .key("hoodie.timeline.history.path")
       .defaultValue("history")
+      .sinceVersion("1.0.0")
       .withDocumentation("path under the meta folder, to store timeline history at.");
 
   public static final ConfigProperty<String> TIMELINE_PATH = ConfigProperty
       .key("hoodie.timeline.path")
       .defaultValue("timeline")
+      .sinceVersion("1.0.0")
       .withDocumentation("path under the meta folder, to store timeline instants at.");
 
   public static final ConfigProperty<Boolean> BOOTSTRAP_INDEX_ENABLE = ConfigProperty
