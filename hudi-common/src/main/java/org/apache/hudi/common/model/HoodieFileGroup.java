@@ -160,7 +160,9 @@ public class HoodieFileGroup implements Serializable {
       return false;
     }
 
-    return timeline.containsOrBeforeTimelineStarts(slice.getBaseInstantTime());
+    return timeline.containsOrBeforeTimelineStarts(slice.getBaseInstantTime())
+        || slice.getLogFiles()
+            .anyMatch(logFile -> timeline.containsOrBeforeTimelineStarts(logFile.getDeltaCommitTime()));
   }
 
   /**
