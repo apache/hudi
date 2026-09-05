@@ -39,6 +39,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
@@ -1046,13 +1047,39 @@ public class TestHoodieSchemaUtils {
     assertTrue(fieldNames1.contains("timestamp"));
 
     // Field names are matched case-insensitively; HiveHoodieReaderContext lowercases names before calling this.
-    HoodieSchema schema2 = HoodieSchemaUtils.generateProjectionSchema(originalSchema, Arrays.asList("_ROW_KEY"));
+    HoodieSchema schema2 = HoodieSchemaUtils.generateProjectionSchema(originalSchema, Arrays.asList("PII_COL"));
     assertEquals(1, schema2.getFields().size());
-    assertEquals("_row_key", schema2.getFields().get(0).name());
+    assertEquals("pii_col", schema2.getFields().get(0).name());
 
     Throwable caughtException = assertThrows(HoodieException.class, () ->
         HoodieSchemaUtils.generateProjectionSchema(originalSchema, Arrays.asList("_row_key", "timestamp", "fake_field")));
     assertTrue(caughtException.getMessage().contains("Field fake_field not found in log schema. Query cannot proceed!"));
+  }
+
+  @Test
+  public void testGenerateProjectionSchemaIgnoresDefaultLocale() {
+    // Under tr-TR, String#toLowerCase() maps an upper-case I to dotless-i (U+0131), so a default-locale lowercase
+    // on one side of the lookup and Locale.ROOT on the other (HiveHoodieReaderContext) cannot match for any name
+    // that contains an upper-case I. Surefire reuses one JVM across the module's tests, so the finally block below
+    // is what keeps the toggle from reaching any test that runs after this one.
+    Locale saved = Locale.getDefault();
+    Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+    try {
+      HoodieSchema originalSchema = HoodieSchema.parse(EXAMPLE_SCHEMA);
+      // Request upper-cased, schema lower-cased.
+      HoodieSchema projected = HoodieSchemaUtils.generateProjectionSchema(originalSchema, Arrays.asList("PII_COL"));
+      assertEquals(1, projected.getFields().size());
+      assertEquals("pii_col", projected.getFields().get(0).name());
+
+      // Schema upper-cased, request pre-lowercased with Locale.ROOT the way HiveHoodieReaderContext does it.
+      HoodieSchema upperCaseSchema = HoodieSchema.parse("{\"type\": \"record\",\"name\": \"rec\",\"fields\": ["
+          + "{\"name\": \"ID\", \"type\": \"string\"},{\"name\": \"value\", \"type\": \"int\"}]}");
+      HoodieSchema projectedUpper = HoodieSchemaUtils.generateProjectionSchema(upperCaseSchema, Arrays.asList("id"));
+      assertEquals(1, projectedUpper.getFields().size());
+      assertEquals("ID", projectedUpper.getFields().get(0).name());
+    } finally {
+      Locale.setDefault(saved);
+    }
   }
 
   @Test

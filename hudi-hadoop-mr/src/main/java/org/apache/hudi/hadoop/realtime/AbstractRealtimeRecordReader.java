@@ -194,7 +194,7 @@ public abstract class AbstractRealtimeRecordReader {
     List<HoodieSchemaField> hiveSchemaFields = new ArrayList<>();
 
     for (String columnName : hiveColumns) {
-      HoodieSchemaField field = schemaFieldsMap.get(columnName.toLowerCase());
+      HoodieSchemaField field = schemaFieldsMap.get(columnName.toLowerCase(Locale.ROOT));
 
       if (field != null) {
         hiveSchemaFields.add(HoodieSchemaUtils.createNewSchemaField(field));
