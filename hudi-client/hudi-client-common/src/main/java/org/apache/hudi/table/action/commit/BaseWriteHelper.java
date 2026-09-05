@@ -76,7 +76,7 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
         context.setJobStatus(this.getClass().getSimpleName(), "Tagging: " + table.getConfig().getTableName());
         taggedRecords = tag(dedupedRecords, context, table);
         if (shouldWriteUpdatesAsDeletesAndInserts(table, operationType)) {
-          taggedRecords = updatesAsDeletesAndInserts(taggedRecords, table);
+          taggedRecords = updatesAsDeletesAndInserts(taggedRecords, table, configuredShuffleParallelism);
         }
       }
 
@@ -104,9 +104,23 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
    * untagged insert of the new version, so the insert partitioner routes the new version to a file
    * group chosen for inserts. See {@link HoodieWriteConfig#WRITE_UPDATES_AS_DELETES_AND_INSERTS}.
    */
-  protected I updatesAsDeletesAndInserts(I taggedRecords, HoodieTable<T, I, K, O> table) {
+  protected I updatesAsDeletesAndInserts(I taggedRecords, HoodieTable<T, I, K, O> table, int configuredShuffleParallelism) {
     throw new HoodieNotSupportedException(
         HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key() + " is not supported by " + this.getClass().getName());
+  }
+
+  /**
+   * Picks the copy of a multi-tagged record whose location is the latest. Under this write mode a
+   * key moves file groups on every update and older file groups keep a tombstoned physical copy,
+   * so an index that scans base files can tag the incoming record once per copy; only the latest
+   * location is live.
+   */
+  protected static <T> HoodieRecord<T> latestLocation(HoodieRecord<T> left, HoodieRecord<T> right) {
+    String leftInstant =
+        left.isCurrentLocationKnown() ? left.getCurrentLocation().getInstantTime() : "";
+    String rightInstant =
+        right.isCurrentLocationKnown() ? right.getCurrentLocation().getInstantTime() : "";
+    return leftInstant.compareTo(rightInstant) >= 0 ? left : right;
   }
 
   public I combineOnCondition(

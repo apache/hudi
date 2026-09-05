@@ -20,6 +20,7 @@ package org.apache.hudi.client.functional;
 
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -154,6 +155,39 @@ public class TestHoodieJavaClientUpdatesAsDeletesAndInserts extends HoodieJavaCl
               "an updated record must be served from a new file group but came from " + fileName);
         }).count();
     assertEquals(50, updatedRecords);
+  }
+
+  @Test
+  public void testRepeatedUpdatesOfSameKeys() throws Exception {
+    HoodieWriteConfig config = buildConfig(true);
+    HoodieJavaWriteClient client = getHoodieWriteClient(config);
+
+    String commitTime = WriteClientTestUtils.createNewInstantTime();
+    insertBatch(config, client, commitTime, "000", 100, HoodieJavaWriteClient::insert,
+        false, false, 100, 100, 1, Option.empty(), INSTANT_GENERATOR);
+
+    // Update every key repeatedly: from the second round on, the base-file-scanning index finds
+    // each key in the tombstoned old file group as well as its current one, and only the latest
+    // location must be updated.
+    String prevCommitTime = commitTime;
+    for (int round = 2; round <= 4; round++) {
+      String updateTime = WriteClientTestUtils.createNewInstantTime();
+      List<WriteStatus> statuses = updateBatch(config, client, updateTime, prevCommitTime,
+          Option.of(Arrays.asList(prevCommitTime)), "000", 100, HoodieJavaWriteClient::upsert,
+          false, false, 100, 100, round, config.populateMetaFields(), INSTANT_GENERATOR);
+      long deletes = statuses.stream().mapToLong(status -> status.getStat().getNumDeletes()).sum();
+      long inserts = statuses.stream().mapToLong(status -> status.getStat().getNumInserts()).sum();
+      assertEquals(100, deletes, "each key must be deleted exactly once per round");
+      assertEquals(100, inserts, "each key must be re-inserted exactly once per round");
+
+      Map<String, GenericRecord> recordMap =
+          GenericRecordValidationTestUtils.getRecordsMap(config, storageConf, dataGen);
+      assertEquals(100, recordMap.size());
+      assertEquals(100, recordMap.values().stream()
+          .filter(r -> r.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString().equals(updateTime))
+          .count(), "every record must be served from the latest round");
+      prevCommitTime = updateTime;
+    }
   }
 
   @Test

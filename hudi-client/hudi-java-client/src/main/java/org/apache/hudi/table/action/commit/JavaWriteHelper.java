@@ -34,6 +34,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -62,12 +63,16 @@ public class JavaWriteHelper<T,R> extends BaseWriteHelper<T, List<HoodieRecord<T
 
   @Override
   protected List<HoodieRecord<T>> updatesAsDeletesAndInserts(List<HoodieRecord<T>> taggedRecords,
-                                                             HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table) {
+                                                             HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
+                                                             int configuredShuffleParallelism) {
     HoodieWriteConfig config = table.getConfig();
     TypedProperties props = config.getProps();
     final HoodieSchema schema = HoodieSchema.parse(config.getSchema());
     DeleteContext deleteContext = DeleteContext.fromRecordSchema(props, schema);
-    return taggedRecords.stream().flatMap(record -> {
+    Map<HoodieKey, HoodieRecord<T>> latestByKey = new LinkedHashMap<>();
+    taggedRecords.forEach(
+        record -> latestByKey.merge(record.getKey(), record, JavaWriteHelper::latestLocation));
+    return latestByKey.values().stream().flatMap(record -> {
       if (!record.isCurrentLocationKnown() || record.isDelete(deleteContext, props)) {
         return Stream.of(record);
       }

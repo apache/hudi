@@ -61,20 +61,28 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
 
   @Override
   protected HoodieData<HoodieRecord<T>> updatesAsDeletesAndInserts(HoodieData<HoodieRecord<T>> taggedRecords,
-                                                                   HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table) {
+                                                                   HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table,
+                                                                   int configuredShuffleParallelism) {
     HoodieWriteConfig config = table.getConfig();
     TypedProperties props = config.getProps();
     final HoodieSchema schema = HoodieSchema.parse(config.getSchema());
     DeleteContext deleteContext = DeleteContext.fromRecordSchema(props, schema);
-    return taggedRecords.flatMap(record -> {
-      if (!record.isCurrentLocationKnown() || record.isDelete(deleteContext, props)) {
-        return Collections.singletonList(record).iterator();
-      }
-      HoodieRecord<T> deleteRecord = HoodieDeleteHelper.createDeleteRecord(config, record.getKey());
-      deleteRecord.setIgnoreIndexUpdate(true);
-      HoodieIndexUtils.tagRecord(deleteRecord, record.getCurrentLocation());
-      return Arrays.asList(deleteRecord, record.newInstance(record.getKey())).iterator();
-    });
+    int parallelism = deduceShuffleParallelism(taggedRecords, configuredShuffleParallelism);
+    return taggedRecords
+        // NOTE: the incoming record may hold an instance of [[InternalRow]] pointing into a
+        //       shared, mutable buffer, so it has to be copied before the shuffle
+        .mapToPair(record -> Pair.of(record.getKey(), record.copy()))
+        .reduceByKey(HoodieWriteHelper::latestLocation, parallelism)
+        .map(Pair::getRight)
+        .flatMap(record -> {
+          if (!record.isCurrentLocationKnown() || record.isDelete(deleteContext, props)) {
+            return Collections.singletonList(record).iterator();
+          }
+          HoodieRecord<T> deleteRecord = HoodieDeleteHelper.createDeleteRecord(config, record.getKey());
+          deleteRecord.setIgnoreIndexUpdate(true);
+          HoodieIndexUtils.tagRecord(deleteRecord, record.getCurrentLocation());
+          return Arrays.asList(deleteRecord, record.newInstance(record.getKey())).iterator();
+        });
   }
 
   @Override
