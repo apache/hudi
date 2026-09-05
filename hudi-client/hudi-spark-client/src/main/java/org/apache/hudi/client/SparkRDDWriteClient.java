@@ -80,9 +80,22 @@ public class SparkRDDWriteClient<T> extends
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig,
                              Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService, SparkUpgradeDowngradeHelper.getInstance());
-    DistributedRegistryUtil.createWrapperFileSystemRegistries(context, writeConfig);
-    this.tableServiceClient = new SparkRDDTableServiceClient<T>(context, writeConfig, getTimelineServer());
-    checkSpeculativeExecution();
+    try {
+      DistributedRegistryUtil.createWrapperFileSystemRegistries(context, writeConfig);
+      this.tableServiceClient = new SparkRDDTableServiceClient<T>(context, writeConfig, getTimelineServer());
+      // The speculative-execution guardrail throws from here, after the base client is fully built.
+      checkSpeculativeExecution();
+    } catch (RuntimeException | Error e) {
+      if (this.tableServiceClient != null) {
+        try {
+          this.tableServiceClient.close();
+        } catch (Exception closeFailure) {
+          e.addSuppressed(closeFailure);
+        }
+      }
+      releaseAfterFailedInit(e);
+      throw e;
+    }
   }
 
   @Override

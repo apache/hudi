@@ -18,9 +18,11 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.callback.HoodieClientInitCallback;
 import org.apache.hudi.callback.common.WriteStatusValidator;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.transaction.TransactionManager;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -80,10 +82,13 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorage
 import static org.apache.hudi.testutils.Assertions.assertComplexKeyGeneratorValidationThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -562,6 +567,132 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     inOrder.verify(transactionManager).endStateChange(Option.of(expectedInstant));
   }
 
+
+  /**
+   * close() releases several independent resources in sequence. An index that fails to close must
+   * not stop the table service client behind it from being released.
+   */
+  @Test
+  void testCloseReleasesLaterResourcesWhenAnEarlierCloseFails() throws IOException {
+    initMetaClient();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withStorageType(FileSystemViewStorageType.MEMORY)
+            .build())
+        .build();
+
+    HoodieIndex<?, ?> failingIndex = mock(HoodieIndex.class);
+    RuntimeException indexFailure = new RuntimeException("index is wedged");
+    doThrow(indexFailure).when(failingIndex).close();
+
+    TransactionManager transactionManager = mock(TransactionManager.class);
+    TimeGenerator timeGenerator = mock(TimeGenerator.class);
+    HoodieTable<String, String, String, String> table = mock(HoodieTable.class);
+    BaseHoodieTableServiceClient<String, String, String> tableServiceClient = mock(BaseHoodieTableServiceClient.class);
+
+    TestWriteClient writeClient =
+        new TestWriteClient(writeConfig, table, Option.empty(), tableServiceClient, transactionManager, timeGenerator) {
+          @Override
+          protected HoodieIndex<?, ?> createIndex(HoodieWriteConfig config) {
+            return failingIndex;
+          }
+        };
+
+    RuntimeException thrown = assertThrows(RuntimeException.class, writeClient::close);
+    assertSame(indexFailure, thrown);
+
+    // the resource behind the failing index is released anyway
+    verify(tableServiceClient).close();
+    verify(transactionManager).close();
+  }
+
+  /**
+   * A failure part way through the base close() chain must not stop the transaction manager, which
+   * holds the write lock, from being released.
+   */
+  @Test
+  void testCloseReleasesTransactionManagerWhenAnEarlierBaseStepFails() throws IOException {
+    initMetaClient();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withEmbeddedTimelineServerEnabled(false)
+        .build();
+
+    HoodieLocalEngineContext context = spy(new HoodieLocalEngineContext(getDefaultStorageConf()));
+    RuntimeException jobStatusFailure = new RuntimeException("job status is wedged");
+    doThrow(jobStatusFailure).when(context).setJobStatus("", "");
+
+    TransactionManager transactionManager = mock(TransactionManager.class);
+    TimeGenerator timeGenerator = mock(TimeGenerator.class);
+    TestWriteClient writeClient = new TestWriteClient(context, writeConfig, mock(HoodieTable.class), Option.empty(),
+        mock(BaseHoodieTableServiceClient.class), transactionManager, timeGenerator);
+
+    RuntimeException thrown = assertThrows(RuntimeException.class, writeClient::close);
+    assertSame(jobStatusFailure, thrown);
+
+    verify(transactionManager).close();
+  }
+
+  /**
+   * When a client init callback throws, the constructor never returns, so no caller can reach close().
+   * Whatever the constructor already started has to be released before the exception leaves it.
+   */
+  @Test
+  void testResourcesAreReleasedWhenClientInitCallbackFails() throws IOException {
+    initMetaClient();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withEmbeddedTimelineServerEnabled(false)
+        .withClientInitCallbackClassNames(ThrowingClientInitCallback.class.getName())
+        .build();
+
+    TransactionManager transactionManager = mock(TransactionManager.class);
+    TimeGenerator timeGenerator = mock(TimeGenerator.class);
+
+    assertThrows(HoodieException.class, () -> new TestWriteClient(writeConfig, mock(HoodieTable.class), Option.empty(),
+        mock(BaseHoodieTableServiceClient.class), transactionManager, timeGenerator));
+
+    verify(transactionManager).close();
+  }
+
+  /**
+   * The base constructor returns before the subclass constructor body runs, so its resources are
+   * already live while close() is still unreachable. Whatever the subclass does next has to release
+   * them if it throws.
+   */
+  @Test
+  void testResourcesAreReleasedWhenSubclassConstructionFails() throws IOException {
+    initMetaClient();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withEmbeddedTimelineServerEnabled(false)
+        .build();
+
+    TransactionManager transactionManager = mock(TransactionManager.class);
+    TimeGenerator timeGenerator = mock(TimeGenerator.class);
+    RuntimeException indexFailure = new RuntimeException("index cannot be created");
+
+    RuntimeException thrown = assertThrows(RuntimeException.class,
+        () -> new TestWriteClient(writeConfig, mock(HoodieTable.class), Option.empty(),
+            mock(BaseHoodieTableServiceClient.class), transactionManager, timeGenerator) {
+              @Override
+              protected HoodieIndex<?, ?> createIndex(HoodieWriteConfig config) {
+                throw indexFailure;
+              }
+            });
+    assertSame(indexFailure, thrown);
+
+    verify(transactionManager).close();
+  }
+
+  public static class ThrowingClientInitCallback implements HoodieClientInitCallback {
+    @Override
+    public void call(BaseHoodieClient hoodieClient) {
+      throw new HoodieException("init callback failed");
+    }
+  }
+
   private static class TestWriteClient extends BaseHoodieWriteClient<String, String, String, String> {
     private final HoodieTable<String, String, String, String> table;
 
@@ -575,6 +706,14 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     public TestWriteClient(HoodieWriteConfig writeConfig, HoodieTable<String, String, String, String> table, Option<EmbeddedTimelineService> timelineService,
                            BaseHoodieTableServiceClient<String, String, String> tableServiceClient, TransactionManager transactionManager, TimeGenerator timeGenerator) {
       super(new HoodieLocalEngineContext(getDefaultStorageConf()), writeConfig, timelineService, null, transactionManager, timeGenerator);
+      this.table = table;
+      this.tableServiceClient = tableServiceClient;
+    }
+
+    public TestWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig, HoodieTable<String, String, String, String> table,
+                           Option<EmbeddedTimelineService> timelineService, BaseHoodieTableServiceClient<String, String, String> tableServiceClient,
+                           TransactionManager transactionManager, TimeGenerator timeGenerator) {
+      super(context, writeConfig, timelineService, null, transactionManager, timeGenerator);
       this.table = table;
       this.tableServiceClient = tableServiceClient;
     }
