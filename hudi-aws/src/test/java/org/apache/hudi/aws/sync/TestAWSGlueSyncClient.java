@@ -23,6 +23,7 @@ import org.apache.hudi.aws.testutils.GlueTestUtil;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.GlueCatalogSyncClientConfig;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.SchemaDifference;
@@ -73,6 +74,7 @@ import software.amazon.awssdk.services.glue.model.PartitionError;
 import software.amazon.awssdk.services.glue.model.SerDeInfo;
 import software.amazon.awssdk.services.glue.model.StorageDescriptor;
 import software.amazon.awssdk.services.glue.model.Table;
+import software.amazon.awssdk.services.glue.model.TableInput;
 import software.amazon.awssdk.services.glue.model.TagResourceRequest;
 import software.amazon.awssdk.services.glue.model.TagResourceResponse;
 import software.amazon.awssdk.services.glue.model.UpdateTableRequest;
@@ -86,6 +88,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -99,6 +102,8 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NA
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -205,6 +210,47 @@ class TestAWSGlueSyncClient {
     verify(mockAwsGlue, times(1)).createTable(any(CreateTableRequest.class));
   }
 
+  /**
+   * Thread on #19488: HiveSyncTool.syncHoodieTable runs syncFirstTime without syncSchema, so a table
+   * created with empty comments would only pick them up on the second sync. createTable therefore has to
+   * carry the docs itself, gated on hoodie.datasource.hive_sync.sync_comment.
+   */
+  @Test
+  void testCreateTableCarriesColumnCommentsOnTheFirstSync() {
+    String tableName = "testTable";
+    HoodieSchema storageSchema = GlueTestUtil.getSimpleSchema();
+    Mockito.when(mockAwsGlue.getTable(any(GetTableRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(GetTableResponse.builder().build()));
+    Mockito.when(mockAwsGlue.createTable(any(CreateTableRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(CreateTableResponse.builder().build()));
+
+    awsGlueSyncClient.createOrReplaceTable(tableName, storageSchema, "inputFormat", "outputFormat", "serde",
+        new HashMap<>(), new HashMap<>());
+
+    ArgumentCaptor<CreateTableRequest> captor = ArgumentCaptor.forClass(CreateTableRequest.class);
+    verify(mockAwsGlue, times(1)).createTable(captor.capture());
+    Map<String, String> commentsByName = captor.getValue().tableInput().storageDescriptor().columns().stream()
+        .collect(HashMap::new, (m, c) -> m.put(c.name(), c.comment()), HashMap::putAll);
+    assertEquals(GlueTestUtil.NAME_FIELD_DOC, commentsByName.get("name"),
+        "a column whose Avro field carries a doc must be created with that comment");
+    assertEquals("", commentsByName.get("id"), "a column with no doc keeps an empty comment");
+  }
+
+  /**
+   * getStorageFieldSchemas is what actually sources the comments the sync applies, from the Avro doc on the
+   * table schema. Every other test hand-builds its FieldSchemas, so this is the only place a real doc is read.
+   */
+  @Test
+  void testGetStorageFieldSchemasSurfacesTheAvroDoc() {
+    List<FieldSchema> fields = awsGlueSyncClient.getStorageFieldSchemas();
+
+    Map<String, Option<String>> docsByName = fields.stream()
+        .collect(HashMap::new, (m, f) -> m.put(f.getName(), f.getComment()), HashMap::putAll);
+    assertEquals(GlueTestUtil.NAME_FIELD_DOC, docsByName.get("name").get(),
+        "the Avro doc on the table schema must reach the sync as a field comment");
+    assertFalse(docsByName.get("id").isPresent(), "a field with no doc must surface no comment");
+  }
+
   @Test
   void testDropTable() {
     DeleteTableResponse response = DeleteTableResponse.builder().build();
@@ -256,6 +302,182 @@ class TestAWSGlueSyncClient {
     assertEquals("age", fields.get(1).getName(), "glue table second column should be age");
     assertEquals("int", fields.get(1).getType(), "glue table second column type should be int");
     assertEquals("person's age", fields.get(1).getComment().get(), "glue table second column comment should person's age");
+  }
+
+  /**
+   * End to end through {@code updateTableComments}: the Glue table holds no comments, the storage schema has
+   * them, so it must apply them and report that it changed something. This is the path the bug actually broke
+   * - {@code setComments} discarded its rebuilt {@code Column}, so nothing was applied and the method always
+   * returned false. It also pins the second half of the fix: {@code StorageDescriptor} is immutable too, so
+   * rebuilding only the column list would still have sent a descriptor carrying no comments.
+   */
+  @Test
+  void testUpdateTableCommentsAppliesThemToColumnsAndPartitionKeys() throws Exception {
+    String tableName = "testTable";
+    List<Column> columns = Arrays.asList(GlueTestUtil.getColumn("name", "string", null),
+        GlueTestUtil.getColumn("age", "int", null));
+    List<Column> partitionKeys = Collections.singletonList(GlueTestUtil.getColumn("city", "string", null));
+    Mockito.when(mockAwsGlue.getTable(any(GetTableRequest.class)))
+        .thenReturn(getTableWithDefaultProps(tableName, columns, partitionKeys));
+    Mockito.when(mockAwsGlue.updateTable(any(UpdateTableRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(UpdateTableResponse.builder().build()));
+
+    List<FieldSchema> fromStorage = Arrays.asList(
+        new FieldSchema("name", "string", "person's name"),
+        new FieldSchema("age", "int", "person's age"),
+        new FieldSchema("city", "string", "person's city"));
+
+    assertTrue(awsGlueSyncClient.updateTableComments(tableName, Collections.emptyList(), fromStorage),
+        "applying comments the table does not have should report a change");
+
+    ArgumentCaptor<UpdateTableRequest> captor = ArgumentCaptor.forClass(UpdateTableRequest.class);
+    verify(mockAwsGlue, times(1)).updateTable(captor.capture());
+    // hoodie.datasource.meta.sync.glue.skip_table_archive defaults to true and the other update paths
+    // honour it; without this the comment sync would archive a Glue table version on every run.
+    assertTrue(captor.getValue().skipArchive(), "the comment sync must honour skip_table_archive");
+    TableInput sent = captor.getValue().tableInput();
+    assertEquals("person's name", sent.storageDescriptor().columns().get(0).comment(),
+        "the rebuilt storage descriptor must be the one sent, carrying the column comment");
+    assertEquals("person's age", sent.storageDescriptor().columns().get(1).comment());
+    assertEquals("person's city", sent.partitionKeys().get(0).comment(),
+        "partition column comments must be sent too");
+  }
+
+  /** The other direction: comments already matching the storage schema must not trigger an update call. */
+  @Test
+  void testUpdateTableCommentsIsANoOpWhenNothingChanges() throws Exception {
+    String tableName = "testTable";
+    List<Column> columns = Arrays.asList(GlueTestUtil.getColumn("name", "string", "person's name"),
+        GlueTestUtil.getColumn("age", "int", "person's age"));
+    List<Column> partitionKeys = Collections.singletonList(GlueTestUtil.getColumn("city", "string", "person's city"));
+    Mockito.when(mockAwsGlue.getTable(any(GetTableRequest.class)))
+        .thenReturn(getTableWithDefaultProps(tableName, columns, partitionKeys));
+
+    List<FieldSchema> fromStorage = Arrays.asList(
+        new FieldSchema("name", "string", "person's name"),
+        new FieldSchema("age", "int", "person's age"),
+        new FieldSchema("city", "string", "person's city"));
+
+    assertFalse(awsGlueSyncClient.updateTableComments(tableName, Collections.emptyList(), fromStorage),
+        "comments already matching the storage schema should not report a change");
+    verify(mockAwsGlue, never()).updateTable(any(UpdateTableRequest.class));
+  }
+
+  /**
+   * A Glue table can carry a storage descriptor whose column list was never set. SDK v2 returns an
+   * auto-construct list for that, and {@code hasColumns()} is false. Rebuilding the descriptor
+   * unconditionally would set an explicit empty list, flip {@code hasColumns()} to true and make the
+   * descriptor compare unequal to itself, reporting a change and sending an {@code updateTable} that
+   * changes nothing - on every sync, since the fetched table comes back the same way each time.
+   */
+  @Test
+  void testUpdateTableCommentsIsANoOpWhenTheTableHasNoColumns() {
+    String tableName = "testTable";
+    StorageDescriptor noColumns = StorageDescriptor.builder()
+        .serdeInfo(SerDeInfo.builder().serializationLibrary("serde").parameters(new HashMap<>()).build())
+        .inputFormat("inputFormat")
+        .location(glueSyncProps.getString(META_SYNC_BASE_PATH.key()))
+        .outputFormat("outputFormat")
+        .build();
+    assertFalse(noColumns.hasColumns(), "precondition: the column list must be unset, not empty");
+    Table table = Table.builder()
+        .name(tableName)
+        .tableType("COPY_ON_WRITE")
+        .parameters(new HashMap<>())
+        .storageDescriptor(noColumns)
+        .build();
+    Mockito.when(mockAwsGlue.getTable(any(GetTableRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(GetTableResponse.builder().table(table).build()));
+
+    assertFalse(awsGlueSyncClient.updateTableComments(tableName, Collections.emptyList(), Collections.emptyList()),
+        "a table with no columns has nothing to update, so it must not report a change");
+    verify(mockAwsGlue, never()).updateTable(any(UpdateTableRequest.class));
+  }
+
+  /**
+   * The bug this covers: {@code setComments} built a {@code Column} and dropped the result, so no comment
+   * was ever applied and {@code updateTableComments} always reported no change. AWS SDK v2 model classes are
+   * immutable, so the column has to be rebuilt and put back.
+   */
+  @Test
+  void testWithCommentsAppliesTheStorageComment() {
+    List<Column> columns = Arrays.asList(GlueTestUtil.getColumn("name", "string", null),
+        GlueTestUtil.getColumn("age", "int", "stale comment"),
+        GlueTestUtil.getColumn("city", "string", "person's city"));
+    Map<String, Option<String>> comments = new HashMap<>();
+    comments.put("name", Option.of("person's name"));
+    comments.put("age", Option.of("person's age"));
+    comments.put("city", Option.of("person's city"));
+
+    List<Column> updated = AWSGlueCatalogSyncClient.withComments(columns, comments);
+
+    assertEquals("person's name", updated.get(0).comment(), "a missing comment should be applied");
+    assertEquals("person's age", updated.get(1).comment(), "an out-of-date comment should be replaced");
+    assertSame(columns.get(2), updated.get(2), "an already-correct column should be returned as-is");
+    assertNull(columns.get(0).comment(), "the input columns must not be mutated");
+    assertEquals("stale comment", columns.get(1).comment(), "the input columns must not be mutated");
+  }
+
+  /**
+   * Hudi's own createTable writes {@code comment("")}, and a storage field with no doc yields null, so
+   * comparing the two directly would rebuild every doc-less column and send an updateTable whose only
+   * effect is swapping "" for null - one redundant write per table after each create or schema evolution.
+   */
+  @Test
+  void testWithCommentsTreatsAnEmptyCommentAndNoCommentAsTheSame() {
+    List<Column> columns = Arrays.asList(GlueTestUtil.getColumn("name", "string", ""),
+        GlueTestUtil.getColumn("age", "int", null));
+    Map<String, Option<String>> comments = new HashMap<>();
+    comments.put("name", Option.empty());
+    comments.put("age", Option.of(""));
+
+    List<Column> updated = AWSGlueCatalogSyncClient.withComments(columns, comments);
+
+    assertSame(columns.get(0), updated.get(0), "\"\" in the catalog and no doc in storage is not a change");
+    assertSame(columns.get(1), updated.get(1), "null in the catalog and an empty doc in storage is not a change");
+  }
+
+  /**
+   * Names are matched case-insensitively, as {@code HoodieHiveSyncClient.updateTableComments} does. A table
+   * created out of band with lowercased column names would otherwise never receive its comments.
+   */
+  @Test
+  void testWithCommentsMatchesNamesCaseInsensitively() {
+    List<Column> columns = Collections.singletonList(GlueTestUtil.getColumn("Name", "string", null));
+    Map<String, Option<String>> comments = new HashMap<>();
+    comments.put("name", Option.of("person's name"));
+
+    List<Column> updated = AWSGlueCatalogSyncClient.withComments(columns, comments);
+
+    assertEquals("person's name", updated.get(0).comment(),
+        "a catalog column differing only in case must still be matched");
+  }
+
+  @Test
+  void testWithCommentsClearsTheCommentOfAKnownColumnWithoutADoc() {
+    List<Column> columns = Collections.singletonList(GlueTestUtil.getColumn("name", "string", "old comment"));
+    Map<String, Option<String>> comments = new HashMap<>();
+    comments.put("name", Option.empty());
+
+    List<Column> updated = AWSGlueCatalogSyncClient.withComments(columns, comments);
+
+    assertNull(updated.get(0).comment(),
+        "the storage schema is authoritative for a column it knows, so its comment should be cleared");
+  }
+
+  /**
+   * A column the storage schema says nothing about is left alone rather than cleared - the storage field
+   * names keep the Avro schema's case while a catalog may hold them lowercased, so a name that fails to
+   * match must not silently wipe a comment. Matches {@code HMSDDLExecutor.applyFieldComments}.
+   */
+  @Test
+  void testWithCommentsLeavesColumnsTheStorageSchemaDoesNotKnowAlone() {
+    List<Column> columns = Collections.singletonList(GlueTestUtil.getColumn("myCol", "string", "keep me"));
+
+    List<Column> updated = AWSGlueCatalogSyncClient.withComments(columns, Collections.emptyMap());
+
+    assertEquals("keep me", updated.get(0).comment(), "an unknown column's comment must be preserved");
+    assertSame(columns.get(0), updated.get(0), "and the column should be returned as-is");
   }
 
   @Test
