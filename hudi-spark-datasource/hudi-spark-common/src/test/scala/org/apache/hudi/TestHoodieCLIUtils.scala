@@ -19,6 +19,11 @@
 
 package org.apache.hudi
 
+import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider
+import org.apache.hudi.common.config.HoodieCommonConfig
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.config.HoodieLockConfig
+
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
 
@@ -100,5 +105,34 @@ class TestHoodieCLIUtils {
     assertThrows(
       classOf[IllegalArgumentException],
       () => HoodieCLIUtils.extractOptions("   =v"))
+  }
+
+  @Test
+  def testGetLockOptionsSupportedSchemeReturnsFsLockConfig(): Unit = {
+    val tablePath = "/tmp/hudi/some_table"
+    // A null scheme is treated as supported; the FS lock provider must be auto-configured.
+    val opts = HoodieCLIUtils.getLockOptions(tablePath, null, Map.empty)
+    assertEquals(classOf[FileSystemBasedLockProvider].getName,
+      opts(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key))
+    // The lock path must live under the shared table metadata folder (not the .aux folder), so the
+    // lock is mutually exclusive across engines/tasks operating on the same table.
+    val lockPath = opts(HoodieLockConfig.FILESYSTEM_LOCK_PATH.key)
+    assertTrue(lockPath.startsWith(tablePath))
+    assertTrue(lockPath.endsWith(HoodieTableMetaClient.METAFOLDER_NAME))
+  }
+
+  @Test
+  def testGetLockOptionsUnsupportedSchemeReturnsEmpty(): Unit = {
+    // s3 is a known scheme without atomic-creation support, so no FS lock can be configured.
+    assertTrue(HoodieCLIUtils.getLockOptions("s3://bucket/table", "s3", Map.empty).isEmpty)
+  }
+
+  @Test
+  def testGetLockOptionsCustomAtomicSupportEnablesScheme(): Unit = {
+    // Opting s3 into hoodie.fs.atomic_creation.support makes the FS lock provider eligible again.
+    val params = Map(HoodieCommonConfig.HOODIE_FS_ATOMIC_CREATION_SUPPORT.key -> "s3")
+    val opts = HoodieCLIUtils.getLockOptions("s3://bucket/table", "s3", params)
+    assertEquals(classOf[FileSystemBasedLockProvider].getName,
+      opts(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key))
   }
 }

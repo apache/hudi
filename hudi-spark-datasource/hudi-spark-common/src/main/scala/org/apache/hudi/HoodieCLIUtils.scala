@@ -22,9 +22,10 @@ package org.apache.hudi
 import org.apache.hudi.avro.model.HoodieClusteringGroup
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider
-import org.apache.hudi.common.config.{HoodieCommonConfig, TypedProperties}
+import org.apache.hudi.common.config.HoodieCommonConfig
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.config.HoodieLockConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.StorageSchemes
 
@@ -36,8 +37,6 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.hudi.HoodieOptionConfig
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.filterHoodieConfigs
-
-import java.util.ArrayList
 
 import scala.collection.JavaConverters.{collectionAsScalaIterableConverter, mapAsJavaMapConverter, propertiesAsScalaMapConverter}
 
@@ -60,12 +59,25 @@ object HoodieCLIUtils extends Logging {
     }
 
     // Priority: defaults < catalog props < table config < sparkSession conf < specified conf
-    val finalParameters = HoodieWriterUtils.parametersWithWriteDefaults(
+    val parameters = HoodieWriterUtils.parametersWithWriteDefaults(
       (catalogProps ++
         metaClient.getTableConfig.getProps.asScala.toMap ++
         filterHoodieConfigs(sparkSession.sqlContext.getAllConfs) ++
         conf).toMap
     )
+
+    // Auto-config a DFS-based lock for the metadata table when the table has an MDT and no lock
+    // provider is configured at any layer. Table-service writers created here (compaction,
+    // clustering, clean, TTL, restore, rollback, savepoint, ...) can update the metadata table, so
+    // they must be mutually exclusive with concurrent writers on the shared lock path. This must be
+    // applied before building the client so the lock config actually takes effect.
+    val finalParameters =
+      if (metaClient.getTableConfig.isMetadataTableAvailable
+        && !parameters.contains(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key)) {
+        parameters ++ getLockOptions(basePath, metaClient.getBasePath.toUri.getScheme, parameters)
+      } else {
+        parameters
+      }
 
     val jsc = new JavaSparkContext(sparkSession.sparkContext)
     DataSourceUtils.createHoodieClient(jsc, schemaStr, basePath,
@@ -166,9 +178,20 @@ object HoodieCLIUtils extends Logging {
     key -> value
   }
 
-  def getLockOptions(tablePath: String, schema: String, lockConfig: TypedProperties): Map[String, String] = {
-    val customSupportedFSs = lockConfig.getStringList(HoodieCommonConfig.HOODIE_FS_ATOMIC_CREATION_SUPPORT.key, ",", new ArrayList[String])
-    if (schema == null || customSupportedFSs.contains(schema) || StorageSchemes.isAtomicCreationSupported(schema)) {
+  /**
+   * Builds the filesystem-based lock configuration for the metadata table, or an empty map when the
+   * table's filesystem cannot support atomic file creation (a hard requirement for the FS lock).
+   *
+   * @param tablePath the table base path, used to derive the shared lock file location
+   * @param scheme    the table filesystem scheme; {@code null} is treated as supported
+   * @param params    the already-merged write parameters, read only for the custom
+   *                  atomic-creation-support list ({@code hoodie.fs.atomic_creation.support})
+   */
+  def getLockOptions(tablePath: String, scheme: String, params: Map[String, String]): Map[String, String] = {
+    val customSupportedFSs = params.get(HoodieCommonConfig.HOODIE_FS_ATOMIC_CREATION_SUPPORT.key)
+      .map(v => StringUtils.split(v, ",").asScala.map(_.trim).filter(_.nonEmpty).toList)
+      .getOrElse(List.empty)
+    if (scheme == null || customSupportedFSs.contains(scheme) || StorageSchemes.isAtomicCreationSupported(scheme)) {
       logInfo("Auto config filesystem lock provider for metadata table")
       val props = FileSystemBasedLockProvider.getLockConfig(tablePath)
       props.stringPropertyNames.asScala

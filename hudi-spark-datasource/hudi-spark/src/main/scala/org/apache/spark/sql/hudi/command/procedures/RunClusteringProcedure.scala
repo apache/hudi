@@ -25,7 +25,7 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.util.{ClusteringUtils, HoodieTimer, Option => HOption, SortUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
-import org.apache.hudi.config.{HoodieClusteringConfig, HoodieLockConfig}
+import org.apache.hudi.config.HoodieClusteringConfig
 import org.apache.hudi.exception.HoodieClusteringException
 import org.apache.hudi.execution.bulkinsert.SpatialCurveSortPartitionerBase
 
@@ -195,11 +195,6 @@ class RunClusteringProcedure extends BaseProcedure
         val strategy = client.getConfig.getLayoutOptimizationStrategy
         if (strategy != HoodieClusteringConfig.LayoutOptimizationStrategy.LINEAR) {
           SpatialCurveSortPartitionerBase.validateOrderByColumns(orderColumns, tableSchema, strategy)
-        }
-      }
-      if (metaClient.getTableConfig.isMetadataTableAvailable) {
-        if (!confs.contains(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key)) {
-          confs = confs ++ HoodieCLIUtils.getLockOptions(basePath, metaClient.getBasePath.toUri.getScheme, client.getConfig.getCommonConfig.getProps())
         }
       }
       if (operation.isSchedule) {
