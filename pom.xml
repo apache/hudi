@@ -144,7 +144,7 @@
          pin-advance job refreshes all three, humans merge its bot/trino-pin branch. Keep each
          property on one line: the workflows and scripts/trino/bootstrap_trino.sh read them with sed. -->
     <trino.version>484-SNAPSHOT</trino.version>
-    <trino.sha>40b70400a8a67dfcc12cd9192e9050ea09b7c995</trino.sha>
+    <trino.sha>83129f579dd499561c4cf04e1ba9f1f3e6f74687</trino.sha>
     <trino.e2e.version>483</trino.e2e.version>
     <hive.exec.classifier>core</hive.exec.classifier>
     <metrics.version>4.1.1</metrics.version>
