@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.GlueCatalogSyncClientConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.SchemaDifference;
 import org.apache.hudi.storage.StoragePath;
@@ -86,6 +87,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -94,6 +96,8 @@ import java.util.concurrent.ExecutionException;
 import static org.apache.hudi.aws.testutils.GlueTestUtil.glueSyncProps;
 import static org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_TABLE_NAME_KEY;
+import static org.apache.hudi.sync.common.HoodieMetaSyncOperations.HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC;
+import static org.apache.hudi.sync.common.HoodieMetaSyncOperations.HOODIE_LAST_COMMIT_TIME_SYNC;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
@@ -893,13 +897,84 @@ class TestAWSGlueSyncClient {
     assertTrue(ex.getMessage().contains(HoodieVersion.get()), "exception message should mention the writer version");
   }
 
+  @Test
+  void testUpdateLastCommitTimeSyncedPersistsCompletionTimeWatermark() throws ExecutionException, InterruptedException, IOException {
+    String tableName = "test";
+    List<Column> columns = Collections.singletonList(GlueTestUtil.getColumn("name", "string", "person's name"));
+    List<Column> partitionKeys = Collections.singletonList(GlueTestUtil.getColumn("city", "string", "person's city"));
+    CompletableFuture<UpdateTableResponse> mockUpdateTableResponse = mock(CompletableFuture.class);
+    Mockito.when(mockUpdateTableResponse.get()).thenReturn(UpdateTableResponse.builder().build());
+    Mockito.when(mockAwsGlue.getTable(any(GetTableRequest.class)))
+        .thenReturn(getTableWithProps(tableName, columns, partitionKeys, Collections.singletonMap("EXTERNAL", "TRUE")));
+    Mockito.when(mockAwsGlue.updateTable(any(UpdateTableRequest.class))).thenReturn(mockUpdateTableResponse);
+
+    // A second commit whose instant time sorts below the fixture's but whose completion time is later:
+    // the instant-time watermark must come from the fixture commit and the completion-time watermark from this one.
+    String earlierInstant = "100";
+    String earlierInstantCompletionTime = "20250101000001000";
+    GlueTestUtil.createCommitFile(earlierInstant, earlierInstantCompletionTime);
+    // fresh client so its lazily loaded timeline sees both commits
+    String basePath = GlueTestUtil.getHiveSyncConfig().getString(META_SYNC_BASE_PATH);
+    awsGlueSyncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, mockSts, GlueTestUtil.getHiveSyncConfig(),
+        HoodieTableMetaClient.builder().setConf(HadoopFSUtils.getStorageConf(GlueTestUtil.getHadoopConf())).setBasePath(basePath).build());
+
+    awsGlueSyncClient.updateLastCommitTimeSynced(tableName);
+
+    ArgumentCaptor<UpdateTableRequest> captor = ArgumentCaptor.forClass(UpdateTableRequest.class);
+    verify(mockAwsGlue, times(1)).updateTable(captor.capture());
+    Map<String, String> params = captor.getValue().tableInput().parameters();
+    assertEquals(GlueTestUtil.INSTANT_TIME, params.get(HOODIE_LAST_COMMIT_TIME_SYNC));
+    assertEquals(earlierInstantCompletionTime, params.get(HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC),
+        "incremental sync needs the completion-time watermark to pick up commits that complete out of instant-time order");
+    assertEquals("TRUE", params.get("EXTERNAL"),
+        "updating the watermarks must merge into the existing table parameters, not replace them");
+  }
+
+  @Test
+  void testUpdateLastCommitTimeSyncedWithNoCompletedCommit() throws IOException {
+    String tableName = "test";
+    GlueTestUtil.deleteCommitFile(GlueTestUtil.INSTANT_TIME, GlueTestUtil.INSTANT_COMPLETION_TIME);
+    String basePath = GlueTestUtil.getHiveSyncConfig().getString(META_SYNC_BASE_PATH);
+    awsGlueSyncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, mockSts, GlueTestUtil.getHiveSyncConfig(),
+        HoodieTableMetaClient.builder().setConf(HadoopFSUtils.getStorageConf(GlueTestUtil.getHadoopConf())).setBasePath(basePath).build());
+
+    awsGlueSyncClient.updateLastCommitTimeSynced(tableName);
+
+    verify(mockAwsGlue, never()).updateTable(any(UpdateTableRequest.class));
+  }
+
+  @Test
+  void testGetLastCommitCompletionTimeSyncedWhenAbsent() {
+    String tableName = "test";
+    List<Column> columns = Collections.singletonList(GlueTestUtil.getColumn("name", "string", "person's name"));
+    List<Column> partitionKeys = Collections.singletonList(GlueTestUtil.getColumn("city", "string", "person's city"));
+    Mockito.when(mockAwsGlue.getTable(any(GetTableRequest.class))).thenReturn(getTableWithDefaultProps(tableName, columns, partitionKeys));
+    assertFalse(awsGlueSyncClient.getLastCommitCompletionTimeSynced(tableName).isPresent());
+  }
+
+  @Test
+  void testGetLastCommitCompletionTimeSyncedWhenPresent() {
+    String tableName = "test";
+    List<Column> columns = Collections.singletonList(GlueTestUtil.getColumn("name", "string", "person's name"));
+    List<Column> partitionKeys = Collections.singletonList(GlueTestUtil.getColumn("city", "string", "person's city"));
+    HashMap<String, String> props = new HashMap<>();
+    props.put(HOODIE_LAST_COMMIT_TIME_SYNC, "101");
+    props.put(HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC, "20260101000000000");
+    Mockito.when(mockAwsGlue.getTable(any(GetTableRequest.class))).thenReturn(getTableWithProps(tableName, columns, partitionKeys, props));
+    assertEquals("101", awsGlueSyncClient.getLastCommitTimeSynced(tableName).get());
+    assertEquals("20260101000000000", awsGlueSyncClient.getLastCommitCompletionTimeSynced(tableName).get());
+  }
+
   private CompletableFuture<GetTableResponse> getTableWithDefaultProps(String tableName, List<Column> columns, List<Column> partitionColumns) {
+    return getTableWithProps(tableName, columns, partitionColumns, new HashMap<>());
+  }
+
+  private CompletableFuture<GetTableResponse> getTableWithProps(String tableName, List<Column> columns, List<Column> partitionColumns, Map<String, String> extraTableProperties) {
     String databaseName = "testdb";
     String inputFormatClass = "inputFormat";
     String outputFormatClass = "outputFormat";
     String serdeClass = "serde";
     HashMap<String, String> serdeProperties = new HashMap<>();
-    HashMap<String, String> tableProperties = new HashMap<>();
     software.amazon.awssdk.services.glue.model.StorageDescriptor storageDescriptor = software.amazon.awssdk.services.glue.model.StorageDescriptor.builder()
         .serdeInfo(SerDeInfo.builder().serializationLibrary(serdeClass).parameters(serdeProperties).build())
         .inputFormat(inputFormatClass)
@@ -913,7 +988,7 @@ class TestAWSGlueSyncClient {
         .parameters(new HashMap<>())
         .storageDescriptor(storageDescriptor)
         .partitionKeys(partitionColumns)
-        .parameters(tableProperties)
+        .parameters(extraTableProperties)
         .databaseName(databaseName)
         .build();
     GetTableResponse response = GetTableResponse.builder()

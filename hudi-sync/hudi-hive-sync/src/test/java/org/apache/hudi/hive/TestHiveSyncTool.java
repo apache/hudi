@@ -229,6 +229,15 @@ public class TestHiveSyncTool {
     HiveTestUtil.clear();
   }
 
+  @Test
+  public void testUpdateLastCommitTimeSyncedWithNoCompletedCommit() {
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), "hms");
+    // created-but-never-written table: the active timeline has no completed instant, the update must no-op
+    reInitHiveSyncClient();
+    assertDoesNotThrow(() -> hiveClient.updateLastCommitTimeSynced(HiveTestUtil.TABLE_NAME));
+    assertFalse(hiveClient.tableExists(HiveTestUtil.TABLE_NAME), "the no-op must not create or alter the metastore table");
+  }
+
   @ParameterizedTest
   @MethodSource({"syncModeAndSchemaFromCommitMetadata"})
   public void testUpdateBasePath(boolean useSchemaFromCommitMetadata, String syncMode, String enablePushDown) throws Exception {
