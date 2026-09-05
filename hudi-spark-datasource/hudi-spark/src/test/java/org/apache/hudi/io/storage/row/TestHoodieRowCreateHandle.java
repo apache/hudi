@@ -35,6 +35,7 @@ import org.apache.hudi.testutils.SparkDatasetTestUtils;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.functions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,9 +44,11 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getJavaVersion;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -130,6 +133,44 @@ public class TestHoodieRowCreateHandle extends HoodieSparkClientTestHarness {
       fileNames.add(handle.getFileName());
       // verify output
       assertOutput(writeStatus, size, fileId, partitionPath, instantTime, totalInputRows, fileNames, fileAbsPaths, populateMetaFields);
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testAllExceptRecordKeyPreservesMetadata(boolean preserveMetadata) throws Exception {
+    HoodieWriteConfig config = SparkDatasetTestUtils.getConfigBuilder(basePath, timelineServicePort)
+        .withMetaFieldsMode(MetaFieldsMode.ALL_EXCEPT_RECORD_KEY).build();
+    Properties tableProps = new Properties();
+    tableProps.setProperty(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.ALL_EXCEPT_RECORD_KEY.name());
+    tableProps.setProperty(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
+    HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), tableProps);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+    String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
+    HoodieRowCreateHandle handle = new HoodieRowCreateHandle(table, config, partitionPath,
+        UUID.randomUUID().toString(), "002", 0, 0, 0, SparkDatasetTestUtils.STRUCT_TYPE.asNullable(), preserveMetadata);
+    Dataset<Row> input = SparkDatasetTestUtils.getRandomRows(sqlContext, 10, partitionPath, false)
+        .withColumn(HoodieRecord.COMMIT_TIME_METADATA_FIELD, functions.lit("001"))
+        .withColumn(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, functions.concat(functions.lit("001_0_"), functions.col(SparkDatasetTestUtils.RECORD_KEY_FIELD_NAME)));
+    WriteStatus status = writeAndGetWriteStatus(input, handle);
+    assertFalse(status.hasErrors());
+    List<Row> written = sqlContext.read().parquet(basePath + "/" + status.getStat().getPath()).collectAsList();
+    Map<String, Row> original = input.collectAsList().stream()
+        .collect(Collectors.toMap(row -> row.getString(5), row -> row));
+    assertEquals(10, written.size());
+    for (Row row : written) {
+      Row source = original.get(row.getString(5));
+      assertNull(row.get(2));
+      assertEquals(partitionPath, row.getString(3));
+      assertEquals(handle.getFileName(), row.getString(4));
+      if (preserveMetadata) {
+        assertEquals(source.getString(0), row.getString(0));
+        assertEquals(source.getString(1), row.getString(1));
+      } else {
+        assertEquals("002", row.getString(0));
+        assertTrue(row.getString(1).startsWith("002_0_"));
+      }
     }
   }
 

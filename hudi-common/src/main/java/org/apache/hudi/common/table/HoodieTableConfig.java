@@ -356,7 +356,8 @@ public class HoodieTableConfig extends HoodieConfig {
       .key("hoodie.meta.fields.mode")
       .noDefaultValue()
       .withDocumentation("Which Hudi meta columns are physically populated on disk. Allowed values are "
-          + "ALL, NONE, COMMIT_TIME_ONLY, FILE_NAME_ONLY and COMMIT_TIME_AND_FILE_NAME. This supersedes the "
+          + "ALL, NONE, COMMIT_TIME_ONLY, FILE_NAME_ONLY, COMMIT_TIME_AND_FILE_NAME and ALL_EXCEPT_RECORD_KEY. "
+          + "ALL_EXCEPT_RECORD_KEY populates every meta column except _hoodie_record_key. This supersedes the "
           + "deprecated hoodie.populate.meta.fields boolean, which is consulted only when this property is unset "
           + "(true maps to ALL, false maps to NONE). Supported on any table version 1.x can write, not just the "
           + "latest. Set only at table creation, via the hudi-cli, or during table upgrade — the property is "
