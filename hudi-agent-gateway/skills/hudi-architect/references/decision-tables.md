@@ -1,0 +1,874 @@
+<!--
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+# Decision tables
+
+Reference for each decision domain. Consult when deriving a design choice from workload answers.
+
+## Engine
+
+Ask, don't default. If user picks Spark or Flink, proceed. If undecided:
+
+**Flink candidate:** append-only workloads with sub-5-minute visibility target AND continuous streaming source.
+
+**Spark default:** everything else.
+
+For mutable workloads at 5-minute visibility, Spark handles cleanly — Flink's advantage doesn't apply.
+
+## Writer
+
+Derived from source + pipeline_shape (see question-flow.md Q2.9).
+
+### Kafka source (special case)
+
+**Default: HoodieStreamer.** Rationale (surface these in dialogue if user asks why):
+- Schema registry integration (Confluent + custom).
+- Format support built-in (AvroKafkaSource, JsonKafkaSource, ProtoKafkaSource).
+- Exactly-once from Kafka (checkpoint stored in Hudi commits).
+- Kafka meta fields propagation.
+- Error table for dead-letter routing.
+- Continuous mode: ingestion + async compaction + async clustering in one Spark job.
+- Transformer chain (SQL-based, custom-class, chained) handles most enrichment and CDC-mapping.
+
+### Kafka source class + schema provider
+
+Derived from the record format answered at Q1.2b. Required — without it the writer decision is incomplete and the bundle cannot name a source class.
+
+| Record format | Source class | Schema provider |
+|---|---|---|
+| Avro + schema registry | `AvroKafkaSource` | `SchemaRegistryProvider` |
+| Avro + schema file | `AvroKafkaSource` | `FilebasedSchemaProvider` |
+| JSON | `JsonKafkaSource` | Optional — file-based or registry if schema is managed |
+| Protobuf | `ProtoKafkaSource` | Proto class on classpath |
+
+Avro on Kafka effectively requires a schema provider. For JSON it is optional but recommended in production — inferred schemas drift silently.
+
+**Reach for Spark DataSource for Kafka only when:**
+- Multi-source complexity (multiple Kafka topics + JDBC lookup + multi-table writes).
+- ML DataFrame-native library work.
+- One-off backfills where a HoodieStreamer job feels heavier than needed.
+
+### In-job DataFrame (derived / silver / gold tables)
+
+When the data is already a DataFrame inside the user's own Spark job — the output of an ETL query, join, or aggregation — the write is `.write.format("hudi")` at the end of that job.
+
+**Writer: Spark DataSource. Not a choice.** HoodieStreamer exists to poll an external source; here there isn't one. Don't present the HoodieStreamer-vs-DataSource tradeoff, and don't ask Q1.2b (no source class, no schema provider).
+
+Consequences to surface:
+
+- **Async compaction isn't free.** HoodieStreamer continuous mode runs compaction in-process; DataSource can't. If the design lands on MOR, the options are inline compaction (blocks commits periodically) or a standalone `HoodieCompactor` job.
+- **The standalone compactor makes this a concurrent-writer deployment** — two processes writing one table. Requires OCC and an identically-configured lock provider in both jobs. See warnings.md → COMPACTOR_CONCURRENCY_REQUIRED.
+- **No submit-command template applies.** The write lives in the user's application; emit the properties as `.option(...)` calls plus the required session config instead.
+- **Q2.9 (pipeline shape) is largely answered already** — it's custom application code. Still worth confirming whether the write sits inside a `forEachBatch` callback (continuous) or a plain batch job, because that changes the integration snippet, not the writer.
+
+### Non-Kafka external sources (DFS, JDBC, another Hudi table, S3/GCS events, Kinesis, Pulsar)
+
+HoodieStreamer and DataSource are co-equal defaults. Choose based on pipeline_shape.
+
+**Schema provider is optional and orthogonal to source type.** Any provider can pair with any source. Many sources infer their schema, and simple pipelines with no expected evolution commonly set none — that's a valid configuration, not a gap. Ask Q1.2c and map the answer: schema files → `FilebasedSchemaProvider`, Hive metastore → `HiveSchemaProvider`, upstream DB → `JdbcbasedSchemaProvider`, registry → `SchemaRegistryProvider`. See config-templates.md for keys.
+
+**Kafka differs in prior, not in mechanism.** Producers and consumers on a topic already need schema coordination, so a registry is usually in place before Hudi arrives. For Kafka, assume a provider exists and ask which one (Q1.2b already does this). For other sources, whether to have one at all is a real question.
+
+```
+if pipeline_shape == "config-driven":
+  → HoodieStreamer
+  mode = "continuous" if continuous ingest declared else "run-once"
+
+elif pipeline_shape == "custom code":
+  → Spark DataSource
+
+elif pipeline_shape == "SQL-centric":
+  → Spark SQL
+
+elif pipeline_shape == "streaming with primitives":
+  Ask: writeStream sink vs forEachBatch
+  - forEachBatch → Spark DataSource
+  - writeStream sink → Ask: stateful primitives needed?
+    - Yes → Spark Structured Streaming
+    - No → nudge toward HoodieStreamer
+```
+
+### Popularity as battle-tested signal
+
+HoodieStreamer + Spark DataSource are the two most-deployed Hudi writer paths — battle-tested, no tuning knobs required, just works out of the box.
+
+Spark SQL: niche, only when user has SQL-only requirement.
+Spark Structured Streaming (writeStream sink): rare, only when company-wide streaming framework OR genuine stateful primitives.
+
+For first-time users on Kafka: HoodieStreamer is the safest first Hudi table. For non-Kafka sources: either HoodieStreamer or DataSource is fine.
+
+## Table type
+
+Derived from mutability + experience + update distribution (for mutable).
+
+| Signals | Derived table type + compaction |
+|---|---|
+| Immutable | COW — silent. Don't show the COW/MOR tradeoff table, and don't ask Q1.6 (experience): with no updates there are no log files to merge, so MOR offers nothing and there's no compaction posture to derive. |
+| Mutable + first-time / fire-and-forget | COW |
+| Mutable + some experience | MOR + inline compaction |
+| Mutable + experienced + writer is HoodieStreamer continuous | MOR + async (free) |
+| Mutable + experienced + writer is DataSource/SQL/Structured Streaming | MOR + async via advanced deployment (standalone compactor) |
+| Mutable + some experience + writer is HoodieStreamer continuous | MOR + async (upgrade for free — bonus from writer choice) |
+
+**Apply the free-async upgrade as soon as the writer is known — do not defer it to the §8.3 checkpoint.**
+
+For Kafka sources the writer is HoodieStreamer by derivation, so this resolves during Round 1 and the upgraded table type should be stated there. Deferring it to §8.3 would hide the upgrade from PROTOTYPING and PRODUCTIONIZING_INITIAL users entirely, since that checkpoint only runs between Rounds 2 and 3 at PRODUCTION_AT_SCALE.
+
+Table type stays genuinely provisional only when the writer is still unknown — non-Kafka sources whose writer is decided by pipeline shape at Q2.9. In that case, revisit table type once Q2.9 lands and surface the upgrade then.
+
+Tradeoff table (in ADR):
+
+|                    | Copy-on-Write (CoW)                     | Merge-on-Read (MoR)                                                              |
+| ------------------ | --------------------------------------- | -------------------------------------------------------------------------------- |
+| **Write cost**     | High — rewrites whole base files        | Low — appends log blocks                                                         |
+| **Read latency**   | Low — reads are plain parquet           | Snapshot reads merge base + logs; read-optimized reads skip logs; compaction periodically brings MoR in line with CoW |
+| **Ops surface**    | Minimal — no compaction to run          | Compaction runs as an ongoing service                                            |
+| **Typical fit**    | Batch BI, reference tables, first-time users | Streaming upserts, CDC ingestion, experienced operators                     |
+
+### Handling workload-vs-experience tension
+
+If mutability + update distribution point toward MOR but user picked fire-and-forget:
+
+> "Your workload signals point toward MOR (mutable + uniform updates at scale = high write amp for COW), but you picked fire-and-forget which typically means COW. Three reconciliations:
+> - (a) Accept COW; ADR flags concrete revisit conditions if write amp materializes.
+> - (b) Step up to MOR with inline compaction. Slightly more per-batch latency, no separate service to deploy.
+> - (c) Keep the workload smaller and rely on the Operations Agent to flag if COW hits a wall.
+>
+> Which matches your priorities?"
+
+## Index
+
+Derived from six signals: engine, mutability, partitioning, partition-column stability, projected table size, key characteristics.
+
+### Decision table
+
+| Index | Write cost | Storage | Scope | Best when | Engine (1.2.0) |
+|---|---|---|---|---|---|
+| **SIMPLE / Global SIMPLE** | O(files listed) per commit | Minimal | Partition or Global | Small tables (<~100M rows), random updates | Spark |
+| **BLOOM / Global BLOOM** | Range prune + bloom check | Bloom filters in MDT | Partition or Global | Sub-1-2TB + monotonic keys | Spark |
+| **Partitioned RLI** | O(1) via MDT hash-shard | ~few % of record count in MDT | Partition (uniqueness within partition) | Any real scale, partition-stable | Spark + Flink |
+| **Global RLI** | O(1) via MDT hash-shard | ~few % of record count in MDT | Global (table-wide uniqueness) | Any scale, unpartitioned or partition-unstable | Spark + Flink |
+| **BUCKET** | O(1) via bucket hash | No MDT partition | Partition-scoped only | Bounded key cardinality + balanced partition sizes | Spark + Flink (Flink dominant) |
+
+### Decision pseudocode
+
+```
+if immutable:
+  → SIMPLE (index cost irrelevant; no tagging happens)
+
+elif engine == "flink":
+  if unpartitioned or partition-unstable:
+    → GLOBAL_RLI (added in 1.2.0)
+  elif partition-stable + key_cardinality_bounded + partition_sizes_balanced:
+    → BUCKET
+  else:
+    → PARTITIONED_RLI
+
+elif engine == "spark":
+  if unpartitioned:
+    if key_cardinality_bounded_and_stable:
+      → BUCKET
+    else:
+      → GLOBAL_RLI
+  elif partitioned + partition-unstable:
+    → GLOBAL_RLI (or GLOBAL_BLOOM if sub-1-2TB + monotonic + cost-sensitive)
+  elif partitioned + partition-stable:
+    if projected_table_size < ~1-2TB:
+      if monotonic_keys: → BLOOM
+      elif key_cardinality_bounded_and_stable + partition_sizes_balanced: → BUCKET
+      else: → SIMPLE (or PARTITIONED_RLI)
+    else (projected >= ~1-2TB):
+      if key_cardinality_bounded_and_stable + partition_sizes_balanced: → BUCKET
+      else: → PARTITIONED_RLI
+```
+
+### BUCKET when to prefer over RLI
+
+- Bounded and predictable key cardinality.
+- Partition sizes roughly balanced.
+- Writer latency tight, MDT record_index sync cost matters.
+- Smaller MDT footprint desired.
+
+### BUCKET fails when
+
+- Key cardinality unbounded or growing (any new-record-generating workload — trips, events, orders, logs).
+- Skewed partition sizes → recommend RLI/Partitioned RLI (do NOT recommend CONSISTENT_HASHING at design time; niche escape hatch).
+
+### BLOOM caveats
+
+- Effective sub-1-2TB only.
+- `hoodie.bloom.index.use.metadata=true` is experimental at 1.2.0 — do NOT recommend at design time.
+
+### Async-buildable framing
+
+Most index decisions are no longer durable at table creation. RECORD_INDEX (both variants), BLOOM (experimental), col stats, secondary index, expression index — all buildable async on live tables using HoodieIndexer, no rewrite needed.
+
+**Two durability exceptions:**
+
+1. **BUCKET** — bucket count fixed at creation.
+2. **RLI file-group count** — fixed when the record index is *initialized*. Adding an RLI later is free; **resizing an initialized one is not possible without a table rewrite.** See "RLI file-group sizing" below.
+
+The distinction matters: "index is async-buildable" is true about *adding* an index and false about *resizing* one. Do not tell users the RLI is a fully reversible choice.
+
+Design implication: for smaller mutable tables, recommend lighter index (SIMPLE) with ADR note that RLI can be added later without rewrite. Avoid over-engineering.
+
+### RLI file-group sizing (PRODUCTION_AT_SCALE — durable decision)
+
+Hudi derives the RLI file-group count when the index is initialized, from the records present at that moment multiplied by a growth factor (`hoodie.metadata.record.index.growth.factor`, default **2.0**). That assumes the table is already fully loaded. A table that bootstraps small and then grows repeatedly gets an index sized for its infancy, permanently.
+
+**The count is pinned only when `min == max` (both non-zero).** Otherwise Hudi estimates from record count × growth factor and clamps into the min/max window — i.e. a range hands the decision back to Hudi.
+
+**Config keys — four of them, two per variant. Use the modern keys:**
+
+| Index | Key | Default | Scope |
+|---|---|---|---|
+| Global RLI | `hoodie.metadata.global.record.level.index.{min,max}.filegroup.count` | 10 / 10000 | Table-wide |
+| Partitioned RLI | `hoodie.metadata.record.level.index.{min,max}.filegroup.count` | 1 / 10 | **Per partition** |
+
+`hoodie.metadata.record.index.{min,max}.filegroup.count` are deprecated aliases for the **global** properties. Do not use them for partitioned RLI.
+
+**Sizing formula:**
+
+```
+bytes_per_rli_record = 50      # safe starting point; assumes UUID-shaped record keys
+shard_size_mb        = 500
+file_group_count     = (projected_record_count * bytes_per_rli_record) / 1024 / 1024 / shard_size_mb
+```
+
+- **Global RLI** — apply to the projected table-wide record count.
+- **Partitioned RLI** — apply to the projected *per-partition* record count (projected total / projected active partition count), because the config is per partition.
+- Size for the 3-4 year projection, not today. Under-sizing is unfixable; over-sizing costs little.
+- 50 bytes assumes UUID-shaped keys. Longer record keys mean a larger per-record RLI footprint — scale the constant and say so in the ADR.
+
+Worked example: 40B projected records → `(40_000_000_000 × 50) / 1024 / 1024 / 500` = **3815 file groups**; round up to **3900** for headroom (over-sizing costs little). Emit `min = max = 3900`.
+
+**Why the defaults are a trap.** Partitioned RLI defaults to `min=1, max=10`. With a 1GB max file-group size and 50-byte records, one file group holds ~21.5M records, so a partition needs ~215M projected records before the estimate even reaches the ceiling of 10. Below that it silently under-sizes.
+
+**When the user cannot project record count:**
+
+Recommend they land the **first commit / bulk load with RLI disabled**, then enable it (async build via `HoodieIndexer`, no rewrite). The estimator then sees a truthful record count instead of a near-empty first commit.
+
+This fixes the *bootstrap* problem, not the *growth* problem — the estimator still applies growth factor 2.0 to whatever exists at initialization, so it sizes for today × 2. For a fast-growing table that headroom is consumed quickly and the count is already frozen. Consider raising `hoodie.metadata.record.index.growth.factor` above 2.0, and record a measurable revisit condition: if record count approaches `initial_count × growth_factor`, the RLI is undersized and only a rewrite fixes it.
+
+## Partitioning
+
+Query-alignment-first, not size-first.
+
+### Rule engine flow
+
+1. If consumer reads filter on natural low-cardinality dimension → partition by that dimension.
+2. If consumer reads filter on time (recent-N-day scans, incremental) → partition by date.
+3. If consumer reads are scan-heavy or point-lookup (no partition-aligned filter) → consider unpartitioned (subject to size threshold).
+
+### Projected partition count guardrails
+
+Formula: `projected_partition_count = cardinality(business_dimension) × time_buckets_over_table_lifetime`
+
+Time buckets accumulate over the table's **lifetime**, projected to the 2-3 year horizon — not over the retention window. Retention governs timeline lookback (see → Retention), not how many date partitions exist on disk; date partitions are only ever added, never expired by the cleaner.
+
+For date-only: `cardinality = 1`, `time_buckets = days (or months) from first commit to the projection horizon` (daily × 3 years ≈ 1095 — matches the ADR example).
+For composite `<business_dim>/<date>`: multiply.
+
+- **Green: < 10K partitions** — proceed.
+- **Yellow: 10K – 50K** — warn (see warnings.md → PROJECTED_PARTITION_COUNT_YELLOW).
+- **Red: > 50K** — reject (see warnings.md → PROJECTED_PARTITION_COUNT_RED).
+
+### Time granularity default
+
+- **Daily** — default. Recent-N-day read patterns align.
+- **Monthly** — when daily pushes into yellow/red.
+- **Hourly** — rarely recommended. Only when volume >~10GB/hour and consumers explicitly need hourly pruning.
+
+### Immutable raw layer
+
+Default to **ingestion-time partitioning**, not event-time. Raw layer consumers ask "give me new data in the last N hours" — ingestion-time question. Raw doesn't apply business logic.
+
+Override to event time if:
+- User explicitly names event-time-filtered downstream reads as dominant.
+- Raw layer is unusual with strong event-time semantic upstream.
+
+### Unpartitioned viability
+
+Viable when both hold:
+- Total table stays under ~500GB at 2-3 year horizon.
+- Consumer read pattern is point-lookup / join / full-scan (not filtered on natural partition dimension).
+
+For point-lookup-dominated workloads with growing key set (like unpartitioned DIM tables), unpartitioned + Global RLI works up to larger sizes (~2TB+) because RLI keeps lookup cost bounded.
+
+Above threshold → partition, even if no natural business filter. Fallback: partition by date-derived column with daily granularity.
+
+## Small-files posture (immutable only)
+
+Three postures — user picks (see question-flow.md Q2.8).
+
+### Recommendation prose adapts to two axes
+
+**Partition cardinality:**
+- Low-card (date-only) → any posture viable.
+- High-card (composite business dim) → posture (c) recommended.
+
+**Future-consumers axis:**
+- Closed universe (all silver consumers exist today) → any posture viable.
+- Open universe (new silver pipelines may spin up 6+ months later) + terabytes → (b) or (c) required; (a) becomes warning.
+
+### Matrix
+
+| Scenario | Recommended posture |
+|---|---|
+| Low-cardinality partition + closed-universe + <500GB | (a) or (b) viable |
+| Low-cardinality partition + open-universe or terabytes | (b) — clustering handles async |
+| High-cardinality partition | (c) — every batch fans across many partitions; inline small-file handling per file group pays off |
+
+## Retention
+
+Time-travel + incremental lookback window. NOT record lifetime.
+
+### Cleaner policy selection
+
+- Continuous ingest → `KEEP_LATEST_BY_HOURS`.
+- Scheduled batch → `KEEP_LATEST_COMMITS`.
+- **NEVER `KEEP_LATEST_FILE_VERSIONS`** — operates at file-group level, savepoint interaction awkward, archival can't make progress cleanly.
+
+### Commit-cadence-aware retention default
+
+Timeline latency degrades past ~5K entries; practical target ~1000.
+
+Formula (COW baseline):
+```
+base_entries_per_commit = 6  # 3 ingestion + 3 cleaner
+if MOR + async compaction: adjust += 3 / compaction_cadence_commits  # typically +0.6
+if async clustering: adjust += 3 / clustering_cadence_commits  # typically +0.6
+entries_per_commit = base_entries_per_commit + adjust
+
+commits_per_day = 1440 / commit_cadence_minutes
+timeline_entries_per_day = commits_per_day * entries_per_commit
+```
+
+### Safe defaults by commit cadence (COW baseline, cleaner retained = 500)
+
+| Commit cadence | Safe max retention | Wall-clock lookback |
+|---|---|---|
+| 5 min | ~500 commits | ~1.7 days |
+| 10 min | ~500 commits | ~3.5 days |
+| 15 min | ~500 commits | ~5 days |
+| 30 min | ~500 commits | ~10 days |
+| 60 min | ~500 commits | ~20 days |
+
+### Sub-5-minute cadence
+
+If computed safe retention < 1 day (e.g., 1-min cadence):
+
+> "At 1-minute cadence, safe retention drops below 1 day. As a best practice, stabilize a 5-minute cadence pipeline first before attempting sub-5-min ingest."
+
+Not a hard block — user can proceed.
+
+## Cleaner + archival config (inline autopilot)
+
+Emit silently. No user question about cadence.
+
+```
+# Automatic inline cleaning and archival are Hudi defaults — emit no on/off switches.
+# (hoodie.clean.automatic, hoodie.clean.async.enabled, hoodie.archive.automatic,
+#  hoodie.archive.async, hoodie.commits.archival.batch all already default to the desired values.)
+hoodie.clean.policy=<KEEP_LATEST_BY_HOURS or KEEP_LATEST_COMMITS>
+hoodie.clean.hours.retained OR hoodie.clean.commits.retained=<derived>
+
+hoodie.keep.min.commits=<derived — see below>
+hoodie.keep.max.commits=<derived — see below>
+```
+
+**Archival window derivation — from commit cadence, never a constant.**
+
+Archival must outlast the cleaner. If instants are archived while the cleaner still treats those file versions as live, incremental and time-travel readers lose the timeline entries they depend on. So the window is always the cleaner window plus a margin.
+
+```
+commits_per_day  = 1440 / commit_cadence_minutes
+cleaner_commits  = commits_per_day × cleaner_retention_days
+                   (or cleaner.commits.retained directly, when the policy is KEEP_LATEST_COMMITS)
+
+keep.min.commits = max(100, ceil(cleaner_commits × 1.1))    # cleaner window + ~10% margin
+keep.max.commits = ceil(keep.min.commits × 1.2)
+```
+
+**At daily cadence or slower, emit nothing.** Don't set cleaner or archival config at all — leave Hudi's out-of-the-box defaults in place. A table committing once a day accumulates timeline entries so slowly that the active timeline is nowhere near its limits, and there is nothing for us to protect it from. Overriding here adds config surface for no benefit.
+
+The floor of 100 covers the middle ground, where derivation produces a number small enough to make look-back impractical but the cadence is still fast enough that the defaults aren't a good fit.
+
+Worked values at a 48h cleaner window:
+
+| Cadence | commits/day | Cleaner commits | +10% | `keep.min.commits` | `keep.max.commits` |
+|---|---|---|---|---|---|
+| 5 min | 288 | 576 | 634 | **634** | 761 |
+| 15 min | 96 | 192 | 211 | **211** | 253 |
+| 1 hour | 24 | 48 | 53 | **100** (floor) | 120 |
+| Daily or slower | ≤1 | — | — | **emit nothing** | **emit nothing** |
+
+This replaces the older `2 × cleaner.commits.retained` rule. The +10% relationship applies uniformly, whichever cleaner policy is in force.
+
+Same principle as not emitting `hoodie.metadata.index.column.stats.enable=false`: config that restates a default is noise. Emit what changes behavior.
+
+**Never emit a fixed 1000 / 1200.** The active-timeline target is ~1000 entries; an archival floor at 1000 leaves no headroom above the number it exists to protect.
+
+**Bucketization note:** archival bucketizes by instant type — ingestion commits and table-service commits (clean, compaction, clustering, rollback) are tracked separately with their own thresholds. `keep.min.commits` governs the ingestion bucket. The ~6-entries-per-commit figure behind the active-timeline math is the combined count across buckets, which is why the window can be sized off ingestion commits without the timeline overrunning.
+
+**Archival bucketization:** archival bucketizes by instant type. Two buckets: ingestion commits and table-service commits. Each has its own min/max threshold. 2x ratio holds because per-bucket accounting keeps combined active timeline bounded.
+
+## Compaction (MOR only)
+
+Derived from writer + experience.
+
+| Writer | Compaction mode |
+|---|---|
+| HoodieStreamer continuous | Async in-process, automatic. **No config emitted.** |
+| Spark Structured Streaming (writeStream sink) | Inline default; async via `hoodie.datasource.compaction.async.enable=true` if experienced. |
+| Spark DataSource | Inline default. Async requires standalone `HoodieCompactor` (advanced deployment). |
+| Spark SQL | Same as DataSource. |
+
+For inline:
+```
+hoodie.compact.inline=true
+hoodie.compact.inline.max.delta.commits=5
+hoodie.compact.inline.trigger.strategy=NUM_COMMITS
+```
+
+### Compaction target IO trap
+
+`hoodie.compaction.target.io` defaults to **500GB per round**. At TB-scale MOR, file groups accumulate uncompacted → log files grow forever → read latency degrades.
+
+If projected size ≥ 1TB with MOR → surface ADR flag: "Bump `hoodie.compaction.target.io` to 2-5TB."
+
+## Clustering
+
+Off by default. Fires only when user asks or when workload signals strongly suggest benefit.
+
+**When Architect surfaces clustering:**
+- Immutable + small-files posture (b) — clustering is on the path by choice.
+- MOR + async services + workload signals suggest fragmentation over time.
+
+**When enabled:**
+```
+hoodie.clustering.async.enabled=true
+hoodie.clustering.async.max.commits=5
+hoodie.clustering.plan.strategy.small.file.limit=300MB
+hoodie.clustering.plan.strategy.target.file.max.bytes=1GB
+hoodie.table.services.incremental.enabled=true  # 1.2.0 win
+```
+
+## Concurrency (writer count → mode → lock provider)
+
+Derived from the writer inventory (question-flow.md Q3.1), the derived table type, and the
+derived index. Nothing here is asked twice — mode and NBCC eligibility fall out of facts the
+flow already holds.
+
+**`hoodie.write.concurrency.mode` is not durable** — it can be changed on a running table.
+What *is* durable is the bucket count that makes NBCC possible at all (see → Index,
+"Two durability exceptions"). So NBCC eligibility is effectively decided at table creation
+even though the mode itself is switchable. Say that in the ADR rather than implying the mode
+is a one-way door.
+
+### Step 1 — mode
+
+A "writer" is any process that commits to the table. Table services count **only** when they
+run as their own job: inline services and async services running *in the same process as a
+writer* are not a second writer.
+
+| Writers | Table type + index | Mode | Why |
+|---|---|---|---|
+| 1, inline or in-process services | any | `SINGLE_WRITER` | Default. Maximum throughput, no lock overhead. |
+| 1 writer + async services **in the writer's process** | any | `SINGLE_WRITER` | Table services stay lock-free while they share a writer's process. |
+| 1 writer + **standalone** service job (e.g. `HoodieCompactor`) | any | **OCC** | Two processes commit → see warnings.md → `COMPACTOR_CONCURRENCY_REQUIRED`. |
+| ≥2 ingestion writers | anything other than MOR + BUCKET | **OCC** | NBCC is ineligible; OCC is the general answer. |
+| ≥2 ingestion writers | MOR + BUCKET, **already derived independently** | **NBCC** offered as default, OCC as the stated alternative | Writers append to their own log files; conflicts resolved by reader and compactor, no lock contention. |
+| ≥2 writers **and** clustering is wanted | any | **OCC** | NBCC does not support clustering. |
+
+**OCC is the default recommendation for multi-writer.** NBCC is surfaced only when the user
+asks for it by name, or when the workload has *already* landed on MOR + BUCKET for its own
+reasons. **Never steer table type or index toward NBCC** — a bucket count is durable and a
+concurrency mode is not, so trading a reversible decision for an irreversible one is backwards.
+
+### Step 2 — NBCC eligibility (hard gate, verified in source)
+
+`HoodieWriteConfig` validation requires **MOR table _and_ simple bucket index** (or the
+metadata table). `CommonClientUtils` additionally rejects NBCC on table version < 8.
+
+```
+nbcc_eligible = (table_type == MERGE_ON_READ)
+                and (index == BUCKET)          # engine SIMPLE — see note
+                and (table_version >= 8)       # 1.0+ tables
+                and (clustering not required)
+```
+
+`hoodie.index.bucket.engine` defaults to `SIMPLE`, and this rubric never recommends
+`CONSISTENT_HASHING` at design time (see → Index). So **whenever the flow derives BUCKET, the
+engine is SIMPLE** and the index half of the gate is satisfied. Do not ask a separate engine
+question to establish it.
+
+If the user asks for NBCC and the gate fails → warnings.md → `NBCC_INELIGIBLE`. Refuse the
+mode, not the session: emit OCC and record why.
+
+### Step 3 — lock provider (OCC; also NBCC where a lock is still wanted)
+
+Two axes decide this: **maturity first, then lock-identity safety.**
+
+**Maturity outranks convenience.** A lock provider is the thing standing between two writers and
+a silently corrupted table, so it is the wrong place to be an early adopter. Provider ages differ
+by years:
+
+| Provider | Available since | Production exposure |
+|---|---|---|
+| ZooKeeper, Hive Metastore, filesystem | 0.8.0 | Years |
+| DynamoDB | 0.10.0 | Years |
+| **Storage-based** | **1.0.2** | **Recent — see caution below** |
+
+**Prefer the implicit-identity variants.** Both DynamoDB and ZooKeeper ship two variants: one
+that derives the lock identity from `hoodie.base.path` (xxHash-64, with `s3a://` normalized to
+`s3://`), and one that reads it from operator-supplied config. The implicit variants make
+`LOCK_PROVIDER_MISMATCH` unrepresentable — same table means same base path means same lock —
+and they remove durable strings that would otherwise have to match by hand across every
+writing job.
+
+| Deployment | Provider class (emit verbatim) | Required keys |
+|---|---|---|
+| **AWS** — *default on AWS* | `org.apache.hudi.aws.transaction.lock.DynamoDBBasedImplicitPartitionKeyLockProvider` | `hoodie.write.lock.dynamodb.table`, `hoodie.write.lock.dynamodb.region` |
+| **Existing ZooKeeper quorum** | `org.apache.hudi.client.transaction.lock.ZookeeperBasedImplicitBasePathLockProvider` | `hoodie.write.lock.zookeeper.url`, `hoodie.write.lock.zookeeper.port` |
+| **Hive ecosystem** | `org.apache.hudi.hive.transaction.lock.HiveMetastoreBasedLockProvider` | `hoodie.write.lock.hivemetastore.database`, `hoodie.write.lock.hivemetastore.table` |
+| **Single process only** (multiple threads, one JVM) | `org.apache.hudi.core.transaction.lock.InProcessLockProvider` | none |
+| Cloud storage, no existing lock infrastructure | `org.apache.hudi.client.transaction.lock.StorageBasedLockProvider` | none beyond the matching cloud bundle — **read the caution below before recommending** |
+| **Local / testing only** | `org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider` | `hoodie.write.lock.filesystem.path` |
+
+**Selection order:**
+
+1. **On AWS → DynamoDB.** The default. Hudi creates the lock table automatically if absent, so
+   setup is modest: a table name, a region, and IAM permissions on it for every writing job.
+2. **Existing ZooKeeper quorum or Hive Metastore → use it.** No new dependency, and both are
+   long-standing providers.
+3. **Neither, and not on AWS (GCS / Azure / on-prem object storage) → ask, do not assume.**
+   Present storage-based with its maturity caution alongside the cost of standing up ZooKeeper,
+   and let the user decide. This is a genuine tradeoff, not a derivable answer.
+
+### Storage-based provider — maturity caution
+
+`StorageBasedLockProvider` arrived in **1.0.2** (2025). It is appealing — it locks under the
+table's own path, so there is no infrastructure to stand up and no lock identity to keep in
+sync — but it is years younger than every other provider here, and it is not a thin wrapper:
+it implements lease renewal with a heartbeat plus per-cloud lock clients. That is precisely
+the kind of code whose interesting failure modes show up under real contention, clock skew,
+and partial cloud outages rather than in tests.
+
+**Do not recommend it as the default.** Surface it when the user is on cloud storage with no
+existing lock infrastructure and would otherwise have to stand up ZooKeeper for one table —
+and when you do, say plainly that it is newer and less battle-tested than the alternatives, so
+the choice is theirs to make knowingly. If the user asks for it directly, emit it; note the
+maturity point once and record it in the ADR rather than arguing.
+
+Revisit as it accumulates production mileage — the zero-infrastructure story is genuinely the
+best of the options, and this caution is about age, not about a known defect.
+
+**Two provider notes worth stating before an operator asks:**
+
+- `InProcessLockProvider` moved package (`org.apache.hudi.client.transaction.lock` →
+  `org.apache.hudi.core.transaction.lock`). The old class is kept as a deprecated shim, and
+  published docs still cite it. Emit the `core` FQCN.
+- `ZookeeperBasedImplicitBasePathLockProvider` derives its ZK base path as `/tmp/<hash>`. That
+  is a **znode path, not a filesystem path** — it is not on any disk and is not tunable. Say so
+  in the ADR, because it reliably looks like a bug in config review, and "fixing" it by
+  switching to the explicit provider reintroduces the mismatch risk this table exists to avoid.
+
+**When to override to an explicit provider.** Only two real reasons:
+several tables that should intentionally share one lock, or an existing deployment whose lock
+identity you must match. Both are deliberate acts, not defaults. Choosing
+`ZookeeperBasedLockProvider` or `DynamoDBBasedLockProvider` adds
+`hoodie.write.lock.zookeeper.base_path` + `hoodie.write.lock.zookeeper.lock_key`, or
+`hoodie.write.lock.dynamodb.partition_key`, and those values must then match **exactly** in
+every writing job → warnings.md → `LOCK_PROVIDER_MISMATCH`.
+
+`FileSystemBasedLockProvider` is **not for production and is not supported on cloud storage**
+→ warnings.md → `FILESYSTEM_LOCK_UNSAFE`.
+
+### Step 4 — what not to emit
+
+Emitting these is at best noise and at worst a correctness bug:
+
+| Config | Why not |
+|---|---|
+| `hoodie.write.lock.conflict.resolution.strategy` | **Auto-infers** to the bucket-index strategy when index type is BUCKET, and to the simple strategy otherwise. Hand-setting it is how bucket-index conflict handling gets silently broken. |
+| `hoodie.write.concurrency.early.conflict.detection.enable` | Experimental (0.13.0), OCC-only, defaults false. Mention as an option for high-contention OCC; do not emit. |
+| `hoodie.write.num.retries.on.conflict.failures` | Defaults 0. A contention-tuning knob — Operations Agent territory, not design time. |
+
+`hoodie.clean.failed.writes.policy=LAZY` is the one exception: it is **auto-inferred** for any
+multi-writer mode, so emitting it is not strictly required, but emit it anyway with a comment
+saying so. It documents intent, and an explicitly-set `EAGER` is a hard config validation
+failure — worth making visible rather than invisible.
+
+## Meta-fields
+
+For mutable: silent default — keep all meta fields. No user question.
+
+For immutable + record size ≤1KB: prompt (see question-flow.md Q2.7).
+
+Rule engine mapping:
+
+**At 1.2.0 the rule is simple: any incremental or CDC consumer → keep all meta fields.** Record size doesn't change this. The config is all-or-nothing and incremental queries require `_hoodie_commit_time`, so there is no middle option to trade storage against.
+
+| Record size | Incremental / CDC needed? | Recommendation |
+|---|---|---|
+| any | **Yes** | **Keep all meta fields — no alternative at 1.2.0.** Note the storage cost in the ADR. |
+| >1KB or unknown | No | Keep all — overhead is rounding error |
+| 200B–1KB | No | Keep all — saving is marginal at this size |
+| <200B | No | Offer disable-entirely |
+
+Only the last row is a real decision. Everything else is determined.
+
+### Selective mode is not available at 1.2.0
+
+At **1.2.0**, `hoodie.populate.meta.fields` is a boolean — all meta fields or none. Do not offer a selective option; there is no config to emit for it.
+
+**Coming after 1.2.0** (apache/hudi#19205, targeting 1.3.0, not yet merged): `hoodie.meta.fields.mode`, a comma-separated list of meta columns to populate when `hoodie.populate.meta.fields=false`. Allowed tokens are `_hoodie_commit_time` and `_hoodie_file_name`.
+
+| `populate.meta.fields` | `meta.fields.mode` | Effective mode |
+|---|---|---|
+| `true` (default) | ignored | ALL |
+| `false` | empty | NONE |
+| `false` | `_hoodie_commit_time` | COMMIT_TIME_ONLY |
+| `false` | `_hoodie_file_name` | FILE_NAME_ONLY |
+| `false` | both | COMMIT_TIME_AND_FILE_NAME |
+| `true` | non-empty | rejected at writer init |
+
+When that lands, COMMIT_TIME_ONLY becomes the balanced middle for small-record append-only tables — it preserves incremental queries while dropping the other four fields. Constraints to respect when adding it: **CoW only** (MoR rejected at writer init pending a follow-up), **Spark only** (Flink RowData and Java client rejected), and **immutable at table creation** (settable only at init, via hudi-cli, or during upgrade). Pre-1.3.0 readers see such a table as NONE.
+
+Until it ships in a release the Skill targets, the choice remains binary.
+
+### What disabling actually costs
+
+Hudi's config documentation: *"When disabled, no meta fields are populated and incremental queries will not be functional. This is only meant to be used for append only/immutable data for batch processing."*
+
+Treat incremental queries as **unavailable**, not degraded. An earlier version of this file claimed they fall back to a slower snapshot-read + filter path and remain "still functional" — that is wrong, and it is the kind of error that produces a table needing a rewrite to fix.
+
+**Hard gate:** if any consumer is incremental or streaming, don't offer the disable option. Keep meta fields and record the storage cost in the ADR.
+
+**Framing:** state the cost plainly. Disabling is a legitimate choice for append-only batch data with a closed, non-incremental consumer set — and a trap for anything else.
+
+### Mutual exclusion with auto-gen
+
+Auto-gen keys require `_hoodie_record_key` materialized. Two coherent immutable presets:
+- User-provided natural key + disable meta fields entirely → max storage saving.
+- Auto-gen key + keep meta fields → efficient ingest, no stable identity.
+
+## Read behavior
+
+Rule engine mapping from consumer-read-pattern answer to Hudi query type:
+
+| Consumer behavior | Hudi query type |
+|---|---|
+| Bulk analytical | Snapshot |
+| Targeted lookups on record key | Snapshot with RLI-driven file skipping |
+| Targeted lookups on non-key column | Snapshot with secondary index (surfaces as ADR flag) |
+| Streaming / incremental | Incremental query |
+| Read-optimized-tolerant + latency-sensitive on MOR | Read-optimized query |
+| Change data capture | CDC query |
+
+Query type is derived, not asked.
+
+## Catalog / metastore sync
+
+Derived from **which engines query the table**, not from a preference. A Hudi table on storage
+is invisible to Trino, Athena, Presto, Redshift Spectrum, BigQuery, or a Hive-based reader
+until it is registered somewhere those engines look. Spark and Flink can read a Hudi table by
+path with no catalog at all, so a Spark-only pipeline may legitimately need none.
+
+**Ask what reads the table, then derive.** Never ask "do you want Hive sync?" — that is a Hudi
+question. Ask which query engines and BI tools consume the table, which is a workload fact.
+
+### Step 1 — does the user want a catalog at all?
+
+**Ask before deriving.** question-flow.md → Q2.1a gates this whole section: a plain question about
+whether anything needs to find the table by name, asked before storage or engines. Many tables
+need no catalog — Spark-only pipelines, intermediate tables in a chain, anything whose consumers
+all read by path. A "no" closes the section and emits nothing.
+
+Only derive when the user says they are unsure:
+
+| Consumers | Catalog needed |
+|---|---|
+| Spark or Flink only, reading by path | **No.** Emit nothing. Say so explicitly rather than leaving it unstated. |
+| Spark SQL with a managed catalog, or anything Hive-based | **Yes** — HMS |
+| Trino, Presto, Athena, Redshift Spectrum | **Yes** — HMS, or Glue on AWS |
+| BigQuery | **Yes** — BigQuery sync (separate mechanism) |
+| A data-discovery tool (DataHub and similar) | **Optional, and additive** — see Step 4 |
+
+Sync is off by default. Nothing below is emitted unless the user wants it or a named consumer
+requires it.
+
+**Catalog sync is not a durable decision.** It can be enabled later against a live table: run the
+standalone sync tool once to register it, then add the properties so subsequent commits keep it
+current. Nothing is rewritten. Say this whenever the user declines or defers — it is the fact that
+makes "no" a cheap answer rather than a risky one.
+
+The exception, and the only reason to act now for a maybe-later table: **BigQuery sync requires
+hive-style partitioning, which IS fixed at table creation.** So a table that might later be read
+from BigQuery should set `hoodie.datasource.write.hive_style_partitioning=true` today even with no
+sync configured. Raise this only on GCS or when the user hints at a future BigQuery consumer.
+
+### Step 2 — which catalog
+
+**HMS is the common answer, and Glue is the common answer on AWS.** Lead with those two;
+treat everything else as reached only when the user names it.
+
+| Catalog | Sync tool class | When |
+|---|---|---|
+| **Hive Metastore** | `org.apache.hudi.hive.HiveSyncTool` (default — no tool class config needed) | The default. Any Hive-based or Trino/Presto reader. |
+| **AWS Glue Data Catalog** | `org.apache.hudi.aws.sync.AwsGlueCatalogSyncTool` | AWS environments, especially with Athena or EMR. Piggybacks on the Hive sync configs. |
+| **BigQuery** | `org.apache.hudi.gcp.bigquery.BigQuerySyncTool` | GCP, BigQuery as the query engine. Own config namespace, own constraints — see Step 3. |
+| **DataHub** | `org.apache.hudi.sync.datahub.DataHubSyncTool` | Discovery and governance only. **Not a query path** — see Step 4. |
+| **Polaris** | via `spark.sql.catalog.<name>=org.apache.polaris.spark.SparkCatalog` | Only when the user already runs Polaris. Since Hudi 1.1.1 / Polaris 1.3.0, and Polaris is incubating — newer than the rest, so say so. |
+
+Multiple sync tools can run together — comma-separate them in
+`hoodie.meta.sync.client.tool.class`. That is the normal shape for "HMS for queries, DataHub
+for discovery."
+
+### Step 3 — the constraints worth stating before they bite
+
+**HMS sync mode.** Three modes; `hms` talks Thrift to the metastore directly and is the one to
+recommend. `jdbc` goes through HiveServer2. `hiveql` executes DDL as HQL and is the weakest
+option — the docs themselves note it is mostly for DML rather than DDL. Recommend `hms` unless
+the user's environment forces otherwise.
+
+**Partition extractor must match the partitioning.** This is the most common way a sync
+succeeds and then produces a table nobody can query correctly:
+
+| Table partitioning | Extractor |
+|---|---|
+| Unpartitioned | `org.apache.hudi.hive.NonPartitionedExtractor` (inferred from partition-field config) |
+| Hive-style (`col=value`) | `org.apache.hudi.hive.HiveStylePartitionValueExtractor` (inferred when hive-style partitioning is on) |
+| One or more plain partition fields | `org.apache.hudi.hive.MultiPartKeysValueExtractor` (default) |
+| `TimestampBasedKeyGenerator` producing `yyyy/MM/dd` | `org.apache.hudi.hive.SinglePartPartitionValueExtractor` — extracts one `yyyy-MM-dd` value rather than three |
+
+Most cases are inferred. The one that is not, and that the rubric must catch, is the
+timestamp-based `yyyy/MM/dd` case → warnings.md → `PARTITION_EXTRACTOR_MISMATCH`.
+
+**MOR syncs two tables, not one.** A MOR table registers as `<table>_ro` (read-optimized, base
+files only) and `<table>_rt` (real-time, merges log files). Consumers must know which one to
+query: `_ro` is cheaper and staler, `_rt` is current and slower. If the design is MOR and a
+catalog is in play, name both in the ADR — a consumer pointed at the wrong suffix sees either
+stale data or unexpected latency, with no error either way.
+
+**BigQuery is read-optimized in practice.** The sync tool accepts both COW and MOR, but its
+manifest lists **base files only** — so a MOR table syncs successfully and BigQuery then reads
+it without merging log files. That is read-optimized semantics, not a failure, and it is worth
+stating plainly rather than letting a user infer snapshot freshness they will not get. BigQuery
+sync also requires hive-style partitioning
+(`hoodie.datasource.write.hive_style_partitioning=true`), and the manifest-based path
+(`hoodie.gcp.bigquery.sync.use_bq_manifest_file=true`) is preferred over the legacy
+view-over-files approach on both cost and performance.
+
+**Glue versions on every commit by default.** `hoodie.datasource.meta_sync.condition.sync`
+defaults to `false`, so every commit writes a new catalog version. At a 15-minute cadence that
+is ~96 versions a day for a table whose schema never changed. Set it to `true` to sync only on
+schema or partition change → warnings.md → `GLUE_SYNC_VERSION_CHURN`.
+
+**Sync failure is not write failure, by default.** The write commits and the catalog silently
+falls behind, so readers see a stale schema with nothing failing. Treat catalog staleness as a
+thing to monitor, not something the writer will report — this belongs in the ADR's operational
+playbook.
+
+### Step 4 — DataHub is not a query path
+
+`DataHubSyncTool` pushes metadata to DataHub over REST for discovery, lineage, and governance.
+It does **not** register the table anywhere a query engine will find it. A user who says "we
+use DataHub as our catalog" and needs Trino to query the table needs **both** DataHub and HMS.
+Say this explicitly — the word "catalog" covers both meanings and conflating them produces a
+table that is documented but unqueryable.
+
+### Step 5 — Iceberg or Delta readers: mention Apache XTable, don't configure it
+
+**No question for this, and no config emitted.** Raise it only when the user's own answers make
+it relevant — they name an Iceberg or Delta consumer, ask about cross-format interoperability, or
+mention a team standardized on another format. Otherwise stay silent; volunteering a
+cross-format tool to someone who never asked is noise.
+
+**What to say when it does come up:**
+
+> "If Iceberg or Delta readers need this table, you don't have to pick a format or maintain a
+> second copy — Apache XTable translates the metadata so the same data files can be read as
+> Hudi, Iceberg, or Delta. It writes format-specific metadata alongside your table and never
+> copies or rewrites the data.
+>
+> It's a separate tool rather than a Hudi config, so it runs after your writes — either as a
+> standalone job or as a post-commit step on HoodieStreamer. Worth reading their docs before
+> committing to it: https://xtable.apache.org and
+> https://github.com/apache/incubator-xtable, plus Hudi's own page at
+> https://hudi.apache.org/docs/syncing_xtable."
+
+**The one design-time coupling worth stating, because it is durable:** the XTable FAQ
+(xtable.apache.org) lists **"Hudi and Iceberg MoR tables not supported"** — Copy-on-Write only.
+Attribute it that way rather than asserting it flatly: the claim appears on their FAQ but not in
+the repo README, and this skill cannot verify it against code the way it verifies Hudi's own
+behavior. Tell the user to confirm it against XTable's current docs, since an incubating project's
+support matrix moves.
+
+If it holds, the implication is real: a workload needing Iceberg or Delta interoperability should
+probably be **CoW**, and table type *is* fixed at creation. If the design has landed on MOR and the user then raises XTable, name the
+conflict rather than leaving them to discover it: they can keep MOR and drop XTable, or choose
+CoW to keep the option open. Do not silently reshape the table type — surface the tension and let
+them decide, as with any durable decision.
+
+**Everything else is a hand-off, deliberately.** Do not emit `hoodie.onetable.*` properties, a
+YAML dataset config, or the `hudi-extensions` bundle coordinate. Three reasons, worth being
+explicit about:
+
+- Those keys are defined in **XTable's** codebase, not Hudi's, so `validate_config_keys.py`
+  cannot check them. Every other `hoodie.*` key this skill emits is machine-verified against a
+  `ConfigProperty` in this source tree; XTable's are not, and emitting unverifiable keys next to
+  verified ones misrepresents how much is checked.
+- The bundle is built and versioned by XTable, so its coordinate moves independently of the Hudi
+  version this skill targets.
+- XTable is **incubating** at the ASF, so its interfaces and config surface are less settled than
+  the sync tools that ship in this repo.
+
+Point at the docs and recommend the user follow up there. That is more useful than a config block
+this skill cannot keep honest.
+
+**Not a catalog.** XTable translates *format* metadata; it does not register the table in HMS,
+Glue, or BigQuery. A user who needs both cross-format reads and SQL-engine discovery needs XTable
+**and** a catalog sync from Steps 1-4 — the same additive relationship DataHub has, for a
+different reason.
+
+### Bundles — the failure mode is a runtime ClassNotFoundException
+
+Each non-HMS sync tool lives in its own module, so the sync class is absent unless the matching
+bundle is on the classpath of the writing job. Correct config plus a missing bundle fails at
+the first commit, not at submit time:
+
+| Sync | Bundle |
+|---|---|
+| HMS | In the Spark bundle already |
+| Glue | `hudi-aws-bundle` |
+| BigQuery | `hudi-gcp-bundle` |
+| DataHub | `hudi-datahub-sync-bundle` |
+
+## Key generator
+
+| Answer shape | Key generator |
+|---|---|
+| Single field | `SimpleKeyGenerator` |
+| Multi-field (composite) | `ComplexKeyGenerator` |
+| Auto-gen (immutable only) | No key generator, no `recordkey.field` |
+| Timestamp-derived partition | `TimestampBasedKeyGenerator` |
+| Mixed (business + timestamp) | `CustomKeyGenerator` |
+| Unpartitioned | `NonpartitionedKeyGenerator` |
+
+Auto-detection: date-string partition columns + natural business record key → `SimpleKeyGenerator`; no explicit `TimestampBasedKeyGenerator` question needed.

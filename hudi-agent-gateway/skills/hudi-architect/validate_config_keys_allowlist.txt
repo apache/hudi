@@ -1,0 +1,21 @@
+# Intentional exceptions for validate_config_keys.py — one key per line.
+# Every entry must say WHY it is allowed to be absent from the Hudi source tree.
+
+# Future key: selective meta-fields mode (apache/hudi#19205, targets 1.3.0, not merged).
+# The references discuss it explicitly as NOT available at 1.2.0 and never emit it.
+hoodie.meta.fields.mode
+
+# Mentioned only in negation prose: config-templates.md states these properties
+# DO NOT EXIST (source class / schema provider are the --source-class /
+# --schemaprovider-class CLI flags). The mention warns users away from them.
+hoodie.streamer.source.class
+hoodie.streamer.schemaprovider.class
+
+# Not a key: the extractor picks up the bare `hoodie.streamer.schemaprovider.`
+# PREFIX mention in prose ("all property keys use the ... prefix").
+hoodie.streamer.schemaprovider
+
+# Mentioned only in negation prose: config-templates.md states this key DOES NOT
+# EXIST (published BigQuery docs list it; the table location comes from the
+# standard base-path config instead). The mention warns users away from it.
+hoodie.gcp.bigquery.sync.base_path
