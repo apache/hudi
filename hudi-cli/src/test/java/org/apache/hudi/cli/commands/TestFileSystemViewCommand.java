@@ -30,8 +30,10 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
+import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.util.NumericUtils;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -86,7 +88,7 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
     nonpartitionedTablePath = tablePath(nonpartitionedTableName);
     new TableCommand().createTable(
         nonpartitionedTablePath, nonpartitionedTableName,
-        "COPY_ON_WRITE", "", 1, "org.apache.hudi.common.model.HoodieAvroPayload");
+        "COPY_ON_WRITE", "", HoodieTableVersion.current().versionCode(), "org.apache.hudi.common.model.HoodieAvroPayload");
 
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
 
@@ -110,8 +112,8 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
         .makeInlineLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime2, 0, testWriteToken)));
 
     // Write commit files
-    Files.createFile(Paths.get(nonpartitionedTablePath, ".hoodie", commitTime1 + ".commit"));
-    Files.createFile(Paths.get(nonpartitionedTablePath, ".hoodie", commitTime2 + ".commit"));
+    FileCreateUtils.createCommit(metaClient, commitTime1);
+    FileCreateUtils.createCommit(metaClient, commitTime2);
 
     // Reload meta client and create fsView
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -127,7 +129,7 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
     partitionedTablePath = tablePath(partitionedTableName);
     new TableCommand().createTable(
         partitionedTablePath, partitionedTableName,
-        "COPY_ON_WRITE", "", 1, "org.apache.hudi.common.model.HoodieAvroPayload");
+        "COPY_ON_WRITE", "", HoodieTableVersion.current().versionCode(), "org.apache.hudi.common.model.HoodieAvroPayload");
 
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
 
@@ -153,8 +155,8 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
         .makeInlineLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime2, 0, testWriteToken)));
 
     // Write commit files
-    Files.createFile(Paths.get(partitionedTablePath, ".hoodie", commitTime1 + ".commit"));
-    Files.createFile(Paths.get(partitionedTablePath, ".hoodie", commitTime2 + ".commit"));
+    FileCreateUtils.createCommit(metaClient, commitTime1);
+    FileCreateUtils.createCommit(metaClient, commitTime2);
 
     // Reload meta client and create fsView
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -294,12 +296,7 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
     return rows;
   }
 
-  /**
-   * (
-   * Test case for command 'show fsview latest'.
-   */
-  @Test
-  public void testShowLatestFileSlices() throws IOException {
+  private static Map<String, Function<Object, String>> latestFileSlicesConverterMap() {
     Function<Object, String> converterFunction =
         entry -> NumericUtils.humanReadableByteCount((Double.parseDouble(entry.toString())));
     Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
@@ -307,8 +304,11 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
     fieldNameToConverterMap.put(HoodieTableHeaderFields.HEADER_TOTAL_DELTA_SIZE, converterFunction);
     fieldNameToConverterMap.put(HoodieTableHeaderFields.HEADER_DELTA_SIZE_SCHEDULED, converterFunction);
     fieldNameToConverterMap.put(HoodieTableHeaderFields.HEADER_DELTA_SIZE_UNSCHEDULED, converterFunction);
+    return fieldNameToConverterMap;
+  }
 
-    TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_PARTITION)
+  private static TableHeader latestFileSlicesHeader() {
+    return new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_PARTITION)
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_FILE_ID)
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_BASE_INSTANT)
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_DATA_FILE)
@@ -321,6 +321,16 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_DELTA_BASE_UNSCHEDULED)
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_DELTA_FILES_SCHEDULED)
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_DELTA_FILES_UNSCHEDULED);
+  }
+
+  /**
+   * (
+   * Test case for command 'show fsview latest'.
+   */
+  @Test
+  public void testShowLatestFileSlices() throws IOException {
+    Map<String, Function<Object, String>> fieldNameToConverterMap = latestFileSlicesConverterMap();
+    TableHeader header = latestFileSlicesHeader();
 
     // Test show with partition path '2016/03/15'
     new TableCommand().connect(partitionedTablePath, false, 0, 0, 0,
@@ -350,5 +360,31 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
     nonpartitionedExpected = removeNonWordAndStripSpace(nonpartitionedExpected);
     String nonpartitionedResults = removeNonWordAndStripSpace(nonpartitionedTable.toString());
     assertEquals(nonpartitionedExpected, nonpartitionedResults);
+  }
+
+  /**
+   * Test case for command 'show fsview latest' on a table whose timeline holds no completed
+   * instant. The merge branch has nothing to pick a max instant from, so it has to fall back to
+   * the unmerged latest file slices instead of dereferencing an empty Option.
+   */
+  @Test
+  public void testShowLatestFileSlicesWithEmptyTimeline() throws IOException {
+    HoodieCLI.conf = storageConf();
+
+    // Create table and connect. No commit is ever written to it.
+    String emptyTableName = "empty_" + tableName();
+    String emptyTablePath = tablePath(emptyTableName);
+    new TableCommand().createTable(
+        emptyTablePath, emptyTableName,
+        "COPY_ON_WRITE", "", HoodieTableVersion.current().versionCode(), "org.apache.hudi.common.model.HoodieAvroPayload");
+
+    // --merge defaults to true, so this takes the branch that resolves a max instant
+    Object result = shell.evaluate(() -> "show fsview latest");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
+
+    // header only, no file slice rows
+    String expected = HoodiePrintHelper.print(latestFileSlicesHeader(), latestFileSlicesConverterMap(),
+        "", false, -1, false, new ArrayList<>());
+    assertEquals(removeNonWordAndStripSpace(expected), removeNonWordAndStripSpace(result.toString()));
   }
 }
