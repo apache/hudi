@@ -347,7 +347,7 @@ public abstract class RecordContext<T> implements Serializable {
    * @param record             The record in engine-specific type.
    * @param schema             The HoodieSchema of the record.
    * @param orderingFieldNames name of the ordering field
-   * @return The ordering value.
+   * @return The ordering value, preserving null field values; the default value if no ordering fields are configured.
    */
   public Comparable getOrderingValue(T record,
                                      HoodieSchema schema,
@@ -356,11 +356,7 @@ public abstract class RecordContext<T> implements Serializable {
       return OrderingValues.getDefault();
     }
 
-    return OrderingValues.create(orderingFieldNames, field -> {
-      Object value = getValue(record, schema, field);
-      // API getDefaultOrderingValue is only used inside Comparables constructor
-      return value != null ? ensureComparability(value) : OrderingValues.getDefault();
-    });
+    return OrderingValues.create(orderingFieldNames, field -> ensureComparability(getValue(record, schema, field)));
   }
 
   /**
@@ -395,7 +391,7 @@ public abstract class RecordContext<T> implements Serializable {
    * @param record             The record in engine-specific type.
    * @param schema             The HoodieSchema of the record.
    * @param orderingFieldNames names of the ordering fields
-   * @return The ordering value.
+   * @return The ordering value, preserving null field values; the default value if no ordering fields are configured.
    */
   public Comparable getOrderingValue(T record,
                                      HoodieSchema schema,
@@ -404,11 +400,7 @@ public abstract class RecordContext<T> implements Serializable {
       return OrderingValues.getDefault();
     }
 
-    return OrderingValues.create(orderingFieldNames, field -> {
-      Object value = getValue(record, schema, field);
-      // API getDefaultOrderingValue is only used inside Comparables constructor
-      return value != null ? ensureComparability(value) : OrderingValues.getDefault();
-    });
+    return OrderingValues.create(orderingFieldNames, field -> ensureComparability(getValue(record, schema, field)));
   }
 
   /**

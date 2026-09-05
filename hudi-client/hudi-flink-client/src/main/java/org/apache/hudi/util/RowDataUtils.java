@@ -112,9 +112,14 @@ public class RowDataUtils {
    *
    * @param logicalType The logical type
    * @param utcTimezone whether to use UTC timezone for timestamp data type
-   * @return A converter that converts a given native Java value into Flink value.
+   * @return A converter that converts a given native Java value into Flink value, preserving nulls.
    */
   public static Function<Comparable, Comparable> flinkValFunc(LogicalType logicalType, boolean utcTimezone) {
+    Function<Comparable, Comparable> converter = createFlinkValueConverter(logicalType, utcTimezone);
+    return fieldVal -> fieldVal == null ? null : converter.apply(fieldVal);
+  }
+
+  private static Function<Comparable, Comparable> createFlinkValueConverter(LogicalType logicalType, boolean utcTimezone) {
     switch (logicalType.getTypeRoot()) {
       case NULL:
         return fieldVal -> null;

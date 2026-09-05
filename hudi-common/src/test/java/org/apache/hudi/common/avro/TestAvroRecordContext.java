@@ -19,6 +19,12 @@
 
 package org.apache.hudi.common.avro;
 
+import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.util.OrderingValues;
+import org.apache.hudi.common.util.collection.ArrayComparable;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -29,8 +35,10 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.avro.AvroRecordContext.getFieldValueFromIndexedRecord;
@@ -157,4 +165,29 @@ class TestAvroRecordContext {
     assertEquals(getFieldValueFromIndexedRecord(record, "id"), getFieldValueFromIndexedRecord(recordWithCopy, "id"));
     assertEquals(getFieldValueFromIndexedRecord(record, "address.city"), getFieldValueFromIndexedRecord(recordWithCopy, "address.city"));
   }
+
+  @Test
+  void testOrderingValuesPreserveNull() {
+    GenericRecord record = buildRecord();
+    record.put("name", null);
+    HoodieSchema schema = HoodieSchema.fromAvroSchema(RECORD_SCHEMA);
+    AvroRecordContext context = AvroRecordContext.getFieldAccessorInstance();
+    assertEquals(OrderingValues.getDefault(), context.getOrderingValue(record, schema, Collections.emptyList()));
+    assertEquals(OrderingValues.getDefault(), context.getOrderingValue(record, schema, new String[0]));
+    assertEquals(OrderingValues.getDefault(), context.getOrderingValue(record, schema, (String[]) null));
+    assertNull(context.getOrderingValue(record, schema, Collections.singletonList("name")));
+    assertNull(context.getOrderingValue(record, schema, new String[] {"name"}));
+    assertEquals(Arrays.asList(1, null), ((ArrayComparable) context.getOrderingValue(
+        record, schema, Arrays.asList("id", "name"))).getValues());
+    assertNull(context.convertOrderingValueToEngineType(null));
+    assertEquals(OrderingValues.getDefault(), context.getOrderingValue(DeleteRecord.create("id", "p", 0)));
+    assertEquals(OrderingValues.getDefault(), context.getOrderingValue(DeleteRecord.create("id", "p", null)));
+
+    HoodieAvroIndexedRecord hoodieRecord = new HoodieAvroIndexedRecord(record);
+    assertEquals(OrderingValues.getDefault(), new HoodieAvroIndexedRecord(record).getOrderingValue(schema, new Properties(), null));
+    assertEquals(OrderingValues.getDefault(), new HoodieAvroIndexedRecord(record).getOrderingValue(schema, new Properties(), new String[0]));
+    assertNull(hoodieRecord.getOrderingValue(schema, new Properties(), new String[] {"name"}));
+    assertEquals(1, hoodieRecord.getOrderingValue(schema, new Properties(), new String[] {"id"}));
+  }
+
 }

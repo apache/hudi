@@ -114,6 +114,11 @@ public class OrderingValues {
     return orderingValue.getValues();
   }
 
+  /**
+   * Returns whether a delete record uses commit-time ordering: its ordering value is null or
+   * the default integer sentinel. Only use this method for delete records; a null ordering
+   * value in an ordinary data record does not imply commit-time ordering.
+   */
   public static boolean isCommitTimeOrderingValue(Comparable orderingValue) {
     return orderingValue == null || OrderingValues.isDefault(orderingValue);
   }

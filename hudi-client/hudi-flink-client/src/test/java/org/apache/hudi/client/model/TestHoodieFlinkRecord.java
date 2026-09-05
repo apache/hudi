@@ -96,7 +96,7 @@ public class TestHoodieFlinkRecord {
     String[] orderingFields = new String[]{"non_existent_field"};
 
     Comparable<?> orderingValue = record.getOrderingValue(schema, props, orderingFields);
-    assertEquals(OrderingValues.getDefault(), orderingValue);
+    assertNull(orderingValue);
   }
 
   @Test
@@ -142,7 +142,7 @@ public class TestHoodieFlinkRecord {
     String[] orderingFields = new String[]{"non_existent_field"};
 
     Comparable<?> orderingValue = record.getOrderingValueAsJava(schema, props, orderingFields);
-    assertEquals(OrderingValues.getDefault(), orderingValue);
+    assertNull(orderingValue);
   }
 
   @Test
@@ -379,7 +379,18 @@ public class TestHoodieFlinkRecord {
     assertEquals("id-001", record.toIndexedRecord(schema, new Properties())
         .get().getData().get(0).toString());
     assertTrue(record.getAvroBytes(schema, new Properties()).size() > 0);
-    assertEquals(OrderingValues.getDefault(),
-        record.getOrderingValueAsJava(schema, new Properties(), null));
+    assertEquals(OrderingValues.getDefault(), record.getOrderingValueAsJava(schema, new Properties(), null));
   }
+
+  @Test
+  public void testNullOrderingValueIsPreserved() {
+    HoodieSchema schema = HoodieSchema.createRecord("test", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("ts", HoodieSchema.createNullable(HoodieSchemaType.LONG))));
+    HoodieFlinkRecord record = new HoodieFlinkRecord(GenericRowData.of(StringData.fromString("id"), null));
+    assertEquals(OrderingValues.getDefault(), new HoodieFlinkRecord(record.getData()).getOrderingValue(schema, new Properties(), new String[0]));
+    assertNull(record.getOrderingValue(schema, new Properties(), new String[] {"ts"}));
+    assertNull(record.getOrderingValueAsJava(schema, new Properties(), new String[] {"ts"}));
+  }
+
 }

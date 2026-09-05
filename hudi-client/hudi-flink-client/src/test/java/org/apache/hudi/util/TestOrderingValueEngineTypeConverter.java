@@ -192,4 +192,18 @@ public class TestOrderingValueEngineTypeConverter {
     Comparable converted = converter.convert(null);
     Assertions.assertNull(converted);
   }
+
+  @Test
+  public void testNullTimestampOrderingValues() {
+    HoodieSchema schema = HoodieSchema.createRecord("test", null, null, Arrays.asList(
+        HoodieSchemaField.of("ts", HoodieSchema.createTimestampMillis()),
+        HoodieSchemaField.of("seq", HoodieSchema.create(HoodieSchemaType.LONG))));
+    OrderingValueEngineTypeConverter converter = OrderingValueEngineTypeConverter.create(schema, Collections.singletonList("ts"), true);
+    Assertions.assertNull(converter.convert(null));
+    Assertions.assertNull(OrderingValueEngineTypeConverter.create(schema, Collections.emptyList(), true).convert(null));
+    converter = OrderingValueEngineTypeConverter.create(schema, Arrays.asList("ts", "seq"), true);
+    ArrayComparable converted = (ArrayComparable) converter.convert(new ArrayComparable(new Comparable[] {null, 1L}));
+    Assertions.assertEquals(Arrays.asList(null, 1L), converted.getValues());
+  }
+
 }
