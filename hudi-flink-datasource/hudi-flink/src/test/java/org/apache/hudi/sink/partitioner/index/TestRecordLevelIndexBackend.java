@@ -220,6 +220,48 @@ public class TestRecordLevelIndexBackend {
   }
 
   @Test
+  public void testBootstrapCreatesCacheWithoutScanningPersistedIndex() throws Exception {
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      // Metrics are intentionally left unregistered: bootstrapPartition() would NPE on the metrics
+      // field if it were invoked, so a clean call here proves bootstrap() skips the persisted-index scan.
+      backend.bootstrap("new-partition", "key1", "file-group-1");
+
+      assertEquals(1, backend.getPartitionBucketCaches().size());
+      assertEquals("file-group-1", backend.get("new-partition", "key1"));
+    }
+  }
+
+  @Test
+  public void testBootstrapReusesExistingPartitionCache() throws Exception {
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      backend.registerMetrics(new UnregisteredMetricsGroup());
+      backend.update("partition", "existing-key", "existing-file");
+
+      backend.bootstrap("partition", "new-key", "new-file");
+
+      assertEquals(1, backend.getPartitionBucketCaches().size());
+      assertEquals("existing-file", backend.get("partition", "existing-key"));
+      assertEquals("new-file", backend.get("partition", "new-key"));
+    }
+  }
+
+  @Test
+  public void testBootstrapDoesNotMarkCacheAsRecentlyUpdated() throws Exception {
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      backend.onCheckpoint(2L);
+      backend.bootstrap("bootstrapped", "key1", "file1");
+      backend.getPartitionBucketCaches().put("recent", cacheWithHeapSize(backend, 2 * ONE_MB, 2L));
+      backend.onCheckpointComplete(new TestCorrespondent(Collections.emptyMap()), 2L);
+
+      backend.cleanIfNecessary(0L, "recent");
+
+      assertFalse(backend.getPartitionBucketCaches().containsKey("bootstrapped"),
+          "A bootstrapped-only cache must not be protected as a recent update, so it is evicted first");
+      assertTrue(backend.getPartitionBucketCaches().containsKey("recent"));
+    }
+  }
+
+  @Test
   public void testLazyEvictReturnsWhenOnlyProtectedPartitionExceedsLimit() throws Exception {
     try (RecordLevelIndexBackend backend = createBackend()) {
       backend.getPartitionBucketCaches().put("protected", cacheWithHeapSize(backend, 2 * ONE_MB, 1L));
