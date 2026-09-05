@@ -30,8 +30,13 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
+
+import java.util.Arrays;
+import java.util.Collections;
 
 public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<HoodieRecord<T>>,
     HoodieData<HoodieKey>, HoodieData<WriteStatus>, R> {
@@ -52,6 +57,24 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
   protected HoodieData<HoodieRecord<T>> tag(HoodieData<HoodieRecord<T>> dedupedRecords, HoodieEngineContext context,
                                             HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table) {
     return table.getIndex().tagLocation(dedupedRecords, context, table);
+  }
+
+  @Override
+  protected HoodieData<HoodieRecord<T>> updatesAsDeletesAndInserts(HoodieData<HoodieRecord<T>> taggedRecords,
+                                                                   HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table) {
+    HoodieWriteConfig config = table.getConfig();
+    TypedProperties props = config.getProps();
+    final HoodieSchema schema = HoodieSchema.parse(config.getSchema());
+    DeleteContext deleteContext = DeleteContext.fromRecordSchema(props, schema);
+    return taggedRecords.flatMap(record -> {
+      if (!record.isCurrentLocationKnown() || record.isDelete(deleteContext, props)) {
+        return Collections.singletonList(record).iterator();
+      }
+      HoodieRecord<T> deleteRecord = HoodieDeleteHelper.createDeleteRecord(config, record.getKey());
+      deleteRecord.setIgnoreIndexUpdate(true);
+      HoodieIndexUtils.tagRecord(deleteRecord, record.getCurrentLocation());
+      return Arrays.asList(deleteRecord, record.newInstance(record.getKey())).iterator();
+    });
   }
 
   @Override

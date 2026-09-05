@@ -25,6 +25,7 @@ import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
@@ -38,7 +39,9 @@ import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
@@ -72,6 +75,9 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
         // perform index loop up to get existing location of records
         context.setJobStatus(this.getClass().getSimpleName(), "Tagging: " + table.getConfig().getTableName());
         taggedRecords = tag(dedupedRecords, context, table);
+        if (shouldWriteUpdatesAsDeletesAndInserts(table, operationType)) {
+          taggedRecords = updatesAsDeletesAndInserts(taggedRecords, table);
+        }
       }
 
       HoodieWriteMetadata<O> result = executor.execute(taggedRecords, Option.of(sourceReadAndIndexTimer));
@@ -86,6 +92,22 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
 
   protected abstract I tag(
       I dedupedRecords, HoodieEngineContext context, HoodieTable<T, I, K, O> table);
+
+  private boolean shouldWriteUpdatesAsDeletesAndInserts(HoodieTable<T, I, K, O> table, WriteOperationType operationType) {
+    return operationType == WriteOperationType.UPSERT
+        && table.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ
+        && table.getConfig().shouldWriteUpdatesAsDeletesAndInserts();
+  }
+
+  /**
+   * Rewrites each tagged update into a positional delete to the record's current file group plus an
+   * untagged insert of the new version, so the insert partitioner routes the new version to a file
+   * group chosen for inserts. See {@link HoodieWriteConfig#WRITE_UPDATES_AS_DELETES_AND_INSERTS}.
+   */
+  protected I updatesAsDeletesAndInserts(I taggedRecords, HoodieTable<T, I, K, O> table) {
+    throw new HoodieNotSupportedException(
+        HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key() + " is not supported by " + this.getClass().getName());
+  }
 
   public I combineOnCondition(
       boolean condition, I records, int configuredParallelism, HoodieTable<T, I, K, O> table) {
