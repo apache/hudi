@@ -1289,6 +1289,37 @@ jobs:
             sudo chown -R "$USER:$(id -g -n)" hudi-platform-service/hudi-metaserver/target/generated-sources
             mvn package -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION"
           fi
+      - name: Validate Presto Bundle Contents
+        if: needs.changes.outputs.relevant == 'true'
+        env:
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+        run: |
+          # hudi-presto-bundle shades classes it reaches through other modules, and shade does not fail when
+          # an artifactSet include matches nothing - see HUDI #19433, where the bundle silently shipped 0
+          # instead of 102 org/apache/hudi/hadoop/** classes.
+          #
+          # This rebuild exists to exercise repository resolution specifically. Build Project above already
+          # produced a presto bundle from the full reactor, but with the reactor in play Maven's
+          # ReactorReader serves the effective model rather than the published dependency-reduced POM, so
+          # the resolution path that actually broke is never covered. Hence: install the closure, then
+          # build the bundle alone, WITHOUT -am.
+          #
+          # Install hudi-hadoop-mr rather than packaging/hudi-hadoop-mr-bundle: it is the same closure for
+          # the presto bundle's purposes, and re-running the bundle module here would re-shade
+          # packaging/hudi-hadoop-mr-bundle/target/*.jar under a second command line - the same jar
+          # ci_run.sh copies for the IT steps below, leaving two producers for the artifact under test.
+          # clean package rather than package, so the bundle is not left depending on remote-resources
+          # rewriting META-INF to defeat maven-jar-plugin's forceCreation=false.
+          mvn install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS \
+            -pl hudi-hadoop-mr -am
+          mvn clean package -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS \
+            -pl packaging/hudi-presto-bundle
+          # Name the jar exactly rather than globbing: this job builds sources and javadoc jars too, and
+          # "-" sorts before "." so a glob picks up hudi-presto-bundle-<version>-javadoc.jar first.
+          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          ./packaging/bundle-validation/validate_presto_bundle.sh \
+            "packaging/hudi-presto-bundle/target/hudi-presto-bundle-${HUDI_VERSION}.jar"
       - name: IT - Bundle Validation - OpenJDK 11
         if: needs.changes.outputs.relevant == 'true'
         env:
