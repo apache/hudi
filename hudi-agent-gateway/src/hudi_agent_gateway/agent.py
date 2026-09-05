@@ -21,24 +21,24 @@ from __future__ import annotations
 from typing import Any, TypeGuard
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, AnyMessage, trim_messages
+from langchain_core.messages import AIMessage, AnyMessage, SystemMessage, trim_messages
 from langchain_core.messages.utils import count_tokens_approximately
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.prebuilt import create_react_agent
 
 from hudi_agent_gateway.config import GatewaySettings
+from hudi_agent_gateway.tools import get_connector
 from hudi_agent_gateway.tools.registry import ToolRegistry
 
 _SYSTEM_PROMPT = """\
 You are the Apache Hudi lakehouse analyst. You answer questions about data in \
-an Apache Hudi lakehouse by querying it through Trino using your tools. The \
-default catalog is `{catalog}` and the default schema is `{schema}`; tables \
-are Hudi tables registered in the catalog's metastore.
+an Apache Hudi lakehouse by querying it through {engine_name} using your tools. \
+{namespace_line}{schema_section}
 
 Tool strategy:
 - For unfamiliar tables, call `list_tables` and `describe_table` BEFORE writing SQL.
-- `query_lakehouse` accepts exactly ONE read-only SELECT statement (Trino SQL). \
-Qualify names as catalog.schema.table when querying outside the defaults.
+- `query_lakehouse` accepts exactly ONE read-only SELECT statement ({dialect}). \
+{qualify_line}
 - A server-side row cap of {row_cap} rows is enforced. Prefer aggregations, \
 GROUP BY, and explicit LIMIT over raw row dumps.
 - If a result has `truncated: true`, tell the user the result was truncated and \
@@ -52,14 +52,37 @@ Grounding rules:
 {extra}"""
 
 
-def build_system_prompt(settings: GatewaySettings) -> str:
+def build_system_prompt(settings: GatewaySettings, schema_block: str = "") -> str:
     extra = f"\n{settings.system_prompt_extra}" if settings.system_prompt_extra else ""
+    ctx = get_connector(settings.engine).prompt_context(settings)
     return _SYSTEM_PROMPT.format(
-        catalog=settings.trino_catalog,
-        schema=settings.trino_schema,
+        engine_name=ctx.engine_name,
+        dialect=ctx.dialect,
+        namespace_line=ctx.namespace_line,
+        qualify_line=ctx.qualify_line,
+        schema_section=f"\n\n{schema_block}" if schema_block else "",
         row_cap=settings.sql_row_cap,
         extra=extra,
     )
+
+
+def make_prompt(settings: GatewaySettings, schema_cache: Any = None):
+    """The agent prompt: a static string, or -- when the schema cache is on
+    (``GATEWAY_SCHEMA_HINTS=prompt|both``) -- a per-turn callable that renders
+    the current schema snapshot into the system message, so the model writes
+    SQL against real table/column names without a discovery hop."""
+    if schema_cache is None or settings.schema_hints not in ("prompt", "both"):
+        return build_system_prompt(settings)
+
+    def prompt(state: dict[str, Any]) -> list[AnyMessage]:
+        system = SystemMessage(
+            content=build_system_prompt(settings, schema_cache.prompt_block())
+        )
+        # pre_model_hook trims into llm_input_messages; fall back to raw state
+        messages = state.get("llm_input_messages") or state["messages"]
+        return [system, *messages]
+
+    return prompt
 
 
 class AgentCache:
@@ -70,10 +93,11 @@ class AgentCache:
     _MAX_AGENTS = 8
 
     def __init__(self, registry: ToolRegistry, checkpointer: BaseCheckpointSaver,
-                 settings: GatewaySettings) -> None:
+                 settings: GatewaySettings, schema_cache: Any = None) -> None:
         self._registry = registry
         self._checkpointer = checkpointer
         self._settings = settings
+        self._schema_cache = schema_cache
         self._agents: dict[str, Any] = {}
 
     def get(self, model: str | None = None) -> Any:
@@ -88,6 +112,7 @@ class AgentCache:
                 self._registry,
                 self._checkpointer,
                 self._settings,
+                schema_cache=self._schema_cache,
             )
         return self._agents[name]
 
@@ -127,6 +152,7 @@ def build_agent(
     registry: ToolRegistry,
     checkpointer: BaseCheckpointSaver,
     settings: GatewaySettings,
+    schema_cache: Any = None,
 ) -> Any:
     max_messages = settings.max_messages_per_session
 
@@ -146,7 +172,7 @@ def build_agent(
     return create_react_agent(
         model=model,
         tools=registry.langchain_tools(),
-        prompt=build_system_prompt(settings),
+        prompt=make_prompt(settings, schema_cache),
         checkpointer=checkpointer,
         pre_model_hook=trim_llm_input,
     )
