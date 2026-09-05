@@ -25,6 +25,9 @@ import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -50,6 +53,8 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieAvroParquetWriter {
@@ -109,6 +114,42 @@ public class TestHoodieAvroParquetWriter {
     recordKeys.forEach(recordKey -> {
       assertTrue(bloomFilter.mightContain(recordKey));
     });
+  }
+
+  @Test
+  public void testAllExceptRecordKeyWritesOtherMetaFields() throws IOException {
+    HoodieStorage storage = HoodieTestUtils.getStorage(tmpDir.toString());
+    HoodieSchema schema = HoodieTestDataGenerator.HOODIE_SCHEMA_WITH_METADATA_FIELDS;
+    List<GenericRecord> records = new HoodieTestDataGenerator(0xDEED).generateGenericRecords(10);
+    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema.toAvroSchema()),
+        schema, Option.empty(), new Properties());
+    HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig = new HoodieParquetConfig<>(writeSupport,
+        CompressionCodecName.GZIP, ParquetWriter.DEFAULT_BLOCK_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE,
+        1024 * 1024 * 1024, storage.getConf(), 0.1, true);
+    StoragePath filePath = new StoragePath(tmpDir.resolve("without-record-key.parquet").toString());
+    LocalTaskContextSupplier taskContext = new LocalTaskContextSupplier();
+    try (HoodieAvroParquetWriter writer = new HoodieAvroParquetWriter(filePath, parquetConfig, "001",
+        taskContext, MetaFieldsMode.ALL_EXCEPT_RECORD_KEY)) {
+      for (GenericRecord record : records) {
+        GenericRecord withMeta = HoodieAvroUtils.rewriteRecord(record, schema.toAvroSchema());
+        writer.writeAvroWithMetadata(new HoodieKey(record.get("_row_key").toString(), "p1"), withMeta);
+      }
+    }
+    List<GenericRecord> written = new ParquetUtils().readAvroRecords(storage, filePath);
+    assertEquals(records.size(), written.size());
+    for (int i = 0; i < written.size(); i++) {
+      GenericRecord record = written.get(i);
+      assertNull(record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+      assertEquals("001", record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString());
+      assertEquals(HoodieRecord.generateSequenceId("001", taskContext.getPartitionIdSupplier().get(), i),
+          record.get(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).toString());
+      assertEquals("p1", record.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString());
+      assertEquals(filePath.getName(), record.get(HoodieRecord.FILENAME_METADATA_FIELD).toString());
+      assertEquals(records.get(i).get("_row_key").toString(), record.get("_row_key").toString());
+    }
+    Map<String, String> footer = ParquetUtils.readMetadata(storage, filePath).getFileMetaData().getKeyValueMetaData();
+    assertFalse(footer.containsKey(HoodieBloomFilterWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER));
+    assertFalse(footer.containsKey(HoodieBloomFilterWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER));
   }
 
   private static List<String> toJson(List<GenericRecord> records) {
