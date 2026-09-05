@@ -53,7 +53,7 @@ import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRela
 import org.apache.spark.sql.functions.{col, concat, date_format, lit, udf, when}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types.{ArrayType, DataTypes, DateType, IntegerType, LongType, MapType, StringType, StructField, StructType, TimestampType}
-import org.joda.time.DateTime
+import org.joda.time.{DateTime, DateTimeZone}
 import org.joda.time.format.DateTimeFormat
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, assertFalse, assertTrue, fail}
@@ -64,6 +64,7 @@ import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource, Meth
 import java.net.URI
 import java.nio.file.Paths
 import java.sql.{Date, Timestamp}
+import java.util.TimeZone
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.function.Consumer
 
@@ -1481,37 +1482,40 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       assertTrue(readDF.filter(col("_hoodie_partition_path") =!= tc.expectedPartitionUdf(col(tc.partitionCol))).count() == 0)
     }
 
-    // Test 1: EPOCHMILLISECONDS with timezone GMT+08:00
-    val tzMillisOutFmt = "yyyy-MM-dd HH"
-    val udfMillisTz = udf((millis: Long) =>
-      new DateTime(millis).withZone(org.joda.time.DateTimeZone.forID("GMT+08:00"))
-        .toString(DateTimeFormat.forPattern(tzMillisOutFmt).withZone(org.joda.time.DateTimeZone.forID("GMT+08:00"))))
-    runTestCase(TestCase("current_ts", "EPOCHMILLISECONDS", tzMillisOutFmt,
-      Map(TIMESTAMP_TIMEZONE_FORMAT.key -> "GMT+08:00"), udfMillisTz))
+    val outputDateFmt = "yyyy-MM-dd HH"
+    // Joda's DateTimeZone.forID does not recognise "GMT+08:00". HoodieDateTimeParser resolves the
+    // configured id via java.util.TimeZone, so the expected values are built the same way.
+    val tzId = "GMT+08:00"
 
-    // Test 2: EPOCHMICROSECONDS
-    val microsOutFmt = "yyyy-MM-dd HH"
+    // Test 1: EPOCHMILLISECONDS with timezone GMT+08:00
+    val udfMillisTz = udf((millis: Long) => {
+      val zone = DateTimeZone.forTimeZone(TimeZone.getTimeZone(tzId))
+      new DateTime(millis, zone).toString(DateTimeFormat.forPattern(outputDateFmt).withZone(zone))
+    })
+    runTestCase(TestCase("current_ts", "EPOCHMILLISECONDS", outputDateFmt,
+      Map(TIMESTAMP_TIMEZONE_FORMAT.key -> tzId), udfMillisTz))
+
+    // Test 2: EPOCHMICROSECONDS (no timezone configured, so the key generator uses the JVM default)
     val udfMicros = udf((micros: Long) =>
-      new DateTime(micros / 1000).toString(DateTimeFormat.forPattern(microsOutFmt)))
-    runTestCase(TestCase("current_ts_micros", "EPOCHMICROSECONDS", microsOutFmt,
+      new DateTime(micros / 1000).toString(DateTimeFormat.forPattern(outputDateFmt)))
+    runTestCase(TestCase("current_ts_micros", "EPOCHMICROSECONDS", outputDateFmt,
       expectedPartitionUdf = udfMicros))
 
     // Test 3: DATE_STRING with timezone
-    val dateStrOutFmt = "yyyy-MM-dd HH"
     val dateStrInFmt = "yyyy-MM-dd HH:mm:ss"
-    val udfDateStrTz = udf((s: String) =>
-      DateTime.parse(s, DateTimeFormat.forPattern(dateStrInFmt).withZone(org.joda.time.DateTimeZone.forID("GMT+08:00")))
-        .toString(DateTimeFormat.forPattern(dateStrOutFmt).withZone(org.joda.time.DateTimeZone.forID("GMT+08:00"))))
-    runTestCase(TestCase("current_date_string", "DATE_STRING", dateStrOutFmt,
+    val udfDateStrTz = udf((s: String) => {
+      val zone = DateTimeZone.forTimeZone(TimeZone.getTimeZone(tzId))
+      DateTime.parse(s, DateTimeFormat.forPattern(dateStrInFmt).withZone(zone))
+        .toString(DateTimeFormat.forPattern(outputDateFmt).withZone(zone))
+    })
+    runTestCase(TestCase("current_date_string", "DATE_STRING", outputDateFmt,
       Map(TIMESTAMP_INPUT_DATE_FORMAT.key -> dateStrInFmt,
-        TIMESTAMP_TIMEZONE_FORMAT.key -> "GMT+08:00"), udfDateStrTz))
+        TIMESTAMP_TIMEZONE_FORMAT.key -> tzId), udfDateStrTz))
 
-    // Test 4: SCALAR with hours
-    val scalarHoursOutFmt = "yyyy-MM-dd HH"
+    // Test 4: SCALAR with hours (no timezone configured, so the key generator uses the JVM default)
     val udfScalarHours = udf((hours: Long) =>
-      new DateTime(java.util.concurrent.TimeUnit.HOURS.toMillis(hours))
-        .toString(DateTimeFormat.forPattern(scalarHoursOutFmt)))
-    runTestCase(TestCase("current_ts_hours", "SCALAR", scalarHoursOutFmt,
+      new DateTime(TimeUnit.HOURS.toMillis(hours)).toString(DateTimeFormat.forPattern(outputDateFmt)))
+    runTestCase(TestCase("current_ts_hours", "SCALAR", outputDateFmt,
       Map(INPUT_TIME_UNIT.key -> "hours"), udfScalarHours))
   }
 
