@@ -22,19 +22,25 @@ import org.apache.hudi.exception.HoodieException;
 
 import lombok.extern.slf4j.Slf4j;
 
-import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.net.JarURLConnection;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -79,7 +85,7 @@ public class ReflectionUtils {
    *
    * @param clazz               Class name.
    * @param constructorArgTypes Argument types of the constructor.
-   * @return {@code true} if the clazz has the target constructor, {@code false} otherwise.
+   * @return {@code true} if the clazz has the target constructor; {@code false} otherwise.
    */
   public static boolean hasConstructor(String clazz, Class<?>[] constructorArgTypes) {
     return hasConstructor(clazz, constructorArgTypes, true);
@@ -125,56 +131,142 @@ public class ReflectionUtils {
    * Scans all classes accessible from the context class loader
    * which belong to the given package and subpackages.
    *
-   * @param clazz class
-   * @return Stream of Class names in package
+   * <p>Behaviour:
+   * <ul>
+   *   <li>Resources under {@code jar:} URLs (shaded bundle classpaths) are scanned
+   *       through {@link JarURLConnection}. The connection's cache is disabled
+   *       before the {@link JarFile} is read, since cached connections share a
+   *       single backing file and would close it for every other reader in the
+   *       process.</li>
+   *   <li>Resources under {@code file:} URLs (exploded class directories) are
+   *       walked with {@link Files#walk}.</li>
+   *   <li>Inner classes (entries whose name contains {@code $}) are filtered
+   *       out, matching the original behaviour.</li>
+   *   <li>An {@link IOException} from {@link ClassLoader#getResources} yields an
+   *       empty stream instead of propagating; the original code logged the
+   *       exception and then triggered {@link NullPointerException} from the
+   *       following {@code Objects.requireNonNull}.</li>
+   *   <li>A class with no package (arrays, primitives) yields an empty stream
+   *       instead of propagating; the original code dereferenced
+   *       {@code Class#getPackage()} and threw {@link NullPointerException}.</li>
+   * </ul>
+   *
+   * @param clazz class whose package is scanned; the class itself need not be reachable
+   * @return Stream of fully-qualified class names in the package and subpackages
    */
   public static Stream<String> getTopLevelClassesInClasspath(Class<?> clazz) {
     ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-    String packageName = clazz.getPackage().getName();
+    if (classLoader == null) {
+      return Stream.empty();
+    }
+    Package pkg = clazz.getPackage();
+    if (pkg == null) {
+      return Stream.empty();
+    }
+    String packageName = pkg.getName();
     String path = packageName.replace('.', '/');
-    Enumeration<URL> resources = null;
+    Enumeration<URL> resources;
     try {
       resources = classLoader.getResources(path);
     } catch (IOException e) {
       log.error("Unable to fetch Resources in package {}", packageName, e);
+      return Stream.empty();
     }
-    List<File> directories = new ArrayList<>();
-    while (Objects.requireNonNull(resources).hasMoreElements()) {
-      URL resource = resources.nextElement();
-      try {
-        directories.add(new File(resource.toURI()));
-      } catch (URISyntaxException e) {
-        log.error("Unable to get URI for {}", resource, e);
-      }
+    return Collections.list(resources).stream()
+        .flatMap(resource -> findClasses(resource, packageName));
+  }
+
+  /**
+   * Finds all top-level classes in {@code packageName} reachable from a package resource URL.
+   *
+   * <p>Routes {@code jar:} URLs through {@link #findClassesInJar} and everything else through
+   * {@link #findClassesInDirectory}.
+   *
+   * @param resource    the package resource URL
+   * @param packageName the package whose classes should be discovered
+   * @return the classes found in {@code packageName} and its subpackages, or an empty stream
+   */
+  private static Stream<String> findClasses(URL resource, String packageName) {
+    if ("jar".equals(resource.getProtocol())) {
+      return findClassesInJar(resource, packageName);
+    }
+    Path directory;
+    try {
+      directory = Paths.get(resource.toURI());
+    } catch (URISyntaxException | IllegalArgumentException e) {
+      log.error("Unable to get URI for {}", resource, e);
+      return Stream.empty();
+    }
+    return findClassesInDirectory(directory, packageName);
+  }
+
+  /**
+   * Scans a JAR for class entries under {@code packageName} and its subpackages.
+   *
+   * <p>{@code JarURLConnection} instances are cached by default; closing the
+   * {@link JarFile} returned by a cached connection closes it for every other
+   * reader in the same JVM. Disabling the cache here keeps the JAR open for
+   * concurrent readers and leaves the lifecycle to the caller.
+   *
+   * @param resource    a {@code jar:} URL whose {@link JarURLConnection} identifies a JAR entry path
+   * @param packageName the package whose classes should be discovered
+   * @return the classes found in {@code packageName} and its subpackages, or an empty stream
+   */
+  private static Stream<String> findClassesInJar(URL resource, String packageName) {
+    String prefix = packageName.replace('.', '/') + "/";
+    JarURLConnection connection;
+    try {
+      connection = (JarURLConnection) resource.openConnection();
+      connection.setUseCaches(false);
+    } catch (IOException e) {
+      log.error("Unable to open JAR resource {} for package {}", resource, packageName, e);
+      return Stream.empty();
+    }
+    JarFile jarFile;
+    try {
+      jarFile = connection.getJarFile();
+    } catch (IOException e) {
+      log.error("Unable to read JAR resource {} for package {}", resource, packageName, e);
+      return Stream.empty();
     }
     List<String> classes = new ArrayList<>();
-    for (File directory : directories) {
-      classes.addAll(findClasses(directory, packageName));
+    Enumeration<JarEntry> entries = jarFile.entries();
+    while (entries.hasMoreElements()) {
+      JarEntry entry = entries.nextElement();
+      String name = entry.getName();
+      if (name.startsWith(prefix) && name.endsWith(".class") && !name.contains("$")) {
+        String className = name.substring(0, name.length() - ".class".length()).replace('/', '.');
+        classes.add(className);
+      }
     }
     return classes.stream();
   }
 
   /**
-   * Recursive method used to find all classes in a given directory and subdirs.
+   * Walks an exploded class directory for class entries under {@code packageName} and its subpackages.
    *
-   * @param directory   The base directory
-   * @param packageName The package name for classes found inside the base directory
-   * @return classes in the package
+   * @param directory   the base directory corresponding to the package root
+   * @param packageName the package whose classes should be discovered
+   * @return the classes found in {@code packageName} and its subpackages, or an empty stream
    */
-  private static List<String> findClasses(File directory, String packageName) {
-    List<String> classes = new ArrayList<>();
-    if (!directory.exists()) {
-      return classes;
+  private static Stream<String> findClassesInDirectory(Path directory, String packageName) {
+    if (!Files.isDirectory(directory)) {
+      return Stream.empty();
     }
-    File[] files = directory.listFiles();
-    for (File file : Objects.requireNonNull(files)) {
-      if (file.isDirectory()) {
-        classes.addAll(findClasses(file, packageName + "." + file.getName()));
-      } else if (file.getName().endsWith(".class")) {
-        classes.add(packageName + '.' + file.getName().substring(0, file.getName().length() - 6));
-      }
+    String prefix = packageName + ".";
+    try (Stream<Path> paths = Files.walk(directory)) {
+      return paths
+          .filter(Files::isRegularFile)
+          .map(p -> p.getFileName().toString())
+          .filter(name -> name.endsWith(".class"))
+          .filter(name -> !name.contains("$"))
+          .map(name -> prefix + name.substring(0, name.length() - ".class".length()))
+          .collect(Collectors.toList())
+          .stream();
+    } catch (IOException e) {
+      log.error("Unable to walk {} for package {}", directory, packageName, e);
+      return Stream.empty();
     }
-    return classes;
   }
 
   /**
