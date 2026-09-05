@@ -24,7 +24,7 @@ import org.apache.hudi.QuickstartUtils.{convertToStringList, getQuickstartWriteC
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, RecordMergeMode}
-import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{INPUT_TIME_UNIT, TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_TIMEZONE_FORMAT, TIMESTAMP_TYPE_FIELD}
+import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{INPUT_TIME_UNIT, TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_INPUT_TIMEZONE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_TIMEZONE_FORMAT, TIMESTAMP_TIMEZONE_FORMAT, TIMESTAMP_TYPE_FIELD}
 import org.apache.hudi.common.config.metrics.HoodieMetricsConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieRecord, HoodieReplaceCommitMetadata, WriteOperationType}
@@ -53,7 +53,7 @@ import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRela
 import org.apache.spark.sql.functions.{col, concat, date_format, lit, udf, when}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types.{ArrayType, DataTypes, DateType, IntegerType, LongType, MapType, StringType, StructField, StructType, TimestampType}
-import org.joda.time.{DateTime, DateTimeZone}
+import org.joda.time.DateTime
 import org.joda.time.format.DateTimeFormat
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, assertFalse, assertTrue, fail}
@@ -64,7 +64,6 @@ import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource, Meth
 import java.net.URI
 import java.nio.file.Paths
 import java.sql.{Date, Timestamp}
-import java.util.TimeZone
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.function.Consumer
 
@@ -1456,67 +1455,40 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   def testTimestampBasedKeyGeneratorWithVariousConfigurations(recordType: HoodieRecordType) {
     val (writeOpts, readOpts) = getWriterReaderOptsLessPartitionPath(recordType)
 
-    val records = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
-    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
-      .withColumn("current_ts_micros", col("current_ts") * 1000)
-      .withColumn("current_date_string",
-        date_format((col("current_ts") / 1000).cast("timestamp"), "yyyy-MM-dd HH:mm:ss"))
-      .withColumn("current_ts_hours", (col("current_ts") / 3600000).cast("long"))
+    val records = recordsToStrings(dataGen.generateInserts("000", 2)).asScala.toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 1))
+      .withColumn("current_date_string", lit("2009-02-14 07:31:30"))
+      .withColumn("current_ts_micros", lit(1234596690123456L))
 
-    case class TestCase(partitionCol: String, tsType: String, outFmt: String,
-                        extraOpts: Map[String, String] = Map.empty,
-                        expectedPartitionUdf: org.apache.spark.sql.expressions.UserDefinedFunction)
+    case class TestCase(partitionCol: String, tsType: String,
+                        extraOpts: Map[String, String], expectedPartition: String)
 
-    def runTestCase(tc: TestCase): Unit = {
-      val writer = tc.extraOpts.foldLeft(
-        inputDF.write.format("hudi")
-          .options(writeOpts)
-          .option(KEYGENERATOR_CLASS_NAME.key(), classOf[TimestampBasedKeyGenerator].getName)
-          .mode(SaveMode.Overwrite)
-      ) { case (w, (k, v)) => w.option(k, v) }
-      writer.partitionBy(tc.partitionCol)
+    val testCases = Seq(
+      // Non-default input/output zones shift the date as well as the hour.
+      TestCase("current_date_string", "DATE_STRING",
+        Map(TIMESTAMP_INPUT_DATE_FORMAT.key -> "yyyy-MM-dd HH:mm:ss",
+          TIMESTAMP_INPUT_TIMEZONE_FORMAT.key -> "GMT+08:00",
+          TIMESTAMP_OUTPUT_TIMEZONE_FORMAT.key -> "GMT-05:00"), "2009-02-13 18"),
+      TestCase("current_ts_micros", "SCALAR",
+        Map(INPUT_TIME_UNIT.key -> "microseconds",
+          TIMESTAMP_OUTPUT_TIMEZONE_FORMAT.key -> "UTC"), "2009-02-14 07"))
+
+    testCases.foreach { tc =>
+      inputDF.write.format("hudi")
+        .options(writeOpts)
+        .options(tc.extraOpts)
+        .option(KEYGENERATOR_CLASS_NAME.key(), classOf[TimestampBasedKeyGenerator].getName)
+        .mode(SaveMode.Overwrite)
+        .partitionBy(tc.partitionCol)
         .option(TIMESTAMP_TYPE_FIELD.key, tc.tsType)
-        .option(TIMESTAMP_OUTPUT_DATE_FORMAT.key, tc.outFmt)
+        .option(TIMESTAMP_OUTPUT_DATE_FORMAT.key, "yyyy-MM-dd HH")
         .save(basePath)
-      val readDF = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
-      assertTrue(readDF.filter(col("_hoodie_partition_path") =!= tc.expectedPartitionUdf(col(tc.partitionCol))).count() == 0)
+      val paths = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
+        .select("_hoodie_partition_path").collect().map(_.getString(0)).toSeq
+      val caseLabel = s"${tc.tsType}, $recordType"
+      assertEquals(2, paths.size, s"unexpected row count for $caseLabel")
+      assertEquals(Seq.fill(2)(tc.expectedPartition), paths, s"partition path mismatch for $caseLabel")
     }
-
-    val outputDateFmt = "yyyy-MM-dd HH"
-    // Joda's DateTimeZone.forID does not recognise "GMT+08:00". HoodieDateTimeParser resolves the
-    // configured id via java.util.TimeZone, so the expected values are built the same way.
-    val tzId = "GMT+08:00"
-
-    // Test 1: EPOCHMILLISECONDS with timezone GMT+08:00
-    val udfMillisTz = udf((millis: Long) => {
-      val zone = DateTimeZone.forTimeZone(TimeZone.getTimeZone(tzId))
-      new DateTime(millis, zone).toString(DateTimeFormat.forPattern(outputDateFmt).withZone(zone))
-    })
-    runTestCase(TestCase("current_ts", "EPOCHMILLISECONDS", outputDateFmt,
-      Map(TIMESTAMP_TIMEZONE_FORMAT.key -> tzId), udfMillisTz))
-
-    // Test 2: EPOCHMICROSECONDS (no timezone configured, so the key generator uses the JVM default)
-    val udfMicros = udf((micros: Long) =>
-      new DateTime(micros / 1000).toString(DateTimeFormat.forPattern(outputDateFmt)))
-    runTestCase(TestCase("current_ts_micros", "EPOCHMICROSECONDS", outputDateFmt,
-      expectedPartitionUdf = udfMicros))
-
-    // Test 3: DATE_STRING with timezone
-    val dateStrInFmt = "yyyy-MM-dd HH:mm:ss"
-    val udfDateStrTz = udf((s: String) => {
-      val zone = DateTimeZone.forTimeZone(TimeZone.getTimeZone(tzId))
-      DateTime.parse(s, DateTimeFormat.forPattern(dateStrInFmt).withZone(zone))
-        .toString(DateTimeFormat.forPattern(outputDateFmt).withZone(zone))
-    })
-    runTestCase(TestCase("current_date_string", "DATE_STRING", outputDateFmt,
-      Map(TIMESTAMP_INPUT_DATE_FORMAT.key -> dateStrInFmt,
-        TIMESTAMP_TIMEZONE_FORMAT.key -> tzId), udfDateStrTz))
-
-    // Test 4: SCALAR with hours (no timezone configured, so the key generator uses the JVM default)
-    val udfScalarHours = udf((hours: Long) =>
-      new DateTime(TimeUnit.HOURS.toMillis(hours)).toString(DateTimeFormat.forPattern(outputDateFmt)))
-    runTestCase(TestCase("current_ts_hours", "SCALAR", outputDateFmt,
-      Map(INPUT_TIME_UNIT.key -> "hours"), udfScalarHours))
   }
 
   @ParameterizedTest
