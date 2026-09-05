@@ -45,7 +45,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Cast, JoinedRow}
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
-import org.apache.spark.sql.execution.datasources.{DataSourceUtils, PartitionedFile, RecordReaderIterator}
+import org.apache.spark.sql.execution.datasources.{DataSourceUtils, FileFormat, PartitionedFile, RecordReaderIterator}
 import org.apache.spark.sql.execution.datasources.parquet.Spark3LegacyHoodieParquetFileFormat._
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
@@ -171,7 +171,11 @@ abstract class Spark3LegacyHoodieParquetFileFormat(shouldAppendPartitionValues: 
     val int96RebaseModeInRead = parquetOptions.int96RebaseModeInRead
     val timeZoneId = Option(sqlConf.sessionLocalTimeZone)
     // Whole stage codegen (PhysicalRDD) is able to deal with batches directly.
-    val returningBatch = getReturningBatch(sparkSession, resultSchema)
+    // Respect the plan-time OPTION_RETURNING_BATCH decision when present, instead of recomputing it here.
+    val returningBatch = enableVectorizedReader &&
+      options.get(FileFormat.OPTION_RETURNING_BATCH)
+        .map(_.equals("true"))
+        .getOrElse(getReturningBatch(sparkSession, resultSchema))
 
     (file: PartitionedFile) => {
       assert(!shouldAppendPartitionValues || file.partitionValues.numFields == partitionSchema.size)
