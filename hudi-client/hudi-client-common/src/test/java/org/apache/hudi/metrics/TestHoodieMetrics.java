@@ -28,9 +28,11 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.index.HoodieIndex;
 
+import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Timer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,6 +46,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
@@ -320,6 +323,41 @@ public class TestHoodieMetrics {
     assertEquals((long)metrics.getRegistry().getGauges().get(metricName).getValue(), 6L);
   }
 
+  @Test
+  void testTableServiceInstantMetricsReadPendingClusteringOncePerCommitAndNeverWhenMetricsOff() {
+    AtomicInteger reads = new AtomicInteger();
+    HoodieActiveTimeline counting = new MockHoodieActiveTimeline() {
+      @Override
+      public HoodieTimeline filterPendingClusteringTimeline() {
+        reads.incrementAndGet();
+        return super.filterPendingClusteringTimeline();
+      }
+    };
+
+    buildMetricsOff().updateTableServiceInstantMetrics(counting);
+    assertEquals(0, reads.get(), "pending clustering must not be read when metrics are off");
+
+    hoodieMetrics.updateTableServiceInstantMetrics(counting);
+    assertEquals(1, reads.get(), "pending clustering must be read once per commit, and shared by both metrics");
+  }
+
+  @Test
+  void testPendingClusteringInstantMetricsSurviveUnreadableReplaceMetadata() {
+    HoodieActiveTimeline unreadable = new MockHoodieActiveTimeline() {
+      @Override
+      public HoodieTimeline filterPendingClusteringTimeline() {
+        throw new HoodieIOException("simulated requested replace metadata read failure");
+      }
+    };
+
+    assertDoesNotThrow(() -> hoodieMetrics.updateTableServiceInstantMetrics(unreadable));
+
+    String countMetric = hoodieMetrics.getMetricsName(HoodieTimeline.CLUSTERING_ACTION, HoodieMetrics.PENDING_CLUSTERING_INSTANT_COUNT_STR);
+    Gauge<?> count = metrics.getRegistry().getGauges().get(countMetric);
+    assertNotNull(count, countMetric + " was never registered");
+    assertEquals(0L, count.getValue());
+  }
+
   private static class MockHoodieActiveTimeline extends ActiveTimelineV2 {
     public MockHoodieActiveTimeline(HoodieInstant... instants) {
       super();
@@ -372,6 +410,7 @@ public class TestHoodieMetrics {
     assertDoesNotThrow(() -> metricsOff.updatePostCommitMetrics(false, 0L));
     assertDoesNotThrow(() -> metricsOff.reportMetrics("action", "metric", 0L));
     assertDoesNotThrow(() -> metricsOff.updateClusteringFileCreationMetrics(0L));
+    assertDoesNotThrow(() -> metricsOff.updateTableServiceInstantMetrics(new MockHoodieActiveTimeline()));
     assertDoesNotThrow(() -> metricsOff.emitRollbackFailure("SomeException"));
     assertDoesNotThrow(() -> metricsOff.emitRollbackFailure(null));
     assertDoesNotThrow(() -> metricsOff.emitCompactionRequested());

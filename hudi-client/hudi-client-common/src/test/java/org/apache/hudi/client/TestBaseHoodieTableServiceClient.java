@@ -41,11 +41,13 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
+import com.codahale.metrics.Gauge;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -63,6 +65,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -426,7 +429,47 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
         "Clustering instants should NOT be rolled back when config is disabled");
   }
 
+  // preTableVersion8=true -> v6 (replacecommit), false -> v9 (clustering)
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void updateTableServiceInstantMetrics_reportsPendingClusteringPerTableVersion(boolean preTableVersion8) throws IOException {
+    initMetaClient(preTableVersion8);
+    String clusteringAction = preTableVersion8 ? HoodieTimeline.REPLACE_COMMIT_ACTION : HoodieTimeline.CLUSTERING_ACTION;
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withMetricsConfig(HoodieMetricsConfig.newBuilder()
+            .on(true)
+            .withReporterType(MetricsReporterType.INMEMORY.name())
+            .build())
+        .build();
+    HoodieMetrics hoodieMetrics = new HoodieMetrics(writeConfig, metaClient.getStorage());
+
+    // A real pending insert_overwrite holds a bare requested replace metadata, so its operationType is null.
+    metaClient.getActiveTimeline()
+        .createRequestedCommitWithReplaceMetadata("20260101010101001", HoodieTimeline.REPLACE_COMMIT_ACTION);
+    createClusteringInstant("20260101010101002", clusteringAction, false);
+    createClusteringInstant("20260101010101003", clusteringAction, true);
+
+    hoodieMetrics.updateTableServiceInstantMetrics(metaClient.getActiveTimeline());
+
+    Gauge<?> count = clusteringGauge(hoodieMetrics, HoodieMetrics.PENDING_CLUSTERING_INSTANT_COUNT_STR);
+    assertNotNull(count, HoodieMetrics.PENDING_CLUSTERING_INSTANT_COUNT_STR + " was never registered");
+    assertEquals(2L, count.getValue());
+    Gauge<?> earliest = clusteringGauge(hoodieMetrics, HoodieMetrics.EARLIEST_PENDING_CLUSTERING_INSTANT_STR);
+    assertNotNull(earliest, HoodieMetrics.EARLIEST_PENDING_CLUSTERING_INSTANT_STR + " was never registered");
+    assertEquals(20260101010101002L, earliest.getValue());
+  }
+
+  private Gauge<?> clusteringGauge(HoodieMetrics hoodieMetrics, String metricName) {
+    return hoodieMetrics.getMetrics().getRegistry().getGauges()
+        .get(hoodieMetrics.getMetricsName(HoodieTimeline.CLUSTERING_ACTION, metricName));
+  }
+
   private void createClusteringInstant(String instantTime, String clusteringAction) {
+    createClusteringInstant(instantTime, clusteringAction, true);
+  }
+
+  private void createClusteringInstant(String instantTime, String clusteringAction, boolean transitionToInflight) {
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     HoodieInstant requestedInstant = metaClient.getInstantGenerator()
         .createNewInstant(HoodieInstant.State.REQUESTED, clusteringAction, instantTime);
@@ -444,7 +487,9 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     } else {
       timeline.createNewInstant(requestedInstant);
     }
-    timeline.transitionClusterRequestedToInflight(requestedInstant, Option.empty());
+    if (transitionToInflight) {
+      timeline.transitionClusterRequestedToInflight(requestedInstant, Option.empty());
+    }
     metaClient.reloadActiveTimeline();
   }
 
