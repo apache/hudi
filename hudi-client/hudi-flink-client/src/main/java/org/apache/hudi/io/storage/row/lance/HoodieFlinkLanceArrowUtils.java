@@ -40,6 +40,8 @@ import org.apache.arrow.vector.TinyIntVector;
 import org.apache.arrow.vector.ValueVector;
 import org.apache.arrow.vector.VarBinaryVector;
 import org.apache.arrow.vector.VarCharVector;
+import org.apache.arrow.vector.complex.BaseListVector;
+import org.apache.arrow.vector.complex.FixedSizeListVector;
 import org.apache.arrow.vector.complex.ListVector;
 import org.apache.arrow.vector.complex.StructVector;
 import org.apache.arrow.vector.types.DateUnit;
@@ -174,7 +176,7 @@ public final class HoodieFlinkLanceArrowUtils {
       case ROW:
         return readRow((RowType) type, (StructVector) vector, rowId);
       case ARRAY:
-        return readArray((ArrayType) type, (ListVector) vector, rowId);
+        return readArray((ArrayType) type, vector, rowId);
       default:
         throw unsupported(type);
     }
@@ -319,9 +321,9 @@ public final class HoodieFlinkLanceArrowUtils {
         fields.add(new RowType.RowField(child.getName(), toLogicalType(child, path + "." + child.getName())));
       }
       logicalType = new RowType(field.isNullable(), fields);
-    } else if (arrowType instanceof ArrowType.List) {
+    } else if (arrowType instanceof ArrowType.List || arrowType instanceof ArrowType.FixedSizeList) {
       ValidationUtils.checkArgument(field.getChildren().size() == 1,
-          String.format("Unsupported Arrow schema at '%s': LIST must contain exactly one child field", path));
+          String.format("Unsupported Arrow schema at '%s': list must contain exactly one child field", path));
       Field element = field.getChildren().get(0);
       logicalType = new ArrayType(field.isNullable(), toLogicalType(element, path + "[]"));
     } else {
@@ -338,11 +340,14 @@ public final class HoodieFlinkLanceArrowUtils {
     return row;
   }
 
-  private static ArrayData readArray(ArrayType arrayType, ListVector vector, int rowId) {
-    int startIndex = vector.getElementStartIndex(rowId);
-    int endIndex = vector.getElementEndIndex(rowId);
+  private static ArrayData readArray(ArrayType arrayType, ValueVector vector, int rowId) {
+    BaseListVector listVector = (BaseListVector) vector;
+    FieldVector dataVector = vector instanceof FixedSizeListVector
+        ? ((FixedSizeListVector) vector).getDataVector()
+        : ((ListVector) vector).getDataVector();
+    int startIndex = listVector.getElementStartIndex(rowId);
+    int endIndex = listVector.getElementEndIndex(rowId);
     Object[] values = new Object[endIndex - startIndex];
-    FieldVector dataVector = vector.getDataVector();
     for (int i = 0; i < values.length; i++) {
       values[i] = readValue(arrayType.getElementType(), dataVector, startIndex + i);
     }
