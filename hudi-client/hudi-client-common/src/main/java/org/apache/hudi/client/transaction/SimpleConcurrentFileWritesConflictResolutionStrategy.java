@@ -38,6 +38,7 @@ import java.util.ConcurrentModificationException;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION;
@@ -145,6 +146,21 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
       log.info("Found conflicting writes between first operation = {}, second operation = {} , intersecting file ids {}", thisOperation, otherOperation, intersection);
       return true;
     }
+    // Two overwrites of the same partition replace each other's file groups only if they saw them at planning
+    // time. Once one of them has completed, a second overwrite of that partition that did not replace the
+    // first one's files would leave both copies of the data live, so it is rejected even though the two
+    // share no file id. Pending overwrites keep file-id semantics: first to commit wins.
+    if (WriteOperationType.isOverwrite(thisOperation.getOperationType())
+        && WriteOperationType.isOverwrite(otherOperation.getOperationType())
+        && HoodieInstant.State.COMPLETED.name().equals(otherOperation.getInstantActionState())) {
+      Set<String> overlappingPartitions = getMutatedPartitions(thisOperation);
+      overlappingPartitions.retainAll(getMutatedPartitions(otherOperation));
+      if (!overlappingPartitions.isEmpty()) {
+        log.info("Found conflicting writes between first operation = {}, second operation = {} , overwritten partitions {}",
+            thisOperation, otherOperation, overlappingPartitions);
+        return true;
+      }
+    }
     return false;
   }
 
@@ -177,6 +193,10 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
    */
   private boolean isRollbackOperation(ConcurrentOperation operation) {
     return ROLLBACK_ACTION.equals(operation.getInstantActionType());
+  }
+
+  private static Set<String> getMutatedPartitions(ConcurrentOperation operation) {
+    return operation.getMutatedPartitionAndFileIds().stream().map(Pair::getLeft).collect(Collectors.toSet());
   }
 
   @Override
