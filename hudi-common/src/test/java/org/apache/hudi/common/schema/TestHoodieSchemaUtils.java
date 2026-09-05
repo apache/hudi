@@ -1058,8 +1058,8 @@ public class TestHoodieSchemaUtils {
   public void testGenerateProjectionSchemaIgnoresDefaultLocale() {
     // Under tr-TR, String#toLowerCase() maps an upper-case I to dotless-i (U+0131), so a default-locale lowercase
     // on one side of the lookup and Locale.ROOT on the other (HiveHoodieReaderContext) cannot match for any name
-    // that contains an upper-case I. Surefire runs this module single-forked and sequentially, so toggling the
-    // default locale here does not leak into other tests.
+    // that contains an upper-case I. Surefire reuses one JVM across the module's tests, so the finally block below
+    // is what keeps the toggle from reaching any test that runs after this one.
     Locale saved = Locale.getDefault();
     Locale.setDefault(Locale.forLanguageTag("tr-TR"));
     try {
