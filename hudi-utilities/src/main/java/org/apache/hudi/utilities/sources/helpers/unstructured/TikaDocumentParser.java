@@ -60,9 +60,11 @@ public class TikaDocumentParser implements DocumentParser {
         truncated = true;
       }
       return ParseResult.success(handler.toString().trim(), toMap(tikaMetadata), truncated);
-    } catch (Throwable t) {
-      // Never propagate: a corrupt file must not fail the ingestion job.
-      return ParseResult.failed(t.getClass().getSimpleName() + ": " + String.valueOf(t.getMessage()));
+    } catch (Exception e) {
+      // A corrupt file must not fail the ingestion job. Error is deliberately not caught:
+      // swallowing OutOfMemoryError would carry on with an undefined JVM state instead of
+      // failing the task and letting Spark retry it elsewhere.
+      return ParseResult.failed(e.getClass().getSimpleName() + ": " + String.valueOf(e.getMessage()));
     }
   }
 
