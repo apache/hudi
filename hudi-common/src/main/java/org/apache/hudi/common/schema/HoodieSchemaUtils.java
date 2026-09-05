@@ -574,7 +574,12 @@ public final class HoodieSchemaUtils {
         return HoodieSchema.createMap(pruneDataSchema(dataSchema.getValueType(), requiredSchema.getValueType(), Collections.emptySet()));
 
       case UNION:
-        throw new IllegalArgumentException("Data schema is a union");
+        // A union is a leaf as far as pruning goes: Avro resolves a branch by its type, so dropping a
+        // branch changes the column's type instead of narrowing it. Hand back the data schema unpruned,
+        // which is what the default arm below already does when Spark projects a single member out of
+        // the member-struct encoding of a union. This also covers a plain record whose fields happen to
+        // be named member0..memberN, which HoodieSparkSchemaConverters reads back as a union.
+        return dataSchema;
 
       default:
         return dataSchema;

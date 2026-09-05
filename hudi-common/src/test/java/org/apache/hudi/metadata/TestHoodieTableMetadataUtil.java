@@ -413,6 +413,27 @@ class TestHoodieTableMetadataUtil {
   }
 
   @Test
+  void testMultiBranchUnionColumnsAreNotSupportedForColumnStats() {
+    // A column typed ["null", "string", "int"] has no single value type, so it must be skipped the same
+    // way RECORD/MAP/ARRAY are. Indexing it instead reaches ValueType#fromSchema and #coerceToComparable,
+    // whose throws are caught by readColumnRangeMetadataFrom and drop the whole file's stats (#19825).
+    HoodieSchema multiBranchUnion = HoodieSchema.createUnion(
+        HoodieSchema.create(HoodieSchemaType.NULL),
+        HoodieSchema.create(HoodieSchemaType.STRING),
+        HoodieSchema.create(HoodieSchemaType.INT));
+    HoodieSchema nullableString = HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.STRING));
+
+    for (HoodieIndexVersion indexVersion : new HoodieIndexVersion[] {HoodieIndexVersion.V1, HoodieIndexVersion.V2}) {
+      for (Option<HoodieRecordType> rt : Arrays.<Option<HoodieRecordType>>asList(Option.empty(), Option.of(HoodieRecordType.AVRO), Option.of(HoodieRecordType.SPARK))) {
+        assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(multiBranchUnion, rt, indexVersion),
+            "A union with two or more non-null branches must be excluded from " + indexVersion + " column stats");
+        assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(nullableString, rt, indexVersion),
+            "A plain nullable column must stay supported for " + indexVersion + " column stats");
+      }
+    }
+  }
+
+  @Test
   void testCreateRecordIndexUpdateMillisOverloadMatchesStringOverload() {
     String instantTime = "20260610153045678";
     long instantTimeMillis = HoodieMetadataPayload.parseRecordIndexInstantTime(instantTime);

@@ -1509,6 +1509,8 @@ public class HoodieTableMetadataUtil {
   }
 
   public static boolean isColumnTypeSupported(HoodieSchema schema, Option<HoodieRecordType> recordType, HoodieIndexVersion indexVersion) {
+    // getNonNullType() strips the null branch of a nullable column, so a UNION still standing after this
+    // is one with two or more non-null branches, which has no single value type to collect stats for.
     HoodieSchema schemaToCheck = schema.getNonNullType();
     if (indexVersion.lowerThan(HoodieIndexVersion.V2)) {
       return isColumnTypeSupportedV1(schemaToCheck, recordType);
@@ -1528,11 +1530,12 @@ public class HoodieTableMetadataUtil {
     }
 
     HoodieSchemaType type = schema.getType();
-    // if record type is set and if its AVRO, MAP, ARRAY, RECORD and ENUM types are unsupported.
+    // if record type is set and if its AVRO, MAP, ARRAY, RECORD, ENUM and multi-branch UNION types are unsupported.
     if (recordType.isPresent() && recordType.get() == HoodieRecordType.AVRO) {
       return (type != HoodieSchemaType.RECORD && type != HoodieSchemaType.ARRAY && type != HoodieSchemaType.MAP
           && type != HoodieSchemaType.ENUM && type != HoodieSchemaType.VARIANT
-          && type != HoodieSchemaType.BLOB && type != HoodieSchemaType.VECTOR);
+          && type != HoodieSchemaType.BLOB && type != HoodieSchemaType.VECTOR
+          && type != HoodieSchemaType.UNION);
     }
     // if record Type is not set or if recordType is SPARK then we cannot support AVRO, MAP, ARRAY, RECORD, ENUM and FIXED and BYTES type as well.
     // HUDI-8585 will add support for BYTES and FIXED
@@ -1541,7 +1544,8 @@ public class HoodieTableMetadataUtil {
         && type != HoodieSchemaType.DECIMAL // DECIMAL's underlying type is BYTES
         && type != HoodieSchemaType.BLOB
         && type != HoodieSchemaType.VECTOR
-        && type != HoodieSchemaType.VARIANT;
+        && type != HoodieSchemaType.VARIANT
+        && type != HoodieSchemaType.UNION;
   }
 
   private static boolean isColumnTypeSupportedV2(HoodieSchema schema) {
@@ -1553,7 +1557,7 @@ public class HoodieTableMetadataUtil {
     return type != HoodieSchemaType.RECORD && type != HoodieSchemaType.MAP
         && type != HoodieSchemaType.ARRAY && type != HoodieSchemaType.ENUM
         && type != HoodieSchemaType.BLOB && type != HoodieSchemaType.VECTOR
-        && type != HoodieSchemaType.VARIANT;
+        && type != HoodieSchemaType.VARIANT && type != HoodieSchemaType.UNION;
   }
 
   public static Set<String> getInflightMetadataPartitions(HoodieTableConfig tableConfig) {

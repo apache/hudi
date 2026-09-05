@@ -88,6 +88,31 @@ class TestSchemaConverters extends SparkAdapterSupport {
   }
 
   @Test
+  def testMemberStructUnionSurvivesReadPathSchemaSteps(): Unit = {
+    // The two schema steps HoodieFileGroupReaderBasedFileFormat#buildReaderWithPartitionValues takes
+    // before it opens a file, run over a table schema carrying ["null","string","int"]: the walk that
+    // decides logical-timestamp repair, then the prune of the table schema down to what Spark asked
+    // for. Both used to fail on this shape -- the first by recursing forever, the second by rejecting
+    // the union outright (#19825).
+    val tableSchema = HoodieSchema.createRecord("test_record", "hoodie.test", null, util.Arrays.asList(
+      HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.LONG)),
+      HoodieSchemaField.of("choice", HoodieSchema.createUnion(
+        HoodieSchema.create(HoodieSchemaType.NULL),
+        HoodieSchema.create(HoodieSchemaType.STRING),
+        HoodieSchema.create(HoodieSchemaType.INT)), null, null)))
+
+    assertFalse(HoodieSchemaRepair.hasTimestampMillisField(tableSchema))
+
+    // Spark sees the union as the member struct it round-trips through, and asks for it back
+    val requestedStructType = HoodieSparkSchemaConverters.toSqlType(tableSchema)._1.asInstanceOf[StructType]
+    val requestedSchema = HoodieSchemaUtils.pruneDataSchema(
+      tableSchema, HoodieSparkSchemaConverters.toHoodieType(requestedStructType, recordName = "test_record", nameSpace = "hoodie.test"), util.Collections.emptySet[String]())
+
+    assertEquals(HoodieSchemaType.UNION, requestedSchema.getField("choice").get().schema().getType)
+    assertEquals(requestedStructType, HoodieSparkSchemaConverters.toSqlType(requestedSchema)._1)
+  }
+
+  @Test
   def testSchemaWithBlobsRoundTrip(): Unit = {
     val originalSchema = HoodieSchema.createRecord("document", "test", null, util.Arrays.asList(
       HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.LONG)),
