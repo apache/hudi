@@ -131,4 +131,32 @@ public class TestHoodieJavaClientMergeOnReadForTestFormat extends HoodieJavaClie
     assertNotNull(compactionInstants.get(0).getCompletionTime(),
         "the completed instant handed to the table format must carry its completion time");
   }
+
+  @Test
+  public void testTableFormatObservesRollbackOnMergeOnRead() throws Exception {
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
+        HoodieIndex.IndexType.INMEMORY)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(10).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .build();
+    HoodieJavaWriteClient client = getHoodieWriteClient(config);
+
+    String insertTime = WriteClientTestUtils.createNewInstantTime();
+    insertBatch(config, client, insertTime, "000", 100, HoodieJavaWriteClient::insert,
+        false, false, 100, 100, 1, Option.empty(), INSTANT_GENERATOR);
+    String updateTime = WriteClientTestUtils.createNewInstantTime();
+    updateBatch(config, client, updateTime, insertTime, Option.of(Arrays.asList(insertTime)),
+        "000", 50, HoodieJavaWriteClient::upsert, false, false, 50, 100, 2,
+        config.populateMetaFields(), INSTANT_GENERATOR);
+    assertTrue(TestTableFormat.getRecordedInstants(metaClient.getBasePath().toString()).stream()
+        .anyMatch(instant -> instant.requestedTime().equals(updateTime)));
+
+    assertTrue(client.rollback(updateTime), "rollback of the deltacommit must succeed");
+
+    // The table format must have been told to revert the instant before its files were removed.
+    List<HoodieInstant> recorded =
+        TestTableFormat.getRecordedInstants(metaClient.getBasePath().toString());
+    assertTrue(recorded.stream().noneMatch(instant -> instant.requestedTime().equals(updateTime)),
+        "the rolled back deltacommit must no longer be recorded in the table format");
+  }
 }
