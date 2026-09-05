@@ -118,6 +118,11 @@ public class DynamicBucketAssignFunction
 
   @Override
   public void processElement(HoodieFlinkInternalRow record, Context ctx, Collector<HoodieFlinkInternalRow> out) throws Exception {
+    if (record.isIndexRecord()) {
+      processIndexRecord(record);
+      return;
+    }
+
     String partitionPath = record.getPartitionPath();
     String recordKey = record.getRecordKey();
     String fileGroupId = indexBackend.get(partitionPath, recordKey);
@@ -141,6 +146,25 @@ public class DynamicBucketAssignFunction
     record.setInstantTime(instantTime);
     record.setFileId(bucketInfo.getFileIdPrefix());
     out.collect(record);
+  }
+
+  /**
+   * Processes an index record that carries a pre-computed file group mapping for a record key.
+   * The index record is used for time-bounded bootstrap of the partitioned record level index,
+   * where the file group assignment is already known from the metadata table.
+   *
+   * <p>This method updates the partitioned index backend with the file group assignment
+   * and registers the file group as an update in the bucket assigner so that the file group
+   * is recognized as an existing one.
+   *
+   * @param record the index record carrying the partition path, record key, and file id
+   */
+  protected void processIndexRecord(HoodieFlinkInternalRow record) {
+    String partitionPath = record.getPartitionPath();
+    String recordKey = record.getRecordKey();
+    String fileId = record.getFileId();
+    indexBackend.update(partitionPath, recordKey, fileId);
+    bucketAssigner.addUpdate(partitionPath, fileId);
   }
 
   @Override
