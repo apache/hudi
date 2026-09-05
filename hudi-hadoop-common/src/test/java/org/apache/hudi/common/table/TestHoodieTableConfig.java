@@ -134,6 +134,36 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   }
 
   @Test
+  void testPersistsIndexTypeFromWriteConfig() throws IOException {
+    Properties props = new Properties();
+    props.setProperty(HoodieTableConfig.NAME.key(), "idx-table");
+    props.setProperty("hoodie.index.type", "BLOOM");
+    initializeNewTableConfig(props);
+    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath);
+    assertEquals(Option.of("BLOOM"), config.getIndexType());
+    assertEquals("BLOOM", config.getString(HoodieTableConfig.INDEX_TYPE));
+  }
+
+  @Test
+  void testIndexClassTakesPrecedenceOverType() throws IOException {
+    Properties props = new Properties();
+    props.setProperty(HoodieTableConfig.NAME.key(), "idx-table");
+    props.setProperty("hoodie.index.type", "BLOOM");
+    props.setProperty("hoodie.index.class", "com.example.CustomIndex");
+    initializeNewTableConfig(props);
+    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath);
+    assertEquals(Option.of("com.example.CustomIndex"), config.getIndexType());
+  }
+
+  @Test
+  void testNoIndexTypeRecordedWhenNotConfigured() throws IOException {
+    // setUp created the table with only the table NAME property.
+    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath);
+    assertFalse(config.contains(HoodieTableConfig.INDEX_TYPE));
+    assertEquals(Option.empty(), config.getIndexType());
+  }
+
+  @Test
   void testUpdate() throws IOException {
     Properties updatedProps = new Properties();
     updatedProps.setProperty(HoodieTableConfig.NAME.key(), "test-table2");
@@ -482,7 +512,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   @Test
   void testDefinedTableConfigs() {
     List<ConfigProperty<?>> configProperties = HoodieTableConfig.definedTableConfigs();
-    assertEquals(46, configProperties.size());
+    assertEquals(47, configProperties.size());
     configProperties.forEach(c -> {
       assertNotNull(c);
       assertFalse(c.doc().isEmpty());
