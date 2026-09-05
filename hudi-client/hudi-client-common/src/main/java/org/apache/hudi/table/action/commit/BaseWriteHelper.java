@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -94,9 +95,20 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
       I dedupedRecords, HoodieEngineContext context, HoodieTable<T, I, K, O> table);
 
   private boolean shouldWriteUpdatesAsDeletesAndInserts(HoodieTable<T, I, K, O> table, WriteOperationType operationType) {
-    return operationType == WriteOperationType.UPSERT
-        && table.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ
-        && table.getConfig().shouldWriteUpdatesAsDeletesAndInserts();
+    if (operationType != WriteOperationType.UPSERT
+        || table.getMetaClient().getTableType() != HoodieTableType.MERGE_ON_READ
+        || !table.getConfig().shouldWriteUpdatesAsDeletesAndInserts()) {
+      return false;
+    }
+    RecordMergeMode mergeMode = table.getMetaClient().getTableConfig().getRecordMergeMode();
+    if (mergeMode != RecordMergeMode.COMMIT_TIME_ORDERING) {
+      // The decomposed delete unconditionally tombstones the current version, so a late-arriving
+      // update with a lower ordering value would incorrectly win under event-time ordering
+      throw new HoodieNotSupportedException(
+          HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key()
+              + " requires commit-time ordering merge semantics but the table uses " + mergeMode);
+    }
+    return true;
   }
 
   /**

@@ -38,6 +38,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseTableServicePlanActionExecutor;
 import org.apache.hudi.table.action.compact.plan.generators.BaseHoodieCompactionPlanGenerator;
@@ -73,6 +74,12 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServi
     this.operationType = operationType;
     checkArgument(operationType == WriteOperationType.COMPACT || operationType == WriteOperationType.LOG_COMPACT,
         "Only COMPACT and LOG_COMPACT is supported");
+    if (operationType == WriteOperationType.LOG_COMPACT && config.shouldWriteUpdatesAsDeletesAndInserts()) {
+      // Log compaction rewrites delete blocks, which breaks the delete-only, positionally
+      // consistent log layout the update-as-delete-insert mode maintains
+      throw new HoodieNotSupportedException("Log compaction is not supported when "
+          + HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key() + " is enabled");
+    }
     initPlanGenerator(context, config, table);
   }
 

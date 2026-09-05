@@ -21,17 +21,21 @@ package org.apache.hudi.client.functional;
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.common.HoodieJavaEngineContext;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -48,6 +52,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -55,6 +60,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -255,6 +261,61 @@ public class TestHoodieJavaClientUpdatesAsDeletesAndInserts extends HoodieJavaCl
           .count();
       assertEquals(0, remainingLogFiles, "compaction must consume all delete log files");
     }
+  }
+
+  @Test
+  public void testLogCompactionRejectedInDeleteInsertMode() throws Exception {
+    HoodieWriteConfig config = buildConfig(true);
+    HoodieJavaWriteClient client = getHoodieWriteClient(config);
+
+    String insertTime = WriteClientTestUtils.createNewInstantTime();
+    insertBatch(config, client, insertTime, "000", 100, HoodieJavaWriteClient::insert,
+        false, false, 100, 100, 1, Option.empty(), INSTANT_GENERATOR);
+    String updateTime = WriteClientTestUtils.createNewInstantTime();
+    updateBatch(config, client, updateTime, insertTime, Option.of(Arrays.asList(insertTime)),
+        "000", 50, HoodieJavaWriteClient::upsert, false, false, 50, 100, 2,
+        config.populateMetaFields(), INSTANT_GENERATOR);
+
+    Exception exception =
+        assertThrows(Exception.class, () -> client.scheduleLogCompaction(Option.empty()));
+    assertTrue(
+        exceptionChainContains(exception, HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key()),
+        "log compaction must be rejected in this write mode but got: " + exception);
+  }
+
+  @Test
+  public void testEventTimeOrderingRejectedInDeleteInsertMode() throws Exception {
+    String eventTimeBasePath = basePath + "_event_time";
+    Properties properties = new Properties();
+    properties.setProperty(HoodieTableConfig.RECORD_MERGE_MODE.key(),
+        RecordMergeMode.EVENT_TIME_ORDERING.name());
+    properties.setProperty("hoodie.table.ordering.fields", "timestamp");
+    HoodieTestUtils.init(storageConf, eventTimeBasePath, HoodieTableType.MERGE_ON_READ, properties);
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
+        HoodieIndex.IndexType.SIMPLE)
+        .withPath(eventTimeBasePath)
+        .withWriteUpdatesAsDeletesAndInserts(true)
+        .build();
+    try (HoodieJavaWriteClient client =
+        new HoodieJavaWriteClient<>(new HoodieJavaEngineContext(storageConf), config)) {
+      String writeTime = WriteClientTestUtils.createNewInstantTime();
+      WriteClientTestUtils.startCommitWithTime(client, writeTime);
+      List<HoodieRecord> records = (List<HoodieRecord>) (List<?>) dataGen.generateInserts(writeTime, 10);
+      Exception exception =
+          assertThrows(Exception.class, () -> client.upsert(records, writeTime));
+      assertTrue(exceptionChainContains(exception, "commit-time ordering"),
+          "event-time ordering must be rejected in this write mode but got: " + exception);
+    }
+  }
+
+  private static boolean exceptionChainContains(Throwable throwable, String text) {
+    while (throwable != null) {
+      if (throwable.getMessage() != null && throwable.getMessage().contains(text)) {
+        return true;
+      }
+      throwable = throwable.getCause();
+    }
+    return false;
   }
 
   private Set<String> collectFileIds() throws Exception {
