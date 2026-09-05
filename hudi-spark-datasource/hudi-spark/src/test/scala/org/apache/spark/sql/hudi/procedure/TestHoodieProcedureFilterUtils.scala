@@ -74,32 +74,23 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     assertResult(Seq(scalarRows.head))(keep(scalarRows, "flag = true", scalarSchema))
   }
 
-  test("evaluateFilter coerces Long columns against integer literals") {
+  test("evaluateFilter widens Long columns and integer literals") {
     // Exercises applyTypeCoercion for every comparison operator (Long boundRef vs Int literal).
     assertResult(Seq(scalarRows.head))(keep(scalarRows, "ts = 1000", scalarSchema))
     assertResult(Seq(scalarRows(1)))(keep(scalarRows, "ts > 1500", scalarSchema))
     assertResult(Seq(scalarRows(1)))(keep(scalarRows, "ts >= 2000", scalarSchema))
     assertResult(Seq(scalarRows.head))(keep(scalarRows, "ts < 2000", scalarSchema))
     assertResult(Seq(scalarRows.head))(keep(scalarRows, "ts <= 1000", scalarSchema))
-    // Known limitation: the coercion narrows the Long column to Int instead of widening the Int
-    // literal, so a Long value beyond Int range never matches (wrong results under non-ANSI Spark,
-    // swallowed overflow error under ANSI). Pinned here so a fix flips this assertion; see #19632.
+    // The integer literal is widened, preserving Long values beyond the Int range.
     val bigRow = Seq(Row(3, "c3", 30.0d, 3000000000L, true, -9,
       Date.valueOf("2024-03-16"), Timestamp.valueOf("2024-03-16 12:30:00")))
-    assertResult(Seq.empty)(keep(bigRow, "ts > 2000", scalarSchema))
-    // Known limitation: the coercion only matches column-on-left, so a literal-on-left comparison
-    // never coerces and drops every row instead of mirroring the equivalent column-on-left filter.
-    // Pinned here so a fix flips these assertions; see #19632.
-    assertResult(Seq.empty)(keep(scalarRows, "1500 < ts", scalarSchema))
-    assertResult(Seq.empty)(keep(scalarRows, "1000 = ts", scalarSchema))
+    assertResult(bigRow)(keep(bigRow, "ts > 2000", scalarSchema))
+    // Coercion applies symmetrically when the literal is on the left.
+    assertResult(Seq(scalarRows(1)))(keep(scalarRows, "1500 < ts", scalarSchema))
+    assertResult(Seq(scalarRows.head))(keep(scalarRows, "1000 = ts", scalarSchema))
   }
 
-  test("evaluateFilter does not coerce other numeric column/literal type pairs") {
-    // Known limitation: applyTypeCoercion only special-cases a Long column against an Int literal.
-    // Every other numeric column/literal pair is left alone, so the mismatched comparison fails to
-    // evaluate; the per-row Try swallows the failure and drops the row. The filter therefore
-    // returns no rows instead of erroring on the type mismatch.
-    // Pinned here so a fix flips the Seq.empty assertions; see #19632.
+  test("evaluateFilter coerces numeric column and literal type pairs") {
     val schema = schemaOf(
       "f" -> FloatType,
       "sh" -> ShortType,
@@ -111,13 +102,13 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     assertResult(rows)(keep(rows, "f > 1.0f", schema))
     assertResult(rows)(keep(rows, "dec > 1.00", schema))
 
-    // Mismatched literal types no-match even though the values would satisfy the predicate.
-    assertResult(Seq.empty)(keep(rows, "sh = 3", schema))
-    assertResult(Seq.empty)(keep(rows, "by = 4", schema))
-    assertResult(Seq.empty)(keep(rows, "f > 1.0d", schema))
-    assertResult(Seq.empty)(keep(rows, "dec > 1", schema))
-    // Same gap for a double column: a plain 15.0 parses as decimal, not double.
-    assertResult(Seq.empty)(keep(scalarRows, "price > 15.0", scalarSchema))
+    // Mismatched numeric types are widened to Spark's common type.
+    assertResult(rows)(keep(rows, "sh = 3", schema))
+    assertResult(rows)(keep(rows, "by = 4", schema))
+    assertResult(rows)(keep(rows, "f > 1.0d", schema))
+    assertResult(rows)(keep(rows, "dec > 1", schema))
+    // A plain 15.0 decimal literal is coerced with the double column.
+    assertResult(Seq(scalarRows(1)))(keep(scalarRows, "price > 15.0", scalarSchema))
   }
 
   test("evaluateFilter silently drops rows for functions outside the resolution table") {
