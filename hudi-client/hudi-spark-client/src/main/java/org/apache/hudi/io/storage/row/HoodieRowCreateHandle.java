@@ -175,7 +175,7 @@ public class HoodieRowCreateHandle implements Serializable {
 
   /**
    * Selective meta-field write path: populate only the meta columns opted in via
-   * {@code hoodie.meta.fields.mode} — {@code _hoodie_commit_time} and/or {@code _hoodie_file_name}.
+   * {@code hoodie.meta.fields.mode}.
    * The other meta columns stay null on disk. Record key is never populated in this path, so the
    * record key is not registered with the write support (bloom filter / RLI hooks are meaningless
    * without the record-key column).
@@ -186,6 +186,14 @@ public class HoodieRowCreateHandle implements Serializable {
       if (metaFieldsMode.isCommitTimePopulated()) {
         metaFields[HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD] = shouldPreserveHoodieMetadata
             ? row.getUTF8String(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD) : commitTime;
+      }
+      if (metaFieldsMode.isCommitSeqnoPopulated()) {
+        metaFields[HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD] = shouldPreserveHoodieMetadata
+            ? row.getUTF8String(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD)
+            : UTF8String.fromString(seqIdGenerator.apply(GLOBAL_SEQ_NO.getAndIncrement()));
+      }
+      if (metaFieldsMode.isPartitionPathPopulated()) {
+        metaFields[HoodieRecord.PARTITION_PATH_META_FIELD_ORD] = UTF8String.fromString(partitionPath);
       }
       if (metaFieldsMode.isFileNamePopulated()) {
         // Always the file being written, never the source row's value — even when
