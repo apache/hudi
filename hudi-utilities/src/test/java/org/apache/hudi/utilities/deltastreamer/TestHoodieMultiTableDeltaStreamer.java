@@ -28,14 +28,17 @@ import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
+import org.apache.hudi.utilities.sources.ContinuousTestSource;
 import org.apache.hudi.utilities.sources.JsonKafkaSource;
 import org.apache.hudi.utilities.sources.ParquetDFSSource;
 import org.apache.hudi.utilities.sources.TestDataSource;
+import org.apache.hudi.utilities.streamer.NoNewDataTerminationStrategy;
 import org.apache.hudi.utilities.streamer.TableExecutionContext;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -44,6 +47,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -240,6 +244,92 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
       totalTable2Records += table2Records;
       // sync and verify
       syncAndVerify(streamer, targetBasePath1, targetBasePath2, totalTable1Records, totalTable2Records);
+    }
+  }
+
+  @Test
+  public void testFailFastOnContinuousDefaultsToFalse() {
+    HoodieMultiTableDeltaStreamer.Config cfg = new HoodieMultiTableDeltaStreamer.Config();
+    assertFalse(cfg.failFastOnContinuousMode);
+  }
+
+  @Timeout(600)
+  @Test
+  public void testMultiTableContinuousModeSyncsAllTablesInParallel() throws IOException {
+    HoodieMultiTableDeltaStreamer streamer = setupContinuousStreamer("parquetContinuous", false);
+    List<TableExecutionContext> contexts = streamer.getTableExecutionContexts();
+    // Let each table stop on its own once it has ingested its data, so the test does not run forever.
+    setTerminationStrategy(contexts);
+
+    streamer.sync();
+
+    assertEquals(2, streamer.getSuccessTables().size());
+    assertTrue(streamer.getFailedTables().isEmpty());
+    assertRecordCount(10, contexts.get(0).getConfig().targetBasePath, sqlContext);
+    assertRecordCount(5, contexts.get(1).getConfig().targetBasePath, sqlContext);
+  }
+
+  @Timeout(600)
+  @Test
+  public void testFailFastOnContinuousThrowsWhenATableFails() throws IOException {
+    HoodieMultiTableDeltaStreamer streamer = setupContinuousStreamer("parquetFailFast", true);
+    List<TableExecutionContext> contexts = streamer.getTableExecutionContexts();
+    // Table 1 blocks after the barrier, so only fail fast interrupting it can end its sync. Table 2 fails after the
+    // barrier. This proves fail fast tears down a sibling that is still actively running, not one that stopped itself.
+    contexts.get(0).getProperties().setProperty(ContinuousTestSource.BLOCK_UNTIL_INTERRUPTED, "true");
+    contexts.get(1).getProperties().setProperty(ContinuousTestSource.FAIL_AFTER_BARRIER, "true");
+
+    assertThrows(HoodieException.class, streamer::sync);
+    assertFalse(streamer.getFailedTables().isEmpty());
+    // sync() returns only after the blocked sibling was interrupted, so the latch must already be counted down.
+    assertTrue(ContinuousTestSource.wasBlockedTableInterrupted());
+  }
+
+  @Timeout(600)
+  @Test
+  public void testContinuousModeDefaultDoesNotStopSiblingsWhenATableFails() throws IOException {
+    HoodieMultiTableDeltaStreamer streamer = setupContinuousStreamer("parquetNoFailFast", false);
+    List<TableExecutionContext> contexts = streamer.getTableExecutionContexts();
+    setTerminationStrategy(contexts);
+    // Table 2 fails after the barrier while table 1 ingests normally. With fail fast off, the failure of one table
+    // must not stop the other.
+    contexts.get(1).getProperties().setProperty(ContinuousTestSource.FAIL_AFTER_BARRIER, "true");
+
+    // sync() must complete without throwing even though one table failed.
+    streamer.sync();
+
+    assertEquals(1, streamer.getSuccessTables().size());
+    assertEquals(1, streamer.getFailedTables().size());
+    // The healthy table still ingested all of its records.
+    assertRecordCount(10, contexts.get(0).getConfig().targetBasePath, sqlContext);
+  }
+
+  /**
+   * Builds a two-table continuous-mode streamer backed by {@link ContinuousTestSource} (10 and 5 records). The source
+   * makes every table wait at a shared barrier before producing data, so a sequential implementation would block the
+   * first table forever and time out; only truly concurrent syncs let all tables pass the barrier.
+   */
+  private HoodieMultiTableDeltaStreamer setupContinuousStreamer(String namePrefix, boolean failFast) throws IOException {
+    String sourceRoot1 = basePath + "/" + namePrefix + "Src1/";
+    String sourceRoot2 = basePath + "/" + namePrefix + "Src2/";
+    prepareParquetDFSFiles(10, sourceRoot1);
+    prepareParquetDFSFiles(5, sourceRoot2);
+
+    HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(populateCommonPropsAndWriteToFile(), basePath + "/config",
+        ContinuousTestSource.class.getName(), false, false, false, "multi_table_" + namePrefix, null);
+    cfg.continuousMode = true;
+    cfg.failFastOnContinuousMode = failFast;
+
+    HoodieMultiTableDeltaStreamer streamer = new HoodieMultiTableDeltaStreamer(cfg, jsc);
+    List<TableExecutionContext> contexts = streamer.getTableExecutionContexts();
+    ingestPerParquetSourceProps(contexts, Arrays.asList(sourceRoot1, sourceRoot2));
+    ContinuousTestSource.resetBarrier(contexts.size());
+    return streamer;
+  }
+
+  private void setTerminationStrategy(List<TableExecutionContext> executionContexts) {
+    for (TableExecutionContext context : executionContexts) {
+      context.getConfig().postWriteTerminationStrategyClass = NoNewDataTerminationStrategy.class.getName();
     }
   }
 
