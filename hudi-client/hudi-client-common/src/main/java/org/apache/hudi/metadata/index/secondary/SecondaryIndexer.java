@@ -73,11 +73,8 @@ public class SecondaryIndexer extends BaseIndexer {
 
   @Override
   public List<IndexInitializationPlan> buildInitialization(IndexInitializationContext context) throws IOException {
-    Set<String> secondaryIndexPartitionsToInit = getSecondaryIndexPartitionsToInit(SECONDARY_INDEX, dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient);
-    if (secondaryIndexPartitionsToInit.size() > 1) {
-      log.warn("Skipping secondary index initialization as only one secondary index bootstrap at a time is supported for now. Provided: {}", secondaryIndexPartitionsToInit);
-      return Collections.emptyList();
-    }
+    Set<String> secondaryIndexPartitionsToInit = resolvePartitionsToInit(context,
+        getSecondaryIndexPartitionsToInit(SECONDARY_INDEX, dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient), SECONDARY_INDEX);
     if (secondaryIndexPartitionsToInit.isEmpty()) {
       return Collections.emptyList();
     }

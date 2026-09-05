@@ -90,13 +90,9 @@ public class ExpressionIndexer extends BaseIndexer {
 
   @Override
   public List<IndexInitializationPlan> buildInitialization(IndexInitializationContext context) throws IOException {
-    Set<String> expressionIndexPartitionsToInit = getExpressionIndexPartitionsToInit(
-        EXPRESSION_INDEX, dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient);
-    if (expressionIndexPartitionsToInit.size() != 1) {
-      if (expressionIndexPartitionsToInit.size() > 1) {
-        log.warn("Skipping expression index initialization as only one expression index "
-            + "bootstrap at a time is supported for now. Provided: {}", expressionIndexPartitionsToInit);
-      }
+    Set<String> expressionIndexPartitionsToInit = resolvePartitionsToInit(context,
+        getExpressionIndexPartitionsToInit(EXPRESSION_INDEX, dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient), EXPRESSION_INDEX);
+    if (expressionIndexPartitionsToInit.isEmpty()) {
       return Collections.emptyList();
     }
 
