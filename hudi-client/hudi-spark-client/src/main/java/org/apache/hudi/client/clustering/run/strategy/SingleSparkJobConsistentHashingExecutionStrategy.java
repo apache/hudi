@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.LazyConcatenatingIterator;
+import org.apache.hudi.common.util.collection.LoserTreeMergeIterator;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
@@ -125,7 +126,9 @@ public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleS
       Supplier<ClosableIterator<HoodieRecord<T>>> supplier = () -> getRecordIterator(readerContextFactory, op, instantTime, maxMemoryPerCompaction);
       readerSuppliers.add(supplier);
     });
-    LazyConcatenatingIterator<HoodieRecord<T>> inputRecordsIter = new LazyConcatenatingIterator<>(readerSuppliers);
+    ClosableIterator<HoodieRecord<T>> inputRecordsIter = getHoodieTable().getMetaClient().getTableConfig().isLSMTreeStorageLayout()
+        ? new LoserTreeMergeIterator<>(readerSuppliers, HoodieRecord::getRecordKey)
+        : new LazyConcatenatingIterator<>(readerSuppliers);
 
     HoodieConsumer<HoodieRecord<T>, List<WriteStatus>> insertHandler =
         new InsertHandler(writeConfig, instantTime, getHoodieTable(), taskContextSupplier, new FixedIdSuffixCreateHandleFactory(), true, record -> newBucketNode.getFileIdPrefix(), readerSchema);
