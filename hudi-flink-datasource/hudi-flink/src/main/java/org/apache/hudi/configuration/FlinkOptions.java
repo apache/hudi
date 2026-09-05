@@ -1536,6 +1536,38 @@ public class FlinkOptions extends HoodieConfig {
               + "The directory is cleaned up when the lookup function is closed.");
 
   // -------------------------------------------------------------------------
+  //  Blob read options
+  // -------------------------------------------------------------------------
+
+  public static final ConfigOption<Boolean> BLOB_READ_MATERIALIZE =
+      key("read.blob.materialize")
+          .booleanType()
+          .defaultValue(false)
+          .withDescription("Whether to materialize out-of-line (OOL) BLOB fields during source reads. "
+              + "When true, the source iterator fetches the byte payload from the external path "
+              + "referenced in each OOL blob struct and replaces the struct with an INLINE blob "
+              + "(type=INLINE, data=<bytes>, reference=null) before emitting the row. "
+              + "Requires that blob field positions are detectable from the committed table schema.");
+
+  public static final ConfigOption<Integer> BLOB_BATCHING_MAX_GAP_BYTES =
+      key("read.blob.batching.max.gap.bytes")
+          .intType()
+          .defaultValue(4096)
+          .withDescription("Maximum byte gap between two OOL blob byte ranges from the same file "
+              + "that are still coalesced into a single batched read. "
+              + "Higher values reduce seek overhead at the cost of reading more bytes. "
+              + "Only effective when '" + BLOB_READ_MATERIALIZE.key() + "' is true.");
+
+  public static final ConfigOption<Integer> BLOB_BATCHING_LOOKAHEAD_SIZE =
+      key("read.blob.batching.lookahead.size")
+          .intType()
+          .defaultValue(50)
+          .withDescription("Number of rows to buffer as a lookahead window for grouping OOL blob "
+              + "references before issuing batched reads. "
+              + "Higher values increase batching opportunities at the cost of memory. "
+              + "Only effective when '" + BLOB_READ_MATERIALIZE.key() + "' is true.");
+
+  // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
 
