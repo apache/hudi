@@ -20,10 +20,11 @@ package org.apache.hudi
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION, STREAMING_CHECKPOINT_IDENTIFIER}
 import org.apache.hudi.cdc.HoodieCDCFileIndex
-import org.apache.hudi.common.config.HoodieStorageConfig
+import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.model.WriteConcurrencyMode
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
+import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.util.{ConfigUtils, TablePathUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieWriteConfig.{WRITE_CONCURRENCY_MODE, WRITE_TABLE_VERSION}
@@ -301,7 +302,10 @@ object DefaultSource {
         Option(schema)
       }
 
-      lazy val isNotMetadataTable = !metaClient.isMetadataTable
+      // Snapshot and read-optimized queries run on the file group reader unless the read opts
+      // turn it off; the metadata table is always served by the legacy relations.
+      lazy val enableFileGroupReader = !metaClient.isMetadataTable && SparkConfigUtils
+        .getStringWithAltKeys(parameters, HoodieReaderConfig.FILE_GROUP_READER_ENABLED).toBoolean
       lazy val tableVersion = if (SparkConfigUtils.containsConfigProperty(parameters, INCREMENTAL_READ_TABLE_VERSION)) {
         Integer.parseInt(parameters(INCREMENTAL_READ_TABLE_VERSION.key))
       } else {
@@ -324,23 +328,24 @@ object DefaultSource {
           case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
                (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
                (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
-            if (isNotMetadataTable) {
+            if (enableFileGroupReader) {
               new HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(
                 sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
             } else {
               resolveBaseFileOnlyRelation(sqlContext, userSchema, metaClient, parameters)
             }
           case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-            if (hoodieTableSupportsCompletionTime) {
-              new HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV2(
+            (hoodieTableSupportsCompletionTime, enableFileGroupReader) match {
+              case (true, true) => new HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV2(
                 sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
-            } else {
-              new HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV1(
+              case (true, false) => new IncrementalRelationV2(sqlContext, parameters, userSchema, metaClient, RangeType.OPEN_CLOSED)
+              case (false, true) => new HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV1(
                 sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
+              case (false, false) => new IncrementalRelationV1(sqlContext, parameters, userSchema, metaClient)
             }
 
           case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
-            if (isNotMetadataTable) {
+            if (enableFileGroupReader) {
               new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
                 sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
             } else {
@@ -352,12 +357,13 @@ object DefaultSource {
               sqlContext, metaClient, parameters, userSchema, isBootstrap = true).build()
 
           case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-            if (hoodieTableSupportsCompletionTime) {
-              new HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV2(
+            (hoodieTableSupportsCompletionTime, enableFileGroupReader) match {
+              case (true, true) => new HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV2(
                 sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
-            } else {
-              new HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV1(
+              case (true, false) => MergeOnReadIncrementalRelationV2(sqlContext, parameters, metaClient, userSchema)
+              case (false, true) => new HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV1(
                 sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
+              case (false, false) => MergeOnReadIncrementalRelationV1(sqlContext, parameters, metaClient, userSchema)
             }
 
           case (_, _, true) =>
