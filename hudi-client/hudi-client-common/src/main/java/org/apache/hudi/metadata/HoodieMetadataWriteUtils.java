@@ -343,11 +343,13 @@ public class HoodieMetadataWriteUtils {
     properties.put(HoodieTableConfig.TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
     properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), RECORD_KEY_FIELD_NAME);
     properties.put("hoodie.datasource.write.recordkey.field", RECORD_KEY_FIELD_NAME);
-    // Pass table service manager config for MDT
+    // Map MDT delegation settings to the metadata write client's generic table service manager config.
     properties.put(HoodieTableServiceManagerConfig.TABLE_SERVICE_MANAGER_ENABLED.key(),
         String.valueOf(writeConfig.getMetadataConfig().isTableServiceManagerEnabled()));
     properties.put(HoodieTableServiceManagerConfig.TABLE_SERVICE_MANAGER_ACTIONS.key(),
         writeConfig.getMetadataConfig().getTableServiceManagerActions());
+    properties.put(HoodieTableServiceManagerConfig.TABLE_SERVICE_MANAGER_SCHEDULE_ACTIONS.key(),
+        writeConfig.getMetadataConfig().getTableServiceManagerScheduleActions());
     if (nonEmpty(writeConfig.getMetricReporterMetricsNamePrefix())) {
       properties.put(HoodieMetricsConfig.METRICS_REPORTER_PREFIX.key(),
           writeConfig.getMetricReporterMetricsNamePrefix() + METADATA_TABLE_NAME_SUFFIX);
