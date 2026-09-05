@@ -76,9 +76,8 @@ public class TestHoodieJavaClientUpdatesAsDeletesAndInserts extends HoodieJavaCl
 
   private HoodieWriteConfig buildConfig(boolean updatesAsDeletesAndInserts) {
     return getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.SIMPLE)
-        // route all inserts to new file groups so log files carry deletes only
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .withMaxNumDeltaCommitsBeforeCompaction(10).compactionSmallFileSize(0).build())
+            .withMaxNumDeltaCommitsBeforeCompaction(10).build())
         .withWriteUpdatesAsDeletesAndInserts(updatesAsDeletesAndInserts)
         .build();
   }
@@ -221,7 +220,7 @@ public class TestHoodieJavaClientUpdatesAsDeletesAndInserts extends HoodieJavaCl
   public void testCompactionAfterDecomposedUpdates() throws Exception {
     HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.SIMPLE)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .withMaxNumDeltaCommitsBeforeCompaction(2).compactionSmallFileSize(0).build())
+            .withMaxNumDeltaCommitsBeforeCompaction(2).build())
         .withWriteUpdatesAsDeletesAndInserts(true)
         .build();
     HoodieJavaWriteClient client = getHoodieWriteClient(config);
