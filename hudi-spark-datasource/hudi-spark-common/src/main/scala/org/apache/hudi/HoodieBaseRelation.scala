@@ -241,7 +241,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     HoodieFileIndex(sparkSession, metaClient, Some(tableStructSchema), optParams,
       FileStatusCache.getOrCreate(sparkSession), shouldIncludeLogFiles())
 
-  protected lazy val latestCommitTimestamp: Option[String] = queryTimestamp
+  protected lazy val targetInstantTime: Option[String] = queryTimestamp
 
   /**
    * Columns that relation has to read from the storage to properly execute on its semantic: for ex,
