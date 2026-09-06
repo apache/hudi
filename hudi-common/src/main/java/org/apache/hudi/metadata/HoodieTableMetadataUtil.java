@@ -328,6 +328,9 @@ public class HoodieTableMetadataUtil {
     Object fieldValue;
     HoodieSchemaType fieldSchemaType = fieldSchema.getType();
     if (record.getRecordType() == HoodieRecordType.AVRO) {
+      // Deliberately the static helper rather than record.getColumnValues, which the SPARK branch below uses:
+      // HoodieAvroIndexedRecord also reports type AVRO but overrides getColumnValues with a decode plus
+      // AvroRecordContext.getFieldValueFromIndexedRecord, so dispatching would read nested fields differently.
       fieldValue = HoodieAvroUtils.getRecordColumnValues(record, new String[]{fieldName}, recordSchema, false)[0];
       if (fieldValue != null && fieldSchemaType.equals(HoodieSchemaType.DATE)) {
         fieldValue = java.sql.Date.valueOf(fieldValue.toString());

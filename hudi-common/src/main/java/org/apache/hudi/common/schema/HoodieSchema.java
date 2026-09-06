@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.schema;
 
-import org.apache.hudi.common.avro.AvroSchemaUtils;
 import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -2887,8 +2886,10 @@ public class HoodieSchema implements Serializable {
   public static class Blob extends HoodieSchema {
     public static final String TYPE_DESCRIPTOR = "BLOB";
     private static final String DEFAULT_NAME = "blob";
+    // declared before BLOB_FIELDS: createBlobFields() reads it while the class is being initialized
+    private static final Schema REFERENCE_SCHEMA = createReferenceSchema();
     private static final List<Schema.Field> BLOB_FIELDS = createBlobFields();
-    private static final int REFERENCE_FIELD_COUNT = AvroSchemaUtils.getNonNullTypeFromUnion(BLOB_FIELDS.get(2).schema()).getFields().size();
+    private static final int REFERENCE_FIELD_COUNT = REFERENCE_SCHEMA.getFields().size();
 
     public static final String INLINE = "INLINE";
     public static final String OUT_OF_LINE = "OUT_OF_LINE";
@@ -2953,22 +2954,33 @@ public class HoodieSchema implements Serializable {
       return blobSchema;
     }
 
-    private static List<Schema.Field> createBlobFields() {
-      Schema bytesField = Schema.create(Schema.Type.BYTES);
+    private static Schema createReferenceSchema() {
       Schema referenceField = Schema.createRecord(EXTERNAL_REFERENCE, null, null, false);
       List<Schema.Field> referenceFields = Arrays.asList(
           new Schema.Field(EXTERNAL_REFERENCE_PATH, Schema.create(Schema.Type.STRING), null, null),
-          new Schema.Field(EXTERNAL_REFERENCE_OFFSET, AvroSchemaUtils.createNullableSchema(Schema.create(Schema.Type.LONG)), null, null),
-          new Schema.Field(EXTERNAL_REFERENCE_LENGTH, AvroSchemaUtils.createNullableSchema(Schema.create(Schema.Type.LONG)), null, null),
+          new Schema.Field(EXTERNAL_REFERENCE_OFFSET, nullable(Schema.create(Schema.Type.LONG)), null, null),
+          new Schema.Field(EXTERNAL_REFERENCE_LENGTH, nullable(Schema.create(Schema.Type.LONG)), null, null),
           new Schema.Field(EXTERNAL_REFERENCE_IS_MANAGED, Schema.create(Schema.Type.BOOLEAN), null, null)
       );
       referenceField.setFields(referenceFields);
+      return referenceField;
+    }
 
+    private static List<Schema.Field> createBlobFields() {
+      Schema bytesField = Schema.create(Schema.Type.BYTES);
       return Arrays.asList(
           new Schema.Field(TYPE, Schema.createEnum("blob_storage_type", null, null, Arrays.asList(INLINE, OUT_OF_LINE)), null, null),
-          new Schema.Field(INLINE_DATA_FIELD, AvroSchemaUtils.createNullableSchema(bytesField), null, Schema.Field.NULL_DEFAULT_VALUE),
-          new Schema.Field(EXTERNAL_REFERENCE, AvroSchemaUtils.createNullableSchema(referenceField), null, Schema.Field.NULL_DEFAULT_VALUE)
+          new Schema.Field(INLINE_DATA_FIELD, nullable(bytesField), null, Schema.Field.NULL_DEFAULT_VALUE),
+          new Schema.Field(EXTERNAL_REFERENCE, nullable(REFERENCE_SCHEMA), null, Schema.Field.NULL_DEFAULT_VALUE)
       );
+    }
+
+    /**
+     * Wraps the given schema into the canonical Avro nullable union {@code [null, schema]}. None of the blob
+     * field types is NULL, so no further validation is needed here.
+     */
+    private static Schema nullable(Schema schema) {
+      return Schema.createUnion(Schema.create(Schema.Type.NULL), schema);
     }
   }
 

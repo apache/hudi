@@ -24,6 +24,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieNullSchemaTypeException;
 
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
@@ -38,6 +39,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
@@ -50,6 +52,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -1044,13 +1047,39 @@ public class TestHoodieSchemaUtils {
     assertTrue(fieldNames1.contains("timestamp"));
 
     // Field names are matched case-insensitively; HiveHoodieReaderContext lowercases names before calling this.
-    HoodieSchema schema2 = HoodieSchemaUtils.generateProjectionSchema(originalSchema, Arrays.asList("_ROW_KEY"));
+    HoodieSchema schema2 = HoodieSchemaUtils.generateProjectionSchema(originalSchema, Arrays.asList("PII_COL"));
     assertEquals(1, schema2.getFields().size());
-    assertEquals("_row_key", schema2.getFields().get(0).name());
+    assertEquals("pii_col", schema2.getFields().get(0).name());
 
     Throwable caughtException = assertThrows(HoodieException.class, () ->
         HoodieSchemaUtils.generateProjectionSchema(originalSchema, Arrays.asList("_row_key", "timestamp", "fake_field")));
     assertTrue(caughtException.getMessage().contains("Field fake_field not found in log schema. Query cannot proceed!"));
+  }
+
+  @Test
+  public void testGenerateProjectionSchemaIgnoresDefaultLocale() {
+    // Under tr-TR, String#toLowerCase() maps an upper-case I to dotless-i (U+0131), so a default-locale lowercase
+    // on one side of the lookup and Locale.ROOT on the other (HiveHoodieReaderContext) cannot match for any name
+    // that contains an upper-case I. Surefire reuses one JVM across the module's tests, so the finally block below
+    // is what keeps the toggle from reaching any test that runs after this one.
+    Locale saved = Locale.getDefault();
+    Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+    try {
+      HoodieSchema originalSchema = HoodieSchema.parse(EXAMPLE_SCHEMA);
+      // Request upper-cased, schema lower-cased.
+      HoodieSchema projected = HoodieSchemaUtils.generateProjectionSchema(originalSchema, Arrays.asList("PII_COL"));
+      assertEquals(1, projected.getFields().size());
+      assertEquals("pii_col", projected.getFields().get(0).name());
+
+      // Schema upper-cased, request pre-lowercased with Locale.ROOT the way HiveHoodieReaderContext does it.
+      HoodieSchema upperCaseSchema = HoodieSchema.parse("{\"type\": \"record\",\"name\": \"rec\",\"fields\": ["
+          + "{\"name\": \"ID\", \"type\": \"string\"},{\"name\": \"value\", \"type\": \"int\"}]}");
+      HoodieSchema projectedUpper = HoodieSchemaUtils.generateProjectionSchema(upperCaseSchema, Arrays.asList("id"));
+      assertEquals(1, projectedUpper.getFields().size());
+      assertEquals("ID", projectedUpper.getFields().get(0).name());
+    } finally {
+      Locale.setDefault(saved);
+    }
   }
 
   @Test
@@ -2082,6 +2111,178 @@ public class TestHoodieSchemaUtils {
     assertEquals("complex_field.key_value.value.list.element.value", result.get().getLeft());
     assertEquals("value", result.get().getRight().name());
     assertEquals(HoodieSchemaType.LONG, result.get().getRight().schema().getType());
+  }
+
+  /**
+   * Record with a namespace, a record-level doc, a custom record prop, per-field docs and a nested
+   * record - all of its top-level fields required.
+   */
+  private static HoodieSchema allRequiredPersonSchema() {
+    HoodieSchema address = HoodieSchema.createRecord(
+        "Address",
+        "ns.test",
+        "the address record",
+        Arrays.asList(
+            HoodieSchemaField.of("city", HoodieSchema.create(HoodieSchemaType.STRING), "city doc", null),
+            HoodieSchemaField.of("zip", HoodieSchema.create(HoodieSchemaType.INT), null, null)));
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "Person",
+        "ns.test",
+        "the person record",
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), "id doc", null),
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
+            HoodieSchemaField.of("address", address, "address doc", null)));
+    schema.addProp("hoodie.custom.prop", "custom-value");
+    return schema;
+  }
+
+  @Test
+  public void testAsNullableMakesEveryTopLevelFieldNullable() {
+    HoodieSchema schema = allRequiredPersonSchema();
+
+    HoodieSchema nullable = HoodieSchemaUtils.asNullable(schema);
+
+    assertNotSame(schema, nullable);
+    assertEquals("Person", nullable.getName());
+    assertEquals("ns.test", nullable.getNamespace().get());
+    assertEquals("ns.test.Person", nullable.getFullName());
+    assertEquals(Arrays.asList("id", "name", "address"),
+        nullable.getFields().stream().map(HoodieSchemaField::name).collect(Collectors.toList()));
+
+    for (HoodieSchemaField field : nullable.getFields()) {
+      assertTrue(field.isNullable(), "Field " + field.name() + " should be nullable");
+      assertEquals(HoodieSchema.NULL_VALUE, field.defaultVal().get());
+    }
+    assertEquals(HoodieSchemaType.INT, nullable.getField("id").get().getNonNullSchema().getType());
+    assertEquals(HoodieSchemaType.STRING, nullable.getField("name").get().getNonNullSchema().getType());
+
+    // Per-field docs survive the InternalSchema round trip.
+    assertEquals("id doc", nullable.getField("id").get().doc().get());
+    assertFalse(nullable.getField("name").get().doc().isPresent());
+    assertEquals("address doc", nullable.getField("address").get().doc().get());
+
+    // Only the top level changes: the nested record keeps its own required fields.
+    HoodieSchema nestedAddress = nullable.getField("address").get().getNonNullSchema();
+    assertEquals(HoodieSchemaType.RECORD, nestedAddress.getType());
+    assertEquals("ns.test.Address", nestedAddress.getFullName());
+    assertFalse(nestedAddress.getField("city").get().isNullable());
+    assertFalse(nestedAddress.getField("zip").get().isNullable());
+    assertEquals("city doc", nestedAddress.getField("city").get().doc().get());
+
+    // The InternalSchema carries neither a record doc nor record props, so both are dropped. This is
+    // the behaviour the Avro-typed implementation had as well, since it ran the same conversion.
+    assertFalse(nullable.getDoc().isPresent());
+    assertTrue(nullable.getObjectProps().isEmpty());
+
+    // The input schema is left untouched.
+    assertEquals("the person record", schema.getDoc().get());
+    assertEquals("custom-value", schema.getObjectProps().get("hoodie.custom.prop"));
+    assertFalse(schema.getField("id").get().isNullable());
+  }
+
+  @Test
+  public void testAsNullableReturnsSameInstanceWhenAllFieldsAlreadyNullable() {
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "AllNullable",
+        "ns.test",
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.createNullable(HoodieSchemaType.INT), null, HoodieSchema.NULL_VALUE),
+            HoodieSchemaField.of("name", HoodieSchema.createNullable(HoodieSchemaType.STRING), "name doc", HoodieSchema.NULL_VALUE)));
+
+    assertSame(schema, HoodieSchemaUtils.asNullable(schema));
+  }
+
+  @Test
+  public void testAsNullableLeavesAlreadyNullableFieldsUntouched() {
+    HoodieSchema nullableName = HoodieSchema.createNullable(HoodieSchemaType.STRING);
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "Mixed",
+        "ns.test",
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("optional_name", nullableName, "name doc", HoodieSchema.NULL_VALUE),
+            HoodieSchemaField.of("required_id", HoodieSchema.create(HoodieSchemaType.LONG), null, null)));
+
+    HoodieSchema nullable = HoodieSchemaUtils.asNullable(schema);
+
+    assertEquals(nullableName, nullable.getField("optional_name").get().schema());
+    assertEquals("name doc", nullable.getField("optional_name").get().doc().get());
+
+    HoodieSchemaField requiredId = nullable.getField("required_id").get();
+    assertTrue(requiredId.isNullable());
+    assertEquals(HoodieSchemaType.LONG, requiredId.getNonNullSchema().getType());
+  }
+
+  @Test
+  public void testAsNullableTreatsBareNullFieldAsAlreadyNullable() {
+    // Avro's Schema#isNullable is true for a bare NULL type while HoodieSchema#isNullable is not, so a
+    // record made only of NULL-typed fields must still short-circuit rather than attempt a conversion.
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "OnlyNull",
+        "ns.test",
+        null,
+        Collections.singletonList(
+            HoodieSchemaField.of("nothing", HoodieSchema.create(HoodieSchemaType.NULL), null, null)));
+
+    assertSame(schema, HoodieSchemaUtils.asNullable(schema));
+  }
+
+  @Test
+  public void testAsNullableRejectsBareNullFieldAlongsideARequiredField() {
+    // A NULL-typed field is never added to the update list, but as soon as some other field does need
+    // updating the InternalSchema conversion runs and rejects the NULL type outright. Pinned because it
+    // is what the previous Avro-typed implementation did too.
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "NullAndRequired",
+        "ns.test",
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("nothing", HoodieSchema.create(HoodieSchemaType.NULL), null, null),
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null)));
+
+    HoodieNullSchemaTypeException exception = assertThrows(HoodieNullSchemaTypeException.class,
+        () -> HoodieSchemaUtils.asNullable(schema));
+    assertTrue(exception.getMessage().contains("nothing"), exception.getMessage());
+  }
+
+  @Test
+  public void testAsNullablePinsTheInternalSchemaRoundTripLosses() {
+    // All three losses are what the previous Avro-typed implementation produced as well: the
+    // InternalSchema has no field defaults, no ENUM type and no union branch order of its own.
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "Lossy",
+        "ns.test",
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("count", HoodieSchema.create(HoodieSchemaType.INT), null, 0),
+            HoodieSchemaField.of("kind", HoodieSchema.createEnum("Kind", "ns.test", null, Arrays.asList("A", "B")), null, null),
+            HoodieSchemaField.of("null_last",
+                HoodieSchema.createUnion(HoodieSchema.create(HoodieSchemaType.STRING), HoodieSchema.create(HoodieSchemaType.NULL)), null, null),
+            HoodieSchemaField.of("embedding", HoodieSchema.createVector(3), null, null)));
+
+    HoodieSchema nullable = HoodieSchemaUtils.asNullable(schema);
+
+    // A non-null default is replaced by the null default of the new union.
+    assertEquals(HoodieSchema.NULL_VALUE, nullable.getField("count").get().defaultVal().get());
+    // ENUM is lowered to STRING.
+    assertEquals(HoodieSchemaType.STRING, nullable.getField("kind").get().getNonNullSchema().getType());
+    // An already-nullable null-last union comes back null-first.
+    assertEquals(Arrays.asList(HoodieSchemaType.NULL, HoodieSchemaType.STRING),
+        nullable.getField("null_last").get().schema().getTypes().stream().map(HoodieSchema::getType).collect(Collectors.toList()));
+    // A VECTOR column, the Flink clustering case, survives with its logical type and dimension.
+    HoodieSchema embedding = nullable.getField("embedding").get().getNonNullSchema();
+    assertEquals(HoodieSchemaType.VECTOR, embedding.getType());
+    assertEquals(3, ((HoodieSchema.Vector) embedding).getDimension());
+  }
+
+  @Test
+  public void testAsNullableRejectsNonRecordSchema() {
+    assertThrows(IllegalArgumentException.class,
+        () -> HoodieSchemaUtils.asNullable(HoodieSchema.create(HoodieSchemaType.STRING)));
+    assertThrows(IllegalArgumentException.class,
+        () -> HoodieSchemaUtils.asNullable(HoodieSchema.createNullable(allRequiredPersonSchema())));
   }
 
   private static HoodieSchema deleteLogTableSchema() {

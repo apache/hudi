@@ -112,7 +112,7 @@ public class HoodieSchemaCompatibilityChecker {
    * @param writerSchema Schema of the record where to look for the writer field.
    * @param readerField  Reader field to identify the corresponding writer field
    *                     of.
-   * @return the writer field, if any does correspond, or None.
+   * @return the writer field, if any does correspond, or null.
    */
   public static HoodieSchemaField lookupWriterField(final HoodieSchema writerSchema, final HoodieSchemaField readerField) {
     assert (writerSchema.hasFields());
@@ -357,24 +357,26 @@ public class HoodieSchemaCompatibilityChecker {
           case DATE:
           case DECIMAL:
             return result.mergedWith(typeMismatch(reader, writer, locations));
+          // TIMESTAMP over LONG and UUID over STRING are reader/writer compatibility rules only. They are deliberately
+          // absent from HoodieSchemaTypePromotion: isCompatibleProjectionOf(source, target) tests
+          // canPromote(target, source), so the entry would make a timestamp a compatible projection of a bare long,
+          // and writer-schema deduction (HoodieSchemaUtils.scala) would then keep the table's long as the writer
+          // schema and silently drop the logical type. The deduction that produces a TIMESTAMP-reader / LONG-writer
+          // pair is gated per field by hoodie.write.timestamp.logical.type.overrides (#19384); this checker accepts
+          // the pair once produced.
           case TIMESTAMP:
             return (writer.getType() == HoodieSchemaType.LONG) ? result : result.mergedWith(typeMismatch(reader, writer, locations));
           case UUID:
             return (writer.getType() == HoodieSchemaType.STRING) ? result : result.mergedWith(typeMismatch(reader, writer, locations));
+          // The primitive widening table (LONG <- INT, FLOAT <- INT/LONG, DOUBLE <- INT/LONG/FLOAT, BYTES <- STRING,
+          // STRING <- BYTES or any numeric) lives in HoodieSchemaTypePromotion, shared with the projection checker.
           case LONG:
-            return (writer.getType() == HoodieSchemaType.INT) ? result : result.mergedWith(typeMismatch(reader, writer, locations));
           case FLOAT:
-            return ((writer.getType() == HoodieSchemaType.INT) || (writer.getType() == HoodieSchemaType.LONG)) ? result
-                : result.mergedWith(typeMismatch(reader, writer, locations));
           case DOUBLE:
-            return ((writer.getType() == HoodieSchemaType.INT) || (writer.getType() == HoodieSchemaType.LONG) || (writer.getType() == HoodieSchemaType.FLOAT))
-                ? result
-                : result.mergedWith(typeMismatch(reader, writer, locations));
           case BYTES:
-            return (writer.getType() == HoodieSchemaType.STRING) ? result : result.mergedWith(typeMismatch(reader, writer, locations));
           case STRING:
-            return (writer.getType().isNumeric() || (writer.getType() == HoodieSchemaType.BYTES)
-                ? result : result.mergedWith(typeMismatch(reader, writer, locations)));
+            return HoodieSchemaTypePromotion.canPromote(reader.getType(), writer.getType())
+                ? result : result.mergedWith(typeMismatch(reader, writer, locations));
           case ARRAY:
             return result.mergedWith(typeMismatch(reader, writer, locations));
           case MAP:

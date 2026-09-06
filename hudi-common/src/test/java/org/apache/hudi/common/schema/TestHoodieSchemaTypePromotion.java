@@ -86,6 +86,15 @@ public class TestHoodieSchemaTypePromotion {
     assertFalse(HoodieSchemaTypePromotion.canPromote(HoodieSchemaType.BOOLEAN, HoodieSchemaType.INT));
     assertFalse(HoodieSchemaTypePromotion.canPromote(HoodieSchemaType.INT, HoodieSchemaType.BOOLEAN));
     assertFalse(HoodieSchemaTypePromotion.canPromote(HoodieSchemaType.LONG, HoodieSchemaType.STRING));
+    // Logical-type-over-primitive pairs are reader/writer compatibility rules only (see
+    // HoodieSchemaCompatibilityChecker); they must never be reported as compatible projections.
+    assertFalse(HoodieSchemaTypePromotion.canPromote(HoodieSchemaType.TIMESTAMP, HoodieSchemaType.LONG));
+    assertFalse(HoodieSchemaTypePromotion.canPromote(HoodieSchemaType.UUID, HoodieSchemaType.STRING));
+    assertFalse(HoodieSchemaTypePromotion.canPromote(HoodieSchemaType.DATE, HoodieSchemaType.INT));
+    // The same holds on the writer side: an int-backed logical type is never a plain INT to the widening
+    // table, which is what keeps the checker's LONG/FLOAT/DOUBLE cases from accepting it.
+    assertFalse(HoodieSchemaTypePromotion.canPromote(HoodieSchemaType.LONG, HoodieSchemaType.DATE));
+    assertFalse(HoodieSchemaTypePromotion.canPromote(HoodieSchemaType.LONG, HoodieSchemaType.TIME));
   }
 
   @Test

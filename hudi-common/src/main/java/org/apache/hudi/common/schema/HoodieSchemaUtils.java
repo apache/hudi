@@ -18,10 +18,14 @@
 
 package org.apache.hudi.common.schema;
 
-import org.apache.hudi.common.avro.AvroSchemaUtils;
 import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.internal.HoodieSchemaException;
+import org.apache.hudi.common.schema.internal.InternalSchema;
+import org.apache.hudi.common.schema.internal.action.TableChanges;
+import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter;
+import org.apache.hudi.common.schema.internal.utils.SchemaChangeUtils;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -35,6 +39,7 @@ import org.apache.avro.generic.GenericData;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -64,6 +69,7 @@ import java.util.stream.Stream;
  *       {@link #toJavaDefaultValue(HoodieSchemaField)}</li>
  *   <li>nullability: {@link #asNullable(HoodieSchema)}</li>
  *   <li>naming: {@link #sanitizeName(String)}, {@link #getRecordQualifiedName(String)}</li>
+ *   <li>error text: {@link #createSchemaErrorString(String, HoodieSchema, HoodieSchema)}</li>
  *   <li>lookups and predicates that need more than {@link HoodieSchema} offers on its own:
  *       {@link #findNestedField(HoodieSchema, String)}, {@link #findMissingFields(HoodieSchema, HoodieSchema)},
  *       {@link #resolveUnionSchema(HoodieSchema, String)}, {@link #hasDecimalField(HoodieSchema)}</li>
@@ -80,11 +86,12 @@ import java.util.stream.Stream;
  *   <li>the field-id InternalSchema (schema-on-read) domain: {@code org.apache.hudi.common.schema.internal}</li>
  * </ul>
  *
- * <p>A few methods here still delegate to Avro-typed implementations
- * ({@link #asNullable(HoodieSchema)}, {@link #createNullableSchema(HoodieSchema)},
- * {@link #projectSchema(HoodieSchema, List)} and the 5-arg
- * {@link #createNewSchemaField(String, HoodieSchema, String, Object, HoodieFieldOrder)}). Those delegations
- * are being retired under #16639; new methods must be implemented on HoodieSchema directly.</p>
+ * <p>A couple of methods here still delegate to Avro-typed implementations
+ * ({@link #projectSchema(HoodieSchema, List)} and the 5-arg
+ * {@link #createNewSchemaField(String, HoodieSchema, String, Object, HoodieFieldOrder)}). An internal
+ * toAvroSchema/fromAvroSchema hop is not one of the conversion boundaries RFC-99 allows (memory to disk,
+ * disk to memory, engine boundary), so those delegations are being retired under #14263; new methods must
+ * be implemented on HoodieSchema directly. Where a helper belongs, by contrast, is #16639.</p>
  *
  * @since 1.2.0
  */
@@ -248,36 +255,46 @@ public final class HoodieSchemaUtils {
   }
 
   /**
-   * Creates a nullable version of the given schema (union of null and the schema).
+   * Create a new schema by force changing all the top-level fields as nullable.
    *
-   * <p>{@link HoodieSchema#createNullable(HoodieSchema)} is the idempotent native equivalent and is
-   * preferred; this overload round-trips through Avro and is retained only for existing call sites.</p>
+   * <p>The rewrite runs through the field-id {@link InternalSchema}: the record is converted, every
+   * still-required top-level field is marked nullable with a {@link TableChanges.ColumnUpdateChange},
+   * and the updated InternalSchema is converted back under the original full name. Only the top level
+   * changes - the inner fields of a nested record keep the nullability they had. Because the record is
+   * rebuilt from the InternalSchema, its full name, field order and per-field docs survive, while the
+   * record-level doc and any custom record properties do not. Three more effects of that round trip are
+   * pre-existing and pinned by tests: a non-null field default becomes {@code null}, an ENUM field comes
+   * back as STRING, and an already-nullable null-last union is reordered null-first.</p>
    *
-   * @param schema the input schema
-   * @return new HoodieSchema that allows null values
-   * @throws IllegalArgumentException if schema is null
-   */
-  public static HoodieSchema createNullableSchema(HoodieSchema schema) {
-    ValidationUtils.checkArgument(schema != null, "Schema cannot be null");
-
-    // Delegate to AvroSchemaUtils
-    Schema nullableAvro = AvroSchemaUtils.createNullableSchema(schema.toAvroSchema());
-    return HoodieSchema.fromAvroSchema(nullableAvro);
-  }
-
-  /**
-   * Create a new schema by force changing all the fields as nullable.
+   * <p>When every top-level field is already nullable the input instance itself is returned and no
+   * conversion runs.</p>
    *
-   * @return a new schema with all the fields updated as nullable
-   * @throws IllegalArgumentException if schema is null
-   * @see AvroSchemaUtils#asNullable(Schema)
+   * @param schema original schema
+   * @return a schema with all the top-level fields updated as nullable, or {@code schema} itself when
+   *         there is nothing to change
+   * @throws IllegalArgumentException if schema is null or not a RECORD
    */
   public static HoodieSchema asNullable(HoodieSchema schema) {
     ValidationUtils.checkArgument(schema != null, "Schema cannot be null");
+    ValidationUtils.checkArgument(schema.getType() == HoodieSchemaType.RECORD,
+        "asNullable expects a RECORD schema, got: " + schema.getType());
 
-    // Delegate to AvroSchemaUtils
-    Schema nullableAvro = AvroSchemaUtils.asNullable(schema.toAvroSchema());
-    return HoodieSchema.fromAvroSchema(nullableAvro);
+    // NOTE: HoodieSchema#isNullable is false for a bare NULL type, unlike Avro's Schema#isNullable, so a
+    //       NULL-typed field is excluded explicitly to keep it out of the update list as it always was.
+    List<String> requiredCols = schema.getFields().stream()
+        .filter(f -> !(f.schema().isNullable() || f.schema().getType() == HoodieSchemaType.NULL))
+        .map(HoodieSchemaField::name)
+        .collect(Collectors.toList());
+    if (requiredCols.isEmpty()) {
+      return schema;
+    }
+
+    InternalSchema internalSchema = InternalSchemaConverter.convert(schema);
+    TableChanges.ColumnUpdateChange schemaChange = TableChanges.ColumnUpdateChange.get(internalSchema);
+    schemaChange = CollectionUtils.reduce(requiredCols, schemaChange,
+        (change, field) -> change.updateColumnNullability(field, true));
+    return InternalSchemaConverter.convert(
+        SchemaChangeUtils.applyTableChanges2Schema(internalSchema, schemaChange), schema.getFullName());
   }
 
   /**
@@ -398,7 +415,7 @@ public final class HoodieSchemaUtils {
    * Alias of {@link HoodieSchemaField#of(String, HoodieSchema, String, Object, HoodieFieldOrder)} with
    * argument validation. Prefer {@code HoodieSchemaField.of} directly in new code; this overload still
    * round-trips through the Avro-typed {@code HoodieAvroUtils#createNewSchemaField} and is being retired
-   * under #16639.
+   * under #14263.
    *
    * @param name         field name
    * @param schema       field schema
@@ -470,9 +487,11 @@ public final class HoodieSchemaUtils {
    *
    * <p>Field names are matched case-insensitively and the projected field keeps the schema's original casing:
    * Avro field names are case-sensitive while Hive lowercases column projections before they reach the reader
-   * (see {@code HoodieRealtimeRecordReaderUtils#generateProjectionSchema}), so both sides are lowercased for the
-   * lookup. A schema with two fields that differ only in case cannot be projected and fails on the duplicate
-   * lowercase key.</p>
+   * (see {@code HoodieRealtimeRecordReaderUtils#generateProjectionSchema}), so both sides are lowercased with
+   * {@code Locale.ROOT} for the lookup. The default locale would map an upper-case I to dotless-i under a Turkish
+   * or Azeri locale and break the match with {@code HiveHoodieReaderContext}, which pre-lowercases with
+   * {@code Locale.ROOT}. A schema with two fields that differ only in case cannot be projected and fails on the
+   * duplicate lowercase key.</p>
    *
    * @param originalSchema the source schema
    * @param fieldNames     the list of field names to include in the projection
@@ -485,10 +504,11 @@ public final class HoodieSchemaUtils {
     ValidationUtils.checkArgument(fieldNames != null, "Field names cannot be null");
 
     Map<String, HoodieSchemaField> schemaFieldsMap = originalSchema.getFields().stream()
-        .map(r -> Pair.of(r.name().toLowerCase(), r)).collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
+        .map(r -> Pair.of(r.name().toLowerCase(Locale.ROOT), r))
+        .collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
     List<HoodieSchemaField> projectedFields = new ArrayList<>(fieldNames.size());
     for (String fn : fieldNames) {
-      HoodieSchemaField field = schemaFieldsMap.get(fn.toLowerCase());
+      HoodieSchemaField field = schemaFieldsMap.get(fn.toLowerCase(Locale.ROOT));
       if (field == null) {
         throw new HoodieException("Field " + fn + " not found in log schema. Query cannot proceed! "
             + "Derived Schema Fields: " + new ArrayList<>(schemaFieldsMap.keySet()));
@@ -948,6 +968,15 @@ public final class HoodieSchemaUtils {
     return INVALID_AVRO_CHARS_IN_NAMES_PATTERN.matcher(name).replaceAll(invalidCharMask);
   }
 
+  /**
+   * Formats a schema error with the writer and table schemas appended on their own lines, so callers
+   * throwing {@code SchemaCompatibilityException} report both sides in a consistent shape.
+   *
+   * @param errorMessage the message to lead with
+   * @param writerSchema the incoming writer schema
+   * @param tableSchema  the current table schema
+   * @return the message followed by both schemas, one per line
+   */
   public static String createSchemaErrorString(String errorMessage, HoodieSchema writerSchema, HoodieSchema tableSchema) {
     return String.format("%s\nwriterSchema: %s\ntableSchema: %s", errorMessage, writerSchema, tableSchema);
   }

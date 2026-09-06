@@ -19,6 +19,7 @@
 package org.apache.hudi.common.schema;
 
 import org.apache.hudi.common.avro.VariantSchemaUtils;
+import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.exception.SchemaBackwardsCompatibilityException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 
@@ -42,6 +43,7 @@ import static org.apache.hudi.common.schema.TestHoodieSchemaUtils.SIMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -699,6 +701,157 @@ public class TestHoodieSchemaCompatibility {
 
     // Int cannot read long (no type demotion)
     assertFalse(HoodieSchemaCompatibility.isSchemaCompatible(longS, intS, true, true));
+  }
+
+  /**
+   * Sibling of {@link #testIsSchemaCompatibleWithTypePromotion()} covering the rest of the reader/writer type
+   * table: the primitive widening cases shared with {@link HoodieSchemaTypePromotion}, plus the two
+   * logical-type-over-primitive rules (TIMESTAMP over LONG, UUID over STRING) that are compatibility-only.
+   *
+   * <p>All pairs are asserted through the 4-arg {@code isSchemaCompatible(prev = writer, new = reader, true, true)}.</p>
+   */
+  @Test
+  public void testIsSchemaCompatibleWithLogicalTypesAndWidening() {
+    // Logical type over its backing primitive: accepted for reader/writer compatibility.
+    assertCompatible(HoodieSchema.createTimestampMillis(), HoodieSchema.create(HoodieSchemaType.LONG));
+    assertCompatible(HoodieSchema.createUUID(), HoodieSchema.create(HoodieSchemaType.STRING));
+
+    // ... but only in that direction, and only over the matching primitive.
+    assertIncompatible(HoodieSchema.create(HoodieSchemaType.LONG), HoodieSchema.createTimestampMillis());
+    assertIncompatible(HoodieSchema.createTimestampMillis(), HoodieSchema.create(HoodieSchemaType.INT));
+    // DATE has no such rule at all, even though it is backed by INT.
+    assertIncompatible(HoodieSchema.createDate(), HoodieSchema.create(HoodieSchemaType.INT));
+
+    // Primitive widening, delegated to HoodieSchemaTypePromotion.
+    assertCompatible(HoodieSchema.create(HoodieSchemaType.DOUBLE), HoodieSchema.create(HoodieSchemaType.FLOAT));
+    assertIncompatible(HoodieSchema.create(HoodieSchemaType.FLOAT), HoodieSchema.create(HoodieSchemaType.DOUBLE));
+    // The narrowing direction is rejected for every numeric pair. The hudi-spark guard for the reversed
+    // argument bug class (TestTableSchemaEvolution, HUDI-1493) never runs, so the pairs are pinned here.
+    assertIncompatible(HoodieSchema.create(HoodieSchemaType.INT), HoodieSchema.create(HoodieSchemaType.LONG));
+    assertIncompatible(HoodieSchema.create(HoodieSchemaType.INT), HoodieSchema.create(HoodieSchemaType.FLOAT));
+    assertIncompatible(HoodieSchema.create(HoodieSchemaType.INT), HoodieSchema.create(HoodieSchemaType.DOUBLE));
+    assertIncompatible(HoodieSchema.create(HoodieSchemaType.LONG), HoodieSchema.create(HoodieSchemaType.FLOAT));
+    assertIncompatible(HoodieSchema.create(HoodieSchemaType.LONG), HoodieSchema.create(HoodieSchemaType.DOUBLE));
+    assertCompatible(HoodieSchema.create(HoodieSchemaType.STRING), HoodieSchema.create(HoodieSchemaType.BYTES));
+    assertCompatible(HoodieSchema.create(HoodieSchemaType.BYTES), HoodieSchema.create(HoodieSchemaType.STRING));
+    assertCompatible(HoodieSchema.create(HoodieSchemaType.STRING), HoodieSchema.create(HoodieSchemaType.INT));
+  }
+
+  @Test
+  public void testAreSchemasCompatibleReaderIsFirstArgument() {
+    HoodieSchema longRecord = HoodieSchemaTestUtils.createRecord("R", HoodieSchemaField.of("f", HoodieSchema.create(HoodieSchemaType.LONG), null, null));
+    HoodieSchema intRecord = HoodieSchemaTestUtils.createRecord("R", HoodieSchemaField.of("f", HoodieSchema.create(HoodieSchemaType.INT), null, null));
+
+    // A long reader can read int data ...
+    assertTrue(HoodieSchemaCompatibility.areSchemasCompatible(longRecord, intRecord));
+    // ... but not the other way round, which pins the reader as the FIRST argument.
+    assertFalse(HoodieSchemaCompatibility.areSchemasCompatible(intRecord, longRecord));
+  }
+
+  @Test
+  public void testLookupWriterFieldDirectMatch() {
+    HoodieSchemaField readerField = readerFieldWithAlias();
+    HoodieSchema writerSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"W\",\"fields\":["
+        + "{\"name\":\"a\",\"type\":\"int\"}]}");
+
+    HoodieSchemaField writerField = HoodieSchemaCompatibility.lookupWriterField(writerSchema, readerField);
+    assertEquals("a", writerField.name());
+  }
+
+  /**
+   * The alias path is also driven end to end through the sole production caller,
+   * {@code HoodieTable#validateSecondaryIndexSchemaEvolution} (see
+   * {@code TestHoodieTableSchemaEvolution#testFieldWithAlias}, whose type-change half is what makes the alias
+   * match decide the outcome: an unresolved alias returns null and is skipped by that caller's
+   * {@code writerField != null} guard); this case pins the facade on its own.
+   */
+  @Test
+  public void testLookupWriterFieldAliasMatch() {
+    HoodieSchemaField readerField = readerFieldWithAlias();
+    HoodieSchema writerSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"W\",\"fields\":["
+        + "{\"name\":\"old_a\",\"type\":\"int\"}]}");
+
+    HoodieSchemaField writerField = HoodieSchemaCompatibility.lookupWriterField(writerSchema, readerField);
+    assertEquals("old_a", writerField.name());
+  }
+
+  @Test
+  public void testLookupWriterFieldAmbiguousMatchThrows() {
+    HoodieSchemaField readerField = readerFieldWithAlias();
+    HoodieSchema writerSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"W\",\"fields\":["
+        + "{\"name\":\"a\",\"type\":\"int\"},"
+        + "{\"name\":\"old_a\",\"type\":\"int\"}]}");
+
+    assertThrows(HoodieSchemaException.class,
+        () -> HoodieSchemaCompatibility.lookupWriterField(writerSchema, readerField));
+  }
+
+  @Test
+  public void testLookupWriterFieldNoMatchReturnsNull() {
+    HoodieSchemaField readerField = readerFieldWithAlias();
+    HoodieSchema writerSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"W\",\"fields\":["
+        + "{\"name\":\"unrelated\",\"type\":\"int\"}]}");
+
+    assertNull(HoodieSchemaCompatibility.lookupWriterField(writerSchema, readerField));
+  }
+
+  @Test
+  public void testLookupWriterFieldRejectsNonRecordWriterSchema() {
+    HoodieSchemaField readerField = readerFieldWithAlias();
+    HoodieSchema notARecord = HoodieSchema.create(HoodieSchemaType.STRING);
+
+    assertThrows(IllegalArgumentException.class,
+        () -> HoodieSchemaCompatibility.lookupWriterField(notARecord, readerField));
+  }
+
+  /**
+   * Reader field {@code a}, aliased {@code old_a}. Aliases have no builder on HoodieSchemaField, so the
+   * reader record is parsed from JSON.
+   */
+  private static HoodieSchemaField readerFieldWithAlias() {
+    HoodieSchema readerSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"a\",\"type\":\"int\",\"aliases\":[\"old_a\"]}]}");
+    return readerSchema.getField("a").get();
+  }
+
+  /**
+   * Asserts that a field written as {@code writerFieldSchema} can be read back as {@code readerFieldSchema},
+   * that is, the {@code writer -> reader} conversion is allowed.
+   *
+   * <p>Arguments are in reader-first ("to", "from") order, matching
+   * {@link HoodieSchemaCompatibility#areSchemasCompatible(HoodieSchema, HoodieSchema)}. That is the reverse
+   * of the (prev = writer, new = reader) order taken by
+   * {@link HoodieSchemaCompatibility#isSchemaCompatible(HoodieSchema, HoodieSchema, boolean, boolean)};
+   * the helper flips the pair before calling it.</p>
+   *
+   * <p>Both schemas are wrapped in a single-field record {@code R { f }}, so only the per-field type rules
+   * are exercised here. Naming checks and projection are both enabled; field addition, removal and renaming
+   * are covered by the other tests in this class.</p>
+   *
+   * @param readerFieldSchema type the field is read as (the "to" side of the conversion)
+   * @param writerFieldSchema type the field was written with (the "from" side)
+   */
+  private static void assertCompatible(HoodieSchema readerFieldSchema, HoodieSchema writerFieldSchema) {
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(
+        HoodieSchemaTestUtils.createRecord("R", HoodieSchemaField.of("f", writerFieldSchema, null, null)),
+        HoodieSchemaTestUtils.createRecord("R", HoodieSchemaField.of("f", readerFieldSchema, null, null)), true, true),
+        "reader " + readerFieldSchema + " should read writer " + writerFieldSchema);
+  }
+
+  /**
+   * Negative counterpart of {@link #assertCompatible(HoodieSchema, HoodieSchema)}: asserts that a field
+   * written as {@code writerFieldSchema} cannot be read back as {@code readerFieldSchema}, that is, the
+   * {@code writer -> reader} conversion is rejected. Same reader-first argument order and same single-field
+   * record wrapping.
+   *
+   * @param readerFieldSchema type the field would be read as (the "to" side of the conversion)
+   * @param writerFieldSchema type the field was written with (the "from" side)
+   */
+  private static void assertIncompatible(HoodieSchema readerFieldSchema, HoodieSchema writerFieldSchema) {
+    assertFalse(HoodieSchemaCompatibility.isSchemaCompatible(
+        HoodieSchemaTestUtils.createRecord("R", HoodieSchemaField.of("f", writerFieldSchema, null, null)),
+        HoodieSchemaTestUtils.createRecord("R", HoodieSchemaField.of("f", readerFieldSchema, null, null)), true, true),
+        "reader " + readerFieldSchema + " should not read writer " + writerFieldSchema);
   }
 
   @Test

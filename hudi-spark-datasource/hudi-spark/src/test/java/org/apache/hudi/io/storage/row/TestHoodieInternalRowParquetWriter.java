@@ -36,6 +36,7 @@ import org.apache.hudi.testutils.SparkDatasetTestUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.hadoop.metadata.FileMetaData;
+import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.PrimitiveType;
 import org.apache.spark.sql.Dataset;
@@ -141,6 +142,46 @@ public class TestHoodieInternalRowParquetWriter extends HoodieSparkClientTestHar
     assertEquals(9, decimalParquetTypeLength(decimalRecordSchema(
         "{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":20,\"scale\":2}")),
         "bytes decimal keeps the precision-minimal FIXED_LEN width (9)");
+  }
+
+  /**
+   * hoodie.parquet.outputtimestamptype has had no effect since #13882: the Parquet timestamp
+   * unit comes from the writer schema's logical type, not from the config. Pin both directions
+   * so the config description cannot drift back to claiming otherwise.
+   */
+  @Test
+  public void testOutputTimestampTypeConfigDoesNotOverrideWriterSchema() {
+    // Config asks for MILLIS, writer schema says micros: the schema wins.
+    assertEquals(LogicalTypeAnnotation.TimeUnit.MICROS,
+        timestampUnitOf(timestampRecordSchema("timestamp-micros"), "TIMESTAMP_MILLIS"));
+    // Config left at its default of MICROS, writer schema says millis: the schema wins again.
+    assertEquals(LogicalTypeAnnotation.TimeUnit.MILLIS,
+        timestampUnitOf(timestampRecordSchema("timestamp-millis"), null));
+  }
+
+  private static String timestampRecordSchema(String logicalType) {
+    return "{\"type\":\"record\",\"name\":\"rec\",\"fields\":[{\"name\":\"ts\","
+        + "\"type\":{\"type\":\"long\",\"logicalType\":\"" + logicalType + "\"}}]}";
+  }
+
+  /** Builds the write support for the given writer schema and returns the Parquet timestamp unit it emits. */
+  @SuppressWarnings("deprecation")
+  private LogicalTypeAnnotation.TimeUnit timestampUnitOf(String avroSchemaJson, String outputTimestampType) {
+    StructType structType = new StructType().add("ts", DataTypes.TimestampType, false);
+    HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withSchema(avroSchemaJson);
+    if (outputTimestampType != null) {
+      builder.withStorageConfig(HoodieStorageConfig.newBuilder()
+          .parquetOutputTimestampType(outputTimestampType).build());
+    }
+    HoodieRowParquetWriteSupport writeSupport = HoodieRowParquetWriteSupport.getHoodieRowParquetWriteSupport(
+        storageConf.unwrap(), structType, Option.empty(), builder.build());
+    MessageType parquetSchema = writeSupport.init(writeSupport.getHadoopConf()).getSchema();
+    LogicalTypeAnnotation annotation = parquetSchema.getType("ts").asPrimitiveType().getLogicalTypeAnnotation();
+    assertTrue(annotation instanceof LogicalTypeAnnotation.TimestampLogicalTypeAnnotation,
+        "ts must carry a timestamp logical type, got: " + annotation);
+    return ((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) annotation).getUnit();
   }
 
   private static String decimalRecordSchema(String decType) {
