@@ -89,7 +89,7 @@ private[hudi] case class HoodieMergeOnReadBaseFileReaders(fullSchemaReader: Base
  * @param fileReaders            suite of base file readers
  * @param tableSchema            table's full schema
  * @param requiredSchema         expected (potentially) projected schema
- * @param tableState             table's state
+ * @param latestCommitTimestamp latest completed commit timestamp for the query
  * @param mergeType              type of merge performed
  * @param fileSplits             target file-splits this RDD will be iterating over
  * @param includedInstantTimeSet instant time set used to filter records
@@ -100,7 +100,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
                              fileReaders: HoodieMergeOnReadBaseFileReaders,
                              tableSchema: HoodieTableSchema,
                              requiredSchema: HoodieTableSchema,
-                             tableState: HoodieTableState,
+                             latestCommitTimestamp: Option[String],
                              mergeType: String,
                              @transient fileSplits: Seq[HoodieMergeOnReadFileSplit],
                              optionalFilters: Array[Filter],
@@ -208,7 +208,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
           val fileGroupReader: HoodieFileGroupReader[IndexedRecord] = HoodieFileGroupReader.builder()
             .withReaderContext(readerContext)
             .withHoodieTableMetaClient(metaClient)
-            .withLatestCommitTime(tableState.latestCommitTimestamp.orNull)
+            .withLatestCommitTime(latestCommitTimestamp.orNull)
             .withLogFiles(logFiles.stream())
             .withBaseFileOption(baseFileOption)
             .withPartitionPath(partitionPath)
@@ -226,7 +226,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
               HoodieLsmFileGroupReader.builder[InternalRow]()
                 .withReaderContext(readerContext)
                 .withHoodieTableMetaClient(metaClient)
-                .withLatestCommitTime(tableState.latestCommitTimestamp.orNull)
+                .withLatestCommitTime(latestCommitTimestamp.orNull)
                 .withLogFiles(logFiles.stream())
                 .withBaseFileOption(baseFileOption)
                 .withPartitionPath(partitionPath)
@@ -239,7 +239,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
               HoodieFileGroupReader.builder[InternalRow]()
                 .withReaderContext(readerContext)
                 .withHoodieTableMetaClient(metaClient)
-                .withLatestCommitTime(tableState.latestCommitTimestamp.orNull)
+                .withLatestCommitTime(latestCommitTimestamp.orNull)
                 .withLogFiles(logFiles.stream())
                 .withBaseFileOption(baseFileOption)
                 .withPartitionPath(partitionPath)

@@ -81,7 +81,7 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
       fileReaders = readers,
       tableSchema = tableSchema,
       requiredSchema = requiredSchema,
-      tableState = tableState,
+      latestCommitTimestamp = latestCommitTimestamp,
       mergeType = mergeType,
       fileSplits = fileSplits,
       includedInstantTimeSet = Option(includedCommits.map(_.requestedTime).toSet),
@@ -271,4 +271,3 @@ trait HoodieIncrementalRelationV2Trait extends HoodieBaseRelation {
     optParams.getOrElse(DataSourceReadOptions.INCR_PATH_GLOB.key, DataSourceReadOptions.INCR_PATH_GLOB.defaultValue)
 
 }
-
