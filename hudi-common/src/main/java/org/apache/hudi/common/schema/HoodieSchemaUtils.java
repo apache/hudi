@@ -521,6 +521,41 @@ public final class HoodieSchemaUtils {
   }
 
   /**
+   * Generate a reader schema off the provided writeSchema, to just project out the provided columns.
+   *
+   * <p>This overload is intended for callers that already have a name-to-field map,
+   * such as the realtime reader.</p>
+   *
+   * @param writeSchema      the source schema
+   * @param schemaFieldsMap  prebuilt case-insensitive field-name map
+   * @param fieldNames       the list of field names to include in the projection
+   * @param isError          whether the projected schema is an error schema
+   * @return new HoodieSchema containing only the specified fields
+   */
+  public static HoodieSchema generateProjectionSchema(HoodieSchema writeSchema,
+                                                      Map<String, HoodieSchemaField> schemaFieldsMap,
+                                                      List<String> fieldNames,
+                                                      boolean isError) {
+    ValidationUtils.checkArgument(writeSchema != null, "Write schema cannot be null");
+    ValidationUtils.checkArgument(schemaFieldsMap != null, "Schema fields map cannot be null");
+    ValidationUtils.checkArgument(fieldNames != null, "Field names cannot be null");
+
+    List<HoodieSchemaField> projectedFields = new ArrayList<>(fieldNames.size());
+    for (String fn : fieldNames) {
+      HoodieSchemaField field = schemaFieldsMap.get(fn.toLowerCase(Locale.ROOT));
+      if (field == null) {
+        throw new HoodieException("Field " + fn + " not found in log schema. Query cannot proceed! "
+                + "Derived Schema Fields: " + new ArrayList<>(schemaFieldsMap.keySet()));
+      } else {
+        projectedFields.add(createNewSchemaField(field));
+      }
+    }
+
+    return HoodieSchema.createRecord(writeSchema.getName(), writeSchema.getDoc().orElse(null),
+            writeSchema.getNamespace().orElse(null), isError, projectedFields);
+  }
+
+  /**
    * Prunes the data schema to only include fields that are required by the required schema,
    * plus any mandatory fields specified.
    *
