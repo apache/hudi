@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.FunctionIdentifier
 import org.apache.spark.sql.catalyst.analysis.{AnsiTypeCoercion, DecimalPrecision, TypeCoercion, UnresolvedAttribute, UnresolvedFunction}
-import org.apache.spark.sql.catalyst.expressions.{BinaryArithmetic, BinaryComparison, Cast, Coalesce, Divide, EqualNullSafe, Expression, GenericInternalRow, In, IntegralDivide, Unevaluable}
+import org.apache.spark.sql.catalyst.expressions.{BinaryArithmetic, BinaryComparison, Cast, Coalesce, Divide, EqualNullSafe, Expression, GenericInternalRow, In, IntegralDivide, RuntimeReplaceable, Unevaluable}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{BooleanType, ByteType, DataType, DecimalType, DoubleType, IntegerType, LongType, NullType, NumericType, ShortType, StructType}
@@ -96,7 +96,7 @@ object HoodieProcedureFilterUtils {
     // Second pass: resolve functions
     val functionResolved = attributeBound.transform {
         case unresolvedFunc: org.apache.spark.sql.catalyst.analysis.UnresolvedFunction =>
-          unresolvedFunc.nameParts.head.toLowerCase(Locale.ROOT) match {
+          val tableResolved = unresolvedFunc.nameParts.head.toLowerCase(Locale.ROOT) match {
             case "upper" =>
               if (unresolvedFunc.arguments.length == 1) {
                 org.apache.spark.sql.catalyst.expressions.Upper(unresolvedFunc.arguments.head)
@@ -356,7 +356,15 @@ object HoodieProcedureFilterUtils {
               } else {
                 unresolvedFunc
               }
-            case _ => resolveViaFunctionRegistry(unresolvedFunc, sparkSession)
+            case _ => unresolvedFunc
+          }
+          // whatever matched above - the table entry, or nothing at all - still an
+          // UnresolvedFunction (wrong arity, or a name not in the table)? try the registry
+          // before giving up.
+          tableResolved match {
+            case _: org.apache.spark.sql.catalyst.analysis.UnresolvedFunction =>
+              resolveViaFunctionRegistry(unresolvedFunc, sparkSession)
+            case resolved => resolved
           }
     }
 
@@ -400,7 +408,19 @@ object HoodieProcedureFilterUtils {
         case Seq(db, funcName) => FunctionIdentifier(funcName, Some(db))
         case _ => FunctionIdentifier(nameParts.last)
       }
-      sparkSession.sessionState.functionRegistry.lookupFunction(functionIdentifier, unresolvedFunc.arguments)
+      val resolved = sparkSession.sessionState.functionRegistry.lookupFunction(functionIdentifier, unresolvedFunc.arguments)
+      // lookupFunction alone doesn't run the analyzer rule that swaps these placeholders for
+      // their real expression (nvl, ifnull, left, right, ...) - eval() on the raw node just
+      // throws, so unwrap it ourselves.
+      val unwrapped = resolved.transformUp { case r: RuntimeReplaceable => r.replacement }
+      // aggregate functions (percentile, collect_list, ...) resolve fine here but can't be
+      // eval()'d row-by-row outside of real aggregation - treat them as still-unresolved so
+      // the existing rejection path (see #19850) catches them instead of silently no-matching.
+      if (unwrapped.isInstanceOf[org.apache.spark.sql.catalyst.expressions.aggregate.AggregateFunction]) {
+        unresolvedFunc
+      } else {
+        unwrapped
+      }
     } match {
       case Success(resolved) => resolved
       case Failure(_) => unresolvedFunc
