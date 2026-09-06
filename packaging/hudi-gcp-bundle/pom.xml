@@ -152,12 +152,9 @@
       <version>${project.version}</version>
     </dependency>
 
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-hadoop-mr-bundle</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-
+    <!-- org.apache.hudi:hudi-hadoop-mr and hudi-hadoop-common are shaded in by the artifactSet
+         above; hudi-hive-sync below already brings both in transitively as a library, so the
+         hudi-hadoop-mr-bundle fat jar is not needed here. -->
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-sync-common</artifactId>
