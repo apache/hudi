@@ -120,21 +120,26 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     assertResult(Seq.empty)(keep(scalarRows, "price > 15.0", scalarSchema))
   }
 
-  test("evaluateFilter silently drops rows for functions outside the resolution table") {
-    // Known limitation: a function missing from the resolution table falls through as an
-    // UnresolvedFunction. validateFilterExpression only checks column references, so nothing
-    // rejects it; instead evaluation fails per row and the row is dropped, which looks like an
-    // empty result rather than an error. Pinned here so a fix flips these; see #19638.
+  test("validateFilterExpression rejects functions outside the resolution table") {
+    // Direct evaluation still treats an unresolved function as a non-match, but procedure callers
+    // validate first so unsupported functions are reported instead of silently dropping every row.
     assertResult(Seq.empty)(keep(scalarRows, "concat(name, 'x') = 'a1x'", scalarSchema))
     assertResult(Seq.empty)(keep(scalarRows, "instr(name, 'a') = 1", scalarSchema))
-    assertResult(Right(()))(
-      HoodieProcedureFilterUtils.validateFilterExpression("concat(name, 'x') = 'a1x'", scalarSchema, spark))
+    val unsupported = HoodieProcedureFilterUtils.validateFilterExpression(
+      "concat(name, 'x') = 'a1x' OR instr(name, 'a') = 1", scalarSchema, spark)
+    assert(unsupported.isLeft)
+    val unsupportedMsg = unsupported.fold(identity, _ => "")
+    assert(unsupportedMsg.contains("Unsupported functions: concat, instr"))
+    assert(unsupportedMsg.contains("Supported functions:"))
+    assert(unsupportedMsg.contains("upper"))
     // if() is parsed as a function call and hits the same gap, while the equivalent CASE WHEN is
     // lowered by the parser without an UnresolvedFunction and evaluates fine.
     assertResult(Seq.empty)(keep(scalarRows, "if(name = 'a1', true, false)", scalarSchema))
     assertResult(Seq(scalarRows.head))(
       keep(scalarRows, "case when name = 'a1' then true else false end", scalarSchema))
     // Control: a function that is in the resolution table resolves and matches.
+    assertResult(Right(()))(
+      HoodieProcedureFilterUtils.validateFilterExpression("upper(name) = 'A1'", scalarSchema, spark))
     assertResult(Seq(scalarRows.head))(keep(scalarRows, "upper(name) = 'A1'", scalarSchema))
   }
 

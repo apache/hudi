@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.spark.sql.{Row, SparkSession}
-import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
+import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction}
 import org.apache.spark.sql.catalyst.expressions.{Expression, GenericInternalRow}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.types.{DataType, StructType}
@@ -38,6 +38,13 @@ import scala.util.{Failure, Success, Try}
  * - Nested combinations of all above types
  */
 object HoodieProcedureFilterUtils {
+
+  private val SupportedFunctionNames: Set[String] = Set(
+    "abs", "array_contains", "array_size", "between", "bigint", "ceil", "ceiling", "coalesce",
+    "date_format", "datediff", "day", "dayofmonth", "double", "floor", "hour", "integer", "int",
+    "isnotnull", "isnull", "len", "length", "like", "long", "lower", "ltrim", "map_keys", "map_values",
+    "month", "regexp_extract", "regexp_like", "rlike", "round", "rtrim", "size", "sort_array", "string",
+    "substr", "substring", "trim", "upper", "year")
 
   /**
    * Evaluates a SQL filter expression against a sequence of rows.
@@ -468,9 +475,13 @@ object HoodieProcedureFilterUtils {
         val columnNames = schema.fieldNames.toSet
         val referencedColumns = extractColumnReferences(parsedExpr)
         val invalidColumns = referencedColumns -- columnNames
+        val unsupportedFunctions = extractFunctionReferences(parsedExpr) -- SupportedFunctionNames
 
         if (invalidColumns.nonEmpty) {
           Left(s"Invalid column references: ${invalidColumns.mkString(", ")}. Available columns: ${columnNames.mkString(", ")}")
+        } else if (unsupportedFunctions.nonEmpty) {
+          Left(s"Unsupported functions: ${unsupportedFunctions.toSeq.sorted.mkString(", ")}. "
+            + s"Supported functions: ${SupportedFunctionNames.toSeq.sorted.mkString(", ")}")
         } else {
           Right(())
         }
@@ -479,6 +490,12 @@ object HoodieProcedureFilterUtils {
         case Failure(exception) => Left(s"Invalid filter expression: ${exception.getMessage}")
       }
     }
+  }
+
+  private def extractFunctionReferences(expression: Expression): Set[String] = expression match {
+    case unresolved: UnresolvedFunction =>
+      Set(unresolved.nameParts.head.toLowerCase) ++ unresolved.children.flatMap(extractFunctionReferences)
+    case _ => expression.children.flatMap(extractFunctionReferences).toSet
   }
 
   private def extractColumnReferences(expression: Expression): Set[String] = {
@@ -505,4 +522,3 @@ object HoodieProcedureFilterUtils {
     }
   }
 }
-
