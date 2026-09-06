@@ -19,10 +19,12 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction}
-import org.apache.spark.sql.catalyst.expressions.{Expression, GenericInternalRow}
+import org.apache.spark.sql.catalyst.expressions.{Expression, GenericInternalRow, Unevaluable}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.types.{DataType, StructType}
 import org.apache.spark.unsafe.types.UTF8String
+
+import java.util.Locale
 
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
@@ -38,13 +40,6 @@ import scala.util.{Failure, Success, Try}
  * - Nested combinations of all above types
  */
 object HoodieProcedureFilterUtils {
-
-  private val SupportedFunctionNames: Set[String] = Set(
-    "abs", "array_contains", "array_size", "between", "bigint", "ceil", "ceiling", "coalesce",
-    "date_format", "datediff", "day", "dayofmonth", "double", "floor", "hour", "integer", "int",
-    "isnotnull", "isnull", "len", "length", "like", "long", "lower", "ltrim", "map_keys", "map_values",
-    "month", "regexp_extract", "regexp_like", "rlike", "round", "rtrim", "size", "sort_array", "string",
-    "substr", "substring", "trim", "upper", "year")
 
   /**
    * Evaluates a SQL filter expression against a sequence of rows.
@@ -77,13 +72,9 @@ object HoodieProcedureFilterUtils {
     }
   }
 
-  private def evaluateExpressionOnRow(expression: Expression, row: Row, schema: StructType): Boolean = {
-
-    val internalRow = convertRowToInternalRow(row, schema)
-
-    Try {
-      // First pass: bind attributes
-      val attributeBound = expression.transform {
+  private def bindAndResolveExpression(expression: Expression, schema: StructType): Expression = {
+    // First pass: bind attributes
+    val attributeBound = expression.transform {
         case attr: org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute =>
           try {
             val fieldIndex = schema.fieldIndex(attr.name)
@@ -94,10 +85,10 @@ object HoodieProcedureFilterUtils {
           }
       }
 
-      // Second pass: resolve functions
-      val functionResolved = attributeBound.transform {
+    // Second pass: resolve functions
+    attributeBound.transform {
         case unresolvedFunc: org.apache.spark.sql.catalyst.analysis.UnresolvedFunction =>
-          unresolvedFunc.nameParts.head.toLowerCase match {
+          unresolvedFunc.nameParts.head.toLowerCase(Locale.ROOT) match {
             case "upper" =>
               if (unresolvedFunc.arguments.length == 1) {
                 org.apache.spark.sql.catalyst.expressions.Upper(unresolvedFunc.arguments.head)
@@ -359,7 +350,15 @@ object HoodieProcedureFilterUtils {
               }
             case _ => unresolvedFunc
           }
-      }
+    }
+  }
+
+  private def evaluateExpressionOnRow(expression: Expression, row: Row, schema: StructType): Boolean = {
+
+    val internalRow = convertRowToInternalRow(row, schema)
+
+    Try {
+      val functionResolved = bindAndResolveExpression(expression, schema)
 
       // Third pass: handle type coercion for numeric comparisons
       val boundExpr = functionResolved.transformUp {
@@ -475,13 +474,22 @@ object HoodieProcedureFilterUtils {
         val columnNames = schema.fieldNames.toSet
         val referencedColumns = extractColumnReferences(parsedExpr)
         val invalidColumns = referencedColumns -- columnNames
-        val unsupportedFunctions = extractFunctionReferences(parsedExpr) -- SupportedFunctionNames
+        val resolvedExpr = bindAndResolveExpression(parsedExpr, schema)
+        val unsupportedFunctions = extractFunctionReferences(resolvedExpr)
+        val unsupportedExpressions = resolvedExpr.collect {
+          case expression: Unevaluable
+            if !expression.isInstanceOf[UnresolvedAttribute]
+              && !expression.isInstanceOf[UnresolvedFunction] => expression.prettyName
+        }.toSet
 
         if (invalidColumns.nonEmpty) {
           Left(s"Invalid column references: ${invalidColumns.mkString(", ")}. Available columns: ${columnNames.mkString(", ")}")
         } else if (unsupportedFunctions.nonEmpty) {
-          Left(s"Unsupported functions: ${unsupportedFunctions.toSeq.sorted.mkString(", ")}. "
-            + s"Supported functions: ${SupportedFunctionNames.toSeq.sorted.mkString(", ")}")
+          Left(s"Unsupported functions: ${unsupportedFunctions.toSeq.sorted.mkString(", ")}")
+        } else if (!resolvedExpr.resolved || unsupportedExpressions.nonEmpty) {
+          val names = unsupportedExpressions.toSeq.sorted
+          val detail = if (names.nonEmpty) s": ${names.mkString(", ")}" else ""
+          Left(s"Unsupported filter expression$detail")
         } else {
           Right(())
         }
@@ -494,7 +502,7 @@ object HoodieProcedureFilterUtils {
 
   private def extractFunctionReferences(expression: Expression): Set[String] = expression match {
     case unresolved: UnresolvedFunction =>
-      Set(unresolved.nameParts.head.toLowerCase) ++ unresolved.children.flatMap(extractFunctionReferences)
+      Set(unresolved.nameParts.mkString(".")) ++ unresolved.children.flatMap(extractFunctionReferences)
     case _ => expression.children.flatMap(extractFunctionReferences).toSet
   }
 
