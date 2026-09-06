@@ -637,9 +637,11 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
           s"""call show_clean_plans(table => '$tableName', filter => "nonexistent_col > 1")""")(
           "Invalid column references: nonexistent_col")
 
+        // concat is now resolved via the FunctionRegistry fallback (see #19852), so a genuinely
+        // unknown function name is needed here to exercise the rejection path.
         checkExceptionContain(
-          s"""call show_clean_plans(table => '$tableName', filter => "concat(action, 'x') = 'cleanx'")""")(
-          "Unsupported functions: concat")
+          s"""call show_clean_plans(table => '$tableName', filter => "no_such_fn(action) = 'cleanx'")""")(
+          "Unsupported functions: no_such_fn")
       }
     }
   }
