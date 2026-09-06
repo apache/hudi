@@ -506,7 +506,7 @@ public class HoodieTableMetadataUtil {
    * @param fieldSchema The schema of the field to check
    * @return true if the field is of type timestamp_millis, false otherwise
    */
-  static boolean isTimestampMillisField(HoodieSchema fieldSchema) {
+  public static boolean isTimestampMillisField(HoodieSchema fieldSchema) {
     HoodieSchema nonNullableSchema = fieldSchema.getNonNullType();
     if (nonNullableSchema.getType() == HoodieSchemaType.TIMESTAMP) {
       HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) nonNullableSchema;

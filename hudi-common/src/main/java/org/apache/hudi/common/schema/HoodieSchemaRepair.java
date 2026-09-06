@@ -20,6 +20,7 @@
 package org.apache.hudi.common.schema;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -249,8 +250,7 @@ public class HoodieSchemaRepair {
         return hasTimestampMillisField(tableSchema.getNonNullType());
 
       case TIMESTAMP:
-        HoodieSchema.Timestamp timestampType = (HoodieSchema.Timestamp) tableSchema;
-        return timestampType.getPrecision() == HoodieSchema.TimePrecision.MILLIS;
+        return HoodieTableMetadataUtil.isTimestampMillisField(tableSchema);
 
       default:
         return false;
