@@ -86,7 +86,7 @@ object HoodieProcedureFilterUtils {
       }
 
     // Second pass: resolve functions
-    attributeBound.transform {
+    val functionResolved = attributeBound.transform {
         case unresolvedFunc: org.apache.spark.sql.catalyst.analysis.UnresolvedFunction =>
           unresolvedFunc.nameParts.head.toLowerCase(Locale.ROOT) match {
             case "upper" =>
@@ -351,6 +351,20 @@ object HoodieProcedureFilterUtils {
             case _ => unresolvedFunc
           }
     }
+
+    // Third pass: handle type coercion for numeric comparisons
+    functionResolved.transformUp {
+      case eq: org.apache.spark.sql.catalyst.expressions.EqualTo =>
+        applyTypeCoercion(eq.left, eq.right, org.apache.spark.sql.catalyst.expressions.EqualTo.apply, eq)
+      case gt: org.apache.spark.sql.catalyst.expressions.GreaterThan =>
+        applyTypeCoercion(gt.left, gt.right, org.apache.spark.sql.catalyst.expressions.GreaterThan.apply, gt)
+      case gte: org.apache.spark.sql.catalyst.expressions.GreaterThanOrEqual =>
+        applyTypeCoercion(gte.left, gte.right, org.apache.spark.sql.catalyst.expressions.GreaterThanOrEqual.apply, gte)
+      case lt: org.apache.spark.sql.catalyst.expressions.LessThan =>
+        applyTypeCoercion(lt.left, lt.right, org.apache.spark.sql.catalyst.expressions.LessThan.apply, lt)
+      case lte: org.apache.spark.sql.catalyst.expressions.LessThanOrEqual =>
+        applyTypeCoercion(lte.left, lte.right, org.apache.spark.sql.catalyst.expressions.LessThanOrEqual.apply, lte)
+    }
   }
 
   private def evaluateExpressionOnRow(expression: Expression, row: Row, schema: StructType): Boolean = {
@@ -358,21 +372,7 @@ object HoodieProcedureFilterUtils {
     val internalRow = convertRowToInternalRow(row, schema)
 
     Try {
-      val functionResolved = bindAndResolveExpression(expression, schema)
-
-      // Third pass: handle type coercion for numeric comparisons
-      val boundExpr = functionResolved.transformUp {
-        case eq: org.apache.spark.sql.catalyst.expressions.EqualTo =>
-          applyTypeCoercion(eq.left, eq.right, org.apache.spark.sql.catalyst.expressions.EqualTo.apply, eq)
-        case gt: org.apache.spark.sql.catalyst.expressions.GreaterThan =>
-          applyTypeCoercion(gt.left, gt.right, org.apache.spark.sql.catalyst.expressions.GreaterThan.apply, gt)
-        case gte: org.apache.spark.sql.catalyst.expressions.GreaterThanOrEqual =>
-          applyTypeCoercion(gte.left, gte.right, org.apache.spark.sql.catalyst.expressions.GreaterThanOrEqual.apply, gte)
-        case lt: org.apache.spark.sql.catalyst.expressions.LessThan =>
-          applyTypeCoercion(lt.left, lt.right, org.apache.spark.sql.catalyst.expressions.LessThan.apply, lt)
-        case lte: org.apache.spark.sql.catalyst.expressions.LessThanOrEqual =>
-          applyTypeCoercion(lte.left, lte.right, org.apache.spark.sql.catalyst.expressions.LessThanOrEqual.apply, lte)
-      }
+      val boundExpr = bindAndResolveExpression(expression, schema)
       val result = boundExpr.eval(internalRow)
 
       result match {

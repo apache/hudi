@@ -286,6 +286,8 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     assertResult(Right(()))(
       validate("id > 1 AND name = 'a1'"))
     assertResult(Right(()))(
+      validate("ts >= 0 AND ts BETWEEN 0 AND 999999"))
+    assertResult(Right(()))(
       validate(null))
     assertResult(Right(()))(
       validate("   "))
