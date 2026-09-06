@@ -354,15 +354,19 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     assertResult(Seq(rows(1)))(keep(rows, "`50% overlap` > 15", schema))
   }
 
-  test("evaluateFilter silently drops rows for expressions it cannot resolve") {
-    assertResult(Seq.empty)(keep(scalarRows, "concat(name, 'x') = 'a1x'", scalarSchema))
-    assertResult(Seq.empty)(keep(scalarRows, "instr(name, 'a') = 1", scalarSchema))
-    assertResult(Seq.empty)(keep(scalarRows, "if(name = 'a1', true, false)", scalarSchema))
+  test("evaluateFilter resolves functions outside the hardcoded table via FunctionRegistry") {
+    // Functions missing from the hardcoded table now fall back to Spark's own FunctionRegistry
+    // instead of being rejected as unsupported. See #19852.
+    assertResult(Seq(scalarRows.head))(keep(scalarRows, "concat(name, 'x') = 'a1x'", scalarSchema))
+    assertResult(Seq(scalarRows.head))(keep(scalarRows, "instr(name, 'a') = 1", scalarSchema))
+    assertResult(Seq(scalarRows.head))(keep(scalarRows, "if(name = 'a1', true, false)", scalarSchema))
     assertResult(Seq(scalarRows.head))(
       keep(scalarRows, "case when name = 'a1' then true else false end", scalarSchema))
     // Or short-circuits on the resolved side, which is what the unresolved-operand guard preserves.
     assertResult(Seq(scalarRows.head))(
       keep(scalarRows, "id = 1 OR concat(name, 'x') = 'a1x'", scalarSchema))
+    assertResult(Right(()))(validate("concat(name, 'x') = 'a1x'"))
+    assertResult(Right(()))(validate("instr(name, 'a') = 1"))
   }
 
   test("evaluateFilter handles AND / OR / NOT / IN / BETWEEN") {
@@ -538,12 +542,13 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
   }
 
   test("validateFilterExpression rejects expressions the evaluator cannot resolve") {
-    val unknown = validate("concat(name, 'x') = 'a1x' OR instr(name, 'a') = 1")
-    assert(unknown.left.exists(_.contains("Unsupported functions: concat, instr")))
-
-    assert(validate("if(name = 'a1', true, false)").isLeft)
+    // concat/instr now resolve via the FunctionRegistry fallback (see #19852), so they're no
+    // longer rejected here — that's covered by the "resolves functions ... via FunctionRegistry"
+    // test above instead.
     assert(validate("substring(name, 2)").isLeft)
-    assert(validate("id = 1 OR concat(name, 'x') = 'a1x'").left.exists(_.contains("Unsupported functions: concat")))
+    // "id = 1 OR concat(...)" now resolves via the FunctionRegistry fallback (see #19852) rather
+    // than being rejected as unsupported - covered by the Or short-circuit assertion in the
+    // "resolves functions ... via FunctionRegistry" test above instead.
     assert(validate("hour(t) = 12").isLeft)
     assert(validate("date_format(t, 'yyyy') = '2024'").isLeft)
     assert(validate("any_value(id) = 1").isLeft)
