@@ -367,6 +367,26 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
       keep(scalarRows, "id = 1 OR concat(name, 'x') = 'a1x'", scalarSchema))
     assertResult(Right(()))(validate("concat(name, 'x') = 'a1x'"))
     assertResult(Right(()))(validate("instr(name, 'a') = 1"))
+
+    // RuntimeReplaceable builtins (nvl, left, right, ...) resolve to a placeholder node that
+    // FunctionRegistry.lookupFunction doesn't substitute on its own - make sure we unwrap it
+    // rather than letting eval() blow up on the raw placeholder.
+    assertResult(Seq(scalarRows.head))(keep(scalarRows, "nvl(name, 'z') = 'a1'", scalarSchema))
+    assertResult(Seq(scalarRows.head))(keep(scalarRows, "left(name, 1) = 'a'", scalarSchema))
+    assertResult(Seq(scalarRows.head))(keep(scalarRows, "right(name, 1) = '1'", scalarSchema))
+
+    // A hardcoded-table entry called with an arity the table doesn't handle (substring only
+    // handles 3 args) should still fall back to the registry instead of getting stuck.
+    assertResult(Seq(scalarRows.head))(keep(scalarRows, "substring(name, 2) = '1'", scalarSchema))
+  }
+
+  test("evaluateFilter still rejects aggregate functions resolved via FunctionRegistry") {
+    // percentile/any_value etc. resolve fine as expressions but can't be eval()'d per row -
+    // make sure those still go through the existing #19850 rejection path instead of silently
+    // resolving to a broken, always-false filter.
+    assert(validate("any_value(id) = 1").isLeft)
+    assert(validate("percentile(id, 0.5) = 1").isLeft)
+    assertResult(Seq.empty)(keep(scalarRows, "any_value(id) = 1", scalarSchema))
   }
 
   test("evaluateFilter handles AND / OR / NOT / IN / BETWEEN") {
@@ -542,13 +562,10 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
   }
 
   test("validateFilterExpression rejects expressions the evaluator cannot resolve") {
-    // concat/instr now resolve via the FunctionRegistry fallback (see #19852), so they're no
-    // longer rejected here — that's covered by the "resolves functions ... via FunctionRegistry"
-    // test above instead.
-    assert(validate("substring(name, 2)").isLeft)
-    // "id = 1 OR concat(...)" now resolves via the FunctionRegistry fallback (see #19852) rather
-    // than being rejected as unsupported - covered by the Or short-circuit assertion in the
-    // "resolves functions ... via FunctionRegistry" test above instead.
+    // concat/instr/substring(2-arg) now resolve via the FunctionRegistry fallback (see #19852),
+    // so they're no longer rejected here — covered by the "resolves functions ... via
+    // FunctionRegistry" test above instead, including the "id = 1 OR concat(...)" short-circuit
+    // case.
     assert(validate("hour(t) = 12").isLeft)
     assert(validate("date_format(t, 'yyyy') = '2024'").isLeft)
     assert(validate("any_value(id) = 1").isLeft)
