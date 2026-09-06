@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.catalyst.FunctionIdentifier
 import org.apache.spark.sql.catalyst.analysis.{AnsiTypeCoercion, DecimalPrecision, TypeCoercion, UnresolvedAttribute, UnresolvedFunction}
 import org.apache.spark.sql.catalyst.expressions.{BinaryArithmetic, BinaryComparison, Cast, Coalesce, Divide, EqualNullSafe, Expression, GenericInternalRow, In, IntegralDivide, Unevaluable}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
@@ -62,7 +63,7 @@ object HoodieProcedureFilterUtils {
 
         // Binding and resolution depend only on the schema, so run the three passes once for the
         // whole batch instead of per row.
-        val boundExpr = bindAndResolveExpression(parsedExpr, schema)
+        val boundExpr = bindAndResolveExpression(parsedExpr, schema, sparkSession)
         rows.filter(row => evaluateExpressionOnRow(boundExpr, row, schema))
       } match {
         case Success(filteredRows) => filteredRows
@@ -79,7 +80,7 @@ object HoodieProcedureFilterUtils {
     }
   }
 
-  private def bindAndResolveExpression(expression: Expression, schema: StructType): Expression = {
+  private def bindAndResolveExpression(expression: Expression, schema: StructType, sparkSession: SparkSession): Expression = {
     // First pass: bind attributes
     val attributeBound = expression.transform {
         case attr: org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute =>
@@ -355,7 +356,7 @@ object HoodieProcedureFilterUtils {
               } else {
                 unresolvedFunc
               }
-            case _ => unresolvedFunc
+            case _ => resolveViaFunctionRegistry(unresolvedFunc, sparkSession)
           }
     }
 
@@ -386,6 +387,23 @@ object HoodieProcedureFilterUtils {
         applyArithmeticTypeCoercion(arith)
       case coalesce: Coalesce =>
         applyCoalesceTypeCoercion(coalesce)
+    }
+  }
+
+  // didn't match anything above, so ask Spark itself before we give up - saves us from having
+  // to hand-list every builtin (concat, instr, if, ...) one by one
+  private def resolveViaFunctionRegistry(unresolvedFunc: UnresolvedFunction, sparkSession: SparkSession): Expression = {
+    Try {
+      val nameParts = unresolvedFunc.nameParts
+      val functionIdentifier = nameParts match {
+        case Seq(funcName) => FunctionIdentifier(funcName)
+        case Seq(db, funcName) => FunctionIdentifier(funcName, Some(db))
+        case _ => FunctionIdentifier(nameParts.last)
+      }
+      sparkSession.sessionState.functionRegistry.lookupFunction(functionIdentifier, unresolvedFunc.arguments)
+    } match {
+      case Success(resolved) => resolved
+      case Failure(_) => unresolvedFunc
     }
   }
 
@@ -500,7 +518,7 @@ object HoodieProcedureFilterUtils {
         val columnNames = schema.fieldNames.toSet
         val referencedColumns = extractColumnReferences(parsedExpr)
         val invalidColumns = referencedColumns -- columnNames
-        val resolvedExpr = bindAndResolveExpression(parsedExpr, schema)
+        val resolvedExpr = bindAndResolveExpression(parsedExpr, schema, sparkSession)
         val unsupportedFunctions = extractFunctionReferences(resolvedExpr)
         val unsupportedExpressions = resolvedExpr.collect {
           case expression: Unevaluable
