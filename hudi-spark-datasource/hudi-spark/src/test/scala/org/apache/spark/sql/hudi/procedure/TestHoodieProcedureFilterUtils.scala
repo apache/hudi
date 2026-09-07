@@ -179,8 +179,9 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     val rows = Seq(Row(new java.math.BigDecimal("1" + "0" * 30), new java.math.BigDecimal("1.5")))
     // Spark 3 only. There the widening picks DECIMAL(38,18), and the precision-38 clamp leaves it
     // 20 integral digits, too few for this 31-digit value, so the cast overflows and the ANSI mode
-    // decides what happens. Spark 4 does not reach an overflow for this pair and its procedure
-    // behaviour here has not been characterised, so nothing is pinned for it.
+    // decides what happens. Parity for a comparison whose common precision would exceed 38 is not
+    // settled on Spark 4 and needs the validation path checked against plain SQL, so nothing is
+    // pinned for it here. Tracked by HUDI #19860.
     if (!HoodieSparkUtils.gteqSpark4_0) {
       withSQLConf("spark.sql.ansi.enabled" -> "false") {
         // The cast yields null and the row drops.
