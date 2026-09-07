@@ -94,7 +94,7 @@ public class HoodieConcatHandle<T, I, K, O> extends HoodieWriteMergeHandle<T, I,
    */
   @Override
   public void write(HoodieRecord oldRecord) {
-    HoodieSchema oldSchema = config.getMetaFieldsMode() == MetaFieldsMode.NONE ? writeSchema : writeSchemaWithMetaFields;
+    HoodieSchema oldSchema = metaFieldsMode == MetaFieldsMode.NONE ? writeSchema : writeSchemaWithMetaFields;
     String key = getRecordKey(oldRecord, oldSchema);
     try {
       // NOTE: We're enforcing preservation of the record metadata to keep existing semantic

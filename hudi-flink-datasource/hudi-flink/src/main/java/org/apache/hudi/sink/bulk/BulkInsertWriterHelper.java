@@ -132,7 +132,7 @@ public class BulkInsertWriterHelper implements AutoCloseable {
       String recordKey = preserveRecordKey
           ? record.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD).toString()
           : keyGen.getRecordKey(record);
-      String partitionPath = preserveRecordKey // only ALL mode populate the partition path meta field
+      String partitionPath = preserveRecordKey // only ALL mode populates the partition path meta field
           ? record.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD).toString()
           : keyGen.getPartitionPath(record);
       writeRecord(recordKey, partitionPath, record);

@@ -57,7 +57,7 @@ public class FlinkIncrementalConcatHandle<T, I, K, O>
    */
   @Override
   public void write(HoodieRecord oldRecord) {
-    // HoodieMergeHelper supplies metadata columns even when NONE leaves their values null.
+    // Match the schema supplied by HoodieMergeHelper: metadata columns are present even in NONE mode.
     HoodieSchema oldSchema = writeSchemaWithMetaFields;
     String key = getRecordKey(oldRecord, oldSchema);
     try {

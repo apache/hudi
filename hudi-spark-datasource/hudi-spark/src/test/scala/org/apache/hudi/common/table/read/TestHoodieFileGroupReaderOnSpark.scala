@@ -202,7 +202,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   def testGetOrderingValue(): Unit = {
     val reader = Mockito.mock(classOf[SparkColumnarFileReader])
     val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
-    Mockito.when(tableConfig.populateMetaFields()).thenReturn(true)
+    Mockito.when(tableConfig.isRecordKeyPopulated()).thenReturn(true)
     val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, getStorageConf, tableConfig)
     val orderingFieldName = "col2"
     val avroSchema = new Schema.Parser().parse(
@@ -346,7 +346,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     val reader = Mockito.mock(classOf[SparkColumnarFileReader])
     val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
     val storageConf = Mockito.mock(classOf[StorageConfiguration[_]])
-    when(tableConfig.populateMetaFields()).thenReturn(true)
+    when(tableConfig.isRecordKeyPopulated()).thenReturn(true)
     val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, storageConf, tableConfig)
     val schema = SchemaBuilder.builder()
       .record("test")
@@ -363,7 +363,8 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   def getRecordKeySingleKey(): Unit = {
     val reader = Mockito.mock(classOf[SparkColumnarFileReader])
     val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
-    when(tableConfig.populateMetaFields()).thenReturn(false)
+    when(tableConfig.isRecordKeyPopulated()).thenReturn(false)
+    when(tableConfig.getPartitionFields()).thenReturn(HOption.empty[Array[String]]())
     when(tableConfig.getRecordKeyFields).thenReturn(HOption.of(Array("field1")))
     val storageConf = Mockito.mock(classOf[StorageConfiguration[_]])
     val props = new TypedProperties
@@ -385,7 +386,8 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   def getRecordKeyWithMultipleKeys(): Unit = {
     val reader = Mockito.mock(classOf[SparkColumnarFileReader])
     val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
-    when(tableConfig.populateMetaFields()).thenReturn(false)
+    when(tableConfig.isRecordKeyPopulated()).thenReturn(false)
+    when(tableConfig.getPartitionFields()).thenReturn(HOption.empty[Array[String]]())
     when(tableConfig.getRecordKeyFields).thenReturn(HOption.of(Array("outer1.field1", "outer1.field2", "outer1.field3")))
     val storageConf = Mockito.mock(classOf[StorageConfiguration[_]])
     val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, storageConf, tableConfig)
@@ -400,7 +402,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   def getNestedValue(): Unit = {
     val reader = Mockito.mock(classOf[SparkColumnarFileReader])
     val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
-    when(tableConfig.populateMetaFields()).thenReturn(true)
+    when(tableConfig.isRecordKeyPopulated()).thenReturn(true)
     val storageConf = Mockito.mock(classOf[StorageConfiguration[_]])
     val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, storageConf, tableConfig)
     val schema: Schema = buildMultiLevelSchema

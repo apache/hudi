@@ -62,7 +62,7 @@ class TestFlinkRowDataReaderContext {
   @BeforeEach
   void setUp() {
     List<ExpressionPredicates.Predicate> predicates = new ArrayList<>();
-    when(tableConfig.populateMetaFields()).thenReturn(true);
+    when(tableConfig.isRecordKeyPopulated()).thenReturn(true);
     when(tableConfig.getBaseFileFormat()).thenReturn(HoodieFileFormat.PARQUET);
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[]{"id"}));
     readerContext = new FlinkRowDataReaderContext(
