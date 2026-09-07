@@ -566,12 +566,19 @@ object HoodieProcedureFilterUtils {
   /**
    * Divide only accepts Double or Decimal, so widening its operands to their common numeric type
    * leaves an integral pair unresolved and "ts / 2 > 500" rejected while "price / 2 > 5" works.
-   * Mirror the analyzer's Division rule instead: promote an integral pair to Double, and let a
-   * pair that already involves a decimal widen the way the other arithmetic does.
+   * Mirror the analyzer's Division rule instead: leave a pair that involves a decimal to the same
+   * widening as the other arithmetic, and promote everything else to Double. Like Spark, that
+   * includes a null operand, so "ts / null" resolves and evaluates to null rather than failing
+   * validation. The rule is unchanged between the two majors this builds against, only relocated:
+   *
+   * 3.5.5 object Division, in
+   * https://github.com/apache/spark/blob/v3.5.5/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/analysis/TypeCoercion.scala
+   * 4.1.1
+   * https://github.com/apache/spark/blob/v4.1.1/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/analysis/DivisionTypeCoercion.scala
    */
   private def applyDivideTypeCoercion(divide: Divide): Expression = {
     val operands = Seq(divide.left, divide.right)
-    if (operands.exists(!_.resolved) || !operands.forall(_.dataType.isInstanceOf[NumericType])) {
+    if (operands.exists(!_.resolved) || !operands.forall(operand => isNumericOrNull(operand.dataType))) {
       divide
     } else if (operands.exists(_.dataType.isInstanceOf[DecimalType])) {
       applyArithmeticTypeCoercion(divide)
@@ -579,6 +586,10 @@ object HoodieProcedureFilterUtils {
       divide.withNewChildren(operands.map(operand => castTo(operand, DoubleType)))
     }
   }
+
+  /** Spark's own guard for the numeric coercion rules, which admit a null literal. */
+  private def isNumericOrNull(dataType: DataType): Boolean =
+    dataType.isInstanceOf[NumericType] || dataType.isInstanceOf[NullType]
 
   private def applyCoalesceTypeCoercion(coalesce: Coalesce): Expression = {
     widenNumericOperands(coalesce.children) match {
@@ -613,8 +624,7 @@ object HoodieProcedureFilterUtils {
       None
     } else {
       val operandTypes = operands.map(_.dataType)
-      if (operandTypes.distinct.length == 1
-        || !operandTypes.forall(t => t.isInstanceOf[NumericType] || t.isInstanceOf[NullType])) {
+      if (operandTypes.distinct.length == 1 || !operandTypes.forall(isNumericOrNull)) {
         None
       } else {
         findWiderNumericType(operandTypes)
@@ -632,6 +642,11 @@ object HoodieProcedureFilterUtils {
    * Reads SQLConf.get rather than the SparkSession because Cast takes its eval mode from that same
    * thread-local at construction, and the two-argument Cast(child, dataType) is the only form that
    * is portable across Spark 3.3 to 4.x (3.3 takes ansiEnabled, 3.4+ takes evalMode).
+   *
+   * Decimal pairs go through Spark's own precision rules, which likewise only moved between the
+   * majors: 3.5.5 analysis/DecimalPrecision.scala, 4.1.1 analysis/DecimalPrecisionTypeCoercion
+   * .scala. Parity for a comparison whose common precision would exceed 38 is not settled here;
+   * see HUDI #19860.
    */
   private def findWiderNumericType(types: Seq[DataType]): Option[DataType] = {
     if (SQLConf.get.ansiEnabled) {

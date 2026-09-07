@@ -231,6 +231,12 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     assertResult(Right(()))(validate("ts / 2 > 500"))
     assertResult(Seq(scalarRows(1)))(keep(scalarRows, "price / 2 > 5", scalarSchema))
     assertResult(Right(()))(validate("price / 2 > 5"))
+    // Spark's rule admits a null operand on either side, so these resolve and evaluate to null
+    // rather than being rejected as an unsupported filter expression.
+    assertResult(Seq.empty)(keep(scalarRows, "ts / null > 0", scalarSchema))
+    assertResult(Right(()))(validate("ts / null > 0"))
+    assertResult(Seq.empty)(keep(scalarRows, "null / ts > 0", scalarSchema))
+    assertResult(Right(()))(validate("null / ts > 0"))
   }
 
   test("evaluateFilter binds quoted column names") {
