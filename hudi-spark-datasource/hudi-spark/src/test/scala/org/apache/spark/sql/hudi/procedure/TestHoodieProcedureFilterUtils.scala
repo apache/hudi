@@ -239,6 +239,17 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     assertResult(Right(()))(validate("null / ts > 0"))
   }
 
+  test("evaluateFilter keeps the operand types of decimal arithmetic") {
+    // BinaryArithmetic derives the result precision from the operands, so the operands have to
+    // reach it unwidened. DECIMAL(38,18) * DECIMAL(2,1) gives a scale-16 product that still holds
+    // 0.0000001, whereas casting both to DECIMAL(38,18) first drives the product to scale 6 and
+    // rounds the value away to zero, dropping a row Spark keeps.
+    val schema = schemaOf("dec" -> DecimalType(38, 18))
+    val rows = Seq(Row(new java.math.BigDecimal("0.0000001")))
+    assertResult(rows)(keep(rows, "dec * 1.0 > 0.0", schema))
+    assertResult(Right(()))(validate("dec * 1.0 > 0.0", schema))
+  }
+
   test("evaluateFilter binds quoted column names") {
     // show_column_stats_overlap, the second procedure named in #19632, outputs columns like
     // "Average overlap" and "50% overlap".

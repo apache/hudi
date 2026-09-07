@@ -556,10 +556,28 @@ object HoodieProcedureFilterUtils {
     }
   }
 
+  /**
+   * Arithmetic keeps its decimal operands exactly as they are. Unlike a comparison,
+   * BinaryArithmetic.checkInputDataTypes accepts two decimals of different precision and scale and
+   * derives the result type from them, so widening to a common type changes the answer rather than
+   * enabling it: DECIMAL(38,18) * DECIMAL(2,1) yields a scale-16 product, while casting both to
+   * DECIMAL(38,18) first drives the product to scale 6 and rounds 0.0000001 away to zero.
+   *
+   * A decimal mixed with a non-decimal is left alone too, and so stays unresolved and rejected the
+   * way it is without this coercion. Matching Spark there means its DecimalPrecision promotion,
+   * including the minimum-precision rule for an integral literal that exists to avoid this same
+   * loss, which is more than this widening should take on; see HUDI #19860.
+   */
   private def applyArithmeticTypeCoercion(arith: BinaryArithmetic): Expression = {
-    widenNumericOperands(Seq(arith.left, arith.right)) match {
-      case Some(Seq(widenedLeft, widenedRight)) => arith.withNewChildren(Seq(widenedLeft, widenedRight))
-      case _ => arith
+    val operands = Seq(arith.left, arith.right)
+    // dataType throws on an unresolved operand, so that has to be ruled out before reading it.
+    if (operands.exists(operand => !operand.resolved || operand.dataType.isInstanceOf[DecimalType])) {
+      arith
+    } else {
+      widenNumericOperands(operands) match {
+        case Some(Seq(widenedLeft, widenedRight)) => arith.withNewChildren(Seq(widenedLeft, widenedRight))
+        case _ => arith
+      }
     }
   }
 
