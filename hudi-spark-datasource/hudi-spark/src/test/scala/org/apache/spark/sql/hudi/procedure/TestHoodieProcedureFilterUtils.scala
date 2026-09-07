@@ -26,6 +26,8 @@ import org.apache.spark.sql.types._
 import java.math.{BigDecimal => JBigDecimal}
 import java.sql.{Date, Timestamp}
 
+import scala.collection.JavaConverters._
+
 /**
  * Direct unit tests for [[HoodieProcedureFilterUtils]] which evaluates SQL filter
  * expressions against procedure output rows. Covers primitive/date/decimal/complex
@@ -240,8 +242,6 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
   }
 
   test("evaluateFilter widens arithmetic and coalesce operands") {
-    import scala.collection.JavaConverters._
-
     assertResult(Seq(scalarRows(1)))(keep(scalarRows, "ts + 1 > 1500", scalarSchema))
     assertResult(Right(()))(validate("ts + 1 > 1500"))
     assertResult(Seq(scalarRows.head))(keep(scalarRows, "coalesce(ts, 0) = 1000", scalarSchema))
@@ -284,8 +284,6 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
   }
 
   test("evaluateFilter matches Spark for mixed decimal arithmetic") {
-    import scala.collection.JavaConverters._
-
     val schema = schemaOf("dec" -> DecimalType(38, 18), "i" -> IntegerType, "f" -> FloatType)
     val rows = Seq(
       Row(new JBigDecimal("0.0000001"), 1, 0.5f),
@@ -314,8 +312,6 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
   }
 
   test("evaluateFilter matches Spark for high-precision decimal comparisons") {
-    import scala.collection.JavaConverters._
-
     val schema = schemaOf("ts" -> LongType, "dec" -> DecimalType(38, 30))
     val rows = Seq(
       Row(3000000000L, new JBigDecimal("0.00000000000000000000000000001")),
@@ -453,7 +449,6 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
   }
 
   test("evaluateFilter converts map columns and resolves map functions") {
-    import scala.collection.JavaConverters._
     val schema = schemaOf("id" -> IntegerType,
       "mScala" -> MapType(StringType, IntegerType),
       "mJava" -> MapType(StringType, IntegerType))
@@ -475,7 +470,6 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
   }
 
   test("evaluateFilter converts array / decimal / binary / uuid / java-time columns without error") {
-    import scala.collection.JavaConverters._
     val schema = schemaOf(
       "id" -> IntegerType,
       "arrScala" -> ArrayType(IntegerType),
