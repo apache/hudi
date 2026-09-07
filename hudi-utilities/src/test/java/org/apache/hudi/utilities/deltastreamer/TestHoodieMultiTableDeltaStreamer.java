@@ -287,6 +287,23 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
 
   @Timeout(600)
   @Test
+  public void testFailFastOnContinuousAfterASiblingFinished() throws IOException {
+    HoodieMultiTableDeltaStreamer streamer = setupContinuousStreamer("parquetFailFastAfterSibling", true);
+    List<TableExecutionContext> contexts = streamer.getTableExecutionContexts();
+    // Table 1 terminates normally, then table 2 fails. This is what separates allOf from anyOf: anyOf resolves on
+    // table 1's normal completion, so table 2's failure would never surface and sync() would return cleanly.
+    contexts.get(0).getConfig().postWriteTerminationStrategyClass = NoNewDataTerminationStrategy.class.getName();
+    contexts.get(1).getProperties().setProperty(ContinuousTestSource.FAIL_AFTER_SIBLING_COMPLETES, "true");
+
+    assertThrows(HoodieException.class, streamer::sync);
+
+    // Only the table that actually failed is recorded; the one that finished first was not torn down with it.
+    assertEquals(1, streamer.getFailedTables().size());
+    assertRecordCount(10, contexts.get(0).getConfig().targetBasePath, sqlContext);
+  }
+
+  @Timeout(600)
+  @Test
   public void testContinuousModeDefaultDoesNotStopSiblingsWhenATableFails() throws IOException {
     HoodieMultiTableDeltaStreamer streamer = setupContinuousStreamer("parquetNoFailFast", false);
     List<TableExecutionContext> contexts = streamer.getTableExecutionContexts();

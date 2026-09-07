@@ -51,14 +51,23 @@ public class ContinuousTestSource extends ParquetDFSSource {
   // When set on a table's properties, that table blocks after the barrier until fail fast interrupts it.
   public static final String BLOCK_UNTIL_INTERRUPTED = "hoodie.test.continuous.source.block.until.interrupted";
 
+  // When set on a table's properties, that table fails only after a sibling has finished its sync.
+  public static final String FAIL_AFTER_SIBLING_COMPLETES = "hoodie.test.continuous.source.fail.after.sibling.completes";
+
   private static final long BARRIER_TIMEOUT_SECONDS = 60;
+  // Time for a finished sibling's future to complete before the waiting table fails. Only widens the gap between
+  // the two completions, so a longer settle can never hide a regression.
+  private static final long SIBLING_SETTLE_MILLIS = 2000;
 
   private static volatile CyclicBarrier startBarrier = new CyclicBarrier(1);
   // Counted down by a blocking table once it observes the fail-fast interrupt, so a test can assert it was torn down.
   private static volatile CountDownLatch blockedTableInterrupted = new CountDownLatch(1);
+  // Counted down when a table releases its source, which its ingestion service does as the sync ends.
+  private static volatile CountDownLatch tableCompleted = new CountDownLatch(1);
 
   private final boolean failAfterBarrier;
   private final boolean blockUntilInterrupted;
+  private final boolean failAfterSiblingCompletes;
   private final AtomicBoolean barrierPassed = new AtomicBoolean(false);
 
   public ContinuousTestSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
@@ -66,12 +75,14 @@ public class ContinuousTestSource extends ParquetDFSSource {
     super(props, sparkContext, sparkSession, schemaProvider);
     this.failAfterBarrier = props.getBoolean(FAIL_AFTER_BARRIER, false);
     this.blockUntilInterrupted = props.getBoolean(BLOCK_UNTIL_INTERRUPTED, false);
+    this.failAfterSiblingCompletes = props.getBoolean(FAIL_AFTER_SIBLING_COMPLETES, false);
   }
 
   // Resets the shared barrier and latch used to coordinate tables. Call before each sync.
   public static void resetBarrier(int numTables) {
     startBarrier = new CyclicBarrier(numTables);
     blockedTableInterrupted = new CountDownLatch(1);
+    tableCompleted = new CountDownLatch(1);
   }
 
   // Whether a blocking table has already observed the fail-fast interrupt.
@@ -90,8 +101,33 @@ public class ContinuousTestSource extends ParquetDFSSource {
       if (blockUntilInterrupted) {
         blockUntilFailFastInterrupts();
       }
+      if (failAfterSiblingCompletes) {
+        awaitSiblingCompleted();
+        throw new HoodieException("Simulated table sync failure after a sibling table finished normally");
+      }
     }
     return super.fetchNextBatch(lastCheckpoint, sourceLimit);
+  }
+
+  @Override
+  public void releaseResources() {
+    // Counting down twice is harmless; only the first table to finish matters.
+    tableCompleted.countDown();
+    super.releaseResources();
+  }
+
+  // Orders this table's failure strictly after a sibling's sync has finished.
+  private void awaitSiblingCompleted() {
+    try {
+      if (!tableCompleted.await(BARRIER_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+        throw new HoodieException("Timed out waiting for a sibling table to finish its sync");
+      }
+      // releaseResources() fires before the sibling's worker completes its future; without this the two race.
+      Thread.sleep(SIBLING_SETTLE_MILLIS);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new HoodieException("Interrupted while waiting for a sibling table to finish its sync", e);
+    }
   }
 
   // Blocks until fail fast interrupts this table, records that it observed the interrupt, then propagates it.
