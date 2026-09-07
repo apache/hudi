@@ -40,6 +40,10 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
   private def validate(expr: String, schema: StructType = scalarSchema): Either[String, Unit] =
     HoodieProcedureFilterUtils.validateFilterExpression(expr, schema, spark)
 
+  private def scalarRow(id: Int, ts: Long): Row =
+    Row(id, s"n$id", 10.0d * id, ts, true, -id,
+      Date.valueOf("2024-01-01"), Timestamp.valueOf("2024-01-01 00:00:00"))
+
   // A rich scalar schema reused across the function tests.
   private val scalarSchema = schemaOf(
     "id" -> IntegerType,
@@ -69,6 +73,9 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     assertResult(2)(keep(scalarRows, "id <= 2", scalarSchema).length)
     assertResult(Seq(scalarRows(1)))(keep(scalarRows, "id != 1", scalarSchema))
     assertResult(Seq(scalarRows.head))(keep(scalarRows, "name = 'a1'", scalarSchema))
+    // A plain 15.0 decimal literal is coerced with the double column.
+    assertResult(Seq(scalarRows(1)))(keep(scalarRows, "price > 15.0", scalarSchema))
+    assertResult(Right(()))(validate("price > 15.0"))
     // Bare boolean column evaluates to a Boolean result directly.
     assertResult(Seq(scalarRows.head))(keep(scalarRows, "flag", scalarSchema))
     assertResult(Seq(scalarRows.head))(keep(scalarRows, "flag = true", scalarSchema))
@@ -83,8 +90,7 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     assertResult(Seq(scalarRows.head))(keep(scalarRows, "ts <= 1000", scalarSchema))
     // The integer literal is widened rather than the column narrowed, so a Long past the Int
     // range keeps its value instead of wrapping to -1294967296 and matching "ts < 2000".
-    val bigRow = Row(3, "c3", 30.0d, 3000000000L, true, -9,
-      Date.valueOf("2024-03-16"), Timestamp.valueOf("2024-03-16 12:30:00"))
+    val bigRow = scalarRow(3, 3000000000L)
     val withBigRow = scalarRows :+ bigRow
     assertResult(Seq(scalarRows(1), bigRow))(keep(withBigRow, "ts > 1500", scalarSchema))
     assertResult(Seq(scalarRows.head))(keep(withBigRow, "ts < 2000", scalarSchema))
@@ -94,6 +100,20 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     // IN and <=> widen through the same path as the binary comparisons.
     assertResult(scalarRows)(keep(withBigRow, "ts IN (1000, 2000)", scalarSchema))
     assertResult(Seq(scalarRows.head))(keep(withBigRow, "ts <=> 1000", scalarSchema))
+    // An IN list of mixed integral widths widens to the single common type.
+    assertResult(scalarRows)(keep(withBigRow, "ts IN (1000, 2000L)", scalarSchema))
+    // Every filterable procedure calls validateFilterExpression before evaluateFilter, and each of
+    // these shapes was rejected there before the operands widened.
+    assertResult(Right(()))(validate("1500 < ts"))
+    assertResult(Right(()))(validate("ts IN (1000, 2000)"))
+    assertResult(Right(()))(validate("ts <=> 1000"))
+    // A non-numeric operand still bails out of the widening and stays unresolved.
+    assert(validate("id IN (1, 'x')").isLeft)
+    // A null operand widens with the numeric ones, the plan Spark builds for the same filter.
+    assertResult(Seq(scalarRows.head))(keep(scalarRows, "ts IN (1000, null)", scalarSchema))
+    assertResult(Right(()))(validate("ts IN (1000, null)"))
+    assertResult(Seq.empty)(keep(scalarRows, "ts <=> null", scalarSchema))
+    assertResult(Right(()))(validate("ts <=> null"))
   }
 
   test("evaluateFilter coerces numeric column and literal type pairs") {
@@ -121,18 +141,23 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     // Reversed operands widen the same way.
     assertResult(matched)(keep(rows, "3 = sh", schema))
     assertResult(rows)(keep(rows, "by < 300", schema))
-    // A plain 15.0 decimal literal is coerced with the double column.
-    assertResult(Seq(scalarRows(1)))(keep(scalarRows, "price > 15.0", scalarSchema))
+    // The same pairs have to pass validation, which every filterable procedure runs first.
+    assertResult(Right(()))(validate("sh = 3", schema))
+    assertResult(Right(()))(validate("dec > 1", schema))
   }
 
-  test("evaluateFilter compares decimal columns without widening them") {
-    // DecimalType.bounded clamps precision at 38, so widening DECIMAL(38,0) towards DECIMAL(38,18)
-    // would overflow the integral side into a null (non-ANSI) or an error (ANSI). Decimal ordering
-    // is already precision- and scale-independent, so an all-decimal comparison is left alone.
-    val schema = schemaOf("big" -> DecimalType(38, 0), "frac" -> DecimalType(38, 18))
-    val rows = Seq(Row(new java.math.BigDecimal("1" + "0" * 30), new java.math.BigDecimal("1.5")))
-    assertResult(rows)(keep(rows, "big > frac", schema))
-    assertResult(Seq.empty)(keep(rows, "frac > big", schema))
+  test("evaluateFilter widens decimal comparisons the way Spark does") {
+    val schema = schemaOf("dec" -> DecimalType(10, 2))
+    val rows = Seq(Row(new java.math.BigDecimal("3.00")), Row(new java.math.BigDecimal("0.50")))
+    // A decimal literal of a different scale has to widen, or the comparison stays unresolved
+    // and validateFilterExpression rejects the filter before any procedure evaluates it.
+    assertResult(Seq(rows.head))(keep(rows, "dec > 1.00", schema))
+    assertResult(Seq(rows.head))(keep(rows, "dec > 1.5", schema))
+    assertResult(Right(()))(validate("dec > 1.00", schema))
+    // Not asserted here: a pair like DECIMAL(38,0) against DECIMAL(38,18), where the wider type
+    // runs into the precision-38 clamp. Spark resolves that differently per version -- 3.5 widens
+    // and overflows the cast, 4.1 declines to widen at all -- so there is no single expected
+    // result to pin. The lossy shapes are documented on widenNumericOperands instead.
   }
 
   test("evaluateFilter widens with the coercion rules of the active ANSI mode") {
@@ -140,14 +165,41 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     // TypeCoercion follows numericPrecedence to FLOAT. 16777217 is the first Long that a Float
     // cannot hold, so it survives the widening under ANSI and rounds down to 16777216.0f without
     // it. A filter has to widen the way the same comparison would in a query.
-    val rows = Seq(Row(1, "n1", 1.0d, 16777217L, true, 0,
-      Date.valueOf("2024-01-01"), Timestamp.valueOf("2024-01-01 00:00:00")))
+    val rows = Seq(scalarRow(1, 16777217L))
     withSQLConf("spark.sql.ansi.enabled" -> "true") {
       assertResult(rows)(keep(rows, "ts > 16777216.0f", scalarSchema))
     }
     withSQLConf("spark.sql.ansi.enabled" -> "false") {
       assertResult(Seq.empty)(keep(rows, "ts > 16777216.0f", scalarSchema))
+      // The rounded-down Long still clears a smaller Float, so the widening runs either way.
+      assertResult(rows)(keep(rows, "ts > 16777215.0f", scalarSchema))
     }
+    // Column against column splits the same way, and only the widening reaches it.
+    val pairSchema = schemaOf("l" -> LongType, "f" -> FloatType)
+    val pairRows = Seq(Row(16777217L, 16777216.0f))
+    withSQLConf("spark.sql.ansi.enabled" -> "true") {
+      assertResult(pairRows)(keep(pairRows, "l > f", pairSchema))
+    }
+    withSQLConf("spark.sql.ansi.enabled" -> "false") {
+      assertResult(Seq.empty)(keep(pairRows, "l > f", pairSchema))
+    }
+  }
+
+  test("evaluateFilter widens arithmetic and coalesce operands") {
+    assertResult(Seq(scalarRows(1)))(keep(scalarRows, "ts + 1 > 1500", scalarSchema))
+    assertResult(Right(()))(validate("ts + 1 > 1500"))
+    assertResult(Seq(scalarRows.head))(keep(scalarRows, "coalesce(ts, 0) = 1000", scalarSchema))
+    assertResult(Right(()))(validate("coalesce(ts, 0) = 1000"))
+  }
+
+  test("evaluateFilter binds quoted column names") {
+    // show_column_stats_overlap, the second procedure named in #19632, outputs columns like
+    // "Average overlap" and "50% overlap".
+    val schema = schemaOf("Average overlap" -> DoubleType, "50% overlap" -> IntegerType)
+    val rows = Seq(Row(0.75d, 10), Row(0.25d, 20))
+    assertResult(Seq(rows.head))(keep(rows, "`Average overlap` > 0.5", schema))
+    assertResult(Right(()))(validate("`Average overlap` > 0.5", schema))
+    assertResult(Seq(rows(1)))(keep(rows, "`50% overlap` > 15", schema))
   }
 
   test("evaluateFilter silently drops rows for expressions it cannot resolve") {
@@ -156,6 +208,9 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     assertResult(Seq.empty)(keep(scalarRows, "if(name = 'a1', true, false)", scalarSchema))
     assertResult(Seq(scalarRows.head))(
       keep(scalarRows, "case when name = 'a1' then true else false end", scalarSchema))
+    // Or short-circuits on the resolved side, which is what the unresolved-operand guard preserves.
+    assertResult(Seq(scalarRows.head))(
+      keep(scalarRows, "id = 1 OR concat(name, 'x') = 'a1x'", scalarSchema))
   }
 
   test("evaluateFilter handles AND / OR / NOT / IN / BETWEEN") {
@@ -335,7 +390,7 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
 
     assert(validate("if(name = 'a1', true, false)").isLeft)
     assert(validate("substring(name, 2)").isLeft)
-    assert(validate("id = 1 OR concat(name, 'x') = 'a1x'").isLeft)
+    assert(validate("id = 1 OR concat(name, 'x') = 'a1x'").left.exists(_.contains("Unsupported functions: concat")))
     assert(validate("hour(t) = 12").isLeft)
     assert(validate("date_format(t, 'yyyy') = '2024'").isLeft)
     assert(validate("any_value(id) = 1").isLeft)

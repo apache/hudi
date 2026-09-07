@@ -62,16 +62,23 @@ class TestFsViewProcedure extends HoodieSparkProcedureTestBase {
       }
 
       // filter runs against the procedure output schema, where data_file_size is a LongType
-      // column, so an integer literal on either side has to widen to compare. See HUDI #19632.
-      val filtered = spark.sql(
-        s"""call show_fsview_all(table => '$tableName', filter => 'data_file_size > 0')""".stripMargin).collect()
-      assertResult(2){
-        filtered.length
-      }
+      // column, so a literal of any numeric type, on either side, has to widen to compare.
+      // See HUDI #19632.
       val reversedFilter = spark.sql(
         s"""call show_fsview_all(table => '$tableName', filter => '0 < data_file_size')""".stripMargin).collect()
       assertResult(2){
         reversedFilter.length
+      }
+      val decimalFilter = spark.sql(
+        s"""call show_fsview_all(table => '$tableName', filter => 'data_file_size >= 0.0')""".stripMargin).collect()
+      assertResult(2){
+        decimalFilter.length
+      }
+      // A filter that keeps nothing, so the pair above is not just a filter being ignored.
+      val emptyFilter = spark.sql(
+        s"""call show_fsview_all(table => '$tableName', filter => 'data_file_size > 9999999999')""".stripMargin).collect()
+      assertResult(0){
+        emptyFilter.length
       }
     }
   }

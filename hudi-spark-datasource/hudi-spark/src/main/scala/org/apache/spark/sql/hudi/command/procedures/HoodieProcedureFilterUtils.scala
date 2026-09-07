@@ -19,10 +19,10 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.analysis.{AnsiTypeCoercion, TypeCoercion, UnresolvedAttribute, UnresolvedFunction}
-import org.apache.spark.sql.catalyst.expressions.{Cast, EqualNullSafe, Expression, GenericInternalRow, In, Unevaluable}
+import org.apache.spark.sql.catalyst.expressions.{BinaryArithmetic, Cast, Coalesce, EqualNullSafe, Expression, GenericInternalRow, In, Unevaluable}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.{DataType, DecimalType, NumericType, StructType}
+import org.apache.spark.sql.types.{DataType, DecimalType, NullType, NumericType, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.util.Locale
@@ -373,6 +373,10 @@ object HoodieProcedureFilterUtils {
         applyTypeCoercion(eqns.left, eqns.right, EqualNullSafe.apply, eqns)
       case in: In =>
         applyInTypeCoercion(in)
+      case arith: BinaryArithmetic =>
+        applyArithmeticTypeCoercion(arith)
+      case coalesce: Coalesce =>
+        applyCoalesceTypeCoercion(coalesce)
     }
   }
 
@@ -541,11 +545,26 @@ object HoodieProcedureFilterUtils {
     }
   }
 
+  private def applyArithmeticTypeCoercion(arith: BinaryArithmetic): Expression = {
+    widenNumericOperands(Seq(arith.left, arith.right)) match {
+      case Some(Seq(widenedLeft, widenedRight)) => arith.withNewChildren(Seq(widenedLeft, widenedRight))
+      case _ => arith
+    }
+  }
+
+  private def applyCoalesceTypeCoercion(coalesce: Coalesce): Expression = {
+    widenNumericOperands(coalesce.children) match {
+      case Some(widened) => Coalesce(widened)
+      case _ => coalesce
+    }
+  }
+
   /**
    * Widens comparison operands of differing numeric types to their common wider type, so that
    * e.g. a LongType column compares against an IntegerType literal on the widened Long rather
-   * than narrowing the column. Returns None when the operands need no widening or cannot be
-   * widened, in which case the caller keeps the expression untouched.
+   * than narrowing the column. A NullType operand widens along with them, the way Spark plans
+   * `ts IN (1000, null)`. Returns None when the operands need no widening or cannot be widened,
+   * in which case the caller keeps the expression untouched.
    *
    * Numeric conversion can still lose precision:
    *  - Large integers may round when converted to Float or Double. For example, Long 16777217
@@ -559,17 +578,14 @@ object HoodieProcedureFilterUtils {
    */
   private def widenNumericOperands(operands: Seq[Expression]): Option[Seq[Expression]] = {
     if (operands.exists(!_.resolved)) {
-      // dataType throws on an unresolved operand. Such an expression is rejected up front by
-      // validateFilterExpression, so leave it alone here rather than failing the whole transform.
+      // dataType throws on an unresolved operand. Leaving it untouched lets validateFilterExpression
+      // report its own message ("Invalid column references", "Unsupported functions") instead of an
+      // UnresolvedException, and keeps Or/And short-circuiting intact at eval time.
       None
     } else {
       val operandTypes = operands.map(_.dataType)
-      // Decimal ordering is already precision- and scale-independent, while DecimalType.bounded
-      // clamps precision at 38, so widening decimals against each other can narrow one side into
-      // a null (non-ANSI) or an overflow error (ANSI). Compare those as they are.
       if (operandTypes.distinct.length == 1
-        || !operandTypes.forall(_.isInstanceOf[NumericType])
-        || operandTypes.forall(_.isInstanceOf[DecimalType])) {
+        || !operandTypes.forall(t => t.isInstanceOf[NumericType] || t.isInstanceOf[NullType])) {
         None
       } else {
         findWiderNumericType(operandTypes)
@@ -583,6 +599,10 @@ object HoodieProcedureFilterUtils {
    * comparison would in a SQL query. The two disagree: for BIGINT with FLOAT, AnsiTypeCoercion
    * gives DOUBLE while TypeCoercion follows numericPrecedence and gives FLOAT. Spark 4 defaults
    * to ANSI mode, Spark 3 does not.
+   *
+   * Reads SQLConf.get rather than the SparkSession because Cast takes its eval mode from that same
+   * thread-local at construction, and the two-argument Cast(child, dataType) is the only form that
+   * is portable across Spark 3.3 to 4.x (3.3 takes ansiEnabled, 3.4+ takes evalMode).
    */
   private def findWiderNumericType(types: Seq[DataType]): Option[DataType] = {
     if (SQLConf.get.ansiEnabled) {
