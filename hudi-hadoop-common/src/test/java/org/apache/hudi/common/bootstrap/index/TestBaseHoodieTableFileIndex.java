@@ -19,19 +19,23 @@
 package org.apache.hudi.common.bootstrap.index;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieTableQueryType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.core.read.BaseHoodieTableFileIndex;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -60,6 +64,7 @@ class TestBaseHoodieTableFileIndex extends HoodieCommonTestHarness {
         Collections.emptyList(),
         Option.empty(),
         false,
+        false,
         true,
         null,
         true,
@@ -69,13 +74,66 @@ class TestBaseHoodieTableFileIndex extends HoodieCommonTestHarness {
     Assertions.assertTrue(baseHoodieTableFileIndex.getFileSlicesCount() == 0);
   }
 
+  /**
+   * The metadata config the index builds is gated on a three-way conjunction, and both of the
+   * added conjuncts came from behavior fixes: {@code isFilesPartitionAvailable} from HUDI-5403
+   * (#7488, a Trino listing regression) and {@code useLatestBaseFilesPathFilterForListing} from
+   * #18136. Nothing else in the repo asserts how that conjunction resolves.
+   */
+  @ParameterizedTest
+  @CsvSource({
+      "true,  true,  false, true",
+      "true,  true,  true,  false",
+      "true,  false, false, false",
+      "true,  false, true,  false",
+      "false, true,  false, false",
+      "false, true,  true,  false",
+      "false, false, false, false",
+      "false, false, true,  false"
+  })
+  void testMetadataConfigIsEnabledOnlyWhenEveryConjunctHolds(boolean metadataEnabled,
+                                                             boolean filesPartitionAvailable,
+                                                             boolean useLatestBaseFilesPathFilterForListing,
+                                                             boolean expectedEnabled) throws IOException {
+    initMetaClient();
+    if (filesPartitionAvailable) {
+      metaClient.getTableConfig().setValue(
+          HoodieTableConfig.TABLE_METADATA_PARTITIONS, HoodieTableMetadataUtil.PARTITION_NAME_FILES);
+    }
+    TypedProperties properties = new TypedProperties();
+    properties.put(HoodieMetadataConfig.ENABLE.key(), String.valueOf(metadataEnabled));
+
+    TestLocalIndex fileIndex = new TestLocalIndex(
+        new HoodieLocalEngineContext(getStorageConf()),
+        metaClient,
+        properties,
+        HoodieTableQueryType.READ_OPTIMIZED,
+        Collections.emptyList(),
+        Option.empty(),
+        useLatestBaseFilesPathFilterForListing,
+        false,
+        true,
+        null,
+        true,
+        Option.empty(),
+        Option.empty()
+    );
+
+    Assertions.assertEquals(expectedEnabled, fileIndex.metadataConfig().isEnabled());
+  }
+
   private static class TestLocalIndex extends BaseHoodieTableFileIndex {
 
     public TestLocalIndex(HoodieEngineContext engineContext, HoodieTableMetaClient metaClient, TypedProperties configProperties, HoodieTableQueryType queryType,
-                          List<StoragePath> queryPaths, Option<String> specifiedQueryInstant, boolean shouldIncludePendingCommits, boolean shouldValidateInstant,
+                          List<StoragePath> queryPaths, Option<String> specifiedQueryInstant, boolean useLatestBaseFilesPathFilterForListing,
+                          boolean shouldIncludePendingCommits, boolean shouldValidateInstant,
                           FileStatusCache fileStatusCache, boolean shouldListLazily, Option<String> startCompletionTime, Option<String> endCompletionTime) {
-      super(engineContext, metaClient, configProperties, queryType, queryPaths, specifiedQueryInstant, false, shouldIncludePendingCommits, shouldValidateInstant, fileStatusCache, shouldListLazily,
-          startCompletionTime, endCompletionTime);
+      super(engineContext, metaClient, configProperties, queryType, queryPaths, specifiedQueryInstant, useLatestBaseFilesPathFilterForListing, shouldIncludePendingCommits, shouldValidateInstant,
+          fileStatusCache, shouldListLazily, startCompletionTime, endCompletionTime);
+    }
+
+    HoodieMetadataConfig metadataConfig() {
+      return metadataConfig;
     }
 
     @Override
