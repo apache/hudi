@@ -546,18 +546,16 @@ object HoodieProcedureFilterUtils {
    * e.g. a LongType column compares against an IntegerType literal on the widened Long rather
    * than narrowing the column. Returns None when the operands need no widening or cannot be
    * widened, in which case the caller keeps the expression untouched.
-   *
-   * Widening is wider in type but not always lossless in value, and neither case below surfaces
-   * an error to the caller:
-   *  - An integral widened to FloatType or DoubleType rounds values the target cannot represent.
-   *    Without ANSI, LONG with FLOAT widens to FLOAT, so 16777217 compares as 16777216.0f.
-   *  - A decimal operand whose scale leaves fewer integral digits than the other side needs
-   *    overflows the cast: DECIMAL(38,20) with BIGINT widens to DECIMAL(38,20), which holds 18
-   *    integral digits where a Long needs 19. Cast takes its evalMode from SQLConf, so a large
-   *    Long throws under ANSI and yields null without it; either way the per-row Try in
-   *    evaluateExpressionOnRow drops the row. Latent while no procedure declares a decimal
-   *    output column.
    */
+  // Numeric conversion can still lose precision:
+  // - Large integers may round when converted to Float or Double.
+  //   For example, Long 16777217 becomes Float 16777216.
+  // - Large integers may overflow when converted to a decimal with
+  //   insufficient space before the decimal point.
+  //   For example, DECIMAL(38,20) allows only 18 digits before the decimal
+  //   point, so the 19-digit Long 9000000000000000000 does not fit.
+  // Rounding can change comparison results. Overflow causes this
+  // filter to drop the row without reporting an error to the caller.
   private def widenNumericOperands(operands: Seq[Expression]): Option[Seq[Expression]] = {
     if (operands.exists(!_.resolved)) {
       // dataType throws on an unresolved operand. Such an expression is rejected up front by
