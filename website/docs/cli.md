@@ -967,8 +967,9 @@ command. The sections above cover the commonly used ones in more depth.
 
 One default is worth stating up front because it is not the empty string it looks like: an unset or blank
 `--sparkMaster` resolves to `yarn`. The CLI treats a blank value as absent and falls back to its own default, so
-every `--sparkMaster` shown below without a value runs against YARN unless you pass something. That differs from
-the compaction and marker commands, which show `local` explicitly.
+every `--sparkMaster` shown below without a value runs against YARN unless you pass something. The compaction
+commands are the exception: they declare `local` explicitly. Note `marker delete` is not an exception despite
+looking like one, since it declares no default and so resolves to `yarn` like the rest.
 
 Some entries are aliases of the same command rather than distinct ones. `refresh`, `metadata refresh`,
 `commits refresh`, `cleans refresh` and `savepoints refresh` are five names for one method that reloads the table
