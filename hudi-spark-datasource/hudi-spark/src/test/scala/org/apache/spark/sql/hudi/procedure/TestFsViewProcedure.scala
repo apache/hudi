@@ -74,9 +74,10 @@ class TestFsViewProcedure extends HoodieSparkProcedureTestBase {
       assertResult(2){
         decimalFilter.length
       }
-      // A filter that keeps nothing, so the pair above is not just a filter being ignored.
+      // A filter that keeps nothing, widened the same way, so the pair above is not just a filter
+      // being ignored.
       val emptyFilter = spark.sql(
-        s"""call show_fsview_all(table => '$tableName', filter => 'data_file_size > 9999999999')""".stripMargin).collect()
+        s"""call show_fsview_all(table => '$tableName', filter => 'data_file_size > 9999999999.0')""".stripMargin).collect()
       assertResult(0){
         emptyFilter.length
       }

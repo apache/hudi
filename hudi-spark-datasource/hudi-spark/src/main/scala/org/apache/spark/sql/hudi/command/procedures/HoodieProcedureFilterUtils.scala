@@ -19,12 +19,13 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.analysis.{AnsiTypeCoercion, DecimalPrecision, TypeCoercion, UnresolvedAttribute, UnresolvedFunction}
-import org.apache.spark.sql.catalyst.expressions.{BinaryArithmetic, BinaryComparison, Cast, Coalesce, Divide, EqualNullSafe, Expression, GenericInternalRow, In, Unevaluable}
+import org.apache.spark.sql.catalyst.expressions.{BinaryArithmetic, BinaryComparison, Cast, Coalesce, Divide, EqualNullSafe, Expression, GenericInternalRow, In, IntegralDivide, Unevaluable}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.{DataType, DecimalType, DoubleType, NullType, NumericType, StructType}
+import org.apache.spark.sql.types.{BooleanType, ByteType, DataType, DecimalType, DoubleType, IntegerType, LongType, NullType, NumericType, ShortType, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 
+import java.time.DateTimeException
 import java.util.Locale
 
 import scala.collection.JavaConverters._
@@ -60,17 +61,15 @@ object HoodieProcedureFilterUtils {
         val parsedExpr = sparkSession.sessionState.sqlParser.parseExpression(filterExpression)
 
         // Binding and resolution depend only on the schema, so run the three passes once for the
-        // whole batch instead of per row. A failure leaves no row able to match, which is what the
-        // per-row evaluation below would have done for every row anyway.
-        Try(bindAndResolveExpression(parsedExpr, schema)) match {
-          case Success(boundExpr) => rows.filter(row => evaluateExpressionOnRow(boundExpr, row, schema))
-          case Failure(_) => Seq.empty[Row]
-        }
+        // whole batch instead of per row.
+        val boundExpr = bindAndResolveExpression(parsedExpr, schema)
+        rows.filter(row => evaluateExpressionOnRow(boundExpr, row, schema))
       } match {
         case Success(filteredRows) => filteredRows
-        // Surface an ANSI overflow with Spark's own exception rather than restating it as a
-        // filter-expression problem: the expression is fine, the data does not fit.
-        case Failure(arithmetic: ArithmeticException) => throw arithmetic
+        // Surface an overflowing ANSI cast or arithmetic, or an ANSI cast of a malformed string,
+        // with Spark's own exception rather than restating it as a filter-expression problem: the
+        // expression is fine, the data does not fit.
+        case Failure(e @ (_: ArithmeticException | _: NumberFormatException | _: DateTimeException)) => throw e
         case Failure(exception) =>
           throw new IllegalArgumentException(
             s"Failed to parse or evaluate filter expression '$filterExpression': ${exception.getMessage}",
@@ -376,10 +375,13 @@ object HoodieProcedureFilterUtils {
         applyTypeCoercion(eqns)
       case in: In =>
         applyInTypeCoercion(in)
-      // Divide is a BinaryArithmetic but accepts only Double or Decimal, so it needs its own
-      // target type and has to be matched before the general arithmetic case below.
+      // Divide and IntegralDivide are BinaryArithmetic but accept only Double or Decimal, and only
+      // Long or Decimal, respectively, so each needs its own target type and has to be matched
+      // before the general arithmetic case below.
       case divide: Divide =>
         applyDivideTypeCoercion(divide)
+      case idiv: IntegralDivide =>
+        applyIntegralDivideTypeCoercion(idiv)
       case arith: BinaryArithmetic =>
         applyArithmeticTypeCoercion(arith)
       case coalesce: Coalesce =>
@@ -406,10 +408,11 @@ object HoodieProcedureFilterUtils {
       }
     } match {
       case Success(result) => result
-      // Spark raises SparkArithmeticException, an ArithmeticException, for an overflowing ANSI
-      // cast or arithmetic. Swallowing it would silently drop a row the same query keeps, so let
-      // it out and let the caller fail the way the equivalent query does.
-      case Failure(arithmetic: ArithmeticException) => throw arithmetic
+      // Spark raises SparkArithmeticException for an overflowing ANSI cast or arithmetic, and
+      // SparkNumberFormatException or SparkDateTimeException for an ANSI cast of a malformed
+      // string; each extends the matching JDK type. Swallowing one would silently drop a row the
+      // same query keeps, so let it out and let the caller fail the way the equivalent query does.
+      case Failure(e @ (_: ArithmeticException | _: NumberFormatException | _: DateTimeException)) => throw e
       case Failure(_) => false
     }
   }
@@ -513,6 +516,11 @@ object HoodieProcedureFilterUtils {
           val names = unsupportedExpressions.toSeq.sorted
           val detail = if (names.nonEmpty) s": ${names.mkString(", ")}" else ""
           Left(s"Unsupported filter expression$detail")
+        } else if (resolvedExpr.dataType != BooleanType) {
+          // Spark rejects any non-boolean filter condition, string included, with
+          // DATATYPE_MISMATCH.FILTER_NOT_BOOLEAN. Without this a resolvable expression such as
+          // "ts + 1" would report zero matching rows instead of the error the same query raises.
+          Left(s"Filter expression must be boolean, got ${resolvedExpr.dataType.simpleString}")
         } else {
           Right(())
         }
@@ -552,7 +560,7 @@ object HoodieProcedureFilterUtils {
       val comparison = DecimalPrecision.transform.applyOrElse(promoted, identity[Expression])
       comparison match {
         case binary: BinaryComparison =>
-          widenNumericOperands(Seq(binary.left, binary.right))
+          widenOperands(Seq(binary.left, binary.right))
             .map(binary.withNewChildren).getOrElse(binary)
         case other => other
       }
@@ -560,7 +568,7 @@ object HoodieProcedureFilterUtils {
   }
 
   private def applyInTypeCoercion(in: In): Expression = {
-    widenNumericOperands(in.value +: in.list) match {
+    widenOperands(in.value +: in.list) match {
       case Some(widened) => In(widened.head, widened.tail)
       case _ => in
     }
@@ -594,7 +602,7 @@ object HoodieProcedureFilterUtils {
           val widened = if (children.forall(_.dataType.isInstanceOf[DecimalType])) {
             binary
           } else {
-            widenNumericOperands(children)
+            widenOperands(children)
               .map(binary.withNewChildren).getOrElse(binary)
           }
           // Spark 3.3 wraps decimal arithmetic in CheckOverflow after operand promotion.
@@ -629,12 +637,35 @@ object HoodieProcedureFilterUtils {
     }
   }
 
+  /**
+   * IntegralDivide accepts only Long or Decimal, and its operands are never widened against each
+   * other, so a same-typed Int pair leaves "id div 2" unresolved while "ts div 2" resolves. Mirror
+   * the analyzer's IntegralDivision rule, which promotes each narrower integral operand on its own
+   * before the arithmetic widening runs.
+   */
+  private def applyIntegralDivideTypeCoercion(divide: IntegralDivide): Expression = {
+    if (!divide.childrenResolved) {
+      divide
+    } else {
+      val promoted = divide.withNewChildren(Seq(divide.left, divide.right).map { operand =>
+        operand.dataType match {
+          case ByteType | ShortType | IntegerType => castTo(operand, LongType)
+          case _ => operand
+        }
+      })
+      promoted match {
+        case arith: BinaryArithmetic => applyArithmeticTypeCoercion(arith)
+        case other => other
+      }
+    }
+  }
+
   /** Spark's own guard for the numeric coercion rules, which admit a null literal. */
   private def isNumericOrNull(dataType: DataType): Boolean =
     dataType.isInstanceOf[NumericType] || dataType.isInstanceOf[NullType]
 
   private def applyCoalesceTypeCoercion(coalesce: Coalesce): Expression = {
-    widenNumericOperands(coalesce.children) match {
+    widenOperands(coalesce.children) match {
       case Some(widened) => Coalesce(widened)
       case _ => coalesce
     }
@@ -643,9 +674,10 @@ object HoodieProcedureFilterUtils {
   /**
    * Widens comparison operands of differing numeric types to their common wider type, so that
    * e.g. a LongType column compares against an IntegerType literal on the widened Long rather
-   * than narrowing the column. A NullType operand widens along with them, the way Spark plans
-   * `ts IN (1000, null)`. Returns None when the operands need no widening or cannot be widened,
-   * in which case the caller keeps the expression untouched.
+   * than narrowing the column. A NullType operand takes the type of its peers whatever that type
+   * is, the way Spark plans `ts IN (1000, null)` and `name IN ('a1', null)`. Returns None when the
+   * operands need no widening or cannot be widened, in which case the caller keeps the expression
+   * untouched.
    *
    * Numeric conversion can still lose precision:
    *  - Large integers may round when converted to Float or Double. For example, Long 16777217
@@ -658,7 +690,7 @@ object HoodieProcedureFilterUtils {
    * follows the session's ANSI mode the way Spark's own Cast does: without ANSI the cast yields
    * null and the row is filtered out, with ANSI it raises and the failure reaches the caller.
    */
-  private def widenNumericOperands(operands: Seq[Expression]): Option[Seq[Expression]] = {
+  private def widenOperands(operands: Seq[Expression]): Option[Seq[Expression]] = {
     if (operands.exists(!_.resolved)) {
       // dataType throws on an unresolved operand. Leaving it untouched lets validateFilterExpression
       // report its own message ("Invalid column references", "Unsupported functions") instead of an
@@ -666,7 +698,14 @@ object HoodieProcedureFilterUtils {
       None
     } else {
       val operandTypes = operands.map(_.dataType)
-      if (operandTypes.distinct.length == 1 || !operandTypes.forall(isNumericOrNull)) {
+      val nonNullTypes = operandTypes.filterNot(_.isInstanceOf[NullType]).distinct
+      if (operandTypes.distinct.length == 1) {
+        None
+      } else if (nonNullTypes.length == 1) {
+        // Only nulls differ from a single peer type, so the nulls take that type whether or not it
+        // is numeric. Nothing else needs widening.
+        Some(operands.map(operand => castTo(operand, nonNullTypes.head)))
+      } else if (!operandTypes.forall(isNumericOrNull)) {
         None
       } else {
         findWiderNumericType(operandTypes)

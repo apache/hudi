@@ -23,7 +23,7 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.hudi.command.procedures.HoodieProcedureFilterUtils
 import org.apache.spark.sql.types._
 
-import java.math.BigDecimal
+import java.math.{BigDecimal => JBigDecimal}
 import java.sql.{Date, Timestamp}
 
 /**
@@ -43,7 +43,8 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
   private def validate(expr: String, schema: StructType = scalarSchema): Either[String, Unit] =
     HoodieProcedureFilterUtils.validateFilterExpression(expr, schema, spark)
 
-  private def scalarRow(id: Int, ts: Long): Row =
+  // Not the scalarRows factory: only id and ts matter to the widening tests that use it.
+  private def tsRow(id: Int, ts: Long): Row =
     Row(id, s"n$id", 10.0d * id, ts, true, -id,
       Date.valueOf("2024-01-01"), Timestamp.valueOf("2024-01-01 00:00:00"))
 
@@ -93,7 +94,7 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     assertResult(Seq(scalarRows.head))(keep(scalarRows, "ts <= 1000", scalarSchema))
     // The integer literal is widened rather than the column narrowed, so a Long past the Int
     // range keeps its value instead of wrapping to -1294967296 and matching "ts < 2000".
-    val bigRow = scalarRow(3, 3000000000L)
+    val bigRow = tsRow(3, 3000000000L)
     val withBigRow = scalarRows :+ bigRow
     assertResult(Seq(scalarRows(1), bigRow))(keep(withBigRow, "ts > 1500", scalarSchema))
     assertResult(Seq(scalarRows.head))(keep(withBigRow, "ts < 2000", scalarSchema))
@@ -117,6 +118,11 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     assertResult(Right(()))(validate("ts IN (1000, null)"))
     assertResult(Seq.empty)(keep(scalarRows, "ts <=> null", scalarSchema))
     assertResult(Right(()))(validate("ts <=> null"))
+    // A null operand takes its peers' type whether or not that type is numeric.
+    assertResult(Seq(scalarRows.head))(keep(scalarRows, "name IN ('a1', null)", scalarSchema))
+    assertResult(Right(()))(validate("name IN ('a1', null)"))
+    assertResult(Seq.empty)(keep(scalarRows, "name <=> null", scalarSchema))
+    assertResult(Right(()))(validate("name <=> null"))
   }
 
   test("evaluateFilter coerces numeric column and literal type pairs") {
@@ -128,13 +134,16 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     // Two rows, so an assertion that matches everything is distinguishable from one that
     // coerces correctly.
     val rows = Seq(
-      Row(2.5f, 3.toShort, 4.toByte, new BigDecimal("3.00")),
-      Row(0.5f, 9.toShort, 9.toByte, new BigDecimal("0.50")))
+      Row(2.5f, 3.toShort, 4.toByte, new JBigDecimal("3.00")),
+      Row(0.5f, 9.toShort, 9.toByte, new JBigDecimal("0.50")))
     val matched = Seq(rows.head)
 
-    // Literals whose parsed type already matches the column type evaluate correctly.
+    // A literal whose parsed type already matches the column type evaluates correctly.
     assertResult(matched)(keep(rows, "f > 1.0f", schema))
+    // A decimal literal of another precision or scale widens to the common decimal type, or the
+    // comparison stays unresolved and validateFilterExpression rejects the filter.
     assertResult(matched)(keep(rows, "dec > 1.00", schema))
+    assertResult(matched)(keep(rows, "dec > 1.5", schema))
 
     // Mismatched numeric types are widened to Spark's common type.
     assertResult(matched)(keep(rows, "sh = 3", schema))
@@ -143,27 +152,19 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     assertResult(matched)(keep(rows, "dec > 1", schema))
     // Reversed operands widen the same way.
     assertResult(matched)(keep(rows, "3 = sh", schema))
-    assertResult(rows)(keep(rows, "by < 300", schema))
+    // 130 narrowed to a Byte is -126, so narrowing the literal would keep neither row.
+    assertResult(rows)(keep(rows, "by < 130", schema))
     // The same pairs have to pass validation, which every filterable procedure runs first.
     assertResult(Right(()))(validate("sh = 3", schema))
     assertResult(Right(()))(validate("dec > 1", schema))
-  }
-
-  test("evaluateFilter widens decimal comparisons the way Spark does") {
-    val schema = schemaOf("dec" -> DecimalType(10, 2))
-    val rows = Seq(Row(new BigDecimal("3.00")), Row(new BigDecimal("0.50")))
-    // A decimal literal of a different scale has to widen, or the comparison stays unresolved
-    // and validateFilterExpression rejects the filter before any procedure evaluates it.
-    assertResult(Seq(rows.head))(keep(rows, "dec > 1.00", schema))
-    assertResult(Seq(rows.head))(keep(rows, "dec > 1.5", schema))
     assertResult(Right(()))(validate("dec > 1.00", schema))
   }
 
-  test("evaluateFilter surfaces an ANSI overflow instead of dropping the row") {
+  test("evaluateFilter surfaces an ANSI error instead of dropping the row") {
     // An overflowing Long addition wraps to a negative without ANSI and raises with it, exactly
     // as it does in a query. The raise has to reach the caller: swallowing it into "no match"
     // would report an empty result for a filter the query answers with an error.
-    val rows = Seq(scalarRow(1, 1000L))
+    val rows = Seq(tsRow(1, 1000L))
     withSQLConf("spark.sql.ansi.enabled" -> "false") {
       // 1000 + Long.MaxValue wraps to a negative, so the row genuinely fails "> 0".
       assertResult(Seq.empty)(keep(rows, "ts + 9223372036854775807 > 0", scalarSchema))
@@ -173,16 +174,26 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
         keep(rows, "ts + 9223372036854775807 > 0", scalarSchema)
       }
     }
+    // An ANSI cast of a malformed string raises SparkNumberFormatException, not an
+    // ArithmeticException, and has to reach the caller the same way.
+    withSQLConf("spark.sql.ansi.enabled" -> "false") {
+      assertResult(Seq.empty)(keep(scalarRows, "int(name) > 1", scalarSchema))
+    }
+    withSQLConf("spark.sql.ansi.enabled" -> "true") {
+      intercept[NumberFormatException] {
+        keep(scalarRows, "int(name) > 1", scalarSchema)
+      }
+    }
   }
 
   test("evaluateFilter follows ANSI mode when a decimal widening overflows") {
     val schema = schemaOf("big" -> DecimalType(38, 0), "frac" -> DecimalType(38, 18))
-    val rows = Seq(Row(new BigDecimal("1" + "0" * 30), new BigDecimal("1.5")))
-    // Spark 3 only. There the widening picks DECIMAL(38,18), and the precision-38 clamp leaves it
-    // 20 integral digits, too few for this 31-digit value, so the cast overflows and the ANSI mode
-    // decides what happens. Parity for a comparison whose common precision would exceed 38 is not
-    // settled on Spark 4 and needs the validation path checked against plain SQL, so nothing is
-    // pinned for it here. Tracked by HUDI #19860.
+    val rows = Seq(Row(new JBigDecimal("1" + "0" * 30), new JBigDecimal("1.5")))
+    // On Spark 3 the widening picks DECIMAL(38,18), and the precision-38 clamp leaves it 20
+    // integral digits, too few for this 31-digit value, so the cast overflows and the ANSI mode
+    // decides what happens. Spark 4 casts the fractional operand down instead, planning the same
+    // filter as `big > cast(frac as decimal(38,0))`, so nothing overflows and the row survives in
+    // either mode.
     if (!HoodieSparkUtils.gteqSpark4_0) {
       withSQLConf("spark.sql.ansi.enabled" -> "false") {
         // The cast yields null and the row drops.
@@ -193,6 +204,13 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
           keep(rows, "big > frac", schema)
         }
       }
+    } else {
+      for (ansi <- Seq("false", "true")) {
+        withSQLConf("spark.sql.ansi.enabled" -> ansi) {
+          assertResult(rows)(keep(rows, "big > frac", schema))
+          assertResult(Right(()))(validate("big > frac", schema))
+        }
+      }
     }
   }
 
@@ -201,7 +219,7 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     // TypeCoercion follows numericPrecedence to FLOAT. 16777217 is the first Long that a Float
     // cannot hold, so it survives the widening under ANSI and rounds down to 16777216.0f without
     // it. A filter has to widen the way the same comparison would in a query.
-    val rows = Seq(scalarRow(1, 16777217L))
+    val rows = Seq(tsRow(1, 16777217L))
     withSQLConf("spark.sql.ansi.enabled" -> "true") {
       assertResult(rows)(keep(rows, "ts > 16777216.0f", scalarSchema))
     }
@@ -222,6 +240,8 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
   }
 
   test("evaluateFilter widens arithmetic and coalesce operands") {
+    import scala.collection.JavaConverters._
+
     assertResult(Seq(scalarRows(1)))(keep(scalarRows, "ts + 1 > 1500", scalarSchema))
     assertResult(Right(()))(validate("ts + 1 > 1500"))
     assertResult(Seq(scalarRows.head))(keep(scalarRows, "coalesce(ts, 0) = 1000", scalarSchema))
@@ -238,17 +258,29 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     assertResult(Right(()))(validate("ts / null > 0"))
     assertResult(Seq.empty)(keep(scalarRows, "null / ts > 0", scalarSchema))
     assertResult(Right(()))(validate("null / ts > 0"))
-  }
-
-  test("evaluateFilter keeps the operand types of decimal arithmetic") {
-    // BinaryArithmetic derives the result precision from the operands, so the operands have to
-    // reach it unwidened. DECIMAL(38,18) * DECIMAL(2,1) gives a scale-16 product that still holds
-    // 0.0000001, whereas casting both to DECIMAL(38,18) first drives the product to scale 6 and
-    // rounds the value away to zero, dropping a row Spark keeps.
-    val schema = schemaOf("dec" -> DecimalType(38, 18))
-    val rows = Seq(Row(new BigDecimal("0.0000001")))
-    assertResult(rows)(keep(rows, "dec * 1.0 > 0.0", schema))
-    assertResult(Right(()))(validate("dec * 1.0 > 0.0", schema))
+    // The remaining arithmetic operators go through the same widening.
+    assertResult(Seq(scalarRows.head))(keep(scalarRows, "ts % 3 = 1", scalarSchema))
+    assertResult(Right(()))(validate("ts % 3 = 1"))
+    assertResult(Seq(scalarRows(1)))(keep(scalarRows, "ts - 1 > 1500", scalarSchema))
+    assertResult(Right(()))(validate("ts - 1 > 1500"))
+    // IntegralDivide accepts only Long or Decimal and never widens its operands against each
+    // other, so an Int pair has to be promoted a side at a time the way Spark's rule does.
+    assertResult(Seq(scalarRows(1)))(keep(scalarRows, "ts div 3 > 500", scalarSchema))
+    assertResult(Right(()))(validate("ts div 3 > 500"))
+    assertResult(Seq(scalarRows(1)))(keep(scalarRows, "id div 2 > 0", scalarSchema))
+    assertResult(Right(()))(validate("id div 2 > 0"))
+    // Coalesce widens across more than two children, and across widths as well as kinds.
+    assertResult(Seq(scalarRows.head))(keep(scalarRows, "coalesce(ts, id, 0) = 1000", scalarSchema))
+    assertResult(Right(()))(validate("coalesce(ts, id, 0) = 1000"))
+    assertResult(Seq(scalarRows(1)))(keep(scalarRows, "coalesce(ts, price) > 1500", scalarSchema))
+    assertResult(Right(()))(validate("coalesce(ts, price) > 1500"))
+    // div is the operator this coercion newly reaches, so check it against Spark itself.
+    val df = spark.createDataFrame(scalarRows.asJava, scalarSchema)
+    Seq("id div 2 > 0", "ts div 3 > 500").foreach { filter =>
+      withClue(s"filter=$filter: ") {
+        assertResult(df.filter(filter).collect().toSeq)(keep(scalarRows, filter, scalarSchema))
+      }
+    }
   }
 
   test("evaluateFilter matches Spark for mixed decimal arithmetic") {
@@ -256,19 +288,20 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
 
     val schema = schemaOf("dec" -> DecimalType(38, 18), "i" -> IntegerType, "f" -> FloatType)
     val rows = Seq(
-      Row(new BigDecimal("0.0000001"), 1, 0.5f),
-      Row(new BigDecimal("-2.5"), 2, 0.25f))
+      Row(new JBigDecimal("0.0000001"), 1, 0.5f),
+      Row(new JBigDecimal("-2.5"), 2, 0.25f))
     val filters = Seq(
       "dec + 1 > 0", "1 + dec > 0", "dec * 1 > 0", "1L * dec > 0",
       "dec + i > 0", "i * dec > 0", "dec / 2 > 0", "2 / dec > 0",
       "dec + 0.5f > 0", "0.5f + dec > 0", "dec * f > 0", "f / dec > 0",
       "dec + 0.5d > 0", "0.5d / dec > 0",
       "dec / null > 0", "null / dec > 0", "dec + null > 0", "null * dec > 0",
+      // DECIMAL(38,18) * DECIMAL(2,1) gives a scale-16 product that still holds 0.0000001, which
+      // widening both operands to DECIMAL(38,18) first would round away to zero.
       "dec * 1.0 > 0.0")
     for (ansi <- Seq("false", "true"); minimumPrecision <- Seq("false", "true")) {
       withSQLConf("spark.sql.ansi.enabled" -> ansi,
-        "spark.sql.legacy.literal.pickMinimumPrecision" -> minimumPrecision,
-        "spark.sql.decimalOperations.allowPrecisionLoss" -> "true") {
+        "spark.sql.legacy.literal.pickMinimumPrecision" -> minimumPrecision) {
         val df = spark.createDataFrame(rows.asJava, schema)
         filters.foreach { filter =>
           withClue(s"filter=$filter, ansi=$ansi, minimumPrecision=$minimumPrecision: ") {
@@ -285,16 +318,22 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
 
     val schema = schemaOf("ts" -> LongType, "dec" -> DecimalType(38, 30))
     val rows = Seq(
-      Row(3000000000L, new BigDecimal("0.00000000000000000000000000001")),
-      Row(0L, new BigDecimal("0")),
-      Row(-3000000000L, new BigDecimal("-0.00000000000000000000000000001")))
+      Row(3000000000L, new JBigDecimal("0.00000000000000000000000000001")),
+      Row(0L, new JBigDecimal("0")),
+      Row(-3000000000L, new JBigDecimal("-0.00000000000000000000000000001")))
     val tiny = "0.000000000000000000000000000001"
+    // A decimal literal past the Long range is folded to a constant by DecimalPrecision, so the
+    // comparison never reaches the widening.
+    val huge = "99999999999999999999.0"
     val filters = Seq(
       s"ts > $tiny", s"ts >= $tiny", s"ts < $tiny", s"ts <= $tiny",
       s"$tiny < ts", s"$tiny <= ts", s"$tiny > ts", s"$tiny >= ts",
+      s"ts > $huge", s"ts < $huge", s"$huge < ts",
       "dec > 0", "0 < dec", "dec = 0", "dec <=> 0", "dec <= 0")
+    // spark.sql.legacy.decimal.retainFractionDigitsOnTruncate is undefined before Spark 4.
+    val retainFractionSettings = if (HoodieSparkUtils.gteqSpark4_0) Seq("false", "true") else Seq("false")
     for (ansi <- Seq("false", "true"); minimumPrecision <- Seq("false", "true");
-         retainFraction <- Seq("false", "true")) {
+         retainFraction <- retainFractionSettings) {
       withSQLConf("spark.sql.ansi.enabled" -> ansi,
         "spark.sql.legacy.literal.pickMinimumPrecision" -> minimumPrecision,
         "spark.sql.legacy.decimal.retainFractionDigitsOnTruncate" -> retainFraction) {
@@ -391,6 +430,9 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
   test("evaluateFilter maps a string result of true / false to a boolean decision") {
     // string(flag) yields the literal strings "true"/"false", exercising the string->boolean branch.
     assertResult(Seq(scalarRows.head))(keep(scalarRows, "string(flag)", scalarSchema))
+    // The mapping is for direct callers: Spark rejects a string filter condition, so a filterable
+    // procedure never gets past validation with one.
+    assert(validate("string(flag)").isLeft)
   }
 
   test("evaluateFilter treats non-boolean-valued expressions as no-match") {
@@ -451,7 +493,7 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
       Seq(1, 2, 3),
       List(1, 2, 3).map(Int.box).asJava,
       Array(1, 2, 3),
-      new BigDecimal("12.50"),
+      new JBigDecimal("12.50"),
       scala.math.BigDecimal("34.75"),
       Array[Byte](1, 2, 3),
       java.util.UUID.randomUUID(),
@@ -512,6 +554,10 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     assert(validate("date_format(t, 'yyyy') = '2024'").isLeft)
     assert(validate("any_value(id) = 1").isLeft)
     assert(validate("id = (select 1)").isLeft)
+    // Spark rejects any non-boolean filter condition. Without this these resolve and report zero
+    // matching rows instead of the error the same query raises.
+    assert(validate("ts + 1").left.exists(_.contains("boolean")))
+    assert(validate("name").left.exists(_.contains("boolean")))
 
     assertResult(Right(()))(validate("upper(name) = 'A1'"))
   }
