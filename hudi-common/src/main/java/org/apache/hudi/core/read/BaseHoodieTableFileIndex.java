@@ -97,7 +97,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   @Getter(AccessLevel.PROTECTED)
   private final String[] partitionColumns;
 
-  @Getter
+  @Getter(AccessLevel.PROTECTED)
   protected final HoodieMetadataConfig metadataConfig;
   private final TypedProperties configProperties;
   @Getter

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.core.read;
 
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.core.read.BaseHoodieTableFileIndex.PartitionPath;
 import org.apache.hudi.storage.StoragePath;
@@ -35,39 +34,10 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 public class BaseHoodieTableFileIndexTest {
-
-  @Test
-  public void testGetMetadataConfigReturnsFieldValue() throws Exception {
-    // Create a mock of BaseHoodieTableFileIndex
-    BaseHoodieTableFileIndex fileIndex = mock(BaseHoodieTableFileIndex.class, 
-        org.mockito.Mockito.CALLS_REAL_METHODS);
-    
-    // Create a test metadata config
-    HoodieMetadataConfig testConfig = HoodieMetadataConfig.newBuilder()
-        .enable(true)
-        .withMetadataIndexBloomFilter(true)
-        .withMetadataIndexColumnStats(true)
-        .build();
-    
-    // Use reflection to set the private metadataConfig field
-    Field metadataConfigField = BaseHoodieTableFileIndex.class.getDeclaredField("metadataConfig");
-    metadataConfigField.setAccessible(true);
-    metadataConfigField.set(fileIndex, testConfig);
-    
-    // Test the getMetadataConfig method
-    HoodieMetadataConfig result = fileIndex.getMetadataConfig();
-    
-    assertNotNull(result, "Metadata config should not be null");
-    assertSame(testConfig, result, "Should return the same metadata config instance");
-    assertEquals(true, result.isEnabled(), "Metadata should be enabled");
-    assertEquals(true, result.isBloomFilterIndexEnabled(), "Bloom filter index should be enabled");
-    assertEquals(true, result.isColumnStatsIndexEnabled(), "Column stats index should be enabled");
-  }
 
   /**
    * Regression test for the empty-partition NPE that surfaces in {@code getInputFileSlices}

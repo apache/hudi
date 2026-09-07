@@ -241,8 +241,6 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     HoodieFileIndex(sparkSession, metaClient, Some(tableStructSchema), optParams,
       FileStatusCache.getOrCreate(sparkSession), shouldIncludeLogFiles())
 
-  protected lazy val targetInstantTime: Option[String] = queryTimestamp
-
   /**
    * Columns that relation has to read from the storage to properly execute on its semantic: for ex,
    * for Merge-on-Read tables key fields as well and precombine field comprise mandatory set of columns,
@@ -257,7 +255,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   // NOTE: We're including compaction here since it's not considering a "commit" operation
     metaClient.getCommitsAndCompactionTimeline.filterCompletedInstants
 
-  private def queryTimestamp: Option[String] =
+  protected def queryTimestamp: Option[String] =
     specifiedQueryTimestamp.orElse(toScalaOption(timeline.lastInstant()).map(_.requestedTime))
 
   /**
