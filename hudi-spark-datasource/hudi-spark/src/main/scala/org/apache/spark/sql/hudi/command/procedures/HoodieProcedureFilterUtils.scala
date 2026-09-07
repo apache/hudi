@@ -18,10 +18,11 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.spark.sql.{Row, SparkSession}
-import org.apache.spark.sql.catalyst.analysis.{TypeCoercion, UnresolvedAttribute, UnresolvedFunction}
-import org.apache.spark.sql.catalyst.expressions.{Cast, Expression, GenericInternalRow, Unevaluable}
+import org.apache.spark.sql.catalyst.analysis.{AnsiTypeCoercion, TypeCoercion, UnresolvedAttribute, UnresolvedFunction}
+import org.apache.spark.sql.catalyst.expressions.{Cast, EqualNullSafe, Expression, GenericInternalRow, In, Unevaluable}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
-import org.apache.spark.sql.types.{DataType, NumericType, StructType}
+import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.types.{DataType, DecimalType, NumericType, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.util.Locale
@@ -58,8 +59,12 @@ object HoodieProcedureFilterUtils {
       Try {
         val parsedExpr = sparkSession.sessionState.sqlParser.parseExpression(filterExpression)
 
-        rows.filter { row =>
-          evaluateExpressionOnRow(parsedExpr, row, schema)
+        // Binding and resolution depend only on the schema, so run the three passes once for the
+        // whole batch instead of per row. A failure leaves no row able to match, which is what the
+        // per-row evaluation below would have done for every row anyway.
+        Try(bindAndResolveExpression(parsedExpr, schema)) match {
+          case Success(boundExpr) => rows.filter(row => evaluateExpressionOnRow(boundExpr, row, schema))
+          case Failure(_) => Seq.empty[Row]
         }
       } match {
         case Success(filteredRows) => filteredRows
@@ -364,15 +369,18 @@ object HoodieProcedureFilterUtils {
         applyTypeCoercion(lt.left, lt.right, org.apache.spark.sql.catalyst.expressions.LessThan.apply, lt)
       case lte: org.apache.spark.sql.catalyst.expressions.LessThanOrEqual =>
         applyTypeCoercion(lte.left, lte.right, org.apache.spark.sql.catalyst.expressions.LessThanOrEqual.apply, lte)
+      case eqns: EqualNullSafe =>
+        applyTypeCoercion(eqns.left, eqns.right, EqualNullSafe.apply, eqns)
+      case in: In =>
+        applyInTypeCoercion(in)
     }
   }
 
-  private def evaluateExpressionOnRow(expression: Expression, row: Row, schema: StructType): Boolean = {
+  private def evaluateExpressionOnRow(boundExpr: Expression, row: Row, schema: StructType): Boolean = {
 
     val internalRow = convertRowToInternalRow(row, schema)
 
     Try {
-      val boundExpr = bindAndResolveExpression(expression, schema)
       val result = boundExpr.eval(internalRow)
 
       result match {
@@ -516,21 +524,65 @@ object HoodieProcedureFilterUtils {
     }
   }
 
-  private def applyTypeCoercion[T <: org.apache.spark.sql.catalyst.expressions.Expression](
-                                                                                            left: org.apache.spark.sql.catalyst.expressions.Expression,
-                                                                                            right: org.apache.spark.sql.catalyst.expressions.Expression,
-                                                                                            constructor: (org.apache.spark.sql.catalyst.expressions.Expression, org.apache.spark.sql.catalyst.expressions.Expression) => T,
-                                                                                            original: T): T = {
-    (left.dataType, right.dataType) match {
-      case (_: NumericType, _: NumericType) =>
-        TypeCoercion.findWiderTypeForTwo(left.dataType, right.dataType)
-          .map { widerType =>
-            val coercedLeft = if (left.dataType == widerType) left else Cast(left, widerType)
-            val coercedRight = if (right.dataType == widerType) right else Cast(right, widerType)
-            constructor(coercedLeft, coercedRight)
-          }
-          .getOrElse(original)
+  private def applyTypeCoercion[T <: Expression](left: Expression,
+                                                 right: Expression,
+                                                 constructor: (Expression, Expression) => T,
+                                                 original: T): T = {
+    widenNumericOperands(Seq(left, right)) match {
+      case Some(Seq(widenedLeft, widenedRight)) => constructor(widenedLeft, widenedRight)
       case _ => original
     }
+  }
+
+  private def applyInTypeCoercion(in: In): Expression = {
+    widenNumericOperands(in.value +: in.list) match {
+      case Some(widened) => In(widened.head, widened.tail)
+      case _ => in
+    }
+  }
+
+  /**
+   * Widens comparison operands of differing numeric types to their common wider type, so that
+   * e.g. a LongType column compares against an IntegerType literal on the widened Long rather
+   * than narrowing the column. Returns None when the operands need no widening or cannot be
+   * widened, in which case the caller keeps the expression untouched.
+   */
+  private def widenNumericOperands(operands: Seq[Expression]): Option[Seq[Expression]] = {
+    if (operands.exists(!_.resolved)) {
+      // dataType throws on an unresolved operand. Such an expression is rejected up front by
+      // validateFilterExpression, so leave it alone here rather than failing the whole transform.
+      None
+    } else {
+      val operandTypes = operands.map(_.dataType)
+      // Decimal ordering is already precision- and scale-independent, while DecimalType.bounded
+      // clamps precision at 38, so widening decimals against each other can narrow one side into
+      // a null (non-ANSI) or an overflow error (ANSI). Compare those as they are.
+      if (operandTypes.distinct.length == 1
+        || !operandTypes.forall(_.isInstanceOf[NumericType])
+        || operandTypes.forall(_.isInstanceOf[DecimalType])) {
+        None
+      } else {
+        findWiderNumericType(operandTypes)
+          .map(widerType => operands.map(operand => castTo(operand, widerType)))
+      }
+    }
+  }
+
+  /**
+   * Mirrors the analyzer's choice of coercion rules, so that a filter widens the way the same
+   * comparison would in a SQL query. The two disagree: for BIGINT with FLOAT, AnsiTypeCoercion
+   * gives DOUBLE while TypeCoercion follows numericPrecedence and gives FLOAT. Spark 4 defaults
+   * to ANSI mode, Spark 3 does not.
+   */
+  private def findWiderNumericType(types: Seq[DataType]): Option[DataType] = {
+    if (SQLConf.get.ansiEnabled) {
+      AnsiTypeCoercion.findWiderCommonType(types)
+    } else {
+      TypeCoercion.findWiderCommonType(types)
+    }
+  }
+
+  private def castTo(expression: Expression, dataType: DataType): Expression = {
+    if (expression.dataType == dataType) expression else Cast(expression, dataType)
   }
 }
