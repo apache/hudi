@@ -164,16 +164,19 @@ by a single config:
 
 | Config Name | Default | Description |
 |-------------|---------|-------------|
-| hoodie.datasource.write.row.writer.enable | true | When enabled, clustering rewrites file groups through the Spark row writer instead of the RDD path. |
+| `hoodie.datasource.write.row.writer.enable` | `true` | When enabled, clustering rewrites file groups through the Spark row writer instead of the RDD path. This is the config's own default; the fallback applied when the config is absent differs by release, see below.<br /><br />`Config Param: ENABLE_ROW_WRITER`<br />`Since Version: 0.9.0` |
 
 Two things about that default are worth knowing, because they are not the same statement:
 
 * The config itself defaults to `true`, and Spark datasource writes set it explicitly, so clustering triggered
   from a datasource write takes the row-writer path unless you turn it off.
-* Clustering also applies its own fallback when the config is **absent** from the write config entirely — which
-  is what a standalone or async clustering job sees. That fallback has not been stable across releases: it was
-  `false` in 0.14.0, 0.15.0 and 0.15.1, and `true` in 0.14.1 and from 1.0.0 onwards. On this release it is
-  `true`, so a standalone clustering job also uses the row writer by default.
+* Clustering also applies its own fallback when the config is **absent** from the write config entirely. That is
+  what `HoodieClusteringJob` (spark-submit or hudi-cli) and Hudi Streamer see, since both build their write
+  config from raw properties. In-process async clustering from a Spark datasource streaming write and
+  `CALL run_clustering` do not: both go through the datasource write defaults, so they carry the key as `true`.
+  The fallback has not been stable across releases: it was `false` in 0.14.0, 0.14.2, 0.15.0 and 0.15.1, and
+  `true` in 0.14.1 and from 1.0.0 onwards. On this release it is `true`, so those two paths use the row writer
+  by default as well.
 
 To force the RDD path, set `hoodie.datasource.write.row.writer.enable=false` in the same properties the
 clustering job reads.
