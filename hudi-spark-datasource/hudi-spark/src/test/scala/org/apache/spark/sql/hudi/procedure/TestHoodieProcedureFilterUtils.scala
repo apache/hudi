@@ -280,6 +280,35 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     }
   }
 
+  test("evaluateFilter matches Spark for high-precision decimal comparisons") {
+    import scala.collection.JavaConverters._
+
+    val schema = schemaOf("ts" -> LongType, "dec" -> DecimalType(38, 30))
+    val rows = Seq(
+      Row(3000000000L, new BigDecimal("0.00000000000000000000000000001")),
+      Row(0L, new BigDecimal("0")),
+      Row(-3000000000L, new BigDecimal("-0.00000000000000000000000000001")))
+    val tiny = "0.000000000000000000000000000001"
+    val filters = Seq(
+      s"ts > $tiny", s"ts >= $tiny", s"ts < $tiny", s"ts <= $tiny",
+      s"$tiny < ts", s"$tiny <= ts", s"$tiny > ts", s"$tiny >= ts",
+      "dec > 0", "0 < dec", "dec = 0", "dec <=> 0", "dec <= 0")
+    for (ansi <- Seq("false", "true"); minimumPrecision <- Seq("false", "true");
+         retainFraction <- Seq("false", "true")) {
+      withSQLConf("spark.sql.ansi.enabled" -> ansi,
+        "spark.sql.legacy.literal.pickMinimumPrecision" -> minimumPrecision,
+        "spark.sql.legacy.decimal.retainFractionDigitsOnTruncate" -> retainFraction) {
+        val df = spark.createDataFrame(rows.asJava, schema)
+        filters.foreach { filter =>
+          withClue(s"filter=$filter, ansi=$ansi, minimumPrecision=$minimumPrecision, retainFraction=$retainFraction: ") {
+            assertResult(Right(()))(validate(filter, schema))
+            assertResult(df.filter(filter).collect().toSeq)(keep(rows, filter, schema))
+          }
+        }
+      }
+    }
+  }
+
   test("evaluateFilter binds quoted column names") {
     // show_column_stats_overlap, the second procedure named in #19632, outputs columns like
     // "Average overlap" and "50% overlap".

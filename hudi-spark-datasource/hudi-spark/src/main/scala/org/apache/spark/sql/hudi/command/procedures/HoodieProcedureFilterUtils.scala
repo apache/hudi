@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.analysis.{AnsiTypeCoercion, DecimalPrecision, TypeCoercion, UnresolvedAttribute, UnresolvedFunction}
-import org.apache.spark.sql.catalyst.expressions.{BinaryArithmetic, Cast, Coalesce, Divide, EqualNullSafe, Expression, GenericInternalRow, In, Unevaluable}
+import org.apache.spark.sql.catalyst.expressions.{BinaryArithmetic, BinaryComparison, Cast, Coalesce, Divide, EqualNullSafe, Expression, GenericInternalRow, In, Unevaluable}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{DataType, DecimalType, DoubleType, NullType, NumericType, StructType}
@@ -363,17 +363,17 @@ object HoodieProcedureFilterUtils {
     // Third pass: handle type coercion for numeric comparisons
     functionResolved.transformUp {
       case eq: org.apache.spark.sql.catalyst.expressions.EqualTo =>
-        applyTypeCoercion(eq.left, eq.right, org.apache.spark.sql.catalyst.expressions.EqualTo.apply, eq)
+        applyTypeCoercion(eq)
       case gt: org.apache.spark.sql.catalyst.expressions.GreaterThan =>
-        applyTypeCoercion(gt.left, gt.right, org.apache.spark.sql.catalyst.expressions.GreaterThan.apply, gt)
+        applyTypeCoercion(gt)
       case gte: org.apache.spark.sql.catalyst.expressions.GreaterThanOrEqual =>
-        applyTypeCoercion(gte.left, gte.right, org.apache.spark.sql.catalyst.expressions.GreaterThanOrEqual.apply, gte)
+        applyTypeCoercion(gte)
       case lt: org.apache.spark.sql.catalyst.expressions.LessThan =>
-        applyTypeCoercion(lt.left, lt.right, org.apache.spark.sql.catalyst.expressions.LessThan.apply, lt)
+        applyTypeCoercion(lt)
       case lte: org.apache.spark.sql.catalyst.expressions.LessThanOrEqual =>
-        applyTypeCoercion(lte.left, lte.right, org.apache.spark.sql.catalyst.expressions.LessThanOrEqual.apply, lte)
+        applyTypeCoercion(lte)
       case eqns: EqualNullSafe =>
-        applyTypeCoercion(eqns.left, eqns.right, EqualNullSafe.apply, eqns)
+        applyTypeCoercion(eqns)
       case in: In =>
         applyInTypeCoercion(in)
       // Divide is a BinaryArithmetic but accepts only Double or Decimal, so it needs its own
@@ -539,13 +539,23 @@ object HoodieProcedureFilterUtils {
     }
   }
 
-  private def applyTypeCoercion[T <: Expression](left: Expression,
-                                                 right: Expression,
-                                                 constructor: (Expression, Expression) => T,
-                                                 original: T): T = {
-    widenNumericOperands(Seq(left, right)) match {
-      case Some(Seq(widenedLeft, widenedRight)) => constructor(widenedLeft, widenedRight)
-      case _ => original
+  private def applyTypeCoercion(original: BinaryComparison): Expression = {
+    if (!original.childrenResolved) {
+      original
+    } else {
+      // Spark can replace an integral/decimal-literal inequality with an integral comparison,
+      // avoiding a lossy cast of the column. It also gives integral literals minimum decimal
+      // precision before finding the common comparison type.
+      val promoted = DecimalPrecision.transform.applyOrElse(original, identity[Expression])
+      // Mixed decimal/integral promotion creates two decimal operands. Apply the decimal-pair
+      // rule next, just as a subsequent analyzer iteration would.
+      val comparison = DecimalPrecision.transform.applyOrElse(promoted, identity[Expression])
+      comparison match {
+        case binary: BinaryComparison =>
+          widenNumericOperands(Seq(binary.left, binary.right))
+            .map(binary.withNewChildren).getOrElse(binary)
+        case other => other
+      }
     }
   }
 
