@@ -63,6 +63,52 @@ class TestDynamicBucketAssignFunction {
   File tempFile;
 
   @Test
+  void testProcessIndexRecordUpdatesBackendAndAssigner() throws Exception {
+    DynamicBucketAssignFunction function = new DynamicBucketAssignFunction(new Configuration());
+    PartitionedIndexBackend indexBackend = mock(PartitionedIndexBackend.class);
+    BucketAssigner bucketAssigner = mock(BucketAssigner.class);
+    setField(function, "indexBackend", indexBackend);
+    setField(function, "bucketAssigner", bucketAssigner);
+
+    // Create an index record that carries a pre-computed file group mapping
+    HoodieFlinkInternalRow indexRecord = new HoodieFlinkInternalRow("key", "partition", "file-1", "2025010100");
+    List<HoodieFlinkInternalRow> output = new ArrayList<>();
+
+    function.processElement(indexRecord, null, collector(output));
+
+    // Index records should NOT be forwarded to output
+    assertEquals(0, output.size());
+    // Should update the partitioned index backend
+    verify(indexBackend).update("partition", "key", "file-1");
+    // Should register the file group as an update in the bucket assigner
+    verify(bucketAssigner).addUpdate("partition", "file-1");
+  }
+
+  @Test
+  void testProcessIndexRecordDoesNotAffectDataRecords() throws Exception {
+    // Verify that having IndexRecord handling doesn't break normal data record processing
+    DynamicBucketAssignFunction function = new DynamicBucketAssignFunction(new Configuration());
+    PartitionedIndexBackend indexBackend = mock(PartitionedIndexBackend.class);
+    BucketAssigner bucketAssigner = mock(BucketAssigner.class);
+    when(indexBackend.get("partition", "key")).thenReturn("existing-file");
+    when(bucketAssigner.addUpdate("partition", "existing-file"))
+        .thenReturn(new BucketInfo(BucketType.UPDATE, "existing-file", "partition"));
+    setField(function, "indexBackend", indexBackend);
+    setField(function, "bucketAssigner", bucketAssigner);
+
+    HoodieFlinkInternalRow record = record("key", "partition", "U");
+    List<HoodieFlinkInternalRow> output = new ArrayList<>();
+
+    function.processElement(record, null, collector(output));
+
+    assertEquals(1, output.size());
+    assertEquals("existing-file", record.getFileId());
+    assertEquals("U", record.getInstantTime());
+    assertEquals("U", record.getOperationType());
+    verify(indexBackend, never()).update("partition", "key", "existing-file");
+  }
+
+  @Test
   void testRoutesExistingRecordToUpdateBucket() throws Exception {
     DynamicBucketAssignFunction function = new DynamicBucketAssignFunction(new Configuration());
     PartitionedIndexBackend indexBackend = mock(PartitionedIndexBackend.class);
