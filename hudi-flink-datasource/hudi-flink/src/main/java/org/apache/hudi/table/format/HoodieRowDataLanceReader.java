@@ -51,7 +51,6 @@ import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.lance.file.LanceFileReader;
 
@@ -148,14 +147,14 @@ public class HoodieRowDataLanceReader implements HoodieRowDataFileReader {
 
   @Override
   public ClosableIterator<HoodieRecord<RowData>> getRecordIterator(HoodieSchema readerSchema, HoodieSchema requestedSchema) throws IOException {
-    ClosableIterator<RowData> rowDataItr = getRowDataIterator(RowDataQueryContexts.fromSchema(requestedSchema).getRowType(), requestedSchema);
+    ClosableIterator<RowData> rowDataItr = getRowDataIterator(requestedSchema);
     return new CloseableMappingIterator<>(rowDataItr, HoodieFlinkRecord::new);
   }
 
   @Override
   public ClosableIterator<String> getRecordKeyIterator() throws IOException {
     HoodieSchema schema = HoodieSchemaUtils.getRecordKeySchema();
-    ClosableIterator<RowData> rowDataItr = getRowDataIterator(RowDataQueryContexts.fromSchema(schema).getRowType(), schema);
+    ClosableIterator<RowData> rowDataItr = getRowDataIterator(schema);
     return new CloseableMappingIterator<>(rowDataItr, rowData -> rowData.getString(0).toString());
   }
 
@@ -170,12 +169,13 @@ public class HoodieRowDataLanceReader implements HoodieRowDataFileReader {
         && !internalSchemaManager.getMergeSchema(path.getName()).isEmptySchema()) {
       throw new HoodieValidationException("Flink Lance base-file support does not support schema evolution.");
     }
-    return getRowDataIterator(RowDataQueryContexts.fromSchema(requiredSchema).getRowType(), requiredSchema);
+    return getRowDataIterator(requiredSchema);
   }
 
-  public ClosableIterator<RowData> getRowDataIterator(DataType dataType, HoodieSchema requestedSchema) {
+  public ClosableIterator<RowData> getRowDataIterator(HoodieSchema requestedSchema) {
     validateRequestedVectors(requestedSchema);
-    RowType rowType = (RowType) dataType.getLogicalType();
+    RowType rowType = (RowType) RowDataQueryContexts.fromSchema(requestedSchema)
+        .getRowType().getLogicalType();
     List<String> columnNames = new ArrayList<>(rowType.getFieldCount());
     for (RowType.RowField field : rowType.getFields()) {
       columnNames.add(field.getName());

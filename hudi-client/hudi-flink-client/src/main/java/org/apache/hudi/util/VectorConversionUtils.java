@@ -42,7 +42,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -76,7 +75,7 @@ public final class VectorConversionUtils {
     Map<String, HoodieSchema.Vector> vectorFields = getVectorFields(tableSchema);
     Map<Integer, HoodieSchema.Vector> vectorColumnInfo = new LinkedHashMap<>();
     for (int i = 0; i < selectedFields.length; i++) {
-      HoodieSchema.Vector vector = vectorFields.get(fullFieldNames[selectedFields[i]].toLowerCase(Locale.ROOT));
+      HoodieSchema.Vector vector = vectorFields.get(fullFieldNames[selectedFields[i]]);
       if (vector != null) {
         vectorColumnInfo.put(i, vector);
       }
@@ -143,7 +142,7 @@ public final class VectorConversionUtils {
     }
     DataType[] readFieldTypes = Arrays.copyOf(fullFieldTypes, fullFieldTypes.length);
     for (int i = 0; i < fullFieldNames.length; i++) {
-      if (vectorFields.containsKey(fullFieldNames[i].toLowerCase(Locale.ROOT))) {
+      if (vectorFields.containsKey(fullFieldNames[i])) {
         readFieldTypes[i] = DataTypes.of(bytesType(fullFieldTypes[i].getLogicalType()));
       }
     }
@@ -192,13 +191,13 @@ public final class VectorConversionUtils {
   }
 
   /**
-   * Returns VECTOR fields keyed by lower-cased field name.
+   * Returns VECTOR fields keyed by field name.
    */
   private static Map<String, HoodieSchema.Vector> getVectorFields(HoodieSchema tableSchema) {
     return tableSchema.getFields().stream()
         .filter(field -> field.schema().getNonNullType().getType() == HoodieSchemaType.VECTOR)
         .collect(Collectors.toMap(
-            field -> field.name().toLowerCase(Locale.ROOT),
+            field -> field.name(),
             field -> (HoodieSchema.Vector) field.schema().getNonNullType()));
   }
 

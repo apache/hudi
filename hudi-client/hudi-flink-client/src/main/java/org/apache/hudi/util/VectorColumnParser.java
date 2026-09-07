@@ -24,7 +24,6 @@ import org.apache.flink.table.types.logical.ArrayType;
 import org.apache.flink.table.types.logical.LogicalType;
 
 import java.util.LinkedHashMap;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -33,8 +32,8 @@ import java.util.Map;
  *
  * <p>The option uses {@code colName[:dimension]} entries separated by commas, for example
  * {@code embedding:4,features:3,codes:4}. The dimension defaults to {@value #DEFAULT_VECTOR_DIMENSION}
- * when omitted. Column names are matched case-insensitively. The vector element type is inferred
- * from the Flink array element type: {@code ARRAY<FLOAT>}, {@code ARRAY<DOUBLE>}, or
+ * when omitted. The vector element type is inferred from the Flink array element type:
+ * {@code ARRAY<FLOAT>}, {@code ARRAY<DOUBLE>}, or
  * {@code ARRAY<TINYINT>} map to FLOAT, DOUBLE, and INT8 respectively.
  *
  * <p>The parser validates the descriptor syntax (well-formed entries, no duplicate columns,
@@ -50,10 +49,10 @@ public class VectorColumnParser {
 
   /**
    * Parses the {@code hoodie.vector.columns} descriptor string into a map from the
-   * (lower-cased) column name to its vector dimension, preserving declaration order.
+   * column name to its vector dimension, preserving declaration order.
    *
    * @param vectorColumns comma-separated {@code colName[:dimension]} descriptors
-   * @return map from normalized column name to dimension
+   * @return map from column name to dimension
    * @throws IllegalArgumentException if a descriptor is malformed, duplicated, or has a non-positive dimension
    */
   public static Map<String, Integer> parse(String vectorColumns) {
@@ -69,8 +68,7 @@ public class VectorColumnParser {
             "Invalid VECTOR column descriptor '" + entry + "'. Expected format: columnName[:dimension].");
       }
       String columnName = parts[0].trim();
-      String normalizedColumnName = columnName.toLowerCase(Locale.ROOT);
-      if (parsed.containsKey(normalizedColumnName)) {
+      if (parsed.containsKey(columnName)) {
         throw new IllegalArgumentException("Duplicate VECTOR column descriptor for column: " + columnName);
       }
       int dimension = DEFAULT_VECTOR_DIMENSION;
@@ -89,7 +87,7 @@ public class VectorColumnParser {
       if (dimension <= 0) {
         throw new IllegalArgumentException("VECTOR dimension must be positive for column '" + columnName + "': " + dimension);
       }
-      parsed.put(normalizedColumnName, dimension);
+      parsed.put(columnName, dimension);
     }
     return parsed;
   }

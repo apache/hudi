@@ -20,6 +20,7 @@ package org.apache.hudi.table.format.cow;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.util.HoodieVectorUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.source.ExpressionPredicates.Predicate;
@@ -27,6 +28,7 @@ import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.RecordIterators;
+import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.VectorConversionUtils;
 
 import lombok.extern.slf4j.Slf4j;
@@ -37,8 +39,10 @@ import org.apache.flink.api.common.io.compression.InflaterInputStreamFactory;
 import org.apache.flink.core.fs.FileInputSplit;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.formats.parquet.utils.SerializableConfiguration;
+import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
+import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.fs.FileStatus;
@@ -73,9 +77,9 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
 
   private final String[] fullFieldNames;
   private final DataType[] fullFieldTypes;
-  private final DataType[] readFieldTypes;
   private final int[] selectedFields;
-  private final Map<Integer, HoodieSchema.Vector> vectorColumnInfo;
+  private final HoodieSchema tableSchema;
+  private final HoodieSchema requestedSchema;
   private final String partDefaultName;
   private final String partPathField;
   private final boolean hiveStylePartitioning;
@@ -116,9 +120,15 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
     this.hiveStylePartitioning = hiveStylePartitioning;
     this.fullFieldNames = fullFieldNames;
     this.fullFieldTypes = fullFieldTypes;
-    this.readFieldTypes = VectorConversionUtils.getParquetReadFieldTypes(fullFieldNames, fullFieldTypes, tableSchema);
     this.selectedFields = selectedFields;
-    this.vectorColumnInfo = VectorConversionUtils.detectVectorColumns(fullFieldNames, selectedFields, tableSchema);
+    this.tableSchema = tableSchema.getNonNullType();
+    RowType requestedRowType = (RowType) DataTypes.ROW(Arrays.stream(selectedFields)
+            .mapToObj(i -> DataTypes.FIELD(fullFieldNames[i], fullFieldTypes[i]))
+            .toArray(DataTypes.Field[]::new))
+        .notNull()
+        .getLogicalType();
+    this.requestedSchema = DataTypeUtils.toHoodieSchema(
+        requestedRowType, this.tableSchema);
     this.conf = new SerializableConfiguration(conf);
     this.utcTimestamp = utcTimestamp;
     this.internalSchemaManager = internalSchemaManager;
@@ -126,40 +136,47 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
 
   @Override
   public void open(FileInputSplit fileSplit) throws IOException {
-    if (fileSplit.getPath().getName().endsWith(HoodieFileFormat.LANCE.getFileExtension())) {
-      this.itr = getLanceRecordIterator(fileSplit.getPath());
-    } else {
-      LinkedHashMap<String, Object> partObjects = FilePathUtils.generatePartitionSpecs(
-          fileSplit.getPath().getPath(),
-          Arrays.asList(fullFieldNames),
-          Arrays.asList(fullFieldTypes),
-          this.partDefaultName,
-          this.partPathField,
-          this.hiveStylePartitioning
-      );
-
-      ClosableIterator<RowData> rowDataItr = RecordIterators.getParquetRecordIterator(
-          internalSchemaManager,
-          utcTimestamp,
-          true,
-          conf.conf(),
-          fullFieldNames,
-          readFieldTypes,
-          partObjects,
-          selectedFields,
-          2048,
-          fileSplit.getPath(),
-          fileSplit.getStart(),
-          fileSplit.getLength(),
-          predicates);
-      this.itr = vectorColumnInfo.isEmpty() ? rowDataItr : VectorConversionUtils.wrapVectorColumnIterator(rowDataItr, fullFieldTypes, selectedFields, vectorColumnInfo);
-    }
+    this.itr = fileSplit.getPath().getName().endsWith(HoodieFileFormat.LANCE.getFileExtension())
+        ? getLanceRecordIterator(fileSplit.getPath())
+        : getParquetRecordIterator(fileSplit);
     this.currentReadCount = 0L;
   }
 
   private ClosableIterator<RowData> getLanceRecordIterator(Path path) {
-    return FormatUtils.getLanceRecordIterator(
-        path.toString(), Arrays.asList(fullFieldNames), Arrays.asList(fullFieldTypes), selectedFields, conf.conf());
+    return FormatUtils.getLanceRecordIterator(path.toString(), requestedSchema, conf.conf());
+  }
+
+  private ClosableIterator<RowData> getParquetRecordIterator(FileInputSplit fileSplit) throws IOException {
+    DataType[] readFieldTypes = VectorConversionUtils.getParquetReadFieldTypes(
+        fullFieldNames, fullFieldTypes, tableSchema);
+    Map<Integer, HoodieSchema.Vector> vectorColumnInfo =
+        HoodieVectorUtils.detectVectorColumns(requestedSchema);
+    LinkedHashMap<String, Object> partObjects = FilePathUtils.generatePartitionSpecs(
+        fileSplit.getPath().getPath(),
+        Arrays.asList(fullFieldNames),
+        Arrays.asList(fullFieldTypes),
+        partDefaultName,
+        partPathField,
+        hiveStylePartitioning);
+
+    ClosableIterator<RowData> rowDataItr = RecordIterators.getParquetRecordIterator(
+        internalSchemaManager,
+        utcTimestamp,
+        true,
+        conf.conf(),
+        fullFieldNames,
+        readFieldTypes,
+        partObjects,
+        selectedFields,
+        2048,
+        fileSplit.getPath(),
+        fileSplit.getStart(),
+        fileSplit.getLength(),
+        predicates);
+    return vectorColumnInfo.isEmpty()
+        ? rowDataItr
+        : VectorConversionUtils.wrapVectorColumnIterator(
+            rowDataItr, fullFieldTypes, selectedFields, vectorColumnInfo);
   }
 
   @Override

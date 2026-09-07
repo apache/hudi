@@ -285,15 +285,15 @@ public class HoodieSchemaConverter {
    * an unknown column is rejected instead of being silently ignored during conversion.
    *
    * @param logicalType   Flink logical type
-   * @param vectorColumns parsed vector columns (normalized column name to dimension), may be empty
+   * @param vectorColumns parsed vector columns (column name to dimension), may be empty
    */
   private static void validateVectorColumns(LogicalType logicalType, Map<String, Integer> vectorColumns) {
     if (vectorColumns.isEmpty()) {
       return;
     }
-    List<String> normalizedFieldNames = ((RowType) logicalType).getFieldNames();
+    List<String> fieldNames = ((RowType) logicalType).getFieldNames();
     vectorColumns.keySet().stream()
-        .filter(vectorColumn -> !normalizedFieldNames.contains(vectorColumn))
+        .filter(vectorColumn -> !fieldNames.contains(vectorColumn))
         .findFirst()
         .ifPresent(vectorColumn -> {
           throw new IllegalArgumentException("VECTOR column '" + vectorColumn + "' does not exist in the table schema.");

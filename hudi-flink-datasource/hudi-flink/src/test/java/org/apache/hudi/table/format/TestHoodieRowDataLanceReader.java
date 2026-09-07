@@ -23,6 +23,7 @@ import org.apache.hudi.common.bloom.SimpleBloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.schema.internal.InternalSchema;
@@ -97,6 +98,47 @@ class TestHoodieRowDataLanceReader {
   Path tempDir;
 
   @Test
+  void testRestoresMixedCaseVectorFieldName() throws Exception {
+    HoodieSchema hoodieSchema = HoodieSchema.createRecord(
+        "mixed_case_record",
+        null,
+        null,
+        Collections.singletonList(HoodieSchemaField.of(
+            "Embedding",
+            HoodieSchema.createNullable(HoodieSchema.createVector(
+                2, HoodieSchema.Vector.VectorElementType.FLOAT)),
+            null,
+            HoodieSchema.NULL_VALUE)));
+    StoragePath path = new StoragePath(tempDir.resolve("mixed-case-vector.lance").toUri());
+
+    try (HoodieRowDataLanceWriter writer = new HoodieRowDataLanceWriter(
+        path,
+        hoodieSchema,
+        "001",
+        mock(TaskContextSupplier.class),
+        Option.empty(),
+        128 * 1024 * 1024L,
+        64 * 1024 * 1024L,
+        16 * 1024 * 1024L,
+        true,
+        false,
+        false)) {
+      writer.writeRow("key1", GenericRowData.of(
+          new GenericArrayData(new Object[] {1.25F, 2.5F})));
+    }
+
+    try (HoodieRowDataLanceReader reader = new HoodieRowDataLanceReader(path, new HoodieConfig())) {
+      HoodieSchema restoredSchema = reader.getSchema().getNonNullType();
+      assertTrue(restoredSchema.getField("Embedding").isPresent());
+      assertFalse(restoredSchema.getField("embedding").isPresent());
+      HoodieSchema.Vector vector = (HoodieSchema.Vector) restoredSchema.getField("Embedding")
+          .get().schema().getNonNullType();
+      assertEquals(2, vector.getDimension());
+      assertEquals(HoodieSchema.Vector.VectorElementType.FLOAT, vector.getVectorElementType());
+    }
+  }
+
+  @Test
   void testReadsVectorsAndRestoresSchemaIdentity() throws Exception {
     RowType rowType = RowType.of(
         new LogicalType[] {
@@ -148,8 +190,7 @@ class TestHoodieRowDataLanceReader {
       assertEquals(HoodieSchemaType.ARRAY,
           readSchema.getField("values").get().schema().getNonNullType().getType());
 
-      try (ClosableIterator<RowData> rows = reader.getRowDataIterator(
-          RowDataQueryContexts.fromSchema(hoodieSchema).getRowType(), hoodieSchema)) {
+      try (ClosableIterator<RowData> rows = reader.getRowDataIterator(hoodieSchema)) {
         RowData first = rows.next();
         assertEquals(1, first.getInt(0));
         assertFloatArray(first.getArray(1), 1.25F, 2.5F);
@@ -176,8 +217,7 @@ class TestHoodieRowDataLanceReader {
     HoodieSchema projectedSchema = HoodieSchemaConverter.convertToSchema(
         projectedRowType, "projected_record", "features:3,embedding:2");
     try (HoodieRowDataLanceReader reader = new HoodieRowDataLanceReader(path, new HoodieConfig());
-         ClosableIterator<RowData> rows = reader.getRowDataIterator(
-             RowDataQueryContexts.fromSchema(projectedSchema).getRowType(), projectedSchema)) {
+         ClosableIterator<RowData> rows = reader.getRowDataIterator(projectedSchema)) {
       RowData first = rows.next();
       assertIntArray(first.getArray(0), 10, 20);
       assertDoubleArray(first.getArray(1), 3.5D, 4.5D, 5.5D);
@@ -193,8 +233,7 @@ class TestHoodieRowDataLanceReader {
     try (HoodieRowDataLanceReader reader = new HoodieRowDataLanceReader(path, new HoodieConfig())) {
       HoodieValidationException exception = assertThrows(
           HoodieValidationException.class,
-          () -> reader.getRowDataIterator(
-              RowDataQueryContexts.fromSchema(incompatibleSchema).getRowType(), incompatibleSchema));
+          () -> reader.getRowDataIterator(incompatibleSchema));
       assertTrue(exception.getMessage().contains("requested VECTOR(3)"));
       assertTrue(exception.getMessage().contains("file contains VECTOR(2)"));
     }
@@ -319,8 +358,7 @@ class TestHoodieRowDataLanceReader {
 
     try (MockedStatic<LanceFileReader> mocked = mockLanceOpen(metadataReader, dataReader)) {
       HoodieRowDataLanceReader reader = new HoodieRowDataLanceReader(PATH, new HoodieConfig());
-      assertThrows(HoodieException.class, () -> reader.getRowDataIterator(
-          RowDataQueryContexts.fromSchema(schema).getRowType(), schema));
+      assertThrows(HoodieException.class, () -> reader.getRowDataIterator(schema));
       verify(dataReader).close();
       reader.close();
     }
