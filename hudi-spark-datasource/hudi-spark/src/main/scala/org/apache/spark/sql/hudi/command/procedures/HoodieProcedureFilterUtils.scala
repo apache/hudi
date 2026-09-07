@@ -68,6 +68,9 @@ object HoodieProcedureFilterUtils {
         }
       } match {
         case Success(filteredRows) => filteredRows
+        // Surface an ANSI overflow with Spark's own exception rather than restating it as a
+        // filter-expression problem: the expression is fine, the data does not fit.
+        case Failure(arithmetic: ArithmeticException) => throw arithmetic
         case Failure(exception) =>
           throw new IllegalArgumentException(
             s"Failed to parse or evaluate filter expression '$filterExpression': ${exception.getMessage}",
@@ -399,6 +402,10 @@ object HoodieProcedureFilterUtils {
       }
     } match {
       case Success(result) => result
+      // Spark raises SparkArithmeticException, an ArithmeticException, for an overflowing ANSI
+      // cast or arithmetic. Swallowing it would silently drop a row the same query keeps, so let
+      // it out and let the caller fail the way the equivalent query does.
+      case Failure(arithmetic: ArithmeticException) => throw arithmetic
       case Failure(_) => false
     }
   }
@@ -573,8 +580,9 @@ object HoodieProcedureFilterUtils {
    *    decimal point. For example, DECIMAL(38,20) allows only 18 digits before the decimal point,
    *    so the 19-digit Long 9000000000000000000 does not fit.
    *
-   * Rounding can change comparison results. Overflow causes this filter to drop the row without
-   * reporting an error to the caller.
+   * Rounding can change comparison results, silently, exactly as it does in a query. Overflow
+   * follows the session's ANSI mode the way Spark's own Cast does: without ANSI the cast yields
+   * null and the row is filtered out, with ANSI it raises and the failure reaches the caller.
    */
   private def widenNumericOperands(operands: Seq[Expression]): Option[Seq[Expression]] = {
     if (operands.exists(!_.resolved)) {

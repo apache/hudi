@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.hudi.procedure
 
+import org.apache.hudi.HoodieSparkUtils
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.hudi.command.procedures.HoodieProcedureFilterUtils
 import org.apache.spark.sql.types._
@@ -154,10 +156,48 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     assertResult(Seq(rows.head))(keep(rows, "dec > 1.00", schema))
     assertResult(Seq(rows.head))(keep(rows, "dec > 1.5", schema))
     assertResult(Right(()))(validate("dec > 1.00", schema))
-    // Not asserted here: a pair like DECIMAL(38,0) against DECIMAL(38,18), where the wider type
-    // runs into the precision-38 clamp. Spark resolves that differently per version -- 3.5 widens
-    // and overflows the cast, 4.1 declines to widen at all -- so there is no single expected
-    // result to pin. The lossy shapes are documented on widenNumericOperands instead.
+  }
+
+  test("evaluateFilter surfaces an ANSI overflow instead of dropping the row") {
+    // Overflow has to reach the caller under ANSI and yield null without it, the way the same
+    // arithmetic behaves in a query. Swallowing it would drop a row the query would keep.
+    val rows = Seq(scalarRow(1, 1000L))
+    withSQLConf("spark.sql.ansi.enabled" -> "false") {
+      assertResult(Seq.empty)(keep(rows, "ts + 9223372036854775807 > 0", scalarSchema))
+    }
+    withSQLConf("spark.sql.ansi.enabled" -> "true") {
+      intercept[ArithmeticException] {
+        keep(rows, "ts + 9223372036854775807 > 0", scalarSchema)
+      }
+    }
+  }
+
+  test("evaluateFilter follows ANSI mode when a decimal widening overflows") {
+    val schema = schemaOf("big" -> DecimalType(38, 0), "frac" -> DecimalType(38, 18))
+    val rows = Seq(Row(new java.math.BigDecimal("1" + "0" * 30), new java.math.BigDecimal("1.5")))
+    if (HoodieSparkUtils.gteqSpark4_0) {
+      // Spark 4 declines to widen a decimal pair that would lose precision, in either ANSI mode,
+      // so the comparison stays on Decimal ordering, which is scale-independent, and keeps the
+      // row. Nothing overflows, so there is no failure to surface.
+      withSQLConf("spark.sql.ansi.enabled" -> "false") {
+        assertResult(rows)(keep(rows, "big > frac", schema))
+      }
+      withSQLConf("spark.sql.ansi.enabled" -> "true") {
+        assertResult(rows)(keep(rows, "big > frac", schema))
+      }
+    } else {
+      // Spark 3 widens to DECIMAL(38,18), which the precision-38 clamp leaves 20 integral digits,
+      // too few for this 31-digit value. The overflow then follows the session's ANSI mode.
+      withSQLConf("spark.sql.ansi.enabled" -> "false") {
+        // The cast yields null and the row drops, the answer Spark SQL gives for the same filter.
+        assertResult(Seq.empty)(keep(rows, "big > frac", schema))
+      }
+      withSQLConf("spark.sql.ansi.enabled" -> "true") {
+        intercept[ArithmeticException] {
+          keep(rows, "big > frac", schema)
+        }
+      }
+    }
   }
 
   test("evaluateFilter widens with the coercion rules of the active ANSI mode") {
