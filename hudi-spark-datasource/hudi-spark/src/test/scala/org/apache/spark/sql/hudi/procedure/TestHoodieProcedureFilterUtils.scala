@@ -23,6 +23,7 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.hudi.command.procedures.HoodieProcedureFilterUtils
 import org.apache.spark.sql.types._
 
+import java.math.BigDecimal
 import java.sql.{Date, Timestamp}
 
 /**
@@ -127,8 +128,8 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     // Two rows, so an assertion that matches everything is distinguishable from one that
     // coerces correctly.
     val rows = Seq(
-      Row(2.5f, 3.toShort, 4.toByte, new java.math.BigDecimal("3.00")),
-      Row(0.5f, 9.toShort, 9.toByte, new java.math.BigDecimal("0.50")))
+      Row(2.5f, 3.toShort, 4.toByte, new BigDecimal("3.00")),
+      Row(0.5f, 9.toShort, 9.toByte, new BigDecimal("0.50")))
     val matched = Seq(rows.head)
 
     // Literals whose parsed type already matches the column type evaluate correctly.
@@ -150,7 +151,7 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
 
   test("evaluateFilter widens decimal comparisons the way Spark does") {
     val schema = schemaOf("dec" -> DecimalType(10, 2))
-    val rows = Seq(Row(new java.math.BigDecimal("3.00")), Row(new java.math.BigDecimal("0.50")))
+    val rows = Seq(Row(new BigDecimal("3.00")), Row(new BigDecimal("0.50")))
     // A decimal literal of a different scale has to widen, or the comparison stays unresolved
     // and validateFilterExpression rejects the filter before any procedure evaluates it.
     assertResult(Seq(rows.head))(keep(rows, "dec > 1.00", schema))
@@ -176,7 +177,7 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
 
   test("evaluateFilter follows ANSI mode when a decimal widening overflows") {
     val schema = schemaOf("big" -> DecimalType(38, 0), "frac" -> DecimalType(38, 18))
-    val rows = Seq(Row(new java.math.BigDecimal("1" + "0" * 30), new java.math.BigDecimal("1.5")))
+    val rows = Seq(Row(new BigDecimal("1" + "0" * 30), new BigDecimal("1.5")))
     // Spark 3 only. There the widening picks DECIMAL(38,18), and the precision-38 clamp leaves it
     // 20 integral digits, too few for this 31-digit value, so the cast overflows and the ANSI mode
     // decides what happens. Parity for a comparison whose common precision would exceed 38 is not
@@ -245,9 +246,38 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     // 0.0000001, whereas casting both to DECIMAL(38,18) first drives the product to scale 6 and
     // rounds the value away to zero, dropping a row Spark keeps.
     val schema = schemaOf("dec" -> DecimalType(38, 18))
-    val rows = Seq(Row(new java.math.BigDecimal("0.0000001")))
+    val rows = Seq(Row(new BigDecimal("0.0000001")))
     assertResult(rows)(keep(rows, "dec * 1.0 > 0.0", schema))
     assertResult(Right(()))(validate("dec * 1.0 > 0.0", schema))
+  }
+
+  test("evaluateFilter matches Spark for mixed decimal arithmetic") {
+    import scala.collection.JavaConverters._
+
+    val schema = schemaOf("dec" -> DecimalType(38, 18), "i" -> IntegerType, "f" -> FloatType)
+    val rows = Seq(
+      Row(new BigDecimal("0.0000001"), 1, 0.5f),
+      Row(new BigDecimal("-2.5"), 2, 0.25f))
+    val filters = Seq(
+      "dec + 1 > 0", "1 + dec > 0", "dec * 1 > 0", "1L * dec > 0",
+      "dec + i > 0", "i * dec > 0", "dec / 2 > 0", "2 / dec > 0",
+      "dec + 0.5f > 0", "0.5f + dec > 0", "dec * f > 0", "f / dec > 0",
+      "dec + 0.5d > 0", "0.5d / dec > 0",
+      "dec / null > 0", "null / dec > 0", "dec + null > 0", "null * dec > 0",
+      "dec * 1.0 > 0.0")
+    for (ansi <- Seq("false", "true"); minimumPrecision <- Seq("false", "true")) {
+      withSQLConf("spark.sql.ansi.enabled" -> ansi,
+        "spark.sql.legacy.literal.pickMinimumPrecision" -> minimumPrecision,
+        "spark.sql.decimalOperations.allowPrecisionLoss" -> "true") {
+        val df = spark.createDataFrame(rows.asJava, schema)
+        filters.foreach { filter =>
+          withClue(s"filter=$filter, ansi=$ansi, minimumPrecision=$minimumPrecision: ") {
+            assertResult(Right(()))(validate(filter, schema))
+            assertResult(df.filter(filter).collect().toSeq)(keep(rows, filter, schema))
+          }
+        }
+      }
+    }
   }
 
   test("evaluateFilter binds quoted column names") {
@@ -392,7 +422,7 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
       Seq(1, 2, 3),
       List(1, 2, 3).map(Int.box).asJava,
       Array(1, 2, 3),
-      new java.math.BigDecimal("12.50"),
+      new BigDecimal("12.50"),
       scala.math.BigDecimal("34.75"),
       Array[Byte](1, 2, 3),
       java.util.UUID.randomUUID(),

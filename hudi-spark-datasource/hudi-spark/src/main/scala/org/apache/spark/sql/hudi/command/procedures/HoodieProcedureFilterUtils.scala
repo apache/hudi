@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.spark.sql.{Row, SparkSession}
-import org.apache.spark.sql.catalyst.analysis.{AnsiTypeCoercion, TypeCoercion, UnresolvedAttribute, UnresolvedFunction}
+import org.apache.spark.sql.catalyst.analysis.{AnsiTypeCoercion, DecimalPrecision, TypeCoercion, UnresolvedAttribute, UnresolvedFunction}
 import org.apache.spark.sql.catalyst.expressions.{BinaryArithmetic, Cast, Coalesce, Divide, EqualNullSafe, Expression, GenericInternalRow, In, Unevaluable}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.internal.SQLConf
@@ -563,20 +563,34 @@ object HoodieProcedureFilterUtils {
    * enabling it: DECIMAL(38,18) * DECIMAL(2,1) yields a scale-16 product, while casting both to
    * DECIMAL(38,18) first drives the product to scale 6 and rounds 0.0000001 away to zero.
    *
-   * A decimal mixed with a non-decimal is left alone too, and so stays unresolved and rejected the
-   * way it is without this coercion. Matching Spark there means its DecimalPrecision promotion,
-   * including the minimum-precision rule for an integral literal that exists to avoid this same
-   * loss, which is more than this widening should take on; see HUDI #19860.
+   * Spark's DecimalPrecision rule promotes integral operands without changing the existing
+   * decimal's type, including minimum precision for integral literals. It also promotes decimals
+   * mixed with floating-point operands to Double. Null operands take the other operand's type.
    */
   private def applyArithmeticTypeCoercion(arith: BinaryArithmetic): Expression = {
     val operands = Seq(arith.left, arith.right)
-    // dataType throws on an unresolved operand, so that has to be ruled out before reading it.
-    if (operands.exists(operand => !operand.resolved || operand.dataType.isInstanceOf[DecimalType])) {
+    if (operands.exists(!_.resolved) || !operands.forall(operand => isNumericOrNull(operand.dataType))) {
       arith
     } else {
-      widenNumericOperands(operands) match {
-        case Some(Seq(widenedLeft, widenedRight)) => arith.withNewChildren(Seq(widenedLeft, widenedRight))
-        case _ => arith
+      val decimalOperands = operands.exists(_.dataType.isInstanceOf[DecimalType])
+      val promoted = if (decimalOperands) {
+        DecimalPrecision.transform.applyOrElse(arith, identity[Expression])
+      } else {
+        arith
+      }
+      promoted match {
+        case binary: BinaryArithmetic =>
+          val children = Seq(binary.left, binary.right)
+          val widened = if (children.forall(_.dataType.isInstanceOf[DecimalType])) {
+            binary
+          } else {
+            widenNumericOperands(children)
+              .map(binary.withNewChildren).getOrElse(binary)
+          }
+          // Spark 3.3 wraps decimal arithmetic in CheckOverflow after operand promotion.
+          // Later versions calculate the result precision within BinaryArithmetic itself.
+          if (decimalOperands) DecimalPrecision.transform.applyOrElse(widened, identity[Expression]) else widened
+        case other => other
       }
     }
   }
