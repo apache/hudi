@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -171,8 +172,19 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
   }
 
   @Override
-  public void testInsertClustering() {
+  public void testInsertClustering(MetaFieldsMode mode) {
     // insert clustering is only valid for cow table.
+  }
+
+  @Override
+  public void testMergeWithMetaFieldsMode(MetaFieldsMode mode, String storageLayout, String mergeHandleClass) {
+    // These tests exercise COW merge handles; MOR does not support selective metadata modes.
+  }
+
+  @Override
+  public void testMergeWithMultiplePartitionFieldsAndMetaFieldsMode(
+      MetaFieldsMode mode, String storageLayout, String mergeHandleClass) {
+    // These tests exercise COW merge handles; MOR does not support selective metadata modes.
   }
 
   @Test

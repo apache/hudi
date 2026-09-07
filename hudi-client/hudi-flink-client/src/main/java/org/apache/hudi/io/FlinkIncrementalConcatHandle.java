@@ -57,10 +57,11 @@ public class FlinkIncrementalConcatHandle<T, I, K, O>
    */
   @Override
   public void write(HoodieRecord oldRecord) {
-    HoodieSchema oldSchema = config.populateMetaFields() ? writeSchemaWithMetaFields : writeSchema;
-    String key = oldRecord.getRecordKey(oldSchema, keyGeneratorOpt);
+    // HoodieMergeHelper supplies metadata columns even when NONE leaves their values null.
+    HoodieSchema oldSchema = writeSchemaWithMetaFields;
+    String key = getRecordKey(oldRecord, oldSchema);
     try {
-      fileWriter.write(key, oldRecord, writeSchema);
+      fileWriter.write(key, oldRecord, oldSchema);
     } catch (IOException | RuntimeException e) {
       String errMsg = String.format(
           "Failed to write old record into new file for key %s from old file %s to new file %s with writerSchema %s",

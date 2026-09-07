@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -80,6 +81,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
   private final String fileId;
   private final boolean preserveHoodieMetadata;
   private final boolean skipMetadataWrite;
+  private final MetaFieldsMode metaFieldsMode;
   // The schema (with meta fields appended when required) used to create the file writer.
   private final HoodieSchema writerSchema;
   private final HoodieStorage storage;
@@ -105,6 +107,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
     this.newRecordLocation = new HoodieRecordLocation(instantTime, fileId);
     this.preserveHoodieMetadata = preserveHoodieMetadata;
     this.skipMetadataWrite = skipMetadataWrite;
+    this.metaFieldsMode = writeConfig.getMetaFieldsMode();
     this.writerSchema = schema;
     this.currTimer = HoodieTimer.start();
     this.storage = table.getStorage();
@@ -149,14 +152,26 @@ public class HoodieRowDataCreateHandle implements Serializable {
       String commitInstant;
       RowData rowData;
       if (!skipMetadataWrite) {
-        seqId = preserveHoodieMetadata
-            ? record.getString(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD).toString()
-            : HoodieRecord.generateSequenceId(instantTime, taskPartitionId, SEQGEN.getAndIncrement());
-        commitInstant = preserveHoodieMetadata
-            ? record.getString(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD).toString()
-            : instantTime;
-        rowData = HoodieRowDataCreation.create(commitInstant, seqId, recordKey, partitionPath, path.getName(),
-            record, writeConfig.allowOperationMetadataField(), preserveHoodieMetadata);
+        if (metaFieldsMode == MetaFieldsMode.ALL) {
+          seqId = preserveHoodieMetadata
+              ? record.getString(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD).toString()
+              : HoodieRecord.generateSequenceId(instantTime, taskPartitionId, SEQGEN.getAndIncrement());
+          commitInstant = preserveHoodieMetadata
+              ? record.getString(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD).toString()
+              : instantTime;
+          rowData = HoodieRowDataCreation.create(commitInstant, seqId, recordKey, partitionPath, path.getName(),
+              record, writeConfig.allowOperationMetadataField(), preserveHoodieMetadata);
+        } else if (metaFieldsMode == MetaFieldsMode.NONE) {
+          rowData = HoodieRowDataCreation.create(null, null, null, null, null,
+              record, writeConfig.allowOperationMetadataField(), preserveHoodieMetadata);
+        } else {
+          commitInstant = !metaFieldsMode.isCommitTimePopulated() ? null : preserveHoodieMetadata
+              ? record.getString(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD).toString()
+              : instantTime;
+          rowData = HoodieRowDataCreation.create(commitInstant, null, null, null,
+              metaFieldsMode.isFileNamePopulated() ? path.getName() : null,
+              record, writeConfig.allowOperationMetadataField(), preserveHoodieMetadata);
+        }
       } else {
         rowData = record;
       }
