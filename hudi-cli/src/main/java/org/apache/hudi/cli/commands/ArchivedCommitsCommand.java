@@ -47,6 +47,8 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.avro.file.DataFileStream;
+import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.specific.SpecificData;
@@ -56,6 +58,7 @@ import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -320,7 +323,7 @@ public class ArchivedCommitsCommand {
                   .deepCopy(HoodieCommitMetadata.SCHEMA$, r.get("hoodieCommitMetadata"));
               final String instantTime = r.get("commitTime").toString();
               final String action = r.get("actionType").toString();
-              return metadata.getPartitionToWriteStats().values().stream().flatMap(hoodieWriteStats -> hoodieWriteStats.stream().map(hoodieWriteStat -> {
+              return sortByKey(metadata.getPartitionToWriteStats()).values().stream().flatMap(hoodieWriteStats -> hoodieWriteStats.stream().map(hoodieWriteStat -> {
                 List<Comparable> row = new ArrayList<>();
                 row.add(action);
                 row.add(instantTime);
@@ -379,9 +382,10 @@ public class ArchivedCommitsCommand {
       return new String(details.get(), StandardCharsets.UTF_8);
     }
     try {
-      // only the actions TimelineArchiverV2 archives can reach here, and it archives completed
-      // compaction as commit, completed log compaction as deltacommit and clustering as
-      // replacecommit; savepoints are never archived
+      // TimelineArchiverV2 writes only the actions with a typed reader below, but the upgrade to the
+      // LSM timeline copies every entry of a legacy archive across, savepoints, compaction plans and
+      // index metadata included, and takes an entry written before the action state was recorded as
+      // completed. Every such payload is an Avro file that carries its own schema
       switch (instant.getAction()) {
         case HoodieTimeline.CLEAN_ACTION:
           return archivedTimeline.readCleanMetadata(instant).toString();
@@ -393,10 +397,21 @@ public class ArchivedCommitsCommand {
         case HoodieTimeline.REPLACE_COMMIT_ACTION:
           return sortPartitions(archivedTimeline.readReplaceCommitMetadataToAvro(instant)).toString();
         default:
-          throw new HoodieException("Unexpected action type: " + instant.getAction());
+          return readAvroPayload(details.get());
       }
     } catch (IOException e) {
       throw new HoodieException("Failed to read the archived metadata of instant " + instant, e);
+    }
+  }
+
+  /**
+   * Renders an archived payload through the schema embedded in it, which is the rendering the
+   * typed Avro records give of themselves.
+   */
+  private static String readAvroPayload(byte[] payload) throws IOException {
+    try (DataFileStream<GenericRecord> reader =
+             new DataFileStream<>(new ByteArrayInputStream(payload), new GenericDatumReader<>())) {
+      return reader.hasNext() ? reader.next().toString() : "{}";
     }
   }
 

@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
+import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.TableHeader;
@@ -29,11 +30,14 @@ import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.cli.testutils.HoodieTestCommitUtilities;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
+import org.apache.hudi.client.timeline.ActiveActionWithDetails;
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
+import org.apache.hudi.client.timeline.LSMTimelineWriter;
 import org.apache.hudi.client.timeline.TimelineArchiverV1;
 import org.apache.hudi.client.timeline.TimelineArchiverV2;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
@@ -45,13 +49,17 @@ import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.MetadataConversionUtils;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 
@@ -267,6 +275,44 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
   }
 
   /**
+   * The upgrade to the LSM timeline copies every entry of a legacy archive across, so the archived
+   * timeline can hold actions that TimelineArchiverV2 never writes, such as a savepoint. Their
+   * payload renders through the schema it carries instead of failing the listing.
+   */
+  @Test
+  public void testShowCommitsRendersActionsWithoutTypedReader() throws Exception {
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+    HoodieSavepointMetadata savepointMetadata = TimelineMetadataUtils.convertSavepointMetadata(
+        "user", "savepoint copied across by the upgrade",
+        Collections.singletonMap(DEFAULT_FIRST_PARTITION_PATH, Collections.singletonList("file-1")));
+    HoodieInstant savepoint = metaClient.getInstantGenerator().createNewInstant(
+        HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "099", "099");
+    byte[] payload = TimelineMetadataUtils.serializeAvroMetadata(savepointMetadata, HoodieSavepointMetadata.class).get();
+    HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath)
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
+        .withMarkersType("DIRECT").build();
+    LSMTimelineWriter.getInstance(cfg, new LocalTaskContextSupplier(), metaClient).write(
+        Collections.singletonList(ActiveActionWithDetails.fromInstantAndDetails(
+            Collections.singletonList(Pair.of(savepoint, Option.of(payload))))),
+        Option.empty(), Option.empty());
+
+    Object cmdResult = shell.evaluate(() -> "show archived commits --skipMetadata false --limit 0");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(cmdResult));
+
+    TableHeader header = new TableHeader().addTableHeaderField("CommitTime").addTableHeaderField("CommitType")
+        .addTableHeaderField("CommitDetails");
+    final List<Comparable[]> rows = new ArrayList<>();
+    rows.add(new Comparable[] {"099", "savepoint", savepointMetadata});
+    rows.add(new Comparable[] {"100", "commit", commitDetails("100")});
+    rows.add(new Comparable[] {CLEAN_INSTANT, "clean", cleanMetadata});
+    rows.add(new Comparable[] {REPLACE_COMMIT_INSTANT, "replacecommit", orderedAvroReplaceCommitMetadata()});
+    rows.add(new Comparable[] {"103", "commit", commitDetails("103")});
+    String expected = removeNonWordAndStripSpace(
+        HoodiePrintHelper.print(header, new HashMap<>(), "", false, 0, false, rows));
+    assertEquals(expected, removeNonWordAndStripSpace(cmdResult.toString()));
+  }
+
+  /**
    * Test for both show archived commands against a table created at version 6, whose archived
    * instants live in the legacy log format under the archive folder instead of in an LSM
    * timeline.
@@ -316,7 +362,8 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
 
     // The pre table version 8 archive keeps one entry per instant state. The requested entry
     // of a commit carries no metadata and the inflight one only the in-progress stats, so the
-    // legacy stats reader renders the completed entry of each archived instant
+    // legacy stats reader renders the completed entry of each archived instant, with its stat
+    // rows ordered by partition path like the archived timeline path
     final List<Comparable[]> statsRows = new ArrayList<>();
     for (String instant : Arrays.asList("100", "101")) {
       statsRows.addAll(writeStatRows("commit", instant));

@@ -56,7 +56,9 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.testutils.Assertions;
 
+import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.logging.log4j.Level;
@@ -293,24 +295,32 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
       out.write(plan, 0, plan.length / 2);
     }
 
+    // A plan whose writer was killed between opening and closing the Avro container, which leaves a
+    // complete header and no record behind
+    try (DataFileWriter<HoodieCleanerPlan> writer =
+             new DataFileWriter<>(new SpecificDatumWriter<>(HoodieCleanerPlan.class))) {
+      writer.create(HoodieCleanerPlan.getClassSchema(),
+          metaClient.getStorage().create(requestedCleanPath(metaClient, "105"), true));
+    }
+
     // A plan that decodes, which the command has to leave in place
-    FileCreateUtils.createRequestedCleanFile(metaClient, "105", validCleanerPlan());
+    FileCreateUtils.createRequestedCleanFile(metaClient, "106", validCleanerPlan());
 
     // reload meta client
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    // first, there are six pending instants
-    assertEquals(6, metaClient.getActiveTimeline().filterInflightsAndRequested().countInstants());
+    // first, there are seven pending instants
+    assertEquals(7, metaClient.getActiveTimeline().filterInflightsAndRequested().countInstants());
 
     Object cleanResult = shell.evaluate(() -> "repair corrupted clean files");
     assertTrue(ShellEvaluationResultUtil.isSuccess(cleanResult));
 
     // reload meta client
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    // the empty and the truncated plans are gone and the readable one is untouched
+    // the empty, the truncated and the record-less plans are gone and the readable one is untouched
     List<HoodieInstant> remaining =
         metaClient.getActiveTimeline().filterInflightsAndRequested().getInstants();
     assertEquals(1, remaining.size());
-    assertEquals("105", remaining.get(0).requestedTime());
+    assertEquals("106", remaining.get(0).requestedTime());
   }
 
   /**

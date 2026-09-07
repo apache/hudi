@@ -228,13 +228,15 @@ public class RepairsCommand {
   }
 
   /**
-   * Decodes a clean plan held in memory, which fails only on the content itself.
+   * Decodes a clean plan held in memory, which fails only on the content itself: bytes that are not
+   * an Avro file or that stop short fail the read, and an Avro container that holds no record, which
+   * a writer killed between opening and closing it leaves behind, fails the serde's argument check.
    */
   private static boolean isReadableCleanerPlan(HoodieTableMetaClient client, byte[] plan) {
     try {
       CleanerUtils.getCleanerPlan(client, new ByteArrayInputStream(plan));
       return true;
-    } catch (IOException | AvroRuntimeException e) {
+    } catch (IOException | AvroRuntimeException | IllegalArgumentException e) {
       return false;
     }
   }
