@@ -489,15 +489,17 @@ public class HoodieMultiTableStreamer {
    * Otherwise the tables are synced sequentially, one after another.
    */
   public void sync() {
-    if (continuousMode) {
-      syncContinuously();
-    } else {
-      syncSequentially();
-    }
-
-    log.info("Ingestion was successful for topics: {}", successTables);
-    if (!failedTables.isEmpty()) {
-      log.info("Ingestion failed for topics: {}", failedTables);
+    try {
+      if (continuousMode) {
+        syncContinuously();
+      } else {
+        syncSequentially();
+      }
+    } finally {
+      log.info("Ingestion was successful for topics: {}", successTables);
+      if (!failedTables.isEmpty()) {
+        log.info("Ingestion failed for topics: {}", failedTables);
+      }
     }
   }
 
@@ -508,13 +510,12 @@ public class HoodieMultiTableStreamer {
         streamer = new HoodieStreamer(context.getConfig(), jssc, Option.ofNullable(context.getProperties()));
         streamer.sync();
         successTables.add(Helpers.getTableWithDatabase(context));
-        streamer.shutdownGracefully();
       } catch (Exception e) {
         log.error("error while running MultiTableDeltaStreamer for table: {}", context.getTableName(), e);
         failedTables.add(Helpers.getTableWithDatabase(context));
       } finally {
         if (streamer != null) {
-          streamer.shutdownGracefully();
+          shutdownQuietly(streamer, context);
         }
       }
     }
@@ -558,14 +559,16 @@ public class HoodieMultiTableStreamer {
                 successTables.add(Helpers.getTableWithDatabase(context));
               }
             } catch (Exception e) {
-              log.error("error while running MultiTableDeltaStreamer for table: {}", context.getTableName(), e);
-              failedTables.add(Helpers.getTableWithDatabase(context));
+              String table = Helpers.getTableWithDatabase(context);
+              log.error("error while running MultiTableDeltaStreamer for table: {}", table, e);
+              failedTables.add(table);
               if (failFastOnContinuousMode) {
-                throw new CompletionException(e);
+                // Name the table so the thrown exception identifies the culprit, not the siblings torn down after it.
+                throw new HoodieException("Table sync failed in continuous mode for table: " + table, e);
               }
             } finally {
               if (streamer != null) {
-                streamer.shutdownGracefully();
+                shutdownQuietly(streamer, context);
               }
             }
           }, executor)).collect(Collectors.toList());
@@ -576,7 +579,6 @@ public class HoodieMultiTableStreamer {
       } else {
         CompletableFuture.allOf(tableFutures.toArray(new CompletableFuture[0])).join();
       }
-      log.info("Successful tables: {}, Failed tables: {}", successTables, failedTables);
     } finally {
       // Wait for every worker thread to finish (including its finally cleanup) before returning, so sync() does not
       // return while a table is still writing and main() then stops the shared Spark context under it.
@@ -605,6 +607,19 @@ public class HoodieMultiTableStreamer {
       // shutdownStreamers only interrupts; the executor teardown in syncContinuously() waits for the siblings to stop.
       shutdownStreamers(streamerInstances);
       throw new HoodieException("Fail fast is enabled and a table sync failed in continuous mode.", cause);
+    }
+  }
+
+  /**
+   * Releases a streamer's resources, logging rather than propagating a failure to do so. Closing can throw, and this
+   * runs in a {@code finally} on the failure path where escaping would mask the table failure and, in
+   * {@link #syncSequentially()}, abort the tables not synced yet.
+   */
+  private static void shutdownQuietly(HoodieStreamer streamer, TableExecutionContext context) {
+    try {
+      streamer.shutdownGracefully();
+    } catch (Exception e) {
+      log.warn("error while shutting down the streamer for table: {}", context.getTableName(), e);
     }
   }
 

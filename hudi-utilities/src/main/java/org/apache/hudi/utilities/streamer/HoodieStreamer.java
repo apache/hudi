@@ -220,7 +220,10 @@ public class HoodieStreamer implements Serializable {
     });
   }
 
-  // Interrupts an in-progress ingestion, unlike shutdownGracefully() which lets the current round finish.
+  /**
+   * Interrupts an in-progress ingestion, unlike {@link #shutdownGracefully()} which lets the current round finish.
+   * Deliberately does not close: the sync is still running, and the thread owning it releases resources on return.
+   */
   public void shutdownForcefully() {
     ingestionService.ifPresent(ds -> {
       if (!ds.isShutdown()) {
