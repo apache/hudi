@@ -830,7 +830,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
               String.format("Condition was not met within %d seconds. %s", timeoutInSecs, detail), cause);
         }
       } finally {
-        // this used to leak the polling thread on every call, and it is called by every continuous-mode test
+        // stop the polling thread: this method runs once per continuous-mode test, so a leak accumulates
         executor.shutdownNow();
       }
     }

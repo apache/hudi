@@ -49,8 +49,8 @@ class TestWaitTillCondition {
 
   /**
    * The helper polls every 2s, so the timeout has to leave room for at least one evaluation to be recorded.
-   * 5s is the same margin {@link #pollingStopsOnceTheWaitHasGivenUp} already relies on, and keeps the four
-   * tests in this class from spending half a minute asleep in the shared utilities job.
+   * 5s is enough for that, and keeps the six tests in this class from spending half a minute asleep in the
+   * shared utilities job.
    */
   private static final int CONDITION_TIMEOUT_SECS = 5;
 
@@ -88,7 +88,7 @@ class TestWaitTillCondition {
             ignored -> {
               polls.incrementAndGet();
               throw new AssertionError("never true");
-            }, RUNNING, 5));
+            }, RUNNING, CONDITION_TIMEOUT_SECS));
 
     int pollsWhenItGaveUp = polls.get();
     assertTrue(pollsWhenItGaveUp > 0,
