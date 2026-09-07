@@ -93,6 +93,7 @@ import java.util.concurrent.ExecutionException;
 import static org.apache.hudi.aws.testutils.GlueTestUtil.glueSyncProps;
 import static org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_TABLE_NAME_KEY;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_COMMENT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
@@ -212,23 +213,44 @@ class TestAWSGlueSyncClient {
    */
   @Test
   void testCreateTableCarriesColumnCommentsOnTheFirstSync() {
-    String tableName = "testTable";
-    HoodieSchema storageSchema = GlueTestUtil.getSimpleSchema();
+    Map<String, String> commentsByName = createTableAndCaptureColumnComments(true);
+    assertEquals(GlueTestUtil.NAME_FIELD_DOC, commentsByName.get("name"),
+        "a column whose Avro field carries a doc must be created with that comment");
+    assertEquals("", commentsByName.get("id"), "a column with no doc keeps an empty comment");
+  }
+
+  /** The other half of the gate: with sync_comment off, which is the default, no comment is written. */
+  @Test
+  void testCreateTableLeavesCommentsEmptyWhenCommentSyncIsOff() {
+    Map<String, String> commentsByName = createTableAndCaptureColumnComments(false);
+    assertEquals("", commentsByName.get("name"),
+        "with hoodie.datasource.hive_sync.sync_comment off, the Avro doc must not be written");
+  }
+
+  /**
+   * Builds a client with sync_comment set as given, creates the table, and returns the comments on the
+   * captured CreateTableRequest keyed by column name. A dedicated client rather than the shared fixture,
+   * so flipping the config does not leak into the other tests in this class.
+   */
+  private Map<String, String> createTableAndCaptureColumnComments(boolean syncComment) {
+    TypedProperties props = new TypedProperties();
+    props.putAll(GlueTestUtil.glueSyncProps);
+    props.setProperty(HIVE_SYNC_COMMENT.key(), String.valueOf(syncComment));
+    AWSGlueCatalogSyncClient client = new AWSGlueCatalogSyncClient(
+        mockAwsGlue, mockSts, new HiveSyncConfig(props), GlueTestUtil.getMetaClient());
+
     Mockito.when(mockAwsGlue.getTable(any(GetTableRequest.class)))
         .thenReturn(CompletableFuture.completedFuture(GetTableResponse.builder().build()));
     Mockito.when(mockAwsGlue.createTable(any(CreateTableRequest.class)))
         .thenReturn(CompletableFuture.completedFuture(CreateTableResponse.builder().build()));
 
-    awsGlueSyncClient.createOrReplaceTable(tableName, storageSchema, "inputFormat", "outputFormat", "serde",
-        new HashMap<>(), new HashMap<>());
+    client.createOrReplaceTable("testTable", GlueTestUtil.getSimpleSchema(), "inputFormat", "outputFormat",
+        "serde", new HashMap<>(), new HashMap<>());
 
     ArgumentCaptor<CreateTableRequest> captor = ArgumentCaptor.forClass(CreateTableRequest.class);
     verify(mockAwsGlue, times(1)).createTable(captor.capture());
-    Map<String, String> commentsByName = captor.getValue().tableInput().storageDescriptor().columns().stream()
+    return captor.getValue().tableInput().storageDescriptor().columns().stream()
         .collect(HashMap::new, (m, c) -> m.put(c.name(), c.comment()), HashMap::putAll);
-    assertEquals(GlueTestUtil.NAME_FIELD_DOC, commentsByName.get("name"),
-        "a column whose Avro field carries a doc must be created with that comment");
-    assertEquals("", commentsByName.get("id"), "a column with no doc keeps an empty comment");
   }
 
   /**
