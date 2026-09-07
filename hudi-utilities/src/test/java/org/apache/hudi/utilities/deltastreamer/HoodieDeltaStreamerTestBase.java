@@ -767,15 +767,15 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
       return lastInstant;
     }
 
+    /** Bound for {@link #waitFor}; generous, since it only exists to stop a hung poll running forever. */
+    private static final long WAIT_FOR_TIMEOUT_SECS = 120;
+
     /**
      * Polls {@code condition} until it holds, the deltastreamer future finishes, or the timeout expires.
      *
      * <p>On timeout the last error the condition threw is attached to the failure, so the report names the
      * assertion that never held rather than only this method.
      */
-    /** Bound for {@link #waitFor}; generous, since it only exists to stop a hung poll running forever. */
-    private static final long WAIT_FOR_TIMEOUT_SECS = 120;
-
     static void waitTillCondition(Function<Boolean, Boolean> condition, Future dsFuture, long timeoutInSecs) throws Exception {
       AtomicReference<Throwable> lastError = new AtomicReference<>();
       AtomicInteger completedEvaluations = new AtomicInteger();
