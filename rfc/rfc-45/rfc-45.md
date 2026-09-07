@@ -154,7 +154,7 @@ Further, suppose there were two inflight writers Writer1 and Writer2 (with
 inflight instants `t1` and `t2` respectively) while the indexing was requested
 or inflight. In this case, the writers will check for pending index action and
 find a pending instant `t3`. Now, if the metadata index creation is pending,
-which means indexer has already intialized a filegroup, then each writer will
+which means indexer has already initialized a filegroup, then each writer will
 create log files in the same filegroup for the metadata index update. This will
 happen within the existing data table lock.
 
@@ -358,7 +358,7 @@ the data table.
 
 - If we are changing behavior how will we phase out the older behavior?
 
-The changes will be backward-compatible and if the async indexing is diabled
+The changes will be backward-compatible and if the async indexing is disabled
 then the existing behavior of MDT creation and updates will be used.
 
 - If we need special migration tools, describe them here.

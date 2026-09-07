@@ -116,7 +116,7 @@ The key points here are:
 1. Hudi Writers continue to use the native file system management. This means the way Hudi organizes files as file-groups and file-slices and Hudi's index for writing will continue to be the same.
 2. Hudi will continue to record actions in timeline (.hoodie/timeline).
 3. The external table format will be configured as part of table properties to ensure all writers can recognize it.
-4. When each of Hudi's actions (write, clean, rollback,..) complete, Hudi will call ther external table format plugin. It is the plugin's responsibility to record necessary metadata for external format readers to query this table. 
+4. When each of Hudi's actions (write, clean, rollback,..) complete, Hudi will call the external table format plugin. It is the plugin's responsibility to record necessary metadata for external format readers to query this table. 
 5. Hudi will use the external table format plugin's timeline implementation which uses the state stored in its metadata as the source of truth. For example, an iceberg plugin needs to create a manifest file when action completes and provides a timeline that honors the state in its snapshot files. Hudi uses this timeline to determine what actions completed and what failed (for rollback). 
 6. The external plugin also needs to provide LockProvider and Conflict Resolution implementations that allows the concurrency controls supported by the external table format to be exercised (for example: optimistic concurrency control).
 7. The plugin also provides capability to allow its metadata to be used by the Hudi writer.
