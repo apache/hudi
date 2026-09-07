@@ -380,6 +380,22 @@ public class TestHoodieSchema {
     ), complexNonNullType.getTypes());
 
     assertSame(complexNonNullType, complexNonNullType.getNonNullType());
+
+    // isComplexUnion() is what a walker checks before recursing on getNonNullType()
+    assertTrue(union.isComplexUnion());
+    assertTrue(unionWithoutNull.isComplexUnion());
+    assertTrue(complexUnion.isComplexUnion());
+    assertFalse(HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.STRING)).isComplexUnion());
+    assertFalse(HoodieSchema.createUnion(HoodieSchema.create(HoodieSchemaType.STRING), HoodieSchema.create(HoodieSchemaType.NULL)).isComplexUnion());
+    assertFalse(HoodieSchema.create(HoodieSchemaType.STRING).isComplexUnion());
+
+    // A lone branch has no null to strip and comes back as-is, still a union; null alone has nothing left
+    HoodieSchema loneBranch = HoodieSchema.createUnion(HoodieSchema.create(HoodieSchemaType.STRING));
+    assertSame(loneBranch, loneBranch.getNonNullType());
+    assertTrue(loneBranch.isComplexUnion());
+    HoodieSchema nullOnly = HoodieSchema.createUnion(HoodieSchema.create(HoodieSchemaType.NULL));
+    assertThrows(IllegalArgumentException.class, nullOnly::getNonNullType);
+    assertTrue(nullOnly.isComplexUnion());
   }
 
   @Test

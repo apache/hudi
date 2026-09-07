@@ -266,6 +266,92 @@ class TestSparkSchemaTransformUtils {
   }
 
   @Test
+  def testGenerateNestedPruningProjection_nestedStructNarrowedByName(): Unit = {
+    // Input: (id: int, choice: struct<member0: string, member1: int, member2: long>), the member struct a
+    // union comes back as from the reader
+    val inputSchema = StructType(Seq(
+      StructField("id", IntegerType, nullable = false),
+      StructField("choice", StructType(Seq(
+        StructField("member0", StringType, nullable = true),
+        StructField("member1", IntegerType, nullable = true),
+        StructField("member2", LongType, nullable = true)
+      )), nullable = true)
+    ))
+
+    // Target keeps the last two members only, so a positional read of the struct would be off by one
+    val targetSchema = StructType(Seq(
+      StructField("id", IntegerType, nullable = false),
+      StructField("choice", StructType(Seq(
+        StructField("member1", IntegerType, nullable = true),
+        StructField("member2", LongType, nullable = true)
+      )), nullable = true)
+    ))
+
+    assertTrue(SparkSchemaTransformUtils.needsNestedPruning(inputSchema, targetSchema))
+    // The other direction is padding, not pruning
+    assertFalse(SparkSchemaTransformUtils.needsNestedPruning(targetSchema, inputSchema))
+
+    val projection = SparkSchemaTransformUtils.generateNestedPruningProjection(inputSchema, targetSchema)
+
+    val outputRow = projection.apply(new GenericInternalRow(Array[Any](
+      1,
+      new GenericInternalRow(Array[Any](UTF8String.fromString("a1"), 7, 100L))
+    )))
+    assertEquals(2, outputRow.numFields)
+    assertEquals(1, outputRow.getInt(0))
+    val choice = outputRow.getStruct(1, 2)
+    assertEquals(7, choice.getInt(0))
+    assertEquals(100L, choice.getLong(1))
+
+    // A null struct stays null instead of coming back as a struct of nulls
+    val nullRow = projection.apply(new GenericInternalRow(Array[Any](2, null)))
+    assertTrue(nullRow.isNullAt(1), "choice should stay NULL")
+  }
+
+  @Test
+  def testGenerateNestedPruningProjection_arrayAndMapOfStructs(): Unit = {
+    val wideElement = StructType(Seq(
+      StructField("k", StringType, nullable = true),
+      StructField("v", StringType, nullable = true)
+    ))
+    val narrowElement = StructType(Seq(StructField("v", StringType, nullable = true)))
+    val inputSchema = StructType(Seq(
+      StructField("tags", ArrayType(wideElement, containsNull = true), nullable = true),
+      StructField("props", MapType(StringType, wideElement, valueContainsNull = true), nullable = true)
+    ))
+    val targetSchema = StructType(Seq(
+      StructField("tags", ArrayType(narrowElement, containsNull = true), nullable = true),
+      StructField("props", MapType(StringType, narrowElement, valueContainsNull = true), nullable = true)
+    ))
+
+    assertTrue(SparkSchemaTransformUtils.needsNestedPruning(inputSchema, targetSchema))
+    val projection = SparkSchemaTransformUtils.generateNestedPruningProjection(inputSchema, targetSchema)
+
+    val element = new GenericInternalRow(Array[Any](UTF8String.fromString("k0"), UTF8String.fromString("v0")))
+    val outputRow = projection.apply(new GenericInternalRow(Array[Any](
+      ArrayData.toArrayData(Array[Any](element)),
+      new ArrayBasedMapData(ArrayData.toArrayData(Array[Any](UTF8String.fromString("m0"))), ArrayData.toArrayData(Array[Any](element)))
+    )))
+
+    val tags = outputRow.getArray(0)
+    assertEquals(1, tags.numElements())
+    assertEquals(UTF8String.fromString("v0"), tags.getStruct(0, 1).getUTF8String(0))
+    val props = outputRow.getMap(1)
+    assertEquals(UTF8String.fromString("m0"), props.keyArray().getUTF8String(0))
+    assertEquals(UTF8String.fromString("v0"), props.valueArray().getStruct(0, 1).getUTF8String(0))
+  }
+
+  @Test
+  def testNeedsNestedPruning_ignoresNullabilityAndLeafTypes(): Unit = {
+    val readType = StructType(Seq(StructField("x", IntegerType, nullable = true)))
+    val requestedType = StructType(Seq(StructField("x", IntegerType, nullable = false)))
+    assertFalse(SparkSchemaTransformUtils.needsNestedPruning(readType, requestedType))
+    assertFalse(SparkSchemaTransformUtils.needsNestedPruning(ArrayType(readType), ArrayType(requestedType)))
+    assertFalse(SparkSchemaTransformUtils.needsNestedPruning(StringType, StringType))
+    assertFalse(SparkSchemaTransformUtils.needsNestedPruning(readType, StringType))
+  }
+
+  @Test
   def testFilterSchemaByFileSchema_allFieldsPresent(): Unit = {
     // Both schemas have (id, name, age)
     val requestedSchema = StructType(Seq(

@@ -1382,12 +1382,11 @@ public class HoodieTableMetadataUtil {
     switch (schemaType) {
       case UNION:
         // TODO we need to handle unions in general case as well
-        HoodieSchema nonNullSchema = schema.getNonNullType();
-        if (nonNullSchema.getType() == HoodieSchemaType.UNION) {
-          throw new HoodieNotSupportedException("Unsupported union type " + schema
-              + ": only a union of null and one non-null type is supported");
+        if (schema.isComplexUnion()) {
+          throw new HoodieNotSupportedException(String.format(
+              "Unsupported UNION type %s: Only UNION of a null type and a non-null type is supported", schema));
         }
-        return coerceToComparable(nonNullSchema, val);
+        return coerceToComparable(schema.getNonNullType(), val);
 
       case FIXED:
       case BYTES:
@@ -1510,7 +1509,7 @@ public class HoodieTableMetadataUtil {
 
   public static boolean isColumnTypeSupported(HoodieSchema schema, Option<HoodieRecordType> recordType, HoodieIndexVersion indexVersion) {
     // getNonNullType() strips the null branch of a nullable column, so a UNION still standing after this
-    // is one with two or more non-null branches, which has no single value type to collect stats for.
+    // is a complex one (HoodieSchema#isComplexUnion), which has no single value type to collect stats for.
     HoodieSchema schemaToCheck = schema.getNonNullType();
     if (indexVersion.lowerThan(HoodieIndexVersion.V2)) {
       return isColumnTypeSupportedV1(schemaToCheck, recordType);

@@ -22,7 +22,7 @@ package org.apache.spark.sql.execution.datasources
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.spark.sql.HoodieSchemaUtils
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
-import org.apache.spark.sql.catalyst.expressions.{ArrayTransform, Attribute, AttributeReference, Cast, CreateNamedStruct, CreateStruct, Expression, GetStructField, LambdaFunction, Literal, MapEntries, MapFromEntries, NamedLambdaVariable, UnsafeProjection}
+import org.apache.spark.sql.catalyst.expressions.{ArrayTransform, Attribute, AttributeReference, Cast, CreateNamedStruct, CreateStruct, Expression, GetStructField, If, IsNull, LambdaFunction, Literal, MapEntries, MapFromEntries, NamedLambdaVariable, UnsafeProjection}
 import org.apache.spark.sql.types.{ArrayType, DataType, DateType, DecimalType, DoubleType, FloatType, IntegerType, LongType, MapType, StringType, StructField, StructType, TimestampNTZType}
 
 import scala.util.Try
@@ -33,6 +33,8 @@ import scala.util.Try
  *
  * These utilities are used by file format readers that need to:
  * - Pad missing columns with NULL literals (required for Lance)
+ * - Drop nested fields the reader returns but the scan did not ask for (unions, BLOB and VARIANT are
+ *   read whole)
  * - Handle nested struct/array/map type conversions
  * - Work around Spark unsafe cast issues (float->double, numeric->decimal)
  *
@@ -162,6 +164,92 @@ object SparkSchemaTransformUtils {
 
     case _ =>
       // No padding needed, return expression as-is
+      expr
+  }
+
+  /**
+   * Generate UnsafeProjection that narrows nested structs down to the fields the target names, matched
+   * by name at every depth. The counterpart of [[generateNullPaddingProjection]] for input that is wider
+   * than the target rather than narrower: the file group reader hands back a union (a member0..memberN
+   * struct on the Spark side), a BLOB and a VARIANT whole because pruneDataSchema cannot prune their
+   * inner fields, while Spark's nested schema pruning may have asked for only some of them.
+   *
+   * @param inputSchema Schema of the rows the reader emits
+   * @param targetSchema Schema the scan has to produce (a subset of inputSchema at every depth)
+   * @return UnsafeProjection that drops the nested fields the target does not name
+   */
+  def generateNestedPruningProjection(inputSchema: StructType, targetSchema: StructType): UnsafeProjection = {
+    val inputAttributes = inputSchema.fields.map(f => AttributeReference(f.name, f.dataType, f.nullable)())
+    val inputFieldMap = inputAttributes.map(a => a.name -> a).toMap
+    val expressions = targetSchema.fields.map { field =>
+      val attr = inputFieldMap(field.name)
+      recursivelyPruneExpression(attr, attr.dataType, field.dataType)
+    }
+    GenerateUnsafeProjection.generate(expressions, inputAttributes)
+  }
+
+  /**
+   * Used to determine if [[generateNestedPruningProjection]] has anything to drop.
+   *
+   * @param readType Type of the value the reader emits
+   * @param requestedType Type the scan has to produce
+   * @return true if readType names a struct field, at any depth, that requestedType does not
+   */
+  def needsNestedPruning(readType: DataType, requestedType: DataType): Boolean = (readType, requestedType) match {
+    case (readStruct: StructType, requestedStruct: StructType) =>
+      readStruct.fields.exists(f => requestedStruct.getFieldIndex(f.name).isEmpty) ||
+        requestedStruct.fields.exists { requestedField =>
+          readStruct.getFieldIndex(requestedField.name)
+            .exists(i => needsNestedPruning(readStruct.fields(i).dataType, requestedField.dataType))
+        }
+    case (ArrayType(readElem, _), ArrayType(requestedElem, _)) =>
+      needsNestedPruning(readElem, requestedElem)
+    case (MapType(readKey, readVal, _), MapType(requestedKey, requestedVal, _)) =>
+      needsNestedPruning(readKey, requestedKey) || needsNestedPruning(readVal, requestedVal)
+    case _ => false
+  }
+
+  /**
+   * Recursively rebuild nested struct/array/map values with only the fields the destination names.
+   *
+   * @param expr Source expression
+   * @param srcType Source data type (may have additional nested fields)
+   * @param dstType Destination data type
+   * @return Expression carrying only the nested fields the destination names
+   */
+  private def recursivelyPruneExpression(
+      expr: Expression,
+      srcType: DataType,
+      dstType: DataType
+  ): Expression = (srcType, dstType) match {
+    case (s: StructType, d: StructType) if needsNestedPruning(s, d) =>
+      val children = d.fields.toSeq.flatMap { dstField =>
+        val srcIndex = s.fieldIndex(dstField.name)
+        val child = GetStructField(expr, srcIndex, Some(dstField.name))
+        Seq(Literal(dstField.name), recursivelyPruneExpression(child, s.fields(srcIndex).dataType, dstField.dataType))
+      }
+      val pruned = CreateNamedStruct(children)
+      // CreateNamedStruct is never null, so without this guard a null struct comes back as a struct of nulls
+      If(IsNull(expr), Literal(null, pruned.dataType), pruned)
+
+    case (ArrayType(sElementType, containsNull), ArrayType(dElementType, _))
+        if needsNestedPruning(sElementType, dElementType) =>
+      val lambdaVar = NamedLambdaVariable("element", sElementType, containsNull)
+      val body = recursivelyPruneExpression(lambdaVar, sElementType, dElementType)
+      ArrayTransform(expr, LambdaFunction(body, Seq(lambdaVar)))
+
+    case (MapType(sKeyType, sValType, vnull), MapType(dKeyType, dValType, _))
+        if needsNestedPruning(sKeyType, dKeyType) || needsNestedPruning(sValType, dValType) =>
+      val kv = NamedLambdaVariable("kv", new StructType()
+        .add("key", sKeyType, nullable = false)
+        .add("value", sValType, nullable = vnull), nullable = false)
+      val newKey = recursivelyPruneExpression(GetStructField(kv, 0), sKeyType, dKeyType)
+      val newVal = recursivelyPruneExpression(GetStructField(kv, 1), sValType, dValType)
+      val entry = CreateStruct(Seq(newKey, newVal))
+      MapFromEntries(ArrayTransform(MapEntries(expr), LambdaFunction(entry, Seq(kv))))
+
+    case _ =>
+      // Nothing below this point is wider than requested
       expr
   }
 

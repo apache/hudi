@@ -294,12 +294,11 @@ public enum ValueType {
       case UUID:
         return ValueType.UUID;
       case UNION:
-        HoodieSchema nonNullSchema = schema.getNonNullType();
-        if (nonNullSchema.getType() == HoodieSchemaType.UNION) {
-          throw new IllegalArgumentException("Unsupported union type " + schema
-              + ": only a union of null and one non-null type is supported");
+        if (schema.isComplexUnion()) {
+          throw new IllegalArgumentException(String.format(
+              "Unsupported UNION type %s: Only UNION of a null type and a non-null type is supported", schema));
         }
-        return fromSchema(nonNullSchema);
+        return fromSchema(schema.getNonNullType());
       default:
         throw new IllegalArgumentException("Unsupported type: " + type);
     }

@@ -667,12 +667,11 @@ public final class HoodieSchemaUtils {
 
   private static Option<HoodieSchemaField> findNestedField(HoodieSchema schema, String[] fieldParts, int index) {
     if (schema.getType() == HoodieSchemaType.UNION) {
-      HoodieSchema nonNullSchema = schema.getNonNullType();
-      if (nonNullSchema.getType() == HoodieSchemaType.UNION) {
-        // A union with two or more non-null branches has no single record to descend into
+      if (schema.isComplexUnion()) {
+        // No single record to descend into
         return Option.empty();
       }
-      Option<HoodieSchemaField> notUnion = findNestedField(nonNullSchema, fieldParts, index);
+      Option<HoodieSchemaField> notUnion = findNestedField(schema.getNonNullType(), fieldParts, index);
       if (!notUnion.isPresent()) {
         return Option.empty();
       }
@@ -860,13 +859,12 @@ public final class HoodieSchemaUtils {
       return schema;
     }
 
-    List<HoodieSchema> innerTypes = schema.getTypes();
-    if (innerTypes.size() == 2 && schema.isNullable()) {
+    if (!schema.isComplexUnion()) {
       // this is a basic nullable field so handle it more efficiently
       return schema.getNonNullType();
     }
 
-    HoodieSchema nonNullType = innerTypes.stream()
+    HoodieSchema nonNullType = schema.getTypes().stream()
         .filter(it -> it.getType() != HoodieSchemaType.NULL && Objects.equals(it.getFullName(), fieldSchemaFullName))
         .findFirst()
         .orElse(null);

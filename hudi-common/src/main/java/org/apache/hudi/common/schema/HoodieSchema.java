@@ -1379,13 +1379,28 @@ public class HoodieSchema implements Serializable {
   }
 
   /**
-   * Strips the null branch from a nullable union. For {@code ["null", T]} (in either order) this returns
-   * {@code T}. For a union with two or more non-null branches it returns a union of just those branches,
-   * or this schema when there is no null branch to strip, so the result can itself be a UNION. Callers
-   * that recurse on the result must check for that, or they will recurse forever. Non-union schemas are
-   * returned as-is.
+   * Whether this is a union other than the nullable wrapper of a single type: two or more non-null
+   * branches ({@code [A, B]}, {@code ["null", A, B]}), a lone branch with no null ({@code [T]}), or null
+   * alone ({@code ["null"]}). {@link #getNonNullType()} cannot reduce such a union to one non-null type,
+   * so walkers that need one check this before recursing on it.
+   *
+   * @return true if this is a union with anything other than exactly one null and one non-null branch
+   */
+  public boolean isComplexUnion() {
+    return type == HoodieSchemaType.UNION && !(avroSchema.getTypes().size() == 2 && isNullable());
+  }
+
+  /**
+   * Strips the null branch from a union. {@code ["null", T]} (in either order) yields {@code T}. A union
+   * with two or more non-null branches yields a union of just those branches (this schema itself when
+   * there was no null branch to strip), so the result can still be a UNION. A lone-branch union
+   * {@code [T]} is returned as-is, still a UNION. {@code ["null"]} has nothing left once the null is
+   * stripped and throws. Callers that need one non-null type out of a union check
+   * {@link #isComplexUnion()} first: recursing on this result without it never terminates. Non-union
+   * schemas are returned as-is.
    *
    * @return the non-null schema from a nullable union, a union of the non-null branches, or this schema
+   * @throws IllegalArgumentException if this is the union {@code ["null"]}
    */
   public HoodieSchema getNonNullType() {
     if (type != HoodieSchemaType.UNION) {
