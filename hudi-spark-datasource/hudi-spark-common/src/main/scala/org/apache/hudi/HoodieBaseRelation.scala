@@ -233,8 +233,10 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   /**
    * NOTE: PLEASE READ THIS CAREFULLY
    *
-   * Even though [[HoodieFileIndex]] initializes eagerly listing all of the files w/in the given Hudi table,
-   * this variable itself is _lazy_ (and have to stay that way) which guarantees that it's not initialized, until
+   * Even though [[HoodieFileIndex]] does eager work on construction (it opens the metadata-table reader
+   * and reloads the active timeline, and lists every file in the table when
+   * `hoodie.datasource.read.file.index.listing.mode` is `eager`; it defaults to `lazy`), this variable
+   * itself is _lazy_ (and have to stay that way) which guarantees that it's not initialized, until
    * it's actually accessed
    */
   lazy val fileIndex: HoodieFileIndex =

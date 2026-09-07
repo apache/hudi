@@ -95,9 +95,9 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
    * Instant this query is targeting: the as-of instant when time-travel is requested, otherwise
    * the last instant of the (potentially narrowed) query timeline.
    *
-   * NOTE: This is deliberately a `lazy val` rather than a `def`, so that every split of a single
-   *       query observes the same instant even if [[timeline]] is reloaded in between
-   *       [[collectFileSplits]] and [[composeRDD]]
+   * NOTE: This is deliberately a `lazy val` rather than a `def`, so the instant is captured once
+   *       per relation instance instead of being re-derived from [[timeline]] on each
+   *       [[composeRDD]]. This preserves the behavior of the `lazy val tableState` it replaces.
    */
   protected lazy val targetInstantTime: Option[String] = queryTimestamp
 
