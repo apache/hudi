@@ -673,7 +673,8 @@ public class HoodieTableSource extends FileIndexReader implements
         getParquetConf(this.conf, this.hadoopConf.unwrap()),
         this.conf.get(FlinkOptions.READ_UTC_TIMEZONE),
         this.internalSchemaManager,
-        tableSchema
+        tableSchema,
+        this.conf
     );
   }
 

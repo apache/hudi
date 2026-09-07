@@ -25,15 +25,20 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieRecordReader;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.source.BlobMaterializingIterator;
 import org.apache.hudi.source.ExpressionPredicates.Predicate;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
@@ -50,8 +55,10 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.io.InputSplitAssigner;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
+import org.apache.flink.table.types.logical.RowType;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -201,7 +208,45 @@ public class MergeOnReadInputFormat
         HoodieSchema.parse(tableState.getTableSchema()));
     final HoodieSchema requiredSchema = HoodieSchemaCache.intern(
         HoodieSchema.parse(tableState.getRequiredSchema()));
-    return getSplitRowIterator(split, tableSchema, requiredSchema, mergeType, emitDelete);
+    ClosableIterator<RowData> iter = getSplitRowIterator(split, tableSchema, requiredSchema, mergeType, emitDelete);
+    return maybeMaterialize(iter, requiredSchema, tableState.getRequiredRowType());
+  }
+
+  /**
+   * Wraps {@code iter} with {@link BlobMaterializingIterator} when
+   * {@link FlinkOptions#BLOB_READ_MATERIALIZE} is enabled and the required schema has blob fields.
+   */
+  private ClosableIterator<RowData> maybeMaterialize(
+      ClosableIterator<RowData> iter,
+      HoodieSchema requiredSchema,
+      RowType requiredRowType) {
+    if (!conf.get(FlinkOptions.BLOB_READ_MATERIALIZE)) {
+      return iter;
+    }
+    int[] blobPositions = detectBlobFieldPositions(requiredSchema);
+    if (blobPositions.length == 0) {
+      return iter;
+    }
+    HoodieStorage storage = HoodieStorageUtils.getStorage(
+        conf.get(FlinkOptions.PATH), HadoopFSUtils.getStorageConf(hadoopConf));
+    return new BlobMaterializingIterator(
+        iter,
+        requiredRowType,
+        blobPositions,
+        storage,
+        conf.get(FlinkOptions.BLOB_BATCHING_MAX_GAP_BYTES),
+        conf.get(FlinkOptions.BLOB_BATCHING_LOOKAHEAD_SIZE));
+  }
+
+  private static int[] detectBlobFieldPositions(HoodieSchema schema) {
+    List<HoodieSchemaField> fields = schema.getFields();
+    List<Integer> positions = new ArrayList<>();
+    for (int i = 0; i < fields.size(); i++) {
+      if (fields.get(i).schema().isBlobField()) {
+        positions.add(i);
+      }
+    }
+    return positions.stream().mapToInt(Integer::intValue).toArray();
   }
 
   @Override
