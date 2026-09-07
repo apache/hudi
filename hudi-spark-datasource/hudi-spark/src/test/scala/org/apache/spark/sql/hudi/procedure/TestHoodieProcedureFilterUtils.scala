@@ -159,10 +159,12 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
   }
 
   test("evaluateFilter surfaces an ANSI overflow instead of dropping the row") {
-    // Overflow has to reach the caller under ANSI and yield null without it, the way the same
-    // arithmetic behaves in a query. Swallowing it would drop a row the query would keep.
+    // An overflowing Long addition wraps to a negative without ANSI and raises with it, exactly
+    // as it does in a query. The raise has to reach the caller: swallowing it into "no match"
+    // would report an empty result for a filter the query answers with an error.
     val rows = Seq(scalarRow(1, 1000L))
     withSQLConf("spark.sql.ansi.enabled" -> "false") {
+      // 1000 + Long.MaxValue wraps to a negative, so the row genuinely fails "> 0".
       assertResult(Seq.empty)(keep(rows, "ts + 9223372036854775807 > 0", scalarSchema))
     }
     withSQLConf("spark.sql.ansi.enabled" -> "true") {
@@ -175,21 +177,13 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
   test("evaluateFilter follows ANSI mode when a decimal widening overflows") {
     val schema = schemaOf("big" -> DecimalType(38, 0), "frac" -> DecimalType(38, 18))
     val rows = Seq(Row(new java.math.BigDecimal("1" + "0" * 30), new java.math.BigDecimal("1.5")))
-    if (HoodieSparkUtils.gteqSpark4_0) {
-      // Spark 4 declines to widen a decimal pair that would lose precision, in either ANSI mode,
-      // so the comparison stays on Decimal ordering, which is scale-independent, and keeps the
-      // row. Nothing overflows, so there is no failure to surface.
+    // Spark 3 only. There the widening picks DECIMAL(38,18), and the precision-38 clamp leaves it
+    // 20 integral digits, too few for this 31-digit value, so the cast overflows and the ANSI mode
+    // decides what happens. Spark 4 does not reach an overflow for this pair and its procedure
+    // behaviour here has not been characterised, so nothing is pinned for it.
+    if (!HoodieSparkUtils.gteqSpark4_0) {
       withSQLConf("spark.sql.ansi.enabled" -> "false") {
-        assertResult(rows)(keep(rows, "big > frac", schema))
-      }
-      withSQLConf("spark.sql.ansi.enabled" -> "true") {
-        assertResult(rows)(keep(rows, "big > frac", schema))
-      }
-    } else {
-      // Spark 3 widens to DECIMAL(38,18), which the precision-38 clamp leaves 20 integral digits,
-      // too few for this 31-digit value. The overflow then follows the session's ANSI mode.
-      withSQLConf("spark.sql.ansi.enabled" -> "false") {
-        // The cast yields null and the row drops, the answer Spark SQL gives for the same filter.
+        // The cast yields null and the row drops.
         assertResult(Seq.empty)(keep(rows, "big > frac", schema))
       }
       withSQLConf("spark.sql.ansi.enabled" -> "true") {
@@ -230,6 +224,12 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     assertResult(Right(()))(validate("ts + 1 > 1500"))
     assertResult(Seq(scalarRows.head))(keep(scalarRows, "coalesce(ts, 0) = 1000", scalarSchema))
     assertResult(Right(()))(validate("coalesce(ts, 0) = 1000"))
+    // Divide accepts only Double or Decimal, so an integral pair has to become Double rather
+    // than a wider integral. Otherwise "ts / 2" stays unresolved while "price / 2" resolves.
+    assertResult(Seq(scalarRows(1)))(keep(scalarRows, "ts / 2 > 500", scalarSchema))
+    assertResult(Right(()))(validate("ts / 2 > 500"))
+    assertResult(Seq(scalarRows(1)))(keep(scalarRows, "price / 2 > 5", scalarSchema))
+    assertResult(Right(()))(validate("price / 2 > 5"))
   }
 
   test("evaluateFilter binds quoted column names") {

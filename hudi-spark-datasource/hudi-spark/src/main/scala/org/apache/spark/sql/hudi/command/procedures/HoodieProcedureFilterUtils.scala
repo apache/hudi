@@ -19,10 +19,10 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.analysis.{AnsiTypeCoercion, TypeCoercion, UnresolvedAttribute, UnresolvedFunction}
-import org.apache.spark.sql.catalyst.expressions.{BinaryArithmetic, Cast, Coalesce, EqualNullSafe, Expression, GenericInternalRow, In, Unevaluable}
+import org.apache.spark.sql.catalyst.expressions.{BinaryArithmetic, Cast, Coalesce, Divide, EqualNullSafe, Expression, GenericInternalRow, In, Unevaluable}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.{DataType, DecimalType, NullType, NumericType, StructType}
+import org.apache.spark.sql.types.{DataType, DecimalType, DoubleType, NullType, NumericType, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.util.Locale
@@ -376,6 +376,10 @@ object HoodieProcedureFilterUtils {
         applyTypeCoercion(eqns.left, eqns.right, EqualNullSafe.apply, eqns)
       case in: In =>
         applyInTypeCoercion(in)
+      // Divide is a BinaryArithmetic but accepts only Double or Decimal, so it needs its own
+      // target type and has to be matched before the general arithmetic case below.
+      case divide: Divide =>
+        applyDivideTypeCoercion(divide)
       case arith: BinaryArithmetic =>
         applyArithmeticTypeCoercion(arith)
       case coalesce: Coalesce =>
@@ -556,6 +560,23 @@ object HoodieProcedureFilterUtils {
     widenNumericOperands(Seq(arith.left, arith.right)) match {
       case Some(Seq(widenedLeft, widenedRight)) => arith.withNewChildren(Seq(widenedLeft, widenedRight))
       case _ => arith
+    }
+  }
+
+  /**
+   * Divide only accepts Double or Decimal, so widening its operands to their common numeric type
+   * leaves an integral pair unresolved and "ts / 2 > 500" rejected while "price / 2 > 5" works.
+   * Mirror the analyzer's Division rule instead: promote an integral pair to Double, and let a
+   * pair that already involves a decimal widen the way the other arithmetic does.
+   */
+  private def applyDivideTypeCoercion(divide: Divide): Expression = {
+    val operands = Seq(divide.left, divide.right)
+    if (operands.exists(!_.resolved) || !operands.forall(_.dataType.isInstanceOf[NumericType])) {
+      divide
+    } else if (operands.exists(_.dataType.isInstanceOf[DecimalType])) {
+      applyArithmeticTypeCoercion(divide)
+    } else {
+      divide.withNewChildren(operands.map(operand => castTo(operand, DoubleType)))
     }
   }
 
