@@ -160,10 +160,12 @@ Kerberos authentication success
 
 If you see "Kerberos authentication success" in the command output, it means Kerberos authentication has been successful.
 
-**kerberos kdestroy** is the counterpart: it logs the current user out of the keytab and resets the cached
+**kerberos kdestroy** is the counterpart: it logs the login user out of the keytab and resets the cached
 `UserGroupInformation`, which is what you want before authenticating as a different principal in the same session.
+It only does so when that user holds Kerberos credentials; otherwise it prints `Currently, no user login with
+kerberos, do nothing` and leaves the session alone.
 
-```shell
+```java
 hudi->kerberos kdestroy --krb5conf /etc/krb5.conf
 Destroy Kerberos authentication
 Parameters:
@@ -226,128 +228,9 @@ hudi:trips->connect --path /app/uber/trips
 Metadata for table trips loaded
 ```
 
-Once connected to the table, a lot of other commands become available. The shell has contextual autocomplete help (press TAB) and below is a list of all commands, few of which are reviewed in this section
-
-```shell
-hudi:trips->help
-* ! - Allows execution of operating system (OS) commands
-* // - Inline comment markers (start of line only)
-* ; - Inline comment markers (start of line only)
-* bootstrap index showmapping - Show bootstrap index mapping
-* bootstrap index showpartitions - Show bootstrap indexed partitions
-* bootstrap run - Run a bootstrap action for current Hudi table
-* clean showpartitions - Show partition level details of a clean
-* cleans refresh - Refresh table metadata
-* cleans run - run clean
-* cleans show - Show the cleans
-* clear - Clears the console
-* cls - Clears the console
-* clustering run - Run Clustering
-* clustering schedule - Schedule Clustering
-* clustering scheduleAndExecute - Run Clustering. Make a cluster plan first and execute that plan immediately
-* commit rollback - Rollback a commit
-* commits compare - Compare commits with another Hoodie table
-* commit show_write_stats - Show write stats of a commit
-* commit showfiles - Show file level details of a commit
-* commit showpartitions - Show partition level details of a commit
-* commits refresh - Refresh table metadata
-* commits show - Show the commits
-* commits showarchived - Show the archived commits
-* commits sync - Sync commits with another Hoodie table
-* compaction repair - Renames the files to make them consistent with the timeline as dictated by Hoodie metadata. Use when compaction unschedule fails partially.
-* compaction run - Run Compaction for given instant time
-* compaction schedule - Schedule Compaction
-* compaction scheduleAndExecute - Schedule compaction plan and execute this plan
-* compaction show - Shows compaction details for a specific compaction instant
-* compaction showarchived - Shows compaction details for a specific compaction instant
-* compactions show all - Shows all compactions that are in active timeline
-* compactions showarchived - Shows compaction details for specified time window
-* compaction unschedule - Unschedule Compaction
-* compaction unscheduleFileId - UnSchedule Compaction for a fileId
-* compaction validate - Validate Compaction
-* connect - Connect to a hoodie table
-* create - Create a hoodie table if not present
-* date - Displays the local date and time
-* desc - Describe Hoodie Table properties
-* diff file - Check how file differs across range of commits
-* diff partition - Check how file differs across range of commits. It is meant to be used only for partitioned tables.
-* downgrade table - Downgrades a table
-* exit - Exits the shell
-* export instants - Export Instants and their metadata from the Timeline
-* fetch table schema - Fetches latest table schema
-* hdfsparquetimport - Imports Parquet table to a hoodie table
-* help - List all commands usage
-* kerberos kdestroy - Destroy Kerberos authentication
-* locks audit cleanup - Clean up old audit lock files
-* locks audit disable - Disable storage lock audit service for the current table
-* locks audit enable - Enable storage lock audit service for the current table
-* locks audit status - Show the current status of lock audit service
-* locks audit validate - Validate audit lock files for consistency and integrity
-* marker delete - Delete the marker
-* metadata create - Create the Metadata Table if it does not exist
-* metadata delete - Remove the Metadata Table
-* metadata delete-record-index - Delete the record index from Metadata Table
-* metadata init - Update the metadata table from commits since the creation
-* metadata list-files - Print a list of all files in a partition from the metadata
-* metadata list-partitions - List all partitions from metadata
-* metadata refresh - Refresh table metadata
-* metadata set - Set options for Metadata Table
-* metadata stats - Print stats about the metadata
-* metadata timeline show active - List all instants in active timeline of metadata table
-* metadata timeline show incomplete - List all incomplete instants in active timeline of metadata table
-* metadata validate-files - Validate all files in all partitions from the metadata
-* quit - Exits the shell
-* refresh - Refresh table metadata
-* rename partition - Rename partition. Usage: rename partition --oldPartition <oldPartition> --newPartition <newPartition>
-* repair addpartitionmeta - Add partition metadata to a table, if not present
-* repair corrupted clean files - repair corrupted clean files
-* repair deduplicate - De-duplicate a partition path contains duplicates & produce repaired files to replace with
-* repair deprecated partition - Repair deprecated partition ("default"). Re-writes data from the deprecated partition into __HIVE_DEFAULT_PARTITION__
-* repair migrate-partition-meta - Migrate all partition meta file currently stored in text format to be stored in base file format. See HoodieTableConfig#PARTITION_METAFILE_USE_DATA_FORMAT.
-* repair overwrite-hoodie-props - Overwrite hoodie.properties with provided file. Risky operation. Proceed with caution!
-* repair show empty commit metadata - show failed commits
-* savepoint create - Savepoint a commit
-* savepoint delete - Delete the savepoint
-* savepoint rollback - Savepoint a commit
-* savepoints refresh - Refresh table metadata
-* savepoints show - Show the savepoints
-* script - Parses the specified resource file and executes its commands
-* set - Set spark launcher env to cli
-* show archived commits - Read commits from archived files and show details
-* show archived commit stats - Read commits from archived files and show details
-* show env - Show spark launcher env by key
-* show envs all - Show spark launcher envs
-* show fsview all - Show entire file-system view
-* show fsview latest - Show latest file-system view
-* show logfile metadata - Read commit metadata from log files
-* show logfile records - Read records from log files
-* show restore - Show details of a restore instant
-* show restores - List all restore instants
-* show rollback - Show details of a rollback instant
-* show rollbacks - List all rollback instants
-* stats filesizes - File Sizes. Display summary stats on sizes of files
-* stats wa - Write Amplification. Ratio of how many records were upserted to how many records were actually written
-* sync validate - Validate the sync by counting the number of records
-* system properties - Shows the shell's properties
-* table delete-configs - Delete the supplied table configs from the table.
-* table recover-configs - Recover table configs, from update/delete that failed midway.
-* table set-meta-fields-mode - Set hoodie.meta.fields.mode on an existing table.
-* table update-configs - Update the table configs with configs with provided file.
-* temp_delete - Delete view name
-* temp_query - query against created temp view
-* temp delete - Delete view name
-* temp query - query against created temp view
-* temps_show - Show all views name
-* temps show - Show all views name
-* timeline show active - List all instants in active timeline
-* timeline show incomplete - List all incomplete instants in active timeline
-* trigger archival - trigger archival
-* upgrade table - Upgrades a table
-* utils loadClass - Load a class
-* version - Displays shell version
-
-hudi:trips->
-```
+Once connected to the table, a lot of other commands become available. The shell has contextual
+autocomplete help (press TAB), and `help` lists every command your build actually carries. The
+[Command reference](#command-reference) below documents all of them with their options.
 
 
 ### Inspecting Commits
@@ -671,9 +554,10 @@ savepoints show
 savepoint rollback --savepoint 20220128160245447 --sparkMaster local[2]
 ```
 
-A rollback to a savepoint writes a `restore` instant on the timeline. `show restores` lists them, and `show restore`
-expands a single one into the commits it reverted, which is how you confirm after the fact what a restore actually
-undid.
+A rollback to a savepoint writes a `restore` instant on the timeline. Both `show restores` and `show restore`
+expand a restore into one row per commit it reverted; `show restore` is the same view scoped to a single instant.
+That is how you confirm after the fact what a restore actually undid. Note that `--limit` caps rows rather than
+restores, so one restore that reverted a dozen commits fills the default page on its own.
 
 ```java
 hudi:trips->show restores --limit 10 --includeInflights false
@@ -769,9 +653,13 @@ hudi:trips->metadata lookup-record-index --record_key <key> --partition_path <pa
 
 The `--partition_path` argument is optional for a global RLI (where record keys are unique across all partitions) and required for a partitioned RLI. If `--partition_path` is omitted for a partitioned RLI, the command will return an error. The output columns are `Record key`, `Partition path`, `File Id`, and `Instant time`.
 
-To drop the record index partition from the Metadata Table entirely, for example before rebuilding it:
+To drop the record index partition from the Metadata Table entirely, for example before rebuilding it. Note the
+prerequisite: unlike `metadata delete`, this command runs on a Spark engine context, and that context is only
+created by `metadata create`, `metadata init` or `metadata list-partitions`. Run one of those first in the same
+session, otherwise the command fails on an uninitialised Spark context rather than doing anything:
 
-```shell
+```java
+hudi:trips->metadata list-partitions --sparkMaster local[2]
 hudi:trips->metadata delete-record-index --backup true
 Record Index has been deleted from the Metadata Table and backed up to /user/hive/warehouse/table1/.hoodie/.metadata_record_index_20260831090412345
 ```
@@ -783,8 +671,9 @@ outright, in which case the output is just `Record Index has been deleted from t
 back is to rebuild the index.
 
 Either way the command first flips the partition off in the table config, so readers stop consulting the index before
-the files go away. If the record index partition does not exist, nothing is deleted and the message still prints, with
-`null` in place of the backup path.
+the files go away. If the record index partition does not exist, or if the backup rename fails, the message still
+prints with `null` in place of the backup path, so a `null` there is not by itself confirmation that the partition was
+absent.
 
 ### Change Hudi Table Type
 There are cases we want to change the hudi table type. For example, change COW table to MOR for more efficient and 
@@ -893,9 +782,9 @@ rewriting a single existing file:
 - **Widening is refused outright**, and `--force` does not override it. Widening means the target mode populates a
   meta column the current mode does not. Since earlier files are not rewritten, the table would advertise a column
   that is null for every row written so far, and incremental queries and file-name lookups silently skip exactly
-  those rows. To widen, recreate the table. The CLI uses the same predicate as the write path
-  (`BaseHoodieWriteClient#validateAgainstTableProperties`), so the two cannot disagree about which transitions are
-  legal.
+  those rows. To widen, recreate the table. The comparison the CLI makes is `MetaFieldsMode#isWiderThan`, the same
+  helper the write path uses. Note the write path itself is stricter rather than equivalent: it rejects any writer
+  mode that differs from the table's, and consults `isWiderThan` only to choose the error wording.
 - **Narrowing needs `--force`** (default `false`). It leaves mixed-mode files: old commits keep the old layout, new
   commits use the new one, and incremental and file-pruning semantics differ between the two sets. Passing `--force`
   logs a warning recording the transition and the commit count.
@@ -904,9 +793,10 @@ Neither guard applies to a table with no commits, where the mode can be set free
 
 ### Inspecting the Timeline
 
-`commits show` lists completed commits. The timeline commands show every instant regardless of action and state, which
-is what you want when diagnosing a stuck table: a compaction sitting in `REQUESTED`, or a rollback that never
-completed, never appears in `commits show`.
+`commits show` lists completed commits, and only commit, deltacommit, replacecommit and clustering actions. The
+timeline commands show every instant regardless of action and state, which is what you want when diagnosing a stuck
+table: a compaction sitting in `REQUESTED` never appears in `commits show`, and neither does a rollback, in any
+state.
 
 ```java
 hudi:trips->timeline show active --limit 10
@@ -922,7 +812,7 @@ Both print `Instant`, `Action`, `State`, and the `Requested` / `Inflight` / `Com
 | `--sortBy` | unset | both | Field to sort by. |
 | `--desc` | `false` | both | Reverse the ordering. |
 | `--headeronly` | `false` | both | Print the header only. |
-| `--show-rollback-info` | `false` | both | For rollback instants, also show the instant being rolled back. |
+| `--show-rollback-info` | `false` | both | Annotate the Action column in both directions: `Rolls back ...` on a rollback instant, and `Rolled back by ...` on any instant a rollback targeted. |
 | `--show-time-seconds` | `false` | both | Include seconds in the instant file modification times. |
 | `--with-metadata-table` | `false` | `timeline show active` only | Show the metadata table timeline alongside the data table, adding `MT Action`, `MT State` and the three matching MT time columns. |
 
@@ -980,7 +870,9 @@ default logging configuration you will see the `Empty Commit: ...` lines in the 
 result. It only reports; it does not modify the timeline.
 
 `rename partition` rewrites the data under one partition value into another, as a Spark job, and deletes the old
-partition on success.
+partition on success. It only works on a table with a single partition field: the rewrite looks the partition field
+up by name in the dataframe schema, and on a multi-field table that name is the comma-joined list, so the job fails
+before writing anything.
 
 ```java
 hudi:trips->set --conf SPARK_HOME=<SPARK_HOME>
@@ -995,7 +887,8 @@ placeholder for the null partition value: it rewrites data from the deprecated `
 hudi:trips->repair deprecated partition --sparkMaster local[2]
 ```
 
-Both take `--sparkProperties` (a Spark properties file path, empty by default), `--sparkMaster` (empty by default) and
+Both take `--sparkProperties` (a Spark properties file path, empty by default), `--sparkMaster` (unset by default,
+which means `yarn` -- see the note under the Command reference legend) and
 `--sparkMemory` (`4G` by default). Both read the old partition, rewrite those records under the new partition value,
 and then issue a `delete_partition` write against the old one, so the change goes through the timeline rather than
 behind it. Both are a no-op when the old partition holds no records.
@@ -1068,8 +961,14 @@ otherwise.
 ## Command reference
 
 Every command `hudi-cli` exposes, grouped by area, with its options and their defaults. An option marked
-`(required)` has no default and must be supplied; a value in backticks after an option is its default.
-The sections above cover the commonly used ones in more depth.
+`(required)` has no default and must be supplied; a value in backticks after an option is its default; an option
+listed with neither is optional and unset by default, which for most commands means the empty string reaches the
+command. The sections above cover the commonly used ones in more depth.
+
+One default is worth stating up front because it is not the empty string it looks like: an unset or blank
+`--sparkMaster` resolves to `yarn`. The CLI treats a blank value as absent and falls back to its own default, so
+every `--sparkMaster` shown below without a value runs against YARN unless you pass something. That differs from
+the compaction and marker commands, which show `local` explicitly.
 
 Some entries are aliases of the same command rather than distinct ones. `refresh`, `metadata refresh`,
 `commits refresh`, `cleans refresh` and `savepoints refresh` are five names for one method that reloads the table
@@ -1099,7 +998,7 @@ underscore and space spellings of the same three commands.
 - **`show env`** Show spark launcher env by key.
   <br />Options: `--key` (required)
 - **`show envs all`** Show spark launcher envs.
-- **`table change-table-type`** Change hudi table type to target type: COW or MOR.
+- **`table change-table-type`** Change hudi table type to target type: COW or MOR. Before changing to COW, this command executes all pending compactions and a full compaction if needed, unless told otherwise.
   <br />Options: `--target-type` (required), `--enable-compaction` (`true`), `--parallelism` (`3`), `--sparkMaster` (`local`), `--sparkMemory` (`4G`), `--retry` (`1`), `--propsFilePath`, `--hoodieConfigs`
 - **`table delete-configs`** Delete the supplied table configs from the table.
   <br />Options: `--comma-separated-configs` (required)
@@ -1160,7 +1059,7 @@ underscore and space spellings of the same three commands.
   <br />Options: `--limit` (`10`), `--logFilePathPattern` (required), `--mergeRecords` (`false`)
 - **`stats filesizes`** File Sizes. Display summary stats on sizes of files.
   <br />Options: `--partitionPath` (`*/*/*`), `--limit` (`-1`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`)
-- **`stats wa`** Write Amplification. Ratio of how many records were upserted to how many.
+- **`stats wa`** Write Amplification. Ratio of how many records were upserted to how many records were actually written.
   <br />Options: `--limit` (`-1`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`)
 
 ### Table services
@@ -1172,12 +1071,12 @@ underscore and space spellings of the same three commands.
 - **`cleans show`** Show the cleans.
   <br />Options: `--limit` (`-1`), `--sortBy`, `--startTs`, `--endTs`, `--includeArchivedTimeline` (`false`), `--desc` (`false`), `--headeronly` (`false`)
 - **`clustering run`** Run Clustering.
-  <br />Options: `--sparkMaster` (`SparkUtil.DEFAULT_SPARK_MASTER`), `--sparkMemory` (`4g`), `--parallelism` (`1`), `--retry` (`1`), `--clusteringInstant`, `--propsFilePath`, `--hoodieConfigs`
+  <br />Options: `--sparkMaster` (`yarn`), `--sparkMemory` (`4g`), `--parallelism` (`1`), `--retry` (`1`), `--clusteringInstant`, `--propsFilePath`, `--hoodieConfigs`
 - **`clustering schedule`** Schedule Clustering.
-  <br />Options: `--sparkMaster` (`SparkUtil.DEFAULT_SPARK_MASTER`), `--sparkMemory` (`1g`), `--propsFilePath`, `--hoodieConfigs`
+  <br />Options: `--sparkMaster` (`yarn`), `--sparkMemory` (`1g`), `--propsFilePath`, `--hoodieConfigs`
 - **`clustering scheduleAndExecute`** Run Clustering. Make a cluster plan first and execute that plan immediately.
-  <br />Options: `--sparkMaster` (`SparkUtil.DEFAULT_SPARK_MASTER`), `--sparkMemory` (`4g`), `--parallelism` (`1`), `--retry` (`1`), `--propsFilePath`, `--hoodieConfigs`
-- **`compaction repair`** Renames the files to make them consistent with the timeline as.
+  <br />Options: `--sparkMaster` (`yarn`), `--sparkMemory` (`4g`), `--parallelism` (`1`), `--retry` (`1`), `--propsFilePath`, `--hoodieConfigs`
+- **`compaction repair`** Renames the files to make them consistent with the timeline as dictated by Hoodie metadata. Use when `compaction unschedule` fails partially.
   <br />Options: `--instant` (required), `--parallelism` (`3`), `--sparkMaster` (`local`), `--sparkMemory` (`2G`), `--dryRun` (`false`), `--limit` (`-1`), `--sortBy`, `--desc` (`false`), `--headeronly` (`false`)
 - **`compaction run`** Run Compaction for given instant time.
   <br />Options: `--parallelism` (`3`), `--schemaFilePath`, `--sparkMaster` (`local`), `--sparkMemory` (`4G`), `--retry` (`1`), `--compactionInstant`, `--propsFilePath`, `--hoodieConfigs`
@@ -1215,9 +1114,9 @@ underscore and space spellings of the same three commands.
 - **`repair corrupted clean files`** Repair corrupted clean files.
 - **`repair deduplicate`** De-duplicate a partition path contains duplicates & produce repaired files to replace with.
   <br />Options: `--duplicatedPartitionPath`, `--repairedOutputPath` (required), `--sparkProperties`, `--sparkMaster`, `--sparkMemory` (`4G`), `--dryrun` (`true`), `--dedupeType` (`insert_type`)
-- **`repair deprecated partition`** Repair deprecated partition ("default"). Re-writes data from the deprecated partition into.
+- **`repair deprecated partition`** Repair deprecated partition ("default"). Re-writes data from the deprecated partition into `__HIVE_DEFAULT_PARTITION__`.
   <br />Options: `--sparkProperties`, `--sparkMaster`, `--sparkMemory` (`4G`)
-- **`repair migrate-partition-meta`** Migrate all partition meta file currently stored in text format.
+- **`repair migrate-partition-meta`** Migrate all partition meta files currently stored in text format to be stored in the base file format. See `HoodieTableConfig#PARTITION_METAFILE_USE_DATA_FORMAT`.
   <br />Options: `--dryrun` (`true`)
 - **`repair overwrite-hoodie-props`** Overwrite hoodie.properties with provided file. Risky operation. Proceed with caution!.
   <br />Options: `--new-props-file` (required)
@@ -1243,19 +1142,20 @@ underscore and space spellings of the same three commands.
 ### Metadata table
 
 - **`metadata create`** Create the Metadata Table if it does not exist.
-  <br />Options: `--sparkMaster` (`SparkUtil.DEFAULT_SPARK_MASTER`)
+  <br />Options: `--sparkMaster` (`yarn`)
 - **`metadata delete`** Remove the Metadata Table.
   <br />Options: `--backup` (`true`)
 - **`metadata delete-record-index`** Delete the record index from Metadata Table.
   <br />Options: `--backup` (`true`)
 - **`metadata init`** Update the metadata table from commits since the creation.
-  <br />Options: `--sparkMaster` (`SparkUtil.DEFAULT_SPARK_MASTER`), `--readonly` (`false`)
+  <br />Options: `--sparkMaster` (`yarn`), `--readonly` (`false`)
 - **`metadata list-files`** Print a list of all files in a partition from the metadata.
   <br />Options: `--partition`
 - **`metadata list-partitions`** List all partitions from metadata.
-  <br />Options: `--sparkMaster` (`SparkUtil.DEFAULT_SPARK_MASTER`)
-- **`metadata lookup-record-index`** Print Record index information for a record_key.
-  <br />Options: `--record_key` (required), `--partition_path` (required)
+  <br />Options: `--sparkMaster` (`yarn`)
+- **`metadata lookup-record-index`** Print Record index information for a record_key. For a global RLI only the
+  record key is needed; for a partitioned RLI both the record key and the partition path are required.
+  <br />Options: `--record_key` (required), `--partition_path`
 - **`metadata set`** Set options for Metadata Table.
   <br />Options: `--metadataDir`
 - **`metadata stats`** Print stats about the metadata.
