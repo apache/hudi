@@ -42,6 +42,10 @@ import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowReader;
+import org.apache.arrow.vector.types.FloatingPointPrecision;
+import org.apache.arrow.vector.types.pojo.ArrowType;
+import org.apache.arrow.vector.types.pojo.Field;
+import org.apache.arrow.vector.types.pojo.FieldType;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.apache.flink.table.data.ArrayData;
 import org.apache.flink.table.data.GenericArrayData;
@@ -240,6 +244,32 @@ class TestHoodieRowDataLanceReader {
   }
 
   @Test
+  void testRejectsInvalidVectorArrowTypes() throws Exception {
+    RowType rowType = RowType.of(
+        new LogicalType[] {new ArrayType(false, new FloatType(false))},
+        new String[] {"embedding"});
+    HoodieSchema requestedSchema = HoodieSchemaConverter.convertToSchema(
+        rowType, "vector_record", "embedding:2");
+
+    Field element = new Field(
+        "element", FieldType.notNullable(new ArrowType.FloatingPoint(FloatingPointPrecision.SINGLE)), null);
+    assertInvalidVectorEncoding(
+        requestedSchema,
+        new Field("embedding", FieldType.nullable(new ArrowType.List()), Collections.singletonList(element)),
+        "expected FixedSizeList<Float32|Float64>");
+
+    Field halfElement = new Field(
+        "element", FieldType.notNullable(new ArrowType.FloatingPoint(FloatingPointPrecision.HALF)), null);
+    assertInvalidVectorEncoding(
+        requestedSchema,
+        new Field(
+            "embedding",
+            FieldType.nullable(new ArrowType.FixedSizeList(2)),
+            Collections.singletonList(halfElement)),
+        "expected Float32 or Float64 elements");
+  }
+
+  @Test
   void testReadsMetadataAndClosesIdempotently() throws Exception {
     SimpleBloomFilter bloomFilter = new SimpleBloomFilter(100, 0.01, MURMUR_HASH);
     bloomFilter.add("key1");
@@ -389,6 +419,19 @@ class TestHoodieRowDataLanceReader {
     LanceFileReader reader = mock(LanceFileReader.class);
     when(reader.schema()).thenReturn(new Schema(Collections.emptyList()));
     return reader;
+  }
+
+  private static void assertInvalidVectorEncoding(
+      HoodieSchema requestedSchema, Field field, String expectedMessage) throws Exception {
+    LanceFileReader metadataReader = mock(LanceFileReader.class);
+    when(metadataReader.schema()).thenReturn(new Schema(Collections.singletonList(field)));
+    try (MockedStatic<LanceFileReader> mocked = mockLanceOpen(metadataReader);
+         HoodieRowDataLanceReader reader = new HoodieRowDataLanceReader(PATH, new HoodieConfig())) {
+      HoodieValidationException exception = assertThrows(
+          HoodieValidationException.class,
+          () -> reader.getRowDataIterator(requestedSchema));
+      assertTrue(exception.getMessage().contains(expectedMessage));
+    }
   }
 
   private static MockedStatic<LanceFileReader> mockLanceOpen(LanceFileReader... readers) {

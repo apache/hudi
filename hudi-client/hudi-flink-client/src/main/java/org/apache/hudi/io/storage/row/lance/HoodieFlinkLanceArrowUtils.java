@@ -221,6 +221,9 @@ public final class HoodieFlinkLanceArrowUtils {
 
   private static void validateLanceVector(String fieldName, HoodieSchema.Vector vectorSchema) {
     HoodieSchema.Vector.VectorElementType elementType = vectorSchema.getVectorElementType();
+    // Keep the on-disk encoding aligned with Spark Lance writes. The current lance-spark
+    // VectorUtils.shouldBeFixedSizeList recognizes only Array<Float> and Array<Double>;
+    // an INT8 vector would otherwise be emitted as a variable-size List instead of FixedSizeList.
     if (elementType != HoodieSchema.Vector.VectorElementType.FLOAT
         && elementType != HoodieSchema.Vector.VectorElementType.DOUBLE) {
       throw new HoodieNotSupportedException(

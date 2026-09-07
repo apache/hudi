@@ -58,10 +58,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.avro.HoodieBloomFilterWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY;
 import static org.apache.hudi.common.avro.HoodieBloomFilterWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE;
@@ -217,9 +217,9 @@ public class HoodieRowDataLanceReader implements HoodieRowDataFileReader {
     if (vectorColumnNames.isEmpty()) {
       return HoodieSchemaConverter.convertToSchema(rowType);
     }
-    String vectorColumns = vectorColumnNames.stream()
-        .map(name -> name + ":" + vectorSchemaFromArrow(getTopLevelField(name)).getDimension())
-        .collect(Collectors.joining(","));
+    Map<String, Integer> vectorColumns = new LinkedHashMap<>();
+    vectorColumnNames.forEach(name -> vectorColumns.put(
+        name, vectorSchemaFromField(getTopLevelField(name)).getDimension()));
     return HoodieSchemaConverter.convertToSchema(rowType, "record", vectorColumns);
   }
 
@@ -230,7 +230,7 @@ public class HoodieRowDataLanceReader implements HoodieRowDataFileReader {
         continue;
       }
       HoodieSchema.Vector expected = (HoodieSchema.Vector) fieldSchema;
-      HoodieSchema.Vector actual = vectorSchemaFromArrow(getTopLevelField(field.name()));
+      HoodieSchema.Vector actual = vectorSchemaFromField(getTopLevelField(field.name()));
       if (actual.getDimension() != expected.getDimension()
           || actual.getVectorElementType() != expected.getVectorElementType()) {
         throw new HoodieValidationException(
@@ -242,21 +242,40 @@ public class HoodieRowDataLanceReader implements HoodieRowDataFileReader {
   }
 
   private Field getTopLevelField(String name) {
-    return arrowSchema.getFields().stream()
-        .filter(field -> field.getName().equals(name))
-        .findFirst()
-        .orElseThrow(() -> new HoodieValidationException(
-            "Missing Lance column in file schema: " + name));
+    Field field = arrowSchema.findField(name);
+    if (field == null) {
+      throw new HoodieValidationException("Missing Lance column in file schema: " + name);
+    }
+    return field;
   }
 
-  private static HoodieSchema.Vector vectorSchemaFromArrow(Field field) {
+  private static HoodieSchema.Vector vectorSchemaFromField(Field field) {
+    // Spark Lance currently writes VECTOR columns as FixedSizeList only for FLOAT/DOUBLE.
+    // Restrict restoration to the same types so files have one cross-engine VECTOR contract.
+    if (!(field.getType() instanceof ArrowType.FixedSizeList)
+        || field.getChildren().size() != 1
+        || !(field.getChildren().get(0).getType() instanceof ArrowType.FloatingPoint)) {
+      throw new HoodieValidationException(
+          "Invalid Lance VECTOR encoding for column '" + field.getName()
+              + "': expected FixedSizeList<Float32|Float64> but found " + field);
+    }
+
     ArrowType.FixedSizeList listType = (ArrowType.FixedSizeList) field.getType();
-    ArrowType.FloatingPoint elementType =
-        (ArrowType.FloatingPoint) field.getChildren().get(0).getType();
-    HoodieSchema.Vector.VectorElementType vectorElementType =
-        elementType.getPrecision() == FloatingPointPrecision.SINGLE
-            ? HoodieSchema.Vector.VectorElementType.FLOAT
-            : HoodieSchema.Vector.VectorElementType.DOUBLE;
+    FloatingPointPrecision precision =
+        ((ArrowType.FloatingPoint) field.getChildren().get(0).getType()).getPrecision();
+    HoodieSchema.Vector.VectorElementType vectorElementType;
+    switch (precision) {
+      case SINGLE:
+        vectorElementType = HoodieSchema.Vector.VectorElementType.FLOAT;
+        break;
+      case DOUBLE:
+        vectorElementType = HoodieSchema.Vector.VectorElementType.DOUBLE;
+        break;
+      default:
+        throw new HoodieValidationException(
+            "Invalid Lance VECTOR encoding for column '" + field.getName()
+                + "': expected Float32 or Float64 elements but found " + precision);
+    }
     return HoodieSchema.createVector(listType.getListSize(), vectorElementType);
   }
 

@@ -20,7 +20,6 @@ package org.apache.hudi.table.format.cow;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.util.HoodieVectorUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.source.ExpressionPredicates.Predicate;
@@ -77,8 +76,9 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
 
   private final String[] fullFieldNames;
   private final DataType[] fullFieldTypes;
+  private final DataType[] readFieldTypes;
   private final int[] selectedFields;
-  private final HoodieSchema tableSchema;
+  private final Map<Integer, HoodieSchema.Vector> vectorColumnInfo;
   private final HoodieSchema requestedSchema;
   private final String partDefaultName;
   private final String partPathField;
@@ -120,15 +120,15 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
     this.hiveStylePartitioning = hiveStylePartitioning;
     this.fullFieldNames = fullFieldNames;
     this.fullFieldTypes = fullFieldTypes;
+    this.readFieldTypes = VectorConversionUtils.getParquetReadFieldTypes(fullFieldNames, fullFieldTypes, tableSchema);
     this.selectedFields = selectedFields;
-    this.tableSchema = tableSchema.getNonNullType();
+    this.vectorColumnInfo = VectorConversionUtils.detectVectorColumns(fullFieldNames, selectedFields, tableSchema);
     RowType requestedRowType = (RowType) DataTypes.ROW(Arrays.stream(selectedFields)
             .mapToObj(i -> DataTypes.FIELD(fullFieldNames[i], fullFieldTypes[i]))
             .toArray(DataTypes.Field[]::new))
         .notNull()
         .getLogicalType();
-    this.requestedSchema = DataTypeUtils.toHoodieSchema(
-        requestedRowType, this.tableSchema);
+    this.requestedSchema = DataTypeUtils.toHoodieSchema(requestedRowType, tableSchema);
     this.conf = new SerializableConfiguration(conf);
     this.utcTimestamp = utcTimestamp;
     this.internalSchemaManager = internalSchemaManager;
@@ -136,47 +136,39 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
 
   @Override
   public void open(FileInputSplit fileSplit) throws IOException {
-    this.itr = fileSplit.getPath().getName().endsWith(HoodieFileFormat.LANCE.getFileExtension())
-        ? getLanceRecordIterator(fileSplit.getPath())
-        : getParquetRecordIterator(fileSplit);
+    if (fileSplit.getPath().getName().endsWith(HoodieFileFormat.LANCE.getFileExtension())) {
+      this.itr = getLanceRecordIterator(fileSplit.getPath());
+    } else {
+      LinkedHashMap<String, Object> partObjects = FilePathUtils.generatePartitionSpecs(
+          fileSplit.getPath().getPath(),
+          Arrays.asList(fullFieldNames),
+          Arrays.asList(fullFieldTypes),
+          this.partDefaultName,
+          this.partPathField,
+          this.hiveStylePartitioning
+      );
+
+      ClosableIterator<RowData> rowDataItr = RecordIterators.getParquetRecordIterator(
+          internalSchemaManager,
+          utcTimestamp,
+          true,
+          conf.conf(),
+          fullFieldNames,
+          readFieldTypes,
+          partObjects,
+          selectedFields,
+          2048,
+          fileSplit.getPath(),
+          fileSplit.getStart(),
+          fileSplit.getLength(),
+          predicates);
+      this.itr = vectorColumnInfo.isEmpty() ? rowDataItr : VectorConversionUtils.wrapVectorColumnIterator(rowDataItr, fullFieldTypes, selectedFields, vectorColumnInfo);
+    }
     this.currentReadCount = 0L;
   }
 
   private ClosableIterator<RowData> getLanceRecordIterator(Path path) {
     return FormatUtils.getLanceRecordIterator(path.toString(), requestedSchema, conf.conf());
-  }
-
-  private ClosableIterator<RowData> getParquetRecordIterator(FileInputSplit fileSplit) throws IOException {
-    DataType[] readFieldTypes = VectorConversionUtils.getParquetReadFieldTypes(
-        fullFieldNames, fullFieldTypes, tableSchema);
-    Map<Integer, HoodieSchema.Vector> vectorColumnInfo =
-        HoodieVectorUtils.detectVectorColumns(requestedSchema);
-    LinkedHashMap<String, Object> partObjects = FilePathUtils.generatePartitionSpecs(
-        fileSplit.getPath().getPath(),
-        Arrays.asList(fullFieldNames),
-        Arrays.asList(fullFieldTypes),
-        partDefaultName,
-        partPathField,
-        hiveStylePartitioning);
-
-    ClosableIterator<RowData> rowDataItr = RecordIterators.getParquetRecordIterator(
-        internalSchemaManager,
-        utcTimestamp,
-        true,
-        conf.conf(),
-        fullFieldNames,
-        readFieldTypes,
-        partObjects,
-        selectedFields,
-        2048,
-        fileSplit.getPath(),
-        fileSplit.getStart(),
-        fileSplit.getLength(),
-        predicates);
-    return vectorColumnInfo.isEmpty()
-        ? rowDataItr
-        : VectorConversionUtils.wrapVectorColumnIterator(
-            rowDataItr, fullFieldTypes, selectedFields, vectorColumnInfo);
   }
 
   @Override

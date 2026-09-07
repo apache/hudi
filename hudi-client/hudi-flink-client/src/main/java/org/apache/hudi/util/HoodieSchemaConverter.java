@@ -103,16 +103,24 @@ public class HoodieSchemaConverter {
       String vectorColumns) {
     Map<String, Integer> vectorColumnMap = vectorColumns == null || vectorColumns.trim().isEmpty()
         ? Collections.emptyMap() : VectorColumnParser.parse(vectorColumns);
-    validateVectorColumns(logicalType, vectorColumnMap);
     return convertToSchema(logicalType, rowName, vectorColumnMap);
   }
 
-  private static HoodieSchema convertToSchema(
+  /**
+   * Converts a Flink LogicalType into a HoodieSchema with the specified top-level VECTOR columns.
+   *
+   * @param logicalType   Flink logical type
+   * @param rowName       the record name
+   * @param vectorColumns vector column names and dimensions
+   * @return HoodieSchema matching this logical type
+   */
+  public static HoodieSchema convertToSchema(
       LogicalType logicalType,
       String rowName,
       Map<String, Integer> vectorColumns) {
     ValidationUtils.checkArgument(vectorColumns.isEmpty() || logicalType instanceof RowType,
         "VECTOR columns can only be configured for top-level ROW schemas.");
+    validateVectorColumns(logicalType, vectorColumns);
 
     int precision;
     boolean nullable = logicalType.isNullable();

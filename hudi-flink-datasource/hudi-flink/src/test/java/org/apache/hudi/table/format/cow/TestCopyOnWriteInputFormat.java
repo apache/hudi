@@ -117,9 +117,8 @@ class TestCopyOnWriteInputFormat {
 
   @Test
   void testLanceVectorSchemaMismatch() throws Exception {
-    RowType rowType = RowType.of(
-        new LogicalType[] {new ArrayType(false, new FloatType(false))},
-        new String[] {"embedding"});
+    RowType rowType = RowType.of(false,
+        new LogicalType[] {new ArrayType(false, new FloatType(false))}, new String[] {"embedding"});
     HoodieSchema fileSchema = HoodieSchemaConverter.convertToSchema(
         rowType, "file_record", "embedding:2");
     HoodieSchema tableSchema = HoodieSchemaConverter.convertToSchema(
