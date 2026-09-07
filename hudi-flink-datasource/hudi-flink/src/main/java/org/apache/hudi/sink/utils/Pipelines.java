@@ -410,11 +410,22 @@ public class Pipelines {
       boolean overwrite) {
     final boolean globalIndex = conf.get(FlinkOptions.INDEX_GLOBAL_ENABLED);
     if (overwrite || OptionsResolver.isBucketIndexType(conf)) {
+      // overwrite and bucket index do not rely on a bootstrapped key index.
       return rowDataToHoodieRecord(conf, rowType, dataStream);
     }
-    if (bounded && !globalIndex && OptionsResolver.isPartitionedTable(conf)) {
+    boolean isRLI = OptionsResolver.isGlobalRecordLevelIndex(conf) || OptionsResolver.isRecordLevelIndex(conf);
+    if (bounded && isRLI && !conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
+      // RLI bucket assignment (global or partitioned) looks up the record index directly,
+      // so the generic bootstrap step can be skipped unless it is explicitly requested.
+      return rowDataToHoodieRecord(conf, rowType, dataStream);
+    }
+    if (bounded && !globalIndex && !isRLI && OptionsResolver.isPartitionedTable(conf)) {
+      // non-RLI partitioned tables shuffle by partition path and bootstrap per-partition
+      // during batch execution to support batch UPSERT.
       return boundedBootstrap(conf, rowType, dataStream);
     }
+    // streaming execution, or bounded execution for a non-partitioned/global-index/RLI-with-
+    // explicit-bootstrap table: load the index via the generic bootstrap operator.
     return streamBootstrap(conf, rowType, dataStream, bounded);
   }
 
@@ -425,8 +436,7 @@ public class Pipelines {
       boolean bounded) {
     DataStream<HoodieFlinkInternalRow> dataStream1 = rowDataToHoodieRecord(conf, rowType, dataStream);
 
-    boolean isRLI = OptionsResolver.isGlobalRecordLevelIndex(conf) || OptionsResolver.isRecordLevelIndex(conf);
-    if (conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED) || (bounded && !isRLI)) {
+    if (conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED) || bounded) {
       AbstractBootstrapOperator bootstrapOperator = BootstrapOperatorFactory.createInstance(conf);
       dataStream1 = dataStream1
           .transform(

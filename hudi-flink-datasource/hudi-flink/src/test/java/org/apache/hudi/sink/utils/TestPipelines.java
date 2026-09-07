@@ -127,6 +127,7 @@ public class TestPipelines {
     // looks up the record index directly rather than consuming bootstrapped state, so it must
     // be treated the same as global RLI and skip the generic bootstrap operator when bounded.
     Configuration conf = defaultConf();
+    conf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, false);
     conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
     conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, false);
     DataStream<RowData> input = rowDataInput();
@@ -142,6 +143,7 @@ public class TestPipelines {
     // INDEX_BOOTSTRAP_ENABLED is an explicit override and must still wire in the bootstrap
     // operator even for RLI index types.
     Configuration conf = defaultConf();
+    conf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, false);
     conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
     conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
     DataStream<RowData> input = rowDataInput();
