@@ -542,36 +542,9 @@ public class HoodieMultiTableStreamer {
     boolean terminated = false;
     try {
       final List<CompletableFuture<Void>> tableFutures = tableExecutionContexts.stream()
-          .map(context -> CompletableFuture.runAsync(() -> {
-            HoodieStreamer streamer = null;
-            try {
-              streamer = new HoodieStreamer(context.getConfig(), jssc, Option.ofNullable(context.getProperties()));
-              streamerInstances.add(streamer);
-              // Register before checking the flag so a concurrent shutdownStreamers() always sees this streamer.
-              if (shutdownRequested.get()) {
-                return;
-              }
-              streamer.sync();
-              // A streamer registered just before fail fast tripped can reach here without ever ingesting.
-              // shutdown() call will be a no-op because its ingestion service hadn't started yet.
-              // Don't count that as a success.
-              if (!shutdownRequested.get()) {
-                successTables.add(Helpers.getTableWithDatabase(context));
-              }
-            } catch (Exception e) {
-              String table = Helpers.getTableWithDatabase(context);
-              log.error("error while running MultiTableDeltaStreamer for table: {}", table, e);
-              failedTables.add(table);
-              if (failFastOnContinuousMode) {
-                // Name the table so the thrown exception identifies the culprit, not the siblings torn down after it.
-                throw new HoodieException("Table sync failed in continuous mode for table: " + table, e);
-              }
-            } finally {
-              if (streamer != null) {
-                shutdownQuietly(streamer, context);
-              }
-            }
-          }, executor)).collect(Collectors.toList());
+          .map(context -> CompletableFuture.runAsync(
+              () -> runTableSync(context, streamerInstances, shutdownRequested), executor))
+          .collect(Collectors.toList());
 
       if (failFastOnContinuousMode) {
         log.info("Fail fast enabled in continuous mode. The whole job fails on any single table failure");
@@ -588,6 +561,41 @@ public class HoodieMultiTableStreamer {
     // cleanup succeeded, so the caller does not silently proceed to Spark teardown with live writers.
     if (!terminated) {
       throw new HoodieException("Timed out shutting down table ingestion workers in continuous mode");
+    }
+  }
+
+  /**
+   * Syncs one table on the calling worker thread. Rethrows only under fail fast; otherwise the failure is recorded
+   * in {@link #failedTables} and the sibling tables carry on.
+   */
+  private void runTableSync(TableExecutionContext context, List<HoodieStreamer> streamerInstances, AtomicBoolean shutdownRequested) {
+    HoodieStreamer streamer = null;
+    try {
+      streamer = new HoodieStreamer(context.getConfig(), jssc, Option.ofNullable(context.getProperties()));
+      streamerInstances.add(streamer);
+      // Register before checking the flag so a concurrent shutdownStreamers() always sees this streamer.
+      if (shutdownRequested.get()) {
+        return;
+      }
+      streamer.sync();
+      // A streamer registered just before fail fast tripped can reach here without ever ingesting.
+      // shutdown() call will be a no-op because its ingestion service hadn't started yet.
+      // Don't count that as a success.
+      if (!shutdownRequested.get()) {
+        successTables.add(Helpers.getTableWithDatabase(context));
+      }
+    } catch (Exception e) {
+      String table = Helpers.getTableWithDatabase(context);
+      log.error("error while running MultiTableDeltaStreamer for table: {}", table, e);
+      failedTables.add(table);
+      if (failFastOnContinuousMode) {
+        // Name the table so the thrown exception identifies the culprit, not the siblings torn down after it.
+        throw new HoodieException("Table sync failed in continuous mode for table: " + table, e);
+      }
+    } finally {
+      if (streamer != null) {
+        shutdownQuietly(streamer, context);
+      }
     }
   }
 
