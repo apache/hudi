@@ -59,6 +59,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -76,7 +77,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.doCallRealMethod;
@@ -89,6 +90,13 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 class TestHoodieBackedTableMetadataWriter {
+
+  private static final String TABLE_NAME = "test_table";
+  // Prefixed with the metadata table name, like TABLE_SERVICE_EXECUTION_*, so that reporters which derive
+  // a table dimension from the first dotted segment do not drop it (see CloudWatchReporter#stageMetricDatum).
+  private static final String DELTA_COMMITS_METRIC =
+      TABLE_NAME + "." + HoodieMetadataMetrics.STAT_DELTA_COMMITS_SINCE_LAST_COMPACTION;
+
   @Test
   void tableStorageLayoutForMetadataTable() {
     assertEquals("lsm_tree", HoodieBackedTableMetadataWriter.getMetadataTableStorageLayout(
@@ -570,31 +578,19 @@ class TestHoodieBackedTableMetadataWriter {
       boolean hasPendingLogCompaction,
       RuntimeException exceptionToThrow,
       boolean shouldFailOnTableServiceFailures) throws Exception {
-    // Create mocks for dependencies
-    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
-    HoodieActiveTimeline timeline = mock(HoodieActiveTimeline.class, RETURNS_DEEP_STUBS);
-    BaseHoodieWriteClient writeClient = mock(BaseHoodieWriteClient.class);
+    // A pending compaction or log compaction instant, so that the service runs and then throws.
+    List<HoodieInstant> instants = new ArrayList<>();
+    if (hasPendingCompaction) {
+      instants.add(INSTANT_GENERATOR.createNewInstant(
+          HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "001"));
+    }
+    if (hasPendingLogCompaction) {
+      instants.add(INSTANT_GENERATOR.createNewInstant(
+          HoodieInstant.State.REQUESTED, HoodieTimeline.LOG_COMPACTION_ACTION, "001"));
+    }
+
     HoodieMetadataMetrics metrics = mock(HoodieMetadataMetrics.class);
-    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
-    HoodieMetadataConfig metadataConfig = mock(HoodieMetadataConfig.class);
-
-    // Set up config mocks
-    when(writeConfig.getMetadataConfig()).thenReturn(metadataConfig);
-    when(metadataConfig.shouldFailOnTableServiceFailures()).thenReturn(shouldFailOnTableServiceFailures);
-    when(writeConfig.getTableName()).thenReturn("test_table");
-    when(writeConfig.getTableServiceManagerConfig()).thenReturn(HoodieTableServiceManagerConfig.newBuilder().build());
-
-    // Set up timeline mocks
-    when(metaClient.reloadActiveTimeline()).thenReturn(timeline);
-    when(metaClient.getActiveTimeline()).thenReturn(timeline);
-    when(timeline.filterPendingCompactionTimeline().countInstants()).thenReturn(hasPendingCompaction ? 1 : 0);
-    when(timeline.filterPendingLogCompactionTimeline().countInstants()).thenReturn(hasPendingLogCompaction ? 1 : 0);
-    when(timeline.getDeltaCommitTimeline().filterCompletedInstants().lastInstant()).thenReturn(Option.empty());
-
-    // Set up write client mocks
-    when(writeClient.getConfig()).thenReturn(writeConfig);
-
-    // Simulate failure based on service type
+    BaseHoodieWriteClient writeClient = mock(BaseHoodieWriteClient.class);
     if (hasPendingCompaction) {
       doThrow(exceptionToThrow).when(writeClient).runAnyPendingCompactions();
     }
@@ -602,31 +598,9 @@ class TestHoodieBackedTableMetadataWriter {
       doThrow(exceptionToThrow).when(writeClient).runAnyPendingLogCompactions();
     }
 
-    // Create a partial mock of HoodieBackedTableMetadataWriter
-    HoodieBackedTableMetadataWriter writer = mock(HoodieBackedTableMetadataWriter.class);
-
-    // Mock getWriteClient to return our mock write client
-    when(writer.getWriteClient()).thenReturn(writeClient);
-
-    // Set up the writer's fields using reflection
-    java.lang.reflect.Field metadataMetaClientField = HoodieBackedTableMetadataWriter.class.getDeclaredField("metadataMetaClient");
-    metadataMetaClientField.setAccessible(true);
-    metadataMetaClientField.set(writer, metaClient);
-
-    java.lang.reflect.Field writeClientField = HoodieBackedTableMetadataWriter.class.getDeclaredField("writeClient");
-    writeClientField.setAccessible(true);
-    writeClientField.set(writer, writeClient);
-
-    java.lang.reflect.Field writeConfigField = HoodieBackedTableMetadataWriter.class.getDeclaredField("dataWriteConfig");
-    writeConfigField.setAccessible(true);
-    writeConfigField.set(writer, writeConfig);
-
-    java.lang.reflect.Field metricsField = HoodieBackedTableMetadataWriter.class.getDeclaredField("metrics");
-    metricsField.setAccessible(true);
-    metricsField.set(writer, Option.of(metrics));
-
-    // Call the real performTableServices method
-    doCallRealMethod().when(writer).performTableServices(any(), eq(true));
+    HoodieActiveTimeline timeline = createMockTimeline(instants);
+    HoodieBackedTableMetadataWriter writer =
+        writerForTableServices(metrics, timeline, timeline, writeClient, shouldFailOnTableServiceFailures);
 
     if (shouldFailOnTableServiceFailures) {
       // When shouldFailOnTableServiceFailures is true, exception should propagate
@@ -650,5 +624,117 @@ class TestHoodieBackedTableMetadataWriter {
 
     // Verify metrics are incremented when there's a failure
     verify(metrics, times(1)).incrementMetric(HoodieMetadataMetrics.PENDING_COMPACTIONS_FAILURES, 1);
+    // The backlog gauge is sampled in the finally block, so a pending table service that throws before
+    // compaction is reached still reports - that is the state the gauge exists to make visible.
+    verify(metrics, times(1)).setMetric(DELTA_COMMITS_METRIC, 0L);
+  }
+
+  static Stream<Arguments> deltaCommitBacklogCases() {
+    return Stream.of(
+        // Three completed delta commits after the last compaction, plus one still inflight. Only the
+        // completed ones count, so the gauge stays comparable to hoodie.metadata.compact.max.delta.commits,
+        // which the compaction trigger evaluates the same way.
+        Arguments.of("completed delta commits after a compaction", Arrays.asList(
+            deltaCommit("001", "0011"),
+            compaction("002", "0021"),
+            deltaCommit("003", "0031"),
+            deltaCommit("004", "0041"),
+            deltaCommit("005", "0051"),
+            INSTANT_GENERATOR.createNewInstant(
+                HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "006")), 3L),
+        // No compaction has ever run, so every completed delta commit counts as backlog.
+        Arguments.of("never compacted", Arrays.asList(
+            deltaCommit("001", "0011"),
+            deltaCommit("002", "0021")), 2L),
+        // No completed delta commit yet, so the gauge reports zero rather than a stale value.
+        Arguments.of("empty timeline", Collections.emptyList(), 0L),
+        // The compaction is the most recent instant, so there is no backlog behind it.
+        Arguments.of("compaction is last", Arrays.asList(
+            deltaCommit("001", "0011"),
+            compaction("002", "0021")), 0L),
+        // Requested before the compaction but completed after it. The count is by completion time
+        // (HUDI-2461), so this delta commit is still behind the compaction and must be counted.
+        Arguments.of("completed after the compaction it precedes", Arrays.asList(
+            deltaCommit("0015", "0035"),
+            compaction("002", "0021")), 1L));
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("deltaCommitBacklogCases")
+  void performTableServicesReportsDeltaCommitBacklog(String name, List<HoodieInstant> instants, long expected)
+      throws Exception {
+    HoodieMetadataMetrics metrics = mock(HoodieMetadataMetrics.class);
+    HoodieActiveTimeline timeline = createMockTimeline(new ArrayList<>(instants));
+
+    writerForTableServices(metrics, timeline, timeline, mock(BaseHoodieWriteClient.class), false)
+        .performTableServices(Option.empty(), true);
+
+    verify(metrics, times(1)).setMetric(DELTA_COMMITS_METRIC, expected);
+  }
+
+  @Test
+  void performTableServicesReportsDeltaCommitBacklogFromTheReloadedTimeline() throws Exception {
+    // The cached timeline still shows the pre-compaction backlog. Neither runAnyPendingCompactions nor
+    // writeClient.compact refreshes this meta client, so the gauge has to reload to see the compaction
+    // land - otherwise a healthy table never reports the drop.
+    HoodieActiveTimeline cached = createMockTimeline(new ArrayList<>(Arrays.asList(
+        deltaCommit("001", "0011"),
+        deltaCommit("002", "0021"),
+        deltaCommit("003", "0031"))));
+    HoodieActiveTimeline reloaded = createMockTimeline(new ArrayList<>(Arrays.asList(
+        deltaCommit("001", "0011"),
+        deltaCommit("002", "0021"),
+        deltaCommit("003", "0031"),
+        compaction("004", "0041"))));
+
+    HoodieMetadataMetrics metrics = mock(HoodieMetadataMetrics.class);
+    writerForTableServices(metrics, cached, reloaded, mock(BaseHoodieWriteClient.class), false)
+        .performTableServices(Option.empty(), false);
+
+    verify(metrics, times(1)).setMetric(DELTA_COMMITS_METRIC, 0L);
+  }
+
+  private static HoodieInstant deltaCommit(String requestedTime, String completionTime) {
+    return INSTANT_GENERATOR.createNewInstant(
+        HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, requestedTime, completionTime);
+  }
+
+  private static HoodieInstant compaction(String requestedTime, String completionTime) {
+    // A completed compaction lands on the timeline as a commit action.
+    return INSTANT_GENERATOR.createNewInstant(
+        HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, requestedTime, completionTime);
+  }
+
+  /**
+   * Builds a partially mocked writer whose {@code performTableServices} runs for real. {@code cachedTimeline}
+   * backs {@code getActiveTimeline()} and {@code reloadedTimeline} backs {@code reloadActiveTimeline()}, so
+   * tests can tell the two apart.
+   */
+  private static HoodieBackedTableMetadataWriter writerForTableServices(HoodieMetadataMetrics metrics,
+                                                                        HoodieActiveTimeline cachedTimeline,
+                                                                        HoodieActiveTimeline reloadedTimeline,
+                                                                        BaseHoodieWriteClient writeClient,
+                                                                        boolean failOnTableServiceFailures) throws Exception {
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    HoodieMetadataConfig metadataConfig = mock(HoodieMetadataConfig.class);
+
+    when(writeConfig.getMetadataConfig()).thenReturn(metadataConfig);
+    when(metadataConfig.shouldFailOnTableServiceFailures()).thenReturn(failOnTableServiceFailures);
+    when(writeConfig.getTableName()).thenReturn(TABLE_NAME);
+    when(writeConfig.getTableServiceManagerConfig()).thenReturn(HoodieTableServiceManagerConfig.newBuilder().build());
+    when(writeClient.getConfig()).thenReturn(writeConfig);
+
+    when(metaClient.getActiveTimeline()).thenReturn(cachedTimeline);
+    when(metaClient.reloadActiveTimeline()).thenReturn(reloadedTimeline);
+
+    HoodieBackedTableMetadataWriter writer = mock(HoodieBackedTableMetadataWriter.class);
+    when(writer.getWriteClient()).thenReturn(writeClient);
+    setField(writer, "metadataMetaClient", metaClient);
+    setField(writer, "writeClient", writeClient);
+    setField(writer, "dataWriteConfig", writeConfig);
+    setField(writer, "metrics", Option.of(metrics));
+    doCallRealMethod().when(writer).performTableServices(any(), anyBoolean());
+    return writer;
   }
 }
