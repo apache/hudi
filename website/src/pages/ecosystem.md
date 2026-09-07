@@ -31,7 +31,7 @@ In such cases, you can leverage another tool like Apache Spark or Apache Flink t
 | Google DataProc   | [Read + Write](https://cloud.google.com/blog/products/data-analytics/getting-started-with-new-table-formats-on-dataproc) |             |
 | Azure Synapse     | [Read + Write](https://www.onehouse.ai/blog/apache-hudi-on-microsoft-azure)                                              |             |
 | Azure HDInsight   | [Read + Write](https://www.onehouse.ai/blog/apache-hudi-on-microsoft-azure)                                              |             |
-| Databricks        | [Read + Write](https://hudi.apache.org/docs/azure_hoodie/)                                                               |             |
+| Databricks        | [Read](https://hudi.apache.org/docs/quick-start-guide#reading-hudi-tables-on-the-databricks-runtime)                                                               |             |
 | Snowflake         |                                                                                                                          |             |
 | Vertica           | [Read](https://www.vertica.com/kb/Apache_Hudi_TE/Content/Partner/Apache_Hudi_TE.htm)                                     |             |
 | Apache Doris      | [Read](https://doris.apache.org/docs/ecosystem/external-table/hudi-external-table/)                                      |             |
