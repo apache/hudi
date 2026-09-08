@@ -51,6 +51,7 @@ import static io.trino.plugin.hudi.HudiSessionProperties.getDynamicFilteringWait
 import static io.trino.plugin.hudi.HudiSessionProperties.getMaxOutstandingSplits;
 import static io.trino.plugin.hudi.HudiSessionProperties.getMaxSplitsPerSecond;
 import static io.trino.plugin.hudi.partition.HiveHudiPartitionInfo.NON_PARTITION;
+import static io.trino.spi.connector.FixedSplitSource.emptySplitSource;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 
@@ -82,6 +83,12 @@ public class HudiSplitManager
             Constraint constraint)
     {
         HudiTableHandle hudiTableHandle = (HudiTableHandle) tableHandle;
+        // The planner turns a none() domain into an empty ValuesNode before applyFilter, so a none() predicate
+        // should never reach here; guard anyway, as computePartitionKeyFilter below throws on a none() domain.
+        if (hudiTableHandle.getPartitionPredicates().isNone() || hudiTableHandle.getRegularPredicates().isNone()) {
+            return emptySplitSource();
+        }
+
         HiveMetastore metastore = metastoreProvider.apply(session.getIdentity(), (HiveTransactionHandle) transaction);
         Lazy<Map<String, Partition>> lazyAllPartitions = Lazy.lazily(() -> {
             HoodieTimer timer = HoodieTimer.start();
