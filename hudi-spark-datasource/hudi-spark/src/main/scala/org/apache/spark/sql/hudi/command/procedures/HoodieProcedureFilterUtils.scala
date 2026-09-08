@@ -93,8 +93,11 @@ object HoodieProcedureFilterUtils {
           }
       }
 
-    // Second pass: resolve functions
-    val functionResolved = attributeBound.transform {
+    // Second pass: resolve functions. transformUp so a nested call's arguments (e.g. upper(name)
+    // inside instr(upper(name), 'A')) are already resolved by the time the outer function's case
+    // runs - otherwise resolved/checkInputDataTypes below would see an unresolved child and
+    // reject a call that's actually fine.
+    val functionResolved = attributeBound.transformUp {
         case unresolvedFunc: org.apache.spark.sql.catalyst.analysis.UnresolvedFunction =>
           val hardcodedResolved = unresolvedFunc.nameParts.head.toLowerCase(Locale.ROOT) match {
             case "upper" =>
@@ -398,8 +401,6 @@ object HoodieProcedureFilterUtils {
     }
   }
 
-  // didn't match anything above, so ask Spark itself before we give up - saves us from having
-  // to hand-list every builtin (concat, instr, if, ...) one by one
   // Resolves a function not covered by the hardcoded table above via Spark's own FunctionRegistry.
   // A resolved result is only usable if it can actually be eval()'d one row at a time, which
   // several categories of otherwise-valid expressions cannot: RuntimeReplaceable placeholders
