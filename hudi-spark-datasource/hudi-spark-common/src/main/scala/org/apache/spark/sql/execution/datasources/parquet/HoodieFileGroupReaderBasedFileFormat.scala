@@ -318,16 +318,18 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     partitionSchema.fields.foreach(f => exclusionFields.add(f.name))
     val requestedStructType = StructType(readRequiredSchema.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name) && !isNestedPartitionField(f.name)))
     val requestedSchema = HoodieSchemaUtils.pruneDataSchema(schema, HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(requestedStructType, sanitizedTableName), exclusionFields)
-    // pruneDataSchema keeps a union (a member0..memberN struct on the Spark side), a BLOB and a VARIANT
-    // whole, so where Spark's nested schema pruning asked for only some of their inner fields the reader
-    // emits a wider struct than requestedStructType declares. Bind the output projection to the emitted
-    // shape for those columns so it can drop the extra inner fields by name; everywhere else the two
-    // agree and the projection stays the pass-through it is today.
+    // The reader emits requestedSchema -- FileGroupReaderSchemaHandler projects its merged rows back
+    // down to it -- and that is wider than requestedStructType wherever pruneDataSchema had to keep a
+    // column whole: a union (a member0..memberN struct on the Spark side), a BLOB or a VARIANT that
+    // Spark's nested schema pruning asked only some inner fields of. Bind the output projection to the
+    // emitted shape rather than to what was asked for, so it resolves by name and drops the rest; a
+    // field the reader does not widen keeps the requested type, which is what it already had.
     val readerStructType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(requestedSchema)
-    val projectionInputSchema = StructType(requestedStructType.fields.map { f =>
-      readerStructType.getFieldIndex(f.name).map(readerStructType.fields(_).dataType) match {
-        case Some(readType) if SparkSchemaTransformUtils.needsNestedPruning(readType, f.dataType) => f.copy(dataType = readType)
-        case _ => f
+    val requestedFieldsByName = requestedStructType.fields.map(f => f.name -> f).toMap
+    val projectionInputSchema = StructType(readerStructType.fields.map { readerField =>
+      requestedFieldsByName.get(readerField.name) match {
+        case Some(f) if !SparkSchemaTransformUtils.needsNestedPruning(readerField.dataType, f.dataType) => f
+        case _ => readerField
       }
     })
     val dataStructTypeWithMandatoryPartitionFields = StructType(dataStructType.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name) && !isNestedPartitionField(f.name)))

@@ -238,11 +238,11 @@ object SparkSchemaTransformUtils {
       val body = recursivelyPruneExpression(lambdaVar, sElementType, dElementType)
       ArrayTransform(expr, LambdaFunction(body, Seq(lambdaVar)))
 
-    case (MapType(sKeyType, sValType, vnull), MapType(dKeyType, dValType, _))
+    case (MapType(sKeyType, sValType, valueContainsNull), MapType(dKeyType, dValType, _))
         if needsNestedPruning(sKeyType, dKeyType) || needsNestedPruning(sValType, dValType) =>
       val kv = NamedLambdaVariable("kv", new StructType()
         .add("key", sKeyType, nullable = false)
-        .add("value", sValType, nullable = vnull), nullable = false)
+        .add("value", sValType, nullable = valueContainsNull), nullable = false)
       val newKey = recursivelyPruneExpression(GetStructField(kv, 0), sKeyType, dKeyType)
       val newVal = recursivelyPruneExpression(GetStructField(kv, 1), sValType, dValType)
       val entry = CreateStruct(Seq(newKey, newVal))

@@ -249,6 +249,34 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test a projection of columns named memberN is not read as a union") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+
+        // canBeUnion matches a struct whose fields are all nullable and named member0..memberN. At the
+        // root that is a projection of columns that happen to be named that way, not a union, and
+        // converting it to one made pruneDataSchema hand the reader the whole table schema -- so
+        // SELECT member0 came back with _hoodie_commit_time -- or made Avro reject the duplicate
+        // branch types outright.
+        spark.sql(
+          s"""
+             |CREATE TABLE $tableName USING HUDI
+             |TBLPROPERTIES (type = '$tableType', primaryKey = 'id', orderingFields = 'ts')
+             |LOCATION '$tablePath'
+             |AS SELECT 1 AS id, 'a1' AS member0, 'b1' AS member1, 123456 AS ts
+             """.stripMargin)
+        // The update writes a log file on MOR, so the reads below go through the merge path
+        spark.sql(s"UPDATE $tableName SET ts = 123457 WHERE id = 1")
+
+        checkAnswer(s"SELECT member0 FROM $tableName")(Seq("a1"))
+        checkAnswer(s"SELECT member0, member1 FROM $tableName")(Seq("a1", "b1"))
+        checkAnswer(s"SELECT id, member0 FROM $tableName")(Seq(1, "a1"))
+      }
+    }
+  }
+
   test("Test no nested schema pruning when disabled") {
     withTempDir { tmp =>
       val tableName = generateTableName
