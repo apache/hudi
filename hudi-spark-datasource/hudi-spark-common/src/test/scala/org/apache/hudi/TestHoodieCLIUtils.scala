@@ -20,12 +20,14 @@
 package org.apache.hudi
 
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider
-import org.apache.hudi.common.config.HoodieCommonConfig
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.config.{HoodieCommonConfig, TypedProperties}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.config.HoodieLockConfig
 
+import org.apache.spark.sql.{SparkSession, SQLContext}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
+import org.mockito.Mockito.{mock, when}
 
 class TestHoodieCLIUtils {
 
@@ -114,11 +116,8 @@ class TestHoodieCLIUtils {
     val opts = HoodieCLIUtils.getLockOptions(tablePath, null, Map.empty)
     assertEquals(classOf[FileSystemBasedLockProvider].getName,
       opts(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key))
-    // The lock path must live under the shared table metadata folder (not the .aux folder), so the
-    // lock is mutually exclusive across engines/tasks operating on the same table.
-    val lockPath = opts(HoodieLockConfig.FILESYSTEM_LOCK_PATH.key)
-    assertTrue(lockPath.startsWith(tablePath))
-    assertTrue(lockPath.endsWith(HoodieTableMetaClient.METAFOLDER_NAME))
+    assertEquals(s"$tablePath/${HoodieTableMetaClient.AUXILIARYFOLDER_NAME}",
+      opts(HoodieLockConfig.FILESYSTEM_LOCK_PATH.key))
   }
 
   @Test
@@ -130,9 +129,48 @@ class TestHoodieCLIUtils {
   @Test
   def testGetLockOptionsCustomAtomicSupportEnablesScheme(): Unit = {
     // Opting s3 into hoodie.fs.atomic_creation.support makes the FS lock provider eligible again.
-    val params = Map(HoodieCommonConfig.HOODIE_FS_ATOMIC_CREATION_SUPPORT.key -> "s3")
+    val params = Map(HoodieCommonConfig.HOODIE_FS_ATOMIC_CREATION_SUPPORT.key -> " hdfs, s3 ")
     val opts = HoodieCLIUtils.getLockOptions("s3://bucket/table", "s3", params)
     assertEquals(classOf[FileSystemBasedLockProvider].getName,
       opts(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key))
   }
+
+  @Test
+  def testWriteParametersPreserveLockConfigPrecedence(): Unit = {
+    val sparkSession = mock(classOf[SparkSession])
+    val sqlContext = mock(classOf[SQLContext])
+    val metaClient = mock(classOf[HoodieTableMetaClient])
+    val tableConfig = mock(classOf[HoodieTableConfig])
+    val tableProps = new TypedProperties()
+    val providerKey = HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key
+    val atomicSupportKey = HoodieCommonConfig.HOODIE_FS_ATOMIC_CREATION_SUPPORT.key
+    tableProps.setProperty(providerKey, "table.provider")
+    tableProps.setProperty(atomicSupportKey, "hdfs")
+    when(sparkSession.sqlContext).thenReturn(sqlContext)
+    when(metaClient.getTableConfig).thenReturn(tableConfig)
+    when(tableConfig.getProps).thenReturn(tableProps)
+    when(sqlContext.getAllConfs).thenReturn(Map.empty[String, String])
+
+    val fromTable = HoodieCLIUtils.getWriteParameters(sparkSession, metaClient, Map.empty, None)
+    assertEquals("table.provider", fromTable(providerKey))
+    assertEquals("hdfs", fromTable(atomicSupportKey))
+
+    when(sqlContext.getAllConfs).thenReturn(Map(providerKey -> "session.provider", atomicSupportKey -> "s3"))
+    val fromSession = HoodieCLIUtils.getWriteParameters(sparkSession, metaClient, Map.empty, None)
+    assertEquals("session.provider", fromSession(providerKey))
+    assertEquals("s3", fromSession(atomicSupportKey))
+
+    val fromOptions = HoodieCLIUtils.getWriteParameters(sparkSession, metaClient,
+      Map(providerKey -> "options.provider", atomicSupportKey -> "file"), None)
+    assertEquals("options.provider", fromOptions(providerKey))
+    assertEquals("file", fromOptions(atomicSupportKey))
+    assertEquals(fromOptions,
+      HoodieCLIUtils.getWriteParameters(sparkSession, metaClient, fromOptions, None))
+
+    tableProps.clear()
+    when(sqlContext.getAllConfs).thenReturn(Map.empty[String, String])
+    val withoutLock = HoodieCLIUtils.getWriteParameters(sparkSession, metaClient, Map.empty, None)
+    assertTrue(!withoutLock.contains(providerKey))
+  }
+
 }

@@ -25,7 +25,7 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.util.{ClusteringUtils, HoodieTimer, Option => HOption, SortUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
-import org.apache.hudi.config.HoodieClusteringConfig
+import org.apache.hudi.config.{HoodieClusteringConfig, HoodieLockConfig}
 import org.apache.hudi.exception.HoodieClusteringException
 import org.apache.hudi.execution.bulkinsert.SpatialCurveSortPartitionerBase
 
@@ -180,6 +180,14 @@ class RunClusteringProcedure extends BaseProcedure
 
     var (filteredPendingClusteringInstants, operation) = HoodieProcedureUtils.filterPendingInstantsAndGetOperation(
       pendingClusteringInstants, specificInstants.asInstanceOf[Option[String]], op.asInstanceOf[Option[String]], limit.asInstanceOf[Option[Int]])
+
+    confs = HoodieCLIUtils.getWriteParameters(sparkSession, metaClient, confs,
+      tableName.asInstanceOf[Option[String]])
+    // Apply the lock options before constructing the write client.
+    if (metaClient.getTableConfig.isMetadataTableAvailable
+      && !confs.contains(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key)) {
+      confs = HoodieCLIUtils.getLockOptions(basePath, metaClient.getBasePath.toUri.getScheme, confs) ++ confs
+    }
 
     var client: SparkRDDWriteClient[_] = null
     try {

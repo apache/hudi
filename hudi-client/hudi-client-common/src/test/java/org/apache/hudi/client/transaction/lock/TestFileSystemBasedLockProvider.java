@@ -433,11 +433,8 @@ public class TestFileSystemBasedLockProvider {
   public void testGetLockConfigProducesUsableProperties() {
     String tablePath = tempDir.resolve("table").toString();
     TypedProperties props = FileSystemBasedLockProvider.getLockConfig(tablePath);
-    // The generated config points the lock provider at the table metadata folder, the shared
-    // location every engine/task derives so the lock is mutually exclusive across processes.
-    assertTrue(props.getString(HoodieLockConfig.FILESYSTEM_LOCK_PATH.key()).startsWith(tablePath));
-    assertTrue(props.getString(HoodieLockConfig.FILESYSTEM_LOCK_PATH.key())
-        .endsWith(HoodieTableMetaClient.METAFOLDER_NAME));
+    assertEquals(tablePath + StoragePath.SEPARATOR + HoodieTableMetaClient.AUXILIARYFOLDER_NAME,
+        props.getString(HoodieLockConfig.FILESYSTEM_LOCK_PATH.key()));
     assertEquals(FileSystemBasedLockProvider.class.getName(),
         props.getString(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key()));
 
@@ -477,11 +474,11 @@ public class TestFileSystemBasedLockProvider {
     assertEquals(fromLockConfig.getLock(), fromFallback.getLock(),
         "explicit default and BASE_PATH fallback must resolve to the same lock file");
     assertTrue(fromLockConfig.getLock()
-        .endsWith(HoodieTableMetaClient.METAFOLDER_NAME + StoragePath.SEPARATOR + "lock"));
+        .endsWith(HoodieTableMetaClient.AUXILIARYFOLDER_NAME + StoragePath.SEPARATOR + "lock"));
   }
 
   @Test
-  public void testLockPathDefaultsToMetafolderFromBasePath() {
+  public void testLockPathDefaultsToAuxiliaryFolderFromBasePath() {
     StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
     Properties props = new Properties();
     props.setProperty(HoodieWriteConfig.BASE_PATH.key(), lockDir("defaultpath"));
@@ -491,9 +488,9 @@ public class TestFileSystemBasedLockProvider {
     try {
       assertTrue(provider.tryLock(1, TimeUnit.SECONDS),
           "lock acquisition must work without an explicit lock path");
-      // Without an explicit lock path the provider locks under the table metafolder.
+      // Without an explicit lock path the provider locks under the table auxiliary folder.
       assertTrue(provider.getLock().endsWith(
-          HoodieTableMetaClient.METAFOLDER_NAME + StoragePath.SEPARATOR + "lock"));
+          HoodieTableMetaClient.AUXILIARYFOLDER_NAME + StoragePath.SEPARATOR + "lock"));
     } finally {
       provider.unlock();
       provider.close();

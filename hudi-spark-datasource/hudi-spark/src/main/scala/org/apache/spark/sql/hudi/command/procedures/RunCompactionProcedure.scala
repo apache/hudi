@@ -23,6 +23,7 @@ import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.util.{CompactionUtils, HoodieTimer, Option => HOption}
+import org.apache.hudi.config.HoodieLockConfig
 import org.apache.hudi.exception.HoodieException
 
 import org.apache.spark.internal.Logging
@@ -92,6 +93,14 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
 
     var (filteredPendingCompactionInstants, operation) = HoodieProcedureUtils.filterPendingInstantsAndGetOperation(
       pendingCompactionInstants, specificInstants.asInstanceOf[Option[String]], Option(op), limit)
+
+    confs = HoodieCLIUtils.getWriteParameters(sparkSession, metaClient, confs,
+      tableName.asInstanceOf[Option[String]])
+    // Apply the lock options before constructing the write client.
+    if (metaClient.getTableConfig.isMetadataTableAvailable
+      && !confs.contains(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key)) {
+      confs = HoodieCLIUtils.getLockOptions(basePath, metaClient.getBasePath.toUri.getScheme, confs) ++ confs
+    }
 
     var client: SparkRDDWriteClient[_] = null
     try {
