@@ -115,7 +115,7 @@ public class SecondaryIndexer extends BaseIndexer {
     // If write operation type based on commit metadata is COMPACT or CLUSTER then no need to update,
     // because these operations do not change the secondary key - record key mapping.
     WriteOperationType operationType = context.commitMetadata().getOperationType();
-    if (operationType.isInsertOverwriteOrDeletePartition()) {
+    if (operationType != null && operationType.isInsertOverwriteOrDeletePartition()) {
       throw new HoodieIndexException(String.format("Can not perform operation %s on secondary index", operationType));
     } else if (operationType == WriteOperationType.COMPACT || operationType == WriteOperationType.CLUSTER) {
       return Collections.emptyList();
@@ -149,6 +149,6 @@ public class SecondaryIndexer extends BaseIndexer {
     }
     HoodieIndexDefinition indexDefinition = HoodieTableMetadataUtil.getHoodieIndexDefinition(indexPartition, dataTableMetaClient);
     return convertWriteStatsToSecondaryIndexRecords(allWriteStats, instantTime, indexDefinition,
-        dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient, engineContext, dataTableWriteConfig);
+        dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient, engineContext, dataTableWriteConfig, commitMetadata);
   }
 }

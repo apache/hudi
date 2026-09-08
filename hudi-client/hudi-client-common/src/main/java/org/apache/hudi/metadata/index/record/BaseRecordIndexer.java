@@ -478,9 +478,46 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
     } else if (operationType == WriteOperationType.DELETE_PARTITION) {
       // all records from the target partition(s) to be deleted from RLI
       return getRecordIndexReplacedRecords((HoodieReplaceCommitMetadata) commitMetadata, fsView);
+    } else if (commitMetadata instanceof HoodieReplaceCommitMetadata && operationType != WriteOperationType.CLUSTER) {
+      // a replace commit that is neither a table service nor an overwrite, e.g. files written outside Hudi being
+      // registered in the table. The replaced file groups are dropped without their records being rewritten under
+      // the same key, so the records of the replaced base files are deleted from RLI unless this commit wrote them again.
+      return getRecordIndexReplacedFileGroupRecords((HoodieReplaceCommitMetadata) commitMetadata, fsView)
+          .mapToPair(r -> Pair.of(r.getKey(), r))
+          .leftOuterJoin(updatesFromWriteStatuses.mapToPair(r -> Pair.of(r.getKey(), r)))
+          .values()
+          .filter(p -> !p.getRight().isPresent())
+          .map(Pair::getLeft);
     } else {
       return engineContext.emptyHoodieData();
     }
+  }
+
+  /**
+   * Reads the record keys of the latest base file of every file group replaced by the given commit and
+   * returns a delete record for each of them.
+   */
+  private HoodieData<HoodieRecord> getRecordIndexReplacedFileGroupRecords(HoodieReplaceCommitMetadata replaceCommitMetadata, Lazy<HoodieTableFileSystemView> fsView) {
+    List<Pair<String, HoodieBaseFile>> replacedBaseFiles = replaceCommitMetadata.getPartitionToReplaceFileIds().entrySet().stream()
+        .flatMap(partitionAndFileIds -> partitionAndFileIds.getValue().stream()
+            .map(fileId -> fsView.get().getLatestBaseFile(partitionAndFileIds.getKey(), fileId))
+            .filter(Option::isPresent)
+            .map(baseFile -> Pair.of(partitionAndFileIds.getKey(), baseFile.get())))
+        .collect(Collectors.toList());
+    if (replacedBaseFiles.isEmpty()) {
+      return engineContext.emptyHoodieData();
+    }
+    String basePath = dataTableMetaClient.getBasePath().toString();
+    StorageConfiguration<?> storageConfiguration = dataTableMetaClient.getStorageConf();
+    boolean isPartitionedRLI = dataTableWriteConfig.getMetadataConfig().isRecordLevelIndexEnabled();
+    int parallelism = Math.min(replacedBaseFiles.size(), dataTableWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism());
+    engineContext.setJobStatus(this.getClass().getSimpleName(), "Record Index: reading record keys from " + replacedBaseFiles.size() + " replaced base files");
+    return engineContext.parallelize(replacedBaseFiles, parallelism).flatMap(partitionAndBaseFile -> {
+      StoragePath dataFilePath = partitionAndBaseFile.getValue().getStoragePath();
+      HoodieStorage storage = HoodieStorageUtils.getStorage(dataFilePath, storageConfiguration);
+      return BaseFileRecordParsingUtils.generateRLIMetadataHoodieRecordsForReplacedBaseFile(
+          basePath, partitionAndBaseFile.getKey(), dataFilePath, storage, isPartitionedRLI);
+    });
   }
 
   private HoodieData<HoodieRecord> getRecordIndexReplacedRecords(HoodieReplaceCommitMetadata replaceCommitMetadata, Lazy<HoodieTableFileSystemView> fsView) {

@@ -20,9 +20,11 @@
 package org.apache.hudi.metadata;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.FileNameParser;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -67,7 +69,9 @@ public class BaseFileRecordParsingUtils {
                                                                                    boolean isPartitionedRLI) {
     String partition = writeStat.getPartitionPath();
     String latestFileName = FSUtils.getFileNameFromPath(writeStat.getPath());
-    String fileId = FSUtils.getFileId(latestFileName);
+    // a file written outside Hudi keeps its own name, which may contain underscores, so the file id is parsed from the marker
+    String fileId = FileNameParser.parseBaseFile(latestFileName).map(FileNameParser.BaseFileName::getFileId)
+        .orElseGet(() -> FSUtils.getFileId(latestFileName));
 
     Set<RecordStatus> recordStatuses = new HashSet<>();
     recordStatuses.add(RecordStatus.INSERT);
@@ -167,10 +171,38 @@ public class BaseFileRecordParsingUtils {
     }
   }
 
+  /**
+   * Generates RLI Metadata delete records for every record key in the given base file.
+   * Used when a file group is replaced by a commit that does not rewrite its records, for example a replace commit
+   * that registers files written outside Hudi.
+   *
+   * @param basePath        base path of the table.
+   * @param partition       partition of the base file.
+   * @param dataFilePath    path of the base file on storage.
+   * @param storage         instance of {@link HoodieStorage}.
+   * @param isPartitionedRLI whether the record index is partitioned.
+   * @return Iterator of delete {@link HoodieRecord}s for RLI Metadata partition.
+   */
+  public static Iterator<HoodieRecord> generateRLIMetadataHoodieRecordsForReplacedBaseFile(String basePath,
+                                                                                           String partition,
+                                                                                           StoragePath dataFilePath,
+                                                                                           HoodieStorage storage,
+                                                                                           boolean isPartitionedRLI) {
+    return getRecordKeysFromBaseFile(storage, basePath, dataFilePath).stream()
+        .map(recordKey -> HoodieMetadataPayload.createRecordIndexDelete(recordKey, partition, isPartitionedRLI))
+        .iterator();
+  }
+
   private static Set<String> getRecordKeysFromBaseFile(HoodieStorage storage, String basePath, String partition, String fileName) {
-    StoragePath dataFilePath = new StoragePath(basePath, StringUtils.isNullOrEmpty(partition) ? fileName : (partition + StoragePath.SEPARATOR) + fileName);
+    // a file written outside Hudi is recorded with an external file marker that is not part of the name on storage.
+    String filePathInPartition = ExternalFilePathUtil.getFilePathInPartition(fileName);
+    StoragePath dataFilePath = new StoragePath(basePath, StringUtils.isNullOrEmpty(partition) ? filePathInPartition : (partition + StoragePath.SEPARATOR) + filePathInPartition);
+    return getRecordKeysFromBaseFile(storage, basePath, dataFilePath);
+  }
+
+  private static Set<String> getRecordKeysFromBaseFile(HoodieStorage storage, String basePath, StoragePath dataFilePath) {
     FileFormatUtils fileFormatUtils = HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(HoodieFileFormat.PARQUET);
-    return fileFormatUtils.readRowKeys(storage, dataFilePath);
+    return fileFormatUtils.readRowKeys(storage, dataFilePath, new StoragePath(basePath));
   }
 
   public enum RecordStatus {

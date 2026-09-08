@@ -18,7 +18,9 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
@@ -28,12 +30,14 @@ import org.apache.hudi.storage.StoragePath;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.metadata.BaseFileRecordParsingUtils.RecordStatus.DELETE;
 import static org.apache.hudi.metadata.BaseFileRecordParsingUtils.RecordStatus.INSERT;
@@ -53,7 +57,7 @@ class TestBaseFileRecordParsingUtils {
     HoodieIOFactory ioFactory = mock(HoodieIOFactory.class);
     FileFormatUtils fileFormatUtils = mock(FileFormatUtils.class);
     when(ioFactory.getFileFormatUtils(HoodieFileFormat.PARQUET)).thenReturn(fileFormatUtils);
-    when(fileFormatUtils.readRowKeys(any(), any(StoragePath.class))).thenAnswer(invocation -> {
+    when(fileFormatUtils.readRowKeys(any(), any(StoragePath.class), any(StoragePath.class))).thenAnswer(invocation -> {
       StoragePath path = invocation.getArgument(1);
       return path.getName().equals("latest.parquet")
           ? new HashSet<>(Arrays.asList("inserted", "updated"))
@@ -85,6 +89,50 @@ class TestBaseFileRecordParsingUtils {
       List<String> changedKeys =
           BaseFileRecordParsingUtils.getRecordKeysDeletedOrUpdated("/table", writeStat, storage);
       assertEquals(new HashSet<>(Arrays.asList("updated", "deleted")), new HashSet<>(changedKeys));
+    }
+  }
+
+  @Test
+  void testExternalFileNamesResolveToFilesOnStorage() {
+    HoodieStorage storage = mock(HoodieStorage.class);
+    HoodieIOFactory ioFactory = mock(HoodieIOFactory.class);
+    FileFormatUtils fileFormatUtils = mock(FileFormatUtils.class);
+    when(ioFactory.getFileFormatUtils(HoodieFileFormat.PARQUET)).thenReturn(fileFormatUtils);
+    List<StoragePath> readPaths = new ArrayList<>();
+    when(fileFormatUtils.readRowKeys(any(), any(StoragePath.class), any(StoragePath.class))).thenAnswer(invocation -> {
+      readPaths.add(invocation.getArgument(1));
+      assertEquals(new StoragePath("/table"), invocation.getArgument(2));
+      return new HashSet<>(Arrays.asList("partition/latest.parquet_0", "partition/latest.parquet_1"));
+    });
+
+    try (MockedStatic<HoodieIOFactory> ioFactoryMock = mockStatic(HoodieIOFactory.class)) {
+      ioFactoryMock.when(() -> HoodieIOFactory.getIOFactory(storage)).thenReturn(ioFactory);
+
+      // the external file marker is not part of the file name on storage
+      Map<BaseFileRecordParsingUtils.RecordStatus, List<String>> statuses = BaseFileRecordParsingUtils.getRecordKeyStatuses(
+          "/table", "partition", "latest.parquet_20240101000000_hudiext", null, storage, EnumSet.of(INSERT));
+      assertEquals(Collections.singletonList(new StoragePath("/table/partition/latest.parquet")), readPaths);
+      assertEquals(new HashSet<>(Arrays.asList("partition/latest.parquet_0", "partition/latest.parquet_1")), new HashSet<>(statuses.get(INSERT)));
+
+      // the file id of an external file is its own name, stored as a raw string in the record index
+      HoodieWriteStat externalWriteStat = new HoodieWriteStat();
+      externalWriteStat.setPartitionPath("partition");
+      externalWriteStat.setPath("partition/latest.parquet_20240101000000_hudiext");
+      List<HoodieRecord> inserts = new ArrayList<>();
+      BaseFileRecordParsingUtils.generateRLIMetadataHoodieRecordsForBaseFile(
+          "/table", externalWriteStat, 1, "20240101000000", storage, false).forEachRemaining(inserts::add);
+      assertEquals(2, inserts.size());
+      inserts.forEach(record -> assertEquals("latest.parquet",
+          ((HoodieMetadataPayload) record.getData()).getRecordGlobalLocation().getFileId()));
+
+      // every record of a replaced base file is deleted
+      List<HoodieRecord> deletes = new ArrayList<>();
+      BaseFileRecordParsingUtils.generateRLIMetadataHoodieRecordsForReplacedBaseFile(
+          "/table", "partition", new StoragePath("/table/partition/latest.parquet"), storage, false).forEachRemaining(deletes::add);
+      assertEquals(2, deletes.size());
+      assertTrue(deletes.stream().allMatch(record -> record.getData() instanceof EmptyHoodieRecordPayload));
+      assertEquals(new HashSet<>(Arrays.asList("partition/latest.parquet_0", "partition/latest.parquet_1")),
+          deletes.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toSet()));
     }
   }
 }

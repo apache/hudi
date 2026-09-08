@@ -11,14 +11,19 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -35,14 +40,19 @@ import org.apache.hudi.metadata.index.model.IndexPartitionAndRecords;
 import org.apache.hudi.metadata.index.model.IndexUpdateContext;
 import org.apache.hudi.metadata.model.FileSliceAndPartition;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -51,6 +61,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.times;
@@ -225,6 +236,82 @@ class TestRecordIndexer {
     HoodieRecordGlobalLocation location = payload.getRecordGlobalLocation();
     assertEquals("p1", location.getPartitionPath());
     assertEquals(fileID, location.getFileId());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void testBuildUpdateDeletesRecordsOfFileGroupsReplacedByExternalWriter() {
+    // files written outside Hudi are registered through replace commits with an unknown operation type. The records of the
+    // replaced file groups leave the index unless the same key is written again in the commit.
+    HoodieEngineContext engineContext = new HoodieLocalEngineContext(getDefaultStorageConf());
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    HoodieMetadataConfig metadataConfig = mock(HoodieMetadataConfig.class);
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    HoodieTableFileSystemView fsView = mock(HoodieTableFileSystemView.class);
+
+    when(writeConfig.getMetadataConfig()).thenReturn(metadataConfig);
+    when(metadataConfig.getRecordIndexMaxParallelism()).thenReturn(4);
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    when(tableConfig.getBaseFileFormat()).thenReturn(HoodieFileFormat.PARQUET);
+    when(metaClient.getBasePath()).thenReturn(new StoragePath("/tmp/hudi-record-index-test"));
+    when(metaClient.getStorageConf()).thenReturn((org.apache.hudi.storage.StorageConfiguration) getDefaultStorageConf());
+    // file ids of external files are file names, not UUIDs, so they are stored as raw strings
+    when(writeConfig.getWritesFileIdEncoding()).thenReturn(1);
+    HoodieBaseFile replacedBaseFile = new HoodieBaseFile(new StoragePathInfo(
+        new StoragePath("/tmp/hudi-record-index-test/p1/file_1.parquet_20240101010101_hudiext"), 100L, false, (short) 0, 0L, 0L));
+    when(fsView.getLatestBaseFile("p1", "file_1.parquet")).thenReturn(Option.of(replacedBaseFile));
+
+    HoodieReplaceCommitMetadata commitMetadata = new HoodieReplaceCommitMetadata();
+    commitMetadata.setOperationType(WriteOperationType.UNKNOWN);
+    commitMetadata.addReplaceFileId("p1", "file_1.parquet");
+    HoodieWriteStat writeStat = new HoodieWriteStat();
+    writeStat.setPartitionPath("p1");
+    writeStat.setPath("p1/" + ExternalFilePathUtil.appendCommitTimeAndExternalFileMarker("file_2.parquet", "20240101010102"));
+    writeStat.setFileId("file_2.parquet");
+    writeStat.setNumInserts(2);
+    writeStat.setTotalWriteBytes(128L);
+    commitMetadata.addWriteStat("p1", writeStat);
+
+    HoodieData<HoodieRecord> records = (HoodieData<HoodieRecord>) (HoodieData<?>) engineContext.emptyHoodieData();
+    ExposedRecordIndexer indexer = new ExposedRecordIndexer(
+        engineContext, writeConfig, metaClient, new DataPartitionAndRecords(1, Option.empty(), records));
+
+    List<HoodieRecord> indexRecords;
+    try (MockedStatic<BaseFileRecordParsingUtils> mockedBaseFileParsingUtils = mockStatic(BaseFileRecordParsingUtils.class);
+         MockedStatic<HoodieTableMetadataUtil> mockedMetadataUtil = mockStatic(HoodieTableMetadataUtil.class)) {
+      mockedMetadataUtil.when(() -> HoodieTableMetadataUtil.tryResolveSchemaForTable(any())).thenReturn(Option.empty());
+      mockedMetadataUtil.when(() -> HoodieTableMetadataUtil.reduceByKeys(any(), anyInt(), anyBoolean()))
+          .thenAnswer(invocation -> invocation.getArgument(0));
+      // the new file carries one new key and rewrites one key of the replaced file
+      mockedBaseFileParsingUtils.when(() -> BaseFileRecordParsingUtils
+              .generateRLIMetadataHoodieRecordsForBaseFile(any(), any(), any(), any(), any(), anyBoolean()))
+          .thenReturn(Arrays.asList(
+              HoodieMetadataPayload.createRecordIndexUpdate("p1/file_2.parquet_0", "p1", "file_2.parquet", "20240101010102", 1),
+              HoodieMetadataPayload.createRecordIndexUpdate("p1/file_1.parquet_1", "p1", "file_2.parquet", "20240101010102", 1)).iterator());
+      mockedBaseFileParsingUtils.when(() -> BaseFileRecordParsingUtils
+              .generateRLIMetadataHoodieRecordsForReplacedBaseFile(any(), any(), any(), any(), anyBoolean()))
+          .thenReturn(Arrays.asList(
+              HoodieMetadataPayload.createRecordIndexDelete("p1/file_1.parquet_0", "p1", false),
+              HoodieMetadataPayload.createRecordIndexDelete("p1/file_1.parquet_1", "p1", false)).iterator());
+
+      List<IndexPartitionAndRecords> result = indexer.buildUpdate(IndexUpdateContext.of(
+          "20240101010102", mock(HoodieBackedTableMetadata.class), Lazy.lazily(() -> fsView), commitMetadata));
+      assertEquals(1, result.size());
+      indexRecords = result.get(0).indexRecords().collectAsList();
+
+      // the replaced file is read from its location on storage, without the external file marker
+      mockedBaseFileParsingUtils.verify(() -> BaseFileRecordParsingUtils.generateRLIMetadataHoodieRecordsForReplacedBaseFile(
+          eq("/tmp/hudi-record-index-test"), eq("p1"), eq(new StoragePath("/tmp/hudi-record-index-test/p1/file_1.parquet")), any(), eq(false)));
+    }
+
+    Map<String, Boolean> recordKeyToIsDeleted = indexRecords.stream()
+        .collect(Collectors.toMap(HoodieRecord::getRecordKey, record -> record.getData() instanceof EmptyHoodieRecordPayload));
+    Map<String, Boolean> expected = new HashMap<>();
+    expected.put("p1/file_2.parquet_0", false);
+    expected.put("p1/file_1.parquet_1", false);
+    expected.put("p1/file_1.parquet_0", true);
+    assertEquals(expected, recordKeyToIsDeleted);
   }
 
   @Test

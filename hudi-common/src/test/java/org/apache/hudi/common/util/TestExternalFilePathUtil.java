@@ -230,4 +230,19 @@ public class TestExternalFilePathUtil {
     assertEquals(prefix + "/" + originalFile, parsed[0]);
     assertEquals(COMMIT_TIME, parsed[1]);
   }
+
+  @Test
+  public void testGetFilePathInPartition() {
+    assertEquals("file1.parquet", ExternalFilePathUtil.getFilePathInPartition("file1.parquet_20240101000000_hudiext"));
+    assertEquals("bucket-0/file1.parquet", ExternalFilePathUtil.getFilePathInPartition("file1.parquet_20240101000000_fg%3Dbucket-0_hudiext"));
+    // a file written by Hudi is returned as is
+    String hudiFileName = "3a9f-1234_1-0-1_20240101000000.parquet";
+    assertEquals(hudiFileName, ExternalFilePathUtil.getFilePathInPartition(hudiFileName));
+  }
+
+  @Test
+  public void testGenerateRecordKeyForRow() {
+    assertEquals("partition1/file1.parquet_0", ExternalFilePathUtil.generateRecordKeyForRow("partition1/file1.parquet", 0));
+    assertEquals("file1.parquet_42", ExternalFilePathUtil.generateRecordKeyForRow("file1.parquet", 42));
+  }
 }

@@ -51,7 +51,7 @@ class TestSecondaryIndexRecordGenerationUtils {
 
     assertThrows(HoodieIOException.class,
         () -> SecondaryIndexRecordGenerationUtils.convertWriteStatsToSecondaryIndexRecords(
-            Collections.singletonList(writeStat), "001", null, null, null, null, writeConfig));
+            Collections.singletonList(writeStat), "001", null, null, null, null, writeConfig, null));
   }
 
   @Test
@@ -67,7 +67,7 @@ class TestSecondaryIndexRecordGenerationUtils {
 
       assertThrows(HoodieException.class,
           () -> SecondaryIndexRecordGenerationUtils.convertWriteStatsToSecondaryIndexRecords(
-              Collections.emptyList(), "001", null, null, metaClient, null, writeConfig));
+              Collections.emptyList(), "001", null, null, metaClient, null, writeConfig, null));
     }
   }
 }

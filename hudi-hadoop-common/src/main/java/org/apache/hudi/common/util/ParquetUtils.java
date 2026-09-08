@@ -21,6 +21,7 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -119,7 +120,23 @@ public class ParquetUtils extends FileFormatUtils {
    */
   @Override
   public Set<Pair<String, Long>> filterRowKeys(HoodieStorage storage, StoragePath filePath, Set<String> filter) {
-    return filterParquetRowKeys(storage, new Path(filePath.toUri()), filter, HoodieSchemaUtils.getRecordKeySchema());
+    return filterParquetRowKeys(storage, new Path(filePath.toUri()), Option.empty(), filter, HoodieSchemaUtils.getRecordKeySchema());
+  }
+
+  /**
+   * Read the rowKey list matching the given filter, from the given parquet file. If the filter is empty, then this will
+   * return all the rowkeys and corresponding positions. Rows without a record key, as written by systems other than Hudi,
+   * get a key generated from the file path relative to the table base path and the row position.
+   *
+   * @param storage  {@link HoodieStorage} instance.
+   * @param filePath The parquet file path.
+   * @param basePath The table base path.
+   * @param filter   record keys filter
+   * @return Set Set of pairs of row key and position matching candidateRecordKeys
+   */
+  @Override
+  public Set<Pair<String, Long>> filterRowKeys(HoodieStorage storage, StoragePath filePath, StoragePath basePath, Set<String> filter) {
+    return filterParquetRowKeys(storage, new Path(filePath.toUri()), Option.of(basePath), filter, HoodieSchemaUtils.getRecordKeySchema());
   }
 
   public static ParquetMetadata readMetadata(HoodieStorage storage, StoragePath parquetFilePath) {
@@ -149,12 +166,15 @@ public class ParquetUtils extends FileFormatUtils {
    *
    * @param storage    {@link HoodieStorage} instance.
    * @param filePath   The parquet file path.
+   * @param basePath   The table base path, required to generate keys for rows that do not carry a record key
    * @param filter     record keys filter
    * @param readSchema schema of columns to be read
    * @return Set of pairs of row key and position matching candidateRecordKeys
    */
   private static Set<Pair<String, Long>> filterParquetRowKeys(HoodieStorage storage,
-                                                              Path filePath, Set<String> filter,
+                                                              Path filePath,
+                                                              Option<StoragePath> basePath,
+                                                              Set<String> filter,
                                                               HoodieSchema readSchema) {
     Option<RecordKeysFilterFunction> filterFunction = Option.empty();
     if (filter != null && !filter.isEmpty()) {
@@ -165,12 +185,21 @@ public class ParquetUtils extends FileFormatUtils {
     AvroReadSupport.setAvroReadSchema(conf, readSchema.toAvroSchema());
     AvroReadSupport.setRequestedProjection(conf, readSchema.toAvroSchema());
     Set<Pair<String, Long>> rowKeys = new HashSet<>();
+    Option<String> relativeFilePath = basePath.map(path -> FSUtils.getRelativePartitionPath(path, convertToStoragePath(filePath)));
     long rowPosition = 0;
     try (ParquetReader reader = AvroParquetReader.builder(filePath).withConf(conf).build()) {
       Object obj = reader.read();
       while (obj != null) {
         if (obj instanceof GenericRecord) {
-          String recordKey = ((GenericRecord) obj).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+          Object recordKeyValue = ((GenericRecord) obj).get(HoodieRecord.RECORD_KEY_METADATA_FIELD);
+          String recordKey;
+          if (recordKeyValue != null) {
+            recordKey = recordKeyValue.toString();
+          } else {
+            ValidationUtils.checkArgument(relativeFilePath.isPresent(),
+                "Record key is missing in " + filePath + " and no table base path is available to generate one");
+            recordKey = ExternalFilePathUtil.generateRecordKeyForRow(relativeFilePath.get(), rowPosition);
+          }
           if (!filterFunction.isPresent() || filterFunction.get().apply(recordKey)) {
             rowKeys.add(Pair.of(recordKey, rowPosition));
           }

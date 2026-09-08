@@ -153,6 +153,20 @@ public abstract class FileFormatUtils {
   }
 
   /**
+   * Read the rowKey list from the given data file. If the data file was written outside Hudi and does not carry
+   * record keys, a key is generated for each row from the file path relative to the table base path and the row position.
+   *
+   * @param storage  {@link HoodieStorage} instance.
+   * @param filePath the data file path.
+   * @param basePath the table base path.
+   * @return set of row keys
+   */
+  public Set<String> readRowKeys(HoodieStorage storage, StoragePath filePath, StoragePath basePath) {
+    return filterRowKeys(storage, filePath, basePath, new HashSet<>())
+        .stream().map(Pair::getKey).collect(Collectors.toSet());
+  }
+
+  /**
    * Read the bloom filter from the metadata of the given data file.
    *
    * @param storage  {@link HoodieStorage} instance.
@@ -251,6 +265,22 @@ public abstract class FileFormatUtils {
    * @return set of pairs of row key and position matching candidateRecordKeys.
    */
   public abstract Set<Pair<String, Long>> filterRowKeys(HoodieStorage storage, StoragePath filePath, Set<String> filter);
+
+  /**
+   * Read the rowKey list matching the given filter, from the given data file.
+   * If the filter is empty, then this will return all the row keys and corresponding positions.
+   * Formats that support data files written outside Hudi override this method to generate a key for rows
+   * that do not carry a record key, from the file path relative to the table base path and the row position.
+   *
+   * @param storage  {@link HoodieStorage} instance.
+   * @param filePath the data file path.
+   * @param basePath the table base path.
+   * @param filter   record keys filter.
+   * @return set of pairs of row key and position matching candidateRecordKeys.
+   */
+  public Set<Pair<String, Long>> filterRowKeys(HoodieStorage storage, StoragePath filePath, StoragePath basePath, Set<String> filter) {
+    return filterRowKeys(storage, filePath, filter);
+  }
 
   /**
    * Fetch {@link HoodieKey}s with positions from the given data file.
