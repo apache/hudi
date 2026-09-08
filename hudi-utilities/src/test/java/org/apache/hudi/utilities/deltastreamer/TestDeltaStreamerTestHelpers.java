@@ -20,6 +20,7 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.common.testutils.JavaTestUtils;
+import org.apache.hudi.utilities.streamer.NoNewDataTerminationStrategy;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -31,28 +32,32 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Covers {@code HoodieDeltaStreamerTestBase.TestHelpers#waitTillCondition}, the helper every
- * continuous-mode deltastreamer test waits on.
+ * Covers the deltastreamer test helpers every continuous-mode test runs on: the wait in
+ * {@code HoodieDeltaStreamerTestBase.TestHelpers} and the runner in {@code TestHoodieDeltaStreamer}.
  *
  * <p>The wait used to fail with a bare {@code TimeoutException} naming only the helper, with the
  * condition's own error logged at debug and discarded, so a timeout said nothing about which assertion
  * never held (HUDI-6843).
  */
-class TestWaitTillCondition {
+class TestDeltaStreamerTestHelpers {
 
   /** A deltastreamer future that never finishes, as a continuous-mode job would be. */
   private static final Future<?> RUNNING = new CompletableFuture<>();
 
   /**
    * The helper polls every 2s, so the timeout has to leave room for at least one evaluation to be recorded.
-   * 5s is enough for that, and keeps the six tests in this class from spending half a minute asleep in the
+   * 5s is enough for that, and keeps the tests in this class from spending half a minute asleep in the
    * shared utilities job.
    */
   private static final int CONDITION_TIMEOUT_SECS = 5;
+
+  /** For the cases that are not meant to time out: they finish long before this, so it is never reached. */
+  private static final int NEVER_REACHED_TIMEOUT_SECS = 30;
 
   @Test
   void timeoutFailureNamesTheLastConditionFailure() {
@@ -94,7 +99,7 @@ class TestWaitTillCondition {
     assertTrue(pollsWhenItGaveUp > 0,
         "the condition should have been evaluated at least once before the wait gave up, otherwise the "
             + "comparison below passes trivially");
-    Thread.sleep(5000);
+    Thread.sleep(2 * HoodieDeltaStreamerTestBase.TestHelpers.POLL_INTERVAL_MS);
     assertEquals(pollsWhenItGaveUp, polls.get(),
         "the polling thread should have stopped when the wait gave up, not carried on in the background");
   }
@@ -120,6 +125,37 @@ class TestWaitTillCondition {
     assertTrue(error.getMessage().contains("No evaluation of the condition completed"),
         () -> "a condition still running its first evaluation should be reported as such, but was: "
             + error.getMessage());
+    assertFalse(JavaTestUtils.checkNestedExceptionContains(error, "no such text"),
+        "walking the cause chain has to tolerate the null-message TimeoutException this path attaches, "
+            + "which is what the multi-writer test hits when its ingestion wait times out");
+  }
+
+  /**
+   * Conditions in the continuous-mode tests catch their own failures and return false rather than throwing,
+   * so this is the branch a real timeout reports. It has to say how many evaluations ran, since that is the
+   * only signal separating it from a condition that never completed one.
+   */
+  @Test
+  void timeoutReportsEvaluationsThatReturnedFalse() {
+    AssertionError error = assertThrows(AssertionError.class,
+        () -> HoodieDeltaStreamerTestBase.TestHelpers.waitTillCondition(
+            ignored -> false, RUNNING, CONDITION_TIMEOUT_SECS));
+
+    assertTrue(error.getMessage().contains("returned false without throwing"),
+        () -> "a condition that kept returning false should be reported as such, but was: " + error.getMessage());
+  }
+
+  /**
+   * The bound exists so a hung poll cannot run for the life of the JVM. Both production callers of waitFor
+   * are currently disabled (HUDI-8951), so this is the only thing exercising it.
+   */
+  @Test
+  void waitForGivesUpAtItsBound() {
+    AssertionError error = assertThrows(AssertionError.class,
+        () -> HoodieDeltaStreamerTestBase.TestHelpers.waitFor(() -> false, 1));
+
+    assertTrue(error.getMessage().contains("did not hold within 1 seconds"),
+        () -> "the bound should name itself in the failure, but was: " + error.getMessage());
   }
 
   /**
@@ -134,7 +170,7 @@ class TestWaitTillCondition {
     HoodieDeltaStreamer ds = Mockito.mock(HoodieDeltaStreamer.class);
     Mockito.doThrow(new IllegalStateException("source is unreachable")).when(ds).sync();
     HoodieDeltaStreamer.Config cfg = new HoodieDeltaStreamer.Config();
-    cfg.postWriteTerminationStrategyClass = "org.apache.hudi.utilities.streamer.NoNewDataTerminationStrategy";
+    cfg.postWriteTerminationStrategyClass = NoNewDataTerminationStrategy.class.getName();
 
     ExecutionException failure = assertThrows(ExecutionException.class,
         () -> TestHoodieDeltaStreamer.deltaStreamerTestRunner(ds, cfg, ignored -> false, "dying_ds_job"));
@@ -146,7 +182,7 @@ class TestWaitTillCondition {
   @Test
   void satisfiedConditionReturnsNormally() {
     assertDoesNotThrow(() -> HoodieDeltaStreamerTestBase.TestHelpers.waitTillCondition(
-        ignored -> true, RUNNING, 30));
+        ignored -> true, RUNNING, NEVER_REACHED_TIMEOUT_SECS));
   }
 
   /**
@@ -159,6 +195,6 @@ class TestWaitTillCondition {
     Future<?> finished = CompletableFuture.completedFuture(null);
 
     assertDoesNotThrow(() -> HoodieDeltaStreamerTestBase.TestHelpers.waitTillCondition(
-        ignored -> false, finished, 30));
+        ignored -> false, finished, NEVER_REACHED_TIMEOUT_SECS));
   }
 }

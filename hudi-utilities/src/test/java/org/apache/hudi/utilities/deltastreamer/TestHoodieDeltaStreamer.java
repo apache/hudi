@@ -187,6 +187,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -218,6 +219,9 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
  */
 @Slf4j
 public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
+
+  // Bounds the stop a failure triggers, so a wedged streamer cannot hang the test it already failed.
+  private static final long STREAMER_STOP_TIMEOUT_SECS = 60;
 
   // Per-field verdict for the corrupt logical-repair fixtures: relabel ts_millis to millis and
   // attach the local-timestamp logical types that 0.x dropped. ts_micros is already micros.
@@ -1744,8 +1748,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   static void deltaStreamerTestRunner(HoodieDeltaStreamer ds, HoodieDeltaStreamer.Config cfg, Function<Boolean, Boolean> condition, String jobId) throws Exception {
     ExecutorService executor = Executors.newSingleThreadExecutor();
+    Future dsFuture = null;
+    boolean stoppedCleanly = false;
     try {
-      Future dsFuture = executor.submit(() -> {
+      dsFuture = executor.submit(() -> {
         try {
           ds.sync();
         } catch (Exception ex) {
@@ -1753,19 +1759,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
           throw new RuntimeException(ex.getMessage(), ex);
         }
       });
-      try {
-        TestHelpers.waitTillCondition(condition, dsFuture, 360);
-      } catch (Throwable failure) {
-        // Surefire runs this module with forkCount=1 and reuseForks=true, so a continuous streamer left
-        // running here reads on into the next test, whose setup deletes basePath and whose teardown closes
-        // the data generators underneath it. Stop it before letting the failure out.
-        try {
-          ds.shutdownGracefully();
-        } catch (Exception shutdownFailure) {
-          failure.addSuppressed(shutdownFailure);
-        }
-        throw failure;
-      }
+      TestHelpers.waitTillCondition(condition, dsFuture, 360);
       if (cfg != null && !cfg.postWriteTerminationStrategyClass.isEmpty()) {
         // If the streamer died, waitTillCondition returns as soon as the future completes. Surface that
         // failure here rather than letting awaitDeltaStreamerShutdown time out and report the misleading
@@ -1778,8 +1772,46 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         ds.shutdownGracefully();
         dsFuture.get();
       }
+      stoppedCleanly = true;
     } finally {
+      if (!stoppedCleanly) {
+        stopLeakedStreamer(ds, dsFuture);
+      }
       executor.shutdown();
+    }
+  }
+
+  /**
+   * Stops a streamer that a failure left running, without letting the stop hang the test.
+   * <p>
+   * Surefire runs this module with forkCount=1 and reuseForks=true, so a live streamer reads on into the
+   * next test, whose setup deletes basePath and whose teardown closes the data generators underneath it.
+   * The stop has to be bounded: shutdownGracefully awaits the ingest executor for up to 24 hours, and it
+   * returns immediately without waiting when shutdown was already requested, so neither the wait nor the
+   * absence of one can be relied on here.
+   */
+  private static void stopLeakedStreamer(HoodieDeltaStreamer ds, Future dsFuture) {
+    ExecutorService stopper = Executors.newSingleThreadExecutor();
+    try {
+      stopper.submit(ds::shutdownGracefully).get(STREAMER_STOP_TIMEOUT_SECS, TimeUnit.SECONDS);
+      if (dsFuture != null) {
+        dsFuture.get(STREAMER_STOP_TIMEOUT_SECS, TimeUnit.SECONDS);
+      }
+    } catch (ExecutionException ingestFailure) {
+      // Expected rather than anomalous: the ingest task failing is usually why the caller is unwinding at
+      // all, and the caller reports it. Nothing to warn about here.
+    } catch (Exception stopFailure) {
+      // Swallowed on purpose: this runs while another failure is propagating, and replacing that failure
+      // with this one would hide the diagnostic the caller is about to report.
+      if (stopFailure instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
+      log.warn("Could not stop the streamer cleanly after a failure, cancelling the ingest task", stopFailure);
+      if (dsFuture != null) {
+        dsFuture.cancel(true);
+      }
+    } finally {
+      stopper.shutdownNow();
     }
   }
 

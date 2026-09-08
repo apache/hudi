@@ -767,8 +767,14 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
       return lastInstant;
     }
 
-    /** Bound for {@link #waitFor}; generous, since it only exists to stop a hung poll running forever. */
+    /**
+     * Default bound for {@link #waitFor(BooleanSupplier)}; generous, since it only exists to stop a hung poll
+     * running forever.
+     */
     private static final long WAIT_FOR_TIMEOUT_SECS = 120;
+
+    /** How often {@link #waitTillCondition} re-evaluates its condition; a test ties its own wait to this. */
+    static final long POLL_INTERVAL_MS = 2000;
 
     /**
      * Polls {@code condition} until it holds, the deltastreamer future finishes, or the timeout expires.
@@ -788,7 +794,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
           // this thread polling for the lifetime of the JVM.
           while (!ret && !dsFuture.isDone() && !Thread.currentThread().isInterrupted() && !executor.isShutdown()) {
             try {
-              Thread.sleep(2000);
+              Thread.sleep(POLL_INTERVAL_MS);
               ret = condition.apply(true);
               completedEvaluations.incrementAndGet();
               if (ret) {
@@ -815,19 +821,28 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
           Throwable last = lastError.get();
           int completed = completedEvaluations.get();
           String detail;
-          if (completed == 0) {
+          if (last != null) {
+            // Tested first because the worker records the error before it increments the counter: a timeout
+            // landing between the two would otherwise report that no evaluation completed. lastError is only
+            // ever set, never cleared, so its presence is decisive in every interleaving.
+            detail = String.format("%d evaluations completed; the last failure reported was: %s", completed, last);
+          } else if (completed == 0) {
             // Distinguishes a condition that is stuck part-way through its first evaluation - a hung Spark
             // read, say - from one that simply kept returning false.
             detail = "No evaluation of the condition completed, so it was still running or never started.";
-          } else if (last == null) {
+          } else {
             detail = String.format("%d evaluations completed and returned false without throwing, "
                 + "so there is no further detail.", completed);
-          } else {
-            detail = String.format("%d evaluations completed; the last failure reported was: %s", completed, last);
           }
           Throwable cause = last == null ? e : last;
-          throw new AssertionError(
+          AssertionError failure = new AssertionError(
               String.format("Condition was not met within %d seconds. %s", timeoutInSecs, detail), cause);
+          if (cause != e) {
+            // The condition's own error is the more useful cause, but the fact that this was a timeout is
+            // still part of the diagnosis, so it is carried along rather than dropped.
+            failure.addSuppressed(e);
+          }
+          throw failure;
         }
       } finally {
         // stop the polling thread: this method runs once per continuous-mode test, so a leak accumulates
@@ -840,13 +855,18 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
      * @param booleanSupplier Boolean supplier
      */
     static void waitFor(BooleanSupplier booleanSupplier) {
+      waitFor(booleanSupplier, WAIT_FOR_TIMEOUT_SECS);
+    }
+
+    static void waitFor(BooleanSupplier booleanSupplier, long timeoutSecs) {
       // Bounded, and the interrupt is restored rather than swallowed: this runs inside conditions passed to
       // waitTillCondition, so swallowing it would defeat the stop that shutdownNow signals.
-      long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(WAIT_FOR_TIMEOUT_SECS);
+      long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeoutSecs);
       while (!booleanSupplier.getAsBoolean()) {
-        if (System.nanoTime() > deadline) {
-          throw new AssertionError(
-              String.format("Condition did not hold within %d seconds", WAIT_FOR_TIMEOUT_SECS));
+        // Subtraction rather than a bare comparison: nanoTime is only meaningful as a difference, so this is
+        // the form its javadoc documents as overflow-safe.
+        if (System.nanoTime() - deadline > 0) {
+          throw new AssertionError(String.format("Condition did not hold within %d seconds", timeoutSecs));
         }
         try {
           Thread.sleep(5);
