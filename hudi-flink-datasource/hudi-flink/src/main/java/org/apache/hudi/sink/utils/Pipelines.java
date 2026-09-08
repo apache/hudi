@@ -408,46 +408,41 @@ public class Pipelines {
       DataStream<RowData> dataStream,
       boolean bounded,
       boolean overwrite) {
-    final boolean globalIndex = conf.get(FlinkOptions.INDEX_GLOBAL_ENABLED);
     if (overwrite || OptionsResolver.isBucketIndexType(conf)) {
       // overwrite and bucket index do not rely on a bootstrapped key index.
       return rowDataToHoodieRecord(conf, rowType, dataStream);
     }
-    boolean isRLI = OptionsResolver.isGlobalRecordLevelIndex(conf) || OptionsResolver.isRecordLevelIndex(conf);
-    if (bounded && isRLI && !conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
-      // RLI bucket assignment (global or partitioned) looks up the record index directly,
-      // so the generic bootstrap step can be skipped unless it is explicitly requested.
+
+    final boolean isRLI = OptionsResolver.isGlobalRecordLevelIndex(conf) || OptionsResolver.isRecordLevelIndex(conf);
+    // Bounded writes require bootstrap automatically only for non-RLI indexes.
+    final boolean needsBootstrap = conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED) || (bounded && !isRLI);
+    if (!needsBootstrap) {
       return rowDataToHoodieRecord(conf, rowType, dataStream);
     }
+
+    final boolean globalIndex = conf.get(FlinkOptions.INDEX_GLOBAL_ENABLED);
     if (bounded && !globalIndex && !isRLI && OptionsResolver.isPartitionedTable(conf)) {
-      // non-RLI partitioned tables shuffle by partition path and bootstrap per-partition
-      // during batch execution to support batch UPSERT.
       return boundedBootstrap(conf, rowType, dataStream);
     }
-    // streaming execution, or bounded execution for a non-partitioned/global-index/RLI-with-
-    // explicit-bootstrap table: load the index via the generic bootstrap operator.
-    return streamBootstrap(conf, rowType, dataStream, bounded);
+
+    return streamBootstrap(conf, rowType, dataStream);
   }
 
   private static DataStream<HoodieFlinkInternalRow> streamBootstrap(
       Configuration conf,
       RowType rowType,
-      DataStream<RowData> dataStream,
-      boolean bounded) {
+      DataStream<RowData> dataStream) {
     DataStream<HoodieFlinkInternalRow> dataStream1 = rowDataToHoodieRecord(conf, rowType, dataStream);
+    AbstractBootstrapOperator bootstrapOperator = BootstrapOperatorFactory.createInstance(conf);
 
-    if (conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED) || bounded) {
-      AbstractBootstrapOperator bootstrapOperator = BootstrapOperatorFactory.createInstance(conf);
-      dataStream1 = dataStream1
-          .transform(
-              "index_bootstrap",
-              new HoodieFlinkInternalRowTypeInfo(rowType),
-              bootstrapOperator)
-          .setParallelism(conf.getOptional(FlinkOptions.INDEX_BOOTSTRAP_TASKS).orElse(dataStream1.getParallelism()))
-          .uid(opUID("index_bootstrap", conf));
-      ((OneInputTransformation<?, ?>) dataStream1.getTransformation()).setChainingStrategy(ChainingStrategy.ALWAYS);
-    }
-
+    dataStream1 = dataStream1
+        .transform(
+            "index_bootstrap",
+            new HoodieFlinkInternalRowTypeInfo(rowType),
+            bootstrapOperator)
+            .setParallelism(conf.getOptional(FlinkOptions.INDEX_BOOTSTRAP_TASKS).orElse(dataStream1.getParallelism()))
+            .uid(opUID("index_bootstrap", conf));
+    ((OneInputTransformation<?, ?>) dataStream1.getTransformation()).setChainingStrategy(ChainingStrategy.ALWAYS);
     return dataStream1;
   }
 

@@ -106,6 +106,71 @@ public class TestPipelines {
   }
 
   @Test
+  void testBootstrapSkippedForBucketIndex() {
+    // Bucket index assigns buckets by hashing the record key directly, so it never relies on
+    // a bootstrapped key index, regardless of the bounded/streaming mode.
+    Configuration conf = defaultConf();
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+    DataStream<RowData> input = rowDataInput();
+
+    DataStream<HoodieFlinkInternalRow> bounded =
+        Pipelines.bootstrap(conf, TestConfigurations.ROW_TYPE, input, true, false);
+    assertEquals("row_data_to_hoodie_record", bounded.getTransformation().getName());
+
+    DataStream<HoodieFlinkInternalRow> streaming =
+        Pipelines.bootstrap(conf, TestConfigurations.ROW_TYPE, input, false, false);
+    assertEquals("row_data_to_hoodie_record", streaming.getTransformation().getName());
+  }
+
+  @Test
+  void testStreamingNonRLIWithoutBootstrapEnabledSkipsBootstrapOperator() {
+    // Streaming execution only wires in the bootstrap operator when the flag is explicitly
+    // turned on; the bounded-write auto-bootstrap rule does not apply here.
+    Configuration conf = defaultConf();
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, false);
+    DataStream<RowData> input = rowDataInput();
+
+    DataStream<HoodieFlinkInternalRow> streaming =
+        Pipelines.bootstrap(conf, TestConfigurations.ROW_TYPE, input, false, false);
+
+    assertEquals("row_data_to_hoodie_record", streaming.getTransformation().getName());
+  }
+
+  @Test
+  void testBoundedGlobalIndexNonRLIPartitionedUsesStreamBootstrap() {
+    // The per-partition batch bootstrap path is reserved for non-global, non-RLI indexes;
+    // a global (non-RLI) index must fall back to the generic streaming bootstrap operator
+    // even for bounded/batch execution, since it is not safe to shuffle by partition path.
+    Configuration conf = defaultConf();
+    conf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, true);
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, false);
+    DataStream<RowData> input = rowDataInput();
+
+    DataStream<HoodieFlinkInternalRow> bounded =
+        Pipelines.bootstrap(conf, TestConfigurations.ROW_TYPE, input, true, false);
+
+    assertEquals("index_bootstrap", bounded.getTransformation().getName());
+  }
+
+  @Test
+  void testBoundedNonPartitionedTableUsesStreamBootstrap() {
+    // The per-partition batch bootstrap path shuffles by partition path, so it only applies to
+    // partitioned tables; a non-partitioned table must use the generic streaming bootstrap
+    // operator for bounded execution instead.
+    Configuration conf = defaultConf();
+    conf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, false);
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "");
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, false);
+    DataStream<RowData> input = rowDataInput();
+
+    DataStream<HoodieFlinkInternalRow> bounded =
+        Pipelines.bootstrap(conf, TestConfigurations.ROW_TYPE, input, true, false);
+
+    assertEquals("index_bootstrap", bounded.getTransformation().getName());
+  }
+
+  @Test
   void testBoundedGlobalRLISkipsBootstrapOperator() {
     // Global RLI bucket assignment queries the metadata table directly, so the generic
     // index-bootstrap step (which loads existing keys into state for the default bucket
