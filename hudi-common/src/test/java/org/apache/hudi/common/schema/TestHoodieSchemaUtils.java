@@ -2370,4 +2370,32 @@ public class TestHoodieSchemaUtils {
         () -> HoodieSchemaUtils.createDeleteLogSchema(tableSchema, Collections.singletonList("not_a_field")));
     assertEquals("Ordering field not_a_field not found in table schema", exception.getMessage());
   }
+
+  @Test
+  void testIsTimestampMillisField() {
+    // Test timestamp-millis
+    HoodieSchema timestampMillisSchema = HoodieSchema.createTimestampMillis();
+    assertTrue(HoodieSchemaUtils.isTimestampMillisField(timestampMillisSchema),
+        "Should return true for timestamp-millis");
+
+    // Test nullable timestamp-millis
+    HoodieSchema nullableTimestampMillisSchema = HoodieSchema.createNullable(HoodieSchema.createTimestampMillis());
+    assertTrue(HoodieSchemaUtils.isTimestampMillisField(nullableTimestampMillisSchema),
+        "Should return true for nullable timestamp-millis");
+
+    // Test timestamp-micros (should return false)
+    HoodieSchema timestampMicrosSchema = HoodieSchema.createTimestampMicros();
+    assertFalse(HoodieSchemaUtils.isTimestampMillisField(timestampMicrosSchema),
+        "Should return false for timestamp-micros");
+
+    // Test regular long (should return false)
+    HoodieSchema longSchema = HoodieSchema.create(HoodieSchemaType.LONG);
+    assertFalse(HoodieSchemaUtils.isTimestampMillisField(longSchema),
+        "Should return false for regular long");
+
+    // Test string (should return false)
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    assertFalse(HoodieSchemaUtils.isTimestampMillisField(stringSchema),
+        "Should return false for string");
+  }
 }

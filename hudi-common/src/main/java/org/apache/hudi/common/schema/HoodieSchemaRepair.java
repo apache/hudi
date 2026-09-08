@@ -20,7 +20,6 @@
 package org.apache.hudi.common.schema;
 
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -41,7 +40,7 @@ import java.util.List;
  *
  * <p>{@link #hasTimestampMillisField(HoodieSchema)} is the cheap pre-check used to decide whether the
  * repair is worth wiring in at all. Its sibling in the metadata-table domain is
- * {@code HoodieTableMetadataUtil#isTimestampMillisField}, which answers the same question for one field
+ * {@code HoodieSchemaUtils#isTimestampMillisField}, which answers the same question for one field
  * schema rather than recursively for a whole table schema.</p>
  */
 public class HoodieSchemaRepair {
@@ -250,7 +249,7 @@ public class HoodieSchemaRepair {
         return hasTimestampMillisField(tableSchema.getNonNullType());
 
       case TIMESTAMP:
-        return HoodieTableMetadataUtil.isTimestampMillisField(tableSchema);
+        return HoodieSchemaUtils.isTimestampMillisField(tableSchema);
 
       default:
         return false;

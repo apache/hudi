@@ -1046,4 +1046,19 @@ public final class HoodieSchemaUtils {
 
     return createNewSchemaFromFieldsWithReference(schema, fields);
   }
+
+  /**
+   * Checks if a schema field is of type timestamp_millis (timestamp-millis or local-timestamp-millis).
+   *
+   * @param fieldSchema The schema of the field to check
+   * @return true if the field is of type timestamp_millis, false otherwise
+   */
+  public static boolean isTimestampMillisField(HoodieSchema fieldSchema) {
+    HoodieSchema nonNullableSchema = fieldSchema.getNonNullType();
+    if (nonNullableSchema.getType() == HoodieSchemaType.TIMESTAMP) {
+      HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) nonNullableSchema;
+      return timestampSchema.getPrecision().equals(HoodieSchema.TimePrecision.MILLIS);
+    }
+    return false;
+  }
 }

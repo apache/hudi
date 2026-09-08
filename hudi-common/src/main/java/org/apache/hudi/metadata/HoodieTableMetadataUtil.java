@@ -65,7 +65,6 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.HoodieSchema.TimePrecision;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
@@ -495,24 +494,9 @@ public class HoodieTableMetadataUtil {
     return indexDefinition.getSourceFields().stream()
         .filter(indexCol -> {
           Option<Pair<String, HoodieSchemaField>> fieldPairOpt = HoodieSchemaUtils.getNestedField(tableSchema, indexCol);
-          return fieldPairOpt.isPresent() && !isTimestampMillisField(fieldPairOpt.get().getRight().schema());
+          return fieldPairOpt.isPresent() && !HoodieSchemaUtils.isTimestampMillisField(fieldPairOpt.get().getRight().schema());
         })
         .collect(Collectors.toList());
-  }
-
-  /**
-   * Checks if a schema field is of type timestamp_millis (timestamp-millis or local-timestamp-millis).
-   *
-   * @param fieldSchema The schema of the field to check
-   * @return true if the field is of type timestamp_millis, false otherwise
-   */
-  public static boolean isTimestampMillisField(HoodieSchema fieldSchema) {
-    HoodieSchema nonNullableSchema = fieldSchema.getNonNullType();
-    if (nonNullableSchema.getType() == HoodieSchemaType.TIMESTAMP) {
-      HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) nonNullableSchema;
-      return timestampSchema.getPrecision().equals(TimePrecision.MILLIS);
-    }
-    return false;
   }
 
   /**
