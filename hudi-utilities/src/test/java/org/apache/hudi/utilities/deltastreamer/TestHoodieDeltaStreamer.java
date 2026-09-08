@@ -110,6 +110,7 @@ import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 import org.apache.hudi.utilities.config.SourceTestConfig;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionException;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionService;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -187,6 +188,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -218,6 +220,11 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
  */
 @Slf4j
 public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
+
+  // Bounds the stop a failure triggers, so a wedged streamer cannot hang the test it already failed. Kept
+  // well inside what the @Timeout(600) continuous-mode tests have left after the 360s they already spend in
+  // the wait: once that budget blows, JUnit replaces the test's own failure with its timeout.
+  private static final long STREAMER_STOP_TIMEOUT_SECS = 30;
 
   // Per-field verdict for the corrupt logical-repair fixtures: relabel ts_millis to millis and
   // attach the local-timestamp logical types that 0.x dropped. ts_micros is already micros.
@@ -1744,22 +1751,133 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   static void deltaStreamerTestRunner(HoodieDeltaStreamer ds, HoodieDeltaStreamer.Config cfg, Function<Boolean, Boolean> condition, String jobId) throws Exception {
     ExecutorService executor = Executors.newSingleThreadExecutor();
-    Future dsFuture = executor.submit(() -> {
-      try {
-        ds.sync();
-      } catch (Exception ex) {
-        log.warn("DS continuous job failed, hence not proceeding with condition check for {}", jobId);
-        throw new RuntimeException(ex.getMessage(), ex);
+    Future dsFuture = null;
+    boolean stoppedCleanly = false;
+    try {
+      dsFuture = executor.submit(() -> {
+        try {
+          ds.sync();
+        } catch (Exception ex) {
+          log.warn("DS continuous job failed, hence not proceeding with condition check for {}", jobId);
+          throw new RuntimeException(ex.getMessage(), ex);
+        }
+      });
+      TestHelpers.waitTillCondition(condition, dsFuture, 360);
+      if (cfg != null && !cfg.postWriteTerminationStrategyClass.isEmpty()) {
+        // If the streamer died, waitTillCondition returns as soon as the future completes. Surface that
+        // failure here rather than letting awaitDeltaStreamerShutdown time out and report the misleading
+        // "Deltastreamer should have shutdown by now" two minutes later.
+        if (dsFuture.isDone()) {
+          dsFuture.get();
+        }
+        awaitDeltaStreamerShutdown(ds);
+      } else {
+        ds.shutdownGracefully();
+        dsFuture.get();
       }
-    });
-    TestHelpers.waitTillCondition(condition, dsFuture, 360);
-    if (cfg != null && !cfg.postWriteTerminationStrategyClass.isEmpty()) {
-      awaitDeltaStreamerShutdown(ds);
-    } else {
-      ds.shutdownGracefully();
-      dsFuture.get();
+      stoppedCleanly = true;
+    } finally {
+      if (!stoppedCleanly) {
+        try {
+          stopLeakedStreamer(ds, dsFuture);
+        } catch (Throwable cleanupFailure) {
+          // Never let the cleanup replace the failure the caller is already propagating.
+          log.warn("Failed to stop the streamer after a failure", cleanupFailure);
+        }
+        // The ingest task has already had its one interrupt from cancel(true). If it swallowed that,
+        // an orderly shutdown() would never reach it and the pool thread would outlive the fork.
+        executor.shutdownNow();
+      } else {
+        executor.shutdown();
+      }
     }
-    executor.shutdown();
+  }
+
+  /**
+   * Stops a streamer that a failure left running, without letting the stop hang the test.
+   * <p>
+   * Surefire runs this module with forkCount=1 and reuseForks=true, so a live streamer reads on into the
+   * next test, whose setup deletes basePath and whose teardown closes the data generators underneath it.
+   * The stop has to be bounded: shutdownGracefully awaits the ingest executor for up to 24 hours, and it
+   * returns immediately without waiting when shutdown was already requested, so neither the wait nor the
+   * absence of one can be relied on here.
+   * <p>
+   * Each of the three waits - the stop itself, the join of the ingest task, and the close that runs on the
+   * stopper thread after the interrupt is swallowed - is bounded by {@code stopTimeoutSecs}, and at most two
+   * of them run in sequence on any one path (a stop that times out skips the join; a stop that returns leaves
+   * nothing for the close-wait), so a wedged streamer holds this for at most twice that.
+   */
+  private static void stopLeakedStreamer(HoodieDeltaStreamer ds, Future dsFuture) {
+    stopLeakedStreamer(ds, dsFuture, STREAMER_STOP_TIMEOUT_SECS);
+  }
+
+  /** The bound is a parameter only so this helper's own tests need not spend the production one. */
+  static void stopLeakedStreamer(HoodieDeltaStreamer ds, Future dsFuture, long stopTimeoutSecs) {
+    ExecutorService stopper = Executors.newSingleThreadExecutor();
+    try {
+      Future<?> stop = stopper.submit(ds::shutdownGracefully);
+      try {
+        stop.get(stopTimeoutSecs, TimeUnit.SECONDS);
+      } catch (ExecutionException stopThrew) {
+        // The stop itself failing does not excuse leaving the ingest task running, so fall through to the join
+        // below rather than take the outer clause, which tolerates only the ingest task's own failure.
+        log.warn("Stopping the streamer threw after a failure", stopThrew);
+      }
+      if (dsFuture != null) {
+        dsFuture.get(stopTimeoutSecs, TimeUnit.SECONDS);
+      }
+    } catch (ExecutionException ingestFailure) {
+      // Expected rather than anomalous: the ingest task failing is usually why the caller is unwinding at
+      // all, and the caller reports it. Nothing to warn about here.
+    } catch (Exception stopFailure) {
+      // Swallowed on purpose: this runs while another failure is propagating, and replacing that failure
+      // with this one would hide the diagnostic the caller is about to report.
+      if (stopFailure instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
+      log.warn("Could not stop the streamer cleanly after a failure, cancelling the ingest task", stopFailure);
+      // The bound only stops this thread waiting: HoodieAsyncService.shutdown(false) swallows the interrupt
+      // that stopper.shutdownNow() sends, and HoodieStreamer.shutdownGracefully runs ds.close() regardless, so
+      // forcing the executor down at least interrupts the ingest round before the close.
+      forceStopIngestion(ds);
+      if (dsFuture != null) {
+        dsFuture.cancel(true);
+      }
+    } finally {
+      stopper.shutdownNow();
+      // shutdownNow only interrupts the stopper out of awaitTermination. HoodieAsyncService.shutdown(false)
+      // swallows that interrupt without restoring the flag, so shutdownGracefully carries on into ds.close()
+      // on that thread. Give the close a bounded chance to finish here, rather than let it run on into the
+      // next test's setup, which deletes basePath underneath it.
+      // An interrupted caller would make awaitTermination throw at once and skip the wait, so the flag is
+      // cleared for the wait and restored afterwards.
+      boolean callerInterrupted = Thread.interrupted();
+      try {
+        if (!stopper.awaitTermination(stopTimeoutSecs, TimeUnit.SECONDS)) {
+          log.warn("The streamer stop did not finish closing within {}s, letting it run on", stopTimeoutSecs);
+        }
+      } catch (InterruptedException interrupted) {
+        callerInterrupted = true;
+      } finally {
+        if (callerInterrupted) {
+          Thread.currentThread().interrupt();
+        }
+      }
+    }
+  }
+
+  private static void forceStopIngestion(HoodieDeltaStreamer ds) {
+    try {
+      HoodieIngestionService ingestionService = ds.getIngestionService();
+      if (ingestionService != null) {
+        ingestionService.shutdown(true);
+      }
+    } catch (Exception noService) {
+      // Nothing to force down: a streamer that never started an ingestion service. On a real streamer
+      // getIngestionService is an Option.get(), so absence arrives as an exception; a mock returns null
+      // instead, which the guard above covers.
+      log.debug("No ingestion service to force-stop", noService);
+    }
   }
 
   static void awaitDeltaStreamerShutdown(HoodieDeltaStreamer ds) throws InterruptedException {
@@ -2166,6 +2284,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @Disabled("HUDI-8951")
+  @Test
   public void testHoodieIndexerExecutionAfterCommit() throws Exception {
     String tableBasePath = basePath + "/asyncindexer_commit";
     Set<String> customConfigs = new HashSet<>();
