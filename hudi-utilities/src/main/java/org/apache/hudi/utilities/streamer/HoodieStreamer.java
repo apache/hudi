@@ -221,10 +221,10 @@ public class HoodieStreamer implements Serializable {
   }
 
   /**
-   * Interrupts an in-progress ingestion, unlike {@link #shutdownGracefully()} which lets the current round finish.
-   * Deliberately does not close: the sync is still running, and the thread owning it releases resources on return.
+   * Interrupts an in-progress ingestion. Unlike {@link #shutdownGracefully()} this neither closes nor waits: the sync
+   * is still running, and the thread owning it releases the resources once it returns.
    */
-  public void shutdownForcefully() {
+  public void interruptIngestion() {
     ingestionService.ifPresent(ds -> {
       if (!ds.isShutdown()) {
         log.info("Forcefully shutting down DeltaStreamer");
