@@ -1822,7 +1822,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       log.warn("Could not stop the streamer cleanly after a failure, cancelling the ingest task", stopFailure);
       // The 60s bound only stops this thread waiting: HoodieAsyncService.shutdown(false) swallows the interrupt
       // that stopper.shutdownNow() sends, and HoodieStreamer.shutdownGracefully runs ds.close() regardless, so
-      // without forcing the executor down the write client can close under a still-running ingest round.
+      // forcing the executor down at least interrupts the ingest round before the close.
       forceStopIngestion(ds);
       if (dsFuture != null) {
         dsFuture.cancel(true);

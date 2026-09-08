@@ -25,6 +25,7 @@ import org.apache.hudi.utilities.streamer.NoNewDataTerminationStrategy;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -89,8 +90,11 @@ class TestDeltaStreamerTestHelpers {
     assertFalse(error.getMessage().contains("returned false without throwing"),
         () -> "The failure should carry the condition's error, not the 'kept returning false' branch, "
             + "but was: " + error.getMessage());
+    assertEquals(1, error.getSuppressed().length,
+        () -> "the timeout should stay attached as a suppressed exception once the condition's error becomes "
+            + "the cause, but the suppressed list was: " + Arrays.toString(error.getSuppressed()));
     assertInstanceOf(TimeoutException.class, error.getSuppressed()[0],
-        "the timeout should stay attached as a suppressed exception once the condition's error becomes the cause");
+        "the suppressed exception should be the timeout the wait gave up on");
   }
 
   /**
@@ -170,7 +174,7 @@ class TestDeltaStreamerTestHelpers {
         () -> waitTillCondition(
             ignored -> {
               try {
-                Thread.sleep(60_000);
+                Thread.sleep(TimeUnit.SECONDS.toMillis(60));
               } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
               }
@@ -253,8 +257,9 @@ class TestDeltaStreamerTestHelpers {
   }
 
   /**
-   * Unreachable through the helper, which reads the evaluation counter before the last error and so can see a
-   * recorded error alongside a count of zero; pinned here because nothing else can produce that combination.
+   * Not deterministically reproducible through the helper: it reads the evaluation counter before the last
+   * error, so it can see a recorded error alongside a count of zero, but only on an interleaving a test cannot
+   * force. Pinned here by calling the report builder directly.
    */
   @Test
   void describeTimeoutReportsAnErrorEvenWithNoCompletedEvaluation() {

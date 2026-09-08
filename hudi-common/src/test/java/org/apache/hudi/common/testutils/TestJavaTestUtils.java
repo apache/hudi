@@ -32,18 +32,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestJavaTestUtils {
 
   @Test
-  public void testNullMessageOnHeadStillMatchesDeeperCause() {
-    // Pre-fix this NPE'd on the head. The explicit (String) null cast matters: new RuntimeException(cause)
-    // would set the message to the cause's toString and hide the null-message case entirely.
-    Throwable t = new RuntimeException((String) null, new IllegalStateException("boom"));
+  public void testNullMessageMidChainDoesNotStopTheWalk() {
+    // Pre-fix this NPE'd on the message-less link. The explicit (String) null cast matters:
+    // new RuntimeException(cause) would set the message to the cause's toString and hide the case entirely.
+    Throwable deepest = new IllegalArgumentException("boom");
+    Throwable t = new RuntimeException("head", new RuntimeException((String) null, deepest));
     assertTrue(JavaTestUtils.checkNestedExceptionContains(t, "boom"));
   }
 
   @Test
-  public void testNullMessageMidChainDoesNotStopTheWalk() {
-    Throwable deepest = new IllegalArgumentException("boom");
-    Throwable t = new RuntimeException("head", new RuntimeException((String) null, deepest));
-    assertTrue(JavaTestUtils.checkNestedExceptionContains(t, "boom"));
+  public void testNullThrowableReturnsFalse() {
+    // The loop guard, the one input shape the other cases never reach.
+    assertFalse(JavaTestUtils.checkNestedExceptionContains(null, "boom"));
   }
 
   @Test
