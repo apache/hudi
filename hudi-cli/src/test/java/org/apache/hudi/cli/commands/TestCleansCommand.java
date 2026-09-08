@@ -177,11 +177,11 @@ public class TestCleansCommand extends CLIFunctionalTestHarness {
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_FILES_SUCCESSFULLY_DELETED)
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_FAILED_DELETIONS);
 
-    // There should be two partition path
+    // There should be two partition paths, rendered in partition order
     List<Comparable[]> rows = new ArrayList<>();
-    rows.add(new Comparable[] {HoodieTestCommitMetadataGenerator.DEFAULT_FIRST_PARTITION_PATH,
-        HoodieCleaningPolicy.KEEP_LATEST_COMMITS, "1", "0"});
     rows.add(new Comparable[] {HoodieTestCommitMetadataGenerator.DEFAULT_SECOND_PARTITION_PATH,
+        HoodieCleaningPolicy.KEEP_LATEST_COMMITS, "1", "0"});
+    rows.add(new Comparable[] {HoodieTestCommitMetadataGenerator.DEFAULT_FIRST_PARTITION_PATH,
         HoodieCleaningPolicy.KEEP_LATEST_COMMITS, "1", "0"});
 
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);

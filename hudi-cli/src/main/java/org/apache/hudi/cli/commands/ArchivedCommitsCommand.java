@@ -205,8 +205,12 @@ public class ArchivedCommitsCommand {
 
   /**
    * Loads the details of the given instants, through the closed time range they span when they
-   * are a strict subset of the archive, so that the archive files outside the range are never
-   * opened and the payloads outside it never held.
+   * are a strict subset of the archive, so that the payloads outside the range are never held.
+   * <p>
+   * On the LSM timeline that table version 8 and above are written with, the range prunes the
+   * archive files by the instant range in their names, so the files outside it are never opened.
+   * The legacy layout carries no such range in its file names and reads every archive file
+   * either way, keeping only the records that fall in the range.
    */
   private static void loadInstantDetails(HoodieArchivedTimeline archivedTimeline, List<HoodieInstant> instants,
                                          boolean subset) {

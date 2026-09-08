@@ -41,7 +41,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.HoodieStorageUtils;
@@ -457,7 +457,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
             Collections.singletonList(HoodieCleanFileInfo.newBuilder().setFilePath("file1").build())))
         .setLastCompletedCommitTimestamp("002")
         .setPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
-        .setVersion(TimelineLayoutVersion.CURR_VERSION)
+        .setVersion(CleanPlanV2MigrationHandler.VERSION)
         .build();
   }
 
