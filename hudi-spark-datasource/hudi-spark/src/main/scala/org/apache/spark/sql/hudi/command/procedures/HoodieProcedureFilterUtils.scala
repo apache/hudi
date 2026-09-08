@@ -96,7 +96,7 @@ object HoodieProcedureFilterUtils {
     // Second pass: resolve functions
     val functionResolved = attributeBound.transform {
         case unresolvedFunc: org.apache.spark.sql.catalyst.analysis.UnresolvedFunction =>
-          val tableResolved = unresolvedFunc.nameParts.head.toLowerCase(Locale.ROOT) match {
+          val hardcodedResolved = unresolvedFunc.nameParts.head.toLowerCase(Locale.ROOT) match {
             case "upper" =>
               if (unresolvedFunc.arguments.length == 1) {
                 org.apache.spark.sql.catalyst.expressions.Upper(unresolvedFunc.arguments.head)
@@ -358,10 +358,10 @@ object HoodieProcedureFilterUtils {
               }
             case _ => unresolvedFunc
           }
-          // whatever matched above - the table entry, or nothing at all - still an
+          // whatever matched above - the hardcoded entry, or nothing at all - still an
           // UnresolvedFunction (wrong arity, or a name not in the table)? try the registry
           // before giving up.
-          tableResolved match {
+          hardcodedResolved match {
             case _: org.apache.spark.sql.catalyst.analysis.UnresolvedFunction =>
               resolveViaFunctionRegistry(unresolvedFunc, sparkSession)
             case resolved => resolved
@@ -400,15 +400,22 @@ object HoodieProcedureFilterUtils {
 
   // didn't match anything above, so ask Spark itself before we give up - saves us from having
   // to hand-list every builtin (concat, instr, if, ...) one by one
+  // Resolves a function not covered by the hardcoded table above via Spark's own FunctionRegistry.
+  // A resolved result is only usable if it can actually be eval()'d one row at a time, which
+  // several categories of otherwise-valid expressions cannot: RuntimeReplaceable placeholders
+  // (nvl, ifnull, left, right) need substitution the analyzer normally performs but skips here;
+  // aggregates (percentile, collect_list) only make sense across real aggregation; generators
+  // (explode, inline) only work inside a projection; non-deterministic functions (rand, uuid,
+  // spark_partition_id) expect per-partition initialization; and a type mismatch the analyzer's
+  // implicit-cast pass would normally have caught (e.g. concat on a non-string column) still
+  // fails checkInputDataTypes. Anything in one of those categories is treated as still-unresolved
+  // so it falls through to the existing rejection path instead of silently dropping every row.
   private def resolveViaFunctionRegistry(unresolvedFunc: UnresolvedFunction, sparkSession: SparkSession): Expression = {
     Try {
-      val nameParts = unresolvedFunc.nameParts
-      // Filter expressions only ever call plain or db-qualified builtins, so this is really just
-      // name/db.name. A 3+ part name (catalog.db.func) isn't something we can look up safely -
-      // FunctionIdentifier only carries one qualifier, and guessing by dropping the extra parts
-      // risks matching a same-named function that isn't the one that was actually asked for. Bail
-      // out to unresolvedFunc instead and let it fall through to the existing rejection path.
-      val functionIdentifier = nameParts match {
+      // Filter expressions only ever call plain or db-qualified builtins. A 3+ part name
+      // (catalog.db.func) isn't safe to look up: FunctionIdentifier only carries one qualifier,
+      // and guessing by dropping the extra parts risks matching an unrelated same-named function.
+      val functionIdentifier = unresolvedFunc.nameParts match {
         case Seq(funcName) => Some(FunctionIdentifier(funcName))
         case Seq(db, funcName) => Some(FunctionIdentifier(funcName, Some(db)))
         case _ => None
@@ -416,19 +423,13 @@ object HoodieProcedureFilterUtils {
       val resolved = functionIdentifier
         .map(sparkSession.sessionState.functionRegistry.lookupFunction(_, unresolvedFunc.arguments))
         .getOrElse(unresolvedFunc)
-      // lookupFunction on its own leaves nvl/ifnull/left/right etc as a placeholder - normally
-      // the analyzer swaps it for the real expression right after, but nobody does that here, so
-      // eval() just throws. Unwrap it ourselves instead.
       val unwrapped = resolved.transformUp { case r: RuntimeReplaceable => r.replacement }
-      // a few more things resolve fine here but still can't be eval()'d one row at a time:
-      // aggregates (percentile, collect_list) need real aggregation, generators (explode,
-      // inline) only work inside a projection, and non-deterministic funcs (rand, uuid,
-      // spark_partition_id) expect per-partition init we never do. Push all of those back to
-      // unresolved so #19850's rejection path catches them instead of quietly dropping every row.
       val stillUnsupported =
         unwrapped.isInstanceOf[org.apache.spark.sql.catalyst.expressions.aggregate.AggregateFunction] ||
           unwrapped.isInstanceOf[org.apache.spark.sql.catalyst.expressions.Generator] ||
-          !unwrapped.deterministic
+          !unwrapped.deterministic ||
+          !unwrapped.resolved ||
+          !unwrapped.checkInputDataTypes().isSuccess
       if (stillUnsupported) {
         unresolvedFunc
       } else {
