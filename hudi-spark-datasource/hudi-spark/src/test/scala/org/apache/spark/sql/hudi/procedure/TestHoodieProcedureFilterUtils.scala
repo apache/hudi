@@ -627,4 +627,39 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     assertResult(scalarRows)(keep(scalarRows, "nvl2(name, 'yes', 'no') = 'yes'", scalarSchema))
     assertResult(Seq(scalarRows.head))(keep(scalarRows, "nullif(name, 'a1') IS NULL", scalarSchema))
   }
+
+  test("evaluateFilter widens nvl the same way as the equivalent hardcoded coalesce") {
+    // ts is LongType, 0 is an Int literal. nvl(ts, 0) unwraps to the same Coalesce shape as the
+    // hardcoded coalesce(ts, 0) case, so both need the same widening to resolve.
+    assertResult(Right(()))(validate("coalesce(ts, 0) = 1000"))
+    assertResult(Seq(scalarRows.head))(keep(scalarRows, "coalesce(ts, 0) = 1000", scalarSchema))
+    assertResult(Right(()))(validate("nvl(ts, 0) = 1000"))
+    assertResult(Seq(scalarRows.head))(keep(scalarRows, "nvl(ts, 0) = 1000", scalarSchema))
+  }
+
+  test("evaluateFilter unwraps a chained RuntimeReplaceable to a fixed point") {
+    // regexp_substr unwraps to NullIf, itself RuntimeReplaceable - a single non-recursive unwrap
+    // would leave NullIf's own eval() throwing, silently swallowed.
+    assertResult(Right(()))(validate("regexp_substr(name, 'a1') = 'a1'"))
+    assertResult(Seq(scalarRows.head))(keep(scalarRows, "regexp_substr(name, 'a1') = 'a1'", scalarSchema))
+  }
+
+  test("evaluateFilter checks a RuntimeReplaceable wrapper's own declared input types") {
+    // split_part's Int delimiter implicit-casts to String the same way a real query allows, so
+    // this resolves and evaluates correctly rather than being rejected outright.
+    assertResult(Right(()))(validate("split_part(name, 1, 1) = 'a'"))
+    assertResult(Seq(scalarRows.head))(keep(scalarRows, "split_part(name, 1, 1) = 'a'", scalarSchema))
+    // An array delimiter can't implicit-cast to the String split_part declares, and nothing about
+    // its unwrapped form (ElementAt over StringSplitSQL) enforces that contract on its own - the
+    // wrapper's own checkInputDataTypes is what has to catch this.
+    assert(validate("split_part(name, array(1), 1) = 'a'").isLeft)
+  }
+
+  test("evaluateFilter surfaces a runtime error from a registry-resolved function") {
+    // An invalid regex pattern raises the same way the equivalent Spark query would, instead of
+    // getting swallowed by the per-row Try and silently returning no matches.
+    assertResult(Right(()))(validate("regexp_replace(name, '[', 'x') = 'x'"))
+    val ex = intercept[IllegalArgumentException](keep(scalarRows, "regexp_replace(name, '[', 'x') = 'x'", scalarSchema))
+    assert(ex.getMessage.contains("regexp_replace"))
+  }
 }
