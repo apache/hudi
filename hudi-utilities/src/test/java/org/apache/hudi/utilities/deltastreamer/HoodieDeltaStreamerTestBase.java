@@ -608,6 +608,15 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
 
   public static class TestHelpers {
 
+    /**
+     * Default bound for {@link #waitFor(BooleanSupplier)}; generous, since it only exists to stop a hung poll
+     * running forever.
+     */
+    private static final long WAIT_FOR_TIMEOUT_SECS = 120;
+
+    /** How often {@link #waitTillCondition} re-evaluates its condition; a test ties its own wait to this. */
+    static final long POLL_INTERVAL_MS = 2000;
+
     static HoodieDeltaStreamer.Config makeDropAllConfig(String basePath, WriteOperationType op) {
       return makeConfig(basePath, op, Collections.singletonList(TestHoodieDeltaStreamer.DropAllTransformer.class.getName()));
     }
@@ -768,15 +777,6 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     }
 
     /**
-     * Default bound for {@link #waitFor(BooleanSupplier)}; generous, since it only exists to stop a hung poll
-     * running forever.
-     */
-    private static final long WAIT_FOR_TIMEOUT_SECS = 120;
-
-    /** How often {@link #waitTillCondition} re-evaluates its condition; a test ties its own wait to this. */
-    static final long POLL_INTERVAL_MS = 2000;
-
-    /**
      * Polls {@code condition} until it holds, the deltastreamer future finishes, or the timeout expires.
      *
      * <p>On timeout the last error the condition threw is attached to the failure, so the report names the
@@ -819,24 +819,9 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
           res.get(timeoutInSecs, TimeUnit.SECONDS);
         } catch (TimeoutException e) {
           Throwable last = lastError.get();
-          int completed = completedEvaluations.get();
-          String detail;
-          if (last != null) {
-            // Tested first because the worker records the error before it increments the counter: a timeout
-            // landing between the two would otherwise report that no evaluation completed. lastError is only
-            // ever set, never cleared, so its presence is decisive in every interleaving.
-            detail = String.format("%d evaluations completed; the last failure reported was: %s", completed, last);
-          } else if (completed == 0) {
-            // Distinguishes a condition that is stuck part-way through its first evaluation - a hung Spark
-            // read, say - from one that simply kept returning false.
-            detail = "No evaluation of the condition completed, so it was still running or never started.";
-          } else {
-            detail = String.format("%d evaluations completed and returned false without throwing, "
-                + "so there is no further detail.", completed);
-          }
           Throwable cause = last == null ? e : last;
           AssertionError failure = new AssertionError(
-              String.format("Condition was not met within %d seconds. %s", timeoutInSecs, detail), cause);
+              describeTimeout(last, completedEvaluations.get(), timeoutInSecs), cause);
           if (cause != e) {
             // The condition's own error is the more useful cause, but the fact that this was a timeout is
             // still part of the diagnosis, so it is carried along rather than dropped.
@@ -848,6 +833,28 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
         // stop the polling thread: this method runs once per continuous-mode test, so a leak accumulates
         executor.shutdownNow();
       }
+    }
+
+    /**
+     * Builds the timeout report. Which of the three shapes it takes is the whole diagnostic: an error the
+     * condition threw, a condition that never completed an evaluation, or one that kept returning false.
+     */
+    static String describeTimeout(Throwable last, int completed, long timeoutInSecs) {
+      String detail;
+      if (last != null) {
+        // Tested first because the worker records the error before it increments the counter: a timeout
+        // landing between the two would otherwise report that no evaluation completed. lastError is only
+        // ever set, never cleared, so its presence is decisive in every interleaving.
+        detail = String.format("%d evaluations completed; the last failure reported was: %s", completed, last);
+      } else if (completed == 0) {
+        // Distinguishes a condition that is stuck part-way through its first evaluation - a hung Spark
+        // read, say - from one that simply kept returning false.
+        detail = "No evaluation of the condition completed, so it was still running or never started.";
+      } else {
+        detail = String.format("%d evaluations completed and returned false without throwing, "
+            + "so there is no further detail.", completed);
+      }
+      return String.format("Condition was not met within %d seconds. %s", timeoutInSecs, detail);
     }
 
     /**
