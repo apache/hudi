@@ -30,9 +30,9 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.CompactionTestUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -89,7 +89,7 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
     // create COW table.
     new TableCommand().createTable(
         tablePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
-        "", TimelineLayoutVersion.VERSION_1, HoodieAvroPayload.class.getName());
+        "", HoodieTableVersion.current().versionCode(), HoodieAvroPayload.class.getName());
 
     // expect HoodieException for COPY_ON_WRITE table.
     assertThrows(HoodieException.class,
@@ -104,7 +104,7 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
     // create MOR table.
     new TableCommand().createTable(
         tablePath, tableName, HoodieTableType.MERGE_ON_READ.name(),
-        "", TimelineLayoutVersion.VERSION_1, HoodieAvroPayload.class.getName());
+        "", HoodieTableVersion.current().versionCode(), HoodieAvroPayload.class.getName());
 
     CompactionTestUtils.setupAndValidateCompactionOperations(HoodieCLI.getTableMetaClient(), false, 3, 4, 3, 3);
 
@@ -136,7 +136,7 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
     // create MOR table.
     new TableCommand().createTable(
         tablePath, tableName, HoodieTableType.MERGE_ON_READ.name(),
-        "", TimelineLayoutVersion.VERSION_1, HoodieAvroPayload.class.getName());
+        "", HoodieTableVersion.current().versionCode(), HoodieAvroPayload.class.getName());
 
     CompactionTestUtils.setupAndValidateCompactionOperations(HoodieCLI.getTableMetaClient(), false, 3, 4, 3, 3);
 
@@ -150,7 +150,7 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
     // create MOR table.
     new TableCommand().createTable(
         tablePath, tableName, HoodieTableType.MERGE_ON_READ.name(),
-        "", TimelineLayoutVersion.VERSION_1, HoodieAvroPayload.class.getName());
+        "", HoodieTableVersion.current().versionCode(), HoodieAvroPayload.class.getName());
 
     CompactionTestUtils.setupAndValidateCompactionOperations(HoodieCLI.getTableMetaClient(), true, 1, 2, 3, 4);
 
