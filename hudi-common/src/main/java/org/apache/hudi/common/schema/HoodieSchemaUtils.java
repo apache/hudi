@@ -540,6 +540,16 @@ public final class HoodieSchemaUtils {
     ValidationUtils.checkArgument(schemaFieldsMap != null, "Schema fields map cannot be null");
     ValidationUtils.checkArgument(fieldNames != null, "Field names cannot be null");
 
+    /**
+     * Avro & Presto field names seems to be case sensitive (support fields differing only in case) whereas
+     * Hive/Impala/SparkSQL(default) are case-insensitive. Spark allows this to be configurable using
+     * spark.sql.caseSensitive=true
+     *
+     * For a RT table setup with no delta-files (for a latest file-slice) -> we translate parquet schema to Avro Here
+     * the field-name case is dependent on parquet schema. Hive (1.x/2.x/CDH) translate column projections to
+     * lower-cases
+     *
+     */
     List<HoodieSchemaField> projectedFields = new ArrayList<>(fieldNames.size());
     for (String fn : fieldNames) {
       HoodieSchemaField field = schemaFieldsMap.get(fn.toLowerCase(Locale.ROOT));
