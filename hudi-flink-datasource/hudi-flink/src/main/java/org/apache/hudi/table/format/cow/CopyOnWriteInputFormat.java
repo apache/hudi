@@ -79,7 +79,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
   private final DataType[] readFieldTypes;
   private final int[] selectedFields;
   private final Map<Integer, HoodieSchema.Vector> vectorColumnInfo;
-  private final HoodieSchema requestedSchema;
+  private final HoodieSchema tableSchema;
   private final String partDefaultName;
   private final String partPathField;
   private final boolean hiveStylePartitioning;
@@ -90,6 +90,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
 
   private transient ClosableIterator<RowData> itr;
   private transient long currentReadCount;
+  private transient HoodieSchema requestedSchema;
 
   /**
    * Files filter for determining what files/directories should be included.
@@ -123,12 +124,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
     this.readFieldTypes = VectorConversionUtils.getParquetReadFieldTypes(fullFieldNames, fullFieldTypes, tableSchema);
     this.selectedFields = selectedFields;
     this.vectorColumnInfo = VectorConversionUtils.detectVectorColumns(fullFieldNames, selectedFields, tableSchema);
-    RowType requestedRowType = (RowType) DataTypes.ROW(Arrays.stream(selectedFields)
-            .mapToObj(i -> DataTypes.FIELD(fullFieldNames[i], fullFieldTypes[i]))
-            .toArray(DataTypes.Field[]::new))
-        .notNull()
-        .getLogicalType();
-    this.requestedSchema = DataTypeUtils.toHoodieSchema(requestedRowType, tableSchema);
+    this.tableSchema = tableSchema;
     this.conf = new SerializableConfiguration(conf);
     this.utcTimestamp = utcTimestamp;
     this.internalSchemaManager = internalSchemaManager;
@@ -168,7 +164,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
   }
 
   private ClosableIterator<RowData> getLanceRecordIterator(Path path) {
-    return FormatUtils.getLanceRecordIterator(path.toString(), requestedSchema, conf.conf());
+    return FormatUtils.getLanceRecordIterator(path.toString(), getRequestedSchema(), conf.conf());
   }
 
   @Override
@@ -428,4 +424,15 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
     }
   }
 
+  private HoodieSchema getRequestedSchema() {
+    if (requestedSchema == null) {
+      RowType requestedRowType = (RowType) DataTypes.ROW(Arrays.stream(selectedFields)
+              .mapToObj(i -> DataTypes.FIELD(fullFieldNames[i], fullFieldTypes[i]))
+              .toArray(DataTypes.Field[]::new))
+          .notNull()
+          .getLogicalType();
+      requestedSchema = DataTypeUtils.toHoodieSchema(requestedRowType, tableSchema);
+    }
+    return requestedSchema;
+  }
 }

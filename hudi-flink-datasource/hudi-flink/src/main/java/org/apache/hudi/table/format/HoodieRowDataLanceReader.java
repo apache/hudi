@@ -219,7 +219,7 @@ public class HoodieRowDataLanceReader implements HoodieRowDataFileReader {
     }
     Map<String, Integer> vectorColumns = new LinkedHashMap<>();
     vectorColumnNames.forEach(name -> vectorColumns.put(
-        name, vectorSchemaFromField(getTopLevelField(name)).getDimension()));
+        name, vectorSchemaFromField(arrowSchema.findField(name)).getDimension()));
     return HoodieSchemaConverter.convertToSchema(rowType, "record", vectorColumns);
   }
 
@@ -230,7 +230,7 @@ public class HoodieRowDataLanceReader implements HoodieRowDataFileReader {
         continue;
       }
       HoodieSchema.Vector expected = (HoodieSchema.Vector) fieldSchema;
-      HoodieSchema.Vector actual = vectorSchemaFromField(getTopLevelField(field.name()));
+      HoodieSchema.Vector actual = vectorSchemaFromField(arrowSchema.findField(field.name()));
       if (actual.getDimension() != expected.getDimension()
           || actual.getVectorElementType() != expected.getVectorElementType()) {
         throw new HoodieValidationException(
@@ -239,14 +239,6 @@ public class HoodieRowDataLanceReader implements HoodieRowDataFileReader {
                 + " but file contains " + actual.toTypeDescriptor());
       }
     }
-  }
-
-  private Field getTopLevelField(String name) {
-    Field field = arrowSchema.findField(name);
-    if (field == null) {
-      throw new HoodieValidationException("Missing Lance column in file schema: " + name);
-    }
-    return field;
   }
 
   private static HoodieSchema.Vector vectorSchemaFromField(Field field) {
