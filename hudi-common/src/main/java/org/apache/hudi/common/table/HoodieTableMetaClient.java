@@ -1306,6 +1306,14 @@ public class HoodieTableMetaClient implements Serializable {
           }
         }
       }
+      // Settings of a pluggable table format are its own to interpret; they must reach
+      // HoodieTableFormat#init from the table config from the very first commit on
+      String tableFormatPrefix = HoodieTableConfig.TABLE_FORMAT.key() + ".";
+      props.forEach((key, value) -> {
+        if (key.startsWith(tableFormatPrefix) && value != null) {
+          this.others.put(key, String.valueOf(value));
+        }
+      });
       return this;
     }
 
