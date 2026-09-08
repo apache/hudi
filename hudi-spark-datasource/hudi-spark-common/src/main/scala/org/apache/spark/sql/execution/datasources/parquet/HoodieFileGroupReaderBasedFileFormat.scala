@@ -51,7 +51,7 @@ import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjecti
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{JoinedRow, UnsafeProjection}
-import org.apache.spark.sql.execution.datasources.{OutputWriterFactory, PartitionedFile, SparkColumnarFileReader}
+import org.apache.spark.sql.execution.datasources.{OutputWriterFactory, PartitionedFile, SparkColumnarFileReader, SparkSchemaTransformUtils}
 import org.apache.spark.sql.execution.datasources.orc.OrcUtils
 import org.apache.spark.sql.execution.vectorized.{OffHeapColumnVector, OnHeapColumnVector}
 import org.apache.spark.sql.hudi.MultipleColumnarFileFormatReader
@@ -318,6 +318,20 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     partitionSchema.fields.foreach(f => exclusionFields.add(f.name))
     val requestedStructType = StructType(readRequiredSchema.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name) && !isNestedPartitionField(f.name)))
     val requestedSchema = HoodieSchemaUtils.pruneDataSchema(schema, HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(requestedStructType, sanitizedTableName), exclusionFields)
+    // The reader emits requestedSchema -- FileGroupReaderSchemaHandler projects its merged rows back
+    // down to it -- and that is wider than requestedStructType wherever pruneDataSchema had to keep a
+    // column whole: a union (a member0..memberN struct on the Spark side), a BLOB or a VARIANT that
+    // Spark's nested schema pruning asked only some inner fields of. Bind the output projection to the
+    // emitted shape rather than to what was asked for, so it resolves by name and drops the rest; a
+    // field the reader does not widen keeps the requested type, which is what it already had.
+    val readerStructType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(requestedSchema)
+    val requestedFieldsByName = requestedStructType.fields.map(f => f.name -> f).toMap
+    val projectionInputSchema = StructType(readerStructType.fields.map { readerField =>
+      requestedFieldsByName.get(readerField.name) match {
+        case Some(f) if !SparkSchemaTransformUtils.needsNestedPruning(readerField.dataType, f.dataType) => f
+        case _ => readerField
+      }
+    })
     val dataStructTypeWithMandatoryPartitionFields = StructType(dataStructType.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name) && !isNestedPartitionField(f.name)))
     val dataSchema = HoodieSchemaUtils.pruneDataSchema(schema, HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(dataStructTypeWithMandatoryPartitionFields, sanitizedTableName), exclusionFields)
 
@@ -402,7 +416,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
               // Append partition values to rows and project to output schema
               appendPartitionAndProject(
                 reader.getClosableIterator,
-                requestedStructType,
+                projectionInputSchema,
                 remainingPartitionSchema,
                 outputSchema,
                 fileSliceMapping.getPartitionValues,
@@ -493,7 +507,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
         //some partition fields read from file, some were not
         getFixedPartitionValues(partitionValues, partitionSchema, fixedPartitionIndexes)
       }
-      val unsafeProjection = generateUnsafeProjection(StructType(inputSchema.fields ++ partitionSchema.fields), to)
+      val unsafeProjection = generateOutputProjection(StructType(inputSchema.fields ++ partitionSchema.fields), to)
       val joinedRow = new JoinedRow()
       makeCloseableFileGroupMappingRecordIterator(iter, d => unsafeProjection(joinedRow(d, fixedPartitionValues)))
     }
@@ -502,8 +516,24 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
   private def projectSchema(iter: ClosableIterator[InternalRow],
                             from: StructType,
                             to: StructType): Iterator[InternalRow] = {
-    val unsafeProjection = generateUnsafeProjection(from, to)
+    val unsafeProjection = generateOutputProjection(from, to)
     makeCloseableFileGroupMappingRecordIterator(iter, d => unsafeProjection(d))
+  }
+
+  /**
+   * The scan's output projection. Stays the by-name top-level projection unless a column comes out of the
+   * reader with nested fields Spark did not ask for (see `projectionInputSchema` in
+   * buildReaderWithPartitionValues), in which case those are dropped by name at every depth.
+   */
+  private def generateOutputProjection(from: StructType, to: StructType): UnsafeProjection = {
+    val hasWiderNestedInput = to.fields.exists { f =>
+      from.getFieldIndex(f.name).exists(i => SparkSchemaTransformUtils.needsNestedPruning(from.fields(i).dataType, f.dataType))
+    }
+    if (hasWiderNestedInput) {
+      SparkSchemaTransformUtils.generateNestedPruningProjection(from, to)
+    } else {
+      generateUnsafeProjection(from, to)
+    }
   }
 
   private def makeCloseableFileGroupMappingRecordIterator(closeableFileGroupRecordIterator: ClosableIterator[InternalRow],
