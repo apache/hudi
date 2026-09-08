@@ -609,7 +609,7 @@ public class HoodieMultiTableStreamer {
     try {
       FutureUtils.allOf(tableFutures).join();
     } catch (CompletionException e) {
-      Throwable cause = unwrapFailFastFailure(e);
+      Throwable cause = unwrapCompletionException(e);
       log.error("error while running MultiTableDeltaStreamer, shutting down remaining tables as fail fast is enabled", cause);
       shutdownRequested.set(true);
       // shutdownStreamers only interrupts; the executor teardown in syncContinuously() waits for the siblings to stop.
@@ -631,8 +631,9 @@ public class HoodieMultiTableStreamer {
     }
   }
 
-  // FutureUtils.allOf can wrap the real failure in more than one layer of CompletionException.
-  private static Throwable unwrapFailFastFailure(CompletionException e) {
+  // A worker failure reaches the waiter wrapped in CompletionException, and FutureUtils.allOf re-wraps it, so the
+  // real cause can sit under more than one layer.
+  private static Throwable unwrapCompletionException(CompletionException e) {
     Throwable cause = e;
     while (cause instanceof CompletionException && cause.getCause() != null) {
       cause = cause.getCause();
