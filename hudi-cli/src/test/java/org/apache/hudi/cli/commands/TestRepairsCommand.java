@@ -100,6 +100,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.validateChecksum;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -282,18 +283,9 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
       HoodieTestCommitMetadataGenerator.createEmptyCleanRequestedFile(tablePath, timestamp, conf);
     }
 
-    // A plan cut short mid-write, so that its bytes stop inside the Avro header. The file is
-    // overwritten in place rather than deleted and rewritten, because both the emptiness check
-    // and the file name generator resolve the file from the instant itself.
+    // A plan cut short mid-write, so that its bytes stop inside the Avro header
     FileCreateUtils.createRequestedCleanFile(metaClient, "104", validCleanerPlan());
-    StoragePath truncatedPath = requestedCleanPath(metaClient, "104");
-    byte[] plan;
-    try (InputStream in = metaClient.getStorage().open(truncatedPath)) {
-      plan = FileIOUtils.readAsByteArray(in);
-    }
-    try (OutputStream out = metaClient.getStorage().create(truncatedPath, true)) {
-      out.write(plan, 0, plan.length / 2);
-    }
+    truncateInHalf(metaClient, requestedCleanPath(metaClient, "104"));
 
     // A plan whose writer was killed between opening and closing the Avro container, which leaves a
     // complete header and no record behind
@@ -346,6 +338,102 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     RepairsCommand.removeCorruptedPendingCleanAction(HoodieTableMetaClient.reload(metaClient));
     assertEquals(1, HoodieTableMetaClient.reload(metaClient).getActiveTimeline()
         .filterInflightsAndRequested().countInstants());
+  }
+
+  /**
+   * A clean that reached inflight keeps its plan in the requested file, so a corrupt plan has to
+   * take both files with it. The timeline collapses the two states into the inflight instant
+   * alone, so removing only the instant it listed would leave the corrupt plan behind for the
+   * next clean to fail on, and take a second run of this command to clear.
+   */
+  @Test
+  public void testRemoveCorruptedPendingCleanActionRemovesInflightAndItsPlan() throws IOException {
+    HoodieCLI.conf = storageConf();
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+
+    // a clean that was scheduled and started, whose plan was then cut short
+    FileCreateUtils.createRequestedCleanFile(metaClient, "100", validCleanerPlan());
+    // the inflight file a clean leaves behind carries no plan of its own
+    FileCreateUtils.createInflightCleanFile(metaClient, "100", null, true);
+    truncateInHalf(metaClient, requestedCleanPath(metaClient, "100"));
+
+    StoragePath inflightPath = new StoragePath(metaClient.getTimelinePath(),
+        metaClient.getInstantFileNameGenerator().makeInflightCleanerFileName("100"));
+    assertTrue(metaClient.getStorage().exists(inflightPath));
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    List<HoodieInstant> pending = metaClient.getActiveTimeline().filterInflightsAndRequested().getInstants();
+    assertEquals(1, pending.size());
+    assertTrue(pending.get(0).isInflight());
+
+    RepairsCommand.removeCorruptedPendingCleanAction(metaClient);
+
+    // one pass takes the whole action, not just the file the timeline listed
+    assertFalse(metaClient.getStorage().exists(inflightPath));
+    assertFalse(metaClient.getStorage().exists(requestedCleanPath(metaClient, "100")));
+    assertEquals(0, HoodieTableMetaClient.reload(metaClient).getActiveTimeline()
+        .filterInflightsAndRequested().countInstants());
+  }
+
+  /**
+   * Corrupt bytes do not always reach the decoder as an Avro failure: a plan that decodes with no
+   * version leaves the migrator to unbox a null, and a length that survives as far as Avro's own
+   * ceiling raises an {@code UnsupportedOperationException}. Such an instant has to be judged
+   * corrupt like any other, and the instants behind it still repaired, rather than the failure
+   * escaping and abandoning the rest of the timeline.
+   */
+  @Test
+  public void testRemoveCorruptedPendingCleanActionRepairsPastAnUndecodablePlan() throws IOException {
+    HoodieCLI.conf = storageConf();
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+
+    HoodieCleanerPlan versionless = validCleanerPlan();
+    versionless.setVersion(null);
+    writeCleanerPlan(metaClient, "100", versionless);
+
+    // an ordinary corruption behind it, which is only reached if the first one does not escape
+    HoodieTestCommitMetadataGenerator.createEmptyCleanRequestedFile(tablePath, "101", HoodieCLI.conf);
+    // and a readable plan the command has to leave in place
+    FileCreateUtils.createRequestedCleanFile(metaClient, "102", validCleanerPlan());
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertEquals(3, metaClient.getActiveTimeline().filterInflightsAndRequested().countInstants());
+
+    RepairsCommand.removeCorruptedPendingCleanAction(metaClient);
+
+    List<HoodieInstant> remaining = HoodieTableMetaClient.reload(metaClient)
+        .getActiveTimeline().filterInflightsAndRequested().getInstants();
+    assertEquals(1, remaining.size());
+    assertEquals("102", remaining.get(0).requestedTime());
+  }
+
+  /**
+   * Cuts a file's bytes in half in place. The file is overwritten rather than deleted and
+   * rewritten, because both the emptiness check and the file name generator resolve the file
+   * from the instant itself.
+   */
+  private static void truncateInHalf(HoodieTableMetaClient metaClient, StoragePath path) throws IOException {
+    byte[] bytes;
+    try (InputStream in = metaClient.getStorage().open(path)) {
+      bytes = FileIOUtils.readAsByteArray(in);
+    }
+    try (OutputStream out = metaClient.getStorage().create(path, true)) {
+      out.write(bytes, 0, bytes.length / 2);
+    }
+  }
+
+  /**
+   * Writes a clean plan straight into the requested file of an instant, so that a plan the
+   * timeline's own writer would not produce still reaches the command.
+   */
+  private static void writeCleanerPlan(HoodieTableMetaClient metaClient, String instantTime,
+                                       HoodieCleanerPlan plan) throws IOException {
+    try (DataFileWriter<HoodieCleanerPlan> writer =
+             new DataFileWriter<>(new SpecificDatumWriter<>(HoodieCleanerPlan.class))) {
+      writer.create(HoodieCleanerPlan.getClassSchema(),
+          metaClient.getStorage().create(requestedCleanPath(metaClient, instantTime), true));
+      writer.append(plan);
+    }
   }
 
   /**

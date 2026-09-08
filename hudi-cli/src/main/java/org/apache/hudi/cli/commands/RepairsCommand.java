@@ -41,7 +41,6 @@ import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.StoragePath;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.AvroRuntimeException;
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.sql.hudi.DeDupeType;
 import org.apache.spark.util.Utils;
@@ -222,8 +221,17 @@ public class RepairsCommand {
         return;
       }
       log.warn("Corruption found. Trying to remove corrupted clean instant file: {}", instant);
+      // An inflight clean keeps its plan in the requested file, so removing only the instant the
+      // timeline listed would leave the corrupt plan behind for the next clean to fail on. The
+      // inflight file goes first: a failure between the two deletes leaves the action requested,
+      // which is a state this command already handles, whereas the reverse order would leave an
+      // inflight action with no plan at all.
       TimelineUtils.deleteInstantFile(client.getStorage(), client.getTimelinePath(),
           instant, client.getInstantFileNameGenerator());
+      if (!instant.equals(planInstant)) {
+        TimelineUtils.deleteInstantFile(client.getStorage(), client.getTimelinePath(),
+            planInstant, client.getInstantFileNameGenerator());
+      }
     });
   }
 
@@ -231,12 +239,20 @@ public class RepairsCommand {
    * Decodes a clean plan held in memory, which fails only on the content itself: bytes that are not
    * an Avro file or that stop short fail the read, and an Avro container that holds no record, which
    * a writer killed between opening and closing it leaves behind, fails the serde's argument check.
+   * <p>
+   * Every failure is caught, because corrupt bytes do not reach the decoder through one exception
+   * type: a length that survives as far as Avro's own ceiling raises an {@code
+   * UnsupportedOperationException} rather than an {@code AvroRuntimeException}, and a plan that
+   * decodes with no version leaves the migrator to unbox a null. Nothing inside the try touches
+   * storage -- the bytes are already in memory and both clean plan migration handlers are pure
+   * transforms -- so there is no I/O failure here to mistake for corruption, and letting one of
+   * these escape would abandon the repair of every instant behind this one.
    */
   private static boolean isReadableCleanerPlan(HoodieTableMetaClient client, byte[] plan) {
     try {
       CleanerUtils.getCleanerPlan(client, new ByteArrayInputStream(plan));
       return true;
-    } catch (IOException | AvroRuntimeException | IllegalArgumentException e) {
+    } catch (IOException | RuntimeException e) {
       return false;
     }
   }
