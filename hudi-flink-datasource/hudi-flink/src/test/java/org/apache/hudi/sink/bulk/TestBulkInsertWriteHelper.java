@@ -20,7 +20,15 @@ package org.apache.hudi.sink.bulk;
 
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
+import org.apache.hudi.sink.bucket.BucketBulkInsertWriterHelper;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.FlinkTables;
@@ -37,6 +45,8 @@ import org.apache.flink.table.types.logical.RowType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -120,6 +130,53 @@ public class TestBulkInsertWriteHelper {
         TestConfigurations.ROW_TYPE);
 
     assertThrows(IOException.class, () -> writerHelper.write(new GenericRowData(0)));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testBucketBulkInsertWithNBCC(boolean sortInput) throws Exception {
+    conf = TestConfigurations.getDefaultConf(
+        new File(tempFile, "nbcc-" + sortInput).getAbsolutePath(),
+        TestConfigurations.ROW_DATA_TYPE);
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    conf.set(FlinkOptions.OPERATION, "bulk_insert");
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+    conf.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 1);
+    conf.set(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT, sortInput);
+    conf.setString(
+        HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(),
+        WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL.name());
+    StreamerUtil.initTableIfNotExists(conf);
+
+    HoodieFlinkTable<?> table = FlinkTables.createTable(conf);
+    String instant = WriteClientTestUtils.createNewInstantTime();
+    RowType rowType = TestConfigurations.ROW_TYPE;
+    RowDataKeyGen keyGen = RowDataKeyGens.instance(conf, rowType);
+    NumBucketsFunction numBucketsFunction = new NumBucketsFunction(
+        conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS),
+        conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_RULE),
+        conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS));
+    Map<String, String> bucketIdToFileId = new HashMap<>();
+    List<WriteStatus> writeStatuses;
+    try (BucketBulkInsertWriterHelper writerHelper = new BucketBulkInsertWriterHelper(
+        conf, table, table.getConfig(), instant, 1, 1, 0, rowType)) {
+      for (RowData row : TestData.DATA_SET_INSERT) {
+        writerHelper.write(BucketBulkInsertWriterHelper.rowWithFileId(
+            bucketIdToFileId,
+            keyGen,
+            row,
+            OptionsResolver.getIndexKeyFields(conf),
+            numBucketsFunction,
+            true));
+      }
+      writeStatuses = writerHelper.getWriteStatuses(1);
+    }
+
+    assertWriteStatus(writeStatuses);
+    assertThat(writeStatuses.stream()
+        .map(writeStatus -> writeStatus.getStat().getFileId())
+        .distinct()
+        .count(), is(1L));
   }
 
   private void assertWriteStatus(List<WriteStatus> writeStatusList) {
