@@ -22,6 +22,7 @@ import org.apache.hudi.exception.HoodieException;
 
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -257,7 +258,7 @@ public class ReflectionUtils {
     try (Stream<Path> paths = Files.walk(directory)) {
       return paths
           .filter(Files::isRegularFile)
-          .map(p -> p.getFileName().toString())
+          .map(p -> directory.relativize(p).toString().replace(File.separatorChar, '.'))
           .filter(name -> name.endsWith(".class"))
           .filter(name -> !name.contains("$"))
           .map(name -> prefix + name.substring(0, name.length() - ".class".length()))
