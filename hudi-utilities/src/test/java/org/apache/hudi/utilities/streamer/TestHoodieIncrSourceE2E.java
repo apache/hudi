@@ -68,6 +68,7 @@ import static org.apache.hudi.utilities.sources.DummyOperationExecutor.OP_EMPTY_
 import static org.apache.hudi.utilities.sources.DummyOperationExecutor.OP_EMPTY_ROW_SET_NULL_CKP_KEY;
 import static org.apache.hudi.utilities.sources.DummyOperationExecutor.OP_FETCH_NEXT_BATCH;
 import static org.apache.hudi.utilities.sources.DummyOperationExecutor.RETURN_CHECKPOINT_KEY;
+import static org.apache.hudi.utilities.sources.MockS3EventsHoodieIncrSource.MOCK_ROWS_JSON;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT;
 import static org.apache.hudi.utilities.streamer.StreamSync.CHECKPOINT_IGNORE_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -532,7 +533,8 @@ public class TestHoodieIncrSourceE2E extends S3EventsHoodieIncrSourceHarness {
    * An empty batch from a source whose schema provider reports no schema at all must still land an empty
    * commit when the table's latest commit carries a schema without fields (what a sync over column-less
    * input leaves behind), so the checkpoint keeps advancing. With an unchanged checkpoint the empty commit
-   * is gated by allowCommitOnNoCheckpointChange, as for any other source.
+   * is gated by allowCommitOnNoCheckpointChange, as for any other source. The non-empty batch that follows
+   * must then evolve the field-less table schema and land its rows.
    */
   @ParameterizedTest
   @CsvSource({
@@ -540,9 +542,8 @@ public class TestHoodieIncrSourceE2E extends S3EventsHoodieIncrSourceHarness {
       "8, 80, false, true",
       "8, 70, false, false",
       "8, 70, true, true"})
-  public void testSyncE2EEmptyBatchWithAbsentSchemaAndFieldlessTableSchema(String tableVersion, String returnedCheckpoint,
-                                                                          boolean allowCommitOnNoCheckpointChange,
-                                                                          boolean expectNewCommit) throws Exception {
+  void testSyncE2EEmptyBatchWithAbsentSchemaAndFieldlessTableSchema(
+      String tableVersion, String returnedCheckpoint, boolean allowCommitOnNoCheckpointChange, boolean expectNewCommit) throws Exception {
     metaClient = getHoodieMetaClientWithTableVersion(storageConf(), basePath(), tableVersion);
     Schema fieldlessSchema = Schema.createRecord("hoodie_trips_record", null, "hoodie.hoodie_trips", false, Collections.emptyList());
     HoodieCommitMetadata seed = new HoodieCommitMetadata();
@@ -557,6 +558,8 @@ public class TestHoodieIncrSourceE2E extends S3EventsHoodieIncrSourceHarness {
     props.put(VAL_INPUT_CKP, VAL_NON_EMPTY_CKP_ALL_MEMBERS);
     props.put(VAL_CKP_KEY_EQ_VAL, "70");
     props.put(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key(), "true");
+    props.put("hoodie.datasource.write.recordkey.field", "_row_key");
+    props.put("hoodie.datasource.write.partitionpath.field", "partition_path");
 
     HoodieDeltaStreamer.Config cfg = createConfig(basePath(), null);
     cfg.operation = WriteOperationType.UPSERT;
@@ -573,6 +576,24 @@ public class TestHoodieIncrSourceE2E extends S3EventsHoodieIncrSourceHarness {
     assertEquals(returnedCheckpoint, last.getMetadata(STREAMER_CHECKPOINT_KEY_V1));
     assertEquals(0, last.getWriteStats().size());
     assertEquals(0, new Schema.Parser().parse(last.getMetadata(HoodieCommitMetadata.SCHEMA_KEY)).getFields().size());
+
+    props.put(MOCK_ROWS_JSON, "{\"_row_key\":\"k1\",\"partition_path\":\"p1\",\"timestamp\":1,\"name\":\"a\"}\n"
+        + "{\"_row_key\":\"k2\",\"partition_path\":\"p1\",\"timestamp\":2,\"name\":\"b\"}");
+    props.put(RETURN_CHECKPOINT_KEY, "90");
+    props.put(VAL_CKP_KEY_EQ_VAL, returnedCheckpoint);
+    new HoodieDeltaStreamer(cfg, jsc, Option.of(props)).sync();
+
+    metaClient.reloadActiveTimeline();
+    commits = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+    assertEquals(expectNewCommit ? 3 : 2, commits.countInstants());
+    last = HoodieClientTestUtils.getCommitMetadataForInstant(metaClient, commits.lastInstant().get()).get();
+    assertEquals("90", last.getMetadata(STREAMER_CHECKPOINT_KEY_V1));
+    assertEquals(2, last.fetchTotalRecordsWritten());
+    Schema evolved = new Schema.Parser().parse(last.getMetadata(HoodieCommitMetadata.SCHEMA_KEY));
+    for (String column : new String[] {"_row_key", "partition_path", "timestamp", "name"}) {
+      assertFalse(evolved.getField(column) == null, column);
+    }
+    assertEquals(2, spark().read().format("hudi").load(basePath()).count());
   }
 
   /**
