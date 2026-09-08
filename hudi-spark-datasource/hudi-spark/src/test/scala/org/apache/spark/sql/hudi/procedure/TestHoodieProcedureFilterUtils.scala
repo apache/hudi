@@ -380,13 +380,27 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     assertResult(Seq(scalarRows.head))(keep(scalarRows, "substring(name, 2) = '1'", scalarSchema))
   }
 
-  test("evaluateFilter still rejects aggregate functions resolved via FunctionRegistry") {
+  test("evaluateFilter still rejects aggregate/generator/nondeterministic functions resolved via FunctionRegistry") {
     // percentile/any_value etc. resolve fine as expressions but can't be eval()'d per row -
     // make sure those still go through the existing #19850 rejection path instead of silently
-    // resolving to a broken, always-false filter.
+    // resolving to a broken, always-false filter. Same story for generators (explode only makes
+    // sense in a projection) and non-deterministic functions (rand()/uuid() rely on
+    // per-partition initialization this evaluator never does).
     assert(validate("any_value(id) = 1").isLeft)
     assert(validate("percentile(id, 0.5) = 1").isLeft)
+    assert(validate("explode(array(1, 2)) = 1").isLeft)
+    assert(validate("rand() = 1").isLeft)
+    assert(validate("uuid() = 'x'").isLeft)
     assertResult(Seq.empty)(keep(scalarRows, "any_value(id) = 1", scalarSchema))
+    assertResult(Seq.empty)(keep(scalarRows, "rand() = 1", scalarSchema))
+    // monotonically_increasing_id/input_file_name are also Nondeterministic, so the same
+    // deterministic check catches them without needing their own case.
+    assert(validate("monotonically_increasing_id() = 1").isLeft)
+    assert(validate("input_file_name() = 'x'").isLeft)
+    // current_date/current_timestamp are deterministic-at-eval-time (Spark computes them
+    // directly rather than requiring rule substitution), so they resolve and evaluate for real
+    // instead of needing denylist treatment.
+    assertResult(scalarRows)(keep(scalarRows, "current_timestamp() > t", scalarSchema))
   }
 
   test("evaluateFilter handles AND / OR / NOT / IN / BETWEEN") {

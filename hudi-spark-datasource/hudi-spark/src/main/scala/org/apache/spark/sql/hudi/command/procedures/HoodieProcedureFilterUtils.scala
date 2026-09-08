@@ -409,14 +409,20 @@ object HoodieProcedureFilterUtils {
         case _ => FunctionIdentifier(nameParts.last)
       }
       val resolved = sparkSession.sessionState.functionRegistry.lookupFunction(functionIdentifier, unresolvedFunc.arguments)
-      // lookupFunction alone doesn't run the analyzer rule that swaps these placeholders for
-      // their real expression (nvl, ifnull, left, right, ...) - eval() on the raw node just
-      // throws, so unwrap it ourselves.
+      // lookupFunction on its own leaves nvl/ifnull/left/right etc as a placeholder - normally
+      // the analyzer swaps it for the real expression right after, but nobody does that here, so
+      // eval() just throws. Unwrap it ourselves instead.
       val unwrapped = resolved.transformUp { case r: RuntimeReplaceable => r.replacement }
-      // aggregate functions (percentile, collect_list, ...) resolve fine here but can't be
-      // eval()'d row-by-row outside of real aggregation - treat them as still-unresolved so
-      // the existing rejection path (see #19850) catches them instead of silently no-matching.
-      if (unwrapped.isInstanceOf[org.apache.spark.sql.catalyst.expressions.aggregate.AggregateFunction]) {
+      // a few more things resolve fine here but still can't be eval()'d one row at a time:
+      // aggregates (percentile, collect_list) need real aggregation, generators (explode,
+      // inline) only work inside a projection, and non-deterministic funcs (rand, uuid,
+      // spark_partition_id) expect per-partition init we never do. Push all of those back to
+      // unresolved so #19850's rejection path catches them instead of quietly dropping every row.
+      val stillUnsupported =
+        unwrapped.isInstanceOf[org.apache.spark.sql.catalyst.expressions.aggregate.AggregateFunction] ||
+          unwrapped.isInstanceOf[org.apache.spark.sql.catalyst.expressions.Generator] ||
+          !unwrapped.deterministic
+      if (stillUnsupported) {
         unresolvedFunc
       } else {
         unwrapped
