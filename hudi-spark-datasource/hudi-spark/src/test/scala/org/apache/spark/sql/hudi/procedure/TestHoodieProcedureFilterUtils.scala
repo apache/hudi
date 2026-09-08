@@ -45,6 +45,14 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
   private def validate(expr: String, schema: StructType = scalarSchema): Either[String, Unit] =
     HoodieProcedureFilterUtils.validateFilterExpression(expr, schema, spark)
 
+  // Every filterable procedure calls validateFilterExpression before evaluateFilter, so a
+  // "resolves correctly" claim needs both: this pairs the two instead of asserting through keep
+  // alone.
+  private def assertKeeps(rows: Seq[Row], expr: String, expected: Seq[Row], schema: StructType = scalarSchema): Unit = {
+    assertResult(Right(()))(validate(expr, schema))
+    assertResult(expected)(keep(rows, expr, schema))
+  }
+
   // Not the scalarRows factory: only id and ts matter to the widening tests that use it.
   private def tsRow(id: Int, ts: Long): Row =
     Row(id, s"n$id", 10.0d * id, ts, true, -id,
@@ -357,55 +365,67 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
   test("evaluateFilter resolves functions outside the hardcoded table via FunctionRegistry") {
     // Functions missing from the hardcoded table now fall back to Spark's own FunctionRegistry
     // instead of being rejected as unsupported. See #19852.
-    assertResult(Seq(scalarRows.head))(keep(scalarRows, "concat(name, 'x') = 'a1x'", scalarSchema))
-    assertResult(Seq(scalarRows.head))(keep(scalarRows, "instr(name, 'a') = 1", scalarSchema))
+    assertKeeps(scalarRows, "concat(name, 'x') = 'a1x'", Seq(scalarRows.head))
+    assertKeeps(scalarRows, "instr(name, 'a') = 1", Seq(scalarRows.head))
     assertResult(Seq(scalarRows.head))(keep(scalarRows, "if(name = 'a1', true, false)", scalarSchema))
     assertResult(Seq(scalarRows.head))(
       keep(scalarRows, "case when name = 'a1' then true else false end", scalarSchema))
     // Or short-circuits on the resolved side, which is what the unresolved-operand guard preserves.
-    assertResult(Seq(scalarRows.head))(
-      keep(scalarRows, "id = 1 OR concat(name, 'x') = 'a1x'", scalarSchema))
-    assertResult(Right(()))(validate("concat(name, 'x') = 'a1x'"))
-    assertResult(Right(()))(validate("instr(name, 'a') = 1"))
+    assertKeeps(scalarRows, "id = 1 OR concat(name, 'x') = 'a1x'", Seq(scalarRows.head))
 
     // RuntimeReplaceable builtins (nvl, left, right, ...) resolve to a placeholder node that
     // FunctionRegistry.lookupFunction doesn't substitute on its own - make sure we unwrap it
     // rather than letting eval() blow up on the raw placeholder.
-    assertResult(Seq(scalarRows.head))(keep(scalarRows, "nvl(name, 'z') = 'a1'", scalarSchema))
-    assertResult(Seq(scalarRows.head))(keep(scalarRows, "left(name, 1) = 'a'", scalarSchema))
-    assertResult(Seq(scalarRows.head))(keep(scalarRows, "right(name, 1) = '1'", scalarSchema))
+    assertKeeps(scalarRows, "nvl(name, 'z') = 'a1'", Seq(scalarRows.head))
+    assertKeeps(scalarRows, "left(name, 1) = 'a'", Seq(scalarRows.head))
+    assertKeeps(scalarRows, "right(name, 1) = '1'", Seq(scalarRows.head))
 
     // A hardcoded-table entry called with an arity the table doesn't handle (substring only
     // handles 3 args) should still fall back to the registry instead of getting stuck.
-    assertResult(Seq(scalarRows.head))(keep(scalarRows, "substring(name, 2) = '1'", scalarSchema))
+    assertKeeps(scalarRows, "substring(name, 2) = '1'", Seq(scalarRows.head))
+
+    // The rejection message for multiple unknown functions lists every name, sorted.
+    assert(validate("no_such_fn(name) = 'x' OR other_missing(name) = 1")
+      .left.exists(_ == "Unsupported functions: no_such_fn, other_missing"))
 
     // A 3+ part name (catalog.db.func) isn't safe to look up by bare function name alone - make
     // sure it's rejected rather than silently resolved against a same-named function elsewhere.
     assert(validate("some_catalog.some_db.upper(name) = 'A1'").isLeft)
     assertResult(Seq.empty)(keep(scalarRows, "some_catalog.some_db.upper(name) = 'A1'", scalarSchema))
+    // Same story for a 2-part db-qualified name: builtins register with no database, so
+    // FunctionRegistry has no "default.upper" to find, and guessing by dropping the qualifier
+    // would risk the same wrong-function-match problem as the 3+ part case.
+    assert(validate("default.upper(name) = 'A1'").isLeft)
+    assertResult(Seq.empty)(keep(scalarRows, "default.upper(name) = 'A1'", scalarSchema))
   }
 
   test("evaluateFilter still rejects aggregate/generator/nondeterministic functions resolved via FunctionRegistry") {
-    // percentile/any_value etc. resolve fine as expressions but can't be eval()'d per row -
-    // make sure those still go through the existing #19850 rejection path instead of silently
-    // resolving to a broken, always-false filter. Same story for generators (explode only makes
-    // sense in a projection) and non-deterministic functions (rand()/uuid() rely on
-    // per-partition initialization this evaluator never does).
-    assert(validate("any_value(id) = 1").isLeft)
+    // Aggregate functions resolve fine as expressions but can't be eval()'d per row - make sure
+    // those still go through the existing #19850 rejection path instead of silently resolving to
+    // a broken, always-false filter. Same story for generators (explode only makes sense in a
+    // projection) and non-deterministic functions (rand()/uuid() rely on per-partition
+    // initialization this evaluator never does). any_value is covered separately below - the
+    // parser lowers it straight to an AggregateExpression before it ever reaches this guard.
+    // max(id) is an unambiguous AggregateFunction case (no decimal-literal argument to complicate
+    // why it's rejected, unlike percentile's 0.5), so it's what actually pins the guard clause.
+    assert(validate("max(id) > 0").left.exists(_.contains("Unsupported functions: max")))
+    assertResult(Seq.empty)(keep(scalarRows, "max(id) > 0", scalarSchema))
     assert(validate("percentile(id, 0.5) = 1").isLeft)
-    assert(validate("explode(array(1, 2)) = 1").isLeft)
+    assert(validate("explode(array(1, 2)) = 1").left.exists(_.contains("Unsupported functions: explode")))
     assert(validate("rand() = 1").isLeft)
     assert(validate("uuid() = 'x'").isLeft)
-    assertResult(Seq.empty)(keep(scalarRows, "any_value(id) = 1", scalarSchema))
     assertResult(Seq.empty)(keep(scalarRows, "rand() = 1", scalarSchema))
     // monotonically_increasing_id/input_file_name are also Nondeterministic, so the same
     // deterministic check catches them without needing their own case.
     assert(validate("monotonically_increasing_id() = 1").isLeft)
     assert(validate("input_file_name() = 'x'").isLeft)
-    // current_date/current_timestamp are deterministic-at-eval-time (Spark computes them
-    // directly rather than requiring rule substitution), so they resolve and evaluate for real
-    // instead of needing denylist treatment.
+    // current_timestamp is deterministic-at-eval-time (Spark computes it directly rather than
+    // requiring rule substitution), so it resolves and evaluates for real instead of needing
+    // denylist treatment. current_date doesn't share that: it's a TimeZoneAwareExpression that
+    // stays unresolved without a session zone the same way hour(t) does above, not because of
+    // anything this guard rejects.
     assertResult(scalarRows)(keep(scalarRows, "current_timestamp() > t", scalarSchema))
+    assert(validate("current_date() > d").isLeft)
 
     // lookupFunction skips the analyzer's implicit-cast pass, so a call like concat(id, 'x')
     // structurally resolves against a non-string column even though the analyzer would reject
@@ -603,18 +623,13 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     assertResult(Right(()))(validate("upper(name) = 'A1'"))
   }
 
-  test("evaluateFilter resolves a registry function nested inside another") {
+  test("evaluateFilter resolves deeper nesting and more RuntimeReplaceable functions") {
     // Function resolution runs bottom-up, so a registry-resolved argument (upper(name)) is
-    // already a real expression by the time its enclosing call (instr/concat) is checked -
-    // otherwise the outer call would look unresolved and get rejected even though both
-    // functions individually resolve fine.
+    // already a real expression by the time its enclosing call (instr) is checked - otherwise
+    // the outer call would look unresolved and get rejected even though both functions
+    // individually resolve fine. This is the regression case for the transformUp fix.
     assertResult(Right(()))(validate("instr(upper(name), 'A') = 1"))
     assertResult(Seq(scalarRows.head))(keep(scalarRows, "instr(upper(name), 'A') = 1", scalarSchema))
-    assertResult(Right(()))(validate("concat(upper(name), 'x') = 'A1x'"))
-    assertResult(Seq(scalarRows.head))(keep(scalarRows, "concat(upper(name), 'x') = 'A1x'", scalarSchema))
-  }
-
-  test("evaluateFilter resolves deeper nesting and more RuntimeReplaceable functions") {
     // Two levels of registry-only nesting.
     assertResult(Right(()))(validate("instr(concat(name, 'x'), 'a') = 1"))
     assertResult(Seq(scalarRows.head))(keep(scalarRows, "instr(concat(name, 'x'), 'a') = 1", scalarSchema))

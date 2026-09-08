@@ -466,7 +466,11 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
             ("action = 'clean' AND total_files_deleted >= 0", "AND logic"),
             ("total_files_deleted >= 0 OR time_taken_in_millis >= 0", "OR logic"),
             ("NOT (total_files_deleted < 0)", "NOT logic"),
-            ("action IN ('clean', 'commit', 'rollback')", "IN operator")
+            ("action IN ('clean', 'commit', 'rollback')", "IN operator"),
+            // Before #19852 this threw at validation instead of returning rows - concat isn't in
+            // the hardcoded table, so this is the only call-level coverage of a registry-resolved
+            // function actually working end to end, not just rejected differently.
+            ("concat(action, 'x') = 'cleanx'", "Registry-resolved function")
           )
 
           filterTests.foreach { case (filterExpr, description) =>
