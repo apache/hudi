@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.schema.HoodieSchemaTestUtils.createArrayField;
 import static org.apache.hudi.common.schema.HoodieSchemaTestUtils.createMapField;
@@ -219,6 +220,23 @@ public class TestInternalSchemaConverter {
         createPrimitiveField("field2", HoodieSchemaType.STRING));
     fieldNames = InternalSchemaConverter.collectColNamesFromSchema(schemaWithMultiBranchUnion);
     assertEquals(Arrays.asList("field1", "field2"), fieldNames);
+
+    // visitSchemaToBuildType keeps the first non-null branch and drops the rest, so a record, array or
+    // map sitting in one of the dropped branches has no ids in the internal schema. Naming its leaves
+    // here made pruneInternalSchema throw "cannot prune col: field1.x which does not exist in hudi
+    // table" (#19825).
+    HoodieSchema schemaWithRecordBranchUnion = createRecord("schemaWithRecordBranchUnion",
+        HoodieSchemaField.of("field1", HoodieSchema.createUnion(
+            HoodieSchema.create(HoodieSchemaType.NULL),
+            HoodieSchema.create(HoodieSchemaType.INT),
+            createRecord("branchRecord", createPrimitiveField("x", HoodieSchemaType.STRING))), null, null),
+        createPrimitiveField("field2", HoodieSchemaType.STRING));
+    fieldNames = InternalSchemaConverter.collectColNamesFromSchema(schemaWithRecordBranchUnion);
+    assertEquals(Arrays.asList("field1", "field2"), fieldNames);
+    InternalSchema prunedInternalSchema = InternalSchemaConverter.pruneHoodieSchemaToInternalSchema(
+        schemaWithRecordBranchUnion, InternalSchemaConverter.convert(schemaWithRecordBranchUnion));
+    assertEquals(Arrays.asList("field1", "field2"),
+        prunedInternalSchema.getRecord().fields().stream().map(Types.Field::name).collect(Collectors.toList()));
   }
 
   @Test

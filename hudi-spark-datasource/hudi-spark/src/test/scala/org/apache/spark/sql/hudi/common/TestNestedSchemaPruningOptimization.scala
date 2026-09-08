@@ -177,6 +177,9 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase {
             |{"name":"id","type":"int"},
             |{"name":"choice","type":["null","string","int"],"default":null},
             |{"name":"pick","type":["null","string","int","long"],"default":null},
+            |{"name":"nested","type":["null","int",{"type":"record","name":"nested_branch","fields":[
+            |{"name":"x","type":["null","string"],"default":null},
+            |{"name":"y","type":["null","string"],"default":null}]}],"default":null},
             |{"name":"ts","type":"long"}]}""".stripMargin)
         HoodieTableMetaClient.newTableBuilder()
           .setTableType(tableType)
@@ -187,21 +190,32 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase {
         val jsc = new JavaSparkContext(spark.sparkContext)
         val writeConfig = HoodieWriteConfig.newBuilder().withPath(tablePath).withSchema(schema.toString).forTable(tableName).build()
         val client = new SparkRDDWriteClient[HoodieAvroPayload](new HoodieSparkEngineContext(jsc), writeConfig)
-        def record(id: Int, choice: AnyRef, pick: AnyRef, ts: Long): HoodieRecord[HoodieAvroPayload] = {
+        def nestedBranch(x: String, y: String): GenericRecord = {
+          val branchSchema = schema.getField("nested").get().schema().getTypes.get(2).getAvroSchema
+          val branchRecord = new GenericData.Record(branchSchema)
+          branchRecord.put("x", x)
+          branchRecord.put("y", y)
+          branchRecord
+        }
+        def record(id: Int, choice: AnyRef, pick: AnyRef, nested: AnyRef, ts: Long): HoodieRecord[HoodieAvroPayload] = {
           val avroRecord = new GenericData.Record(schema.getAvroSchema)
           avroRecord.put("id", Int.box(id))
           avroRecord.put("choice", choice)
           avroRecord.put("pick", pick)
+          avroRecord.put("nested", nested)
           avroRecord.put("ts", Long.box(ts))
           new HoodieAvroRecord(new HoodieKey(id.toString, ""), new HoodieAvroPayload(HOption.of[GenericRecord](avroRecord)))
         }
         try {
           val insertInstant = client.startCommit()
-          client.commit(insertInstant, client.insert(jsc.parallelize(Seq(record(1, "a1", Long.box(100L), 1000L), record(2, Int.box(7), "b2", 1000L)).asJava), insertInstant))
+          client.commit(insertInstant, client.insert(jsc.parallelize(Seq(
+            record(1, "a1", Long.box(100L), nestedBranch("n1", "n2"), 1000L),
+            record(2, Int.box(7), "b2", Int.box(9), 1000L)).asJava), insertInstant))
           if (tableType == HoodieTableType.MERGE_ON_READ) {
             // The update writes a log file, so the pruned reads below merge base and log records
             val updateInstant = client.startCommit()
-            client.commit(updateInstant, client.upsert(jsc.parallelize(Seq(record(1, "a1", Long.box(100L), 1001L)).asJava), updateInstant))
+            client.commit(updateInstant, client.upsert(jsc.parallelize(Seq(
+              record(1, "a1", Long.box(100L), nestedBranch("n1", "n2"), 1001L)).asJava), updateInstant))
           }
         } finally {
           client.close()
@@ -219,6 +233,15 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase {
         // Two members out of three, and not the leading ones
         checkAnswer(s"SELECT id, pick.member0, pick.member2 FROM $tableName")(Seq(1, null, 100L), Seq(2, "b2", null))
         checkAnswer(s"SELECT id, pick.member2 FROM $tableName")(Seq(1, 100L), Seq(2, null))
+        // A record branch: the required schema converts back to a union over a record, and the projection
+        // has to drop both the other member and the inner field Spark did not ask for
+        val nestedDF = spark.sql(s"SELECT id, nested.member1.x FROM $tableName")
+        assertEquals(
+          StructType(Seq(StructField("member1", StructType(Seq(StructField("x", StringType, nullable = true))), nullable = true))),
+          prunedStructTypeOf(nestedDF, "nested"))
+        checkAnswer(s"SELECT id, nested.member1.x FROM $tableName")(Seq(1, "n1"), Seq(2, null))
+        checkAnswer(s"SELECT id, nested.member0 FROM $tableName")(Seq(1, null), Seq(2, 9))
+        checkAnswer(s"SELECT id, nested.member1 FROM $tableName")(Seq(1, Row("n1", "n2")), Seq(2, null))
         // The whole struct is not pruned and comes back as written, next to the ordering value the log record carries
         val tsOfFirstRecord = if (tableType == HoodieTableType.MERGE_ON_READ) 1001L else 1000L
         checkAnswer(s"SELECT id, choice, ts FROM $tableName")(Seq(1, Row("a1", null), tsOfFirstRecord), Seq(2, Row(null, 7), 1000L))

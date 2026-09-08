@@ -923,6 +923,41 @@ public class TestHoodieSchemaUtils {
   }
 
   @Test
+  void testPruningPreservesMultiBranchUnionWhenRequiredIsOneMember() {
+    // Spark's nested schema pruning can cut the member0..memberN struct a union is read as down to a
+    // single member, and HoodieSparkSchemaConverters converts that one-member struct back to a union
+    // over the member's own type. The required schema then presents as a record, array or map while the
+    // data schema still holds the whole union, which used to be rejected as a type mismatch (#19825).
+    HoodieSchema branchRecord = HoodieSchema.createRecord("branch_record", null, null, Arrays.asList(
+        HoodieSchemaField.of("x", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
+        HoodieSchemaField.of("y", HoodieSchema.create(HoodieSchemaType.STRING), null, null)
+    ));
+    HoodieSchema prunedBranchRecord = HoodieSchema.createRecord("branch_record", null, null, Collections.singletonList(
+        HoodieSchemaField.of("x", HoodieSchema.create(HoodieSchemaType.STRING), null, null)
+    ));
+    HoodieSchema branchArray = HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.STRING));
+    HoodieSchema branchMap = HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.STRING));
+
+    for (Pair<HoodieSchema, HoodieSchema> branchAndRequired : Arrays.asList(
+        Pair.of(branchRecord, prunedBranchRecord), Pair.of(branchArray, branchArray), Pair.of(branchMap, branchMap))) {
+      HoodieSchema dataUnion = HoodieSchema.createUnion(
+          HoodieSchema.create(HoodieSchemaType.NULL),
+          HoodieSchema.create(HoodieSchemaType.INT),
+          branchAndRequired.getLeft());
+      HoodieSchema dataSchema = HoodieSchema.createRecord("test_record", null, null, Collections.singletonList(
+          HoodieSchemaField.of("choice", dataUnion, null, null)
+      ));
+      HoodieSchema requiredSchema = HoodieSchema.createRecord("test_record", null, null, Collections.singletonList(
+          HoodieSchemaField.of("choice", HoodieSchema.createNullable(branchAndRequired.getRight()), null, null)
+      ));
+
+      HoodieSchema pruned = HoodieSchemaUtils.pruneDataSchema(dataSchema, requiredSchema, Collections.emptySet());
+
+      assertEquals(dataUnion, pruned.getFields().get(0).schema());
+    }
+  }
+
+  @Test
   void testPruningPreserveNullable() {
     String dataSchemaStr = "{"
         + "\"type\": \"record\","
