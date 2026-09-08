@@ -40,7 +40,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -171,9 +170,8 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
         assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, instant.getAction()));
   }
 
-  // replacecommit.inflight doesn't have clustering plan.
-  // Verify that getClusteringPlan fetches content from corresponding requested file.
-  @Disabled("Will fail due to avro issue AVRO-3789. This is fixed in avro 1.11.3")
+  // The inflight instant file carries no clustering plan, so getClusteringPlan has to read it from the
+  // corresponding requested file. Verified for both states of the same instant.
   @Test
   public void testClusteringPlanInflight() throws Exception {
     String partitionPath1 = "partition1";
@@ -182,7 +180,7 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     fileIds1.add(UUID.randomUUID().toString());
     String clusterTime1 = "1";
     HoodieInstant requestedInstant = createRequestedClusterInstant(partitionPath1, clusterTime1, fileIds1);
-    HoodieInstant inflightInstant = metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(requestedInstant, Option.empty());
+    HoodieInstant inflightInstant = metaClient.getActiveTimeline().transitionClusterRequestedToInflight(requestedInstant, Option.empty());
     assertTrue(ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline(), requestedInstant, INSTANT_GENERATOR));
     HoodieClusteringPlan requestedClusteringPlan = ClusteringUtils.getClusteringPlan(metaClient, requestedInstant).get().getRight();
     assertTrue(ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline(), inflightInstant, INSTANT_GENERATOR));
