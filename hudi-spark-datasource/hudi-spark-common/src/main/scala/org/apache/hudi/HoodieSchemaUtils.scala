@@ -248,7 +248,7 @@ object HoodieSchemaUtils {
         } else {
           log.error(
             s"""Failed to reconcile incoming batch schema with the table's one.
-               |Incoming schema ${sourceSchema.toString(true)}
+               |Incoming schema ${if (sourceSchema == null) "null" else sourceSchema.toString(true)}
                |Incoming schema (canonicalized) ${canonicalizedSourceSchema.toString(true)}
                |Table's schema ${latestTableSchema.toString(true)}
                |""".stripMargin)
