@@ -70,7 +70,7 @@ public class AvroSchemaEvolutionUtils {
   public static InternalSchema reconcileSchema(HoodieSchema incomingSchema, InternalSchema oldTableSchema,
                                                boolean makeMissingFieldsNullable, Map<String, Type> timestampLogicalTypeOverrides) {
     /* If incoming schema is null, we fall back on table schema. */
-    if (incomingSchema.isSchemaNull()) {
+    if (incomingSchema == null || incomingSchema.isSchemaNull()) {
       return oldTableSchema;
     }
     InternalSchema inComingInternalSchema = convert(incomingSchema, oldTableSchema.getNameToPosition());
@@ -315,12 +315,12 @@ public class AvroSchemaEvolutionUtils {
    */
   public static HoodieSchema reconcileSchemaRequirements(HoodieSchema sourceSchema, HoodieSchema targetSchema,
                                                           boolean shouldReorderColumns) {
-    if (targetSchema.isSchemaNull() || targetSchema.getFields().isEmpty()) {
-      return sourceSchema;
-    }
-
     if (sourceSchema == null || sourceSchema.isSchemaNull() || sourceSchema.getFields().isEmpty()) {
       return targetSchema;
+    }
+
+    if (targetSchema.isSchemaNull() || targetSchema.getFields().isEmpty()) {
+      return sourceSchema;
     }
 
     InternalSchema targetInternalSchema = convert(targetSchema);

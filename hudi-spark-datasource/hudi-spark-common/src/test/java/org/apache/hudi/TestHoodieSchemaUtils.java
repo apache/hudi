@@ -410,6 +410,26 @@ public class TestHoodieSchemaUtils {
     return deduceWriterSchema(incomingSchema, latestTableSchema, false);
   }
 
+  @Test
+  void testDeduceWriterSchemaWithAbsentIncomingSchema() {
+    HoodieSchema tableSchema = createRecord("simple", createPrimitiveField("f", HoodieSchemaType.INT));
+    HoodieSchema emptyTableSchema = createRecord("empty");
+
+    assertEquals(tableSchema, deduceWriterSchema(null, tableSchema, true));
+    assertEquals(emptyTableSchema, deduceWriterSchema(null, emptyTableSchema, true));
+    assertEquals(HoodieSchemaType.NULL, deduceWriterSchema(null, null, true).getType());
+
+    // schema reconciliation takes the schema-on-read branch, which also has to tolerate an absent incoming schema
+    TypedProperties reconcileProps = new TypedProperties();
+    reconcileProps.setProperty(DataSourceWriteOptions.RECONCILE_SCHEMA().key(), "true");
+    for (HoodieSchema incoming : new HoodieSchema[] {null, HoodieSchema.create(HoodieSchemaType.NULL)}) {
+      for (HoodieSchema table : new HoodieSchema[] {tableSchema, emptyTableSchema}) {
+        assertEquals(table, HoodieSchemaUtils.deduceWriterSchema(incoming, Option.of(table),
+            Option.of(InternalSchemaConverter.convert(table)), reconcileProps));
+      }
+    }
+  }
+
   private static final TypedProperties TYPED_PROPERTIES = new TypedProperties();
 
   private static HoodieSchema deduceWriterSchema(HoodieSchema incomingSchema, HoodieSchema latestTableSchema, Boolean addNull) {
