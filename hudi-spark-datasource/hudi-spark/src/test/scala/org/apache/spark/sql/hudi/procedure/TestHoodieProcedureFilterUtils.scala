@@ -406,6 +406,12 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     // directly rather than requiring rule substitution), so they resolve and evaluate for real
     // instead of needing denylist treatment.
     assertResult(scalarRows)(keep(scalarRows, "current_timestamp() > t", scalarSchema))
+
+    // lookupFunction skips the analyzer's implicit-cast pass, so a call like concat(id, 'x')
+    // structurally resolves against a non-string column even though the analyzer would reject
+    // it. checkInputDataTypes() catches that instead of letting eval() throw silently.
+    assert(validate("concat(id, 'x') = 'x'").isLeft)
+    assertResult(Seq.empty)(keep(scalarRows, "concat(id, 'x') = 'x'", scalarSchema))
   }
 
   test("evaluateFilter handles AND / OR / NOT / IN / BETWEEN") {
