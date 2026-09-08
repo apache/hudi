@@ -498,24 +498,25 @@ public class HoodieMultiTableStreamer {
     } finally {
       log.info("Ingestion was successful for topics: {}", successTables);
       if (!failedTables.isEmpty()) {
-        log.info("Ingestion failed for topics: {}", failedTables);
+        log.error("Ingestion failed for topics: {}", failedTables);
       }
     }
   }
 
   private void syncSequentially() {
     for (TableExecutionContext context : tableExecutionContexts) {
+      String table = Helpers.getTableWithDatabase(context);
       HoodieStreamer streamer = null;
       try {
         streamer = new HoodieStreamer(context.getConfig(), jssc, Option.ofNullable(context.getProperties()));
         streamer.sync();
-        successTables.add(Helpers.getTableWithDatabase(context));
+        successTables.add(table);
       } catch (Exception e) {
-        log.error("error while running MultiTableDeltaStreamer for table: {}", context.getTableName(), e);
-        failedTables.add(Helpers.getTableWithDatabase(context));
+        log.error("error while running MultiTableDeltaStreamer for table: {}", table, e);
+        failedTables.add(table);
       } finally {
         if (streamer != null) {
-          shutdownQuietly(streamer, context);
+          shutdownQuietly(streamer, table);
         }
       }
     }
@@ -548,11 +549,16 @@ public class HoodieMultiTableStreamer {
 
       if (failFastOnContinuousMode) {
         log.info("Fail fast enabled in continuous mode. The whole job fails on any single table failure");
-        awaitFailFast(tableFutures, streamerInstances, shutdownRequested);
+        awaitFailFast(tableFutures);
       } else {
         CompletableFuture.allOf(tableFutures.toArray(new CompletableFuture[0])).join();
       }
     } finally {
+      // On an abnormal exit the siblings are still ingesting, since FutureUtils.allOf only cancels their futures.
+      // Stopping them here rather than in a catch covers every such exit, including an Error, which the workers do
+      // not catch; it is a no-op on the success path because each table has already shut its ingestion service down.
+      shutdownRequested.set(true);
+      shutdownStreamers(streamerInstances);
       // Wait for every worker thread to finish (including its finally cleanup) before returning, so sync() does not
       // return while a table is still writing and main() then stops the shared Spark context under it.
       terminated = shutdownExecutor(executor);
@@ -569,6 +575,9 @@ public class HoodieMultiTableStreamer {
    * in {@link #failedTables} and the sibling tables carry on.
    */
   private void runTableSync(TableExecutionContext context, List<HoodieStreamer> streamerInstances, AtomicBoolean shutdownRequested) {
+    String table = Helpers.getTableWithDatabase(context);
+    // The tables now log concurrently into one driver log, so name the worker after the table it is syncing.
+    Thread.currentThread().setName("multi-table-streamer-" + table);
     HoodieStreamer streamer = null;
     try {
       streamer = new HoodieStreamer(context.getConfig(), jssc, Option.ofNullable(context.getProperties()));
@@ -582,10 +591,9 @@ public class HoodieMultiTableStreamer {
       // shutdown() call will be a no-op because its ingestion service hadn't started yet.
       // Don't count that as a success.
       if (!shutdownRequested.get()) {
-        successTables.add(Helpers.getTableWithDatabase(context));
+        successTables.add(table);
       }
     } catch (Exception e) {
-      String table = Helpers.getTableWithDatabase(context);
       log.error("error while running MultiTableDeltaStreamer for table: {}", table, e);
       failedTables.add(table);
       if (failFastOnContinuousMode) {
@@ -594,7 +602,7 @@ public class HoodieMultiTableStreamer {
       }
     } finally {
       if (streamer != null) {
-        shutdownQuietly(streamer, context);
+        shutdownQuietly(streamer, table);
       }
     }
   }
@@ -605,15 +613,16 @@ public class HoodieMultiTableStreamer {
    * on an <em>exceptional</em> completion, so a table that terminates normally (e.g. via a
    * {@link PostWriteTerminationStrategy}) does not abort its siblings.
    */
-  private void awaitFailFast(List<CompletableFuture<Void>> tableFutures, List<HoodieStreamer> streamerInstances, AtomicBoolean shutdownRequested) {
+  private static void awaitFailFast(List<CompletableFuture<Void>> tableFutures) {
     try {
       FutureUtils.allOf(tableFutures).join();
     } catch (CompletionException e) {
       Throwable cause = unwrapCompletionException(e);
+      // An Error is rethrown as is rather than boxed, so the JVM-level failure reaches the caller unchanged.
+      if (cause instanceof Error) {
+        throw (Error) cause;
+      }
       log.error("error while running MultiTableDeltaStreamer, shutting down remaining tables as fail fast is enabled", cause);
-      shutdownRequested.set(true);
-      // shutdownStreamers only interrupts; the executor teardown in syncContinuously() waits for the siblings to stop.
-      shutdownStreamers(streamerInstances);
       throw new HoodieException("Fail fast is enabled and a table sync failed in continuous mode.", cause);
     }
   }
@@ -623,11 +632,11 @@ public class HoodieMultiTableStreamer {
    * runs in a {@code finally} on the failure path where escaping would mask the table failure and, in
    * {@link #syncSequentially()}, abort the tables not synced yet.
    */
-  private static void shutdownQuietly(HoodieStreamer streamer, TableExecutionContext context) {
+  private static void shutdownQuietly(HoodieStreamer streamer, String table) {
     try {
       streamer.shutdownGracefully();
     } catch (Exception e) {
-      log.warn("error while shutting down the streamer for table: {}", context.getTableName(), e);
+      log.warn("error while shutting down the streamer for table: {}", table, e);
     }
   }
 
@@ -647,7 +656,7 @@ public class HoodieMultiTableStreamer {
    *
    * @return true if all workers terminated, false if any were still running when the timeout elapsed.
    */
-  private boolean shutdownExecutor(ExecutorService executor) {
+  private static boolean shutdownExecutor(ExecutorService executor) {
     executor.shutdown();
     try {
       if (executor.awaitTermination(Constants.SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
@@ -666,7 +675,7 @@ public class HoodieMultiTableStreamer {
     }
   }
 
-  private void shutdownStreamers(List<HoodieStreamer> streamerInstances) {
+  private static void shutdownStreamers(List<HoodieStreamer> streamerInstances) {
     for (HoodieStreamer streamer : streamerInstances) {
       try {
         streamer.interruptIngestion();
