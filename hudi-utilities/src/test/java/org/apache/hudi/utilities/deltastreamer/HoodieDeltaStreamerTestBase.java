@@ -614,8 +614,8 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
      */
     private static final long WAIT_FOR_TIMEOUT_SECS = 120;
 
-    /** How often {@link #waitTillCondition} re-evaluates its condition; a test ties its own wait to this. */
-    static final long POLL_INTERVAL_MS = 2000;
+    /** The cadence production callers poll at; the helper's own tests pass a faster one of their own. */
+    private static final long POLL_INTERVAL_MS = 2000;
 
     static HoodieDeltaStreamer.Config makeDropAllConfig(String basePath, WriteOperationType op) {
       return makeConfig(basePath, op, Collections.singletonList(TestHoodieDeltaStreamer.DropAllTransformer.class.getName()));
@@ -783,6 +783,12 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
      * assertion that never held rather than only this method.
      */
     static void waitTillCondition(Function<Boolean, Boolean> condition, Future dsFuture, long timeoutInSecs) throws Exception {
+      waitTillCondition(condition, dsFuture, timeoutInSecs, POLL_INTERVAL_MS);
+    }
+
+    /** The poll interval is a parameter only so this helper's own tests need not spend the production cadence. */
+    static void waitTillCondition(Function<Boolean, Boolean> condition, Future dsFuture, long timeoutInSecs,
+                                  long pollIntervalMs) throws Exception {
       AtomicReference<Throwable> lastError = new AtomicReference<>();
       AtomicInteger completedEvaluations = new AtomicInteger();
       ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -794,7 +800,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
           // this thread polling for the lifetime of the JVM.
           while (!ret && !dsFuture.isDone() && !Thread.currentThread().isInterrupted() && !executor.isShutdown()) {
             try {
-              Thread.sleep(POLL_INTERVAL_MS);
+              Thread.sleep(pollIntervalMs);
               ret = condition.apply(true);
               completedEvaluations.incrementAndGet();
               if (ret) {
@@ -816,12 +822,18 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
           return ret;
         });
         try {
-          res.get(timeoutInSecs, TimeUnit.SECONDS);
+          Boolean satisfied = res.get(timeoutInSecs, TimeUnit.SECONDS);
+          // Not a failure - the caller surfaces the streamer's own outcome - but the wait should still say
+          // what it was waiting for instead of looking like success.
+          if (!Boolean.TRUE.equals(satisfied)) {
+            log.warn("Wait ended because the deltastreamer future finished, not because the condition held. {}",
+                describeProgress(lastError.get(), completedEvaluations.get()));
+          }
         } catch (TimeoutException e) {
+          int completed = completedEvaluations.get();
           Throwable last = lastError.get();
           Throwable cause = last == null ? e : last;
-          AssertionError failure = new AssertionError(
-              describeTimeout(last, completedEvaluations.get(), timeoutInSecs), cause);
+          AssertionError failure = new AssertionError(describeTimeout(last, completed, timeoutInSecs), cause);
           if (cause != e) {
             // The condition's own error is the more useful cause, but the fact that this was a timeout is
             // still part of the diagnosis, so it is carried along rather than dropped.
@@ -840,11 +852,20 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
      * condition threw, a condition that never completed an evaluation, or one that kept returning false.
      */
     static String describeTimeout(Throwable last, int completed, long timeoutInSecs) {
+      return String.format("Condition was not met within %d seconds. %s", timeoutInSecs,
+          describeProgress(last, completed));
+    }
+
+    /** The progress half of the report on its own, so an exit that is not a timeout can say the same thing. */
+    static String describeProgress(Throwable last, int completed) {
       String detail;
       if (last != null) {
         // Tested first because the worker records the error before it increments the counter: a timeout
         // landing between the two would otherwise report that no evaluation completed. lastError is only
-        // ever set, never cleared, so its presence is decisive in every interleaving.
+        // ever set, never cleared, so its presence is decisive in every interleaving. The reader takes the
+        // counter first, the opposite order, so any skew between the two reads lands in this branch - a real
+        // error reported with a possibly stale count - rather than in the "returned false without throwing"
+        // branch, which would deny an error that did happen.
         detail = String.format("%d evaluations completed; the last failure reported was: %s", completed, last);
       } else if (completed == 0) {
         // Distinguishes a condition that is stuck part-way through its first evaluation - a hung Spark
@@ -854,7 +875,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
         detail = String.format("%d evaluations completed and returned false without throwing, "
             + "so there is no further detail.", completed);
       }
-      return String.format("Condition was not met within %d seconds. %s", timeoutInSecs, detail);
+      return detail;
     }
 
     /**

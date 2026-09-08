@@ -110,6 +110,7 @@ import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 import org.apache.hudi.utilities.config.SourceTestConfig;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionException;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionService;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -1775,7 +1776,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       stoppedCleanly = true;
     } finally {
       if (!stoppedCleanly) {
-        stopLeakedStreamer(ds, dsFuture);
+        try {
+          stopLeakedStreamer(ds, dsFuture);
+        } catch (Throwable cleanupFailure) {
+          // Never let the cleanup replace the failure the caller is already propagating.
+          log.warn("Failed to stop the streamer after a failure", cleanupFailure);
+        }
       }
       executor.shutdown();
     }
@@ -1793,7 +1799,14 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   private static void stopLeakedStreamer(HoodieDeltaStreamer ds, Future dsFuture) {
     ExecutorService stopper = Executors.newSingleThreadExecutor();
     try {
-      stopper.submit(ds::shutdownGracefully).get(STREAMER_STOP_TIMEOUT_SECS, TimeUnit.SECONDS);
+      Future<?> stop = stopper.submit(ds::shutdownGracefully);
+      try {
+        stop.get(STREAMER_STOP_TIMEOUT_SECS, TimeUnit.SECONDS);
+      } catch (ExecutionException stopThrew) {
+        // The stop itself failing does not excuse leaving the ingest task running, so fall through to the join
+        // below rather than take the outer clause, which tolerates only the ingest task's own failure.
+        log.warn("Stopping the streamer threw after a failure", stopThrew);
+      }
       if (dsFuture != null) {
         dsFuture.get(STREAMER_STOP_TIMEOUT_SECS, TimeUnit.SECONDS);
       }
@@ -1807,11 +1820,28 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         Thread.currentThread().interrupt();
       }
       log.warn("Could not stop the streamer cleanly after a failure, cancelling the ingest task", stopFailure);
+      // The 60s bound only stops this thread waiting: HoodieAsyncService.shutdown(false) swallows the interrupt
+      // that stopper.shutdownNow() sends, and HoodieStreamer.shutdownGracefully runs ds.close() regardless, so
+      // without forcing the executor down the write client can close under a still-running ingest round.
+      forceStopIngestion(ds);
       if (dsFuture != null) {
         dsFuture.cancel(true);
       }
     } finally {
       stopper.shutdownNow();
+    }
+  }
+
+  private static void forceStopIngestion(HoodieDeltaStreamer ds) {
+    try {
+      HoodieIngestionService ingestionService = ds.getIngestionService();
+      if (ingestionService != null) {
+        ingestionService.shutdown(true);
+      }
+    } catch (Exception noService) {
+      // Nothing to force down: a streamer that never started an ingestion service, or a mock. getIngestionService
+      // is an Option.get(), so absence arrives as an exception rather than a null.
+      log.debug("No ingestion service to force-stop", noService);
     }
   }
 
@@ -2219,6 +2249,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @Disabled("HUDI-8951")
+  @Test
   public void testHoodieIndexerExecutionAfterCommit() throws Exception {
     String tableBasePath = basePath + "/asyncindexer_commit";
     Set<String> customConfigs = new HashSet<>();

@@ -28,10 +28,11 @@ public class JavaTestUtils {
     Throwable throwable = t;
     boolean res = false;
     while (throwable != null) {
-      // String.valueOf rather than getMessage().contains: a null message anywhere in the chain would
-      // otherwise NPE here and lose the failure the caller was trying to assert on. A TimeoutException
-      // raised before its condition ever threw is one such case, and NPEs in a chain are another.
-      if (String.valueOf(throwable.getMessage()).contains(errorMsg)) {
+      // A null message is treated as "not a match" rather than an NPE: a TimeoutException raised before its
+      // condition ever threw carries no message, and neither do many wrapped NPEs. String.valueOf would also
+      // avoid the NPE, but would make an errorMsg of "null" match a message-less throwable: a trap, not a match.
+      String message = throwable.getMessage();
+      if (message != null && message.contains(errorMsg)) {
         res = true;
         break;
       }

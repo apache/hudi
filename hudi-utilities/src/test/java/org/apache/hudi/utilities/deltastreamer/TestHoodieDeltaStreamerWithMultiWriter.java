@@ -406,6 +406,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
 
     AtomicBoolean continuousFailed = new AtomicBoolean(false);
     AtomicBoolean backfillFailed = new AtomicBoolean(false);
+    AtomicBoolean prerequisiteHeld = new AtomicBoolean(false);
     try {
       Future regularIngestionJobFuture = service.submit(() -> {
         try {
@@ -420,7 +421,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
         try {
           // trigger backfill at least after 1 requested entry is added to timeline from continuous job. If not, there is a chance that backfill will complete even before
           // continuous job starts.
-          awaitCondition(new GetCommitsAfterInstant(tableBasePath, lastSuccessfulCommit));
+          prerequisiteHeld.set(awaitCondition(new GetCommitsAfterInstant(tableBasePath, lastSuccessfulCommit)));
           backfillJob.sync();
         } catch (Throwable ex) {
           log.error("Backfilling job failed {}", ex.getMessage());
@@ -431,6 +432,10 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
       backfillJobFuture.get();
       regularIngestionJobFuture.get();
       if (expectConflict) {
+        Assertions.assertTrue(prerequisiteHeld.get(),
+            "The backfill job started before the ingestion job committed anything after " + lastSuccessfulCommit
+                + ", so the two jobs never overlapped and no conflict could be raised. This is a test-side "
+                + "prerequisite that did not hold, not a conflict-handling failure.");
         Assertions.fail("Failed to handle concurrent writes");
       }
     } catch (Exception e) {
@@ -483,18 +488,28 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     }
   }
 
-  private static void awaitCondition(GetCommitsAfterInstant callback) throws InterruptedException {
+  /**
+   * Waits for the continuous ingestion job to place a commit after the instant the callback was built with, the
+   * prerequisite for the backfill job to overlap with it. The return value lets the caller tell a prerequisite
+   * that never held from a genuine conflict-handling failure.
+   *
+   * @return true if the commit landed within the budget, false if the budget expired.
+   */
+  private static boolean awaitCondition(GetCommitsAfterInstant callback) throws InterruptedException {
     long startTime = System.currentTimeMillis();
     long soFar = 0;
     while (soFar <= 5000) {
       if (callback.getCommitsAfterInstant() > 0) {
-        break;
+        log.warn("Awaiting completed in {}", System.currentTimeMillis() - startTime);
+        return true;
       } else {
         Thread.sleep(500);
         soFar += 500;
       }
     }
-    log.warn("Awaiting completed in {}", System.currentTimeMillis() - startTime);
+    log.error("The continuous job placed no commit after {} within {} ms, so the backfill job is about to start "
+        + "unsynchronized with it", callback.lastSuccessfulCommit, System.currentTimeMillis() - startTime);
+    return false;
   }
 
 }

@@ -28,11 +28,18 @@ import org.mockito.Mockito;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
+import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerTestBase.TestHelpers.describeTimeout;
+import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerTestBase.TestHelpers.waitFor;
+import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerTestBase.TestHelpers.waitTillCondition;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -50,11 +57,16 @@ class TestDeltaStreamerTestHelpers {
   private static final Future<?> RUNNING = new CompletableFuture<>();
 
   /**
-   * The helper polls every 2s, so the timeout has to leave room for at least one evaluation to be recorded.
-   * 5s is enough for that, and keeps the tests in this class from spending half a minute asleep in the
-   * shared utilities job.
+   * The poll interval these tests drive the helper at, so the class does not spend the production 2s cadence
+   * asleep.
    */
-  private static final int CONDITION_TIMEOUT_SECS = 5;
+  private static final long FAST_POLL_INTERVAL_MS = 50;
+
+  /**
+   * With the fast poll above, one second still leaves room for many evaluations to be recorded, which is what
+   * the timeout report needs.
+   */
+  private static final int CONDITION_TIMEOUT_SECS = 1;
 
   /** For the cases that are not meant to time out: they finish long before this, so it is never reached. */
   private static final int NEVER_REACHED_TIMEOUT_SECS = 30;
@@ -64,19 +76,21 @@ class TestDeltaStreamerTestHelpers {
     String assertionText = "assertAtleastNDeltaCommits: expected at least 3 delta commits but got 2";
 
     AssertionError error = assertThrows(AssertionError.class,
-        () -> HoodieDeltaStreamerTestBase.TestHelpers.waitTillCondition(
+        () -> waitTillCondition(
             ignored -> {
               throw new AssertionError(assertionText);
-            }, RUNNING, CONDITION_TIMEOUT_SECS));
+            }, RUNNING, CONDITION_TIMEOUT_SECS, FAST_POLL_INTERVAL_MS));
 
     assertTrue(error.getMessage().contains("was not met within " + CONDITION_TIMEOUT_SECS + " seconds"),
         () -> "The failure should say the condition timed out, but was: " + error.getMessage());
     assertTrue(error.getMessage().contains(assertionText),
         () -> "The failure should carry the condition's own error, which is the only clue to why the "
             + "wait timed out, but was: " + error.getMessage());
-    assertTrue(error.getMessage().contains("evaluations completed"),
-        () -> "The failure should say how many evaluations completed, which separates a condition that "
-            + "kept failing from one that never finished an evaluation, but was: " + error.getMessage());
+    assertFalse(error.getMessage().contains("returned false without throwing"),
+        () -> "The failure should carry the condition's error, not the 'kept returning false' branch, "
+            + "but was: " + error.getMessage());
+    assertInstanceOf(TimeoutException.class, error.getSuppressed()[0],
+        "the timeout should stay attached as a suppressed exception once the condition's error becomes the cause");
   }
 
   /**
@@ -87,19 +101,60 @@ class TestDeltaStreamerTestHelpers {
   @Test
   void pollingStopsOnceTheWaitHasGivenUp() throws Exception {
     AtomicInteger polls = new AtomicInteger();
+    AtomicReference<Thread> poller = new AtomicReference<>();
 
     assertThrows(AssertionError.class,
-        () -> HoodieDeltaStreamerTestBase.TestHelpers.waitTillCondition(
+        () -> waitTillCondition(
             ignored -> {
+              poller.set(Thread.currentThread());
               polls.incrementAndGet();
               throw new AssertionError("never true");
-            }, RUNNING, CONDITION_TIMEOUT_SECS));
+            }, RUNNING, CONDITION_TIMEOUT_SECS, FAST_POLL_INTERVAL_MS));
 
     int pollsWhenItGaveUp = polls.get();
     assertTrue(pollsWhenItGaveUp > 0,
         "the condition should have been evaluated at least once before the wait gave up, otherwise the "
             + "comparison below passes trivially");
-    Thread.sleep(2 * HoodieDeltaStreamerTestBase.TestHelpers.POLL_INTERVAL_MS);
+    poller.get().join(TimeUnit.SECONDS.toMillis(5));
+    assertFalse(poller.get().isAlive(),
+        "the polling thread should have exited once the wait gave up, not still be running after the join");
+    assertEquals(pollsWhenItGaveUp, polls.get(),
+        "the polling thread should have stopped when the wait gave up, not carried on in the background");
+  }
+
+  /**
+   * The interrupt from {@code shutdownNow} is delivered once, and {@code Thread.sleep} clears the flag when it
+   * throws, so a condition that swallows it without restoring it leaves the loop with no interrupt to see. The
+   * {@code executor.isShutdown()} guard is what stops the worker in that case.
+   */
+  @Test
+  void pollingStopsEvenWhenTheConditionSwallowsTheInterrupt() throws Exception {
+    AtomicInteger polls = new AtomicInteger();
+    AtomicReference<Thread> poller = new AtomicReference<>();
+
+    assertThrows(AssertionError.class,
+        () -> waitTillCondition(
+            ignored -> {
+              poller.set(Thread.currentThread());
+              polls.incrementAndGet();
+              try {
+                Thread.sleep(TimeUnit.SECONDS.toMillis(60));
+              } catch (InterruptedException interrupted) {
+                // The missing Thread.currentThread().interrupt() is the point of the test: a condition that
+                // swallows the interrupt is exactly what the isShutdown() guard exists for, so do not "fix"
+                // this catch.
+              }
+              return false;
+            }, RUNNING, CONDITION_TIMEOUT_SECS, FAST_POLL_INTERVAL_MS));
+
+    int pollsWhenItGaveUp = polls.get();
+    assertTrue(pollsWhenItGaveUp > 0,
+        "the condition should have been evaluated at least once before the wait gave up, otherwise the "
+            + "comparison below passes trivially");
+    poller.get().join(TimeUnit.SECONDS.toMillis(5));
+    assertFalse(poller.get().isAlive(),
+        "the isShutdown() guard should have stopped the polling thread even though the condition swallowed "
+            + "the interrupt without restoring the flag");
     assertEquals(pollsWhenItGaveUp, polls.get(),
         "the polling thread should have stopped when the wait gave up, not carried on in the background");
   }
@@ -112,7 +167,7 @@ class TestDeltaStreamerTestHelpers {
   @Test
   void timeoutDistinguishesAConditionThatNeverCompletedAnEvaluation() {
     AssertionError error = assertThrows(AssertionError.class,
-        () -> HoodieDeltaStreamerTestBase.TestHelpers.waitTillCondition(
+        () -> waitTillCondition(
             ignored -> {
               try {
                 Thread.sleep(60_000);
@@ -120,7 +175,7 @@ class TestDeltaStreamerTestHelpers {
                 Thread.currentThread().interrupt();
               }
               return true;
-            }, RUNNING, CONDITION_TIMEOUT_SECS));
+            }, RUNNING, CONDITION_TIMEOUT_SECS, FAST_POLL_INTERVAL_MS));
 
     assertTrue(error.getMessage().contains("No evaluation of the condition completed"),
         () -> "a condition still running its first evaluation should be reported as such, but was: "
@@ -138,8 +193,7 @@ class TestDeltaStreamerTestHelpers {
   @Test
   void timeoutReportsEvaluationsThatReturnedFalse() {
     AssertionError error = assertThrows(AssertionError.class,
-        () -> HoodieDeltaStreamerTestBase.TestHelpers.waitTillCondition(
-            ignored -> false, RUNNING, CONDITION_TIMEOUT_SECS));
+        () -> waitTillCondition(ignored -> false, RUNNING, CONDITION_TIMEOUT_SECS, FAST_POLL_INTERVAL_MS));
 
     assertTrue(error.getMessage().contains("returned false without throwing"),
         () -> "a condition that kept returning false should be reported as such, but was: " + error.getMessage());
@@ -152,7 +206,7 @@ class TestDeltaStreamerTestHelpers {
   @Test
   void waitForGivesUpAtItsBound() {
     AssertionError error = assertThrows(AssertionError.class,
-        () -> HoodieDeltaStreamerTestBase.TestHelpers.waitFor(() -> false, 1));
+        () -> waitFor(() -> false, 1));
 
     assertTrue(error.getMessage().contains("did not hold within 1 seconds"),
         () -> "the bound should name itself in the failure, but was: " + error.getMessage());
@@ -181,8 +235,8 @@ class TestDeltaStreamerTestHelpers {
 
   @Test
   void satisfiedConditionReturnsNormally() {
-    assertDoesNotThrow(() -> HoodieDeltaStreamerTestBase.TestHelpers.waitTillCondition(
-        ignored -> true, RUNNING, NEVER_REACHED_TIMEOUT_SECS));
+    assertDoesNotThrow(() -> waitTillCondition(
+        ignored -> true, RUNNING, NEVER_REACHED_TIMEOUT_SECS, FAST_POLL_INTERVAL_MS));
   }
 
   /**
@@ -194,7 +248,21 @@ class TestDeltaStreamerTestHelpers {
   void finishedStreamerEndsTheWaitWithoutFailing() {
     Future<?> finished = CompletableFuture.completedFuture(null);
 
-    assertDoesNotThrow(() -> HoodieDeltaStreamerTestBase.TestHelpers.waitTillCondition(
-        ignored -> false, finished, NEVER_REACHED_TIMEOUT_SECS));
+    assertDoesNotThrow(() -> waitTillCondition(
+        ignored -> false, finished, NEVER_REACHED_TIMEOUT_SECS, FAST_POLL_INTERVAL_MS));
+  }
+
+  /**
+   * Unreachable through the helper, which reads the evaluation counter before the last error and so can see a
+   * recorded error alongside a count of zero; pinned here because nothing else can produce that combination.
+   */
+  @Test
+  void describeTimeoutReportsAnErrorEvenWithNoCompletedEvaluation() {
+    String message = describeTimeout(new AssertionError("boom"), 0, CONDITION_TIMEOUT_SECS);
+
+    assertTrue(message.contains("boom"),
+        () -> "an error recorded before the counter caught up should still be reported, but was: " + message);
+    assertFalse(message.contains("No evaluation of the condition completed"),
+        () -> "a recorded error should not be reported as no evaluation having completed, but was: " + message);
   }
 }
