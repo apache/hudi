@@ -668,7 +668,7 @@ public class HoodieMultiTableStreamer {
   private void shutdownStreamers(List<HoodieStreamer> streamerInstances) {
     for (HoodieStreamer streamer : streamerInstances) {
       try {
-        streamer.shutdownForcefully();
+        streamer.interruptIngestion();
       } catch (Exception e) {
         log.warn("error while shutting down a streamer instance during fail fast handling", e);
       }
