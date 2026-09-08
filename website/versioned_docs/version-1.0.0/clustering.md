@@ -156,6 +156,49 @@ The available strategies are as follows:
    consistent bucket index and only applicable to the Spark engine. Set `hoodie.clustering.execution.strategy.class`
    to `org.apache.hudi.client.clustering.run.strategy.SparkConsistentBucketClusteringExecutionStrategy`.
 
+#### Row writer
+
+On Spark, the execution strategies above can rewrite the data either through the row writer, which operates on
+a `Dataset<Row>` and avoids converting records to Avro, or through the older RDD path. Which one runs is decided
+by a single config:
+
+| Config Name | Default | Description |
+|-------------|---------|-------------|
+| `hoodie.datasource.write.row.writer.enable` | `true` | When enabled, clustering rewrites file groups through the Spark row writer instead of the RDD path. This is the config's own default; the fallback applied when the config is absent differs by release, see below.<br /><br />`Config Param: ENABLE_ROW_WRITER`<br />`Since Version: 0.9.0` |
+
+Two things about that default are worth knowing, because they are not the same statement:
+
+* The config itself defaults to `true`, and Spark datasource writes set it explicitly, so clustering triggered
+  from a datasource write takes the row-writer path unless you turn it off. One case turns it off without anyone
+  setting it: the config carries an infer function that resolves to `false` when the operation is `bulk_insert`,
+  meta fields are not populated, and `hoodie.combine.before.insert` is on, so that combine-before-insert is not
+  silently skipped. Clustering inheriting those write properties then takes the RDD path. If clustering did not
+  use the row writer and nothing in your config says so, that combination is the first thing to check.
+* Clustering also applies its own fallback when the config is **absent** from the write config entirely. That is
+  what `HoodieClusteringJob` (spark-submit or hudi-cli) and Hudi Streamer see, since both build their write
+  config from raw properties. In-process async clustering from a Spark datasource streaming write and
+  `CALL run_clustering` do not: both go through the datasource write defaults, so they carry the key as `true`.
+  The fallback has not been stable across releases: it was `false` in 0.14.0, 0.14.2, 0.15.0 and 0.15.1, and
+  `true` in 0.14.1 and from 1.0.0 onwards. On this release it is `true`, so those two paths use the row writer
+  by default as well.
+
+To force the RDD path, set `hoodie.datasource.write.row.writer.enable=false` in the same properties the
+clustering job reads. Note this is not a clustering-only switch: it is the general Spark write config, documented
+as "when set to true, will perform write operations directly using the spark native `Row` representation", and it
+gates the row-writer path for ordinary `bulk_insert` writes too. On an inline or async clustering job attached to
+a datasource write, turning it off therefore also turns the row writer off for that job's ingestion writes. A
+standalone `HoodieClusteringJob` is the case where it affects clustering alone. A Hudi Streamer job's *ingestion*
+writes are unaffected either way, since its row writer is gated by a separate
+`hoodie.streamer.write.row.writer.enable` that defaults to `false`; only its clustering reads the key discussed
+above.
+
+On 1.0.x there is one further condition: even with the config enabled, Hudi falls back to the RDD path when the
+schema cannot be written through the row writer, specifically when `parquet.avro.write-old-list-structure` is
+`false` **and** the schema contains both a small-precision decimal field and a list or map field. That property
+defaults to `true`, so this only applies if you have explicitly disabled it; it is not something a table hits by
+accident. When it does apply, Hudi logs `Cannot use row writer due to presence of list or map with a small
+precision decimal field`. That check was removed in later releases.
+
 ### Update Strategy
 
 Currently, clustering can only be scheduled for tables/partitions not receiving any concurrent updates. By default,
