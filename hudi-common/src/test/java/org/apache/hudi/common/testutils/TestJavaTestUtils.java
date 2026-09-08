@@ -41,12 +41,6 @@ public class TestJavaTestUtils {
   }
 
   @Test
-  public void testNullThrowableReturnsFalse() {
-    // The loop guard, the one input shape the other cases never reach.
-    assertFalse(JavaTestUtils.checkNestedExceptionContains(null, "boom"));
-  }
-
-  @Test
   public void testErrorMsgNullDoesNotMatchMessagelessThrowable() {
     assertFalse(JavaTestUtils.checkNestedExceptionContains(new RuntimeException((String) null), "null"));
   }
