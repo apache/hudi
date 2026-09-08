@@ -602,4 +602,15 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
 
     assertResult(Right(()))(validate("upper(name) = 'A1'"))
   }
+
+  test("evaluateFilter resolves a registry function nested inside another") {
+    // Function resolution runs bottom-up, so a registry-resolved argument (upper(name)) is
+    // already a real expression by the time its enclosing call (instr/concat) is checked -
+    // otherwise the outer call would look unresolved and get rejected even though both
+    // functions individually resolve fine.
+    assertResult(Right(()))(validate("instr(upper(name), 'A') = 1"))
+    assertResult(Seq(scalarRows.head))(keep(scalarRows, "instr(upper(name), 'A') = 1", scalarSchema))
+    assertResult(Right(()))(validate("concat(upper(name), 'x') = 'A1x'"))
+    assertResult(Seq(scalarRows.head))(keep(scalarRows, "concat(upper(name), 'x') = 'A1x'", scalarSchema))
+  }
 }
