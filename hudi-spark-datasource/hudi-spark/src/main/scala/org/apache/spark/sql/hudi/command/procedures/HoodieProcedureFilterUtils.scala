@@ -403,12 +403,19 @@ object HoodieProcedureFilterUtils {
   private def resolveViaFunctionRegistry(unresolvedFunc: UnresolvedFunction, sparkSession: SparkSession): Expression = {
     Try {
       val nameParts = unresolvedFunc.nameParts
+      // Filter expressions only ever call plain or db-qualified builtins, so this is really just
+      // name/db.name. A 3+ part name (catalog.db.func) isn't something we can look up safely -
+      // FunctionIdentifier only carries one qualifier, and guessing by dropping the extra parts
+      // risks matching a same-named function that isn't the one that was actually asked for. Bail
+      // out to unresolvedFunc instead and let it fall through to the existing rejection path.
       val functionIdentifier = nameParts match {
-        case Seq(funcName) => FunctionIdentifier(funcName)
-        case Seq(db, funcName) => FunctionIdentifier(funcName, Some(db))
-        case _ => FunctionIdentifier(nameParts.last)
+        case Seq(funcName) => Some(FunctionIdentifier(funcName))
+        case Seq(db, funcName) => Some(FunctionIdentifier(funcName, Some(db)))
+        case _ => None
       }
-      val resolved = sparkSession.sessionState.functionRegistry.lookupFunction(functionIdentifier, unresolvedFunc.arguments)
+      val resolved = functionIdentifier
+        .map(sparkSession.sessionState.functionRegistry.lookupFunction(_, unresolvedFunc.arguments))
+        .getOrElse(unresolvedFunc)
       // lookupFunction on its own leaves nvl/ifnull/left/right etc as a placeholder - normally
       // the analyzer swaps it for the real expression right after, but nobody does that here, so
       // eval() just throws. Unwrap it ourselves instead.

@@ -378,6 +378,11 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     // A hardcoded-table entry called with an arity the table doesn't handle (substring only
     // handles 3 args) should still fall back to the registry instead of getting stuck.
     assertResult(Seq(scalarRows.head))(keep(scalarRows, "substring(name, 2) = '1'", scalarSchema))
+
+    // A 3+ part name (catalog.db.func) isn't safe to look up by bare function name alone - make
+    // sure it's rejected rather than silently resolved against a same-named function elsewhere.
+    assert(validate("some_catalog.some_db.upper(name) = 'A1'").isLeft)
+    assertResult(Seq.empty)(keep(scalarRows, "some_catalog.some_db.upper(name) = 'A1'", scalarSchema))
   }
 
   test("evaluateFilter still rejects aggregate/generator/nondeterministic functions resolved via FunctionRegistry") {
