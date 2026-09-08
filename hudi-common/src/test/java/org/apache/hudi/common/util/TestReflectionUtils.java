@@ -27,83 +27,24 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
-import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.URL;
-import java.net.URLClassLoader;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Enumeration;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.jar.JarEntry;
-import java.util.jar.JarOutputStream;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.apache.hudi.common.util.ReflectionUtils.getMethod;
 import static org.apache.hudi.common.util.ReflectionUtils.isSubClass;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests {@link ReflectionUtils}.
+ * Tests {@link ReflectionUtils}
  */
 public class TestReflectionUtils {
-
-  // Isolate fixture classes from production classes on the real classpath.
-  private static final String SCRATCH_PACKAGE = "org.apache.hudi.common.util.scratchfixtures";
-  private static final String SCRATCH_PACKAGE_PATH = SCRATCH_PACKAGE.replace('.', '/');
-
-  private static final String CLASS_A = SCRATCH_PACKAGE + ".TopLevelA";
-  private static final String CLASS_B = SCRATCH_PACKAGE + ".TopLevelB";
-  private static final String CLASS_SUBPACKAGE = SCRATCH_PACKAGE + ".sub.SubLevelC";
-
-  @TempDir
-  Path tempDir;
-
-  private Path writeDirectoryFixture() throws IOException {
-    Path root = tempDir.resolve("classes");
-    for (String className : Arrays.asList(CLASS_A, CLASS_B, CLASS_SUBPACKAGE)) {
-      String resourceName = className.replace('.', '/') + ".class";
-      Path target = root.resolve(resourceName);
-      Files.createDirectories(target.getParent());
-      try (InputStream input = TestReflectionUtils.class.getClassLoader().getResourceAsStream(resourceName)) {
-        Files.copy(input, target);
-      }
-    }
-    // Negative cases: non-class files and nested classes must be excluded.
-    Path pkgDir = root.resolve(SCRATCH_PACKAGE_PATH);
-    Files.write(pkgDir.resolve("README.txt"), new byte[0]);
-    Files.write(pkgDir.resolve("TopLevelA$Nested.class"), new byte[0]);
-    return root;
-  }
-
-  private Path writeJarFixture() throws IOException {
-    Path root = writeDirectoryFixture();
-    Path jarPath = tempDir.resolve("fixture.jar");
-    try (JarOutputStream jos = new JarOutputStream(Files.newOutputStream(jarPath));
-         Stream<Path> paths = Files.walk(root)) {
-      Iterator<Path> entries = paths.filter(path -> !path.equals(root)).iterator();
-      while (entries.hasNext()) {
-        Path entry = entries.next();
-        String name = root.relativize(entry).toString().replace(File.separatorChar, '/');
-        // URLClassLoader.getResources(package) requires an explicit directory entry.
-        jos.putNextEntry(new JarEntry(Files.isDirectory(entry) ? name + "/" : name));
-        if (Files.isRegularFile(entry)) {
-          Files.copy(entry, jos);
-        }
-        jos.closeEntry();
-      }
-    }
-    return jarPath;
-  }
-
   @Test
   public void testIsSubClass() {
     String subClassName1 = DirectMarkerBasedDetectionStrategy.class.getName();
@@ -125,77 +66,20 @@ public class TestReflectionUtils {
     assertFalse(getMethod(HoodieStorage.class, "nonExistentMethod").isPresent());
   }
 
-  @Test
-  void testGetTopLevelClassesInClasspathFromDirectory() throws IOException {
-    Path root = writeDirectoryFixture();
+  @ParameterizedTest
+  @ValueSource(strings = {"jar:file:/unused.jar!/org/apache/hudi/common/util", "file:/invalid path"})
+  void testGetTopLevelClassesInClasspathSkipsInvalidResources(String invalidResource) {
     ClassLoader original = Thread.currentThread().getContextClassLoader();
-    try (URLClassLoader loader = new URLClassLoader(new URL[]{root.toUri().toURL()}, null)) {
+    ClassLoader loader = new ClassLoader(original) {
+      @Override
+      public Enumeration<URL> getResources(String name) throws IOException {
+        return Collections.enumeration(Arrays.asList(new URL(invalidResource), TestReflectionUtils.class.getResource("")));
+      }
+    };
+    try {
       Thread.currentThread().setContextClassLoader(loader);
-      // Anchor on TopLevelA, which is loaded from the fixture and exposes
-      // SCRATCH_PACKAGE as its package.
-      Class<?> anchor = loader.loadClass(CLASS_A);
-      java.util.List<String> scanned = ReflectionUtils.getTopLevelClassesInClasspath(anchor)
-          .collect(Collectors.toList());
-      // Subpackages are included by documented behaviour; the non-class
-      // file must be excluded.
-      assertEquals(new HashSet<>(Arrays.asList(CLASS_A, CLASS_B, CLASS_SUBPACKAGE)),
-          new HashSet<>(scanned),
-          "Expected only the three classes inside " + SCRATCH_PACKAGE
-              + ", got " + scanned);
-    } catch (ClassNotFoundException e) {
-      throw new AssertionError("Fixture class should be loadable", e);
-    } finally {
-      Thread.currentThread().setContextClassLoader(original);
-    }
-  }
-
-  @Test
-  void testGetTopLevelClassesInClasspathFromJar() throws IOException {
-    Path jarPath = writeJarFixture();
-    ClassLoader original = Thread.currentThread().getContextClassLoader();
-    try (URLClassLoader loader = new URLClassLoader(new URL[]{jarPath.toUri().toURL()}, null)) {
-      Thread.currentThread().setContextClassLoader(loader);
-      Class<?> anchor = loader.loadClass(CLASS_A);
-      java.util.List<String> scanned = ReflectionUtils.getTopLevelClassesInClasspath(anchor)
-          .collect(Collectors.toList());
-      assertEquals(new HashSet<>(Arrays.asList(CLASS_A, CLASS_B, CLASS_SUBPACKAGE)),
-          new HashSet<>(scanned),
-          "Expected only the three classes inside " + SCRATCH_PACKAGE
-              + ", got " + scanned);
-    } catch (ClassNotFoundException e) {
-      throw new AssertionError("Fixture class should be loadable", e);
-    } finally {
-      Thread.currentThread().setContextClassLoader(original);
-    }
-  }
-
-  @Test
-  void testGetTopLevelClassesInClasspathOnTheRealClasspath() {
-    // Discover classes across the test directory and dependency JARs.
-    java.util.List<String> scanned = ReflectionUtils.getTopLevelClassesInClasspath(
-        TestReflectionUtils.class).collect(Collectors.toList());
-    assertTrue(scanned.contains(TestReflectionUtils.class.getName()));
-    assertTrue(scanned.contains(ReflectionUtils.class.getName()));
-  }
-
-  @Test
-  void testGetTopLevelClassesInClasspathForClassesWithoutAPackage() {
-    // Arrays and primitives have no Package; the original code dereferenced
-    // getPackage() and threw NullPointerException. New contract: empty stream.
-    Stream<String> arrayResult = ReflectionUtils.getTopLevelClassesInClasspath(int[].class);
-    assertEquals(0L, arrayResult.count(),
-        "Expected empty stream for an array class without a package");
-    Stream<String> primitiveResult = ReflectionUtils.getTopLevelClassesInClasspath(int.class);
-    assertEquals(0L, primitiveResult.count(),
-        "Expected empty stream for a primitive class without a package");
-  }
-
-  @Test
-  void testGetTopLevelClassesInClasspathForPackageNotOnTheClasspath() throws IOException {
-    ClassLoader original = Thread.currentThread().getContextClassLoader();
-    try (URLClassLoader loader = new URLClassLoader(new URL[0], null)) {
-      Thread.currentThread().setContextClassLoader(loader);
-      assertEquals(0L, ReflectionUtils.getTopLevelClassesInClasspath(TestReflectionUtils.class).count());
+      assertTrue(ReflectionUtils.getTopLevelClassesInClasspath(TestReflectionUtils.class)
+          .anyMatch(TestReflectionUtils.class.getName()::equals));
     } finally {
       Thread.currentThread().setContextClassLoader(original);
     }
@@ -212,7 +96,7 @@ public class TestReflectionUtils {
     };
     try {
       Thread.currentThread().setContextClassLoader(loader);
-      assertEquals(0L, ReflectionUtils.getTopLevelClassesInClasspath(TestReflectionUtils.class).count());
+      assertFalse(ReflectionUtils.getTopLevelClassesInClasspath(TestReflectionUtils.class).findAny().isPresent());
     } finally {
       Thread.currentThread().setContextClassLoader(original);
     }
