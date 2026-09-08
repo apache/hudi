@@ -1782,8 +1782,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
           // Never let the cleanup replace the failure the caller is already propagating.
           log.warn("Failed to stop the streamer after a failure", cleanupFailure);
         }
+        // The ingest task has already had its one interrupt from cancel(true). If it swallowed that,
+        // an orderly shutdown() would never reach it and the pool thread would outlive the fork.
+        executor.shutdownNow();
+      } else {
+        executor.shutdown();
       }
-      executor.shutdown();
     }
   }
 
@@ -1795,20 +1799,29 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
    * The stop has to be bounded: shutdownGracefully awaits the ingest executor for up to 24 hours, and it
    * returns immediately without waiting when shutdown was already requested, so neither the wait nor the
    * absence of one can be relied on here.
+   * <p>
+   * Three waits are bounded by {@code stopTimeoutSecs} in sequence, so a streamer wedged at every step
+   * holds this for three times that: the stop itself, the join of the ingest task, and the close that
+   * runs on the stopper thread after the interrupt is swallowed.
    */
   private static void stopLeakedStreamer(HoodieDeltaStreamer ds, Future dsFuture) {
+    stopLeakedStreamer(ds, dsFuture, STREAMER_STOP_TIMEOUT_SECS);
+  }
+
+  /** The bound is a parameter only so this helper's own tests need not spend the production one. */
+  static void stopLeakedStreamer(HoodieDeltaStreamer ds, Future dsFuture, long stopTimeoutSecs) {
     ExecutorService stopper = Executors.newSingleThreadExecutor();
     try {
       Future<?> stop = stopper.submit(ds::shutdownGracefully);
       try {
-        stop.get(STREAMER_STOP_TIMEOUT_SECS, TimeUnit.SECONDS);
+        stop.get(stopTimeoutSecs, TimeUnit.SECONDS);
       } catch (ExecutionException stopThrew) {
         // The stop itself failing does not excuse leaving the ingest task running, so fall through to the join
         // below rather than take the outer clause, which tolerates only the ingest task's own failure.
         log.warn("Stopping the streamer threw after a failure", stopThrew);
       }
       if (dsFuture != null) {
-        dsFuture.get(STREAMER_STOP_TIMEOUT_SECS, TimeUnit.SECONDS);
+        dsFuture.get(stopTimeoutSecs, TimeUnit.SECONDS);
       }
     } catch (ExecutionException ingestFailure) {
       // Expected rather than anomalous: the ingest task failing is usually why the caller is unwinding at
@@ -1820,7 +1833,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         Thread.currentThread().interrupt();
       }
       log.warn("Could not stop the streamer cleanly after a failure, cancelling the ingest task", stopFailure);
-      // The 60s bound only stops this thread waiting: HoodieAsyncService.shutdown(false) swallows the interrupt
+      // The bound only stops this thread waiting: HoodieAsyncService.shutdown(false) swallows the interrupt
       // that stopper.shutdownNow() sends, and HoodieStreamer.shutdownGracefully runs ds.close() regardless, so
       // forcing the executor down at least interrupts the ingest round before the close.
       forceStopIngestion(ds);
@@ -1829,6 +1842,17 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       }
     } finally {
       stopper.shutdownNow();
+      // shutdownNow only interrupts the stopper out of awaitTermination. HoodieAsyncService.shutdown(false)
+      // swallows that interrupt without restoring the flag, so shutdownGracefully carries on into ds.close()
+      // on that thread. Give the close a bounded chance to finish here, rather than let it run on into the
+      // next test's setup, which deletes basePath underneath it.
+      try {
+        if (!stopper.awaitTermination(stopTimeoutSecs, TimeUnit.SECONDS)) {
+          log.warn("The streamer stop did not finish closing within {}s, letting it run on", stopTimeoutSecs);
+        }
+      } catch (InterruptedException interrupted) {
+        Thread.currentThread().interrupt();
+      }
     }
   }
 

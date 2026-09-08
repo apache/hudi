@@ -27,7 +27,10 @@ import org.mockito.Mockito;
 
 import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -41,6 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -72,6 +76,18 @@ class TestDeltaStreamerTestHelpers {
   /** For the cases that are not meant to time out: they finish long before this, so it is never reached. */
   private static final int NEVER_REACHED_TIMEOUT_SECS = 30;
 
+  /**
+   * Slow enough that the poll spends almost all of its time asleep, so a directly delivered interrupt lands in
+   * the sleep rather than in the condition.
+   */
+  private static final long SLOW_POLL_INTERVAL_MS = 500;
+
+  /** Generous, so that "ended well before the timeout" is an unambiguous signal rather than a near miss. */
+  private static final int INTERRUPT_TIMEOUT_SECS = 10;
+
+  /** The stop bound the stop-path cases drive, instead of the production 60s. */
+  private static final long FAST_STOP_TIMEOUT_SECS = 1;
+
   @Test
   void timeoutFailureNamesTheLastConditionFailure() {
     String assertionText = "assertAtleastNDeltaCommits: expected at least 3 delta commits but got 2";
@@ -98,9 +114,10 @@ class TestDeltaStreamerTestHelpers {
   }
 
   /**
-   * {@code shutdownNow} interrupts the polling thread, but {@code Thread.sleep} clears the interrupt flag
-   * when it throws, so a catch-all around the sleep would swallow it and keep polling for the life of the
-   * JVM. This pins that the worker actually stops.
+   * Pins that the worker actually stops once the wait has given up, whichever of the two guards fires. The
+   * {@code InterruptedException} branch on its own is covered by
+   * {@link #directInterruptEndsTheWaitWithoutRunningToTheTimeout()}, since the {@code executor.isShutdown()}
+   * guard would stop the worker here even without it.
    */
   @Test
   void pollingStopsOnceTheWaitHasGivenUp() throws Exception {
@@ -184,15 +201,18 @@ class TestDeltaStreamerTestHelpers {
     assertTrue(error.getMessage().contains("No evaluation of the condition completed"),
         () -> "a condition still running its first evaluation should be reported as such, but was: "
             + error.getMessage());
-    assertFalse(JavaTestUtils.checkNestedExceptionContains(error, "no such text"),
-        "walking the cause chain has to tolerate the null-message TimeoutException this path attaches, "
-            + "which is what the multi-writer test hits when its ingestion wait times out");
+    assertInstanceOf(TimeoutException.class, error.getCause(),
+        "with no error recorded the timeout itself should be the cause");
+    assertNull(error.getCause().getMessage(),
+        "the cause is a message-less TimeoutException, which is the shape that made the null check in "
+            + "JavaTestUtils.checkNestedExceptionContains necessary");
   }
 
   /**
-   * Conditions in the continuous-mode tests catch their own failures and return false rather than throwing,
-   * so this is the branch a real timeout reports. It has to say how many evaluations ran, since that is the
-   * only signal separating it from a condition that never completed one.
+   * The branch for a condition that swallows its own failure and returns false, as {@code testHoodieIndexer}
+   * does. The HUDI-6843 condition is not one of those: it only ever throws, so a real timeout there takes the
+   * last-error branch instead. This one has to say how many evaluations ran, since that is the only signal
+   * separating it from a condition that never completed one.
    */
   @Test
   void timeoutReportsEvaluationsThatReturnedFalse() {
@@ -201,6 +221,9 @@ class TestDeltaStreamerTestHelpers {
 
     assertTrue(error.getMessage().contains("returned false without throwing"),
         () -> "a condition that kept returning false should be reported as such, but was: " + error.getMessage());
+    assertFalse(error.getMessage().contains("0 evaluations completed"),
+        () -> "the count should be the real number of evaluations, not a constant, but was: "
+            + error.getMessage());
   }
 
   /**
@@ -269,5 +292,97 @@ class TestDeltaStreamerTestHelpers {
         () -> "an error recorded before the counter caught up should still be reported, but was: " + message);
     assertFalse(message.contains("No evaluation of the condition completed"),
         () -> "a recorded error should not be reported as no evaluation having completed, but was: " + message);
+  }
+
+  /**
+   * The {@code InterruptedException} branch on its own: an interrupt delivered while the poll is sleeping has
+   * to end the wait, rather than be recorded as a condition failure and polled through. A catch-all around the
+   * sleep would clear the flag and keep polling until the timeout, which is what this discriminates.
+   *
+   * <p>The slow poll makes the sleep the overwhelmingly likely place for the interrupt to land. Landing outside
+   * it is also a pass, since the loop guard then ends the wait, so this cannot flake either way.
+   */
+  @Test
+  void directInterruptEndsTheWaitWithoutRunningToTheTimeout() throws Exception {
+    AtomicReference<Thread> poller = new AtomicReference<>();
+    CountDownLatch polling = new CountDownLatch(1);
+    Thread interrupter = new Thread(() -> {
+      try {
+        if (polling.await(5, TimeUnit.SECONDS)) {
+          poller.get().interrupt();
+        }
+      } catch (InterruptedException interrupted) {
+        Thread.currentThread().interrupt();
+      }
+    });
+    interrupter.start();
+
+    long startedAt = System.nanoTime();
+    assertDoesNotThrow(() -> waitTillCondition(
+        ignored -> {
+          poller.set(Thread.currentThread());
+          polling.countDown();
+          return false;
+        }, RUNNING, INTERRUPT_TIMEOUT_SECS, SLOW_POLL_INTERVAL_MS));
+    long elapsedSecs = TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - startedAt);
+    interrupter.join(TimeUnit.SECONDS.toMillis(5));
+
+    assertTrue(elapsedSecs < INTERRUPT_TIMEOUT_SECS,
+        () -> "the interrupt should have ended the wait well before the timeout, but it took "
+            + elapsedSecs + "s of " + INTERRUPT_TIMEOUT_SECS + "s");
+  }
+
+  /**
+   * A stop that throws does not excuse leaving the ingest task running: the wait falls through to the join,
+   * which times out, and the task is force-stopped and cancelled rather than left reading into the next test.
+   */
+  @Test
+  void stopThatThrowsStillCancelsTheIngestTask() throws Exception {
+    HoodieDeltaStreamer ds = Mockito.mock(HoodieDeltaStreamer.class);
+    Mockito.doThrow(new IllegalStateException("stop blew up")).when(ds).shutdownGracefully();
+
+    ExecutorService ingest = Executors.newSingleThreadExecutor();
+    try {
+      Future<?> dsFuture = ingest.submit(() -> {
+        Thread.sleep(TimeUnit.MINUTES.toMillis(10));
+        return null;
+      });
+
+      TestHoodieDeltaStreamer.stopLeakedStreamer(ds, dsFuture, FAST_STOP_TIMEOUT_SECS);
+
+      assertTrue(dsFuture.isCancelled(),
+          "a stop that threw should still leave the ingest task cancelled, since that leak is what the "
+              + "helper exists to close");
+    } finally {
+      ingest.shutdownNow();
+    }
+  }
+
+  /**
+   * The same outcome when the stop hangs instead of throwing, which is the case the bound exists for:
+   * {@code shutdownGracefully} can await the ingest executor for up to 24 hours.
+   */
+  @Test
+  void stopThatHangsIsBoundedAndCancelsTheIngestTask() throws Exception {
+    HoodieDeltaStreamer ds = Mockito.mock(HoodieDeltaStreamer.class);
+    Mockito.doAnswer(invocation -> {
+      Thread.sleep(TimeUnit.MINUTES.toMillis(10));
+      return null;
+    }).when(ds).shutdownGracefully();
+
+    ExecutorService ingest = Executors.newSingleThreadExecutor();
+    try {
+      Future<?> dsFuture = ingest.submit(() -> {
+        Thread.sleep(TimeUnit.MINUTES.toMillis(10));
+        return null;
+      });
+
+      TestHoodieDeltaStreamer.stopLeakedStreamer(ds, dsFuture, FAST_STOP_TIMEOUT_SECS);
+
+      assertTrue(dsFuture.isCancelled(),
+          "a stop that hung past its bound should still leave the ingest task cancelled");
+    } finally {
+      ingest.shutdownNow();
+    }
   }
 }

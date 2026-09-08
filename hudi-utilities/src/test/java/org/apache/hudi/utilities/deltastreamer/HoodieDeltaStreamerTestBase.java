@@ -826,8 +826,12 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
           // Not a failure - the caller surfaces the streamer's own outcome - but the wait should still say
           // what it was waiting for instead of looking like success.
           if (!Boolean.TRUE.equals(satisfied)) {
+            // Read in the same order as the timeout path below, so describeProgress's note on the read
+            // order holds for both callers. The worker has finished here, so neither can be stale.
+            int completed = completedEvaluations.get();
+            Throwable last = lastError.get();
             log.warn("Wait ended because the deltastreamer future finished, not because the condition held. {}",
-                describeProgress(lastError.get(), completedEvaluations.get()));
+                describeProgress(last, completed));
           }
         } catch (TimeoutException e) {
           int completed = completedEvaluations.get();
