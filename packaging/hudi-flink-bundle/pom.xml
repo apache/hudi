@@ -75,6 +75,20 @@
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
               </transformers>
               <artifactSet>
+                <!-- Lance runtime dependencies are not bundled. Before using Lance with Flink,
+                     add the following JARs and their required transitive dependencies to Flink's lib
+                     directory, using versions compatible with Hudi:
+                     org.lance:lance-core
+                     org.apache.arrow:arrow-vector
+                     org.apache.arrow:arrow-format
+                     org.apache.arrow:arrow-memory-core
+                     org.apache.arrow:arrow-memory-netty
+                     org.apache.arrow:arrow-memory-netty-buffer-patch
+                     org.apache.arrow:arrow-c-data
+                     org.questdb:jar-jni
+                     com.google.flatbuffers:flatbuffers-java
+                     io.netty:netty-buffer
+                     io.netty:netty-common -->
                 <includes combine.children="append">
                   <include>org.apache.hudi:hudi-hadoop-common</include>
                   <include>org.apache.hudi:hudi-common</include>
