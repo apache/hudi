@@ -613,4 +613,18 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     assertResult(Right(()))(validate("concat(upper(name), 'x') = 'A1x'"))
     assertResult(Seq(scalarRows.head))(keep(scalarRows, "concat(upper(name), 'x') = 'A1x'", scalarSchema))
   }
+
+  test("evaluateFilter resolves deeper nesting and more RuntimeReplaceable functions") {
+    // Two levels of registry-only nesting.
+    assertResult(Right(()))(validate("instr(concat(name, 'x'), 'a') = 1"))
+    assertResult(Seq(scalarRows.head))(keep(scalarRows, "instr(concat(name, 'x'), 'a') = 1", scalarSchema))
+    // Registry function nested inside a hardcoded-table function, and vice versa three levels deep.
+    assertResult(Seq(scalarRows.head))(keep(scalarRows, "upper(concat(name, 'x')) = 'A1X'", scalarSchema))
+    assertResult(Seq(scalarRows.head))(
+      keep(scalarRows, "upper(concat(lower(name), 'x')) = 'A1X'", scalarSchema))
+    // Other RuntimeReplaceable builtins beyond nvl/left/right also need the replacement unwrap.
+    assertResult(Seq(scalarRows.head))(keep(scalarRows, "ifnull(name, 'z') = 'a1'", scalarSchema))
+    assertResult(scalarRows)(keep(scalarRows, "nvl2(name, 'yes', 'no') = 'yes'", scalarSchema))
+    assertResult(Seq(scalarRows.head))(keep(scalarRows, "nullif(name, 'a1') IS NULL", scalarSchema))
+  }
 }
