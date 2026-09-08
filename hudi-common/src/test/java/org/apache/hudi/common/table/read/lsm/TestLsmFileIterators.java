@@ -33,16 +33,21 @@ import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.IteratorMode;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -58,8 +63,9 @@ import static org.mockito.Mockito.when;
 
 class TestLsmFileIterators {
 
-  @Test
-  void testNativeDeleteRecordPreservesOrderingValue() {
+  @ParameterizedTest
+  @MethodSource("nativeDeleteOrderingValues")
+  void testNativeDeleteRecordPreservesOrderingValue(Comparable orderingValue, boolean commitTimeOrdering) {
     HoodieReaderContext<Map<String, Object>> readerContext = mock(HoodieReaderContext.class);
     RecordContext<Map<String, Object>> recordContext = mock(RecordContext.class);
     Map<String, Object> record = Collections.emptyMap();
@@ -68,14 +74,31 @@ class TestLsmFileIterators {
 
     when(readerContext.getRecordContext()).thenReturn(recordContext);
     when(recordContext.getValue(record, deleteLogSchema, HoodieRecord.RECORD_KEY_METADATA_FIELD)).thenReturn("key1");
-    when(recordContext.getOrderingValue(eq(record), eq(deleteLogSchema), eq(orderingFields))).thenReturn(42L);
+    when(recordContext.getOrderingValue(eq(record), eq(deleteLogSchema), eq(orderingFields))).thenReturn(orderingValue);
 
     BufferedRecord<Map<String, Object>> deleteRecord =
         LsmFileIterators.createNativeDeleteRecord(readerContext, record, deleteLogSchema, orderingFields);
 
     assertEquals("key1", deleteRecord.getRecordKey());
-    assertEquals(42L, deleteRecord.getOrderingValue());
+    assertEquals(orderingValue, deleteRecord.getOrderingValue());
     assertTrue(deleteRecord.isDelete());
+    assertEquals(commitTimeOrdering, deleteRecord.isCommitTimeOrderingDelete());
+  }
+
+  private static Stream<Arguments> nativeDeleteOrderingValues() {
+    Comparable allNulls = OrderingValues.create(new Comparable[] {null, null});
+    Comparable nullFirst = OrderingValues.create(new Comparable[] {null, 42L});
+    Comparable nullLast = OrderingValues.create(new Comparable[] {42L, null});
+    Comparable composite = OrderingValues.create(new Comparable[] {0L, 42L});
+    return Stream.of(
+        Arguments.of(null, true),
+        Arguments.of(OrderingValues.getDefault(), true),
+        Arguments.of(0L, false),
+        Arguments.of(42L, false),
+        Arguments.of(allNulls, false),
+        Arguments.of(nullFirst, false),
+        Arguments.of(nullLast, false),
+        Arguments.of(composite, false));
   }
 
   @Test

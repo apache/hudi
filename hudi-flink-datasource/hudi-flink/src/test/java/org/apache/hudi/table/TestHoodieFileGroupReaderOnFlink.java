@@ -78,6 +78,7 @@ import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.when;
 
 /**
@@ -222,7 +223,10 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
         ));
     GenericRowData rowData = GenericRowData.of(StringData.fromString("f1"), StringData.fromString("f2"), 1000L);
     assertEquals(1000L, readerContext.getRecordContext().getOrderingValue(rowData, schema, Collections.singletonList("ts")));
-    assertEquals(OrderingValues.getDefault(), readerContext.getRecordContext().getOrderingValue(rowData, schema, Collections.singletonList("non_existent_col")));
+    assertNull(readerContext.getRecordContext().getOrderingValue(rowData, schema, Collections.singletonList("non_existent_col")));
+    assertEquals(OrderingValues.getDefault(), readerContext.getRecordContext().getOrderingValue(rowData, schema, Collections.emptyList()));
+    rowData.setField(2, null);
+    assertNull(readerContext.getRecordContext().getOrderingValue(rowData, schema, Collections.singletonList("ts")));
   }
 
   @Test

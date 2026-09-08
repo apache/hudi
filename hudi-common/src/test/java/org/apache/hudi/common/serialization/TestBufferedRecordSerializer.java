@@ -36,6 +36,8 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -62,14 +64,16 @@ public class TestBufferedRecordSerializer {
     }
   }
 
-  @Test
-  void testBufferedRecordSerAndDe() throws IOException {
+  @ParameterizedTest
+  @NullSource
+  @ValueSource(ints = {0, 100})
+  void testBufferedRecordSerAndDe(Integer orderingValue) throws IOException {
     HoodieSchema schema = SchemaTestUtil.getSimpleSchema();
     GenericRecord record = new GenericData.Record(schema.toAvroSchema());
     record.put("name", "lily");
     record.put("favorite_number", 100);
     record.put("favorite_color", "red");
-    BufferedRecord<IndexedRecord> bufferedRecord = new BufferedRecord<>("id", 100, record, 1, null);
+    BufferedRecord<IndexedRecord> bufferedRecord = new BufferedRecord<>("id", orderingValue, record, 1, null);
 
     AvroRecordSerializer avroRecordSerializer = new AvroRecordSerializer(integer -> schema.toAvroSchema());
     BufferedRecordSerializer<IndexedRecord> bufferedRecordSerializer = new BufferedRecordSerializer<>(avroRecordSerializer);
