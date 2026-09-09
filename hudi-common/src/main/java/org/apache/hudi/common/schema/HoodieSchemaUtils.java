@@ -538,7 +538,7 @@ public final class HoodieSchemaUtils {
     ValidationUtils.checkArgument(schemaFieldsMap != null, "Schema fields map cannot be null");
     ValidationUtils.checkArgument(fieldNames != null, "Field names cannot be null");
 
-    /**
+    /*
      * Avro & Presto field names seems to be case sensitive (support fields differing only in case) whereas
      * Hive/Impala/SparkSQL(default) are case-insensitive. Spark allows this to be configurable using
      * spark.sql.caseSensitive=true
