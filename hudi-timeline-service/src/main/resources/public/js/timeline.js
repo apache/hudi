@@ -47,6 +47,10 @@
   // Lazy-loaded data caches for tabs
   var tableConfigData = null;
   var schemaHistoryData = null;
+  // Bumped on every table load. In-flight fetches carry the generation they started under and drop
+  // their response if a newer load has started, so a slow response for the previous table can never
+  // repopulate the timeline or the tab caches under the new path.
+  var loadGeneration = 0;
 
   // Maps each comparable action to a group row: one row per comparable action.
   // Pending compaction/logcompaction/clustering fold into the row of the action
@@ -191,6 +195,10 @@
     if (match) {
       timeline.focus(match.id, { animation: { duration: 500, easingFunction: 'easeInOutQuad' } });
       timeline.setSelection([match.id]);
+      // setSelection does not fire 'select'; refresh the detail card as the arrow-key navigation does.
+      if (currentTablePath) {
+        onSelect({ items: [match.id] }, currentTablePath);
+      }
     } else {
       var parsed = parseHudiTimestamp(query);
       if (parsed && parsed !== query) {
@@ -339,6 +347,7 @@
     // Reset cached tab data on new table load
     tableConfigData = null;
     schemaHistoryData = null;
+    var generation = ++loadGeneration;
 
     // Switch to Timeline tab
     var timelineTab = document.getElementById('tab-timeline');
@@ -354,6 +363,7 @@
         return res.json();
       })
       .then(function (data) {
+        if (generation !== loadGeneration) return;
         var instants = data.instants;
         if (!instants || instants.length === 0) {
           setState(STATES.ERROR, 'No instants found for this table.');
@@ -417,6 +427,9 @@
           timeline = new vis.Timeline(timelineContainer, filteredView, groups, options);
         } else {
           timeline.setItems(filteredView);
+          // vis-timeline auto-fits only its first dataset; refit so a table whose instants fall
+          // outside the previous window does not come up as a blank canvas.
+          timeline.fit({ animation: false });
         }
 
         computeStats();
@@ -431,6 +444,7 @@
         });
       })
       .catch(function (err) {
+        if (generation !== loadGeneration) return;
         setState(STATES.ERROR, 'Failed to load timeline: ' + err.message);
         console.error(err);
       });
@@ -603,17 +617,20 @@
     document.getElementById('configContent').classList.add('d-none');
     document.getElementById('configError').classList.add('d-none');
 
+    var generation = loadGeneration;
     fetch(API_BASE + '/table/config?basepath=' + encodeURIComponent(currentTablePath))
       .then(function (res) {
         if (!res.ok) return httpError(res);
         return res.json();
       })
       .then(function (data) {
+        if (generation !== loadGeneration) return;
         tableConfigData = data;
         document.getElementById('configLoading').classList.add('d-none');
         renderTableConfig(data);
       })
       .catch(function (err) {
+        if (generation !== loadGeneration) return;
         document.getElementById('configLoading').classList.add('d-none');
         document.getElementById('configError').classList.remove('d-none');
         document.getElementById('configErrorMessage').textContent = 'Failed to load table config: ' + err.message;
@@ -658,17 +675,20 @@
     document.getElementById('schemaContent').classList.add('d-none');
     document.getElementById('schemaError').classList.add('d-none');
 
+    var generation = loadGeneration;
     fetch(API_BASE + '/table/schema/history?basepath=' + encodeURIComponent(currentTablePath))
       .then(function (res) {
         if (!res.ok) return httpError(res);
         return res.json();
       })
       .then(function (data) {
+        if (generation !== loadGeneration) return;
         schemaHistoryData = data;
         document.getElementById('schemaLoading').classList.add('d-none');
         renderSchemaHistory(data);
       })
       .catch(function (err) {
+        if (generation !== loadGeneration) return;
         document.getElementById('schemaLoading').classList.add('d-none');
         document.getElementById('schemaError').classList.remove('d-none');
         document.getElementById('schemaErrorMessage').textContent = 'Failed to load schema history: ' + err.message;

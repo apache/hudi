@@ -28,6 +28,8 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -583,7 +585,8 @@ class TestUiApi extends HoodieCommonTestHarness {
     String base = mc.getBasePath().toString();
 
     JsonNode root = getJsonOk(UI_SCHEMA_URL, params(BASEPATH_PARAM, base));
-    assertTrue(isJsonNull(root.get("currentSchema")), root.toString());
+    // The key must be present and explicitly null, not merely absent.
+    assertTrue(root.has("currentSchema") && root.get("currentSchema").isNull(), root.toString());
     assertEquals(0, root.get("history").size(), root.toString());
     assertTrue(isJsonNull(root.get("window").get("oldestInstantScanned")), root.toString());
     assertFalse(root.get("window").get("truncated").asBoolean(), root.toString());
@@ -607,6 +610,13 @@ class TestUiApi extends HoodieCommonTestHarness {
     table.addReplaceCommit("20240101000104", Option.empty(), Option.empty(), replaceMetadata);
 
     JsonNode root = getJsonOk(UI_SCHEMA_URL, params(BASEPATH_PARAM, base));
+
+    // currentSchema is the latest commit schema (SCHEMA_C) with the meta fields added, so dropping the
+    // TableSchemaResolver call in getSchemaHistory fails here rather than passing a null check.
+    assertFalse(isJsonNull(root.get("currentSchema")), root.toString());
+    HoodieSchema expectedCurrent = HoodieSchemaUtils.addMetadataFields(HoodieSchema.parse(SCHEMA_C), false);
+    assertEquals(expectedCurrent, HoodieSchema.parse(root.get("currentSchema").asText()), root.toString());
+
     JsonNode history = root.get("history");
     assertEquals(3, history.size(), root.toString());
 

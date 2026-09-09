@@ -53,6 +53,7 @@ import io.javalin.Javalin;
 import io.javalin.http.BadRequestResponse;
 import io.javalin.http.Context;
 import io.javalin.http.Handler;
+import io.javalin.http.NotFoundResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.security.UserGroupInformation;
 
@@ -704,8 +705,10 @@ public class RequestHandler {
           }
         } catch (RuntimeException re) {
           success = false;
-          if (re instanceof BadRequestResponse) {
-            log.warn("Bad request response due to client view behind server view. {}", re.getMessage());
+          if (re instanceof BadRequestResponse || re instanceof NotFoundResponse) {
+            // Client-side rejections are expected (view behind server, malformed UI params, an instant
+            // that completed between the timeline listing and the click); keep them out of the ERROR log.
+            log.warn("Request {} rejected with {}: {}", context.queryString(), re.getClass().getSimpleName(), re.getMessage());
           } else {
             log.error("Got runtime exception servicing request {}", context.queryString(), re);
           }
