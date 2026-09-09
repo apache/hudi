@@ -212,7 +212,7 @@ public class HoodieDataTableValidator implements Serializable {
       if (o == null || getClass() != o.getClass()) {
         return false;
       }
-      HoodieMetadataTableValidator.Config config = (HoodieMetadataTableValidator.Config) o;
+      Config config = (Config) o;
       return basePath.equals(config.basePath)
           && Objects.equals(continuous, config.continuous)
           && Objects.equals(minValidateIntervalSeconds, config.minValidateIntervalSeconds)
