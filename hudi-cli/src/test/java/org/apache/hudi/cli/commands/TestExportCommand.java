@@ -83,7 +83,8 @@ public class TestExportCommand extends CLIFunctionalTestHarness {
    * Exports the whole timeline. The instant count is passed as the limit and the ordering is
    * descending on purpose: that is the one shape in which the export does not walk the archived
    * timeline, whose reader cannot open the LSM timeline history directory of a table of version
-   * eight or above.
+   * eight or above. The limit is not honoured for active instants either. Both are tracked in
+   * https://github.com/apache/hudi/issues/19879; once fixed, this test can drop the workaround.
    */
   @Test
   public void testExportInstants() throws Exception {

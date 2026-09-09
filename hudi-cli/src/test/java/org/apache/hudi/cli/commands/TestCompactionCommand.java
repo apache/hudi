@@ -212,6 +212,8 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
   /**
    * Repair only validates the plan and reports the renames it would need; with the plan intact
    * there is nothing to rename and the plan is left alone, whether or not this is a dry run.
+   * The dry run flag is currently ignored by the admin client, see
+   * https://github.com/apache/hudi/issues/19881.
    */
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
@@ -267,7 +269,9 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
         outputPath, 2, skipValidation, dryRun);
 
     assertTrue(readOperationResults(outputPath).isEmpty());
-    // the plan itself stays pending either way, only its operations change
+    // the plan itself stays pending either way, only its operations change. Only the target file
+    // group is asserted: the admin client currently drops the other operations of the same
+    // partition as well (https://github.com/apache/hudi/issues/19881); assert they survive once fixed.
     assertTrue(pendingCompactionInstants().contains(PENDING_COMPACTION_INSTANT));
     if (dryRun) {
       assertTrue(fileIdsOf(PENDING_COMPACTION_INSTANT).contains(unscheduled.getFileId()));

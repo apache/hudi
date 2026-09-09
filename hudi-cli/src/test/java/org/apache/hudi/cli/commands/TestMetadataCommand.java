@@ -241,7 +241,8 @@ public class TestMetadataCommand extends CLIFunctionalTestHarness {
     connectToTable();
 
     // The command opens the reader with metadata metrics off, so there is nothing to report on,
-    // but the stat table is still rendered.
+    // but the stat table is still rendered. Tracked in https://github.com/apache/hudi/issues/19880;
+    // once fixed, assert on the rows instead.
     Object stats = shell.evaluate(() -> "metadata stats");
     assertTrue(ShellEvaluationResultUtil.isSuccess(stats));
     assertTrue(stats.toString().contains("stat key"), stats.toString());
