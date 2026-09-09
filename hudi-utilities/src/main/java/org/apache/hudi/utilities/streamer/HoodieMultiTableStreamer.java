@@ -411,8 +411,9 @@ public class HoodieMultiTableStreamer {
             + "down the remaining table syncs; they are interrupted mid-round rather than allowed to finish it, so a "
             + "table can be left with an inflight instant that is rolled back on the next run. When disabled "
             + "(default), each table is synced independently and a single failure does not stop the others. Either "
-            + "way the job exits with a non-zero status if any table failed, since continuous mode is not meant to "
-            + "end.")
+            + "way, if the run ends at all with a failed table the job exits with a non-zero status, since continuous "
+            + "mode is not meant to end. A table failing while the others keep running does not end the run, so it "
+            + "surfaces through that table's error log and metrics rather than the exit code.")
     public Boolean failFastOnContinuousMode = false;
 
     @Parameter(names = {"--min-sync-interval-seconds"},
@@ -531,7 +532,8 @@ public class HoodieMultiTableStreamer {
    *
    * <p>When {@code --fail-fast-on-continuous} is enabled, the first table failure tears the sibling streamers down
    * at once. Otherwise every table is synced independently and a single failure does not affect the others. Either
-   * way a {@link HoodieException} is thrown if any table failed, so the caller exits with a non-zero status.
+   * way, a {@link HoodieException} is thrown if the run ends with a failed table. Note that the run only ends once
+   * every table has stopped, so a failure alongside still-running tables surfaces in logs and metrics instead.
    *
    * <p>Teardown runs in a {@code finally} rather than a catch so that it also covers an {@link Error}, which the
    * workers do not catch, and it is a no-op once a table has shut its own ingestion service down. The siblings are
@@ -636,7 +638,7 @@ public class HoodieMultiTableStreamer {
    */
   private static void awaitFailFast(List<CompletableFuture<Void>> tableFutures) {
     try {
-      FutureUtils.allOf(tableFutures).join();
+      CompletableFuture.anyOf(tableFutures.toArray(new CompletableFuture[0])).join();
     } catch (CompletionException e) {
       Throwable cause = unwrapCompletionException(e);
       // An Error is rethrown as is rather than boxed, so the JVM-level failure reaches the caller unchanged.
