@@ -333,6 +333,10 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
 
       ExecutionException thrown = assertThrows(ExecutionException.class, sync::get);
       assertTrue(thrown.getCause() instanceof HoodieException, "expected sync() to fail with a HoodieException");
+      // It has to be fail fast that threw, not the end-of-sync check on failedTables: that check fires whichever
+      // way the wait resolved, so only this message distinguishes allOf from anyOf.
+      assertTrue(thrown.getCause().getMessage().contains("Fail fast is enabled"),
+          "expected fail fast to surface table 2's failure, got: " + thrown.getCause().getMessage());
     } finally {
       syncExecutor.shutdownNow();
     }
