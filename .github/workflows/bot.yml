@@ -1507,17 +1507,9 @@ jobs:
           SPARK_ARCHIVE: ${{ matrix.sparkArchive }}
           SCALA_PROFILE: '-Dscala-2.12 -Dscala.binary.version=2.12'
         run: |
-          # dlcdn is the ASF CDN but only carries the current release of each
-          # line; superseded versions are served by archive.apache.org, a single
-          # un-CDN'd origin measured between 42s and 68min for this same 382MB
-          # file (see #19883). Try the CDN first so a current version is fast,
-          # and fall back so a version that has rolled off still resolves.
-          # Plain --retry (not --retry-all-errors) is deliberate: it retries
-          # transient 5xx and stalls but not a 404, so a CDN miss falls through
-          # immediately instead of sleeping through five pointless retries.
-          # --speed-limit/--speed-time abort a transfer stuck under 100KB/s for
-          # two minutes, which --retry then resumes via -C - against a fresh
-          # connection rather than crawling to the end.
+          # dlcdn only carries the current release of each line; fall back to
+          # the archive for older pins (#19883). Plain --retry, not
+          # --retry-all-errors, so a 404 on the CDN falls through immediately.
           DEST="$GITHUB_WORKSPACE/$SPARK_ARCHIVE"
           downloaded=false
           for base in https://dlcdn.apache.org/spark https://archive.apache.org/dist/spark; do
