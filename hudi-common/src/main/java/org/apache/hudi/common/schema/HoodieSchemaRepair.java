@@ -39,7 +39,7 @@ import java.util.List;
  * {@code org.apache.hudi.common.schema.internal.utils.AvroSchemaEvolutionUtils}.</p>
  *
  * <p>{@link #hasTimestampMillisField(HoodieSchema)} is the cheap pre-check used to decide whether the
- * repair is worth wiring in at all. Its sibling in the metadata-table domain is
+ * repair is worth wiring in at all. Its per-field sibling is
  * {@code HoodieSchemaUtils#isTimestampMillisField}, which answers the same question for one field
  * schema rather than recursively for a whole table schema.</p>
  */
