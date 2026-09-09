@@ -376,7 +376,7 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     // instead of being rejected as unsupported. See #19852.
     assertKeeps(scalarRows, "concat(name, 'x') = 'a1x'", Seq(scalarRows.head))
     assertKeeps(scalarRows, "instr(name, 'a') = 1", Seq(scalarRows.head))
-    assertResult(Seq(scalarRows.head))(keep(scalarRows, "if(name = 'a1', true, false)", scalarSchema))
+    assertKeeps(scalarRows, "if(name = 'a1', true, false)", Seq(scalarRows.head))
     assertResult(Seq(scalarRows.head))(
       keep(scalarRows, "case when name = 'a1' then true else false end", scalarSchema))
     // Or short-circuits on the resolved side, which is what the unresolved-operand guard preserves.
@@ -435,15 +435,14 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     // anything this guard rejects.
     assertResult(scalarRows)(keep(scalarRows, "current_timestamp() > t", scalarSchema))
     assert(validate("current_date() > d").isLeft)
+  }
 
+  test("evaluateFilter runs the same coercion rules the analyzer would for concat/if/functions") {
     // lookupFunction skips the analyzer's implicit-cast pass, but applyImplicitCasts now runs
     // ConcatCoercion too, so concat(id, 'x') casts the Int column to String exactly as a real
     // query would - a genuine mismatch (Map, below) is what checkInputDataTypes still has to
     // catch, not a fixable one like this.
     assertKeeps(scalarRows, "concat(id, 'x') = '1x'", Seq(scalarRows.head))
-  }
-
-  test("evaluateFilter runs the same coercion rules the analyzer would for concat/if/functions") {
     // IfCoercion unifies the then/else branch types (ts: Long, 0: Int).
     assertKeeps(scalarRows, "if(flag, ts, 0) = 1000", Seq(scalarRows.head))
     // FunctionArgumentConversion widens greatest/least's arguments to a common type (id: Int,
