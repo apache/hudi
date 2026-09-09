@@ -26,9 +26,11 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils;
 import org.apache.hudi.metadata.index.model.IndexCleanContext;
 import org.apache.hudi.metadata.index.model.IndexInitializationContext;
 import org.apache.hudi.metadata.index.model.IndexInitializationPlan;
+import org.apache.hudi.metadata.index.model.IndexPartitionAndRecords;
 import org.apache.hudi.metadata.index.model.IndexUpdateContext;
 
 import org.junit.jupiter.api.Test;
@@ -47,6 +49,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyFloat;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
@@ -174,31 +177,48 @@ class TestSecondaryIndexer {
   }
 
   @Test
-  void testBuildUpdateForReplaceCommitFromExternalWriterIsNotRejected() {
-    // files written outside Hudi are registered through replace commits with an unknown operation type
-    HoodieEngineContext engineContext = mock(HoodieEngineContext.class);
+  void testBuildUpdateForReplaceCommitFromExternalWriterWithoutWriteStats() {
+    // files written outside Hudi are registered through replace commits without a known operation type. A fresh
+    // HoodieCommitMetadata carries UNKNOWN; a writer may also leave the type null. A commit that only drops files has
+    // no write stats but still removes the records of the replaced file groups from the index.
+    HoodieEngineContext engineContext = new HoodieLocalEngineContext(getDefaultStorageConf());
     HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    HoodieMetadataConfig metadataConfig = mock(HoodieMetadataConfig.class);
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     HoodieIndexMetadata indexMetadata = mock(HoodieIndexMetadata.class);
     HoodieIndexDefinition indexDefinition = mock(HoodieIndexDefinition.class);
 
-    when(metaClient.getIndexMetadata()).thenReturn(org.apache.hudi.common.util.Option.of(indexMetadata));
+    when(writeConfig.getMetadataConfig()).thenReturn(metadataConfig);
+    when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
-    when(tableConfig.getMetadataPartitions()).thenReturn(Collections.emptySet());
+    when(metaClient.getIndexForMetadataPartition("secondary_index_idx")).thenReturn(Option.of(indexDefinition));
+    when(tableConfig.getMetadataPartitions()).thenReturn(Collections.singleton("secondary_index_idx"));
     when(indexMetadata.getIndexDefinitions()).thenReturn(Collections.singletonMap("secondary_index_idx", indexDefinition));
     when(indexDefinition.getIndexName()).thenReturn("secondary_index_idx");
 
     HoodieReplaceCommitMetadata commitMetadata = new HoodieReplaceCommitMetadata();
-    commitMetadata.setOperationType(WriteOperationType.UNKNOWN);
+    commitMetadata.setOperationType(null);
     commitMetadata.addReplaceFileId("p1", "file_1.parquet");
 
-    SecondaryIndexer indexer = new SecondaryIndexer(engineContext, writeConfig, metaClient);
-    assertTrue(indexer.buildUpdate(IndexUpdateContext.of(
-        "016",
-        mock(HoodieBackedTableMetadata.class),
-        Lazy.lazily(() -> mock(HoodieTableFileSystemView.class)),
-        commitMetadata)).isEmpty());
+    HoodieData<HoodieRecord> deletes = engineContext.parallelize(Collections.singletonList(
+        HoodieMetadataPayload.createSecondaryIndexRecord("p1/file_1.parquet_0", "alice", "secondary_index_idx", true)), 1);
+    try (MockedStatic<SecondaryIndexRecordGenerationUtils> mockedGenerationUtils = mockStatic(SecondaryIndexRecordGenerationUtils.class)) {
+      mockedGenerationUtils.when(() -> SecondaryIndexRecordGenerationUtils.convertWriteStatsToSecondaryIndexRecords(
+              eq(Collections.emptyList()), eq("016"), eq(indexDefinition), eq(metadataConfig), eq(metaClient), eq(engineContext), eq(writeConfig), eq(commitMetadata)))
+          .thenReturn(deletes);
+
+      SecondaryIndexer indexer = new SecondaryIndexer(engineContext, writeConfig, metaClient);
+      List<IndexPartitionAndRecords> result = indexer.buildUpdate(IndexUpdateContext.of(
+          "016",
+          mock(HoodieBackedTableMetadata.class),
+          Lazy.lazily(() -> mock(HoodieTableFileSystemView.class)),
+          commitMetadata));
+
+      assertEquals(1, result.size());
+      assertEquals("secondary_index_idx", result.get(0).indexPartitionName());
+      assertEquals(1, result.get(0).indexRecords().collectAsList().size());
+    }
   }
 
   @Test

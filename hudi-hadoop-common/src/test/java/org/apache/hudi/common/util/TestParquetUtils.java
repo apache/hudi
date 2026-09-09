@@ -33,6 +33,7 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.StoragePath;
@@ -132,8 +133,10 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
         HoodieTestUtils.getStorage(filePath), new StoragePath(filePath), new StoragePath(basePath), Collections.singleton("2024/external.parquet_1"));
     assertEquals(Collections.singleton(Pair.of("2024/external.parquet_1", 1L)), filtered);
 
-    // without the table base path no key can be generated
-    assertThrows(IllegalArgumentException.class, () -> parquetUtils.readRowKeys(HoodieTestUtils.getStorage(filePath), new StoragePath(filePath)));
+    // without the table base path the missing record key is an error
+    HoodieException missingKey = assertThrows(HoodieException.class,
+        () -> parquetUtils.readRowKeys(HoodieTestUtils.getStorage(filePath), new StoragePath(filePath)));
+    assertTrue(missingKey.getMessage().startsWith("Record key is missing in row 0 of "));
   }
 
   @ParameterizedTest

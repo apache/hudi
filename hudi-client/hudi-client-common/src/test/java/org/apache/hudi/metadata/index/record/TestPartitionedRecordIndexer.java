@@ -198,7 +198,7 @@ class TestPartitionedRecordIndexer {
       mockedMetadataUtil.when(() -> HoodieTableMetadataUtil.reduceByKeys(any(), anyInt(), anyBoolean()))
           .thenAnswer(invocation -> invocation.getArgument(0));
       mockedBaseFileParsingUtils.when(() -> BaseFileRecordParsingUtils
-              .generateRLIMetadataHoodieRecordsForBaseFile(any(), any(), any(), any(), any(), anyBoolean()))
+              .generateRLIMetadataHoodieRecordsForBaseFile(any(), any(), any(), any(), any(), anyBoolean(), anyBoolean()))
           .thenReturn(Collections.singletonList(
               HoodieMetadataPayload.createRecordIndexUpdate(
                   "rk1", "p1", fileId, "20240101010101", 0)).iterator());
@@ -217,7 +217,7 @@ class TestPartitionedRecordIndexer {
       assertEquals("p1", payload.getDataPartition());
 
       mockedBaseFileParsingUtils.verify(() -> BaseFileRecordParsingUtils
-          .generateRLIMetadataHoodieRecordsForBaseFile(any(), any(), anyInt(), any(), any(), eq(true)));
+          .generateRLIMetadataHoodieRecordsForBaseFile(any(), any(), anyInt(), any(), any(), eq(true), anyBoolean()));
       mockedMetadataUtil.verify(() -> HoodieTableMetadataUtil
           .reduceByKeys(any(), anyInt(), eq(true)));
     }

@@ -35,6 +35,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -117,7 +118,10 @@ public class SecondaryIndexRecordGenerationUtils {
       // a table without any completed commit, e.g. one that registers files written outside Hudi for the first time,
       // only has the schema of the current commit.
       tableSchema = tryResolveSchemaForTable(dataMetaClient)
-          .orElseGet(() -> HoodieSchema.parse(commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY)));
+          .orElseGet(() -> Option.ofNullable(commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY))
+              .map(HoodieSchema::parse)
+              .orElseThrow(() -> new HoodieException("The table has no completed commit to resolve its schema from and the commit metadata has no "
+                  + HoodieCommitMetadata.SCHEMA_KEY)));
     } catch (Exception e) {
       throw new HoodieException("Failed to get latest schema for " + dataMetaClient.getBasePath(), e);
     }
@@ -207,7 +211,9 @@ public class SecondaryIndexRecordGenerationUtils {
       return records.iterator();
     });
 
-    if (commitMetadata instanceof HoodieReplaceCommitMetadata) {
+    if (commitMetadata instanceof HoodieReplaceCommitMetadata && WriteOperationType.isUnknown(commitMetadata.getOperationType())) {
+      // a replace commit without a known operation type registers files written outside Hudi and drops the replaced
+      // file groups without rewriting their records under the same key
       secondaryIndexRecords = secondaryIndexRecords.union(convertReplacedFileGroupsToSecondaryIndexRecords(
           (HoodieReplaceCommitMetadata) commitMetadata, writeStatsByFileId.keySet(), instantTime, indexDefinition, metadataConfig,
           dataMetaClient, engineContext, writeConfig, tableSchema));
@@ -312,7 +318,8 @@ public class SecondaryIndexRecordGenerationUtils {
     return engineContext.parallelize(fileSlices, parallelism).flatMap(partitionAndBaseFile -> {
       final String partition = partitionAndBaseFile.getPartitionPath();
       final FileSlice fileSlice = partitionAndBaseFile.getFileSlice();
-      Option<StoragePath> dataFilePath = Option.ofNullable(fileSlice.getBaseFile().map(baseFile -> FSUtils.getAbsoluteFilePath(basePath, partition, baseFile.getFileName())).orElseGet(null));
+      // the storage path keeps the directory prefix of a file written outside Hudi, which its file name alone loses
+      Option<StoragePath> dataFilePath = fileSlice.getBaseFile().map(HoodieBaseFile::getStoragePath);
       HoodieSchema readerSchema;
       if (dataFilePath.isPresent()) {
         readerSchema = HoodieIOFactory.getIOFactory(metaClient.getStorage())
@@ -341,12 +348,18 @@ public class SecondaryIndexRecordGenerationUtils {
                                                                                                 boolean allowInflightInstants) throws IOException {
     String secondaryKeyField = indexDefinition.getSourceFieldsKey();
     HoodieSchema requestedSchema = getRequestedSchemaForSecondaryIndex(metaClient, tableSchema, secondaryKeyField);
-    // Files written outside Hudi may carry neither the record key meta field nor record key fields. Their rows are
-    // keyed by the file path relative to the table base path and the row position, the same key the record index uses.
-    boolean hasRecordKeyMetaField = tableSchema.getField(RECORD_KEY_METADATA_FIELD).isPresent();
-    boolean hasRecordKeyFields = metaClient.getTableConfig().getRecordKeyFields().map(fields -> fields.length > 0).orElse(false);
-    Option<String> relativeFilePath = fileSlice.getBaseFile()
-        .map(baseFile -> FSUtils.getRelativePartitionPath(metaClient.getBasePath(), baseFile.getStoragePath()));
+    // a table without record keys, e.g. one that registers files written outside Hudi, keys every row by the path of its
+    // base file relative to the table and the row position, the same key the record index generates from the base file.
+    // The positions of a merged file slice would not line up with the base file, so such a slice must not have log files.
+    boolean generateRecordKeys = !metaClient.getTableConfig().hasRecordKey();
+    if (generateRecordKeys) {
+      ValidationUtils.checkState(fileSlice.getBaseFile().isPresent() && !fileSlice.hasLogFiles(),
+          "File group " + fileSlice.getFileId() + " in partition " + fileSlice.getPartitionPath() + " needs a base file and no log files "
+              + "to key its rows by position, because the table has no record key");
+    }
+    Option<String> relativeFilePath = generateRecordKeys
+        ? Option.of(FSUtils.getRelativePartitionPath(metaClient.getBasePath(), fileSlice.getBaseFile().get().getStoragePath()))
+        : Option.empty();
     HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>builder()
         .withReaderContext(readerContext)
         .withBaseFileOption(fileSlice.getBaseFile())
@@ -390,20 +403,10 @@ public class SecondaryIndexRecordGenerationUtils {
       }
 
       private String getRecordKey(T record) {
-        Object recordKey;
-        if (hasRecordKeyMetaField) {
-          recordKey = readerContext.getRecordContext().getValue(record, requestedSchema, RECORD_KEY_METADATA_FIELD);
-        } else if (hasRecordKeyFields) {
-          recordKey = readerContext.getRecordContext().getRecordKey(record, requestedSchema);
-        } else {
-          recordKey = null;
+        if (relativeFilePath.isPresent()) {
+          return ExternalFilePathUtil.generateRecordKeyForRow(relativeFilePath.get(), rowPosition);
         }
-        if (recordKey != null) {
-          return recordKey.toString();
-        }
-        ValidationUtils.checkArgument(relativeFilePath.isPresent(),
-            "Record key is missing in file group " + fileSlice.getFileId() + " and no base file is available to generate one");
-        return ExternalFilePathUtil.generateRecordKeyForRow(relativeFilePath.get(), rowPosition);
+        return readerContext.getRecordContext().getRecordKey(record, requestedSchema);
       }
 
       @Override

@@ -153,8 +153,8 @@ public abstract class FileFormatUtils {
   }
 
   /**
-   * Read the rowKey list from the given data file. If the data file was written outside Hudi and does not carry
-   * record keys, a key is generated for each row from the file path relative to the table base path and the row position.
+   * Read the rowKey list from the given data file, which was written outside Hudi and carries no record keys.
+   * Every row is keyed by the file path relative to the table base path and the row position.
    *
    * @param storage  {@link HoodieStorage} instance.
    * @param filePath the data file path.
@@ -269,8 +269,8 @@ public abstract class FileFormatUtils {
   /**
    * Read the rowKey list matching the given filter, from the given data file.
    * If the filter is empty, then this will return all the row keys and corresponding positions.
-   * Formats that support data files written outside Hudi override this method to generate a key for rows
-   * that do not carry a record key, from the file path relative to the table base path and the row position.
+   * Formats that support data files written outside Hudi override this method to key every row of such a file,
+   * which carries no record key, by the file path relative to the table base path and the row position.
    *
    * @param storage  {@link HoodieStorage} instance.
    * @param filePath the data file path.

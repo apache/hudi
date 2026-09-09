@@ -34,6 +34,7 @@ import org.apache.hudi.core.io.HoodieParquetConfigInjector;
 import org.apache.hudi.core.io.ParquetZstdCompressionLevelInjector;
 import org.apache.hudi.core.io.storage.HoodieFileWriter;
 import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -125,8 +126,8 @@ public class ParquetUtils extends FileFormatUtils {
 
   /**
    * Read the rowKey list matching the given filter, from the given parquet file. If the filter is empty, then this will
-   * return all the rowkeys and corresponding positions. Rows without a record key, as written by systems other than Hudi,
-   * get a key generated from the file path relative to the table base path and the row position.
+   * return all the rowkeys and corresponding positions. The rows of a file written by a system other than Hudi carry no
+   * record key; every row is keyed by the file path relative to the table base path and the row position instead.
    *
    * @param storage  {@link HoodieStorage} instance.
    * @param filePath The parquet file path.
@@ -166,7 +167,8 @@ public class ParquetUtils extends FileFormatUtils {
    *
    * @param storage    {@link HoodieStorage} instance.
    * @param filePath   The parquet file path.
-   * @param basePath   The table base path, required to generate keys for rows that do not carry a record key
+   * @param basePath   The table base path; when present, the file carries no record keys and every row is keyed
+   *                   by its relative path and position
    * @param filter     record keys filter
    * @param readSchema schema of columns to be read
    * @return Set of pairs of row key and position matching candidateRecordKeys
@@ -185,20 +187,23 @@ public class ParquetUtils extends FileFormatUtils {
     AvroReadSupport.setAvroReadSchema(conf, readSchema.toAvroSchema());
     AvroReadSupport.setRequestedProjection(conf, readSchema.toAvroSchema());
     Set<Pair<String, Long>> rowKeys = new HashSet<>();
+    // with the table base path given, the file was written outside Hudi and carries no record key: every row is keyed
+    // by the file path relative to the table and its position, the same key the secondary index generates for it
     Option<String> relativeFilePath = basePath.map(path -> FSUtils.getRelativePartitionPath(path, convertToStoragePath(filePath)));
     long rowPosition = 0;
     try (ParquetReader reader = AvroParquetReader.builder(filePath).withConf(conf).build()) {
       Object obj = reader.read();
       while (obj != null) {
         if (obj instanceof GenericRecord) {
-          Object recordKeyValue = ((GenericRecord) obj).get(HoodieRecord.RECORD_KEY_METADATA_FIELD);
           String recordKey;
-          if (recordKeyValue != null) {
-            recordKey = recordKeyValue.toString();
-          } else {
-            ValidationUtils.checkArgument(relativeFilePath.isPresent(),
-                "Record key is missing in " + filePath + " and no table base path is available to generate one");
+          if (relativeFilePath.isPresent()) {
             recordKey = ExternalFilePathUtil.generateRecordKeyForRow(relativeFilePath.get(), rowPosition);
+          } else {
+            Object recordKeyValue = ((GenericRecord) obj).get(HoodieRecord.RECORD_KEY_METADATA_FIELD);
+            if (recordKeyValue == null) {
+              throw new HoodieException("Record key is missing in row " + rowPosition + " of " + filePath);
+            }
+            recordKey = recordKeyValue.toString();
           }
           if (!filterFunction.isPresent() || filterFunction.get().apply(recordKey)) {
             rowKeys.add(Pair.of(recordKey, rowPosition));

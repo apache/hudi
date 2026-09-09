@@ -233,11 +233,12 @@ public class TestExternalFilePathUtil {
 
   @Test
   public void testGetFilePathInPartition() {
-    assertEquals("file1.parquet", ExternalFilePathUtil.getFilePathInPartition("file1.parquet_20240101000000_hudiext"));
-    assertEquals("bucket-0/file1.parquet", ExternalFilePathUtil.getFilePathInPartition("file1.parquet_20240101000000_fg%3Dbucket-0_hudiext"));
     // a file written by Hudi is returned as is
     String hudiFileName = "3a9f-1234_1-0-1_20240101000000.parquet";
     assertEquals(hudiFileName, ExternalFilePathUtil.getFilePathInPartition(hudiFileName));
+    // an external file with a nested prefix resolves to its path below the partition
+    assertEquals("bucket-0/subdir/file1.parquet",
+        ExternalFilePathUtil.getFilePathInPartition("file1.parquet_20240101000000_fg%3Dbucket-0%2Fsubdir_hudiext"));
   }
 
   @Test

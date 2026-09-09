@@ -24,6 +24,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -144,7 +145,12 @@ public class SecondaryIndexer extends BaseIndexer {
     List<HoodieWriteStat> allWriteStats = commitMetadata.getPartitionToWriteStats().values().stream()
         .flatMap(Collection::stream).collect(Collectors.toList());
     // Return early if there are no write stats, or if this helper is reached for a table-service operation.
-    if (allWriteStats.isEmpty() || WriteOperationType.isCompactionOrClustering(commitMetadata.getOperationType())) {
+    // A replace commit without a known operation type, e.g. one that only drops files written outside Hudi,
+    // has no write stats but still removes the records of the replaced file groups from the index.
+    boolean dropsReplacedFileGroups = commitMetadata instanceof HoodieReplaceCommitMetadata
+        && WriteOperationType.isUnknown(commitMetadata.getOperationType())
+        && !((HoodieReplaceCommitMetadata) commitMetadata).getPartitionToReplaceFileIds().isEmpty();
+    if ((allWriteStats.isEmpty() && !dropsReplacedFileGroups) || WriteOperationType.isCompactionOrClustering(commitMetadata.getOperationType())) {
       return engineContext.emptyHoodieData();
     }
     HoodieIndexDefinition indexDefinition = HoodieTableMetadataUtil.getHoodieIndexDefinition(indexPartition, dataTableMetaClient);
