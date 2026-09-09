@@ -84,8 +84,8 @@ public class TestFlinkNativeLogAppendHandle {
       verify(writer, never()).canWriteDataFile();
       verify(writer, never()).canWriteDeleteFile();
       verify(writer, never()).flushAppend(any());
-      verify(writer, times(2)).appendRecord(eq(populatedRecord), any(HoodieSchema.class), any());
-      verify(writer, times(2)).appendDeleteRecord(eq(inputRecord), any(HoodieSchema.class), any());
+      verify(writer, times(2)).appendRecord(eq(populatedRecord), any(HoodieSchema.class));
+      verify(writer, times(2)).appendDeleteRecord(eq(inputRecord), any(HoodieSchema.class));
 
       handle.flushWriter();
       verify(writer).flushAppend(any());

@@ -56,6 +56,7 @@ import static org.apache.hudi.common.model.LogExtensions.DELETE_LOG_EXTENSION;
 
 /**
  * Writes MOR log blocks as native files, for example {@code .log.parquet} and {@code .deletes.parquet}.
+ * Incoming records must carry their generated record key, including when metadata fields are disabled.
  */
 public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
 
@@ -158,16 +159,16 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
     return deleteFileWriter == null || deleteFileWriter.canWrite();
   }
 
-  public void appendRecord(HoodieRecord record, HoodieSchema recordSchema, String keyFieldName) throws IOException {
+  public void appendRecord(HoodieRecord record, HoodieSchema recordSchema) throws IOException {
     ensureDataFileWriter(recordSchema);
-    dataFileWriter.write(record.getRecordKey(recordSchema, keyFieldName),
+    dataFileWriter.write(record.getRecordKey(),
         record, recordSchema, recordProperties);
     dataRecordPositions.add(record.getCurrentPosition());
   }
 
-  public void appendDeleteRecord(HoodieRecord record, HoodieSchema recordSchema, String keyFieldName) throws IOException {
+  public void appendDeleteRecord(HoodieRecord record, HoodieSchema recordSchema) throws IOException {
     ensureDeleteFileWriter();
-    String recordKey = record.getRecordKey(recordSchema, keyFieldName);
+    String recordKey = record.getRecordKey();
     Comparable orderingValue = getDeleteOrderingValue(record, recordSchema);
     Object deleteEngineRecord = recordContext.constructEngineRecord(
         deleteLogSchema, createDeleteLogFieldValues(recordKey, orderingValue));

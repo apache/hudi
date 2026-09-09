@@ -18,13 +18,17 @@
 
 package org.apache.hudi.io.cdc;
 
+import org.apache.hudi.common.avro.AvroRecordContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.LogFileCreationCallback;
 import org.apache.hudi.common.table.log.LogReaderUtils;
@@ -39,7 +43,12 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
 
@@ -61,6 +70,53 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class TestHoodieNativeLogFormatWriter {
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testWritesCompositeRecordKey(boolean populateMetaFields) throws Exception {
+    String schemaString = "{\"type\":\"record\",\"name\":\"test\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"name\",\"type\":\"string\"}]}";
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withSchema(schemaString)
+        .withPopulateMetaFields(populateMetaFields)
+        .build();
+    HoodieSchema dataSchema = HoodieSchema.parse(schemaString);
+    HoodieSchema recordSchema = populateMetaFields ? HoodieSchemaUtils.addMetadataFields(dataSchema) : dataSchema;
+    String recordKey = "id:1,name:alice";
+    GenericRecord data = new GenericData.Record(recordSchema.toAvroSchema());
+    data.put("id", "1");
+    data.put("name", "alice");
+    if (populateMetaFields) {
+      data.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, recordKey);
+    }
+    HoodieRecord record = new HoodieAvroIndexedRecord(new HoodieKey(recordKey, "partition"), data);
+    HoodieStorage storage = mock(HoodieStorage.class);
+    HoodieFileWriter dataFileWriter = mock(HoodieFileWriter.class);
+    HoodieFileWriter deleteFileWriter = mock(HoodieFileWriter.class);
+    TaskContextSupplier taskContextSupplier = mock(TaskContextSupplier.class);
+
+    try (MockedStatic<HoodieFileWriterFactory> writerFactory = mockStatic(HoodieFileWriterFactory.class)) {
+      writerFactory.when(() -> HoodieFileWriterFactory.getFileWriter(
+              eq("100"), any(StoragePath.class), eq(storage), eq(config), any(HoodieSchema.class),
+              eq(taskContextSupplier), eq(HoodieRecord.HoodieRecordType.AVRO)))
+          .thenReturn(dataFileWriter, deleteFileWriter);
+
+      try (HoodieNativeLogFormatWriter writer = new HoodieNativeLogFormatWriter(
+          4096, storage, new StoragePath("/tmp/partition"), "file-1", "100", 1, "1-0-1", 1024L,
+          new LogFileCreationCallback() {
+          }, HoodieTableVersion.current(), config, HoodieFileFormat.PARQUET, recordSchema,
+          taskContextSupplier, new AvroRecordContext(), new ArrayList<>(), Option.empty())) {
+        writer.appendRecord(record, recordSchema);
+        writer.appendDeleteRecord(record, recordSchema);
+      }
+    }
+
+    verify(dataFileWriter).write(eq(recordKey), eq(record), eq(recordSchema), eq(config.getProps()));
+    ArgumentCaptor<IndexedRecord> deleteRecordCaptor = ArgumentCaptor.forClass(IndexedRecord.class);
+    verify(deleteFileWriter).writeRow(eq(recordKey), deleteRecordCaptor.capture());
+    assertEquals(recordKey, deleteRecordCaptor.getValue().get(0).toString());
+  }
 
   @Test
   public void testAddsRecordPositionsToDataLogFooter() throws Exception {
@@ -118,7 +174,7 @@ public class TestHoodieNativeLogFormatWriter {
   public void testUsesDefaultOrderingValueForCommitTimeDeleteLog() throws Exception {
     HoodieSchema schema = mock(HoodieSchema.class);
     HoodieRecord record = mock(HoodieRecord.class);
-    when(record.getRecordKey(schema, HoodieRecord.RECORD_KEY_METADATA_FIELD)).thenReturn("key-1");
+    when(record.getRecordKey()).thenReturn("key-1");
     when(record.getCurrentPosition()).thenReturn(7L);
     doReturn(HoodieRecord.DEFAULT_ORDERING_VALUE + 1).when(record).getOrderingValue(eq(schema), any(), any());
 
@@ -202,7 +258,7 @@ public class TestHoodieNativeLogFormatWriter {
           Option.empty());
 
       writer.appendRecord(recordWithPosition("key-1", 1L, schema),
-          schema, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+          schema);
       writer.flushAppend(new HashMap<>());
       return writer.getLastDataFileFormatMetadata();
     }
@@ -253,7 +309,7 @@ public class TestHoodieNativeLogFormatWriter {
 
       for (int i = 0; i < positions.length; i++) {
         writer.appendRecord(recordWithPosition("key-" + i, positions[i], schema),
-            schema, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+            schema);
       }
 
       Map<HeaderMetadataType, String> header = new HashMap<>();
@@ -323,7 +379,7 @@ public class TestHoodieNativeLogFormatWriter {
           orderingFieldNames,
           baseFileInstantTimeOfPositions);
 
-      writer.appendDeleteRecord(record, schema, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+      writer.appendDeleteRecord(record, schema);
 
       Map<HeaderMetadataType, String> header = new HashMap<>();
       header.put(HeaderMetadataType.SCHEMA, schemaString);
@@ -339,7 +395,7 @@ public class TestHoodieNativeLogFormatWriter {
 
   private static HoodieRecord recordWithPosition(String key, long position, HoodieSchema schema) throws Exception {
     HoodieRecord record = mock(HoodieRecord.class);
-    when(record.getRecordKey(schema, HoodieRecord.RECORD_KEY_METADATA_FIELD)).thenReturn(key);
+    when(record.getRecordKey()).thenReturn(key);
     when(record.getCurrentPosition()).thenReturn(position);
     when(record.getOrderingValue(eq(schema), any(), any())).thenReturn(OrderingValues.getDefault());
     return record;
