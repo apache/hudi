@@ -194,6 +194,15 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
         keep(scalarRows, "int(name) > 1", scalarSchema)
       }
     }
+    // The registry-fallback guard added to protect a direct eval() on a genuinely unsupported
+    // function must not narrow this pre-existing, unconditional ANSI rethrow: OR'd together with
+    // a call to an unknown function (itself Unevaluable), the ANSI cast error still has to win
+    // over the unrelated function being unsupported, not get silently swallowed by that guard.
+    withSQLConf("spark.sql.ansi.enabled" -> "true") {
+      intercept[NumberFormatException] {
+        keep(scalarRows, "int(name) > 1 OR no_such_fn(name) = 'x'", scalarSchema)
+      }
+    }
   }
 
   test("evaluateFilter follows ANSI mode when a decimal widening overflows") {
@@ -427,11 +436,28 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     assertResult(scalarRows)(keep(scalarRows, "current_timestamp() > t", scalarSchema))
     assert(validate("current_date() > d").isLeft)
 
-    // lookupFunction skips the analyzer's implicit-cast pass, so a call like concat(id, 'x')
-    // structurally resolves against a non-string column even though the analyzer would reject
-    // it. checkInputDataTypes() catches that instead of letting eval() throw silently.
-    assert(validate("concat(id, 'x') = 'x'").isLeft)
-    assertResult(Seq.empty)(keep(scalarRows, "concat(id, 'x') = 'x'", scalarSchema))
+    // lookupFunction skips the analyzer's implicit-cast pass, but applyImplicitCasts now runs
+    // ConcatCoercion too, so concat(id, 'x') casts the Int column to String exactly as a real
+    // query would - a genuine mismatch (Map, below) is what checkInputDataTypes still has to
+    // catch, not a fixable one like this.
+    assertKeeps(scalarRows, "concat(id, 'x') = '1x'", Seq(scalarRows.head))
+  }
+
+  test("evaluateFilter runs the same coercion rules the analyzer would for concat/if/functions") {
+    // IfCoercion unifies the then/else branch types (ts: Long, 0: Int).
+    assertKeeps(scalarRows, "if(flag, ts, 0) = 1000", Seq(scalarRows.head))
+    // FunctionArgumentConversion widens greatest/least's arguments to a common type (id: Int,
+    // price: Double).
+    assertKeeps(scalarRows, "greatest(id, price) = 10.0", Seq(scalarRows.head))
+    // ... and array_contains's element type against the array's.
+    assertKeeps(scalarRows, "array_contains(array(1, 2, 3), id)", scalarRows)
+
+    // A genuine mismatch nothing coerces (a Map argument to concat) still gets rejected -
+    // widening the coercion rules didn't loosen the underlying type check.
+    val mapSchema = schemaOf("name" -> StringType, "m" -> MapType(StringType, IntegerType))
+    val mapRows = Seq(Row("a1", Map("k" -> 1)))
+    assert(HoodieProcedureFilterUtils.validateFilterExpression("concat(name, m) = 'x'", mapSchema, spark).isLeft)
+    assertResult(Seq.empty)(keep(mapRows, "concat(name, m) = 'x'", mapSchema))
   }
 
   test("evaluateFilter handles AND / OR / NOT / IN / BETWEEN") {
