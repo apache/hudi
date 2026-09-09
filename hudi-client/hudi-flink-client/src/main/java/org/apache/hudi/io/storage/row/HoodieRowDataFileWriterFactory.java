@@ -93,7 +93,7 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
       HoodieConfig config,
       HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
-    boolean populateMetaFields = MetaFieldsMode.resolve(config).toLegacyPopulateMetaFields();
+    MetaFieldsMode metaFieldsMode = MetaFieldsMode.resolve(config);
     boolean withOperation = config.getBooleanOrDefault(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD);
 
     Pair<StorageConfiguration, HoodieConfig> injectedConfigs =
@@ -102,14 +102,14 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
     HoodieConfig hoodieConfig = injectedConfigs.getRight();
 
     Configuration conf = (Configuration) storageConfiguration.unwrapAs(Configuration.class);
-    BloomFilter filter = createBloomFilter(hoodieConfig);
+    BloomFilter filter = enableBloomFilter(metaFieldsMode, hoodieConfig) ? createBloomFilter(hoodieConfig) : null;
     HoodieRowDataParquetWriteSupport writeSupport = (HoodieRowDataParquetWriteSupport) ReflectionUtils.loadClass(
         hoodieConfig.getStringOrDefault(HoodieStorageConfig.HOODIE_PARQUET_FLINK_ROW_DATA_WRITE_SUPPORT_CLASS),
         new Class<?>[] {Configuration.class, HoodieSchema.class, BloomFilter.class},
         conf, schema, filter);
 
     return new HoodieRowDataParquetWriter(storagePath, getParquetConfig(hoodieConfig, writeSupport),
-        instantTime, taskContextSupplier, populateMetaFields, withOperation);
+        instantTime, taskContextSupplier, metaFieldsMode, withOperation);
   }
 
   @Override
@@ -120,7 +120,6 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
       HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) {
     MetaFieldsMode metaFieldsMode = MetaFieldsMode.resolve(config);
-    boolean populateMetaFields = metaFieldsMode.toLegacyPopulateMetaFields();
     boolean withOperation = config.getBooleanOrDefault(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD);
     Option<org.apache.hudi.common.bloom.BloomFilter> bloomFilter = enableBloomFilter(metaFieldsMode, config)
         ? Option.of(createBloomFilter(config)) : Option.empty();
@@ -134,7 +133,7 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
         config.getLongOrDefault(HoodieStorageConfig.LANCE_WRITE_ALLOCATOR_SIZE_BYTES),
         config.getLongOrDefault(HoodieStorageConfig.LANCE_WRITE_FLUSH_BYTE_WATERMARK),
         config.getBooleanOrDefault(HoodieStorageConfig.WRITE_UTC_TIMEZONE),
-        populateMetaFields,
+        metaFieldsMode,
         withOperation);
   }
 

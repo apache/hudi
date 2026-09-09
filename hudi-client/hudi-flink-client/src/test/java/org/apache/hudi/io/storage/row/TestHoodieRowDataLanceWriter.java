@@ -18,8 +18,13 @@
 
 package org.apache.hudi.io.storage.row;
 
+import org.apache.hudi.client.model.HoodieRowDataCreation;
+import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.HoodieSchemaConverter;
@@ -33,6 +38,7 @@ import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.flink.table.data.GenericArrayData;
 import org.apache.flink.table.data.GenericRowData;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.ArrayType;
 import org.apache.flink.table.types.logical.FloatType;
 import org.apache.flink.table.types.logical.IntType;
@@ -40,6 +46,8 @@ import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.lance.file.LanceFileReader;
 
 import java.nio.file.Path;
@@ -55,6 +63,37 @@ public class TestHoodieRowDataLanceWriter {
 
   @TempDir
   Path tempDir;
+
+  @ParameterizedTest
+  @EnumSource(MetaFieldsMode.class)
+  void testMetaFieldsMode(MetaFieldsMode mode) throws Exception {
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(HoodieSchemaConverter.convertToSchema(
+        RowType.of(new LogicalType[] {new IntType(false)}, new String[] {"id"}).copy(false)), false);
+    StoragePath path = new StoragePath(tempDir.resolve("metadata.lance").toUri());
+    try (HoodieRowDataLanceWriter writer = new HoodieRowDataLanceWriter(path, schema, "001",
+        new LocalTaskContextSupplier(), Option.empty(), 128 * 1024 * 1024L,
+        64 * 1024 * 1024L, 16 * 1024 * 1024L, true, mode, false)) {
+      RowData row = HoodieRowDataCreation.create(null, null, null, null, null,
+          GenericRowData.of(1), false, false);
+      writer.writeRowWithMetaData(new HoodieKey("key1", "partition"), row);
+    }
+    try (BufferAllocator allocator = new RootAllocator();
+         LanceFileReader reader = LanceFileReader.open(path.toString(), allocator);
+         ArrowReader arrowReader = reader.readAll(null, null, Integer.MAX_VALUE)) {
+      assertTrue(arrowReader.loadNextBatch());
+      VectorSchemaRoot root = arrowReader.getVectorSchemaRoot();
+      boolean[] populated = {mode.isCommitTimePopulated(), mode == MetaFieldsMode.ALL,
+          mode.isRecordKeyPopulated(), mode == MetaFieldsMode.ALL, mode.isFileNamePopulated()};
+      String[] expected = {"001", null, "key1", "partition", path.getName()};
+      for (int i = 0; i < populated.length; i++) {
+        assertEquals(!populated[i], root.getVector(i).isNull(0));
+        if (populated[i] && expected[i] != null) {
+          assertEquals(expected[i], root.getVector(i).getObject(0).toString());
+        }
+      }
+      assertEquals(1, root.getVector("id").getObject(0));
+    }
+  }
 
   @Test
   public void testWritesVectorDataAndFooterMetadata() throws Exception {
@@ -75,7 +114,7 @@ public class TestHoodieRowDataLanceWriter {
         64 * 1024 * 1024L,
         16 * 1024 * 1024L,
         true,
-        false,
+        MetaFieldsMode.NONE,
         false)) {
       writer.writeRow("key1", GenericRowData.of(
           1, new GenericArrayData(new Object[] {1.25F, 2.5F})));

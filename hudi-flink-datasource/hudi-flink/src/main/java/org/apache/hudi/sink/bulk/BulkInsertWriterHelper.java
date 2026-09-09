@@ -20,6 +20,7 @@ package org.apache.hudi.sink.bulk;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.Option;
@@ -71,6 +72,7 @@ public class BulkInsertWriterHelper implements AutoCloseable {
   // table schema handed to the write handles.
   protected final HoodieSchema writerSchema;
   protected final boolean preserveHoodieMetadata;
+  private final boolean preserveRecordKey;
   protected final boolean isAppendMode;
   // used for Append mode only, if true then only initial row data without metacolumns is written
   protected final boolean populateMetaFields;
@@ -106,7 +108,8 @@ public class BulkInsertWriterHelper implements AutoCloseable {
     this.totalSubtaskNum = totalSubtaskNum;
     this.taskEpochId = taskEpochId;
     this.isAppendMode = OptionsResolver.isAppendMode(conf);
-    this.populateMetaFields = writeConfig.populateMetaFields();
+    MetaFieldsMode metaFieldsMode = writeConfig.getMetaFieldsMode();
+    this.populateMetaFields = metaFieldsMode != MetaFieldsMode.NONE;
     HoodieSchema schema = HoodieSchemaConverter.convertToSchema(
         rowType,
         HoodieSchemaUtils.getRecordQualifiedName(conf.get(FlinkOptions.TABLE_NAME)),
@@ -115,20 +118,21 @@ public class BulkInsertWriterHelper implements AutoCloseable {
         ? schema
         : HoodieSchemaUtils.addMetadataFields(schema, writeConfig.allowOperationMetadataField());
     this.preserveHoodieMetadata = preserveHoodieMetadata;
+    this.preserveRecordKey = preserveHoodieMetadata && metaFieldsMode.isRecordKeyPopulated();
     this.isInputSorted = OptionsResolver.isBulkInsertOperation(conf)
         && (conf.get(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT)
         || OptionsResolver.isLsmTreeStorageLayout(conf));
     this.fileIdPrefix = UUID.randomUUID().toString();
-    this.keyGen = preserveHoodieMetadata ? null : RowDataKeyGens.instance(conf, rowType, taskPartitionId, instantTime);
+    this.keyGen = preserveRecordKey ? null : RowDataKeyGens.instance(conf, rowType, taskPartitionId, instantTime);
     this.writeMetrics = writeMetrics;
   }
 
   public void write(RowData record) throws IOException {
     try {
-      String recordKey = preserveHoodieMetadata
+      String recordKey = preserveRecordKey
           ? record.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD).toString()
           : keyGen.getRecordKey(record);
-      String partitionPath = preserveHoodieMetadata
+      String partitionPath = preserveRecordKey // only ALL mode populates the partition path meta field
           ? record.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD).toString()
           : keyGen.getPartitionPath(record);
       writeRecord(recordKey, partitionPath, record);

@@ -278,6 +278,7 @@ public abstract class SchemaHandlerTestBase {
 
   static void setupMORTable(RecordMergeMode mergeMode, boolean hasPrecombine, HoodieTableConfig hoodieTableConfig) {
     when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
+    when(hoodieTableConfig.isRecordKeyPopulated()).thenReturn(true);
     when(hoodieTableConfig.getRecordMergeMode()).thenReturn(mergeMode);
     when(hoodieTableConfig.getTableVersion()).thenReturn(HoodieTableVersion.current());
     if (hasPrecombine) {

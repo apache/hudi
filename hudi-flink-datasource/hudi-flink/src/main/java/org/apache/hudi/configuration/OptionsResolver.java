@@ -26,6 +26,7 @@ import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -565,10 +566,14 @@ public class OptionsResolver {
    * Returns whether to populate meta fields or not
    */
   public static boolean isPopulateMetaFields(Configuration conf) {
-    return Boolean.parseBoolean(
-        conf.getString(
-            HoodieTableConfig.POPULATE_META_FIELDS.key(),
-            HoodieTableConfig.POPULATE_META_FIELDS.defaultValue().toString()));
+    return getMetaFieldsMode(conf).toLegacyPopulateMetaFields();
+  }
+
+  /**
+   * Resolves meta-field population, including the legacy boolean fallback.
+   */
+  public static MetaFieldsMode getMetaFieldsMode(Configuration conf) {
+    return MetaFieldsMode.resolve(conf.toMap());
   }
 
   /**

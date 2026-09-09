@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -59,6 +60,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Test for {@link OptionsResolver}
  */
 public class TestOptionsResolver {
+
+  @Test
+  void testMetaFieldsModeLegacyFallback() {
+    Configuration conf = new Configuration();
+    assertEquals(MetaFieldsMode.ALL, OptionsResolver.getMetaFieldsMode(conf));
+    conf.setString(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
+    assertEquals(MetaFieldsMode.NONE, OptionsResolver.getMetaFieldsMode(conf));
+    conf.setString(HoodieTableConfig.META_FIELDS_MODE.key(), "commit_time_only");
+    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, OptionsResolver.getMetaFieldsMode(conf));
+    assertFalse(OptionsResolver.isPopulateMetaFields(conf));
+  }
 
   @Test
   void testTableStorageLayoutDefaultsByOperation() {

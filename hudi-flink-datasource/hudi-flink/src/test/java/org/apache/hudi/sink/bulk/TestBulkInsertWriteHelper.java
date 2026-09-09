@@ -20,7 +20,14 @@ package org.apache.hudi.sink.bulk;
 
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.model.HoodieRowDataCreation;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.MetaFieldsMode;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.FlinkTables;
@@ -37,17 +44,25 @@ import org.apache.flink.table.types.logical.RowType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
@@ -63,6 +78,69 @@ public class TestBulkInsertWriteHelper {
   public void before() throws IOException {
     conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath(), TestConfigurations.ROW_DATA_TYPE);
     StreamerUtil.initTableIfNotExists(conf);
+  }
+
+  @ParameterizedTest
+  @MethodSource("metaFieldsModeParams")
+  void testMetaFieldsMode(MetaFieldsMode mode, boolean preserveMetadata) throws Exception {
+    for (String operation : new String[] {"insert", "bulk_insert"}) {
+      File path = new File(tempFile, operation);
+      Configuration modeConf = TestConfigurations.getDefaultConf(path.getAbsolutePath(), TestConfigurations.ROW_DATA_TYPE);
+      modeConf.set(FlinkOptions.TABLE_TYPE, "COPY_ON_WRITE");
+      modeConf.set(FlinkOptions.OPERATION, operation);
+      modeConf.set(FlinkOptions.INSERT_CLUSTER, false);
+      modeConf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(), "DEFAULT");
+      modeConf.setString(HoodieTableConfig.META_FIELDS_MODE.key(), mode.name());
+      StreamerUtil.initTableIfNotExists(modeConf);
+      HoodieFlinkTable<?> table = FlinkTables.createTable(modeConf);
+      String instant = WriteClientTestUtils.createNewInstantTime();
+      String expectedCommitTime = preserveMetadata ? "old-instant" : instant;
+      RowType rowType = preserveMetadata ? DataTypeUtils.addMetadataFields(TestConfigurations.ROW_TYPE, false) : TestConfigurations.ROW_TYPE;
+      BulkInsertWriterHelper helper = new BulkInsertWriterHelper(modeConf, table, table.getConfig(),
+          instant, 1, 1, 0, rowType, preserveMetadata);
+      for (RowData row : TestData.DATA_SET_INSERT) {
+        if (preserveMetadata) {
+          // Clustering reads rows with metadata columns, but selective modes leave keys null.
+          row = HoodieRowDataCreation.create(mode.isCommitTimePopulated() ? expectedCommitTime : null,
+              mode == MetaFieldsMode.ALL ? "old-sequence" : null,
+              mode.isRecordKeyPopulated() ? row.getString(0).toString() : null,
+              mode == MetaFieldsMode.ALL ? row.getString(4).toString() : null,
+              mode.isFileNamePopulated() ? "old.parquet" : null, row, false, false);
+        }
+        helper.write(row);
+      }
+      List<WriteStatus> statuses = helper.getWriteStatuses(1);
+      assertWriteStatus(statuses);
+      assertEquals(TestData.DATA_SET_INSERT.size(), statuses.stream().mapToLong(status -> status.getStat().getNumWrites()).sum());
+      for (WriteStatus status : statuses) {
+        assertFalse(status.hasErrors());
+        StoragePath file = new StoragePath(path.getAbsolutePath(), status.getStat().getPath());
+        for (GenericRecord row : new ParquetUtils().readAvroRecords(table.getStorage(), file)) {
+          if (mode == MetaFieldsMode.NONE && operation.equals("insert") && !preserveMetadata) {
+            assertEquals(TestConfigurations.ROW_TYPE.getFieldCount(), row.getSchema().getFields().size());
+            for (String field : HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION) {
+              assertEquals(null, row.getSchema().getField(field), field);
+            }
+            continue;
+          }
+          assertEquals(row.get("partition").toString(), status.getStat().getPartitionPath());
+          assertEquals(mode.isCommitTimePopulated() ? expectedCommitTime : null,
+              Objects.toString(row.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD), null));
+          assertEquals(mode != MetaFieldsMode.ALL, row.get(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD) == null);
+          assertEquals(mode.isRecordKeyPopulated() ? row.get("uuid").toString() : null,
+              Objects.toString(row.get(HoodieRecord.RECORD_KEY_METADATA_FIELD), null));
+          assertEquals(mode == MetaFieldsMode.ALL ? status.getStat().getPartitionPath() : null,
+              Objects.toString(row.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD), null));
+          assertEquals(mode.isFileNamePopulated() ? file.getName() : null,
+              Objects.toString(row.get(HoodieRecord.FILENAME_METADATA_FIELD), null));
+        }
+      }
+    }
+  }
+
+  private static Stream<Arguments> metaFieldsModeParams() {
+    return Arrays.stream(MetaFieldsMode.values()).flatMap(mode -> Stream.of(
+        Arguments.of(mode, false), Arguments.of(mode, true)));
   }
 
   @Test

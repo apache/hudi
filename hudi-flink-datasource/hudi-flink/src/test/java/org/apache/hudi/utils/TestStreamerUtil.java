@@ -28,6 +28,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -62,6 +63,8 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mockito;
 
 import java.io.File;
@@ -91,6 +94,20 @@ class TestStreamerUtil {
 
   @TempDir
   File tempFile;
+
+  @ParameterizedTest
+  @EnumSource(MetaFieldsMode.class)
+  void testInitTableMetaFieldsMode(MetaFieldsMode mode) throws IOException {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.TABLE_TYPE, "COPY_ON_WRITE");
+    conf.set(FlinkOptions.WRITE_TABLE_VERSION, HoodieTableVersion.TEN.versionCode());
+    conf.setString(HoodieTableConfig.META_FIELDS_MODE.key(), mode.name());
+    // The explicit mode must win over the legacy default.
+    conf.setString(HoodieTableConfig.POPULATE_META_FIELDS.key(), "true");
+    HoodieTableMetaClient metaClient = StreamerUtil.initTableIfNotExists(conf);
+    assertEquals(mode, metaClient.getTableConfig().getMetaFieldsMode());
+    assertEquals(mode.toLegacyPopulateMetaFields(), metaClient.getTableConfig().populateMetaFields());
+  }
 
   @Test
   void testMetadataConfigIncludesMetadataTableBloomFilterSettings() {

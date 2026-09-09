@@ -19,23 +19,35 @@
 package org.apache.hudi.io.storage.row;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.model.HoodieRowDataCreation;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodiePayloadProps;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.MetaFieldsMode;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
 import org.apache.hudi.util.HoodieSchemaConverter;
 
+import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.GenericRowData;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
+import java.util.Objects;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -65,6 +77,55 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
   @AfterEach
   public void tearDown() throws Exception {
     cleanupResources();
+  }
+
+  @ParameterizedTest
+  @EnumSource(MetaFieldsMode.class)
+  void testMetaFieldsMode(MetaFieldsMode mode) throws Exception {
+    RowType rowType = (RowType) DataTypes.ROW(DataTypes.FIELD("id", DataTypes.STRING())).notNull().getLogicalType();
+    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(rowType);
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withEngineType(EngineType.FLINK)
+        .withMetaFieldsMode(mode)
+        .withEmbeddedTimelineServerEnabled(false)
+        .withSchema(schema.toString())
+        .build();
+    HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, context, metaClient);
+    for (boolean preserveMetadata : new boolean[] {false, true}) {
+      HoodieRowDataCreateHandle handle = new HoodieRowDataCreateHandle(
+          table, config, PARTITION_PATH, FILE_ID + preserveMetadata, INSTANT_TIME,
+          TASK_PARTITION_ID, TASK_ID, TASK_EPOCH_ID,
+          HoodieSchemaUtils.addMetadataFields(schema, false), preserveMetadata, false);
+      RowData row = GenericRowData.of(StringData.fromString("id1"));
+      if (preserveMetadata) {
+        row = HoodieRowDataCreation.create(
+            mode.isCommitTimePopulated() ? "old-instant" : null,
+            mode == MetaFieldsMode.ALL ? "old-sequence" : null,
+            mode.isRecordKeyPopulated() ? "id1" : null,
+            mode == MetaFieldsMode.ALL ? PARTITION_PATH : null,
+            mode.isFileNamePopulated() ? "old-file" : null,
+            row, false, false);
+      }
+      handle.write("id1", PARTITION_PATH, row);
+      WriteStatus status = handle.close();
+      assertEquals(0, status.getTotalErrorRecords());
+      StoragePath file = new StoragePath(basePath, status.getStat().getPath());
+      GenericRecord stored = new ParquetUtils().readAvroRecords(metaClient.getStorage(), file).get(0);
+      assertEquals("id1", stored.get("id").toString());
+      assertEquals(mode.isCommitTimePopulated() ? (preserveMetadata ? "old-instant" : INSTANT_TIME) : null,
+          Objects.toString(stored.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD), null));
+      assertEquals(mode != MetaFieldsMode.ALL, stored.get(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD) == null);
+      if (preserveMetadata && mode == MetaFieldsMode.ALL) {
+        assertEquals("old-sequence", stored.get(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).toString());
+      }
+      assertEquals(mode.isRecordKeyPopulated() ? "id1" : null,
+          Objects.toString(stored.get(HoodieRecord.RECORD_KEY_METADATA_FIELD), null));
+      assertEquals(mode == MetaFieldsMode.ALL ? PARTITION_PATH : null,
+          Objects.toString(stored.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD), null));
+      assertEquals(mode.isFileNamePopulated() ? file.getName() : null,
+          Objects.toString(stored.get(HoodieRecord.FILENAME_METADATA_FIELD), null));
+    }
   }
 
   @Test

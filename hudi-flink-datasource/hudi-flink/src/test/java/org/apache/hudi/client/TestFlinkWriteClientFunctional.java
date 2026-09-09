@@ -22,8 +22,10 @@ package org.apache.hudi.client;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.clustering.plan.strategy.FlinkSizeBasedClusteringPlanStrategyRecently;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.HoodieFlinkRecord;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
@@ -31,6 +33,7 @@ import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -38,6 +41,7 @@ import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.FlinkCreateHandle;
@@ -49,8 +53,10 @@ import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.table.action.commit.BucketType;
+import org.apache.hudi.table.format.HoodieFlinkIOFactory;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
 
+import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.StringData;
 import org.junit.jupiter.api.AfterEach;
@@ -58,6 +64,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
@@ -69,6 +76,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
@@ -90,8 +98,7 @@ import static org.mockito.Mockito.when;
  * Functional coverage for the Flink client write boundary.
  *
  * <p>The datasource bucket assigner hands this client records that already carry a target file group.
- * These tests construct that same input directly so client and handle behavior can be exercised without
- * depending on the datasource module.
+ * These tests construct that same input directly and use the datasource's Flink readers for base files.
  */
 class TestFlinkWriteClientFunctional extends HoodieFlinkClientTestHarness {
 
@@ -112,6 +119,8 @@ class TestFlinkWriteClientFunctional extends HoodieFlinkClientTestHarness {
   void setUp() {
     initPath();
     initFileSystem();
+    storageConf.set(HoodieStorageConfig.HOODIE_IO_FACTORY_CLASS.key(), HoodieFlinkIOFactory.class.getName());
+    context = new HoodieFlinkEngineContext(storageConf.unwrap());
   }
 
   @AfterEach
@@ -178,9 +187,89 @@ class TestFlinkWriteClientFunctional extends HoodieFlinkClientTestHarness {
     }
   }
 
+  @ParameterizedTest
+  @EnumSource(MetaFieldsMode.class)
+  void testCopyOnWriteMetaFieldsMode(MetaFieldsMode mode) throws IOException {
+    initWriteClient(HoodieTableType.COPY_ON_WRITE, false, false, mode);
+    String insertInstant = writeClient.startCommit();
+    transitionToInflight(insertInstant);
+    List<WriteStatus> statuses = writeClient.insert(Arrays.asList(
+        insertRecord("id1", "one", 1L), insertRecord("id2", "two", 2L)), insertInstant);
+    assertWriteStatuses(statuses, 2);
+    statuses = writeClient.insert(Collections.singletonList(insertRecord("id3", "three", 3L)), insertInstant);
+    assertWriteStatuses(statuses, 3);
+    assertTrue(writeClient.commit(insertInstant, statuses));
+    assertMetaFields(statuses, mode, insertInstant, insertInstant);
+
+    writeClient.cleanHandles();
+    String updateInstant = writeClient.startCommit();
+    transitionToInflight(updateInstant);
+    statuses = writeClient.upsert(Arrays.asList(
+        updateRecord("id1", "updated", 4L, insertInstant),
+        deleteRecord("id2", 5L, insertInstant)), updateInstant);
+    assertWriteStatuses(statuses, 2);
+    assertTrue(writeClient.commit(updateInstant, statuses));
+    assertMetaFields(statuses, mode, insertInstant, updateInstant);
+  }
+
+  @ParameterizedTest
+  @EnumSource(MetaFieldsMode.class)
+  void testCopyOnWriteConcatMetaFieldsMode(MetaFieldsMode mode) throws IOException {
+    initWriteClient(HoodieTableType.COPY_ON_WRITE, false, false, mode);
+    writeConfig.setValue(HoodieWriteConfig.MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE, "true");
+    String insertInstant = writeClient.startCommit();
+    transitionToInflight(insertInstant);
+    writeClient.insert(Collections.singletonList(insertRecord("id1", "one", 1L)), insertInstant);
+    List<WriteStatus> statuses = writeClient.insert(
+        Collections.singletonList(insertRecord("id1", "one", 1L)), insertInstant);
+    assertWriteStatuses(statuses, 2);
+    assertTrue(writeClient.commit(insertInstant, statuses));
+    assertMetaFields(statuses, mode, insertInstant, insertInstant);
+
+    writeClient.cleanHandles();
+    String nextInstant = writeClient.startCommit();
+    transitionToInflight(nextInstant);
+    // Target the existing file group while keeping insert semantics.
+    statuses = writeClient.insert(Collections.singletonList(
+        updateRecord("id3", "three", 3L, insertInstant)), nextInstant);
+    assertWriteStatuses(statuses, 3);
+    assertTrue(writeClient.commit(nextInstant, statuses));
+    for (WriteStatus status : statuses) {
+      StoragePath path = new StoragePath(basePath, status.getStat().getPath());
+      for (GenericRecord row : new ParquetUtils().readAvroRecords(metaClient.getStorage(), path)) {
+        assertEquals(mode.isFileNamePopulated(), row.get(HoodieRecord.FILENAME_METADATA_FIELD) != null);
+        String expectedInstant = row.get("id").toString().equals("id3") ? nextInstant : insertInstant;
+        assertEquals(mode.isCommitTimePopulated() ? expectedInstant : null,
+            Objects.toString(row.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD), null));
+      }
+    }
+  }
+
+  private void assertMetaFields(List<WriteStatus> statuses, MetaFieldsMode mode,
+                                String insertInstant, String updateInstant) {
+    for (WriteStatus status : statuses) {
+      StoragePath path = new StoragePath(basePath, status.getStat().getPath());
+      for (GenericRecord row : new ParquetUtils().readAvroRecords(metaClient.getStorage(), path)) {
+        String id = row.get("id").toString();
+        String expectedInstant = id.equals("id1") ? updateInstant : insertInstant;
+        assertEquals(mode.isCommitTimePopulated() ? expectedInstant : null,
+            Objects.toString(row.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD), null));
+        assertEquals(mode != MetaFieldsMode.ALL, row.get(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD) == null);
+        assertEquals(mode.isRecordKeyPopulated() ? id : null,
+            Objects.toString(row.get(HoodieRecord.RECORD_KEY_METADATA_FIELD), null));
+        assertEquals(mode == MetaFieldsMode.ALL ? PARTITION_PATH : null,
+            Objects.toString(row.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD), null));
+        assertEquals(mode.isFileNamePopulated(), row.get(HoodieRecord.FILENAME_METADATA_FIELD) != null);
+        if (id.equals("id1")) {
+          assertEquals(insertInstant.equals(updateInstant) ? "one" : "updated", row.get("name").toString());
+        }
+      }
+    }
+  }
+
   @Test
   void testCopyOnWriteCleansRetryFiles() throws IOException {
-    context = new HoodieFlinkEngineContext(
+    context = new HoodieFlinkEngineContext(storageConf,
         new HoodieFlinkEngineContext.DefaultTaskContextSupplier() {
           @Override
           public Supplier<Long> getAttemptIdSupplier() {
@@ -408,7 +497,13 @@ class TestFlinkWriteClientFunctional extends HoodieFlinkClientTestHarness {
   private void initWriteClient(
       HoodieTableType tableType, boolean cdcEnabled, boolean useRecentClusteringStrategy)
       throws IOException {
+    initWriteClient(tableType, cdcEnabled, useRecentClusteringStrategy, MetaFieldsMode.ALL);
+  }
+
+  private void initWriteClient(HoodieTableType tableType, boolean cdcEnabled,
+                               boolean useRecentClusteringStrategy, MetaFieldsMode mode) throws IOException {
     Properties tableProperties = new Properties();
+    tableProperties.setProperty(HoodieTableConfig.META_FIELDS_MODE.key(), mode.name());
     tableProperties.setProperty(HoodieTableConfig.CDC_ENABLED.key(), Boolean.toString(cdcEnabled));
     tableProperties.setProperty(
         HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key(),
@@ -427,6 +522,8 @@ class TestFlinkWriteClientFunctional extends HoodieFlinkClientTestHarness {
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
         .withEngineType(EngineType.FLINK)
+        .withRecordMergeImplClasses(EventTimeFlinkRecordMerger.class.getName())
+        .withRecordMergeStrategyId(EventTimeFlinkRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID)
         .withSchema(SCHEMA)
         .withProperties(tableProperties)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())

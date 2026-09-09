@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.StoragePath;
@@ -86,7 +85,6 @@ public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteH
     this.keyGeneratorOpt = keyGeneratorOpt;
     initPartitionMetadataAndFilePaths(partitionPath);
     initWriteStatus(fileId, partitionPath);
-    validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
   }
 
   /**
@@ -149,11 +147,6 @@ public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteH
     writeStatus.getStat().setFileId(fileId);
     log.debug("Initializing Write status with fileId {} partitionPath {}", fileId, partitionPath);
     setWriteStatusPath();
-  }
-
-  private void validateAndSetAndKeyGenProps(Option<BaseKeyGenerator> keyGeneratorOpt, boolean populateMetaFields) {
-    ValidationUtils.checkArgument(populateMetaFields == !keyGeneratorOpt.isPresent());
-    this.keyGeneratorOpt = keyGeneratorOpt;
   }
 
   protected String createNewFileName(String oldFileName) {
