@@ -558,7 +558,7 @@ public class HoodieMultiTableStreamer {
       // Stopping them here rather than in a catch covers every such exit, including an Error, which the workers do
       // not catch; it is a no-op on the success path because each table has already shut its ingestion service down.
       shutdownRequested.set(true);
-      shutdownStreamers(streamerInstances);
+      interruptAllIngestion(streamerInstances);
       // Wait for every worker thread to finish (including its finally cleanup) before returning, so sync() does not
       // return while a table is still writing and main() then stops the shared Spark context under it.
       terminated = shutdownExecutor(executor);
@@ -582,14 +582,14 @@ public class HoodieMultiTableStreamer {
     try {
       streamer = new HoodieStreamer(context.getConfig(), jssc, Option.ofNullable(context.getProperties()));
       streamerInstances.add(streamer);
-      // Register before checking the flag so a concurrent shutdownStreamers() always sees this streamer.
+      // Register before checking the flag so a concurrent interruptAllIngestion() always sees this streamer.
       if (shutdownRequested.get()) {
         return;
       }
       streamer.sync();
-      // A streamer registered just before fail fast tripped can reach here without ever ingesting.
-      // shutdown() call will be a no-op because its ingestion service hadn't started yet.
-      // Don't count that as a success.
+      // A streamer registered just before fail fast tripped can reach here without ever ingesting: the interrupt
+      // found no executor to stop, but it had already marked the service shut down, and that flag is what makes
+      // HoodieIngestionService's loop exit on its first check. Nothing was written, so not a success.
       if (!shutdownRequested.get()) {
         successTables.add(table);
       }
@@ -675,12 +675,12 @@ public class HoodieMultiTableStreamer {
     }
   }
 
-  private static void shutdownStreamers(List<HoodieStreamer> streamerInstances) {
+  private static void interruptAllIngestion(List<HoodieStreamer> streamerInstances) {
     for (HoodieStreamer streamer : streamerInstances) {
       try {
         streamer.interruptIngestion();
       } catch (Exception e) {
-        log.warn("error while shutting down a streamer instance during fail fast handling", e);
+        log.warn("error while interrupting the ingestion of a streamer instance", e);
       }
     }
   }

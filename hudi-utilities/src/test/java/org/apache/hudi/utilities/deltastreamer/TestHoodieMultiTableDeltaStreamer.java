@@ -288,6 +288,8 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     HoodieException thrown = assertThrows(HoodieException.class, streamer::sync);
     assertFalse(streamer.getFailedTables().isEmpty());
     // Both tables end up in failedTables, so the exception is what identifies the one that actually failed.
+    // Assert to catch if unwrapCompletionException peeled nothing.
+    assertTrue(thrown.getCause() instanceof HoodieException, "expected the cause to be unwrapped to a HoodieException");
     assertTrue(thrown.getCause().getMessage().contains(tableWithDatabase(contexts.get(1))),
         "expected the cause to name the failing table, got: " + thrown.getCause().getMessage());
     // sync() returns only after the blocked sibling was interrupted, so the latch must already be counted down.

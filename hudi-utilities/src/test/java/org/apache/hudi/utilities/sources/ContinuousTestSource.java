@@ -57,6 +57,9 @@ public class ContinuousTestSource extends ParquetDFSSource {
 
   private static final long BARRIER_TIMEOUT_SECONDS = 60;
 
+  // lets awaitUntil be the one that reports a stall.
+  private static final long RELEASE_TIMEOUT_SECONDS = 300;
+
   private static volatile CyclicBarrier startBarrier = new CyclicBarrier(1);
   // Counted down by a blocking table once it observes the fail-fast interrupt, so a test can assert it was torn down.
   private static volatile CountDownLatch blockedTableInterrupted = new CountDownLatch(1);
@@ -115,7 +118,7 @@ public class ContinuousTestSource extends ParquetDFSSource {
   // Blocks until the test decides this table should fail.
   private void awaitRelease() {
     try {
-      if (!failRelease.await(BARRIER_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+      if (!failRelease.await(RELEASE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
         throw new HoodieException("Timed out waiting for the test to release the failing table");
       }
     } catch (InterruptedException e) {
