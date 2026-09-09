@@ -23,6 +23,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -55,7 +56,7 @@ public class HoodieRowDataLanceWriter extends HoodieBaseLanceWriter<RowData, Str
   private final String instantTime;
   private final long maxFileSize;
   private final boolean utcTimestamp;
-  private final boolean populateMetaFields;
+  private final MetaFieldsMode metaFieldsMode;
   private final boolean withOperation;
   private final Function<Long, String> seqIdGenerator;
   private long recordCountForNextSizeCheck = MIN_RECORDS_FOR_SIZE_CHECK;
@@ -70,7 +71,7 @@ public class HoodieRowDataLanceWriter extends HoodieBaseLanceWriter<RowData, Str
       long allocatorSize,
       long flushByteWatermark,
       boolean utcTimestamp,
-      boolean populateMetaFields,
+      MetaFieldsMode metaFieldsMode,
       boolean withOperation) {
     super(file, DEFAULT_BATCH_SIZE, allocatorSize, flushByteWatermark,
         bloomFilterOpt.map(HoodieBloomFilterRowDataWriteSupport::new));
@@ -86,7 +87,7 @@ public class HoodieRowDataLanceWriter extends HoodieBaseLanceWriter<RowData, Str
     this.instantTime = instantTime;
     this.maxFileSize = maxFileSize;
     this.utcTimestamp = utcTimestamp;
-    this.populateMetaFields = populateMetaFields;
+    this.metaFieldsMode = metaFieldsMode;
     this.withOperation = withOperation;
     this.seqIdGenerator = recordIndex -> {
       Integer partitionId = taskContextSupplier.getPartitionIdSupplier().get();
@@ -118,12 +119,20 @@ public class HoodieRowDataLanceWriter extends HoodieBaseLanceWriter<RowData, Str
 
   @Override
   public void writeRowWithMetaData(HoodieKey key, RowData row) throws IOException {
-    if (populateMetaFields) {
-      RowData rowWithMeta = updateRecordMetadata(row, key, getWrittenRecordCount());
-      writeRow(key.getRecordKey(), rowWithMeta);
+    RowData rowWithMeta;
+    if (metaFieldsMode == MetaFieldsMode.ALL) {
+      rowWithMeta = HoodieRowDataCreation.create(instantTime, seqIdGenerator.apply(getWrittenRecordCount()),
+          key.getRecordKey(), key.getPartitionPath(), fileName, row, withOperation, true);
+    } else if (metaFieldsMode == MetaFieldsMode.NONE) {
+      rowWithMeta = row;
     } else {
-      writeRow(key.getRecordKey(), row);
+      rowWithMeta = HoodieRowDataCreation.create(
+          metaFieldsMode.isCommitTimePopulated() ? instantTime : null,
+          null, null, null,
+          metaFieldsMode.isFileNamePopulated() ? fileName : null,
+          row, withOperation, true);
     }
+    writeRow(key.getRecordKey(), rowWithMeta);
   }
 
   @Override
@@ -169,10 +178,5 @@ public class HoodieRowDataLanceWriter extends HoodieBaseLanceWriter<RowData, Str
     public void reset() {
       rowId = 0;
     }
-  }
-
-  private RowData updateRecordMetadata(RowData row, HoodieKey key, long recordCount) {
-    return HoodieRowDataCreation.create(instantTime, seqIdGenerator.apply(recordCount),
-        key.getRecordKey(), key.getPartitionPath(), fileName, row, withOperation, true);
   }
 }

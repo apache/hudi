@@ -19,11 +19,14 @@
 package org.apache.hudi.config;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.Properties;
 
@@ -40,6 +43,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * cross-flag validation that runs at {@code build()} time.
  */
 class TestHoodieWriteConfigMetaFieldsMode {
+
+  @ParameterizedTest
+  @EnumSource(MetaFieldsMode.class)
+  void flinkSupportsCopyOnWriteModes(MetaFieldsMode mode) {
+    assertEquals(mode, baseBuilder().withEngineType(EngineType.FLINK)
+        .withMetaFieldsMode(mode).build().getMetaFieldsMode());
+    if (mode.isSelective()) {
+      assertThrows(IllegalArgumentException.class, () -> baseBuilder()
+          .withEngineType(EngineType.FLINK).withMetaFieldsMode(mode)
+          .withProps(mergeOnReadProps()).build());
+      assertThrows(IllegalArgumentException.class, () -> baseBuilder()
+          .withEngineType(EngineType.JAVA).withMetaFieldsMode(mode).build());
+    }
+  }
 
   private static HoodieWriteConfig.Builder baseBuilder() {
     return HoodieWriteConfig.newBuilder().withPath("file:///tmp/test_hudi_meta_fields_mode");

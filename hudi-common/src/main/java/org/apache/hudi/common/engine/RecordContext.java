@@ -74,8 +74,9 @@ public abstract class RecordContext<T> implements Serializable {
 
   protected RecordContext(HoodieTableConfig tableConfig, JavaTypeConverter typeConverter) {
     this.typeConverter = typeConverter;
-    this.recordKeyExtractor = tableConfig.populateMetaFields() ? metadataKeyExtractor() : virtualKeyExtractor(tableConfig.getRecordKeyFields()
-        .orElseThrow(() -> new IllegalArgumentException("No record keys specified and meta fields are not populated")));
+    this.recordKeyExtractor = tableConfig.isRecordKeyPopulated() ? metadataKeyExtractor() : virtualKeyExtractor(tableConfig.getRecordKeyFields()
+        .orElseThrow(() -> new IllegalArgumentException("No record keys specified and meta fields are not populated")),
+        tableConfig.getPartitionFields().map(fields -> fields.length).orElse(0));
   }
 
   /**
@@ -440,11 +441,8 @@ public abstract class RecordContext<T> implements Serializable {
     return (record, schema) -> getValue(record, schema, RECORD_KEY_METADATA_FIELD).toString();
   }
 
-  private SerializableBiFunction<T, HoodieSchema, String> virtualKeyExtractor(String[] recordKeyFields) {
-    if (recordKeyFields.length == 1) {
-      // there might be consistency for record key encoding when partition fields are multiple for cow merging,
-      // currently the incoming records are using the keys from HoodieRecord which utilities the write config and by default encodes the field name with the value
-      // while here the field names are ignored, this function would be used to extract record keys from old base file.
+  private SerializableBiFunction<T, HoodieSchema, String> virtualKeyExtractor(String[] recordKeyFields, int numPartitionFields) {
+    if (recordKeyFields.length == 1 && numPartitionFields <= 1) {
       return (record, schema) -> {
         Object result = getValue(record, schema, recordKeyFields[0]);
         if (result == null) {

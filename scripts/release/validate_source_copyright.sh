@@ -50,8 +50,12 @@ echo "Performing custom Licensing Check "
 # Exclude the 'hudi-trino' directory: its files carry the short AL header (Trino convention),
 # which the ASF wording this grep matches does not cover. RAT still checks the module via its
 # default AL matchers. Drop this prune once apache/hudi#19412 converts the module to ASF headers.
+#
+# Exclude the bundled UI libraries under hudi-timeline-service. Bootstrap, renderjson,
+# and vis-timeline ship with their own permissive licenses (preserved in their files).
 # ---
-numfilesWithNoLicense=$(find . -path './hudi-trino' -prune -o -type f -iname '*' | grep -v './hudi-trino' | grep -v NOTICE | grep -v LICENSE | grep -v '.jpg' | grep -v '.json' | grep -v '.zip' | grep -v '.hfile' | grep -v '.data' | grep -v '.commit' | grep -v emptyFile | grep -v DISCLAIMER | grep -v '.sqltemplate' | grep -v KEYS | grep -v '.mailmap' | grep -v 'banner.txt' | grep -v '.txt' | grep -v "fixtures" | xargs grep -L "Licensed to the Apache Software Foundation (ASF)")
+bundledUiLibs='./hudi-timeline-service/src/main/resources/public/lib'
+numfilesWithNoLicense=$(find . -path './hudi-trino' -prune -o -path "$bundledUiLibs" -prune -o -type f -iname '*' | grep -v './hudi-trino' | grep -v "$bundledUiLibs" | grep -v NOTICE | grep -v LICENSE | grep -v '.jpg' | grep -v '.json' | grep -v '.zip' | grep -v '.hfile' | grep -v '.data' | grep -v '.commit' | grep -v emptyFile | grep -v DISCLAIMER | grep -v '.sqltemplate' | grep -v KEYS | grep -v '.mailmap' | grep -v 'banner.txt' | grep -v '.txt' | grep -v "fixtures" | xargs grep -L "Licensed to the Apache Software Foundation (ASF)")
 # Check if the variable holding the list of files is non-empty
 if [ -n "$numfilesWithNoLicense" ]; then
   # If the list isn't empty, count the files and report the error

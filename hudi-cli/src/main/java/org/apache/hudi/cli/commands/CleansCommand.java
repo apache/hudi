@@ -45,6 +45,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import scala.collection.JavaConverters;
@@ -108,7 +109,10 @@ public class CleansCommand {
 
     HoodieCleanMetadata cleanMetadata = timeline.readCleanMetadata(cleanInstant);
     List<Comparable[]> rows = new ArrayList<>();
-    for (Map.Entry<String, HoodieCleanPartitionMetadata> entry : cleanMetadata.getPartitionMetadata().entrySet()) {
+    // the metadata's partition map carries no order of its own, and the printer sorts only when
+    // --sortBy is given, so the rows are keyed in partition order to keep the output stable
+    for (Map.Entry<String, HoodieCleanPartitionMetadata> entry :
+        new TreeMap<>(cleanMetadata.getPartitionMetadata()).entrySet()) {
       String path = entry.getKey();
       HoodieCleanPartitionMetadata stats = entry.getValue();
       String policy = stats.getPolicy();

@@ -163,7 +163,7 @@ class TestHoodieAvroReaderContext {
 
   @Test
   void getNestedField() {
-    when(tableConfig.populateMetaFields()).thenReturn(true);
+    when(tableConfig.isRecordKeyPopulated()).thenReturn(true);
     HoodieAvroReaderContext avroReaderContext =
         new HoodieAvroReaderContext(storageConfig, tableConfig, Option.empty(), Option.empty());
     IndexedRecord indexedRecord = createBaseRecord("compound", "field2", 3.2);
@@ -172,7 +172,8 @@ class TestHoodieAvroReaderContext {
 
   @Test
   void getRecordKeyWithSingleKey() {
-    when(tableConfig.populateMetaFields()).thenReturn(false);
+    when(tableConfig.isRecordKeyPopulated()).thenReturn(false);
+    when(tableConfig.getPartitionFields()).thenReturn(Option.empty());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[]{"skeleton_field_1"}));
     HoodieAvroReaderContext avroReaderContext =
         new HoodieAvroReaderContext(storageConfig, tableConfig, Option.empty(), Option.empty());
@@ -183,7 +184,8 @@ class TestHoodieAvroReaderContext {
 
   @Test
   void getRecordKeyWithMultipleKeys() {
-    when(tableConfig.populateMetaFields()).thenReturn(false);
+    when(tableConfig.isRecordKeyPopulated()).thenReturn(false);
+    when(tableConfig.getPartitionFields()).thenReturn(Option.empty());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[]{"base_field_1", "base_field_3.nested_field"}));
     HoodieAvroReaderContext avroReaderContext =
         new HoodieAvroReaderContext(storageConfig, tableConfig, Option.empty(), Option.empty());
@@ -249,7 +251,7 @@ class TestHoodieAvroReaderContext {
   }
 
   private HoodieAvroReaderContext getReaderContextWithMetaFields() {
-    when(tableConfig.populateMetaFields()).thenReturn(true);
+    when(tableConfig.isRecordKeyPopulated()).thenReturn(true);
     return new HoodieAvroReaderContext(storageConfig, tableConfig, Option.empty(), Option.empty());
   }
 

@@ -246,7 +246,7 @@ public class HoodieSchemaRepair {
         return hasTimestampMillisField(tableSchema.getValueType());
 
       case UNION:
-        return hasTimestampMillisField(tableSchema.getNonNullType());
+        return tableSchema.getTypes().stream().anyMatch(HoodieSchemaRepair::hasTimestampMillisField);
 
       case TIMESTAMP:
         HoodieSchema.Timestamp timestampType = (HoodieSchema.Timestamp) tableSchema;

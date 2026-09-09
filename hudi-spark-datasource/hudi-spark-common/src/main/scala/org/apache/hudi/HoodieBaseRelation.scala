@@ -21,7 +21,7 @@ import org.apache.hudi.HoodieBaseRelation.{convertToHoodieSchema, createHFileRea
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.avro.HoodieAvroUtils
-import org.apache.hudi.common.config.{ConfigProperty, HoodieMetadataConfig}
+import org.apache.hudi.common.config.ConfigProperty
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.{FileSlice, HoodieFileFormat, HoodieRecord}
@@ -40,7 +40,6 @@ import org.apache.hudi.common.util.HoodieStorageUtils
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
-import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath
@@ -74,16 +73,6 @@ import scala.util.{Failure, Success, Try}
 trait HoodieFileSplit {}
 
 case class HoodieTableSchema(structTypeSchema: StructType, schema: HoodieSchema, internalSchema: Option[InternalSchema] = None)
-
-case class HoodieTableState(tablePath: String,
-                            latestCommitTimestamp: Option[String],
-                            recordKeyField: String,
-                            orderingFields: List[String],
-                            usesVirtualKeys: Boolean,
-                            metadataConfig: HoodieMetadataConfig,
-                            recordMergeImplClasses: List[String],
-                            recordMergeStrategyId: String)
-
 
 /**
  * Hoodie BaseRelation which extends [[PrunedFilteredScan]]
@@ -244,27 +233,15 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   /**
    * NOTE: PLEASE READ THIS CAREFULLY
    *
-   * Even though [[HoodieFileIndex]] initializes eagerly listing all of the files w/in the given Hudi table,
-   * this variable itself is _lazy_ (and have to stay that way) which guarantees that it's not initialized, until
+   * Even though [[HoodieFileIndex]] does eager work on construction (it opens the metadata-table reader
+   * and reloads the active timeline, and lists every file in the table when
+   * `hoodie.datasource.read.file.index.listing.mode` is `eager`; it defaults to `lazy`), this variable
+   * itself is _lazy_ (and have to stay that way) which guarantees that it's not initialized, until
    * it's actually accessed
    */
   lazy val fileIndex: HoodieFileIndex =
     HoodieFileIndex(sparkSession, metaClient, Some(tableStructSchema), optParams,
       FileStatusCache.getOrCreate(sparkSession), shouldIncludeLogFiles())
-
-  lazy val tableState: HoodieTableState = {
-    val recordMergerImpls = optParams.get(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key()).map(impls => ConfigUtils.split2List(impls).asScala.toList).getOrElse(List.empty)
-    // Subset of the state of table's configuration as of at the time of the query
-    HoodieTableState(tablePath = basePath.toString,
-      latestCommitTimestamp = queryTimestamp,
-      recordKeyField = recordKeyField,
-      orderingFields = orderingFields,
-      usesVirtualKeys = !tableConfig.populateMetaFields(),
-      metadataConfig = fileIndex.getMetadataConfig,
-      recordMergeImplClasses = recordMergerImpls,
-      recordMergeStrategyId = tableConfig.getRecordMergeStrategyId
-    )
-  }
 
   /**
    * Columns that relation has to read from the storage to properly execute on its semantic: for ex,
@@ -280,7 +257,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   // NOTE: We're including compaction here since it's not considering a "commit" operation
     metaClient.getCommitsAndCompactionTimeline.filterCompletedInstants
 
-  private def queryTimestamp: Option[String] =
+  protected def queryTimestamp: Option[String] =
     specifiedQueryTimestamp.orElse(toScalaOption(timeline.lastInstant()).map(_.requestedTime))
 
   /**

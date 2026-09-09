@@ -70,7 +70,7 @@ class TestBaseSparkInternalRowReaderContext {
   void setUp() {
     storageconfig = mock(StorageConfiguration.class);
     tableConfig = mock(HoodieTableConfig.class);
-    when(tableConfig.populateMetaFields()).thenReturn(true);
+    when(tableConfig.isRecordKeyPopulated()).thenReturn(true);
     when(tableConfig.getBaseFileFormat()).thenReturn(HoodieFileFormat.PARQUET);
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[]{"id"}));
 

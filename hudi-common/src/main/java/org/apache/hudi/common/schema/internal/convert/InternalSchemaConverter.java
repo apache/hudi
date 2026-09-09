@@ -130,7 +130,17 @@ public class InternalSchemaConverter {
         return;
 
       case UNION:
-        collectColNamesFromSchema(schema.getNonNullType(), visited, resultSet);
+        // visitSchemaToBuildType keeps a single branch of a union -- the first one unless that is the
+        // null branch -- and drops the rest, so the internal schema only carries ids for that branch's
+        // leaves. Walk the same branch: naming a leaf of any other one makes pruneInternalSchema fail
+        // with "cannot prune col: x.y which does not exist in hudi table". A union branch is never
+        // itself a union, so this terminates where recursing on getNonNullType() did not (#19825).
+        for (HoodieSchema branch : schema.getTypes()) {
+          if (branch.getType() != HoodieSchemaType.NULL) {
+            collectColNamesFromSchema(branch, visited, resultSet);
+            break;
+          }
+        }
         return;
 
       case ARRAY:

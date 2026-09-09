@@ -602,7 +602,7 @@ public class TestHoodieBackedTableMetadataDataCleanup {
     when(timeline.filterCompletedInstants()).thenReturn(timeline);
     when(timeline.lastInstant()).thenReturn(Option.empty());
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
-    when(tableConfig.populateMetaFields()).thenReturn(true);
+    when(tableConfig.isRecordKeyPopulated()).thenReturn(true);
     when(tableConfig.getBaseFileFormat()).thenReturn(HoodieFileFormat.PARQUET);
     when(metadataMetaClient.getTableConfig()).thenReturn(tableConfig);
 

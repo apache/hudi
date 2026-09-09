@@ -199,6 +199,13 @@
                                         <exclude>**/*.proto</exclude>
                                     </excludes>
                                 </filter>
+                                <filter>
+                                    <!-- Timeline UI assets ship only in hudi-timeline-server-bundle; the standalone-only UI cannot be served from engine bundles -->
+                                    <artifact>org.apache.hudi:hudi-timeline-service</artifact>
+                                    <excludes>
+                                        <exclude>public/**</exclude>
+                                    </excludes>
+                                </filter>
                             </filters>
                         </configuration>
                     </execution>

@@ -561,6 +561,22 @@ public class TestHoodieSchemaConverter {
   }
 
   @Test
+  public void testVectorColumnNamesAreCaseSensitive() {
+    RowType rowType = (RowType) DataTypes.ROW(
+        DataTypes.FIELD("Embedding", DataTypes.ARRAY(DataTypes.FLOAT().notNull()).notNull()))
+        .notNull()
+        .getLogicalType();
+
+    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(rowType, "test_record", "Embedding:4");
+    HoodieSchema vector = schema.getField("Embedding").get().schema().getNonNullType();
+    assertEquals(HoodieSchemaType.VECTOR, vector.getType());
+    assertEquals(4, ((HoodieSchema.Vector) vector).getDimension());
+
+    assertThrows(IllegalArgumentException.class,
+        () -> HoodieSchemaConverter.convertToSchema(rowType, "test_record", "embedding:4"));
+  }
+
+  @Test
   public void testConvertVectorColumnsValidation() {
     RowType rowType = (RowType) DataTypes.ROW(
         DataTypes.FIELD("embedding", DataTypes.ARRAY(DataTypes.FLOAT().notNull()).notNull()),

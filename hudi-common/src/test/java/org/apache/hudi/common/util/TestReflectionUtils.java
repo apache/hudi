@@ -27,6 +27,14 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+import java.io.IOException;
+import java.net.URL;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Enumeration;
 
 import static org.apache.hudi.common.util.ReflectionUtils.getMethod;
 import static org.apache.hudi.common.util.ReflectionUtils.isSubClass;
@@ -56,5 +64,41 @@ public class TestReflectionUtils {
     assertFalse(getMethod(HoodieStorage.class,
         "listDirectEntries", StoragePathFilter.class).isPresent());
     assertFalse(getMethod(HoodieStorage.class, "nonExistentMethod").isPresent());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"jar:file:/unused.jar!/org/apache/hudi/common/util", "file:/invalid path"})
+  void testGetTopLevelClassesInClasspathSkipsInvalidResources(String invalidResource) {
+    ClassLoader original = Thread.currentThread().getContextClassLoader();
+    ClassLoader loader = new ClassLoader(original) {
+      @Override
+      public Enumeration<URL> getResources(String name) throws IOException {
+        return Collections.enumeration(Arrays.asList(new URL(invalidResource), TestReflectionUtils.class.getResource("")));
+      }
+    };
+    try {
+      Thread.currentThread().setContextClassLoader(loader);
+      assertTrue(ReflectionUtils.getTopLevelClassesInClasspath(TestReflectionUtils.class)
+          .anyMatch(TestReflectionUtils.class.getName()::equals));
+    } finally {
+      Thread.currentThread().setContextClassLoader(original);
+    }
+  }
+
+  @Test
+  void testGetTopLevelClassesInClasspathHandlesIOException() {
+    ClassLoader original = Thread.currentThread().getContextClassLoader();
+    ClassLoader loader = new ClassLoader(original) {
+      @Override
+      public Enumeration<URL> getResources(String name) throws IOException {
+        throw new IOException("Simulated failure enumerating resources");
+      }
+    };
+    try {
+      Thread.currentThread().setContextClassLoader(loader);
+      assertFalse(ReflectionUtils.getTopLevelClassesInClasspath(TestReflectionUtils.class).findAny().isPresent());
+    } finally {
+      Thread.currentThread().setContextClassLoader(original);
+    }
   }
 }

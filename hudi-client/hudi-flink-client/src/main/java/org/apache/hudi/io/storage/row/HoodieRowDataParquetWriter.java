@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.io.hadoop.HoodieBaseParquetWriter;
 import org.apache.hudi.storage.StoragePath;
 
@@ -41,7 +42,7 @@ public class HoodieRowDataParquetWriter extends HoodieBaseParquetWriter<RowData>
   private final String fileName;
 
   private final String instantTime;
-  private final boolean populateMetaFields;
+  private final MetaFieldsMode metaFieldsMode;
   private final boolean withOperation;
   private final Function<Long, String> seqIdGenerator;
 
@@ -50,13 +51,13 @@ public class HoodieRowDataParquetWriter extends HoodieBaseParquetWriter<RowData>
       HoodieParquetConfig<HoodieRowDataParquetWriteSupport> parquetConfig,
       String instantTime,
       TaskContextSupplier taskContextSupplier,
-      boolean populateMetaFields,
+      MetaFieldsMode metaFieldsMode,
       boolean withOperation) throws IOException {
     super(file, parquetConfig);
     this.fileName = file.getName();
     this.writeSupport = parquetConfig.getWriteSupport();
     this.instantTime = instantTime;
-    this.populateMetaFields = populateMetaFields;
+    this.metaFieldsMode = metaFieldsMode;
     this.withOperation = withOperation;
     this.seqIdGenerator = recordIndex -> {
       Integer partitionId = taskContextSupplier.getPartitionIdSupplier().get();
@@ -77,16 +78,19 @@ public class HoodieRowDataParquetWriter extends HoodieBaseParquetWriter<RowData>
 
   @Override
   public void writeRowWithMetaData(HoodieKey key, RowData row) throws IOException {
-    if (populateMetaFields) {
-      RowData rowWithMeta = updateRecordMetadata(row, key, getWrittenRecordCount());
-      writeRow(key.getRecordKey(), rowWithMeta);
+    RowData rowWithMeta;
+    if (metaFieldsMode == MetaFieldsMode.ALL) {
+      rowWithMeta = HoodieRowDataCreation.create(instantTime, seqIdGenerator.apply(getWrittenRecordCount()),
+          key.getRecordKey(), key.getPartitionPath(), fileName, row, withOperation, true);
+    } else if (metaFieldsMode == MetaFieldsMode.NONE) {
+      rowWithMeta = row;
     } else {
-      writeRow(key.getRecordKey(), row);
+      rowWithMeta = HoodieRowDataCreation.create(
+          metaFieldsMode.isCommitTimePopulated() ? instantTime : null,
+          null, null, null,
+          metaFieldsMode.isFileNamePopulated() ? fileName : null,
+          row, withOperation, true);
     }
-  }
-
-  private RowData updateRecordMetadata(RowData row, HoodieKey key, long recordCount) {
-    return HoodieRowDataCreation.create(instantTime, seqIdGenerator.apply(recordCount),
-        key.getRecordKey(), key.getPartitionPath(), fileName, row, withOperation, true);
+    writeRow(key.getRecordKey(), rowWithMeta);
   }
 }

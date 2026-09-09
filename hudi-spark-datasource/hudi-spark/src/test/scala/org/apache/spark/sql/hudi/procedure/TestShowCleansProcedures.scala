@@ -636,6 +636,10 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
         checkExceptionContain(
           s"""call show_clean_plans(table => '$tableName', filter => "nonexistent_col > 1")""")(
           "Invalid column references: nonexistent_col")
+
+        checkExceptionContain(
+          s"""call show_clean_plans(table => '$tableName', filter => "concat(action, 'x') = 'cleanx'")""")(
+          "Unsupported functions: concat")
       }
     }
   }

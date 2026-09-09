@@ -270,6 +270,21 @@ class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
           metadataStats(0)(9)
         }
       }
+      // The filter runs against the procedure output schema, where "Average overlap" is a
+      // DoubleType column that a decimal literal has to widen against. See HUDI #19632.
+      val kept = spark.sql(
+        s"""call show_metadata_column_stats_overlap(table => '$tableName', targetColumns => 'c1',
+           | filter => '`Average overlap` >= 0.0')""".stripMargin).collect()
+      assertResult(1) {
+        kept.length
+      }
+      // Average overlap is a mean file count, never negative, so this keeps nothing.
+      val dropped = spark.sql(
+        s"""call show_metadata_column_stats_overlap(table => '$tableName', targetColumns => 'c1',
+           | filter => '`Average overlap` < 0.0')""".stripMargin).collect()
+      assertResult(0) {
+        dropped.length
+      }
     }
   }
 

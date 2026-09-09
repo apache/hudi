@@ -181,6 +181,14 @@ class RunClusteringProcedure extends BaseProcedure
     var (filteredPendingClusteringInstants, operation) = HoodieProcedureUtils.filterPendingInstantsAndGetOperation(
       pendingClusteringInstants, specificInstants.asInstanceOf[Option[String]], op.asInstanceOf[Option[String]], limit.asInstanceOf[Option[Int]])
 
+    confs = HoodieCLIUtils.getWriteParameters(sparkSession, metaClient, confs,
+      tableName.asInstanceOf[Option[String]])
+    // Apply the lock options before constructing the write client.
+    if (metaClient.getTableConfig.isMetadataTableAvailable
+      && !confs.contains(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key)) {
+      confs = HoodieCLIUtils.getLockOptions(basePath, metaClient.getBasePath.toUri.getScheme, confs) ++ confs
+    }
+
     var client: SparkRDDWriteClient[_] = null
     try {
       client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, confs,
@@ -195,11 +203,6 @@ class RunClusteringProcedure extends BaseProcedure
         val strategy = client.getConfig.getLayoutOptimizationStrategy
         if (strategy != HoodieClusteringConfig.LayoutOptimizationStrategy.LINEAR) {
           SpatialCurveSortPartitionerBase.validateOrderByColumns(orderColumns, tableSchema, strategy)
-        }
-      }
-      if (metaClient.getTableConfig.isMetadataTableAvailable) {
-        if (!confs.contains(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key)) {
-          confs = confs ++ HoodieCLIUtils.getLockOptions(basePath, metaClient.getBasePath.toUri.getScheme, client.getConfig.getCommonConfig.getProps())
         }
       }
       if (operation.isSchedule) {

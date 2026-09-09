@@ -545,6 +545,18 @@ public final class HoodieSchemaUtils {
   }
 
   private static HoodieSchema pruneDataSchemaInternal(HoodieSchema dataSchema, HoodieSchema requiredSchema, Set<String> mandatoryFields) {
+    // A union is a leaf as far as pruning goes: Avro resolves a branch by its type, so dropping a branch
+    // changes the column's type instead of narrowing it. Hand the data schema back unpruned whichever
+    // side still holds a union once the null branch is stripped, and let the caller's projection drop
+    // what it did not ask for. Spark reads a union as a struct of nullable member0..memberN fields and
+    // its nested schema pruning can project a subset of those members, so the required schema comes back
+    // as a union when two or more members survive and as the surviving member's own type when one does:
+    // a record, array or map there belongs to a branch and must not be matched against the data union.
+    // The reverse pairing is a plain record whose fields happen to be named member0..memberN, which
+    // HoodieSparkSchemaConverters also reads back as a union.
+    if (dataSchema.getType() == HoodieSchemaType.UNION || requiredSchema.getType() == HoodieSchemaType.UNION) {
+      return dataSchema;
+    }
     switch (requiredSchema.getType()) {
       case RECORD:
         // BLOB and VARIANT are represented as Avro RECORDs but carry a logical type
@@ -592,9 +604,6 @@ public final class HoodieSchemaUtils {
           throw new IllegalArgumentException("Data schema is not a map");
         }
         return HoodieSchema.createMap(pruneDataSchema(dataSchema.getValueType(), requiredSchema.getValueType(), Collections.emptySet()));
-
-      case UNION:
-        throw new IllegalArgumentException("Data schema is a union");
 
       default:
         return dataSchema;
@@ -682,6 +691,10 @@ public final class HoodieSchemaUtils {
 
   private static Option<HoodieSchemaField> findNestedField(HoodieSchema schema, String[] fieldParts, int index) {
     if (schema.getType() == HoodieSchemaType.UNION) {
+      if (schema.isComplexUnion()) {
+        // No single record to descend into
+        return Option.empty();
+      }
       Option<HoodieSchemaField> notUnion = findNestedField(schema.getNonNullType(), fieldParts, index);
       if (!notUnion.isPresent()) {
         return Option.empty();
@@ -820,6 +833,13 @@ public final class HoodieSchemaUtils {
     return "hoodie." + sanitizedTableName + "." + sanitizedTableName + "_record";
   }
 
+  /**
+   * Checks whether the schema is, or nests, a DECIMAL at any depth, descending through records, arrays,
+   * maps and every branch of a union.
+   *
+   * @param schema the schema to search
+   * @return true if a decimal type is found anywhere in the schema
+   */
   public static boolean hasDecimalField(HoodieSchema schema) {
     switch (schema.getType()) {
       case RECORD:
@@ -834,7 +854,7 @@ public final class HoodieSchemaUtils {
       case MAP:
         return hasDecimalField(schema.getValueType());
       case UNION:
-        return hasDecimalField(schema.getNonNullType());
+        return schema.getTypes().stream().anyMatch(HoodieSchemaUtils::hasDecimalField);
       case DECIMAL:
         return true;
       default:
@@ -863,13 +883,12 @@ public final class HoodieSchemaUtils {
       return schema;
     }
 
-    List<HoodieSchema> innerTypes = schema.getTypes();
-    if (innerTypes.size() == 2 && schema.isNullable()) {
+    if (!schema.isComplexUnion()) {
       // this is a basic nullable field so handle it more efficiently
       return schema.getNonNullType();
     }
 
-    HoodieSchema nonNullType = innerTypes.stream()
+    HoodieSchema nonNullType = schema.getTypes().stream()
         .filter(it -> it.getType() != HoodieSchemaType.NULL && Objects.equals(it.getFullName(), fieldSchemaFullName))
         .findFirst()
         .orElse(null);

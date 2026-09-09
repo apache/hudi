@@ -4045,10 +4045,9 @@ public class HoodieWriteConfig extends HoodieConfig {
                   + "For MoR use %s=ALL or %s=NONE.",
               HoodieTableConfig.META_FIELDS_MODE.key(), metaFieldsMode,
               HoodieTableConfig.META_FIELDS_MODE.key(), HoodieTableConfig.META_FIELDS_MODE.key()));
-      // Selective meta-field modes are wired only for the Spark writer path in this release. Flink
-      // RowData / Java-client writers ignore the mode and would silently produce NONE-mode output.
-      checkArgument(!(engineType != EngineType.SPARK && isSelective),
-          String.format("%s=%s is currently supported for the Spark writer only. Support for engine=%s is a follow-up. "
+      // Java-client writers do not yet support selective meta-field population.
+      checkArgument(!(engineType == EngineType.JAVA && isSelective),
+          String.format("%s=%s is currently supported for Spark and Flink writers only. Support for engine=%s is a follow-up. "
                   + "Use %s=ALL or %s=NONE.",
               HoodieTableConfig.META_FIELDS_MODE.key(), metaFieldsMode, engineType,
               HoodieTableConfig.META_FIELDS_MODE.key(), HoodieTableConfig.META_FIELDS_MODE.key()));

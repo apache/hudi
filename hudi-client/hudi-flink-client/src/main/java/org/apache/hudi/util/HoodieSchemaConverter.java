@@ -103,16 +103,24 @@ public class HoodieSchemaConverter {
       String vectorColumns) {
     Map<String, Integer> vectorColumnMap = vectorColumns == null || vectorColumns.trim().isEmpty()
         ? Collections.emptyMap() : VectorColumnParser.parse(vectorColumns);
-    validateVectorColumns(logicalType, vectorColumnMap);
     return convertToSchema(logicalType, rowName, vectorColumnMap);
   }
 
-  private static HoodieSchema convertToSchema(
+  /**
+   * Converts a Flink LogicalType into a HoodieSchema with the specified top-level VECTOR columns.
+   *
+   * @param logicalType   Flink logical type
+   * @param rowName       the record name
+   * @param vectorColumns vector column names and dimensions
+   * @return HoodieSchema matching this logical type
+   */
+  public static HoodieSchema convertToSchema(
       LogicalType logicalType,
       String rowName,
       Map<String, Integer> vectorColumns) {
     ValidationUtils.checkArgument(vectorColumns.isEmpty() || logicalType instanceof RowType,
         "VECTOR columns can only be configured for top-level ROW schemas.");
+    validateVectorColumns(logicalType, vectorColumns);
 
     int precision;
     boolean nullable = logicalType.isNullable();
@@ -285,15 +293,15 @@ public class HoodieSchemaConverter {
    * an unknown column is rejected instead of being silently ignored during conversion.
    *
    * @param logicalType   Flink logical type
-   * @param vectorColumns parsed vector columns (normalized column name to dimension), may be empty
+   * @param vectorColumns parsed vector columns (column name to dimension), may be empty
    */
   private static void validateVectorColumns(LogicalType logicalType, Map<String, Integer> vectorColumns) {
     if (vectorColumns.isEmpty()) {
       return;
     }
-    List<String> normalizedFieldNames = ((RowType) logicalType).getFieldNames();
+    List<String> fieldNames = ((RowType) logicalType).getFieldNames();
     vectorColumns.keySet().stream()
-        .filter(vectorColumn -> !normalizedFieldNames.contains(vectorColumn))
+        .filter(vectorColumn -> !fieldNames.contains(vectorColumn))
         .findFirst()
         .ifPresent(vectorColumn -> {
           throw new IllegalArgumentException("VECTOR column '" + vectorColumn + "' does not exist in the table schema.");

@@ -781,6 +781,26 @@ public class TestHoodieSchemaRepair {
   }
 
   @Test
+  public void testHasTimestampMillisFieldMultiBranchUnion() {
+    // Unions with two or more non-null branches used to recurse forever (#19825)
+    HoodieSchema withoutMillis = HoodieSchema.createUnion(
+        HoodieSchema.create(HoodieSchemaType.NULL),
+        HoodieSchema.create(HoodieSchemaType.STRING),
+        HoodieSchema.create(HoodieSchemaType.LONG)
+    );
+    assertFalse(HoodieSchemaRepair.hasTimestampMillisField(withoutMillis),
+        "Should return false for multi-branch union without timestamp-millis");
+
+    HoodieSchema withMillis = HoodieSchema.createUnion(
+        HoodieSchema.create(HoodieSchemaType.NULL),
+        HoodieSchema.create(HoodieSchemaType.STRING),
+        HoodieSchema.createTimestampMillis()
+    );
+    assertTrue(HoodieSchemaRepair.hasTimestampMillisField(withMillis),
+        "Should return true for multi-branch union containing timestamp-millis");
+  }
+
+  @Test
   public void testHasTimestampMillisFieldUnionWithRecordContainingTimestampMillis() {
     HoodieSchema recordSchema = HoodieSchema.createRecord("Record", null, null, Collections.singletonList(
         HoodieSchemaField.of("timestamp", HoodieSchema.createTimestampMillis(), null, null)

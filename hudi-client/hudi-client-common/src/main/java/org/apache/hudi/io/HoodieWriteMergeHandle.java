@@ -112,7 +112,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
   // Read from the TABLE config, not the write config -- see the note on BaseCreateHandle. Resolved
   // once rather than per record: writeToFile consults it on the preserve-metadata path, which runs
   // for every record copied forward during a merge.
-  private final MetaFieldsMode metaFieldsMode =
+  protected final MetaFieldsMode metaFieldsMode =
       hoodieTable.getMetaClient().getTableConfig().getMetaFieldsMode();
 
   protected long recordsWritten = 0;
@@ -374,7 +374,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
     HoodieSchema oldSchema = writeSchemaWithMetaFields;
     HoodieSchema newSchema = getNewSchema();
     boolean copyOldRecord = true;
-    String key = oldRecord.getRecordKey(oldSchema, keyGeneratorOpt);
+    String key = getRecordKey(oldRecord, oldSchema);
     TypedProperties props = config.getPayloadConfig().getProps();
     if (keyToNewRecords.containsKey(key)) {
       // If we have duplicate records that we are updating, then the hoodie record will be deflated after
@@ -418,6 +418,10 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       }
       recordsWritten++;
     }
+  }
+
+  protected String getRecordKey(HoodieRecord<T> record, HoodieSchema schema) {
+    return record.getRecordKey(schema, keyGeneratorOpt);
   }
 
   protected void writeToFile(HoodieKey key, HoodieRecord<T> record, HoodieSchema schema, Properties props, boolean shouldPreserveRecordMetadata) throws IOException {

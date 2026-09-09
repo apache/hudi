@@ -74,6 +74,7 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
   @Test
   public void testCow() {
     when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
+    when(hoodieTableConfig.isRecordKeyPopulated()).thenReturn(true);
     HoodieReaderContext<String> readerContext = createReaderContext(hoodieTableConfig, false, false, false, false, null);
     HoodieSchema requestedSchema = DATA_SCHEMA;
     FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema, false);
@@ -89,6 +90,7 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
   @Test
   public void testCowBootstrap() {
     when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
+    when(hoodieTableConfig.isRecordKeyPopulated()).thenReturn(true);
     HoodieReaderContext<String> readerContext = createReaderContext(hoodieTableConfig, false, false, true, false, null);
     HoodieSchema requestedSchema = generateProjectionSchema("begin_lat", "tip_history", "_hoodie_record_key", "rider");
 
@@ -105,6 +107,7 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
   @Test
   void testGetRequiredSchemaForFileAndRenameColumns() {
     when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
+    when(hoodieTableConfig.isRecordKeyPopulated()).thenReturn(true);
     HoodieReaderContext<String> readerContext = createReaderContext(hoodieTableConfig, false, false, true, false, null);
     HoodieSchema requestedSchema = generateProjectionSchema("_hoodie_record_key", "timestamp", "rider");
 
@@ -244,6 +247,7 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
 
     when(hoodieTableConfig.getRecordMergeMode()).thenReturn(mergeMode);
     when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
+    when(hoodieTableConfig.isRecordKeyPopulated()).thenReturn(true);
     when(hoodieTableConfig.getOrderingFieldsStr()).thenReturn(Option.of(setPrecombine ? preCombineField : StringUtils.EMPTY_STRING));
     when(hoodieTableConfig.getOrderingFields()).thenReturn(setPrecombine ? Collections.singletonList(preCombineField) : Collections.emptyList());
     when(hoodieTableConfig.getTableVersion()).thenReturn(tableVersion);
@@ -343,6 +347,7 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
     when(hoodieTableConfig.getPayloadClass()).thenReturn(payloadClass);
     when(hoodieTableConfig.getRecordMergeStrategyId()).thenReturn(null);
     when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
+    when(hoodieTableConfig.isRecordKeyPopulated()).thenReturn(true);
     if (orderingField != null) {
       when(hoodieTableConfig.getOrderingFieldsStr()).thenReturn(Option.of(orderingField));
       when(hoodieTableConfig.getOrderingFields()).thenReturn(Collections.singletonList(orderingField));

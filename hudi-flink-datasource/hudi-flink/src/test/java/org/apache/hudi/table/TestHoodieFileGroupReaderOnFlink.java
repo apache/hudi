@@ -211,7 +211,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
   @Test
   public void testGetOrderingValue() {
     HoodieTableConfig tableConfig = Mockito.mock(HoodieTableConfig.class);
-    when(tableConfig.populateMetaFields()).thenReturn(true);
+    when(tableConfig.isRecordKeyPopulated()).thenReturn(true);
     FlinkRowDataReaderContext readerContext =
         new FlinkRowDataReaderContext(getStorageConf(), () -> InternalSchemaManager.DISABLED, Collections.emptyList(), tableConfig, Option.empty());
     HoodieSchema schema = HoodieSchema.createRecord("test", null, null,
@@ -228,7 +228,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
   @Test
   public void getRecordKeyFromMetadataFields() {
     HoodieTableConfig tableConfig = Mockito.mock(HoodieTableConfig.class);
-    when(tableConfig.populateMetaFields()).thenReturn(true);
+    when(tableConfig.isRecordKeyPopulated()).thenReturn(true);
     FlinkRowDataReaderContext readerContext =
         new FlinkRowDataReaderContext(getStorageConf(), () -> InternalSchemaManager.DISABLED, Collections.emptyList(), tableConfig, Option.empty());
     HoodieSchema schema = HoodieSchema.createRecord("test", null, null,
@@ -244,7 +244,8 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
   @Test
   public void getRecordKeySingleKey() {
     HoodieTableConfig tableConfig = Mockito.mock(HoodieTableConfig.class);
-    when(tableConfig.populateMetaFields()).thenReturn(false);
+    when(tableConfig.isRecordKeyPopulated()).thenReturn(false);
+    when(tableConfig.getPartitionFields()).thenReturn(Option.empty());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"field1"}));
     FlinkRowDataReaderContext readerContext =
         new FlinkRowDataReaderContext(getStorageConf(), () -> InternalSchemaManager.DISABLED, Collections.emptyList(), tableConfig, Option.empty());
@@ -261,7 +262,8 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
   @Test
   public void getRecordKeyWithMultipleKeys() {
     HoodieTableConfig tableConfig = Mockito.mock(HoodieTableConfig.class);
-    when(tableConfig.populateMetaFields()).thenReturn(false);
+    when(tableConfig.isRecordKeyPopulated()).thenReturn(false);
+    when(tableConfig.getPartitionFields()).thenReturn(Option.empty());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"field1", "field2"}));
     FlinkRowDataReaderContext readerContext =
         new FlinkRowDataReaderContext(getStorageConf(), () -> InternalSchemaManager.DISABLED, Collections.emptyList(), tableConfig, Option.empty());

@@ -91,6 +91,16 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
   protected val mergeType: String = optParams.getOrElse(DataSourceReadOptions.REALTIME_MERGE.key,
     DataSourceReadOptions.REALTIME_MERGE.defaultValue)
 
+  /**
+   * Instant this query is targeting: the as-of instant when time-travel is requested, otherwise
+   * the last instant of the (potentially narrowed) query timeline.
+   *
+   * NOTE: This is deliberately a `lazy val` rather than a `def`, so the instant is captured once
+   *       per relation instance instead of being re-derived from [[timeline]] on each
+   *       [[composeRDD]]. This preserves the behavior of the `lazy val tableState` it replaces.
+   */
+  protected lazy val targetInstantTime: Option[String] = queryTimestamp
+
   protected override def composeRDD(fileSplits: Seq[HoodieMergeOnReadFileSplit],
                                     tableSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
@@ -108,7 +118,7 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
       fileReaders = readers,
       tableSchema = tableSchema,
       requiredSchema = requiredSchema,
-      tableState = tableState,
+      targetInstantTime = targetInstantTime,
       mergeType = mergeType,
       fileSplits = fileSplits,
       optionalFilters = optionalFilters,

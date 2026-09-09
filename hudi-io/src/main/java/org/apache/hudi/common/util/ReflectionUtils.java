@@ -30,7 +30,7 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Enumeration;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -132,26 +132,30 @@ public class ReflectionUtils {
     ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
     String packageName = clazz.getPackage().getName();
     String path = packageName.replace('.', '/');
-    Enumeration<URL> resources = null;
     try {
-      resources = classLoader.getResources(path);
+      return Collections.list(classLoader.getResources(path)).stream()
+          .map(ReflectionUtils::toDirectory)
+          .filter(Objects::nonNull)
+          .flatMap(directory -> findClasses(directory, packageName).stream());
     } catch (IOException e) {
       log.error("Unable to fetch Resources in package {}", packageName, e);
+      return Stream.empty();
     }
-    List<File> directories = new ArrayList<>();
-    while (Objects.requireNonNull(resources).hasMoreElements()) {
-      URL resource = resources.nextElement();
-      try {
-        directories.add(new File(resource.toURI()));
-      } catch (URISyntaxException e) {
-        log.error("Unable to get URI for {}", resource, e);
-      }
+  }
+
+  /**
+   * Converts a package resource {@link URL} to a {@link File} directory, or {@code null} if the URI is malformed or does not represent a file.
+   *
+   * @param resource the package resource URL
+   * @return the corresponding directory, or {@code null} if conversion fails
+   */
+  private static File toDirectory(URL resource) {
+    try {
+      return new File(resource.toURI());
+    } catch (URISyntaxException | IllegalArgumentException e) {
+      log.error("Unable to get URI for {}", resource, e);
+      return null;
     }
-    List<String> classes = new ArrayList<>();
-    for (File directory : directories) {
-      classes.addAll(findClasses(directory, packageName));
-    }
-    return classes.stream();
   }
 
   /**

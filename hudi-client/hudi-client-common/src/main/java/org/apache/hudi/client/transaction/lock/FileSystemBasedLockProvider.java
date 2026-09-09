@@ -24,7 +24,6 @@ import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.lock.LockState;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -115,8 +114,8 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
     this.lockConfiguration = lockConfiguration;
     String lockDirectory = lockConfiguration.getConfig().getString(FILESYSTEM_LOCK_PATH_PROP_KEY, null);
     if (StringUtils.isNullOrEmpty(lockDirectory)) {
-      lockDirectory = lockConfiguration.getConfig().getString(HoodieWriteConfig.BASE_PATH.key())
-          + StoragePath.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME;
+      // Match getLockConfig() so writers using either default share the same lock.
+      lockDirectory = defaultLockPath(lockConfiguration.getConfig().getString(HoodieWriteConfig.BASE_PATH.key()));
     }
     this.lockTimeoutMinutes = lockConfiguration.getConfig().getInteger(FILESYSTEM_LOCK_EXPIRE_PROP_KEY);
     this.lockFile = new StoragePath(lockDirectory + StoragePath.SEPARATOR + LOCK_FILE_NAME);

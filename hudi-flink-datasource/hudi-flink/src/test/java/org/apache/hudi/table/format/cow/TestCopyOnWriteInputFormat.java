@@ -19,8 +19,16 @@
 
 package org.apache.hudi.table.format.cow;
 
+import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.model.MetaFieldsMode;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieValidationException;
+import org.apache.hudi.io.storage.row.HoodieRowDataLanceWriter;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.utils.TestConfigurations;
@@ -28,10 +36,15 @@ import org.apache.hudi.utils.TestConfigurations;
 import org.apache.flink.api.common.io.FilePathFilter;
 import org.apache.flink.core.fs.FileInputSplit;
 import org.apache.flink.core.fs.Path;
+import org.apache.flink.table.data.GenericArrayData;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.types.DataType;
+import org.apache.flink.table.types.logical.ArrayType;
+import org.apache.flink.table.types.logical.FloatType;
+import org.apache.flink.table.types.logical.LogicalType;
+import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.fs.FileStatus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -101,6 +114,57 @@ class TestCopyOnWriteInputFormat {
     FileInputSplit[] splits = inputFormat.createInputSplits(8);
     assertEquals(1, splits.length);
     assertEquals(-1L, splits[0].getLength());
+  }
+
+  @Test
+  void testLanceVectorSchemaMismatch() throws Exception {
+    RowType rowType = RowType.of(false,
+        new LogicalType[] {new ArrayType(false, new FloatType(false))}, new String[] {"embedding"});
+    HoodieSchema fileSchema = HoodieSchemaConverter.convertToSchema(
+        rowType, "file_record", "embedding:2");
+    HoodieSchema tableSchema = HoodieSchemaConverter.convertToSchema(
+        rowType, "table_record", "embedding:3");
+    StoragePath storagePath = new StoragePath(tempDir.resolve("vector.lance").toUri());
+
+    try (HoodieRowDataLanceWriter writer = new HoodieRowDataLanceWriter(
+        storagePath,
+        fileSchema,
+        "001",
+        mock(TaskContextSupplier.class),
+        Option.empty(),
+        128 * 1024 * 1024L,
+        64 * 1024 * 1024L,
+        16 * 1024 * 1024L,
+        true,
+        MetaFieldsMode.NONE,
+        false)) {
+      writer.writeRow("key1", GenericRowData.of(
+          new GenericArrayData(new Object[] {1.0F, 2.0F})));
+    }
+
+    DataType rowDataType = HoodieSchemaConverter.convertToDataType(tableSchema);
+    CopyOnWriteInputFormat inputFormat = new CopyOnWriteInputFormat(
+        new Path[] {new Path(storagePath.toUri())},
+        new String[] {"embedding"},
+        rowDataType.getChildren().toArray(new DataType[0]),
+        new int[] {0},
+        FlinkOptions.PARTITION_DEFAULT_NAME.defaultValue(),
+        FlinkOptions.PARTITION_PATH_FIELD.defaultValue(),
+        false,
+        Collections.emptyList(),
+        Long.MAX_VALUE,
+        new org.apache.hadoop.conf.Configuration(),
+        true,
+        InternalSchemaManager.DISABLED,
+        tableSchema);
+
+    HoodieException exception = assertThrows(
+        HoodieException.class,
+        () -> inputFormat.open(new FileInputSplit(
+            0, new Path(storagePath.toUri()), 0, -1, new String[0])));
+    assertTrue(exception.getCause() instanceof HoodieValidationException);
+    assertTrue(exception.getCause().getMessage().contains("requested VECTOR(3)"));
+    assertTrue(exception.getCause().getMessage().contains("file contains VECTOR(2)"));
   }
 
   @Test

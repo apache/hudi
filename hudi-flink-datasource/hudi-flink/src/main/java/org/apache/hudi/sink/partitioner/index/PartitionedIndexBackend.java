@@ -44,4 +44,18 @@ public interface PartitionedIndexBackend extends IndexBackend {
    * @param fileId the file group id, usually the file id prefix produced by bucket assignment
    */
   void update(String partitionPath, String recordKey, String fileId);
+
+  /**
+   * Applies a preloaded {@code recordKey -> fileId} mapping to the given partition, e.g. one emitted
+   * by a bootstrap operator that has already scanned the persisted index.
+   *
+   * <p>Unlike {@link #update}, this does not trigger a scan of the persisted index to warm up the
+   * partition cache when it does not exist yet, and the mapping is not marked as a normal data
+   * update.
+   *
+   * @param partitionPath the partition path of the record
+   * @param recordKey the unique key identifying the record
+   * @param fileId the file group id already known for the record key
+   */
+  void bootstrap(String partitionPath, String recordKey, String fileId);
 }

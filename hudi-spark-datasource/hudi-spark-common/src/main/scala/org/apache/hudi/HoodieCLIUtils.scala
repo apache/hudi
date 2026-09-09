@@ -37,7 +37,7 @@ import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.hudi.HoodieOptionConfig
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.filterHoodieConfigs
 
-import java.util.ArrayList
+import java.util.Collections
 
 import scala.collection.JavaConverters.{collectionAsScalaIterableConverter, mapAsJavaMapConverter, propertiesAsScalaMapConverter}
 
@@ -52,6 +52,16 @@ object HoodieCLIUtils extends Logging {
     val schemaUtil = new TableSchemaResolver(metaClient)
     val schemaStr = schemaUtil.getTableSchema(false).toString
 
+    val finalParameters = getWriteParameters(sparkSession, metaClient, conf, tableName)
+    val jsc = new JavaSparkContext(sparkSession.sparkContext)
+    DataSourceUtils.createHoodieClient(jsc, schemaStr, basePath,
+      metaClient.getTableConfig.getTableName, finalParameters.asJava)
+  }
+
+  def getWriteParameters(sparkSession: SparkSession,
+                         metaClient: HoodieTableMetaClient,
+                         conf: Map[String, String],
+                         tableName: Option[String]): Map[String, String] = {
     // If tableName is provided, we need to add catalog props
     val catalogProps = tableName match {
       case Some(value) => HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs(
@@ -60,16 +70,12 @@ object HoodieCLIUtils extends Logging {
     }
 
     // Priority: defaults < catalog props < table config < sparkSession conf < specified conf
-    val finalParameters = HoodieWriterUtils.parametersWithWriteDefaults(
+    HoodieWriterUtils.parametersWithWriteDefaults(
       (catalogProps ++
         metaClient.getTableConfig.getProps.asScala.toMap ++
         filterHoodieConfigs(sparkSession.sqlContext.getAllConfs) ++
         conf).toMap
     )
-
-    val jsc = new JavaSparkContext(sparkSession.sparkContext)
-    DataSourceUtils.createHoodieClient(jsc, schemaStr, basePath,
-      metaClient.getTableConfig.getTableName, finalParameters.asJava)
   }
 
   def extractPartitions(clusteringGroups: Seq[HoodieClusteringGroup]): String = {
@@ -166,9 +172,19 @@ object HoodieCLIUtils extends Logging {
     key -> value
   }
 
-  def getLockOptions(tablePath: String, schema: String, lockConfig: TypedProperties): Map[String, String] = {
-    val customSupportedFSs = lockConfig.getStringList(HoodieCommonConfig.HOODIE_FS_ATOMIC_CREATION_SUPPORT.key, ",", new ArrayList[String])
-    if (schema == null || customSupportedFSs.contains(schema) || StorageSchemes.isAtomicCreationSupported(schema)) {
+  /**
+   * Builds the filesystem-based lock configuration for the metadata table, or an empty map when the
+   * table's filesystem cannot support atomic file creation (a hard requirement for the FS lock).
+   *
+   * @param tablePath the table base path, used to derive the shared lock file location
+   * @param scheme    the table filesystem scheme; {@code null} is treated as supported
+   * @param params    the already-merged write parameters, read only for the custom
+   *                  atomic-creation-support list ({@code hoodie.fs.atomic_creation.support})
+   */
+  def getLockOptions(tablePath: String, scheme: String, params: Map[String, String]): Map[String, String] = {
+    val customSupportedFSs = TypedProperties.fromMap(params.asJava)
+      .getStringList(HoodieCommonConfig.HOODIE_FS_ATOMIC_CREATION_SUPPORT.key, ",", Collections.emptyList[String]())
+    if (scheme == null || customSupportedFSs.contains(scheme) || StorageSchemes.isAtomicCreationSupported(scheme)) {
       logInfo("Auto config filesystem lock provider for metadata table")
       val props = FileSystemBasedLockProvider.getLockConfig(tablePath)
       props.stringPropertyNames.asScala

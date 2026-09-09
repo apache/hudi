@@ -110,6 +110,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     HoodieReadStats readStats = new HoodieReadStats();
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
+    when(tableConfig.getPartitionFields()).thenReturn(Option.empty());
     StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty());
     KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, null,
@@ -137,6 +138,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     HoodieReadStats readStats = new HoodieReadStats();
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
+    when(tableConfig.getPartitionFields()).thenReturn(Option.empty());
     StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty());
     KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, null,
@@ -178,6 +180,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     when(tableConfig.getPartialUpdateMode()).thenReturn(Option.empty());
     when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.current());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
+    when(tableConfig.getPartitionFields()).thenReturn(Option.empty());
     StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty());
     readerContext.setHasLogFiles(false);
@@ -210,6 +213,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     HoodieReadStats readStats = new HoodieReadStats();
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
+    when(tableConfig.getPartitionFields()).thenReturn(Option.empty());
     StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty());
     KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, null,
@@ -246,6 +250,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     when(tableConfig.getPartialUpdateMode()).thenReturn(Option.empty());
     when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.current());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
+    when(tableConfig.getPartitionFields()).thenReturn(Option.empty());
     StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty());
     readerContext.setHasLogFiles(false);
@@ -277,6 +282,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.getPayloadClass()).thenReturn(CustomPayload.class.getName());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
+    when(tableConfig.getPartitionFields()).thenReturn(Option.empty());
     when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.CUSTOM);
     when(tableConfig.getPartialUpdateMode()).thenReturn(Option.empty());
     StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
@@ -322,6 +328,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.getPayloadClass()).thenReturn(TestKeyBasedFileGroupRecordBuffer.CustomPayload.class.getName());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
+    when(tableConfig.getPartitionFields()).thenReturn(Option.empty());
     when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.CUSTOM);
     when(tableConfig.getPartialUpdateMode()).thenReturn(Option.empty());
     when(tableConfig.getRecordMergeStrategyId()).thenReturn(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID);
@@ -355,6 +362,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.getPayloadClass()).thenReturn(CustomPayload.class.getName());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
+    when(tableConfig.getPartitionFields()).thenReturn(Option.empty());
     StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty());
     KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, new CustomMerger(),
@@ -396,6 +404,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.getPayloadClass()).thenReturn(CustomPayload.class.getName());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
+    when(tableConfig.getPartitionFields()).thenReturn(Option.empty());
     when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.CUSTOM);
     when(tableConfig.getPartialUpdateMode()).thenReturn(Option.empty());
     when(tableConfig.getRecordMergeStrategyId()).thenReturn(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID);
