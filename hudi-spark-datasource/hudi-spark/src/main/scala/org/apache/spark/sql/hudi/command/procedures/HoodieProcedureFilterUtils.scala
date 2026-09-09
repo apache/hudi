@@ -367,19 +367,20 @@ object HoodieProcedureFilterUtils {
               }
             case _ => unresolvedFunc
           }
-          // whatever matched above - the hardcoded entry, or nothing at all - still an
-          // UnresolvedFunction (wrong arity, or a name not in the table)? try the registry
-          // before giving up.
-          hardcodedResolved match {
-            case _: org.apache.spark.sql.catalyst.analysis.UnresolvedFunction =>
-              resolveViaFunctionRegistry(unresolvedFunc, sparkSession)
-            case resolved => resolved
-          }
+          resolveOrFallback(hardcodedResolved, unresolvedFunc, sparkSession)
     }
 
     // Third pass: handle type coercion for numeric comparisons
     applyCoercionRules(functionResolved)
   }
+
+  // Whatever the hardcoded table produced - a real expression, or nothing at all (wrong arity, or
+  // a name not in the table) - still an UnresolvedFunction? Try the registry before giving up.
+  private def resolveOrFallback(hardcodedResolved: Expression, unresolvedFunc: UnresolvedFunction, sparkSession: SparkSession): Expression =
+    hardcodedResolved match {
+      case _: UnresolvedFunction => resolveViaFunctionRegistry(unresolvedFunc, sparkSession)
+      case resolved => resolved
+    }
 
   // Widens numeric comparison/arithmetic operands to a common type - see the coercion helpers
   // below for the rules each case follows. Shared between the third pass here and
@@ -469,13 +470,21 @@ object HoodieProcedureFilterUtils {
   // work inside a projection), still Unevaluable somewhere in it (current_user, lag, lead, ... -
   // only valid in their normal analyzer context), or non-deterministic (rand, uuid,
   // spark_partition_id - expect per-partition initialization this evaluator never does).
+  //
+  // Unevaluable alone doesn't cover the whole family on every Spark version: current_timestamp
+  // and its relatives are foldable (Spark computes them once and reuses the value, rather than
+  // per row) but which marker trait exempts them from eval() varies between the 3.x and 4.x lines
+  // this builds against, so a foldable result gets a real probe instead of a trait check - eval()
+  // against EmptyRow only touches its own constant inputs, never a real column, so a throw here
+  // means it genuinely can't be evaluated standalone rather than that this row's data is missing.
   private def isUsableOutsideQueryPlan(expression: Expression): Boolean = {
     !expression.isInstanceOf[org.apache.spark.sql.catalyst.expressions.aggregate.AggregateFunction] &&
       !expression.isInstanceOf[org.apache.spark.sql.catalyst.expressions.Generator] &&
       !expression.exists(_.isInstanceOf[Unevaluable]) &&
       expression.deterministic &&
       expression.resolved &&
-      expression.checkInputDataTypes().isSuccess
+      expression.checkInputDataTypes().isSuccess &&
+      (!expression.foldable || Try(expression.eval(org.apache.spark.sql.catalyst.expressions.EmptyRow)).isSuccess)
   }
 
   private def evaluateExpressionOnRow(boundExpr: Expression, row: Row, schema: StructType): Boolean = {
