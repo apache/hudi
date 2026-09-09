@@ -188,7 +188,7 @@
     <rocksdbjni.version>7.5.3</rocksdbjni.version>
     <spark33.version>3.3.4</spark33.version>
     <spark34.version>3.4.3</spark34.version>
-    <spark35.version>3.5.5</spark35.version>
+    <spark35.version>3.5.9</spark35.version>
     <spark40.version>4.0.2</spark40.version>
     <spark41.version>4.1.1</spark41.version>
     <spark42.version>4.2.0</spark42.version>

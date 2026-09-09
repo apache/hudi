@@ -65,7 +65,7 @@ import scala.Tuple2;
  * ```
  * spark-submit \
  * --class org.apache.hudi.utilities.HoodieDropPartitionsTool \
- * --packages org.apache.spark:spark-avro_2.12:3.5.5 \
+ * --packages org.apache.spark:spark-avro_2.12:3.5.9 \
  * --master local[*]
  * --driver-memory 1g \
  * --executor-memory 1g \
@@ -87,7 +87,7 @@ import scala.Tuple2;
  * ```
  * spark-submit \
  * --class org.apache.hudi.utilities.HoodieDropPartitionsTool \
- * --packages org.apache.spark:spark-avro_2.12:3.5.5 \
+ * --packages org.apache.spark:spark-avro_2.12:3.5.9 \
  * --master local[*]
  * --driver-memory 1g \
  * --executor-memory 1g \

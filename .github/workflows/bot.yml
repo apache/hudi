@@ -1459,7 +1459,7 @@ jobs:
         include:
           - sparkProfile: 'spark3.5'
             flinkProfile: 'flink2.2'
-            sparkArchive: 'spark-3.5.3/spark-3.5.3-bin-hadoop3.tgz'
+            sparkArchive: 'spark-3.5.9/spark-3.5.9-bin-hadoop3.tgz'
     steps:
       - if: needs.changes.outputs.relevant == 'true'
         uses: actions/checkout@v5
