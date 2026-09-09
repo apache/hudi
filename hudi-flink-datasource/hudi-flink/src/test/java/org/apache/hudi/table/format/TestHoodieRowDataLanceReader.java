@@ -22,6 +22,7 @@ package org.apache.hudi.table.format;
 import org.apache.hudi.common.bloom.SimpleBloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
@@ -125,7 +126,7 @@ class TestHoodieRowDataLanceReader {
         64 * 1024 * 1024L,
         16 * 1024 * 1024L,
         true,
-        false,
+        MetaFieldsMode.NONE,
         false)) {
       writer.writeRow("key1", GenericRowData.of(
           new GenericArrayData(new Object[] {1.25F, 2.5F})));
@@ -166,7 +167,7 @@ class TestHoodieRowDataLanceReader {
         64 * 1024 * 1024L,
         16 * 1024 * 1024L,
         true,
-        false,
+        MetaFieldsMode.NONE,
         false)) {
       writer.writeRow("key1", GenericRowData.of(
           1,

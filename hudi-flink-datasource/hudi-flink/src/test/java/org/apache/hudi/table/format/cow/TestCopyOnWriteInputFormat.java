@@ -20,6 +20,7 @@
 package org.apache.hudi.table.format.cow;
 
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -135,7 +136,7 @@ class TestCopyOnWriteInputFormat {
         64 * 1024 * 1024L,
         16 * 1024 * 1024L,
         true,
-        false,
+        MetaFieldsMode.NONE,
         false)) {
       writer.writeRow("key1", GenericRowData.of(
           new GenericArrayData(new Object[] {1.0F, 2.0F})));
