@@ -408,8 +408,10 @@ public class HoodieMultiTableStreamer {
 
     @Parameter(names = {"--fail-fast-on-continuous"},
         description = "Only applies in continuous mode. When enabled, the failure of any single table sync fails the "
-            + "whole job. The remaining table syncs are shut down and the process exits with a non-zero status. When "
-            + "disabled (default), each table is synced independently and a single failure does not stop the others.")
+            + "whole job and the process exits with a non-zero status. The remaining table syncs are interrupted "
+            + "mid-round rather than allowed to finish the round, so a table can be left with an inflight instant "
+            + "that is rolled back on the next run. When disabled (default), each table is synced independently and "
+            + "a single failure does not stop the others.")
     public Boolean failFastOnContinuousMode = false;
 
     @Parameter(names = {"--min-sync-interval-seconds"},
