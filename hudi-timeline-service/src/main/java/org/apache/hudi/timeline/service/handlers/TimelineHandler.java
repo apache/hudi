@@ -118,10 +118,11 @@ public class TimelineHandler extends Handler {
   }
 
   // Plans for table-service actions live in the requested file; the inflight files of these
-  // plan-carrying actions (clean, rollback, restore, compaction, logcompaction, clustering,
-  // replacecommit, indexing) are empty by design. Read the requested twin so an in-progress instant
-  // that the active timeline folds to INFLIGHT still surfaces its plan. Only timeline-resolved fields
-  // flow into the twin, so the path-traversal defense on the resolved instant is preserved.
+  // plan-carrying actions (clean, rollback, restore, compaction, logcompaction, clustering, indexing)
+  // are empty by design. Read the requested twin so an in-progress instant that the active timeline
+  // folds to INFLIGHT still surfaces its plan. A non-clustering replacecommit is the exception (see
+  // the replacecommit arm of getInstantDetails). Only timeline-resolved fields flow into the twin, so
+  // the path-traversal defense on the resolved instant is preserved.
   private HoodieInstant requestedTwin(HoodieTableMetaClient metaClient, HoodieInstant instant) {
     return instant.isRequested() ? instant
         : metaClient.createNewInstant(HoodieInstant.State.REQUESTED, instant.getAction(), instant.requestedTime());
@@ -207,9 +208,18 @@ public class TimelineHandler extends Handler {
           // A completed replacecommit/clustering file is avro HoodieReplaceCommitMetadata on disk;
           // reading it as avro HoodieCommitMetadata fails avro record-name resolution. Read the POJO
           // HoodieReplaceCommitMetadata: the serde deserializes the avro record and converts it to POJO.
-          result = instant.isCompleted()
-              ? readAs(serde, activeTimeline, instant, HoodieReplaceCommitMetadata.class)
-              : readAs(serde, activeTimeline, requestedTwin(metaClient, instant), HoodieRequestedReplaceMetadata.class);
+          if (instant.isCompleted()) {
+            result = readAs(serde, activeTimeline, instant, HoodieReplaceCommitMetadata.class);
+          } else if (instant.isInflight() && !activeTimeline.isEmpty(instant)) {
+            // A pending insert_overwrite/insert_overwrite_table/delete_partition is the inverse of
+            // clustering: its requested file is empty and the inflight file carries the workload profile
+            // as a HoodieCommitMetadata (BaseCommitActionExecutor.saveWorkloadProfileMetadataToInflight).
+            // Mirror MetadataConversionUtils and read a non-empty inflight file as such; an empty inflight
+            // file (clustering) falls through to the requested plan.
+            result = readCommitMetadata(serde, activeTimeline, instant);
+          } else {
+            result = readAs(serde, activeTimeline, requestedTwin(metaClient, instant), HoodieRequestedReplaceMetadata.class);
+          }
           break;
         case HoodieTimeline.INDEXING_ACTION:
           // A completed indexing instant stores avro HoodieIndexCommitMetadata, not HoodieCommitMetadata.

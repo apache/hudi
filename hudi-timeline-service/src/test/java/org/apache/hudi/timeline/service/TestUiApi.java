@@ -20,13 +20,16 @@ package org.apache.hudi.timeline.service;
 
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieIndexCommitMetadata;
 import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
+import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
@@ -489,6 +492,51 @@ class TestUiApi extends HoodieCommonTestHarness {
         INSTANT_ACTION_PARAM, "compaction", INSTANT_STATE_PARAM, "INFLIGHT"));
     assertTrue(root.has("operations"), "inflight compaction must expose its plan operations: " + root);
     assertTrue(root.get("operations").isArray());
+  }
+
+  @Test
+  void testGetInstantDetailsInflightInsertOverwriteReturnsWorkloadProfile() throws Exception {
+    HoodieTableMetaClient mc = initTable("instant-inflight-insert-overwrite");
+    String base = mc.getBasePath().toString();
+    String ts = "20240101000028";
+    // An insert_overwrite replacecommit is the inverse of clustering: its requested file is empty and
+    // the inflight file carries the workload profile, a HoodieCommitMetadata with per-partition insert
+    // counts, as BaseCommitActionExecutor.saveWorkloadProfileMetadataToInflight writes it. Reading the
+    // requested twin here previously rendered an all-null HoodieRequestedReplaceMetadata.
+    HoodieCommitMetadata workloadProfile = new HoodieCommitMetadata();
+    workloadProfile.setOperationType(WriteOperationType.INSERT_OVERWRITE);
+    HoodieWriteStat insertStat = new HoodieWriteStat();
+    insertStat.setNumInserts(42);
+    insertStat.setFileId("");
+    insertStat.setPrevCommit(HoodieWriteStat.NULL_COMMIT);
+    workloadProfile.addWriteStat("par", insertStat);
+    HoodieTestTable.of(mc).addPendingReplace(ts, Option.empty(), Option.of(workloadProfile));
+
+    JsonNode root = getJsonOk(UI_INSTANT_URL, params(BASEPATH_PARAM, base, INSTANT_PARAM, ts,
+        INSTANT_ACTION_PARAM, "replacecommit", INSTANT_STATE_PARAM, "INFLIGHT"));
+    assertEquals("INSERT_OVERWRITE", root.get("operationType").asText(), root.toString());
+    assertEquals(42, root.get("partitionToWriteStats").get("par").get(0).get("numInserts").asLong(), root.toString());
+  }
+
+  @Test
+  void testGetInstantDetailsInflightClusteringReturnsPlan() throws Exception {
+    HoodieTableMetaClient mc = initTable("instant-inflight-clustering");
+    String base = mc.getBasePath().toString();
+    String ts = "20240101000029";
+    // Clustering keeps its plan in the requested file and leaves the inflight file empty, so the
+    // inflight state must fall back to the requested plan rather than surface an empty
+    // HoodieCommitMetadata.
+    HoodieRequestedReplaceMetadata requested = HoodieRequestedReplaceMetadata.newBuilder()
+        .setOperationType(WriteOperationType.CLUSTER.name())
+        .setExtraMetadata(Collections.emptyMap())
+        .setClusteringPlan(new HoodieClusteringPlan())
+        .build();
+    HoodieTestTable.of(mc).addPendingCluster(ts, requested, Option.empty());
+
+    JsonNode root = getJsonOk(UI_INSTANT_URL, params(BASEPATH_PARAM, base, INSTANT_PARAM, ts,
+        INSTANT_ACTION_PARAM, "clustering", INSTANT_STATE_PARAM, "INFLIGHT"));
+    assertEquals("CLUSTER", root.get("operationType").asText(), root.toString());
+    assertTrue(root.has("clusteringPlan") && !root.get("clusteringPlan").isNull(), root.toString());
   }
 
   @Test
