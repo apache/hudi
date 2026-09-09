@@ -529,11 +529,17 @@ public class HoodieMultiTableStreamer {
    * <p>When {@code --fail-fast-on-continuous} is enabled, the first table failure fails the whole job. The sibling
    * streamers are shut down and a {@link HoodieException} is thrown so the caller can exit with a non-zero status.
    * Otherwise, every table is synced independently and a single failure does not affect the others.
+   *
+   * <p>Teardown runs in a {@code finally} rather than a catch so that it also covers an {@link Error}, which the
+   * workers do not catch, and it is a no-op once a table has shut its own ingestion service down. The siblings are
+   * interrupted first, then waited on, so this does not return while a table is still writing and {@code main()}
+   * stops the shared Spark context under it.
    */
   private void syncContinuously() {
     if (tableExecutionContexts.isEmpty()) {
       return;
     }
+    warnIfSchedulerIsNotFair();
     // Streamer instances are registered from worker threads, so a thread-safe list is required.
     final List<HoodieStreamer> streamerInstances = new CopyOnWriteArrayList<>();
     // Set once fail fast trips, so tasks that register their streamer afterwards stop before starting the sync.
@@ -553,13 +559,28 @@ public class HoodieMultiTableStreamer {
         CompletableFuture.allOf(tableFutures.toArray(new CompletableFuture[0])).join();
       }
     } finally {
-      // On an abnormal exit the siblings are still ingesting, since FutureUtils.allOf only cancels their futures.
-      // Covers an Error too, which the workers do not catch. A no-op once a table has shut its service down.
+      // FutureUtils.allOf only cancels the futures, so the siblings are still ingesting on an abnormal exit.
       shutdownRequested.set(true);
       interruptAllIngestion(streamerInstances);
-      // Wait for the workers, cleanup included, so sync() does not return while a table is still writing.
-      // shutdownExecutor logs rather than throws. The failure path is already propagating its own exception.
+      // Logs rather than throws. The failure path is already propagating its own exception.
       shutdownExecutor(executor);
+    }
+  }
+
+  /**
+   * Warns when several tables share a SparkContext that schedules FIFO, where one table's job holds the cluster
+   * until it finishes and the others wait behind it. FAIR has to be set at submit time to interleave them.
+   */
+  private void warnIfSchedulerIsNotFair() {
+    if (tableExecutionContexts.size() < 2) {
+      return;
+    }
+    String schedulerMode = jssc.getConf().get(SchedulerConfGenerator.SPARK_SCHEDULER_MODE_KEY, "FIFO");
+    if (!SchedulerConfGenerator.SPARK_SCHEDULER_FAIR_MODE.equalsIgnoreCase(schedulerMode)) {
+      log.warn("Syncing {} tables concurrently on a SparkContext with {}={}. One table's job will hold the cluster "
+          + "until it completes while the others queue behind it; set {}=FAIR at submit time to interleave them.",
+          tableExecutionContexts.size(), SchedulerConfGenerator.SPARK_SCHEDULER_MODE_KEY, schedulerMode,
+          SchedulerConfGenerator.SPARK_SCHEDULER_MODE_KEY);
     }
   }
 
@@ -580,9 +601,8 @@ public class HoodieMultiTableStreamer {
         return;
       }
       streamer.sync();
-      // A streamer registered just before fail fast tripped can reach here without ever ingesting: the interrupt
-      // found no executor to stop, but it had already marked the service shut down, and that flag is what makes
-      // HoodieIngestionService's loop exit on its first check. Nothing was written, so not a success.
+      // Fail fast may have tripped while this streamer was starting: the interrupt found no executor to stop, but
+      // the flag it set makes HoodieIngestionService's loop exit at once, so nothing was written.
       if (!shutdownRequested.get()) {
         successTables.add(table);
       }
