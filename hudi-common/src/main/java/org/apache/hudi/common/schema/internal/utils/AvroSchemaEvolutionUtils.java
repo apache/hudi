@@ -308,10 +308,15 @@ public class AvroSchemaEvolutionUtils {
    * and target is long and since int can be promoted to long), colC will be long data type in output schema.
    *
    *
+   * <p>Precedence when a side is degenerate (null, the NULL type, or no fields): an absent source resolves to
+   * {@code target}, and that check runs first, so with both sides degenerate the result is {@code target}. Keep it
+   * first, since {@code reconcileSchema} relies on never being handed a null source.
+   *
    * @param sourceSchema source schema that needs reconciliation
    * @param targetSchema target schema that source schema will be reconciled against
    * @param shouldReorderColumns whether fields should be reordered to match the target schema
-   * @return schema (based off {@code source} one) that has nullability constraints and datatypes reconciled
+   * @return schema (based off {@code source} one, or {@code target} when the source is absent) that has
+   *         nullability constraints and datatypes reconciled
    */
   public static HoodieSchema reconcileSchemaRequirements(HoodieSchema sourceSchema, HoodieSchema targetSchema,
                                                           boolean shouldReorderColumns) {
