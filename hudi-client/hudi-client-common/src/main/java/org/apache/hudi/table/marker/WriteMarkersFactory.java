@@ -53,7 +53,7 @@ public class WriteMarkersFactory {
         }
         String basePath = table.getMetaClient().getBasePath().toString();
         if (StorageSchemes.HDFS.getScheme().equals(
-            HadoopFSUtils.getFs(basePath, table.getContext().getStorageConf(), true).getScheme())) {
+            HadoopFSUtils.getScheme(HadoopFSUtils.getFs(basePath, table.getContext().getStorageConf(), true)))) {
           log.warn("Timeline-server-based markers are not supported for HDFS: "
               + "base path {}.  Falling back to direct markers.", basePath);
           return getDirectWriteMarkers(table, instantTime);

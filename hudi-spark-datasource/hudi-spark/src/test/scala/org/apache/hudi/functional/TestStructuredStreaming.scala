@@ -508,6 +508,52 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
     assertEquals(25, metaClient.getActiveTimeline.countInstants())
   }
 
+  /**
+   * Injects a failing micro-batch into [[HoodieStreamingSink]] by pointing the record key at a
+   * non-existent column so that every Hudi write throws. With STREAMING_IGNORE_FAILED_BATCH
+   * enabled the sink must swallow the failure (unpersisting the write RDDs), let the streaming
+   * query complete without crashing, and produce no commit.
+   */
+  @Test
+  def testStructuredStreamingIgnoreFailedBatch(): Unit = {
+    val (sourcePath, destPath) = initStreamingSourceAndDestPath("source", "dest")
+    val records1 = recordsToStrings(dataGen.generateInsertsForPartition(
+      "000", 100, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).asScala.toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    val schema = inputDF1.schema
+    inputDF1.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
+
+    val failingOpts = commonOpts ++ Map(
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "non_existent_field",
+      DataSourceWriteOptions.STREAMING_IGNORE_FAILED_BATCH.key -> "true",
+      DataSourceWriteOptions.STREAMING_RETRY_CNT.key -> "1"
+    )
+
+    val query = spark.readStream
+      .schema(schema)
+      .json(sourcePath)
+      .writeStream
+      .format("org.apache.hudi")
+      .options(failingOpts)
+      .outputMode(OutputMode.Append)
+      .option("checkpointLocation", s"$basePath/checkpoint_ignore")
+      .start(destPath)
+
+    // Must not throw even though the micro-batch fails; the failure is ignored.
+    query.processAllAvailable()
+    query.stop()
+
+    // No completed commit must exist since every batch failed and was ignored.
+    val completedCommits =
+      try {
+        HoodieTestUtils.createMetaClient(storage, destPath)
+          .getActiveTimeline.getCommitsTimeline.filterCompletedInstants().countInstants()
+      } catch {
+        case _: TableNotFoundException => 0
+      }
+    assertEquals(0, completedCommits)
+  }
+
   @ParameterizedTest
   @CsvSource(Array(
     "COPY_ON_WRITE,EVENT_TIME_ORDERING",

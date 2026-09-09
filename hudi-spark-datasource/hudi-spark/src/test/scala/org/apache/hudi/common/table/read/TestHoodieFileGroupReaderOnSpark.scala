@@ -231,7 +231,8 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   def testCustomDelete(useFgReader: String,
                        tableType: String,
                        positionUsed: String,
-                       mergeMode: String): Unit = {
+                       mergeMode: String,
+                       markerFromTableConfigOnly: String): Unit = {
     val payloadClass = "org.apache.hudi.common.table.read.CustomPayloadForTesting"
     val fgReaderOpts: Map[String, String] = Map(
       HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key -> "0",
@@ -241,13 +242,17 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     )
     val deleteOpts: Map[String, String] = Map(
       DELETE_KEY -> "op", DELETE_MARKER -> "d")
-    val readOpts = if (mergeMode.equals("CUSTOM")) {
-      fgReaderOpts ++ deleteOpts ++ Map(
-        HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key -> payloadClass)
+    val payloadOpts = if (mergeMode.equals("CUSTOM")) {
+      Map(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key -> payloadClass)
     } else {
-      fgReaderOpts ++ deleteOpts
+      Map.empty[String, String]
     }
-    val opts = readOpts
+    val opts = fgReaderOpts ++ deleteOpts ++ payloadOpts
+    // The write persists the marker on the table under the record-merge property prefix. When the query does
+    // not restate the delete options, the table config is the only place the reader can learn about them -
+    // which is what a query that just loads the path looks like.
+    val tableConfigOnly = markerFromTableConfigOnly.equals("true")
+    val readOpts = if (tableConfigOnly) fgReaderOpts ++ payloadOpts else opts
     val columns = Seq("ts", "key", "rider", "driver", "fare", "op")
 
     val data = Seq(
@@ -269,6 +274,11 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     val metaClient = HoodieTableMetaClient
       .builder().setConf(getStorageConf).setBasePath(getBasePath).build
     assertEquals((1, 0), getFileCount(metaClient, getBasePath))
+    if (tableConfigOnly) {
+      assertTrue(metaClient.getTableConfig.getProps.containsKey(
+        HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY),
+        "the delete marker must be persisted on the table, otherwise the read side has nothing to pick up")
+    }
 
     // Delete using delete markers.
     val updateData = Seq(
@@ -456,12 +466,15 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
 object TestHoodieFileGroupReaderOnSpark {
   def customDeleteTestParams(): java.util.List[Arguments] = {
     java.util.Arrays.asList(
-      Arguments.of("true", "MERGE_ON_READ", "false", "EVENT_TIME_ORDERING"),
-      Arguments.of("true", "MERGE_ON_READ", "true", "EVENT_TIME_ORDERING"),
-      Arguments.of("true", "MERGE_ON_READ", "false", "COMMIT_TIME_ORDERING"),
-      Arguments.of("true", "MERGE_ON_READ", "true", "COMMIT_TIME_ORDERING"),
-      Arguments.of("true", "MERGE_ON_READ", "false", "CUSTOM"),
-      Arguments.of("true", "MERGE_ON_READ", "true", "CUSTOM"))
+      Arguments.of("true", "MERGE_ON_READ", "false", "EVENT_TIME_ORDERING", "false"),
+      Arguments.of("true", "MERGE_ON_READ", "true", "EVENT_TIME_ORDERING", "false"),
+      Arguments.of("true", "MERGE_ON_READ", "false", "COMMIT_TIME_ORDERING", "false"),
+      Arguments.of("true", "MERGE_ON_READ", "true", "COMMIT_TIME_ORDERING", "false"),
+      Arguments.of("true", "MERGE_ON_READ", "false", "CUSTOM", "false"),
+      Arguments.of("true", "MERGE_ON_READ", "true", "CUSTOM", "false"),
+      // The query does not restate the delete options, so the table config is the reader's only source.
+      Arguments.of("true", "MERGE_ON_READ", "false", "EVENT_TIME_ORDERING", "true"),
+      Arguments.of("true", "MERGE_ON_READ", "false", "COMMIT_TIME_ORDERING", "true"))
   }
 
   def getFileCount(metaClient: HoodieTableMetaClient, basePath: String): (Long, Long) = {

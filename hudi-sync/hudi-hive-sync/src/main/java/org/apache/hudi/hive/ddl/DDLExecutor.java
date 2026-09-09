@@ -108,4 +108,11 @@ public interface DDLExecutor extends AutoCloseable {
    * @param newSchema Map key: field name, Map value: [field type, field comment]
    */
   void updateTableComments(String tableName, Map<String, Pair<String, String>> newSchema);
+
+  /**
+   * @return whether this executor can update the comments of partition columns of an existing table.
+   */
+  default boolean supportsUpdatingPartitionColumnComments() {
+    return true;
+  }
 }

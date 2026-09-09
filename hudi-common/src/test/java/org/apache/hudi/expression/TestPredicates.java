@@ -22,6 +22,7 @@ package org.apache.hudi.expression;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -29,6 +30,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestPredicates {
+  @Test
+  void testStringStartsWithToString() {
+    Predicates.StringStartsWith predicate = Predicates.startsWith(Literal.from("key"), Literal.from("k1"));
+    assertEquals("key.startsWith(k1)", predicate.toString());
+  }
+
   @Test
   void testStringStartsWithAnyWhenMatched() {
     Expression left = Literal.from("key2_any");
@@ -51,5 +58,19 @@ class TestPredicates {
     Predicates.StringStartsWithAny predicate = Predicates.startsWithAny(left, right);
     assertEquals(Expression.Operator.STARTS_WITH, predicate.getOperator());
     assertFalse((boolean) predicate.eval(null));
+  }
+
+  @Test
+  void testStringStartsWithAnyToString() {
+    Predicates.StringStartsWithAny predicate =
+        Predicates.startsWithAny(Literal.from("key"), Arrays.asList(Literal.from("k1"), Literal.from("k2")));
+    assertEquals("key.startsWithAny(k1,k2)", predicate.toString());
+  }
+
+  @Test
+  void testStringStartsWithAnyToStringIsNullSafeForAbsentLeft() {
+    Predicates.StringStartsWithAny predicate =
+        Predicates.startsWithAny(null, Collections.singletonList(Literal.from("key1")));
+    assertEquals("null.startsWithAny(key1)", predicate.toString());
   }
 }

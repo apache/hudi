@@ -63,12 +63,7 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
     // NOTE: We have to strip partition-path configuration, since it could only be interpreted by
     //       this key-gen
     super(stripPartitionPathConfig(props));
-    this.recordKeyFields = Option.ofNullable(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), null))
-        .map(recordKeyConfigValue ->
-            Arrays.stream(recordKeyConfigValue.split(","))
-                .map(String::trim)
-                .collect(Collectors.toList())
-        ).orElse(Collections.emptyList());
+    this.recordKeyFields = KeyGenUtils.getRecordKeyFields(props);
     String partitionPathFields = props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
     this.partitionPathFields = partitionPathFields == null
         ? Collections.emptyList()
@@ -167,4 +162,3 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
     return filtered;
   }
 }
-

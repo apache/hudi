@@ -87,17 +87,19 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
 
     if (!new File(localFolder).isDirectory) throw new HoodieException(localFolder + " is not a valid local directory")
 
-    // The non archived instants can be listed from the Timeline.
-    val nonArchivedInstants: util.List[HoodieInstant] = metaClient
+    // The non archived instants can be listed from the Timeline. Wrap in a mutable list because the
+    // desc branch below reverses it in place via Collections.reverse, which fails on the read-only
+    // list produced by asJava over an immutable Scala collection.
+    val nonArchivedInstants: util.List[HoodieInstant] = new util.ArrayList[HoodieInstant](metaClient
       .getActiveTimeline
       .filterCompletedInstants.getInstants.iterator().asScala
       .filter((i: HoodieInstant) => actionSet.contains(i.getAction))
-      .toList.asJava
+      .toList.asJava)
 
-    // Archived instants are in the commit archive files
+    // Archived instants are in the commit archive files (also mutable, for the same reason).
     val statuses: Array[FileStatus] = HadoopFSUtils.getFs(basePath, jsc.hadoopConfiguration()).globStatus(archivePath)
-    val archivedStatuses = List(statuses: _*)
-      .sortWith((f1, f2) => (f1.getModificationTime - f2.getModificationTime).toInt > 0).asJava
+    val archivedStatuses = new util.ArrayList[FileStatus](List(statuses: _*)
+      .sortWith((f1, f2) => (f1.getModificationTime - f2.getModificationTime).toInt > 0).asJava)
 
     if (desc) {
       Collections.reverse(nonArchivedInstants)

@@ -95,7 +95,7 @@ public class SparkBinaryCopyClusteringExecutionStrategy<T> extends SparkSortAndS
     JavaSparkContext engineContext = HoodieSparkEngineContext.getSparkContext(getEngineContext());
     TaskContextSupplier taskContextSupplier = getEngineContext().getTaskContextSupplier();
     JavaRDD<ClusteringGroupInfo> groupInfoJavaRDD = engineContext.parallelize(clusteringGroupInfos, clusteringGroupInfos.size());
-    log.info("number of partitions for clustering " + groupInfoJavaRDD.getNumPartitions());
+    log.info("number of partitions for clustering {}", groupInfoJavaRDD.getNumPartitions());
     JavaRDD<WriteStatus> writeStatusRDD = groupInfoJavaRDD
         .mapPartitions(clusteringOps -> {
           Iterable<ClusteringGroupInfo> clusteringOpsIterable = () -> clusteringOps;

@@ -107,17 +107,14 @@ class DefaultSource extends RelationProvider
       throw new HoodieException("Glob paths are not supported for read paths as of Hudi 1.2.0")
     }
 
-    val hoodieAndSparkHoodieSqlConfs = sqlContext.getAllConfs.filter {
-      case (key, _) => key.startsWith("hoodie.") || key.startsWith("spark.hoodie.")
-    }
     // Add default options for unspecified read options keys.
     // Effective precedence (low -> high):
     // 1) global DFS props
-    // 2) spark.hoodie.* SQL confs (normalized in parametersWithReadDefaults)
+    // 2) spark.hoodie.* SQL confs (normalized to hoodie.* in collectHoodieAndSparkHoodieConfs)
     // 3) hoodie.* SQL confs
     // 4) explicit DataFrame/DataSource options
     val parameters = DataSourceOptionsHelper.parametersWithReadDefaults(
-      hoodieAndSparkHoodieSqlConfs ++ optParams)
+      DataSourceOptionsHelper.collectHoodieAndSparkHoodieConfs(sqlContext, optParams))
 
     // Get the table base path
     val tablePath = DataSourceUtils.getTablePath(storage, Seq(new StoragePath(path.get)).asJava)
@@ -134,7 +131,21 @@ class DefaultSource extends RelationProvider
       parameters
     }
 
-    val relation = DefaultSource.createRelation(sqlContext, metaClient, schema, options.toMap)
+    // Spark's DataSource.resolveRelation() invokes this 3-arg overload directly via the
+    // SchemaRelationProvider path when a user-supplied schema is present (e.g.
+    // spark.read.schema(...).load(path)). The 2-arg overload catches
+    // HoodieSchemaNotFoundException and returns an EmptyRelation, but that catch is bypassed
+    // on this path, so we mirror the same handling here. Preserve the caller-supplied schema
+    // so subsequent query analysis (e.g. column resolution in WHERE clauses) sees the
+    // HMS-known columns even though the on-disk table is schemaless. The 2-arg overload also
+    // re-enters this method with schema=null, so we must fall back to an empty StructType
+    // when schema is null to avoid an NPE in the 2-arg overload's relation.schema.isEmpty check.
+    val relation = try {
+      DefaultSource.createRelation(sqlContext, metaClient, schema, options.toMap)
+    } catch {
+      case _: HoodieSchemaNotFoundException =>
+        new EmptyRelation(sqlContext, Option(schema).getOrElse(new StructType()))
+    }
     log.info(s"Created relation ${relation.getClass.getSimpleName} with ${options.size} resolved options")
     relation
   }
@@ -159,11 +170,20 @@ class DefaultSource extends RelationProvider
                               mode: SaveMode,
                               optParams: Map[String, String],
                               df: DataFrame): BaseRelation = {
+    // Pull `spark.hoodie.*` from SparkConf, normalize to canonical `hoodie.*`, and merge
+    // with explicit options (explicit options win), so configs like
+    // `--conf spark.hoodie.datasource.hive_sync.use_spark_catalog=true` are honored on
+    // writes too. Unlike the read path, we deliberately do NOT forward bare `hoodie.*`
+    // session confs here: the DataFrame write path historically honored only the explicit
+    // `.option(...)` map, and injecting ambient session `hoodie.*` state would silently
+    // change every write. `HoodieSparkSqlWriter` and downstream callers see only canonical keys.
+    val effectiveOpts =
+      DataSourceOptionsHelper.collectSparkHoodieConfs(sqlContext, optParams)
     try {
-      if (optParams.get(OPERATION.key).contains(BOOTSTRAP_OPERATION_OPT_VAL)) {
-        HoodieSparkSqlWriter.bootstrap(sqlContext, mode, optParams, df)
+      if (effectiveOpts.get(OPERATION.key).contains(BOOTSTRAP_OPERATION_OPT_VAL)) {
+        HoodieSparkSqlWriter.bootstrap(sqlContext, mode, effectiveOpts, df)
       } else {
-        val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sqlContext, mode, optParams, df)
+        val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sqlContext, mode, effectiveOpts, df)
         if (!success) {
           throw new HoodieException("Failed to write to Hudi")
         }

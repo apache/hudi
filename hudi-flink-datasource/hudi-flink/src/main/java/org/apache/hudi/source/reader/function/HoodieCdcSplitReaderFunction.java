@@ -39,8 +39,6 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.source.ExpressionPredicates;
-import org.apache.hudi.source.reader.BatchRecords;
-import org.apache.hudi.source.reader.HoodieRecordWithPosition;
 import org.apache.hudi.source.split.HoodieCdcSourceSplit;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.table.format.FilePathUtils;
@@ -55,9 +53,9 @@ import org.apache.hudi.table.format.mor.MergeOnReadTableState;
 import org.apache.hudi.util.StreamerUtil;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
+import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
@@ -66,6 +64,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.CloseableUtils.closeSuppressing;
 
 /**
  * CDC reader function for source V2. Reads CDC splits ({@link HoodieCdcSourceSplit}) and
@@ -80,7 +80,6 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
   private final List<DataType> fieldTypes;
   private final MergeOnReadTableState tableState;
   private transient HoodieTableMetaClient metaClient;
-  private transient ClosableIterator<RowData> currentIterator;
   // Fallback reader for non-CDC splits (e.g. snapshot reads when read.start-commit='earliest')
   private transient HoodieSplitReaderFunction fallbackReaderFunction;
 
@@ -109,12 +108,12 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
   }
 
   @Override
-  public RecordsWithSplitIds<HoodieRecordWithPosition<RowData>> read(HoodieSourceSplit split) {
+  protected ClosableIterator<RowData> createRecordIterator(HoodieSourceSplit split) {
     if (!(split instanceof HoodieCdcSourceSplit)) {
       // Non-CDC splits arrive when reading from 'earliest' with no prior CDC history
       // (i.e. instantRange is empty → snapshot path). Fall back to the standard MOR reader
       // which emits all records as INSERT rows, matching the expected snapshot behaviour.
-      return getFallbackReaderFunction().read(split);
+      return getFallbackReaderFunction().createRecordIterator(split);
     }
     HoodieCdcSourceSplit cdcSplit = (HoodieCdcSourceSplit) split;
 
@@ -131,21 +130,15 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
             mode,
             imageManager);
 
-    currentIterator = new CdcIterators.CdcFileSplitsIterator(cdcSplit.getChanges(), imageManager, recordIteratorFunc);
-    BatchRecords<RowData> records = BatchRecords.forRecords(
-        split.splitId(), currentIterator, split.getFileOffset(), split.getConsumed());
-    records.seek(split.getConsumed());
-    return records;
+    // The CdcFileSplitsIterator owns the imageManager and its per-split record iterators; closing it
+    // (via the base class closeCurrentSplit) releases them. The base class handles the consumed-offset
+    // skip and the minibatch materialization uniformly with the MOR/COW path.
+    return new CdcIterators.CdcFileSplitsIterator(cdcSplit.getChanges(), imageManager, recordIteratorFunc);
   }
 
   @Override
-  public void close() throws Exception {
-    if (currentIterator != null) {
-      currentIterator.close();
-    }
-    if (fallbackReaderFunction != null) {
-      fallbackReaderFunction.close();
-    }
+  protected RowType producedRowType() {
+    return tableState.getRequiredRowType();
   }
 
   // -------------------------------------------------------------------------
@@ -231,10 +224,15 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
         String logFilePath = new Path(tablePath, fileSplit.getCdcFiles().get(0)).toString();
         MergeOnReadInputSplit split = CdcIterators.singleLogFile2Split(tablePath, logFilePath, maxCompactionMemoryInBytes);
         ClosableIterator<HoodieRecord<RowData>> recordIterator = getFileSliceHoodieRecordIterator(split);
-        return new CdcIterators.DataLogFileIterator(
-            maxCompactionMemoryInBytes, imageManager, fileSplit, tableSchema,
-            tableState.getRequiredRowType(), tableState.getRequiredPositions(),
-            recordIterator, getMetaClient(), getWriteConfig());
+        try {
+          return new CdcIterators.DataLogFileIterator(
+              maxCompactionMemoryInBytes, imageManager, fileSplit, tableSchema,
+              tableState.getRequiredRowType(), tableState.getRequiredPositions(),
+              recordIterator, getMetaClient(), getWriteConfig());
+        } catch (IOException | RuntimeException | Error e) {
+          closeSuppressing(recordIterator, e);
+          throw e;
+        }
       }
       case REPLACE_COMMIT: {
         return new CdcIterators.ReplaceCommitIterator(

@@ -150,9 +150,14 @@ public abstract class DynamoDBBasedLockProviderBase implements LockProvider<Lock
         }
         lock = null;
       }
-      this.client.close();
     } catch (Exception e) {
       LOG.error(generateLogStatement(LockState.FAILED_TO_RELEASE, generateLogSuffixString()));
+    } finally {
+      try {
+        this.client.close();
+      } catch (Exception ex) {
+        LOG.warn("Failed to close AmazonDynamoDBLockClient after failed lock release", ex);
+      }
     }
   }
 

@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.adapter
 
-import org.apache.hudi.{HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, Spark40HoodieFileScanRDD, Spark40HoodiePartitionCDCFileGroupMapping, Spark40HoodiePartitionFileSliceMapping}
+import org.apache.hudi.{HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, Spark40HoodiePartitionCDCFileGroupMapping, Spark40HoodiePartitionFileSliceMapping}
 import org.apache.hudi.client.model.{HoodieInternalRow, Spark40HoodieInternalRow}
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.schema.HoodieSchema
@@ -33,7 +33,7 @@ import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, ResolvedTable}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression}
+import org.apache.spark.sql.catalyst.expressions.{Expression}
 import org.apache.spark.sql.catalyst.parser.{ParseException, ParserInterface}
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical._
@@ -43,7 +43,6 @@ import org.apache.spark.sql.catalyst.util.RebaseDateTime.RebaseSpec
 import org.apache.spark.sql.connector.catalog.{V1Table, V2TableWithV1Fallback}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.lance.SparkLanceReaderBase
-import org.apache.spark.sql.execution.datasources.orc.Spark40OrcReader
 import org.apache.spark.sql.execution.datasources.parquet.{HoodieParquetReadSupport, ParquetFileFormat, Spark40HoodieParquetReadSupport, Spark40LegacyHoodieParquetFileFormat, Spark40ParquetReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.execution.streaming.MemoryStream
@@ -98,8 +97,6 @@ class Spark4_0Adapter extends BaseSpark4Adapter {
 
   override def getSchemaUtils: HoodieSchemaUtils = HoodieSpark40SchemaUtils
 
-  override def getSparkPartitionedFileUtils: HoodieSparkPartitionedFileUtils = HoodieSpark40PartitionedFileUtils
-
   override def newParseException(command: Option[String],
                                  exception: AnalysisException,
                                  start: Origin,
@@ -134,14 +131,6 @@ class Spark4_0Adapter extends BaseSpark4Adapter {
   override def createPartitionFileSliceMapping(values: InternalRow,
                                                slices: Map[String, FileSlice]): HoodiePartitionFileSliceMapping = {
     new Spark40HoodiePartitionFileSliceMapping(values, slices)
-  }
-
-  override def createHoodieFileScanRDD(sparkSession: SparkSession,
-                                       readFunction: PartitionedFile => Iterator[InternalRow],
-                                       filePartitions: Seq[FilePartition],
-                                       readDataSchema: StructType,
-                                       metadataColumns: Seq[AttributeReference] = Seq.empty): FileScanRDD = {
-    new Spark40HoodieFileScanRDD(sparkSession, readFunction, filePartitions, readDataSchema, metadataColumns)
   }
 
   override def extractDeleteCondition(deleteFromTable: Command): Expression = {
@@ -207,23 +196,6 @@ class Spark4_0Adapter extends BaseSpark4Adapter {
     new Spark40HoodieParquetReadSupport(
       convertTz, enableVectorizedReader, enableTimestampFieldRepair,
       datetimeRebaseSpec, getRebaseSpec("LEGACY"), tableSchemaOpt)
-  }
-
-  /**
-   * TODO
-   *
-   * @param vectorized
-   * @param sqlConf
-   * @param options
-   * @param hadoopConf
-   * @return
-   */
-  override def createOrcFileReader(vectorized: Boolean,
-                                   sqlConf: SQLConf,
-                                   options: Map[String, String],
-                                   hadoopConf: Configuration,
-                                   dataSchema: StructType): SparkColumnarFileReader = {
-    Spark40OrcReader.build(vectorized, sqlConf, options, hadoopConf, dataSchema)
   }
 
   override def createLanceFileReader(vectorized: Boolean,

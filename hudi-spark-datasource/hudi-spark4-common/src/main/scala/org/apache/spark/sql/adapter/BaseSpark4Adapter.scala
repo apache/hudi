@@ -17,13 +17,14 @@
 
 package org.apache.spark.sql.adapter
 
-import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieSchemaConversionUtils}
+import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieFileScanRDD, HoodieSchemaConversionUtils}
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.JsonUtils
 import org.apache.hudi.spark.internal.ReflectUtil
 import org.apache.hudi.storage.StorageConfiguration
 
+import org.apache.hadoop.conf.Configuration
 import org.apache.parquet.schema.{GroupType, MessageType, PrimitiveType, Type, Types}
 import org.apache.parquet.schema.Type.Repetition
 import org.apache.spark.api.java.JavaSparkContext
@@ -34,7 +35,7 @@ import org.apache.spark.sql.FileFormatUtilsForFileGroupReader.applyFiltersToPlan
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate, SpecializedGetters}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate, Predicate, SpecializedGetters}
 import org.apache.spark.sql.catalyst.parser.ParseException
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
@@ -42,6 +43,7 @@ import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.classic.ColumnConversions
 import org.apache.spark.sql.execution.{PartitionedFileUtil, QueryExecution, SQLExecution}
 import org.apache.spark.sql.execution.datasources._
+import org.apache.spark.sql.execution.datasources.orc.{OrcColumnarBatchReader, SparkOrcReaderBase}
 import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, ParquetFilters, SparkShreddingUtils}
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.internal.SQLConf
@@ -101,6 +103,23 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
     Predicate.createInterpreted(e)
   }
 
+  override def createHoodieFileScanRDD(sparkSession: SparkSession,
+                                       readFunction: PartitionedFile => Iterator[InternalRow],
+                                       filePartitions: Seq[FilePartition],
+                                       readDataSchema: StructType,
+                                       metadataColumns: Seq[AttributeReference] = Seq.empty): FileScanRDD = {
+    new HoodieFileScanRDD(sparkSession, readFunction, filePartitions, readDataSchema, metadataColumns)
+  }
+
+  override def createOrcFileReader(vectorized: Boolean,
+                                   sqlConf: SQLConf,
+                                   options: Map[String, String],
+                                   hadoopConf: Configuration,
+                                   dataSchema: StructType): SparkColumnarFileReader = {
+    SparkOrcReaderBase.build(vectorized, sqlConf, options, hadoopConf, dataSchema,
+      (capacity, memoryMode) => new OrcColumnarBatchReader(capacity, memoryMode))
+  }
+
   override def createRelation(sqlContext: SQLContext,
                               metaClient: HoodieTableMetaClient,
                               schema: HoodieSchema,
@@ -129,6 +148,8 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
   def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit
 
   override def getUTF8StringFactory: HoodieUTF8StringFactory = Spark4HoodieUTF8StringFactory
+
+  override def getSparkPartitionedFileUtils: HoodieSparkPartitionedFileUtils = HoodieSpark4PartitionedFileUtils
 
   override def splitFiles(sparkSession: SparkSession,
                           partitionDirectory: PartitionDirectory,

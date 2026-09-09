@@ -300,7 +300,7 @@ public class HoodieFlinkCompactor {
       compactionInstantTimes.forEach(timestamp -> {
         HoodieInstant inflightInstant = table.getInstantGenerator().getCompactionInflightInstant(timestamp);
         if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
-          LOG.info("Rollback inflight compaction instant: [" + timestamp + "]");
+          LOG.info("Rollback inflight compaction instant: [{}]", timestamp);
           table.rollbackInflightCompaction(inflightInstant, writeClient.getTransactionManager());
           table.getMetaClient().reloadActiveTimeline();
         }
@@ -322,7 +322,7 @@ public class HoodieFlinkCompactor {
 
       if (compactionPlans.isEmpty()) {
         // No compaction plan, do nothing and return.
-        LOG.info("No compaction plan for instant " + String.join(",", compactionInstantTimes));
+        LOG.info("No compaction plan for instant {}", String.join(",", compactionInstantTimes));
         return;
       }
 
@@ -336,7 +336,7 @@ public class HoodieFlinkCompactor {
           ? totalOperations
           : Math.min(conf.get(FlinkOptions.COMPACTION_TASKS), totalOperations);
 
-      LOG.info("Start to compaction for instant " + compactionInstantTimes);
+      LOG.info("Start to compaction for instant {}", compactionInstantTimes);
 
       // Mark instant as compaction inflight
       for (HoodieInstant instant : instants) {
@@ -367,7 +367,7 @@ public class HoodieFlinkCompactor {
      * Shutdown async services like compaction/clustering as DeltaSync is shutdown.
      */
     public void shutdownAsyncService(boolean error) {
-      LOG.info("Gracefully shutting down compactor. Error ?" + error);
+      LOG.info("Gracefully shutting down compactor. Error: {}", error);
       executor.shutdown();
       writeClient.close();
     }

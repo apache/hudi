@@ -22,12 +22,12 @@
     <parent>
         <artifactId>hudi-flink-datasource</artifactId>
         <groupId>org.apache.hudi</groupId>
-        <version>1.2.0</version>
+        <version>1.2.1-rc1</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>hudi-flink</artifactId>
-    <version>1.2.0</version>
+    <version>1.2.1-rc1</version>
     <packaging>jar</packaging>
 
     <properties>
@@ -78,7 +78,7 @@
         </dependency>
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
-            <artifactId>log4j-slf4j-impl</artifactId>
+            <artifactId>log4j-slf4j2-impl</artifactId>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
@@ -231,12 +231,6 @@
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>${flink.table.runtime.artifactId}</artifactId>
-            <version>${flink.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.flink</groupId>
-            <artifactId>${flink.table.planner.artifactId}</artifactId>
             <version>${flink.version}</version>
             <scope>provided</scope>
         </dependency>
@@ -451,6 +445,13 @@
             <version>${flink.version}</version>
             <scope>test</scope>
             <type>test-jar</type>
+        </dependency>
+        <!-- Required by TableEnvironmentImpl in SQL tests to discover ExecutorFactory. -->
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>${flink.table.planner.artifactId}</artifactId>
+            <version>${flink.version}</version>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>

@@ -31,6 +31,7 @@ import org.apache.hudi.utilities.sources.helpers.SanitizationUtils;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
+import lombok.Getter;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -54,6 +55,7 @@ public class FilebasedSchemaProvider extends SchemaProvider {
   private final String sourceFile;
   private final String targetFile;
 
+  @Getter
   protected Schema sourceSchema;
 
   protected Schema targetSchema;
@@ -72,11 +74,6 @@ public class FilebasedSchemaProvider extends SchemaProvider {
 
   private Schema parseSchema(String schemaFile) {
     return readSchemaFromFile(schemaFile, this.fs, config);
-  }
-
-  @Override
-  public Schema getSourceSchema() {
-    return sourceSchema;
   }
 
   @Override

@@ -64,12 +64,12 @@ public class FiveToSixUpgradeHandler implements UpgradeHandler {
 
     compactionTimeline.getInstantsAsStream().forEach(
         deleteInstant -> {
-          log.info("Deleting instant " + deleteInstant + " in auxiliary meta path " + metaClient.getMetaAuxiliaryPath());
+          log.info("Deleting instant {} in auxiliary meta path {}", deleteInstant, metaClient.getMetaAuxiliaryPath());
           StoragePath metaFile = new StoragePath(metaClient.getMetaAuxiliaryPath(), factory.getFileName(deleteInstant));
           try {
             if (metaClient.getStorage().exists(metaFile)) {
               metaClient.getStorage().deleteFile(metaFile);
-              log.info("Deleted instant file in auxiliary meta path : " + metaFile);
+              log.info("Deleted instant file in auxiliary meta path : {}", metaFile);
             }
           } catch (IOException e) {
             throw new HoodieUpgradeDowngradeException(HoodieTableVersion.FIVE.versionCode(), HoodieTableVersion.SIX.versionCode(), true, e);

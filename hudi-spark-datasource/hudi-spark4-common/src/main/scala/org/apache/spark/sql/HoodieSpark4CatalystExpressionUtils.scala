@@ -17,22 +17,37 @@
 
 package org.apache.spark.sql
 
-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression}
+import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
+import org.apache.spark.sql.catalyst.expressions.{Cast, EvalMode, Expression, ParseToDate, ParseToTimestamp}
+import org.apache.spark.sql.types.{DataType, StructType}
 
-abstract class HoodieSpark4CatalystExpressionUtils extends HoodieCatalystExpressionUtils {
+/**
+ * Implementation of [[HoodieCatalystExpressionUtils]] shared by all supported Spark 4.x versions
+ */
+abstract class HoodieSpark4CatalystExpressionUtils extends BaseHoodieCatalystExpressionUtils {
 
-  /**
-   * The attribute name may differ from the one in the schema if the query analyzer
-   * is case insensitive. We should change attribute names to match the ones in the schema,
-   * so we do not need to worry about case sensitivity anymore
-   */
-  def normalizeExprs(exprs: Seq[Expression], attributes: Seq[Attribute]): Seq[Expression]
+  override def getEncoder(schema: StructType): ExpressionEncoder[Row] = {
+    ExpressionEncoder.apply(schema).resolveAndBind()
+  }
 
-  /**
-   * Returns a filter that its reference is a subset of `outputSet` and it contains the maximum
-   * constraints from `condition`. This is used for predicate push-down
-   * When there is no such filter, `None` is returned.
-   */
-  def extractPredicatesWithinOutputSet(condition: Expression,
-                                                outputSet: AttributeSet): Option[Expression]
+  override def matchCast(expr: Expression): Option[(Expression, DataType, Option[String])] = {
+    expr match {
+      case Cast(child, dataType, timeZoneId, _) => Some((child, dataType, timeZoneId))
+      case _ => None
+    }
+  }
+
+  override def unapplyCastExpression(expr: Expression): Option[(Expression, DataType, Option[String], Boolean)] =
+    expr match {
+      case Cast(castedExpr, dataType, timeZoneId, ansiEnabled) =>
+        Some((castedExpr, dataType, timeZoneId, if (ansiEnabled == EvalMode.ANSI) true else false))
+      case _ => None
+    }
+
+  override protected def unapplyOrderPreservingDateParsing(expr: Expression): Option[Expression] =
+    expr match {
+      case ParseToDate(child, _, _, _) => Some(child)
+      case ParseToTimestamp(child, _, _, _, _) => Some(child)
+      case _ => None
+    }
 }

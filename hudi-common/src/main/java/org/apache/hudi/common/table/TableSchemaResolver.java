@@ -49,8 +49,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -67,10 +66,9 @@ import java.util.stream.Stream;
 /**
  * Helper class to read schema from data files and log files and to convert it between different formats.
  */
+@Slf4j
 @ThreadSafe
 public class TableSchemaResolver {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TableSchemaResolver.class);
 
   protected final HoodieTableMetaClient metaClient;
 
@@ -254,11 +252,11 @@ public class TableSchemaResolver {
               .map(writeStat -> new StoragePath(metaClient.getBasePath(), writeStat.getPath()));
           return Option.of(fetchSchemaFromFiles(filePaths));
         } else {
-          LOG.debug("Could not find any data file written for commit, so could not get schema for table {}", metaClient.getBasePath());
+          log.debug("Could not find any data file written for commit, so could not get schema for table {}", metaClient.getBasePath());
           return Option.empty();
         }
       default:
-        LOG.error("Unknown table type {}", metaClient.getTableType());
+        log.error("Unknown table type {}", metaClient.getTableType());
         throw new InvalidTableException(metaClient.getBasePath().toString());
     }
   }
@@ -373,7 +371,7 @@ public class TableSchemaResolver {
       HoodieSchema tableSchema = getTableSchemaFromDataFile();
       return tableSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD).isPresent();
     } catch (Exception e) {
-      LOG.info("Failed to read operation field from schema ({})", e.getMessage());
+      log.info("Failed to read operation field from schema ({})", e.getMessage());
       return false;
     }
   }

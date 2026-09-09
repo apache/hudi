@@ -72,10 +72,13 @@ public class HoodieConcatHandle<T, I, K, O> extends HoodieWriteMergeHandle<T, I,
   private final Iterator<HoodieRecord<T>> recordItr;
 
   public HoodieConcatHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
+                            MergeContext<T> mergeContext, String partitionPath, String fileId,
                             TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    super(config, instantTime, hoodieTable, Collections.emptyIterator(), partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
-    this.recordItr = recordItr;
+    // The parent must not consume the incoming records into keyToNewRecords: this handle
+    // concatenates them after the existing records instead of merging by key. Hand the parent
+    // an empty iterator (keeping the update count) and keep the real iterator locally.
+    super(config, instantTime, hoodieTable, MergeContext.create(mergeContext.getNumUpdates(), Collections.emptyIterator()), partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
+    this.recordItr = mergeContext.getRecordIterator();
   }
 
   public HoodieConcatHandle(HoodieWriteConfig config, String instantTime, HoodieTable hoodieTable,

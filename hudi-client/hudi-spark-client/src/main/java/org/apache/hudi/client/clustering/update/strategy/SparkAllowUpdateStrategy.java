@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.table.HoodieTable;
 
-import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -35,13 +34,17 @@ import java.util.stream.Collectors;
 public class SparkAllowUpdateStrategy<T> extends BaseSparkUpdateStrategy<T> {
 
   public SparkAllowUpdateStrategy(
-      HoodieEngineContext engineContext, HoodieTable table, Set<HoodieFileGroupId> fileGroupsInPendingClustering) {
-    super(engineContext, table, fileGroupsInPendingClustering);
+      HoodieEngineContext engineContext, HoodieTable table,
+      Set<HoodieFileGroupId> fileGroupsInPendingClustering,
+      Set<HoodieFileGroupId> fileGroupsToBeReplaced) {
+    super(engineContext, table, fileGroupsInPendingClustering, fileGroupsToBeReplaced);
   }
 
   @Override
   public Pair<HoodieData<HoodieRecord<T>>, Set<HoodieFileGroupId>> handleUpdate(HoodieData<HoodieRecord<T>> taggedRecordsRDD) {
-    List<HoodieFileGroupId> fileGroupIdsWithRecordUpdate = getGroupIdsWithUpdate(taggedRecordsRDD);
+    // TODO: also consider fileGroupsToBeReplaced so INSERT_OVERWRITE overlapping with pending
+    // clustering can be rejected/handled here for users who set SparkAllowUpdateStrategy.
+    Set<HoodieFileGroupId> fileGroupIdsWithRecordUpdate = getGroupIdsWithUpdate(taggedRecordsRDD);
     Set<HoodieFileGroupId> fileGroupIdsWithUpdatesAndPendingClustering = fileGroupIdsWithRecordUpdate.stream()
         .filter(fileGroupsInPendingClustering::contains)
         .collect(Collectors.toSet());

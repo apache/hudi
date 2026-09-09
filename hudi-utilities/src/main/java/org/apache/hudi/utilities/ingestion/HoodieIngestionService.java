@@ -27,8 +27,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.streamer.PostWriteTerminationStrategy;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -40,9 +39,8 @@ import static org.apache.hudi.utilities.ingestion.HoodieIngestionService.HoodieI
 /**
  * A generic service to facilitate running data ingestion.
  */
+@Slf4j
 public abstract class HoodieIngestionService extends HoodieAsyncService {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieIngestionService.class);
 
   protected HoodieIngestionConfig ingestionConfig;
 
@@ -59,18 +57,18 @@ public abstract class HoodieIngestionService extends HoodieAsyncService {
    */
   public void startIngestion() {
     if (ingestionConfig.getBoolean(INGESTION_IS_CONTINUOUS)) {
-      LOG.info("Ingestion service starts running in continuous mode");
+      log.info("Ingestion service starts running in continuous mode");
       start(this::onIngestionCompletes);
       try {
         waitForShutdown();
       } catch (Exception e) {
         throw new HoodieIngestionException("Ingestion service was shut down with exception.", e);
       }
-      LOG.info("Ingestion service (continuous mode) has been shut down.");
+      log.info("Ingestion service (continuous mode) has been shut down.");
     } else {
-      LOG.info("Ingestion service starts running in run-once mode");
+      log.info("Ingestion service starts running in run-once mode");
       ingestOnce();
-      LOG.info("Ingestion service (run-once mode) has been shut down.");
+      log.info("Ingestion service (run-once mode) has been shut down.");
     }
   }
 
@@ -121,8 +119,8 @@ public abstract class HoodieIngestionService extends HoodieAsyncService {
       long minSyncInternalSeconds = ingestionConfig.getLongOrDefault(INGESTION_MIN_SYNC_INTERNAL_SECONDS);
       long sleepMs = minSyncInternalSeconds * 1000 - (System.currentTimeMillis() - ingestionStartEpochMillis);
       if (sleepMs > 0) {
-        LOG.info(String.format("Last ingestion took less than min sync interval: %d s; sleep for %.2f s",
-            minSyncInternalSeconds, sleepMs / 1000.0));
+        log.info("Last ingestion took less than min sync interval: {} s; sleep for {} s",
+            minSyncInternalSeconds, sleepMs / 1000.0);
         Thread.sleep(sleepMs);
       }
     } catch (InterruptedException e) {

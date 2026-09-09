@@ -24,7 +24,7 @@
     <parent>
         <artifactId>hudi</artifactId>
         <groupId>org.apache.hudi</groupId>
-        <version>1.2.0</version>
+        <version>1.2.1-rc1</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
     <modelVersion>4.0.0</modelVersion>
@@ -82,9 +82,6 @@
                                     <include>org.apache.httpcomponents:httpcore</include>
                                     <include>io.netty:*</include>
                                     <include>software.amazon.awssdk:*</include>
-                                    <!-- Kinesis KCL and deaggregation for JsonKinesisSource -->
-                                    <include>com.amazonaws:amazon-kinesis-deaggregator</include>
-                                    <include>com.amazonaws:amazon-kinesis-client</include>
                                     <include>io.dropwizard.metrics:metrics-core</include>
                                     <include>com.beust:jcommander</include>
                                     <include>commons-io:commons-io</include>

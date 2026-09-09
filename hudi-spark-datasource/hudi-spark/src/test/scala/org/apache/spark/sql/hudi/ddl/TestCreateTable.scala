@@ -416,6 +416,46 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
           Seq(1, "a1", 10, "2021-04-01")
         )
 
+        // Create table with multi-level partition
+        val tableNameMultiLevelPartition = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableNameMultiLevelPartition using hudi
+             | partitioned by (year, month, day)
+             | tblproperties(
+             |    primaryKey = 'id',
+             |    type = '$tableType'
+             | )
+             | location '${tmp.getCanonicalPath}/$tableNameMultiLevelPartition'
+             | AS
+             | select 1 as id, 'a1' as name, 10 as price, '2021' as year, '04' as month, '01' as day
+         """.stripMargin
+        )
+
+        checkAnswer(s"select id, name, price, year, month, day from $tableNameMultiLevelPartition")(
+          Seq(1, "a1", 10, "2021", "04", "01")
+        )
+
+        // Create table with multi-level partition and out-of-order partition columns
+        val tableNameMultiLevelPartitionDisorder = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableNameMultiLevelPartitionDisorder using hudi
+             | partitioned by (year, month, day)
+             | tblproperties(
+             |    primaryKey = 'id',
+             |    type = '$tableType'
+             | )
+             | location '${tmp.getCanonicalPath}/$tableNameMultiLevelPartitionDisorder'
+             | AS
+             | select 1 as id, 'a1' as name, 10 as price, '04' as month, '01' as day, '2021' as year
+         """.stripMargin
+        )
+
+        checkAnswer(s"select id, name, price, year, month, day from $tableNameMultiLevelPartitionDisorder")(
+          Seq(1, "a1", 10, "2021", "04", "01")
+        )
+
         // Create Partitioned table with timestamp data type
         val tableName3 = generateTableName
         // CTAS failed with null primaryKey
@@ -2024,6 +2064,11 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       // Verify structure matches blob schema
       assertTrue(videoField.dataType.isInstanceOf[StructType])
       assertEquals(BlobType(), videoField.dataType)
+
+      // The catalog-stored copy of the schema must retain the hudi_type metadata too
+      val catalogField = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
+        .schema.find(_.name == "video").get
+      assertEquals(HoodieSchemaType.BLOB.name(), catalogField.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
     }
   }
 
@@ -2143,6 +2188,11 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       assertEquals("VECTOR(128)", embeddingField.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
       assertEquals("document embedding", embeddingField.metadata.getString("comment"))
       assertEquals(ArrayType(FloatType, containsNull = false), embeddingField.dataType)
+
+      // The catalog-stored copy of the schema must retain the hudi_type metadata too
+      val catalogField = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
+        .schema.find(_.name == "embedding").get
+      assertEquals("VECTOR(128)", catalogField.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
     }
   }
 

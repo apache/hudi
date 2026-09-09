@@ -39,6 +39,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.source.ExpressionPredicates;
@@ -98,18 +99,30 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       HoodieSchema dataSchema,
       HoodieSchema requiredSchema,
       HoodieStorage storage) throws IOException {
-    if (filePath.toString().endsWith(HoodieFileFormat.LANCE.getFileExtension())) {
-      throw new UnsupportedOperationException(HoodieFileFormat.LANCE_SPARK_ONLY_ERROR_MSG);
-    }
     boolean isLogFile = FSUtils.isLogFile(filePath);
     // disable schema evolution in fileReader if it's log file, since schema evolution for log file is handled in `FileGroupRecordBuffer`
     InternalSchemaManager schemaManager = isLogFile ? InternalSchemaManager.DISABLED : internalSchemaManager.get();
 
+    if (filePath.getName().endsWith(HoodieFileFormat.LANCE.getFileExtension())) {
+      if (schemaManager != InternalSchemaManager.DISABLED) {
+        throw new HoodieValidationException("Flink Lance base-file support does not support schema evolution.");
+      }
+      HoodieRowDataLanceReader rowDataLanceReader =
+          (HoodieRowDataLanceReader) HoodieIOFactory.getIOFactory(storage)
+              .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)
+              .getFileReader(tableConfig, filePath, HoodieFileFormat.LANCE, Option.empty());
+      try {
+        return rowDataLanceReader.getRowDataIterator(RowDataQueryContexts.fromSchema(requiredSchema).getRowType(), requiredSchema);
+      } catch (RuntimeException e) {
+        rowDataLanceReader.close();
+        throw new HoodieException("Failed to get iterator from lance reader", e);
+      }
+    }
+    DataType rowType = RowDataQueryContexts.fromSchema(dataSchema).getRowType();
     HoodieRowDataParquetReader rowDataParquetReader =
         (HoodieRowDataParquetReader) HoodieIOFactory.getIOFactory(storage)
             .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)
             .getFileReader(tableConfig, filePath, HoodieFileFormat.PARQUET, Option.empty());
-    DataType rowType = RowDataQueryContexts.fromSchema(dataSchema).getRowType();
     return rowDataParquetReader.getRowDataIterator(schemaManager, rowType, requiredSchema, getSafePredicates(requiredSchema));
   }
 

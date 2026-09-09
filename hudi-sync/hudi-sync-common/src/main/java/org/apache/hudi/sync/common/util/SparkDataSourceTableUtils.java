@@ -38,6 +38,17 @@ public class SparkDataSourceTableUtils {
    */
   public static Map<String, String> getSparkTableProperties(List<String> partitionNames, String sparkVersion,
                                                             int schemaLengthThreshold, HoodieSchema schema) {
+    return getSparkTableProperties(partitionNames, sparkVersion, schemaLengthThreshold, schema, false);
+  }
+
+  /**
+   * Get Spark Sql related table properties. This is used for spark datasource table.
+   * @param schema           The schema to write to the table.
+   * @param includeFieldDocs Whether to include the field docs as column comments in the serialized spark schema.
+   * @return A new parameters added the spark's table properties.
+   */
+  public static Map<String, String> getSparkTableProperties(List<String> partitionNames, String sparkVersion,
+                                                            int schemaLengthThreshold, HoodieSchema schema, boolean includeFieldDocs) {
     // Convert the schema and partition info used by spark sql to hive table properties.
     // The following code refers to the spark code in
     // https://github.com/apache/spark/blob/master/sql/hive/src/main/scala/org/apache/spark/sql/hive/HiveExternalCatalog.scala
@@ -73,7 +84,7 @@ public class SparkDataSourceTableUtils {
       sparkProperties.put("spark.sql.create.version", sparkVersion);
     }
     // Split the schema string to multi-parts according the schemaLengthThreshold size.
-    String schemaString = SparkSchemaUtils.convertToSparkSchemaJson(reOrderedSchema);
+    String schemaString = SparkSchemaUtils.convertToSparkSchemaJson(reOrderedSchema, includeFieldDocs);
     int numSchemaPart = (schemaString.length() + schemaLengthThreshold - 1) / schemaLengthThreshold;
     sparkProperties.put("spark.sql.sources.schema.numParts", String.valueOf(numSchemaPart));
     // Add each part of schema string to sparkProperties

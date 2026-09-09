@@ -145,11 +145,13 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     LOG.debug("Creating HoodieFileGroupReaderRecordReader with tableBasePath={}, latestCommitTime={}, fileSplit={}", tableBasePath, latestCommitTime, fileSplit.getPath());
     FileSlice fileSlice = getFileSliceFromSplit(fileSplit, getFs(tableBasePath, jobConfCopy), tableBasePath);
     this.containsBaseFile = fileSlice.getBaseFile().isPresent();
-    this.recordIterator = HoodieFileGroupReader.<ArrayWritable>newBuilder()
+    this.recordIterator = HoodieFileGroupReader.<ArrayWritable>builder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metaClient)
         .withLatestCommitTime(latestCommitTime)
-        .withFileSlice(fileSlice)
+        .withBaseFileOption(fileSlice.getBaseFile())
+        .withLogFiles(fileSlice.getLogFiles())
+        .withPartitionPath(fileSlice.getPartitionPath())
         .withDataSchema(tableSchema)
         .withRequestedSchema(requestedSchema)
         .withProps(props)

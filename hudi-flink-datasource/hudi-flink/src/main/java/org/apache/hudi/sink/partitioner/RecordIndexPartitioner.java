@@ -19,12 +19,12 @@
 package org.apache.hudi.sink.partitioner;
 
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.hash.BucketIndexUtil;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
@@ -34,7 +34,6 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.flink.api.common.functions.Partitioner;
 import org.apache.flink.configuration.Configuration;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -77,7 +76,7 @@ public class RecordIndexPartitioner implements Partitioner<HoodieKey> {
     if (partitionedRLIFileGroupCounts == null) {
       partitionedRLIFileGroupCounts = getPartitionedRLIFileGroupCounts();
     }
-    int fileGroupCount = getFileGroupCountForPartitionedRLI(recordKey.getPartitionPath());
+    int fileGroupCount = partitionedRLIFileGroupCounts.computeIfAbsent(recordKey.getPartitionPath(), s -> OptionsResolver.estimateFileGroupCountForRLI(conf));
     int fgIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(recordKey.getRecordKey(), fileGroupCount);
     if (partitionIndexFunc == null) {
       partitionIndexFunc = BucketIndexUtil.getPartitionIndexFunc(numPartitions);
@@ -91,7 +90,7 @@ public class RecordIndexPartitioner implements Partitioner<HoodieKey> {
   private Map<String, Integer> getPartitionedRLIFileGroupCounts() {
     HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
     if (!metaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX)) {
-      return Collections.emptyMap();
+      return new HashMap<>();
     }
     try (HoodieTableMetadata metadataTable = metaClient.getTableFormat().getMetadataFactory().create(
         HoodieFlinkEngineContext.DEFAULT,
@@ -105,25 +104,5 @@ public class RecordIndexPartitioner implements Partitioner<HoodieKey> {
     } catch (Exception e) {
       throw new HoodieException("Failed to get file group counts for partitioned record index.", e);
     }
-  }
-
-  /**
-   * Get the partitioned record index file group count for the given data partition.
-   */
-  private int getFileGroupCountForPartitionedRLI(String partitionPath) {
-    int fileGroupCount = partitionedRLIFileGroupCounts.getOrDefault(partitionPath, 0);
-    // HoodieBackedTableMetadataWriter initializes record-index file groups for a newly seen
-    // data partition with RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP, so the writer-side
-    // partitioner should use the same count before that partition appears in the MDT view.
-    return fileGroupCount > 0 ? fileGroupCount : getMinFileGroupCountForPartitionedRLI();
-  }
-
-  /**
-   * Get the minimum file group count used to initialize newly seen partitioned record index partitions.
-   */
-  private int getMinFileGroupCountForPartitionedRLI() {
-    return Integer.parseInt(conf.getString(
-        HoodieMetadataConfig.RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(),
-        HoodieMetadataConfig.RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.defaultValue().toString()));
   }
 }

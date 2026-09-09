@@ -124,11 +124,11 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServi
 
   @Nullable
   private HoodieCompactionPlan scheduleCompaction() {
-    log.info("Checking if compaction needs to be run on " + config.getBasePath());
+    log.info("Checking if compaction needs to be run on {}", config.getBasePath());
     // judge if we need to compact according to num delta commits and time elapsed
     boolean compactable = needCompact(config.getInlineCompactTriggerStrategy());
     if (compactable) {
-      log.info("Generating compaction plan for merge on read table " + config.getBasePath());
+      log.info("Generating compaction plan for merge on read table {}", config.getBasePath());
       try {
         context.setJobStatus(this.getClass().getSimpleName(), "Compaction: generating compaction plan");
         return planGenerator.generateCompactionPlan(instantTime);

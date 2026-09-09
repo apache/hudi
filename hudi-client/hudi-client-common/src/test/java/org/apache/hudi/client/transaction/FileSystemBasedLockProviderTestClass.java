@@ -42,7 +42,14 @@ import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_RETRY
  */
 public class FileSystemBasedLockProviderTestClass implements LockProvider<String>, Serializable {
 
-  private static final String LOCK = "lock";
+  private static final String LOCK_FILE_NAME = "lock";
+  /**
+   * Guards this provider's lock-file operations. Must not be the {@code "lock"} String constant: that is
+   * interned and shared JVM-wide, so any other class synchronizing on the same literal contends on the very
+   * same monitor. Same defect as the one fixed in {@link
+   * org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider}.
+   */
+  private static final Object LOCK_FILE_MONITOR = new Object();
 
   private final int retryMaxCount;
   private final int retryWaitTimeMs;
@@ -55,13 +62,13 @@ public class FileSystemBasedLockProviderTestClass implements LockProvider<String
     final String lockDirectory = lockConfiguration.getConfig().getString(FILESYSTEM_LOCK_PATH_PROP_KEY);
     this.retryWaitTimeMs = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY);
     this.retryMaxCount = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY);
-    this.lockFile = new StoragePath(lockDirectory + "/" + LOCK);
+    this.lockFile = new StoragePath(lockDirectory + "/" + LOCK_FILE_NAME);
     this.storage = HoodieStorageUtils.getStorage(this.lockFile.toString(), configuration);
   }
 
   @Override
   public void close() {
-    synchronized (LOCK) {
+    synchronized (LOCK_FILE_MONITOR) {
       try {
         storage.deleteDirectory(this.lockFile);
       } catch (IOException e) {
@@ -74,9 +81,9 @@ public class FileSystemBasedLockProviderTestClass implements LockProvider<String
   public boolean tryLock(long time, TimeUnit unit) {
     try {
       int numRetries = 0;
-      synchronized (LOCK) {
+      synchronized (LOCK_FILE_MONITOR) {
         while (storage.exists(this.lockFile)) {
-          LOCK.wait(retryWaitTimeMs);
+          LOCK_FILE_MONITOR.wait(retryWaitTimeMs);
           numRetries++;
           if (numRetries > retryMaxCount) {
             return false;
@@ -92,7 +99,7 @@ public class FileSystemBasedLockProviderTestClass implements LockProvider<String
 
   @Override
   public void unlock() {
-    synchronized (LOCK) {
+    synchronized (LOCK_FILE_MONITOR) {
       try {
         if (storage.exists(this.lockFile)) {
           storage.deleteDirectory(this.lockFile);

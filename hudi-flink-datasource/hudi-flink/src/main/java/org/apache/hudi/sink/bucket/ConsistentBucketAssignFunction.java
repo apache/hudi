@@ -68,7 +68,7 @@ public class ConsistentBucketAssignFunction extends ProcessFunctionAdapter<Hoodi
 
   public ConsistentBucketAssignFunction(Configuration conf) {
     this.config = conf;
-    this.indexKeyFields = Arrays.asList(OptionsResolver.getIndexKeyField(conf).split(","));
+    this.indexKeyFields = Arrays.asList(OptionsResolver.getBucketIndexKeys(conf));
     this.bucketNum = conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
   }
 

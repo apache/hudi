@@ -87,7 +87,7 @@ public abstract class SparkExternalFileClusteringExecutionStrategy<T extends Hoo
       try {
         getHoodieTable().getStorage().deleteFile(writeHandler.getPath());
       } catch (Exception deleteEx) {
-        LOG.warn("Failed to clean up partial output file: " + writeHandler.getPath(), deleteEx);
+        LOG.warn("Failed to clean up partial output file: {}", writeHandler.getPath(), deleteEx);
       }
       throw new HoodieClusteringException("Failed to transform file: " + dataFilePathStr, e);
     }

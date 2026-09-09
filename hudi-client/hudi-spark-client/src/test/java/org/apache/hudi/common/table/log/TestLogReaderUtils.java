@@ -43,6 +43,8 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.List;
@@ -50,6 +52,7 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.testutils.Assertions.assertFileSizesEqual;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -128,6 +131,61 @@ public class TestLogReaderUtils extends SparkClientFunctionalTestHarness {
       assertNotNull(allLogFiles);
       assertTrue(allLogFiles.size() >= logFilesWithMaxCommit.size(),
           "Should have same or more log files when including third commit");
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {6, 9}) // SIX appends to the existing log file (logOffset > 0); NINE writes fresh files (logOffset == 0)
+  public void testLogFileWriteStatSizeMatchesOnDisk(int writeTableVersion) throws Exception {
+    // HoodieAppendHandle derives each log file's on-disk size from the AppendResult
+    // (logOffset + accumulated appended bytes) instead of a getPathInfo per file. Validate that the
+    // derived size in the write stat matches the actual on-disk log file length.
+    //
+    // The "logOffset +" term only contributes when a delta commit appends to a pre-existing log file:
+    //   - table version >= EIGHT (e.g. NINE): each delta commit writes a fresh instant-named log file
+    //     from offset 0, so logOffset is always 0;
+    //   - table version SIX: the second upsert appends to the first commit's log file, so logOffset
+    //     is > 0 and the derived sum is actually exercised.
+    // Running both covers the derivation with and without a non-zero offset.
+    Properties props = new Properties();
+    props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), String.valueOf(writeTableVersion));
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(
+        storageConf(), basePath(), props, HoodieTableType.MERGE_ON_READ);
+
+    HoodieWriteConfig config = getConfigBuilder(true)
+        .withPath(basePath())
+        .withWriteTableVersion(writeTableVersion)
+        .withAutoUpgradeVersion(false)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withInlineCompaction(false)
+            .compactionSmallFileSize(0)
+            .build())
+        .build();
+
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
+
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
+      // First commit - insert data (base files)
+      String firstCommit = "001";
+      WriteClientTestUtils.startCommitWithTime(client, firstCommit);
+      JavaRDD<WriteStatus> insertRdd = client.insert(jsc().parallelize(dataGen.generateInserts(firstCommit, 100), 1), firstCommit);
+      assertNoWriteErrors(insertRdd.collect());
+      client.commit(firstCommit, insertRdd);
+
+      // Two upsert commits. Under version SIX the second commit appends to the first's log file
+      // (logOffset > 0); under version >= EIGHT each commit writes a fresh log file (logOffset == 0).
+      for (String commitTime : new String[] {"002", "003"}) {
+        WriteClientTestUtils.startCommitWithTime(client, commitTime);
+        JavaRDD<WriteStatus> upsertRdd = client.upsert(jsc().parallelize(dataGen.generateUpdates(commitTime, 50), 1), commitTime);
+        List<WriteStatus> statuses = upsertRdd.collect();
+        assertNoWriteErrors(statuses);
+        assertLogFilesProduced(statuses);
+        client.commit(commitTime, upsertRdd);
+        // Derived log file size (logOffset + appended bytes) must equal the actual on-disk length
+        assertFileSizesEqual(statuses, status -> FSUtils.getFileSize(
+            metaClient.getStorage(),
+            new StoragePath(config.getBasePath(), status.getStat().getPath())));
+      }
     }
   }
 

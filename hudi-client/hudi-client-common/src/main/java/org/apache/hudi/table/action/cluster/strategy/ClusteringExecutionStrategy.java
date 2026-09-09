@@ -107,7 +107,11 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
 
   protected TypedProperties getReaderProperties(long maxMemory) {
     HoodieWriteConfig config = getWriteConfig();
-    TypedProperties props = new TypedProperties();
+    // Seed from the full write config so that merge-related properties (e.g. the custom record
+    // merger impl classes, merge mode and strategy id) are propagated to the file group reader.
+    // Without this, reading source file groups with a CUSTOM merge mode fails to resolve the
+    // configured merger (HUDI-18980). This mirrors the compaction read path.
+    TypedProperties props = TypedProperties.copy(config.getProps());
     props.setProperty(SPILLABLE_MAP_BASE_PATH.key(), config.getSpillableMapBasePath());
     props.setProperty(SPILLABLE_DISK_MAP_TYPE.key(), config.getCommonConfig().getSpillableDiskMapType().toString());
     props.setProperty(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), Boolean.toString(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled()));
@@ -142,9 +146,18 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
                                                                    ReaderContextFactory<R> readerContextFactory, String instantTime,
                                                                    TypedProperties properties, boolean usePosition) {
     HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
-    return HoodieFileGroupReader.<R>newBuilder()
-        .withReaderContext(readerContext).withHoodieTableMetaClient(metaClient).withLatestCommitTime(instantTime)
-        .withFileSlice(fileSlice).withDataSchema(readerSchema).withRequestedSchema(readerSchema).withInternalSchema(internalSchemaOption)
-        .withShouldUseRecordPosition(usePosition).withProps(properties).build();
+    return HoodieFileGroupReader.<R>builder()
+        .withReaderContext(readerContext)
+        .withHoodieTableMetaClient(metaClient)
+        .withLatestCommitTime(instantTime)
+        .withBaseFileOption(fileSlice.getBaseFile())
+        .withLogFiles(fileSlice.getLogFiles())
+        .withPartitionPath(fileSlice.getPartitionPath())
+        .withDataSchema(readerSchema)
+        .withRequestedSchema(readerSchema)
+        .withInternalSchemaOpt(internalSchemaOption)
+        .withShouldUseRecordPosition(usePosition)
+        .withProps(properties)
+        .build();
   }
 }

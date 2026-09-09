@@ -68,7 +68,7 @@ public class ViewStorageProperties {
    */
   public static FileSystemViewStorageConfig loadFromProperties(String basePath, Configuration conf) {
     Path propertyPath = getPropertiesFilePath(basePath, conf.get(FlinkOptions.WRITE_CLIENT_ID));
-    log.info("Loading filesystem view storage properties from " + propertyPath);
+    log.info("Loading filesystem view storage properties from {}", propertyPath);
     FileSystem fs = HadoopFSUtils.getFs(basePath, HadoopConfigurations.getHadoopConf(conf));
     Properties props = new Properties();
     try {

@@ -42,6 +42,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
@@ -164,6 +165,59 @@ public class TestZookeeperBasedLockProvider {
     Assertions.assertEquals(IllegalArgumentException.class, ex.getCause().getCause().getClass());
   }
 
+  /**
+   * Build an implicit-provider lock config for {@code hudiTableBasePath}, independent of the
+   * shared fixtures above (those are mutated progressively in {@link #setup()}).
+   */
+  private static LockConfiguration implicitLockConfig(String hudiTableBasePath) {
+    Properties props = new Properties();
+    props.setProperty(ZK_CONNECT_URL_PROP_KEY, server.getConnectString());
+    props.setProperty(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "1000");
+    props.setProperty(LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS_PROP_KEY, "3000");
+    props.setProperty(LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY, "3");
+    props.setProperty(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY, "3");
+    props.setProperty(ZK_SESSION_TIMEOUT_MS_PROP_KEY, "10000");
+    props.setProperty(ZK_CONNECTION_TIMEOUT_MS_PROP_KEY, "10000");
+    props.setProperty(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "1000");
+    props.setProperty(HoodieCommonConfig.BASE_PATH.key(), hudiTableBasePath);
+    props.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_KEY, "ma_po_tofu_is_awesome");
+    return new LockConfiguration(props);
+  }
+
+  /**
+   * Two writers on the SAME table whose base paths differ only by a trailing slash must contend
+   * for one znode. Before the base path was canonicalized they hashed to two different znodes and
+   * both acquired, silently losing mutual exclusion and letting concurrent writers corrupt the
+   * timeline. This is the end-to-end guard for that; the pure-function coverage lives in
+   * {@code TestZookeeperBasedImplicitBasePathLockProvider}.
+   */
+  @Test
+  void testTrailingSlashBasePathContendsForTheSameLock() {
+    String tableBasePath = "s3://my-bucket-8b2a4b30/1718662238400/be715573/my_lake/contended_table";
+    // Each constructor starts its own curator client, so they are nested rather than created
+    // side by side: if writerB's constructor throws, writerA still gets closed.
+    ZookeeperBasedImplicitBasePathLockProvider writerA =
+        new ZookeeperBasedImplicitBasePathLockProvider(implicitLockConfig(tableBasePath), null);
+    try {
+      ZookeeperBasedImplicitBasePathLockProvider writerB =
+          new ZookeeperBasedImplicitBasePathLockProvider(implicitLockConfig(tableBasePath + "/"), null);
+      try {
+        Assertions.assertTrue(writerA.tryLock(1000, TimeUnit.MILLISECONDS));
+        // BaseZookeeperBasedLockProvider#tryLock throws rather than returning false when the
+        // mutex cannot be acquired within the timeout.
+        Assertions.assertThrows(HoodieLockException.class,
+            () -> writerB.tryLock(1000, TimeUnit.MILLISECONDS),
+            "Writer B derived a different znode for the same table and lost mutual exclusion");
+      } finally {
+        // close() releases the lock if held and then shuts the curator client down, so it
+        // covers unlock() as well and never throws.
+        writerB.close();
+      }
+    } finally {
+      writerA.close();
+    }
+  }
+
   @Test
   public void testUnLock() {
     ZookeeperBasedLockProvider zookeeperBasedLockProvider = new ZookeeperBasedLockProvider(zkConfWithZkBasePathAndLockKeyLock, null);
@@ -193,5 +247,25 @@ public class TestZookeeperBasedLockProvider {
   public void testUnlockWithoutLock() {
     ZookeeperBasedLockProvider zookeeperBasedLockProvider = new ZookeeperBasedLockProvider(zkConfWithZkBasePathAndLockKeyLock, null);
     zookeeperBasedLockProvider.unlock();
+  }
+
+  @Test
+  public void testFailFastWhenZkUnreachable() {
+    Properties properties = new Properties();
+    // Nothing listens on 127.0.0.1:1, so the connect-wait must time out instead of hanging.
+    properties.setProperty(ZK_CONNECT_URL_PROP_KEY, "127.0.0.1:1");
+    properties.setProperty(ZK_BASE_PATH_PROP_KEY, basePath);
+    properties.setProperty(ZK_LOCK_KEY_PROP_KEY, key);
+    properties.setProperty(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "100");
+    properties.setProperty(LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS_PROP_KEY, "300");
+    properties.setProperty(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY, "1");
+    properties.setProperty(ZK_SESSION_TIMEOUT_MS_PROP_KEY, "1000");
+    properties.setProperty(ZK_CONNECTION_TIMEOUT_MS_PROP_KEY, "1000");
+    LockConfiguration unreachable = new LockConfiguration(properties);
+    // Construction must fail fast (seconds, bounded by the connection timeout) with a
+    // HoodieLockException instead of being amplified into a multi-minute retry hang.
+    Assertions.assertTimeoutPreemptively(Duration.ofSeconds(15), () ->
+        Assertions.assertThrows(HoodieLockException.class,
+            () -> new ZookeeperBasedLockProvider(unreachable, null)));
   }
 }

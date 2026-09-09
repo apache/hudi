@@ -35,8 +35,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePathInfo;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.File;
 import java.io.IOException;
@@ -48,9 +47,8 @@ import java.util.stream.Stream;
 /**
  * Table FileSystemView implementation where view is stored in spillable disk using fixed memory.
  */
+@Slf4j
 public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SpillableMapBasedFileSystemView.class);
 
   private final long maxMemoryForFileGroupMap;
   private final long maxMemoryForPendingCompaction;
@@ -75,7 +73,7 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
     new File(baseStoreDir).mkdirs();
     diskMapType = commonConfig.getSpillableDiskMapType();
     isBitCaskDiskMapCompressionEnabled = commonConfig.isBitCaskDiskMapCompressionEnabled();
-    LOG.info("Initializing SpillableMapBasedFileSystemView with memory configs: "
+    log.info("Initializing SpillableMapBasedFileSystemView with memory configs: "
             + "maxMemoryForFileGroupMap={}, maxMemoryForPendingCompaction={}, maxMemoryForPendingLogCompaction={}, "
             + "maxMemoryForBootstrapBaseFile={}, maxMemoryForReplaceFileGroups={}, maxMemoryForClusteringFileGroups={}, baseStoreDir={}",
         maxMemoryForFileGroupMap, maxMemoryForPendingCompaction, maxMemoryForPendingLogCompaction,
@@ -225,14 +223,18 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
   }
 
   @Override
-  public void close() {
+  protected void closeResources() throws Exception {
+    // Close ExternalSpillableMaps (which hold RocksDB handles) while the writeLock is held
+    // by AbstractTableFileSystemView.close(). This prevents a race where a concurrent reader
+    // holding readLock could be mid-call in RocksDBDAO.put() when the handles are cleared,
+    // causing a NullPointerException at RocksDB.put(null_handle, ...).
+    super.closeResources();
     closeFileGroupsMapIfPresent();
     closePendingClusteringMapIfPresent();
     closePendingCompactionMapIfPresent();
     closePendingLogCompactionMapIfPresent();
     closeBootstrapFileMapIfPresent();
     closeReplaceInstantsMapIfPresent();
-    super.close();
   }
 
   private void closeReplaceInstantsMapIfPresent() {

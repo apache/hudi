@@ -95,7 +95,7 @@ public class HoodieIndexingConfig extends HoodieConfig {
       .withDocumentation("Index definition checksum is used to guard against partial writes in HDFS. "
           + "It is added as the last entry in index.properties and then used to validate while reading table config.");
 
-  private static final String INDEX_DEFINITION_CHECKSUM_FORMAT = "%s.%s"; // <index_name>.<index_type>
+  private static final String INDEX_DEFINITION_CHECKSUM_FORMAT = "%s.%s"; // <index_type>.<index_name>
 
   public HoodieIndexingConfig() {
     super();
@@ -208,9 +208,9 @@ public class HoodieIndexingConfig extends HoodieConfig {
     if (!props.containsKey(INDEX_NAME.key())) {
       throw new IllegalArgumentException(INDEX_NAME.key() + " property needs to be specified");
     }
-    String table = props.getProperty(INDEX_NAME.key());
-    String database = props.getProperty(INDEX_TYPE.key(), "");
-    return BinaryUtil.generateChecksum(getUTF8Bytes(String.format(INDEX_DEFINITION_CHECKSUM_FORMAT, database, table)));
+    String indexName = props.getProperty(INDEX_NAME.key());
+    String indexType = props.getProperty(INDEX_TYPE.key(), "");
+    return BinaryUtil.generateChecksum(getUTF8Bytes(String.format(INDEX_DEFINITION_CHECKSUM_FORMAT, indexType, indexName)));
   }
 
   public static boolean validateChecksum(Properties props) {

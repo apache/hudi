@@ -22,6 +22,7 @@ package org.apache.hudi.table;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -57,6 +58,7 @@ import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -84,6 +86,12 @@ import static org.mockito.Mockito.when;
 public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderBase<RowData> {
   private Configuration conf;
   private Option<InstantRange> instantRangeOpt = Option.empty();
+
+  @BeforeAll
+  public static void setUpClass() {
+    // add the lance format when composition type is supported
+    supportedFileFormats = Collections.singletonList(HoodieFileFormat.PARQUET);
+  }
 
   @BeforeEach
   public void setup() {

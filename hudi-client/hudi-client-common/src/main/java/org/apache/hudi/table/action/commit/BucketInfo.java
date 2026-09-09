@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.io.MergeContext;
+
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -34,12 +36,23 @@ public class BucketInfo implements Serializable {
   BucketType bucketType;
   String fileIdPrefix;
   String partitionPath;
+  // The number of update and delete records from input based on tagging. Populated only by the
+  // Spark and Java upsert partitioners, which report 0 (known none) for INSERT buckets and
+  // insert-only small-file buckets; other producers (e.g., bucket index, insert overwrite,
+  // metadata table, Flink) leave it at MergeContext.UNKNOWN_NUM_UPDATES. Intentionally excluded
+  // from equals/hashCode: bucket identity is (bucketType, fileIdPrefix, partitionPath).
+  long numUpdates;
+
+  public BucketInfo(BucketType bucketType, String fileIdPrefix, String partitionPath) {
+    this(bucketType, fileIdPrefix, partitionPath, MergeContext.UNKNOWN_NUM_UPDATES);
+  }
 
   @Override
   public String toString() {
     return "BucketInfo {" + "bucketType=" + bucketType + ", "
         + "fileIdPrefix=" + fileIdPrefix + ", "
-        + "partitionPath=" + partitionPath
+        + "partitionPath=" + partitionPath + ", "
+        + "numUpdates=" + numUpdates
         + '}';
   }
 

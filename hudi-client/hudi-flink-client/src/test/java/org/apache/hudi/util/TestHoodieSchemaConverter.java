@@ -40,6 +40,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -693,23 +695,16 @@ public class TestHoodieSchemaConverter {
 
   @Test
   public void testVariantTypeConversion() {
-    // Test direct Variant conversion
     HoodieSchema variantSchema = HoodieSchema.createVariant();
     DataType dataType = HoodieSchemaConverter.convertToDataType(variantSchema);
     assertNotNull(dataType);
 
-    // Verify it's a ROW with metadata and value binary fields
-    RowType rowType = (RowType) dataType.getLogicalType();
-    assertEquals(2, rowType.getFieldCount());
-    assertEquals("metadata", rowType.getFieldNames().get(0));
-    assertEquals("value", rowType.getFieldNames().get(1));
-    assertInstanceOf(VarBinaryType.class, rowType.getTypeAt(0));
-    assertInstanceOf(VarBinaryType.class, rowType.getTypeAt(1));
+    assertThat("the return type should be variant",
+        dataType.getLogicalType().asSummaryString(), is("VARIANT NOT NULL"));
   }
 
   @Test
   public void testVariantInRecordConversion() {
-    // Test Variant field within a record
     HoodieSchema recordWithVariant = HoodieSchema.createRecord(
         "test_record",
         null,
@@ -724,11 +719,38 @@ public class TestHoodieSchemaConverter {
     assertEquals(2, result.getFieldCount());
     assertEquals("data", result.getFieldNames().get(1));
 
-    // Verify variant field is a ROW<metadata BYTES, value BYTES>
-    RowType variantRowType = (RowType) result.getTypeAt(1);
-    assertEquals(2, variantRowType.getFieldCount());
-    assertEquals("metadata", variantRowType.getFieldNames().get(0));
-    assertEquals("value", variantRowType.getFieldNames().get(1));
+    assertThat("the return type should be variant",
+        result.getTypeAt(1).asSummaryString(), is("VARIANT NOT NULL"));
+  }
+
+  @Test
+  public void testVariantInArrayConversion() {
+    HoodieSchema arrayOfVariant = HoodieSchema.createArray(HoodieSchema.createVariant());
+    DataType dataType = HoodieSchemaConverter.convertToDataType(arrayOfVariant);
+    assertNotNull(dataType);
+    assertInstanceOf(ArrayType.class, dataType.getLogicalType());
+    LogicalType elementType = ((ArrayType) dataType.getLogicalType()).getElementType();
+    assertEquals("VARIANT", elementType.getTypeRoot().name());
+  }
+
+  @Test
+  public void testVariantInMapConversion() {
+    HoodieSchema mapOfVariant = HoodieSchema.createMap(HoodieSchema.createVariant());
+    DataType dataType = HoodieSchemaConverter.convertToDataType(mapOfVariant);
+    assertNotNull(dataType);
+    assertInstanceOf(MapType.class, dataType.getLogicalType());
+    LogicalType valueType = ((MapType) dataType.getLogicalType()).getValueType();
+    assertEquals("VARIANT", valueType.getTypeRoot().name());
+  }
+
+  @Test
+  public void testShreddedVariantConversionThrows() {
+    HoodieSchema.Variant shredded = HoodieSchema.createVariantShredded(
+        HoodieSchema.create(HoodieSchemaType.STRING));
+    UnsupportedOperationException ex = assertThrows(
+        UnsupportedOperationException.class,
+        () -> HoodieSchemaConverter.convertToDataType(shredded));
+    assertTrue(ex.getMessage().contains("Shredded Variant is not yet supported in Flink"));
   }
 
   @Test
@@ -748,6 +770,23 @@ public class TestHoodieSchemaConverter {
     RowType blobLikeRowType = (RowType) blobLikeRow.getLogicalType();
     HoodieSchema convertedSchema = HoodieSchemaConverter.convertToSchema(blobLikeRowType);
     assertEquals(HoodieSchemaType.BLOB, convertedSchema.getType());
+
+    // Positive case: same structure but every nested field nullable. Flink SQL CREATE TABLE does not
+    // preserve NOT NULL on nested ROW fields, so detection must not depend on nested nullability.
+    DataType allNullableBlobRow = DataTypes.ROW(
+        DataTypes.FIELD(HoodieSchema.Blob.TYPE, DataTypes.STRING().nullable()),
+        DataTypes.FIELD(HoodieSchema.Blob.INLINE_DATA_FIELD, DataTypes.BYTES().nullable()),
+        DataTypes.FIELD(HoodieSchema.Blob.EXTERNAL_REFERENCE, DataTypes.ROW(
+            DataTypes.FIELD(HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH, DataTypes.STRING().nullable()),
+            DataTypes.FIELD(HoodieSchema.Blob.EXTERNAL_REFERENCE_OFFSET, DataTypes.BIGINT().nullable()),
+            DataTypes.FIELD(HoodieSchema.Blob.EXTERNAL_REFERENCE_LENGTH, DataTypes.BIGINT().nullable()),
+            DataTypes.FIELD(HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED, DataTypes.BOOLEAN().nullable())
+        ).nullable())
+    ).notNull();
+
+    RowType allNullableBlobRowType = (RowType) allNullableBlobRow.getLogicalType();
+    HoodieSchema allNullableConverted = HoodieSchemaConverter.convertToSchema(allNullableBlobRowType);
+    assertEquals(HoodieSchemaType.BLOB, allNullableConverted.getType());
 
     // Negative case 1: Different field names
     DataType differentNames = DataTypes.ROW(

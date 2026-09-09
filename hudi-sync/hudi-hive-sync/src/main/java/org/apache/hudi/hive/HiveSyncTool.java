@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.sync.common.HoodieSyncClient;
@@ -51,6 +52,8 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getInputFormatClassName;
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getOutputFormatClassName;
@@ -211,7 +214,14 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
             syncHoodieTable(snapshotTableName, true, false);
             // sync origin table for MOR
             if (config.getBoolean(META_SYNC_SNAPSHOT_WITH_TABLE_NAME)) {
-              syncHoodieTable(tableName, true, false);
+              if (config.getBoolean(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE)) {
+                log.warn("{}=true claims the bare table name '{}' for the read-optimized view; "
+                        + "ignoring {} for this table (the real-time view remains registered as '{}').",
+                    HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE.key(), tableId(databaseName, tableName),
+                    META_SYNC_SNAPSHOT_WITH_TABLE_NAME.key(), snapshotTableName);
+              } else {
+                syncHoodieTable(tableName, true, false);
+              }
             }
         }
         break;
@@ -268,7 +278,8 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
 
       boolean partitionsChanged = validateAndSyncPartitions(tableName, tableExists);
       boolean meetSyncConditions = schemaChanged || propertiesChanged || partitionsChanged;
-      if (!config.getBoolean(META_SYNC_CONDITIONAL_SYNC) || meetSyncConditions) {
+      if (!config.getBoolean(META_SYNC_CONDITIONAL_SYNC) || meetSyncConditions
+          || isLastCommitTimeSyncedBehindTimelineMidpoint(tableName)) {
         syncClient.updateLastCommitTimeSynced(tableName);
       }
       syncClient.updateHoodieWriterVersion(tableName);
@@ -281,6 +292,28 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
         throw new HoodieHiveSyncException("failed to sync the table " + tableName, ex);
       }
     }
+  }
+
+  /**
+   * Whether last commit time synced trails the midpoint of the completed commit instants.
+   * Advancing it at the midpoint bounds how far it can fall behind, capping the archived-timeline
+   * scans a stale value forces on every conditional-sync round.
+   */
+  @VisibleForTesting
+  boolean isLastCommitTimeSyncedBehindTimelineMidpoint(String tableName) {
+    Option<String> lastCommitTimeSynced = syncClient.getLastCommitTimeSynced(tableName);
+    if (!lastCommitTimeSynced.isPresent()) {
+      return false;
+    }
+    // Completed commits only: getCommitsTimeline() excludes non-commit actions (clean, rollback),
+    // and filterCompletedInstants() excludes inflight instants.
+    List<HoodieInstant> completedCommits =
+        syncClient.getMetaClient().getCommitsTimeline().filterCompletedInstants().getInstants();
+    if (completedCommits.isEmpty()) {
+      return false;
+    }
+    String midpointInstantTime = completedCommits.get(completedCommits.size() / 2).requestedTime();
+    return compareTimestamps(lastCommitTimeSynced.get(), LESSER_THAN, midpointInstantTime);
   }
 
   private boolean isAlreadySynced(String tableName) {
@@ -393,7 +426,8 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     Map<String, String> tableProperties = ConfigUtils.toMap(config.getString(HIVE_TABLE_PROPERTIES));
     if (config.getBoolean(HIVE_SYNC_AS_DATA_SOURCE_TABLE)) {
       Map<String, String> sparkTableProperties = SparkDataSourceTableUtils.getSparkTableProperties(config.getSplitStrings(META_SYNC_PARTITION_FIELDS),
-          config.getStringOrDefault(META_SYNC_SPARK_VERSION), config.getIntOrDefault(HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD), schema);
+          config.getStringOrDefault(META_SYNC_SPARK_VERSION), config.getIntOrDefault(HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD), schema,
+          config.getBoolean(HIVE_SYNC_COMMENT));
       tableProperties.putAll(sparkTableProperties);
     }
     return tableProperties;
@@ -555,7 +589,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
 
     List<String> touchPartitions = config.getBoolean(META_SYNC_TOUCH_PARTITIONS_ENABLED) ? filterPartitions(partitionEventList, PartitionEventType.TOUCH) : Collections.emptyList();
     if (!touchPartitions.isEmpty()) {
-      log.info("Touch Partitions " + touchPartitions);
+      log.info("Touch Partitions {}", touchPartitions);
       syncClient.touchPartitionsToTable(tableName, touchPartitions);
     }
 

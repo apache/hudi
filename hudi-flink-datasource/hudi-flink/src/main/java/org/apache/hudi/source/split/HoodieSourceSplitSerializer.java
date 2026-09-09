@@ -103,13 +103,13 @@ public class HoodieSourceSplitSerializer implements SimpleVersionedSerializer<Ho
           out.writeBoolean(false);
         }
 
-        out.writeBoolean(instantRange.getStartInstant().isPresent());
-        if (instantRange.getStartInstant().isPresent()) {
-          out.writeUTF(instantRange.getStartInstant().get());
+        out.writeBoolean(instantRange.getStartInstantOpt().isPresent());
+        if (instantRange.getStartInstantOpt().isPresent()) {
+          out.writeUTF(instantRange.getStartInstantOpt().get());
         }
-        out.writeBoolean(instantRange.getEndInstant().isPresent());
-        if (instantRange.getEndInstant().isPresent()) {
-          out.writeUTF(instantRange.getEndInstant().get());
+        out.writeBoolean(instantRange.getEndInstantOpt().isPresent());
+        if (instantRange.getEndInstantOpt().isPresent()) {
+          out.writeUTF(instantRange.getEndInstantOpt().get());
         }
 
         if (instantRange.getRangeType().equals(InstantRange.RangeType.EXACT_MATCH)) {

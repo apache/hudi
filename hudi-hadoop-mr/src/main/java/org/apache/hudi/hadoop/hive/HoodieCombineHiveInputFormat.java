@@ -174,7 +174,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
       Class<?> inputFormatClass = part.getInputFileFormatClass();
       String inputFormatClassName = inputFormatClass.getName();
       InputFormat inputFormat = getInputFormatFromCache(inputFormatClass, job);
-      LOG.info("Input Format => " + inputFormatClass.getName());
+      LOG.info("Input Format => {}", inputFormatClass.getName());
       // **MOD** Set the hoodie filter in the combine
       if (inputFormatClass.getName().equals(getParquetInputFormatClassName())) {
         combine.setHoodieFilter(true);
@@ -186,7 +186,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
           List<String> partitions = new ArrayList<>(part.getPartSpec().keySet());
           if (!partitions.isEmpty()) {
             String partitionStr = String.join("/", partitions);
-            LOG.info("Setting Partitions in jobConf - Partition Keys for Path : " + path + " is :" + partitionStr);
+            LOG.info("Setting Partitions in jobConf - Partition Keys for Path : {} is :{}", path, partitionStr);
             job.set(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, partitionStr);
           } else {
             job.set(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "");
@@ -224,11 +224,11 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
         f = poolMap.get(combinePathInputFormat);
         if (f == null) {
           f = new CombineFilter(filterPath);
-          LOG.info("CombineHiveInputSplit creating pool for " + path + "; using filter path " + filterPath);
+          LOG.info("CombineHiveInputSplit creating pool for {}; using filter path {}", path, filterPath);
           combine.createPool(job, f);
           poolMap.put(combinePathInputFormat, f);
         } else {
-          LOG.info("CombineHiveInputSplit: pool is already created for " + path + "; using filter path " + filterPath);
+          LOG.info("CombineHiveInputSplit: pool is already created for {}; using filter path {}", path, filterPath);
           f.addPath(filterPath);
         }
       } else {
@@ -286,7 +286,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
       result.add(csplit);
     }
 
-    LOG.info("number of splits " + result.size());
+    LOG.info("number of splits {}", result.size());
     return result.toArray(new CombineHiveInputSplit[result.size()]);
   }
 
@@ -295,8 +295,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
    */
   public Set<Integer> getNonCombinablePathIndices(JobConf job, Path[] paths, int numThreads)
       throws ExecutionException, InterruptedException {
-    LOG.info("Total number of paths: " + paths.length + ", launching " + numThreads
-        + " threads to check non-combinable ones.");
+    LOG.info("Total number of paths: {}, launching {} threads to check non-combinable ones.", paths.length, numThreads);
     int numPathPerThread = (int) Math.ceil((double) paths.length / numThreads);
 
     ExecutorService executor = Executors.newFixedThreadPool(numThreads);
@@ -559,7 +558,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
         retLists.add(split);
         long splitgLength = split.getLength();
         if (size + splitgLength >= targetSize) {
-          LOG.info("Sample alias " + entry.getValue() + " using " + (i + 1) + "splits");
+          LOG.info("Sample alias {} using {}splits", entry.getValue(), (i + 1));
           if (size + splitgLength > targetSize) {
             ((InputSplitShim) split).shrinkSplit(targetSize - size);
           }
@@ -963,8 +962,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
       if (job.getLong(org.apache.hadoop.mapreduce.lib.input.FileInputFormat.SPLIT_MAXSIZE, 0L) == 0L) {
         super.setMaxSplitSize(minSize);
       }
-      LOG.info("mapreduce.input.fileinputformat.split.minsize=" + minSize
-          + ", mapreduce.input.fileinputformat.split.maxsize=" + maxSize);
+      LOG.info("mapreduce.input.fileinputformat.split.minsize={}, mapreduce.input.fileinputformat.split.maxsize={}", minSize, maxSize);
 
       if (isRealTime) {
         job.set("hudi.hive.realtime", "true");

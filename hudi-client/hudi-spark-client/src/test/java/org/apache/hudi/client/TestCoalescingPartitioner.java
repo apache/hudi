@@ -123,7 +123,7 @@ public class TestCoalescingPartitioner extends HoodieClientTestBase {
     }, true).collect();
 
     assertEquals(targetPartitions, countsPerPartition.size());
-    // lets validate that atleast we have 50% of data in each spark partition compared to ideal scenario (we can't assume hash of strings will evenly distribute).
+    // lets validate that at least we have 50% of data in each spark partition compared to ideal scenario (we can't assume hash of strings will evenly distribute).
     countsPerPartition.forEach(pair -> {
       int numElements = pair.getValue();
       int idealExpectedCount = inputNumPartitions / targetPartitions;

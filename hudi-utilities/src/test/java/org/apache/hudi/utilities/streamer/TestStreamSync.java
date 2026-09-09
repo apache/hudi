@@ -28,6 +28,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
@@ -36,6 +37,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.transform.Transformer;
@@ -55,6 +57,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -75,6 +78,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -103,10 +107,10 @@ public class TestStreamSync extends SparkClientFunctionalTestHarness {
     SourceFormatAdapter sourceFormatAdapter = mock(SourceFormatAdapter.class);
     SchemaProvider inputBatchSchemaProvider = getSchemaProvider("InputBatch", false);
     Option<Dataset<Row>> fakeDataFrame = Option.of(mock(Dataset.class));
-    InputBatch<Dataset<Row>> fakeRowInputBatch = new InputBatch<>(fakeDataFrame, "chkpt", inputBatchSchemaProvider);
+    InputBatch<Dataset<Row>> fakeRowInputBatch = new InputBatch<>(fakeDataFrame, new StreamerCheckpointV2("chkpt"), inputBatchSchemaProvider);
     when(sourceFormatAdapter.fetchNewDataInRowFormat(any(), anyLong())).thenReturn(fakeRowInputBatch);
     //batch is empty because we don't want getBatch().map() to do anything because it calls static method we can't mock
-    InputBatch<JavaRDD<GenericRecord>> fakeAvroInputBatch = new InputBatch<>(Option.empty(), "chkpt", inputBatchSchemaProvider);
+    InputBatch<JavaRDD<GenericRecord>> fakeAvroInputBatch = new InputBatch<>(Option.empty(), new StreamerCheckpointV2("chkpt"), inputBatchSchemaProvider);
     when(sourceFormatAdapter.fetchNewDataInAvroFormat(any(),anyLong())).thenReturn(fakeAvroInputBatch);
 
     //transformer
@@ -356,11 +360,33 @@ public class TestStreamSync extends SparkClientFunctionalTestHarness {
   }
 
   @Test
-  public void testExtractCheckpointMetadata_WhenCheckpointIsNullV2() {
+  void testExtractCheckpointMetadata_WhenCheckpointIsNullNonIncrementalSourceOnV8UsesV1() {
     StreamSync streamSync = setupStreamSync();
     HoodieStreamer.Config cfg = new HoodieStreamer.Config();
     cfg.checkpoint = "test-checkpoint";
     cfg.ignoreCheckpoint = "test-ignore";
+    cfg.sourceClassName = "org.apache.hudi.utilities.sources.KafkaSource";
+    TypedProperties props = new TypedProperties();
+
+    InputBatch inputBatch = mock(InputBatch.class);
+    when(inputBatch.getCheckpointForNextBatch()).thenReturn(null);
+
+    Map<String, String> result = streamSync.extractCheckpointMetadata(
+        inputBatch, props, HoodieTableVersion.EIGHT.versionCode(), cfg);
+
+    Map<String, String> expected = new HashMap<>();
+    expected.put(CHECKPOINT_IGNORE_KEY, "test-ignore");
+    expected.put(CHECKPOINT_RESET_KEY, "test-checkpoint");
+    assertEquals(expected, result, "Should fall back to V1 keys for non-incremental sources on v8");
+  }
+
+  @Test
+  void testExtractCheckpointMetadata_WhenCheckpointIsNullIncrementalSourceOnV8UsesV2() {
+    StreamSync streamSync = setupStreamSync();
+    HoodieStreamer.Config cfg = new HoodieStreamer.Config();
+    cfg.checkpoint = "test-checkpoint";
+    cfg.ignoreCheckpoint = "test-ignore";
+    cfg.sourceClassName = "org.apache.hudi.utilities.sources.HoodieIncrSource";
     TypedProperties props = new TypedProperties();
 
     InputBatch inputBatch = mock(InputBatch.class);
@@ -372,7 +398,7 @@ public class TestStreamSync extends SparkClientFunctionalTestHarness {
     Map<String, String> expected = new HashMap<>();
     expected.put(CHECKPOINT_IGNORE_KEY, "test-ignore");
     expected.put(STREAMER_CHECKPOINT_RESET_KEY_V2, "test-checkpoint");
-    assertEquals(expected, result, "Should return default metadata when checkpoint is null");
+    assertEquals(expected, result, "Should fall back to V2 keys for incremental sources on v8");
   }
 
   @Test
@@ -449,6 +475,36 @@ public class TestStreamSync extends SparkClientFunctionalTestHarness {
       assertEquals(RecordMergeMode.COMMIT_TIME_ORDERING, triple.getLeft());
       assertEquals("org.apache.hudi.common.model.OverwriteWithLatestPayload", triple.getMiddle());
       assertEquals("any_id", triple.getRight());
+    }
+
+    @Test
+    void testReportSuccessMetricsDelegatesToMetrics() throws Exception {
+      StreamSync streamSync = mock(StreamSync.class);
+      HoodieIngestionMetrics mockMetrics = mock(HoodieIngestionMetrics.class);
+      Field metricsField = StreamSync.class.getDeclaredField("metrics");
+      metricsField.setAccessible(true);
+      metricsField.set(streamSync, mockMetrics);
+      doCallRealMethod().when(streamSync).reportSuccessMetrics();
+
+      streamSync.reportSuccessMetrics();
+
+      verify(mockMetrics, times(1)).emitStreamerJobSuccessMetrics();
+      verify(mockMetrics, never()).emitStreamerJobFailedMetrics();
+    }
+
+    @Test
+    void testReportFailureMetricsDelegatesToMetrics() throws Exception {
+      StreamSync streamSync = mock(StreamSync.class);
+      HoodieIngestionMetrics mockMetrics = mock(HoodieIngestionMetrics.class);
+      Field metricsField = StreamSync.class.getDeclaredField("metrics");
+      metricsField.setAccessible(true);
+      metricsField.set(streamSync, mockMetrics);
+      doCallRealMethod().when(streamSync).reportFailureMetrics();
+
+      streamSync.reportFailureMetrics();
+
+      verify(mockMetrics, times(1)).emitStreamerJobFailedMetrics();
+      verify(mockMetrics, never()).emitStreamerJobSuccessMetrics();
     }
   }
 }

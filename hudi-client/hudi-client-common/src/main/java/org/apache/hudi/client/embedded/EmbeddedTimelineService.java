@@ -97,7 +97,7 @@ public class EmbeddedTimelineService {
       synchronized (SERVICE_LOCK) {
         if (RUNNING_SERVICES.containsKey(timelineServiceIdentifier)) {
           RUNNING_SERVICES.get(timelineServiceIdentifier).addBasePath(writeConfig.getBasePath());
-          log.info("Reusing existing embedded timeline server with configuration: " + RUNNING_SERVICES.get(timelineServiceIdentifier).serviceConfig);
+          log.info("Reusing existing embedded timeline server with configuration: {}", RUNNING_SERVICES.get(timelineServiceIdentifier).serviceConfig);
           return RUNNING_SERVICES.get(timelineServiceIdentifier);
         }
         // if no compatible instance is found, create a new one
@@ -214,6 +214,7 @@ public class EmbeddedTimelineService {
         .withRemoteTimelineInitialRetryIntervalMs(clientWriteConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineInitialRetryIntervalMs())
         .withRemoteTimelineClientMaxRetryIntervalMs(clientWriteConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineClientMaxRetryIntervalMs())
         .withRemoteTimelineClientRetryExceptions(clientWriteConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineClientRetryExceptions())
+        .withRemoteResponseCharset(clientWriteConfig.getClientSpecifiedViewStorageConfig().getRemoteResponseCharset())
         .build();
   }
 

@@ -156,11 +156,11 @@ public class TestHoodieCdcSplitReaderFunction {
         1, "base.parquet", Option.empty(), tempDir.getAbsolutePath(),
         "", "read_optimized", "20230101000000000", "file-1", Option.empty());
 
-    Exception ex = assertThrows(Exception.class, () -> function.read(nonCdcSplit));
+    Exception ex = assertThrows(Exception.class, () -> function.open(nonCdcSplit));
     assertNotNull(ex);
     // Must not be IllegalArgumentException (which the old type-guard wrongly threw)
     if (ex instanceof IllegalArgumentException) {
-      throw new AssertionError("read() should not throw IllegalArgumentException for non-CDC split; "
+      throw new AssertionError("open() should not throw IllegalArgumentException for non-CDC split; "
           + "it should fall through to the fallback reader", ex);
     }
   }
@@ -223,7 +223,7 @@ public class TestHoodieCdcSplitReaderFunction {
   // -------------------------------------------------------------------------
 
   @Test
-  public void testReadAcceptsCdcSourceSplitType() {
+  public void testReadAcceptsCdcSourceSplitType() throws Exception {
     // Verify that HoodieCdcSourceSplit is accepted (cast doesn't throw).
     // Actual I/O would require a real Hoodie table, so we only check the
     // type-guard passes by catching the downstream I/O error rather than
@@ -237,7 +237,8 @@ public class TestHoodieCdcSplitReaderFunction {
         1, tempDir.getAbsolutePath(), 128 * 1024 * 1024L, "file-cdc",
         EMPTY_PARTITION_PATH, changes, "read_optimized", "20230101000000000");
 
-    // Should not throw exception
-    function.read(cdcSplit);
+    // Opening the split creates the CDC iterator lazily (no I/O yet); it must not throw.
+    function.open(cdcSplit);
+    function.close();
   }
 }

@@ -25,8 +25,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.List;
@@ -34,6 +33,7 @@ import java.util.List;
 /**
  * Hoodie log format reader.
  */
+@Slf4j
 public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
 
   private final List<HoodieLogFile> logFiles;
@@ -44,8 +44,6 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   private final String recordKeyField;
   private final boolean enableInlineReading;
   private final int bufferSize;
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieLogFormatReader.class);
 
   HoodieLogFormatReader(HoodieStorage storage, List<HoodieLogFile> logFiles, HoodieSchema readerSchema,
                         boolean reverseLogReader, int bufferSize, boolean enableRecordLookups,
@@ -91,7 +89,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
       } catch (IOException io) {
         throw new HoodieIOException("unable to initialize read with log file ", io);
       }
-      LOG.debug("Moving to the next reader for logfile {}", currentReader.getLogFile());
+      log.debug("Moving to the next reader for logfile {}", currentReader.getLogFile());
       return hasNext();
     }
     return false;

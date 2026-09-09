@@ -39,7 +39,7 @@ import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.AppendResult;
-import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieHFileDataBlock;
@@ -54,6 +54,7 @@ import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.SizeEstimator;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
@@ -105,7 +106,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   // Incoming records to be written to logs.
   protected Iterator<HoodieRecord<T>> recordItr;
   // Writer to log into the file group's latest slice.
-  protected Writer writer;
+  protected HoodieLogFormat.Writer writer;
 
   protected final List<WriteStatus> statuses;
   // Total number of records written during appending
@@ -260,7 +261,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
           ? getInstantTimeForLogFile(record) : deltaWriteStat.getPrevCommit();
       this.writer = createLogWriter(instantTime, fileSliceOpt);
     } catch (Exception e) {
-      log.error("Error in update task at commit " + instantTime, e);
+      log.error("Error in update task at commit {}", instantTime, e);
       writeStatus.setGlobalError(e);
       throw new HoodieUpsertException("Failed to initialize HoodieAppendHandle for FileId: " + fileId + " on commit "
           + instantTime + " on storage path " + hoodieTable.getMetaClient().getBasePath() + "/" + partitionPath, e);
@@ -558,14 +559,16 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         writer = null;
       }
 
-      // update final size, once for all log files
-      // TODO we can actually deduce file size purely from AppendResult (based on offset and size
-      //      of the appended block)
+      // Set the final on-disk size of each log file. Appends within an append handle are contiguous,
+      // so a log file's length equals its start offset plus the total bytes appended to it. That is
+      // exactly what fs.getFileStatus().getLength() returns, and both values are already captured by
+      // the AppendResult stats (logOffset and the accumulated fileSizeInBytes). Deriving the size this
+      // way avoids a getPathInfo/HEAD per log file, which is a remote round trip per file group on
+      // object stores.
       for (WriteStatus status : statuses) {
-        long logFileSize = storage.getPathInfo(
-            new StoragePath(config.getBasePath(), status.getStat().getPath()))
-            .getLength();
-        status.getStat().setFileSizeInBytes(logFileSize);
+        HoodieDeltaWriteStat stat = (HoodieDeltaWriteStat) status.getStat();
+        long appendedBytes = stat.getFileSizeInBytes();
+        stat.setFileSizeInBytes(stat.getLogOffset() + appendedBytes);
       }
 
       // generate Secondary index stats if streaming writes is enabled.
@@ -725,7 +728,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       case HFILE_DATA_BLOCK:
         // Not supporting positions in HFile data blocks
         header.remove(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS);
-        records.sort(Comparator.comparing(HoodieRecord::getRecordKey));
+        // HFile orders keys by their raw UTF-8 bytes, so sort by UTF-8 bytes rather than
+        // String (UTF-16) order to keep non-ASCII / binary keys consistent with the writer.
+        records.sort(Comparator.comparing(HoodieRecord::getRecordKey, StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR));
         return new HoodieHFileDataBlock(
             records, header, writeConfig.getHFileCompressionAlgorithm(), new StoragePath(writeConfig.getBasePath()));
       case PARQUET_DATA_BLOCK:

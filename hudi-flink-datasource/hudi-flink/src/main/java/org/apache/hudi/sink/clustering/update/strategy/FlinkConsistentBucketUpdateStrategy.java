@@ -62,7 +62,7 @@ public class FlinkConsistentBucketUpdateStrategy<T extends HoodieRecordPayload> 
   private String lastRefreshInstant = HoodieTimeline.INIT_INSTANT_TS;
 
   public FlinkConsistentBucketUpdateStrategy(HoodieFlinkWriteClient writeClient, List<String> indexKeyFields) {
-    super(writeClient.getEngineContext(), writeClient.getHoodieTable(), Collections.emptySet());
+    super(writeClient.getEngineContext(), writeClient.getHoodieTable(), Collections.emptySet(), Collections.emptySet());
     this.indexKeyFields = indexKeyFields;
     this.partitionToIdentifier = new HashMap<>();
   }

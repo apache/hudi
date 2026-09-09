@@ -63,7 +63,7 @@ public class GenericRecordPartialPayloadGenerator extends GenericRecordFullPaylo
     return validate((Object) record);
   }
 
-  // Atleast 1 entry should be null
+  // At least 1 entry should be null
   private boolean validate(Object object) {
     if (object == null) {
       return true;

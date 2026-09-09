@@ -170,6 +170,20 @@ public interface ValidationContext {
   }
 
   /**
+   * Calculate total write errors in the current commit.
+   * Records that failed to write are tracked in {@link org.apache.hudi.common.model.HoodieWriteStat#getTotalWriteErrors()}.
+   * A non-zero error count alongside a deviation in offset validation indicates write failures
+   * rather than silent data loss — useful context for distinguishing the two failure modes.
+   *
+   * @return Total count of records that failed to write
+   */
+  default long getTotalWriteErrors() {
+    return getWriteStats()
+        .map(stats -> stats.stream().mapToLong(HoodieWriteStat::getTotalWriteErrors).sum())
+        .orElse(0L);
+  }
+
+  /**
    * Check if this is the first commit (no previous commits exist).
    * Derived from {@link #getPreviousCommitInstant()}.
    * Validators should skip validation for first commit since there's

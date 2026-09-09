@@ -36,12 +36,16 @@ import org.apache.hudi.testutils.SparkDatasetTestUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.hadoop.metadata.FileMetaData;
+import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.PrimitiveType;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -124,6 +128,38 @@ public class TestHoodieInternalRowParquetWriter extends HoodieSparkClientTestHar
     recordKeys.forEach(recordKey -> {
       assertTrue(bloomFilter.mightContain(recordKey));
     });
+  }
+
+  @Test
+  void testDecimalFixedLenWidthFromAvroSchema() {
+    // The row-writer sizes decimal FIXED_LEN columns from the Avro schema: an Avro fixed(10) for
+    // decimal(20,2) keeps its declared width (10, wider than the precision-minimal 9), while a bytes
+    // decimal keeps the precision-minimal width (9).
+    assertEquals(10, decimalParquetTypeLength(decimalRecordSchema(
+        "{\"type\":\"fixed\",\"name\":\"dec_fixed\",\"size\":10,\"logicalType\":\"decimal\",\"precision\":20,\"scale\":2}")),
+        "Avro fixed(10) decimal must stay FIXED_LEN_BYTE_ARRAY(10)");
+    assertEquals(9, decimalParquetTypeLength(decimalRecordSchema(
+        "{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":20,\"scale\":2}")),
+        "bytes decimal keeps the precision-minimal FIXED_LEN width (9)");
+  }
+
+  private static String decimalRecordSchema(String decType) {
+    return "{\"type\":\"record\",\"name\":\"rec\",\"fields\":[{\"name\":\"dec\",\"type\":" + decType + "}]}";
+  }
+
+  private int decimalParquetTypeLength(String avroSchemaJson) {
+    StructType structType = new StructType().add("dec", DataTypes.createDecimalType(20, 2), false);
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withSchema(avroSchemaJson)
+        .build();
+    HoodieRowParquetWriteSupport writeSupport = HoodieRowParquetWriteSupport.getHoodieRowParquetWriteSupport(
+        storageConf.unwrap(), structType, Option.empty(), config);
+    MessageType parquetSchema = writeSupport.init(writeSupport.getHadoopConf()).getSchema();
+    PrimitiveType dec = parquetSchema.getType("dec").asPrimitiveType();
+    assertEquals(PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY, dec.getPrimitiveTypeName(),
+        "decimal must be encoded as FIXED_LEN_BYTE_ARRAY");
+    return dec.getTypeLength();
   }
 
   private HoodieRowParquetWriteSupport getWriteSupport(HoodieWriteConfig.Builder writeConfigBuilder, Configuration hadoopConf, boolean parquetWriteLegacyFormatEnabled) {

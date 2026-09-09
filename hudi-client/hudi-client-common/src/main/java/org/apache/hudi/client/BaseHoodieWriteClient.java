@@ -24,10 +24,7 @@ import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
-import org.apache.hudi.callback.HoodieWriteCommitCallback;
-import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
 import org.apache.hudi.callback.common.WriteStatusValidator;
-import org.apache.hudi.callback.util.HoodieCommitCallbackFactory;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.heartbeat.HeartbeatUtils;
 import org.apache.hudi.client.transaction.TransactionManager;
@@ -86,12 +83,14 @@ import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
+import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metrics.HoodieMetrics;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -145,7 +144,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   @Getter
   @Setter
   private transient WriteOperationType operationType;
-  private transient HoodieWriteCommitCallback commitCallback;
 
   protected transient Timer.Context writeTimer = null;
 
@@ -253,6 +251,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     if (!config.allowEmptyCommit() && tableWriteStats.isEmptyDataTableWriteStats()) {
       return true;
     }
+    extraMetadata = updateExtraMetadata(extraMetadata);
     log.info("Committing {} action {}", instantTime, commitActionType);
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable table = hoodieTableOpt.orElse(createTable(config));
@@ -285,7 +284,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     boolean postCommitStatus = true;
     HoodieTimer postCommitTimer = HoodieTimer.start();
     try {
-      postCommit(table, metadata, instantTime, extraMetadata);
+      postCommit(table, metadata, instantTime, commitActionType, extraMetadata);
       mayBeCleanAndArchive(table);
       runTableServicesInline(table, metadata, extraMetadata);
     } catch (Exception e) {
@@ -301,15 +300,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
 
     emitCommitMetrics(instantTime, metadata, commitActionType);
-
-    // callback if needed.
-    if (config.writeCommitCallbackOn()) {
-      if (null == commitCallback) {
-        commitCallback = HoodieCommitCallbackFactory.create(config);
-      }
-      commitCallback.call(new HoodieWriteCommitCallbackMessage(
-          instantTime, config.getTableName(), config.getBasePath(), tableWriteStats.getDataTableWriteStats(), Option.of(commitActionType), extraMetadata));
-    }
     return true;
   }
 
@@ -367,7 +357,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         internalSchema = InternalSchemaUtils.searchSchema(Long.parseLong(instantTime),
             SerDeHelper.parseSchemas(historySchemaStr));
       }
-      InternalSchema evolvedSchema = AvroSchemaEvolutionUtils.reconcileSchema(schema.toAvroSchema(), internalSchema, config.getBooleanOrDefault(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS));
+      InternalSchema evolvedSchema = AvroSchemaEvolutionUtils.reconcileSchema(schema, internalSchema,
+          config.getBooleanOrDefault(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS),
+          SchemaChangeUtils.parseTimestampLogicalTypeOverrides(
+              config.getStringOrDefault(HoodieCommonConfig.TIMESTAMP_LOGICAL_TYPE_OVERRIDES)));
       if (evolvedSchema.equals(internalSchema)) {
         metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(evolvedSchema));
         //TODO save history schema by metaTable
@@ -637,7 +630,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       boolean postCommitStatus = true;
       HoodieTimer postCommitTimer = HoodieTimer.start();
       try {
-        postCommit(hoodieTable, result.getCommitMetadata().get(), instantTime, Option.empty());
+        String commitActionType = CommitUtils.getCommitActionType(operationType, hoodieTable.getMetaClient().getTableType());
+        postCommit(hoodieTable, result.getCommitMetadata().get(), instantTime,
+            commitActionType, Option.empty());
         mayBeCleanAndArchive(hoodieTable);
       } catch (Exception e) {
         postCommitStatus = false;
@@ -664,8 +659,37 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param instantTime   Instant Time
    * @param extraMetadata Additional Metadata passed by user
    */
-  protected void postCommit(HoodieTable table, HoodieCommitMetadata metadata, String instantTime, Option<Map<String, String>> extraMetadata) {
+  protected void postCommit(HoodieTable table, HoodieCommitMetadata metadata, String instantTime, String commitActionType, Option<Map<String, String>> extraMetadata) {
     try {
+      context.setJobStatus(this.getClass().getSimpleName(), "Cleaning up marker directories for commit " + instantTime + " in table "
+          + config.getTableName());
+      // Delete the marker directory for the instant.
+      WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
+          .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+      metrics.updateTableServiceInstantMetrics(table.getActiveTimeline());
+      // Fire write commit callback if a callback class is registered. postCommit() is reached
+      // by both auto-commit and explicit-commit paths; compaction and clustering have their own
+      // explicit fireCommitCallbackIfNecessary call sites in BaseHoodieTableServiceClient.
+      List<HoodieWriteStat> stats = metadata.getWriteStats();
+      fireCommitCallbackIfNecessary(instantTime, commitActionType, stats,
+          table::getBaseFileOnlyView, extraMetadata);
+    } finally {
+      this.heartbeatClient.stop(instantTime);
+    }
+  }
+
+  /**
+   * Performs post-commit cleanup when the instant is already completed and commit metadata is not
+   * available to invoke the regular post-commit hook. This can happen while recovering a streaming
+   * metadata-table write after failover. The table is recreated from the write configuration so its
+   * marker directory can still be removed, and the heartbeat is always stopped even if marker cleanup
+   * fails.
+   *
+   * @param instantTime the completed instant to clean up
+   */
+  public void postCommit(String instantTime) {
+    try {
+      HoodieTable table = createTable(config);
       context.setJobStatus(this.getClass().getSimpleName(), "Cleaning up marker directories for commit " + instantTime + " in table "
           + config.getTableName());
       // Delete the marker directory for the instant.
@@ -846,44 +870,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public void restoreToSavepoint(String savepointTime) {
     boolean initializeMetadataTableIfNecessary = config.isMetadataTableEnabled();
-    if (initializeMetadataTableIfNecessary) {
-      try {
-        // Delete metadata table directly when users trigger savepoint rollback if mdt existed and if the savePointTime is beforeTimelineStarts
-        // or before the oldest compaction on MDT.
-        // We cannot restore to before the oldest compaction on MDT as we don't have the basefiles before that time.
-        HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
-            .setConf(storageConf.newInstance())
-            .setBasePath(getMetadataTableBasePath(config.getBasePath())).build();
-        Option<HoodieInstant> oldestMdtCompaction = mdtMetaClient.getCommitTimeline().filterCompletedInstants().firstInstant();
-        boolean deleteMDT = false;
-        if (oldestMdtCompaction.isPresent()) {
-          if (LESSER_THAN_OR_EQUALS.test(savepointTime, oldestMdtCompaction.get().requestedTime())) {
-            log.warn("Deleting MDT during restore to {} as the savepoint is older than oldest compaction {} on MDT",
-                savepointTime, oldestMdtCompaction.get().requestedTime());
-            deleteMDT = true;
-          }
-        }
-
-        // The instant required to sync rollback to MDT has been archived and the mdt syncing will be failed
-        // So that we need to delete the whole MDT here.
-        if (!deleteMDT) {
-          HoodieInstant syncedInstant = mdtMetaClient.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, savepointTime);
-          if (mdtMetaClient.getCommitsTimeline().isBeforeTimelineStarts(syncedInstant.requestedTime())) {
-            log.warn("Deleting MDT during restore to {} as the savepoint is older than the MDT timeline {}",
-                savepointTime, mdtMetaClient.getCommitsTimeline().firstInstant().get().requestedTime());
-            deleteMDT = true;
-          }
-        }
-
-        if (deleteMDT) {
-          HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
-          // rollbackToSavepoint action will try to bootstrap MDT at first but sync to MDT will fail at the current scenario.
-          // so that we need to disable metadata initialized here.
-          initializeMetadataTableIfNecessary = false;
-        }
-      } catch (Exception e) {
-        // Metadata directory does not exist
-      }
+    if (initializeMetadataTableIfNecessary && shouldDeleteMdtBeforeRestore(savepointTime)) {
+      HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
+      // rollbackToSavepoint action will try to bootstrap MDT at first but sync to MDT will fail at the current scenario.
+      // so that we need to disable metadata initialized here.
+      initializeMetadataTableIfNecessary = false;
     }
 
     HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty(), initializeMetadataTableIfNecessary);
@@ -892,6 +883,82 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         + " is enabled");
     restoreToInstant(savepointTime, initializeMetadataTableIfNecessary);
     SavepointHelpers.validateSavepointRestore(table, savepointTime);
+  }
+
+  /**
+   * Decides whether the metadata table (MDT) must be deleted before restoring the data table to
+   * {@code targetInstant}. Returns true when restoring would leave the MDT in an inconsistent
+   * state, specifically when any of the following holds:
+   * <ol>
+   *   <li>The target is at or before the oldest completed compaction. We cannot restore to before
+   *       the oldest compaction because we don't have base files before that time.</li>
+   *   <li>The target is before the MDT timeline start (the relevant history was archived away).</li>
+   * </ol>
+   * Returns false when the MDT directory does not exist or is not readable (nothing to delete or
+   * worry about). Wraps genuine IO failures ({@link IOException}) in a {@link HoodieException}
+   * so permission / network errors surface to the caller.
+   */
+  protected boolean shouldDeleteMdtBeforeRestore(String targetInstant) {
+    String mdtBasePath = getMetadataTableBasePath(config.getBasePath());
+    try {
+      // Cheap existence check first to avoid constructing an MDT meta client when there is no MDT.
+      if (!storage.exists(new StoragePath(mdtBasePath))) {
+        return false;
+      }
+      HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
+          .setConf(storageConf.newInstance())
+          .setBasePath(mdtBasePath).build();
+      List<HoodieInstant> completedCompactions = mdtMetaClient.getCommitTimeline()
+          .filterCompletedInstants().getInstants();
+      Option<HoodieInstant> oldestMdtCompaction = completedCompactions.isEmpty()
+          ? Option.empty() : Option.of(completedCompactions.get(0));
+      if (oldestMdtCompaction.isPresent()
+          && LESSER_THAN_OR_EQUALS.test(targetInstant, oldestMdtCompaction.get().requestedTime())) {
+        log.warn("Deleting MDT before restore to {}: target is at or before oldest MDT compaction {}",
+            targetInstant, oldestMdtCompaction.get().requestedTime());
+        return true;
+      }
+      if (mdtMetaClient.getCommitsTimeline().isBeforeTimelineStarts(targetInstant)) {
+        log.warn("Deleting MDT before restore to {}: target is before MDT timeline start", targetInstant);
+        return true;
+      }
+      return false;
+    } catch (IOException e) {
+      throw new HoodieException(
+          "Failed to inspect MDT at " + mdtBasePath + " before restore to " + targetInstant
+              + " - refusing to silently proceed without an MDT integrity check.", e);
+    } catch (HoodieException e) {
+      // MDT directory exists but is not usable (e.g. TableNotFoundException from a partially
+      // initialized MDT). Treat as absent: no deletion needed, let the restore proceed.
+      log.warn("MDT at {} is present but could not be read ({}); skipping pre-check.",
+          mdtBasePath, e.getMessage());
+      return false;
+    }
+  }
+
+  /**
+   * Deletes the metadata table (MDT) if it would be left in an inconsistent state by a restore
+   * to {@code targetInstant}, and returns whether the MDT was actually deleted.
+   *
+   * <p>Callers that drive restore via {@link #restoreToInstant} directly (e.g. the
+   * {@code restore_to_instant} stored procedure) should call this method before invoking
+   * {@code restoreToInstant} and suppress MDT initialization when it returns {@code true}:
+   *
+   * <pre>{@code
+   * boolean mdtDeleted = client.deleteMdtIfNecessaryBeforeRestore(targetInstant);
+   * client.restoreToInstant(targetInstant, !mdtDeleted && enableMetadata);
+   * }</pre>
+   *
+   * @param targetInstant the instant the data table will be restored to
+   * @return {@code true} if the MDT was deleted (caller must not re-initialize it);
+   *         {@code false} otherwise (MDT either did not need deletion or does not exist)
+   */
+  public boolean deleteMdtIfNecessaryBeforeRestore(String targetInstant) {
+    if (shouldDeleteMdtBeforeRestore(targetInstant)) {
+      HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
+      return true;
+    }
+    return false;
   }
 
   @Deprecated

@@ -18,26 +18,15 @@
 
 package org.apache.spark.sql
 
-import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.analysis.{AnalysisErrorAt, ResolvedTable}
-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression, ProjectionOverSchema}
+import org.apache.spark.sql.catalyst.analysis.AnalysisErrorAt
+import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.planning.ScanOperation
-import org.apache.spark.sql.catalyst.plans.logical._
-import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog}
-import org.apache.spark.sql.execution.command.RepairTableCommand
+import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, LogicalPlan, MergeIntoTable}
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, ParquetFileFormat}
-import org.apache.spark.sql.execution.streaming.SerializedOffset
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.StructType
 
-object HoodieSpark34CatalystPlanUtils extends BaseHoodieCatalystPlanUtils {
-
-  def unapplyResolvedTable(plan: LogicalPlan): Option[(TableCatalog, Identifier, Table)] =
-    plan match {
-      case ResolvedTable(catalog, identifier, table, _) => Some((catalog, identifier, table))
-      case _ => None
-    }
+object HoodieSpark34CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
 
   override def unapplyMergeIntoTable(plan: LogicalPlan): Option[(LogicalPlan, LogicalPlan, Expression)] = {
     plan match {
@@ -58,22 +47,6 @@ object HoodieSpark34CatalystPlanUtils extends BaseHoodieCatalystPlanUtils {
     }
   }
 
-  override def projectOverSchema(schema: StructType, output: AttributeSet): ProjectionOverSchema =
-    ProjectionOverSchema(schema, output)
-
-  override def isRepairTable(plan: LogicalPlan): Boolean = {
-    plan.isInstanceOf[RepairTableCommand]
-  }
-
-  override def getRepairTableChildren(plan: LogicalPlan): Option[(TableIdentifier, Boolean, Boolean, String)] = {
-    plan match {
-      case rtc: RepairTableCommand =>
-        Some((rtc.tableName, rtc.enableAddPartitions, rtc.enableDropPartitions, rtc.cmd))
-      case _ =>
-        None
-    }
-  }
-
   override def failAnalysisForMIT(a: Attribute, cols: String): Unit = {
     a.failAnalysis(
       errorClass = "_LEGACY_ERROR_TEMP_2309",
@@ -86,42 +59,6 @@ object HoodieSpark34CatalystPlanUtils extends BaseHoodieCatalystPlanUtils {
     throw new AnalysisException(
       errorClass = "TABLE_OR_VIEW_NOT_FOUND",
       messageParameters = Map("relationName" -> s"`$tableName`"))
-  }
-
-  override def unapplyCreateIndex(plan: LogicalPlan): Option[(LogicalPlan, String, String, Boolean, Seq[(Seq[String], Map[String, String])], Map[String, String])] = {
-    plan match {
-      case ci@CreateIndex(table, indexName, indexType, ignoreIfExists, columns, properties) =>
-        Some((table, indexName, indexType, ignoreIfExists, columns.map(col => (col._1.name, col._2)), properties))
-      case _ =>
-        None
-    }
-  }
-
-  override def unapplyDropIndex(plan: LogicalPlan): Option[(LogicalPlan, String, Boolean)] = {
-    plan match {
-      case ci@DropIndex(table, indexName, ignoreIfNotExists) =>
-        Some((table, indexName, ignoreIfNotExists))
-      case _ =>
-        None
-    }
-  }
-
-  override def unapplyShowIndexes(plan: LogicalPlan): Option[(LogicalPlan, Seq[Attribute])] = {
-    plan match {
-      case ci@HoodieShowIndexes(table, output) =>
-        Some((table, output))
-      case _ =>
-        None
-    }
-  }
-
-  override def unapplyRefreshIndex(plan: LogicalPlan): Option[(LogicalPlan, String)] = {
-    plan match {
-      case ci@RefreshIndex(table, indexName) =>
-        Some((table, indexName))
-      case _ =>
-        None
-    }
   }
 
   override def unapplyInsertIntoStatement(plan: LogicalPlan): Option[(LogicalPlan, Seq[String], Map[String, Option[String]], LogicalPlan, Boolean, Boolean)] = {
@@ -143,29 +80,6 @@ object HoodieSpark34CatalystPlanUtils extends BaseHoodieCatalystPlanUtils {
         }
       case _ =>
         None
-    }
-  }
-
-  override def createProjectForByNameQuery(lr: LogicalRelation, plan: LogicalPlan): Option[LogicalPlan] = {
-    plan match {
-      case insert: InsertIntoStatement =>
-        Some(ResolveInsertionBase.createProjectForByNameQuery(lr.catalogTable.get.qualifiedName, insert))
-      case _ =>
-        None
-    }
-  }
-
-  override def unapplyUpdateAction(mergeAction: Any): Option[(Option[Expression], Seq[Assignment])] = {
-    mergeAction match {
-      case UpdateAction(condition, assignments) => Some((condition, assignments))
-      case _ => None
-    }
-  }
-
-  override def extractJsonFromSerializedOffset(offset: Any): Option[String] = {
-    offset match {
-      case SerializedOffset(json) => Some(json)
-      case _ => None
     }
   }
 }

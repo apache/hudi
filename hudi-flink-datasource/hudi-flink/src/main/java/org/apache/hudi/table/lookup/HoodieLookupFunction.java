@@ -135,14 +135,17 @@ public class HoodieLookupFunction extends LookupFunction implements Serializable
     }
 
     HoodieActiveTimeline latestCommit = metaClient.reloadActiveTimeline();
-    Option<HoodieInstant> latestCommitInstant = latestCommit.getCommitsTimeline().lastInstant();
-    if (latestCommit.empty()) {
+    Option<HoodieInstant> latestCommitInstant =
+        latestCommit.getCommitsTimeline().filterCompletedInstants().lastInstant();
+    if (!latestCommitInstant.isPresent()) {
+      scheduleNextLoad();
       log.info("No commit instant found currently.");
       return;
     }
     // Determine whether to reload data by comparing instant
     if (latestCommitInstant.get().equals(currentCommit)) {
-      log.info("Ignore loading data because the commit instant " + currentCommit + " has not changed.");
+      scheduleNextLoad();
+      log.info("Ignore loading data because the commit instant {} has not changed.", currentCommit);
       return;
     }
 
@@ -152,17 +155,18 @@ public class HoodieLookupFunction extends LookupFunction implements Serializable
       try {
         long count = 0;
         GenericRowData reuse = new GenericRowData(rowType.getFieldCount());
-        partitionReader.open();
-        RowData row;
-        while ((row = partitionReader.read(reuse)) != null) {
-          count++;
-          RowData rowData = serializer.copy(row);
-          RowData key = extractLookupKey(rowData);
-          cache.addRow(key, rowData);
+        try (HoodieLookupTableReader reader = partitionReader) {
+          reader.open();
+          RowData row;
+          while ((row = reader.read(reuse)) != null) {
+            count++;
+            RowData rowData = serializer.copy(row);
+            RowData key = extractLookupKey(rowData);
+            cache.addRow(key, rowData);
+          }
         }
-        partitionReader.close();
         currentCommit = latestCommitInstant.get();
-        nextLoadTime = System.currentTimeMillis() + reloadInterval.toMillis();
+        scheduleNextLoad();
         log.info("Loaded {} row(s) into lookup join cache", count);
         return;
       } catch (Exception e) {
@@ -183,6 +187,10 @@ public class HoodieLookupFunction extends LookupFunction implements Serializable
         }
       }
     }
+  }
+
+  private void scheduleNextLoad() {
+    nextLoadTime = System.currentTimeMillis() + reloadInterval.toMillis();
   }
 
   private RowData extractLookupKey(RowData row) {

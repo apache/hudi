@@ -344,6 +344,7 @@ public class TestHoodieMetadataBase extends HoodieSparkClientTestHarness {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(useFileListingMetadata)
             .enableMetrics(enableMetrics)
+            .enableDetailedMetadataMetrics(enableMetrics)
             .ignoreSpuriousDeletes(validateMetadataPayloadConsistency)
             .build())
         .withMetricsConfig(HoodieMetricsConfig.newBuilder().on(enableMetrics)

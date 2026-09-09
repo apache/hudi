@@ -19,45 +19,16 @@
 
 package org.apache.hudi.utilities.streamer;
 
-import java.util.Objects;
+import lombok.Value;
 
 /**
  * Error event is an event triggered during write or processing failure of a record.
  */
+@Value
 public class ErrorEvent<T> {
 
-  private final ErrorReason reason;
-  private final T payload;
-
-  public ErrorEvent(T payload, ErrorReason reason) {
-    this.payload = payload;
-    this.reason = reason;
-  }
-
-  public T getPayload() {
-    return payload;
-  }
-
-  public ErrorReason getReason() {
-    return reason;
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (o == null || getClass() != o.getClass()) {
-      return false;
-    }
-    ErrorEvent<?> that = (ErrorEvent<?>) o;
-    return reason == that.reason && Objects.equals(payload, that.payload);
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(reason, payload);
-  }
+  T payload;
+  ErrorReason reason;
 
   /**
    * The reason behind write or processing failure of a record

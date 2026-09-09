@@ -20,69 +20,13 @@
 package org.apache.hudi
 
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
-import org.apache.spark.sql.types.{DataType, Decimal}
-import org.apache.spark.unsafe.types.{CalendarInterval, GeographyVal, GeometryVal, UTF8String, VariantVal}
+import org.apache.spark.unsafe.types.{GeographyVal, GeometryVal}
 
-case class Spark41HoodiePartitionValues(values: InternalRow) extends HoodiePartitionValues {
-  override def numFields: Int = {
-    values.numFields
-  }
-
-  override def setNullAt(i: Int): Unit = {
-    values.setNullAt(i)
-  }
-
-  override def update(i: Int, value: Any): Unit = {
-    values.update(i, value)
-  }
+case class Spark41HoodiePartitionValues(override val values: InternalRow)
+  extends Spark4HoodiePartitionValues(values) {
 
   override def copy(): InternalRow = {
     Spark41HoodiePartitionValues(values.copy())
-  }
-
-  override def isNullAt(ordinal: Int): Boolean = {
-    values.isNullAt(ordinal)
-  }
-
-  override def getBoolean(ordinal: Int): Boolean = {
-    values.getBoolean(ordinal)
-  }
-
-  override def getByte(ordinal: Int): Byte = {
-    values.getByte(ordinal)
-  }
-
-  override def getShort(ordinal: Int): Short = {
-    values.getShort(ordinal)
-  }
-
-  override def getInt(ordinal: Int): Int = {
-    values.getInt(ordinal)
-  }
-
-  override def getLong(ordinal: Int): Long = {
-    values.getLong(ordinal)
-  }
-
-  override def getFloat(ordinal: Int): Float = {
-    values.getFloat(ordinal)
-  }
-
-  override def getDouble(ordinal: Int): Double = {
-    values.getDouble(ordinal)
-  }
-
-  override def getDecimal(ordinal: Int, precision: Int, scale: Int): Decimal = {
-    values.getDecimal(ordinal, precision, scale)
-  }
-
-  override def getUTF8String(ordinal: Int): UTF8String = {
-    values.getUTF8String(ordinal)
-  }
-
-  override def getBinary(ordinal: Int): Array[Byte] = {
-    values.getBinary(ordinal)
   }
 
   override def getGeography(ordinal: Int): GeographyVal = {
@@ -91,29 +35,5 @@ case class Spark41HoodiePartitionValues(values: InternalRow) extends HoodieParti
 
   override def getGeometry(ordinal: Int): GeometryVal = {
     values.getGeometry(ordinal)
-  }
-
-  override def getInterval(ordinal: Int): CalendarInterval = {
-    values.getInterval(ordinal)
-  }
-
-  override def getVariant(ordinal: Int): VariantVal = {
-    values.getVariant(ordinal)
-  }
-
-  override def getStruct(ordinal: Int, numFields: Int): InternalRow = {
-    values.getStruct(ordinal, numFields)
-  }
-
-  override def getArray(ordinal: Int): ArrayData = {
-    values.getArray(ordinal)
-  }
-
-  override def getMap(ordinal: Int): MapData = {
-    values.getMap(ordinal)
-  }
-
-  override def get(ordinal: Int, dataType: DataType): AnyRef = {
-    values.get(ordinal, dataType)
   }
 }

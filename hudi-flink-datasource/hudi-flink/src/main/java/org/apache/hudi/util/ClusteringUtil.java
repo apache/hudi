@@ -87,7 +87,7 @@ public class ClusteringUtil {
         .filter(instant -> instant.getState() == HoodieInstant.State.INFLIGHT)
         .collect(Collectors.toList());
     inflightInstants.forEach(inflightInstant -> {
-      log.info("Rollback the inflight clustering instant: " + inflightInstant + " for failover");
+      log.info("Rollback the inflight clustering instant: {} for failover", inflightInstant);
       table.rollbackInflightClustering(inflightInstant,
           commitToRollback -> writeClient.getTableServiceClient().getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false),
           writeClient.getTransactionManager());

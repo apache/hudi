@@ -172,7 +172,7 @@ public class ExportCommand {
 
               final String instantTime = archiveEntryRecord.get("commitTime").toString();
               if (metadata == null) {
-                log.error("Could not load metadata for action " + action + " at instant time " + instantTime);
+                log.error("Could not load metadata for action {} at instant time {}", action, instantTime);
                 continue;
               }
               final String outPath = localFolder + StoragePath.SEPARATOR + instantTime + "." + action;

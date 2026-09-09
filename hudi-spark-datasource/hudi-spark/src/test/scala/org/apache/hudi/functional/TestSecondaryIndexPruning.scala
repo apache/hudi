@@ -231,6 +231,78 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarnessScala {
   }
 
   @Test
+  def testSecondaryIndexWithNonAsciiSecondaryKeyValues(): Unit = {
+    var hudiOpts = commonOpts
+    hudiOpts = hudiOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> COW_TABLE_TYPE_OPT_VAL,
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
+    tableName += "test_secondary_index_non_ascii_partitioned_cow"
+
+    // These two secondary values have UTF-16 order reversed vs their raw UTF-8 byte order:
+    // U+E000 encodes to bytes EE 80 80 while U+20000 encodes to F0 A0 80 80, so U+E000 sorts
+    // before U+20000 by UTF-8 bytes; but in UTF-16 the U+20000 surrogate pair (D840 DC00)
+    // sorts before the single U+E000 code unit. The fix orders metadata keys by UTF-8 bytes,
+    // matching HFile, so both lookups must still resolve to the correct row.
+    val bmpVal = new String(Character.toChars(0xE000)) + "acme"
+    val astralVal = new String(Character.toChars(0x20000)) + "acme"
+    val asciiVal = "acme"
+
+    spark.sql(
+      s"""
+         |create table $tableName (
+         |  ts bigint,
+         |  record_key_col string,
+         |  not_record_key_col string,
+         |  partition_key_col string
+         |) using hudi
+         | options (
+         |  primaryKey ='record_key_col',
+         |  type = 'cow',
+         |  hoodie.metadata.enable = 'true',
+         |  hoodie.metadata.record.index.enable = 'true',
+         |  hoodie.datasource.write.recordkey.field = 'record_key_col',
+         |  hoodie.enable.data.skipping = 'true',
+         |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
+         | )
+         | partitioned by(partition_key_col)
+         | location '$basePath'
+       """.stripMargin)
+    // small file limit 0 so each insert lands in its own file, giving data skipping something to prune
+    withSQLConf("hoodie.parquet.small.file.limit" -> "0") {
+      spark.sql(s"insert into $tableName values(1, 'row1', '$bmpVal', 'p1')")
+      spark.sql(s"insert into $tableName values(2, 'row2', '$astralVal', 'p2')")
+      spark.sql(s"insert into $tableName values(3, 'row3', '$asciiVal', 'p3')")
+      // create secondary index on the column holding the non-ascii values
+      spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
+      metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(basePath)
+        .setConf(HoodieTestUtils.getDefaultStorageConf)
+        .build()
+      assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))
+      // non-ascii secondary values must be preserved verbatim in the secondary index records
+      checkAnswer(s"select key from hudi_metadata('$basePath') where type=7")(
+        Seq(bmpVal + SECONDARY_INDEX_RECORD_KEY_SEPARATOR + "row1"),
+        Seq(astralVal + SECONDARY_INDEX_RECORD_KEY_SEPARATOR + "row2"),
+        Seq(asciiVal + SECONDARY_INDEX_RECORD_KEY_SEPARATOR + "row3")
+      )
+      withSQLConf("hoodie.metadata.enable" -> "true",
+        "hoodie.enable.data.skipping" -> "true",
+        "hoodie.fileIndex.dataSkippingFailureMode" -> "strict") {
+        // each non-ascii equality predicate must resolve to exactly its own row via the SI prefix lookup
+        checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col = '$bmpVal'")(
+          Seq(1, "row1", bmpVal, "p1")
+        )
+        checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col = '$astralVal'")(
+          Seq(2, "row2", astralVal, "p2")
+        )
+        // data skipping must prune files using the non-ascii secondary keys
+        verifyFilePruning(hudiOpts, EqualTo(attribute("not_record_key_col"), Literal(bmpVal)))
+        verifyFilePruning(hudiOpts, EqualTo(attribute("not_record_key_col"), Literal(astralVal)))
+      }
+    }
+  }
+
+  @Test
   def testCreateAndDropSecondaryIndex(): Unit = {
     var hudiOpts = commonOpts
     hudiOpts = hudiOpts ++ Map(

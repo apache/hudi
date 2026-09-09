@@ -19,6 +19,8 @@
 
 package org.apache.hudi.utilities.util;
 
+import org.apache.hudi.common.util.StringUtils;
+
 import javax.annotation.Nonnull;
 
 import java.nio.ByteBuffer;
@@ -68,7 +70,7 @@ public class BloomFilterData implements Comparable<BloomFilterData> {
 
   @Override
   public String toString() {
-    String bloomFilterString = new String(bloomFilter.array());
+    String bloomFilterString = StringUtils.fromUTF8Bytes(bloomFilter.array());
     return "BloomFilterData{"
         + "partitionPath='" + partitionPath + '\''
         + ", filename='" + filename + '\''

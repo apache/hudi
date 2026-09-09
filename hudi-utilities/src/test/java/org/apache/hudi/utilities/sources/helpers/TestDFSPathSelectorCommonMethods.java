@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -44,6 +45,7 @@ import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.createBaseF
 import static org.apache.hudi.utilities.config.DFSPathSelectorConfig.ROOT_INPUT_PATH;
 import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.PARTITIONS_LIST_PARALLELISM;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestDFSPathSelectorCommonMethods extends HoodieSparkClientTestHarness {
@@ -163,5 +165,18 @@ public class TestDFSPathSelectorCommonMethods extends HoodieSparkClientTestHarne
     assertTrue(fileNames2ndRead.get(1).startsWith("foo5"));
     String checkpointStr2ndRead = nextFilePathsAndCheckpoint.getRight().getCheckpointKey();
     assertEquals(2000L, Long.parseLong(checkpointStr2ndRead), "should read up to foo5 (inclusive)");
+  }
+
+  @ParameterizedTest
+  @ValueSource(classes = {DFSPathSelector.class, DatePartitionPathSelector.class})
+  void getNextFilePathsAndMaxModificationTimeReturnsV1CheckpointWhenNoEligibleFiles(Class<?> clazz) throws Exception {
+    DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, storageConf.unwrap());
+    createBaseFile(basePath, "p1", "000", "foo1", 10, 1000);
+    createBaseFile(basePath, "p1", "000", "foo2", 10, 2000);
+    Pair<Option<String>, Checkpoint> result = selector
+        .getNextFilePathsAndMaxModificationTime(jsc, Option.of(new StreamerCheckpointV2("999999999")), 30);
+    assertTrue(result.getLeft().isEmpty());
+    assertInstanceOf(StreamerCheckpointV1.class, result.getRight());
+    assertEquals("999999999", result.getRight().getCheckpointKey());
   }
 }

@@ -29,12 +29,14 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.catalyst.CatalystTypeConverters;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.unsafe.types.UTF8String;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.stream.Stream;
 
@@ -212,5 +214,80 @@ class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
     HoodieKey key = keyGenerator.getKey(avroRecord);
     Assertions.assertEquals("key1", key.getRecordKey());
     Assertions.assertEquals("2026/01/01", key.getPartitionPath());
+  }
+
+  @Test
+  void testSlashSeparatedDatePartitioningLeavesLeadingDashesAlone() {
+    SimpleKeyGenerator keyGenerator = new SimpleKeyGenerator(getPropsWithSlashSeparatedDatePartitioning());
+
+    // NOTE: Substituting here would yield a partition path starting with "/", which
+    //       [[FSUtils#constructAbsolutePath(String, String)]] and the [[StoragePath]] overload used
+    //       by [[AbstractTableFileSystemView]] resolve differently -- the former chops the leading
+    //       "/", the latter URI-resolves the table base path away -- so the writer and the
+    //       file-system view would disagree on where the partition lives
+    GenericRecord avroRecord = new GenericData.Record(HoodieSchema.parse(KeyGeneratorTestUtilities.EXAMPLE_SCHEMA).getAvroSchema());
+    avroRecord.put("timestamp", "-5");
+    avroRecord.put("_row_key", "key1");
+    avroRecord.put("ts_ms", "-5");
+    avroRecord.put("pii_col", "val1");
+
+    HoodieKey key = keyGenerator.getKey(avroRecord);
+    Assertions.assertEquals("key1", key.getRecordKey());
+    Assertions.assertEquals("-5", key.getPartitionPath());
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testSlashSeparatedDatePartitioningOnRowWritingPaths(boolean urlEncode) {
+    TypedProperties properties = getPropsWithSlashSeparatedDatePartitioning();
+    // NOTE: "ts_ms" is the string-typed field of the example schema, "timestamp" is a long
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "ts_ms");
+    properties.put(KeyGeneratorOptions.URL_ENCODE_PARTITIONING.key(), String.valueOf(urlEncode));
+    SimpleKeyGenerator keyGenerator = new SimpleKeyGenerator(properties);
+
+    GenericRecord avroRecord = getRecord();
+    Assertions.assertEquals("2020/03/21", keyGenerator.getPartitionPath(avroRecord));
+
+    Row row = KeyGeneratorTestUtilities.getRow(avroRecord);
+    Assertions.assertEquals("2020/03/21", keyGenerator.getPartitionPath(row));
+
+    InternalRow internalRow = KeyGeneratorTestUtilities.getInternalRow(row);
+    Assertions.assertEquals(UTF8String.fromString("2020/03/21"),
+        keyGenerator.getPartitionPath(internalRow, row.schema()));
+
+    // Encoding runs before the substitution on all three write paths, so an escapable character
+    // is escaped while the dash still becomes a directory separator. This pins the ordering at
+    // the KeyGenUtils/Avro level too, which the formatter-level encode test cannot reach
+    avroRecord.put("ts_ms", "a?b-c");
+    String expected = urlEncode ? "a%3Fb/c" : "a?b/c";
+    Assertions.assertEquals(expected, keyGenerator.getPartitionPath(avroRecord));
+
+    Row encodedRow = KeyGeneratorTestUtilities.getRow(avroRecord);
+    Assertions.assertEquals(expected, keyGenerator.getPartitionPath(encodedRow));
+    Assertions.assertEquals(UTF8String.fromString(expected),
+        keyGenerator.getPartitionPath(KeyGeneratorTestUtilities.getInternalRow(encodedRow), encodedRow.schema()));
+  }
+
+  @Test
+  void testSlashSeparatedDatePartitioningWithNullValue() {
+    TypedProperties properties = getPropsWithSlashSeparatedDatePartitioning();
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "nested_col.prop1");
+    SimpleKeyGenerator keyGenerator = new SimpleKeyGenerator(properties);
+
+    GenericRecord avroRecord = getRecord(getNestedColRecord(null, 10L));
+    // The Avro arm covers the HUDI-1888 class (NPE on a null nested partition value) under slash
+    Assertions.assertEquals(HUDI_DEFAULT_PARTITION_PATH, keyGenerator.getPartitionPath(avroRecord));
+
+    Row row = KeyGeneratorTestUtilities.getRow(avroRecord);
+    Assertions.assertEquals(HUDI_DEFAULT_PARTITION_PATH, keyGenerator.getPartitionPath(row));
+
+    // NOTE: [[KeyGeneratorTestUtilities#getInternalRow]] builds a flat [[GenericInternalRow]], leaving
+    //       a nested value as a [[Row]], so the conversion has to go through Spark here. "nested_col.prop1"
+    //       is the only nullable field of the example schema, and a null on a non-nullable one is
+    //       rejected by [[org.apache.spark.sql.HoodieUnsafeRowUtils]] before the formatter is reached
+    InternalRow internalRow =
+        (InternalRow) CatalystTypeConverters.createToCatalystConverter(row.schema()).apply(row);
+    Assertions.assertEquals(UTF8String.fromString(HUDI_DEFAULT_PARTITION_PATH),
+        keyGenerator.getPartitionPath(internalRow, row.schema()));
   }
 }

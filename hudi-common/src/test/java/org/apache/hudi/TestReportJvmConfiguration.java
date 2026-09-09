@@ -42,14 +42,14 @@ public class TestReportJvmConfiguration {
     MemoryUsage nonHeapMemoryUsage = memoryBean.getNonHeapMemoryUsage();
 
     LOG.warn("Heap Memory Usage (MemoryMXBean):");
-    LOG.warn("  Used: " + heapMemoryUsage.getUsed() + " bytes");
-    LOG.warn("  Committed: " + heapMemoryUsage.getCommitted() + " bytes");
-    LOG.warn("  Max: " + heapMemoryUsage.getMax() + " bytes");
+    LOG.warn("  Used: {} bytes", heapMemoryUsage.getUsed());
+    LOG.warn("  Committed: {} bytes", heapMemoryUsage.getCommitted());
+    LOG.warn("  Max: {} bytes", heapMemoryUsage.getMax());
 
     LOG.warn("Non-Heap Memory Usage (MemoryMXBean):");
-    LOG.warn("  Used: " + nonHeapMemoryUsage.getUsed() + " bytes");
-    LOG.warn("  Committed: " + nonHeapMemoryUsage.getCommitted() + " bytes");
-    LOG.warn("  Max: " + nonHeapMemoryUsage.getMax() + " bytes");
+    LOG.warn("  Used: {} bytes", nonHeapMemoryUsage.getUsed());
+    LOG.warn("  Committed: {} bytes", nonHeapMemoryUsage.getCommitted());
+    LOG.warn("  Max: {} bytes", nonHeapMemoryUsage.getMax());
   }
 
   private void reportMemoryUsageWithRuntime() {
@@ -60,8 +60,8 @@ public class TestReportJvmConfiguration {
     long usedMemory = totalMemory - freeMemory;
 
     LOG.warn("Memory Usage (Runtime):");
-    LOG.warn("  Total Memory: " + totalMemory + " bytes");
-    LOG.warn("  Free Memory: " + freeMemory + " bytes");
-    LOG.warn("  Used Memory: " + usedMemory + " bytes");
+    LOG.warn("  Total Memory: {} bytes", totalMemory);
+    LOG.warn("  Free Memory: {} bytes", freeMemory);
+    LOG.warn("  Used Memory: {} bytes", usedMemory);
   }
 }

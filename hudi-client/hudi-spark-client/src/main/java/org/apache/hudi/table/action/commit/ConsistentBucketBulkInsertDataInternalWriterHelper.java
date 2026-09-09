@@ -75,7 +75,7 @@ public class ConsistentBucketBulkInsertDataInternalWriterHelper extends BucketBu
 
   private HoodieRowCreateHandle getBucketRowCreateHandle(String partitionPath, String recordKey) {
     ConsistentBucketIdentifier identifier = getBucketIdentifier(partitionPath);
-    final ConsistentHashingNode node = identifier.getBucket(recordKey, indexKeyFields);
+    final ConsistentHashingNode node = identifier.getBucket(recordKey, indexKeyFieldList);
     String fileId = FSUtils.createNewFileId(node.getFileIdPrefix(), 0);
 
     ValidationUtils.checkArgument(node.getTag() != ConsistentHashingNode.NodeTag.NORMAL

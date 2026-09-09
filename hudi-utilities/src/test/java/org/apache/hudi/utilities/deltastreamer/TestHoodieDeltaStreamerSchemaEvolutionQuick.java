@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.MissingSchemaFieldException;
 import org.apache.hudi.utilities.UtilHelpers;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionException;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
 import org.apache.spark.sql.Column;
@@ -231,7 +232,9 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
       addData(df, false);
       deltaStreamer.sync();
       assertTrue(allowNullForDeletedCols);
-    } catch (MissingSchemaFieldException e) {
+    } catch (HoodieIngestionException e) {
+      assertTrue(e.getCause() instanceof MissingSchemaFieldException,
+          "Expected cause to be MissingSchemaFieldException but was: " + e.getCause());
       assertFalse(allowNullForDeletedCols);
       return;
     }
@@ -421,7 +424,9 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
       assertTrue(riderFieldOpt.get().schema().getTypes()
           .stream().anyMatch(t -> HoodieSchemaType.STRING == t.getType()));
       assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);
-    } catch (MissingSchemaFieldException e) {
+    } catch (HoodieIngestionException e) {
+      assertTrue(e.getCause() instanceof MissingSchemaFieldException,
+          "Expected cause to be MissingSchemaFieldException but was: " + e.getCause());
       assertFalse(allowNullForDeletedCols || targetSchemaSameAsTableSchema);
     }
   }

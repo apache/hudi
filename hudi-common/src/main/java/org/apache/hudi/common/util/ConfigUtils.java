@@ -151,7 +151,13 @@ public class ConfigUtils {
    * Ensures that the prefixed merge properties are populated for mergers.
    */
   public static TypedProperties getMergeProps(TypedProperties props, HoodieTableConfig tableConfig) {
-    Map<String, String> mergeProps = tableConfig.getTableMergeProperties();
+    // Prefer the payload class persisted in the table config, falling back to the reader/write props
+    // (e.g. hoodie.datasource.write.payload.class) when the table never persisted it. This keeps the
+    // persisted payload authoritative (no query-side shadowing) while pre-v9 delete markers still derive.
+    String payloadClass = tableConfig.getPayloadClassIfPresent()
+        .orElseGet(() -> HoodieRecordPayload.getPayloadClassNameIfPresent(props)
+            .orElseGet(tableConfig::getPayloadClass));
+    Map<String, String> mergeProps = tableConfig.getTableMergeProperties(payloadClass);
     if (mergeProps.isEmpty()) {
       return props;
     }
@@ -682,7 +688,7 @@ public class ConfigUtils {
           return props;
         } catch (IOException e) {
           if (HoodieExceptionUtil.isPermissionDeniedException(e)) {
-            log.error("Permission denied for " + path.toString() + " file.", e);
+            log.error("Permission denied for {} file.", path, e);
             throw new HoodieIOException("Permission denied for " + path + " file path. User does not have read access on the dataset.", e);
           } else {
             log.warn("Could not read properties from {}: {}", path, e);

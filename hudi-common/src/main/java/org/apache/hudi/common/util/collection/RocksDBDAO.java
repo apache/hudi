@@ -59,6 +59,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
@@ -153,8 +154,8 @@ public class RocksDBDAO {
       for (int index = 0; index < managedHandles.size(); index++) {
         ColumnFamilyHandle handle = managedHandles.get(index);
         ColumnFamilyDescriptor descriptor = managedColumnFamilies.get(index);
-        String familyNameFromHandle = new String(handle.getName());
-        String familyNameFromDescriptor = new String(descriptor.getName());
+        String familyNameFromHandle = fromUTF8Bytes(handle.getName());
+        String familyNameFromDescriptor = fromUTF8Bytes(descriptor.getName());
 
         ValidationUtils.checkArgument(familyNameFromDescriptor.equals(familyNameFromHandle),
             "Family Handles not in order with descriptors");
@@ -385,11 +386,11 @@ public class RocksDBDAO {
     List<Pair<String, T>> results = new LinkedList<>();
     try (final RocksIterator it = getRocksDB().newIterator(managedHandlesMap.get(columnFamilyName))) {
       it.seek(getUTF8Bytes(prefix));
-      while (it.isValid() && new String(it.key()).startsWith(prefix)) {
+      while (it.isValid() && fromUTF8Bytes(it.key()).startsWith(prefix)) {
         long beginTs = System.nanoTime();
         T val = deserializePayload(columnFamilyName, it.value());
         timeTakenMicro += ((System.nanoTime() - beginTs) / 1000);
-        results.add(Pair.of(new String(it.key()), val));
+        results.add(Pair.of(fromUTF8Bytes(it.key()), val));
         it.next();
       }
     }
@@ -425,8 +426,8 @@ public class RocksDBDAO {
     // Find first and last keys to be deleted
     String firstEntry = null;
     String lastEntry = null;
-    while (it.isValid() && new String(it.key()).startsWith(prefix)) {
-      String result = new String(it.key());
+    while (it.isValid() && fromUTF8Bytes(it.key()).startsWith(prefix)) {
+      String result = fromUTF8Bytes(it.key());
       it.next();
       if (firstEntry == null) {
         firstEntry = result;

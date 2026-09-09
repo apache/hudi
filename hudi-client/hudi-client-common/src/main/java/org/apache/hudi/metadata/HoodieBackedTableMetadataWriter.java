@@ -58,7 +58,9 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
@@ -170,7 +172,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   // Average size of a record saved within the record index.
   // Record index has a fixed size schema. This has been calculated based on experiments with default settings
   // for block size (1MB), compression (GZ) and disabling the hudi metadata fields.
-  private static final int RECORD_INDEX_AVERAGE_RECORD_SIZE = 48;
+  public static final int RECORD_INDEX_AVERAGE_RECORD_SIZE = 48;
   private transient BaseHoodieWriteClient<?, I, ?, O> writeClient;
 
   protected HoodieWriteConfig metadataWriteConfig;
@@ -429,7 +431,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     } else {
       // if auto initialization is enabled, then we need to list all partitions from the file system
       if (dataWriteConfig.getMetadataConfig().shouldAutoInitialize()) {
-        partitionInfoList = listAllPartitionsFromFilesystem(dataTableInstantTime, pendingDataInstants);
+        partitionInfoList = listAllPartitionsFromFilesystem(dataTableInstantTime, pendingDataInstants,
+            dataWriteConfig.getMetadataConfig().shouldSkipZeroSizeFilesOnInitialize());
       } else {
         // if auto initialization is disabled, we can return an empty list
         partitionInfoList = Collections.emptyList();
@@ -935,6 +938,27 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   }
 
   /**
+   * Resolves the data schema (with metadata fields added) for use during record index bootstrap.
+   * When the write config does not carry a schema (e.g. table-service operations such as clean),
+   * falls back to resolving the schema from the table's commit history / data files.
+   */
+  static HoodieSchema resolveDataSchemaForRLIBootstrap(HoodieTableMetaClient metaClient, HoodieWriteConfig dataWriteConfig) {
+    String writeSchemaStr = dataWriteConfig.getWriteSchema();
+    HoodieSchema rawSchema;
+    if (writeSchemaStr != null) {
+      rawSchema = HoodieSchema.parse(writeSchemaStr);
+    } else {
+      try {
+        rawSchema = new TableSchemaResolver(metaClient).getTableSchema(false);
+      } catch (Exception e) {
+        throw new HoodieException(
+            String.format("Could not resolve schema for table %s for record index bootstrap", metaClient.getBasePath()), e);
+      }
+    }
+    return HoodieSchemaCache.intern(HoodieSchemaUtils.addMetadataFields(rawSchema, dataWriteConfig.allowOperationMetadataField()));
+  }
+
+  /**
    * Fetch record locations from FileSlice snapshot.
    *
    * @param engineContext             context ot use.
@@ -971,26 +995,28 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       final FileSlice fileSlice = partitionAndFileSlice.getValue();
       final String fileId = fileSlice.getFileId();
       HoodieReaderContext<T> readerContext = readerContextFactory.getContext();
-      HoodieSchema dataSchema = HoodieSchemaCache.intern(HoodieSchemaUtils.addMetadataFields(HoodieSchema.parse(dataWriteConfig.getWriteSchema()), dataWriteConfig.allowOperationMetadataField()));
+      HoodieSchema dataSchema = resolveDataSchemaForRLIBootstrap(metaClient, dataWriteConfig);
       HoodieSchema requestedSchema = metaClient.getTableConfig().populateMetaFields() ? getRecordKeySchema()
           : HoodieSchemaUtils.projectSchema(dataSchema, Arrays.asList(metaClient.getTableConfig().getRecordKeyFields().orElse(new String[0])));
       Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(dataWriteConfig.getInternalSchema());
-      HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder()
+      HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>builder()
           .withReaderContext(readerContext)
           .withHoodieTableMetaClient(metaClient)
-          .withFileSlice(fileSlice)
+          .withBaseFileOption(fileSlice.getBaseFile())
+          .withLogFiles(fileSlice.getLogFiles())
+          .withPartitionPath(fileSlice.getPartitionPath())
           .withLatestCommitTime(instantTime.get())
           .withDataSchema(dataSchema)
           .withRequestedSchema(requestedSchema)
-          .withInternalSchema(internalSchemaOption)
+          .withInternalSchemaOpt(internalSchemaOption)
           .withShouldUseRecordPosition(false)
           .withProps(metaClient.getTableConfig().getProps())
           .build();
-      String baseFileInstantTime = fileSlice.getBaseInstantTime();
+      long baseFileInstantTimeMillis = HoodieMetadataPayload.parseRecordIndexInstantTime(fileSlice.getBaseInstantTime());
       return new CloseableMappingIterator<>(fileGroupReader.getClosableIterator(), record -> {
         String recordKey = readerContext.getRecordContext().getRecordKey(record, requestedSchema);
         return HoodieMetadataPayload.createRecordIndexUpdate(recordKey, partition, fileId,
-            baseFileInstantTime, 0);
+            baseFileInstantTimeMillis, 0);
       });
     });
   }
@@ -1064,9 +1090,13 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
    *
    * @param initializationTime  Files which have a timestamp after this are neglected
    * @param pendingDataInstants Pending instants on data set
+   * @param skipZeroSizeFiles   Whether zero-size data files should be skipped during listing, per
+   *                            hoodie.metadata.skip.zero.size.files.on.initialize. Both the initialize path and the
+   *                            restore-sync relisting pass the config so zero-size files are treated consistently;
+   *                            otherwise restore would re-add to the metadata table the files skipped at initialization.
    * @return List consisting of {@code DirectoryInfo} for each partition found.
    */
-  private List<DirectoryInfo> listAllPartitionsFromFilesystem(String initializationTime, Set<String> pendingDataInstants) {
+  private List<DirectoryInfo> listAllPartitionsFromFilesystem(String initializationTime, Set<String> pendingDataInstants, boolean skipZeroSizeFiles) {
     if (dataMetaClient.getActiveTimeline().countInstants() == 0) {
       return Collections.emptyList();
     }
@@ -1078,6 +1108,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     StorageConfiguration<?> storageConf = dataMetaClient.getStorageConf();
     final String dirFilterRegex = dataWriteConfig.getMetadataConfig().getDirectoryFilterRegex();
     StoragePath storageBasePath = dataMetaClient.getBasePath();
+    long totalZeroSizeFiles = 0;
 
     while (!pathsToList.isEmpty()) {
       // In each round we will list a section of directories
@@ -1091,12 +1122,13 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       List<DirectoryInfo> processedDirectories = engineContext.map(pathsToProcess, path -> {
         HoodieStorage storage = HoodieStorageUtils.getStorage(path, storageConf);
         String relativeDirPath = FSUtils.getRelativePartitionPath(storageBasePath, path);
-        return new DirectoryInfo(relativeDirPath, storage.listDirectEntries(path), initializationTime, pendingDataInstants);
+        return new DirectoryInfo(relativeDirPath, storage.listDirectEntries(path), initializationTime, pendingDataInstants, true, skipZeroSizeFiles);
       }, numDirsToList);
 
       // If the listing reveals a directory, add it to queue. If the listing reveals a hoodie partition, add it to
       // the results.
       for (DirectoryInfo dirInfo : processedDirectories) {
+        totalZeroSizeFiles += dirInfo.getZeroSizeFileCount();
         if (!dirFilterRegex.isEmpty()) {
           final String relativePath = dirInfo.getRelativePath();
           if (!relativePath.isEmpty() && relativePath.matches(dirFilterRegex)) {
@@ -1115,6 +1147,10 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       }
     }
 
+    if (totalZeroSizeFiles > 0) {
+      final long zeroSizeCount = totalZeroSizeFiles;
+      metrics.ifPresent(m -> m.incrementMetric(HoodieMetadataMetrics.SKIPPED_ZERO_SIZE_FILES_ON_INITIALIZE_STR, zeroSizeCount));
+    }
     return partitionsToBootstrap;
   }
 
@@ -1173,9 +1209,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
         final HoodieDeleteBlock block = new HoodieDeleteBlock(Collections.emptyList(), blockHeader);
 
-        try (HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
-            .onParentPath(FSUtils.constructAbsolutePath(metadataWriteConfig.getBasePath(), relativePartitionPath))
-            .withFileId(fileGroupFileId)
+        try (HoodieLogFormat.Writer writer = HoodieLogFormatWriter.builder()
+            .withParentPath(FSUtils.constructAbsolutePath(metadataWriteConfig.getBasePath(), relativePartitionPath))
+            .withLogFileId(fileGroupFileId)
             .withInstantTime(instantTime)
             .withLogVersion(HoodieLogFile.LOGFILE_BASE_VERSION)
             .withFileSize(0L)
@@ -1444,6 +1480,12 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
   @Override
   public void completeStreamingCommit(String instantTime, HoodieEngineContext context, List<HoodieWriteStat> partialWriteStats, HoodieCommitMetadata metadata) {
+    if (metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(instantTime)) {
+      LOG.info("Skipping streaming metadata commit completion for already completed instant {}", instantTime);
+      getWriteClient().postCommit(instantTime);
+      return;
+    }
+
     List<HoodieWriteStat> allWriteStats = new ArrayList<>(partialWriteStats);
     // update metadata for left over partitions which does not have streaming writes support.
     allWriteStats.addAll(prepareAndWriteToNonStreamingPartitions(metadata, instantTime).map(WriteStatus::getStat).collectAsList());
@@ -1741,7 +1783,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
     // Restore requires the existing pipelines to be shutdown. So we can safely scan the dataset to find the current
     // list of files in the filesystem.
-    List<DirectoryInfo> dirInfoList = listAllPartitionsFromFilesystem(instantTime, Collections.emptySet());
+    List<DirectoryInfo> dirInfoList = listAllPartitionsFromFilesystem(instantTime, Collections.emptySet(),
+        dataWriteConfig.getMetadataConfig().shouldSkipZeroSizeFilesOnInitialize());
     Map<String, DirectoryInfo> dirInfoMap = dirInfoList.stream().collect(Collectors.toMap(DirectoryInfo::getRelativePath, Function.identity()));
     dirInfoList.clear();
 
@@ -1882,6 +1925,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   public void close() throws Exception {
     if (metadata != null) {
       metadata.close();
+      // Keep the closed reader reference: guarded update paths use its presence to proceed and
+      // mayBeReinitMetadataReader() detects the closed file-system view and reopens the reader.
+      // Nullifying it here would silently skip subsequent metadata updates, such as rollbacks.
     }
     if (writeClient != null) {
       writeClient.close();
@@ -1959,7 +2005,11 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     metadataMetaClient.reloadActiveTimeline();
 
     // Update total size of the metadata and count of base/log files
-    metrics.ifPresent(m -> m.updateSizeMetrics(metadataMetaClient, metadata, dataMetaClient.getTableConfig().getMetadataPartitions()));
+    metrics.ifPresent(m -> {
+      if (m.isDetailedMetricsEnabled()) {
+        m.updateSizeMetrics(metadataMetaClient, metadata, dataMetaClient.getTableConfig().getMetadataPartitions());
+      }
+    });
   }
 
   protected abstract void bulkInsertAndCommit(BaseHoodieWriteClient<?, I, ?, O> writeClient, String instantTime, I preppedRecordInputs, Option<BulkInsertPartitioner> bulkInsertPartitioner);
@@ -2026,7 +2076,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         // scheduling of INDEX only initializes the file group and not add commit
         // so if there are no committed file slices, look for inflight slices
         if (isNonGlobalRLI) {
-          // For isNonGlobalRLI, new partitions added to the data table will cause new filegroups that are not yet commited
+          // For isNonGlobalRLI, new partitions added to the data table will cause new filegroups that are not yet committed
           // therefore, we always need to look for inflight filegroups
           fileSlices = getPartitionLatestFileSlicesIncludingInflight(metadataMetaClient, Option.ofNullable(fsView), partitionPath);
         } else if (fileSlices.isEmpty()) {

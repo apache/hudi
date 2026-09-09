@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.model;
 
+import org.apache.hudi.adapter.DataTypeAdapter;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.util.ValidationUtils;
 
@@ -169,6 +170,6 @@ public abstract class AbstractHoodieRowData implements RowData {
   protected abstract int rebaseOrdinal(int ordinal);
 
   public Variant getVariant(int i) {
-    throw new UnsupportedOperationException("Variant is not supported yet.");
+    return DataTypeAdapter.getVariant(row, rebaseOrdinal(i));
   }
 }

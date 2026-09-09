@@ -49,7 +49,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
@@ -137,9 +136,8 @@ public class LSMTimelineWriter {
       throw new HoodieIOException("Failed to check archiving file before write: " + filePath, ioe);
     }
     try (HoodieFileWriter writer = openWriter(filePath)) {
-      Schema wrapperSchema = HoodieLSMTimelineInstant.getClassSchema();
-      log.info("Writing schema " + wrapperSchema.toString());
-      HoodieSchema schema = HoodieSchema.fromAvroSchema(wrapperSchema);
+      HoodieSchema schema = HoodieSchema.fromAvroSchema(HoodieLSMTimelineInstant.getClassSchema());
+      log.info("Writing schema {}", schema);
       for (ActiveAction activeAction : activeActions) {
         try {
           preWriteCallback.ifPresent(callback -> callback.accept(activeAction));
@@ -147,7 +145,7 @@ public class LSMTimelineWriter {
           final HoodieLSMTimelineInstant metaEntry = MetadataConversionUtils.createLSMTimelineInstant(activeAction, metaClient);
           writer.write(metaEntry.getInstantTime(), new HoodieAvroIndexedRecord(metaEntry), schema);
         } catch (Exception e) {
-          log.error("Failed to write instant: " + activeAction.getInstantTime(), e);
+          log.error("Failed to write instant: {}", activeAction.getInstantTime(), e);
           exceptionHandler.ifPresent(handler -> handler.accept(e));
         }
       }
@@ -290,7 +288,7 @@ public class LSMTimelineWriter {
       compactFiles(candidateFiles, compactedFileName);
       // 4. update the manifest file
       updateManifest(candidateFiles, compactedFileName);
-      log.info("Finishes compaction of source files: " + candidateFiles);
+      log.info("Finishes compaction of source files: {}", candidateFiles);
       return Option.of(compactedFileName);
     }
     return Option.empty();

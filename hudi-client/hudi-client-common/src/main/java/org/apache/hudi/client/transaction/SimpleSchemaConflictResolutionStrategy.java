@@ -30,8 +30,6 @@ import org.apache.hudi.table.HoodieTable;
 
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.stream.Stream;
-
 import static org.apache.hudi.client.transaction.SchemaConflictResolutionStrategy.throwConcurrentSchemaEvolutionException;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
@@ -77,7 +75,7 @@ public class SimpleSchemaConflictResolutionStrategy implements SchemaConflictRes
     // schema and writer schema.
     HoodieInstant lastCompletedInstantAtTxnStart = lastCompletedTxnOwnerInstant.isPresent()
         ? getInstantInTimelineImmediatelyPriorToTimestamp(
-        lastCompletedTxnOwnerInstant.get().getCompletionTime(), schemaResolver.computeSchemaEvolutionTimelineInReverseOrder()).orElse(null)
+        schemaResolver.getOrderingTime(lastCompletedTxnOwnerInstant.get()), schemaResolver).orElse(null)
         : null;
     // If lastCompletedInstantAtTxnValidation is null there are 2 possibilities:
     // - No committed txn at validation starts
@@ -157,9 +155,9 @@ public class SimpleSchemaConflictResolutionStrategy implements SchemaConflictRes
   }
 
   private Option<HoodieInstant> getInstantInTimelineImmediatelyPriorToTimestamp(
-      String timestamp, Stream<HoodieInstant> reverseOrderTimeline) {
-    return Option.fromJavaOptional(reverseOrderTimeline
-        .filter(s -> compareTimestamps(s.getCompletionTime(), LESSER_THAN_OR_EQUALS, timestamp))
+      String timestamp, ConcurrentSchemaEvolutionTableSchemaGetter schemaResolver) {
+    return Option.fromJavaOptional(schemaResolver.computeSchemaEvolutionTimelineInReverseOrder()
+        .filter(s -> compareTimestamps(schemaResolver.getOrderingTime(s), LESSER_THAN_OR_EQUALS, timestamp))
         .findFirst());
   }
 

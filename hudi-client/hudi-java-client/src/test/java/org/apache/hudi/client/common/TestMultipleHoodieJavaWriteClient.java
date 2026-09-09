@@ -35,6 +35,7 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -207,13 +208,24 @@ public class TestMultipleHoodieJavaWriteClient {
               String startCommitTime = writer.startCommit();
               List<WriteStatus> s = writer.upsert(Collections.singletonList(record), startCommitTime);
 
-              writer.commit(startCommitTime, s);
-              LOGGER.info("Completed commit");
-              synchronized (writerQueue) {
-                try {
-                  writerQueue.put(writer);
-                } catch (InterruptedException e) {
-                  throw new RuntimeException(e);
+              try {
+                writer.commit(startCommitTime, s);
+                LOGGER.info("Completed commit");
+              } catch (HoodieWriteConflictException e) {
+                // Under OPTIMISTIC_CONCURRENCY_CONTROL, two writers updating overlapping file
+                // groups conflict and one of them is aborted by design. This test validates that
+                // concurrent writers do not deadlock, so an aborted commit is an expected outcome
+                // and must not fail the test.
+                LOGGER.info("Commit {} was aborted by an expected OCC conflict", startCommitTime);
+              } finally {
+                // Always return the writer to the pool, even when its commit was aborted, so the
+                // remaining records are not starved of writers.
+                synchronized (writerQueue) {
+                  try {
+                    writerQueue.put(writer);
+                  } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                  }
                 }
               }
             }

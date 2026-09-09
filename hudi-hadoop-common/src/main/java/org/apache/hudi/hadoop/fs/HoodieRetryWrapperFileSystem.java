@@ -277,7 +277,7 @@ public class HoodieRetryWrapperFileSystem extends FileSystem {
 
   @Override
   public String getScheme() {
-    return fileSystem.getScheme();
+    return HadoopFSUtils.getScheme(fileSystem);
   }
 
   @Override

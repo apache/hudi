@@ -940,7 +940,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
       int finalCounter = counter;
       curFuture.exceptionally(ex -> {
         if (!jobFailed.getAndSet(true)) {
-          log.warn("One of the job failed. Cancelling all other futures. " + ex.getCause() + ", " + ex.getMessage());
+          log.warn("One of the job failed. Cancelling all other futures. {}, {}", ex.getCause(), ex.getMessage());
           int secondCounter = 0;
           while (secondCounter < futures.size()) {
             if (secondCounter != finalCounter) {
@@ -2356,15 +2356,12 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
 
   private void addCleanCommitWithECTR(HoodieTestTable testTable, String cleanInstant, String ectr, String lastCompleted) throws Exception {
     List<HoodieCleanStat> cleanStatsList = new ArrayList<>();
-    cleanStatsList.add(new HoodieCleanStat(
-        HoodieCleaningPolicy.KEEP_LATEST_COMMITS,
-        "p1",
-        Collections.emptyList(),
-        Collections.emptyList(),
-        Collections.emptyList(),
-        ectr,
-        lastCompleted
-    ));
+    cleanStatsList.add(HoodieCleanStat.builder()
+        .withPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
+        .withPartitionPath("p1")
+        .withEarliestCommitToRetain(ectr)
+        .withLastCompletedCommitTimestamp(lastCompleted)
+        .build());
 
     HoodieCleanMetadata cleanMetadata =
         CleanerUtils.convertCleanMetadata(cleanInstant, Option.of(0L), cleanStatsList, Collections.emptyMap());

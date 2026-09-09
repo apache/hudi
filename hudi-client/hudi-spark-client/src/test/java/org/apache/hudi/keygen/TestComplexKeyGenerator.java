@@ -245,6 +245,24 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
   }
 
   @Test
+  void testSlashSeparatedDatePartitioningLeavesLeadingDashesAlone() {
+    TypedProperties properties = new TypedProperties();
+    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "timestamp");
+    properties.put(KeyGeneratorOptions.SLASH_SEPARATED_DATE_PARTITIONING.key(), "true");
+    properties.put(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key(), "false");
+
+    ComplexKeyGenerator keyGenerator = new ComplexKeyGenerator(properties);
+
+    // This is the only production caller of the multi-field KeyGenUtils#getRecordPartitionPath
+    // overload, so the guard on that line is unexercised without this case
+    GenericRecord avroRecord = KeyGeneratorTestUtilities.getRecord();
+    avroRecord.put("timestamp", "-5");
+
+    assertEquals("-5", keyGenerator.getKey(avroRecord).getPartitionPath());
+  }
+
+  @Test
   void testSlashSeparatedDatePartitioningWithAlreadyFormattedInput() {
     TypedProperties properties = new TypedProperties();
     properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");

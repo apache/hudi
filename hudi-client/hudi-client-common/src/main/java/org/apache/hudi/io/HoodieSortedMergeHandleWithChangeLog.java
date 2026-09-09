@@ -30,7 +30,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
 
@@ -39,9 +38,9 @@ import java.util.Properties;
  */
 public class HoodieSortedMergeHandleWithChangeLog<T, I, K, O> extends HoodieMergeHandleWithChangeLog<T, I, K, O> {
   public HoodieSortedMergeHandleWithChangeLog(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                              Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
+                                              MergeContext<T> mergeContext, String partitionPath, String fileId,
                                               TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
+    super(config, instantTime, hoodieTable, mergeContext, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
   }
 
   /**

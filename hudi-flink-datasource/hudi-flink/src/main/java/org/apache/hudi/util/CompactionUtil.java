@@ -245,7 +245,7 @@ public class CompactionUtil {
         .filter(instant ->
             instant.getState() == HoodieInstant.State.INFLIGHT);
     inflightCompactionTimeline.getInstants().forEach(inflightInstant -> {
-      log.info("Rollback the inflight compaction instant: " + inflightInstant + " for failover");
+      log.info("Rollback the inflight compaction instant: {} for failover", inflightInstant);
       table.rollbackInflightCompaction(inflightInstant, commitToRollback -> writeClient.getTableServiceClient().getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false),
           writeClient.getTransactionManager());
       table.getMetaClient().reloadActiveTimeline();
@@ -269,7 +269,7 @@ public class CompactionUtil {
       String currentTime = HoodieInstantTimeGenerator.getCurrentInstantTimeStr();
       int timeout = conf.get(FlinkOptions.COMPACTION_TIMEOUT_SECONDS);
       if (StreamerUtil.instantTimeDiffSeconds(currentTime, instant.requestedTime()) >= timeout) {
-        log.info("Rollback the inflight compaction instant: " + instant + " for timeout(" + timeout + "s)");
+        log.info("Rollback the inflight compaction instant: {} for timeout({}s)", instant, timeout);
         try (TransactionManager transactionManager = new TransactionManager(table.getConfig(), table.getStorage())) {
           table.rollbackInflightCompaction(instant, transactionManager);
         }

@@ -22,6 +22,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
 
+import lombok.Getter;
+
 import java.io.ByteArrayOutputStream;
 import java.util.HashMap;
 import java.util.Map;
@@ -30,6 +32,7 @@ import java.util.function.Supplier;
 /**
  * Command block issues a specific command to the scanner.
  */
+@Getter
 public class HoodieCommandBlock extends HoodieLogBlock {
 
   private final HoodieCommandBlockTypeEnum type;
@@ -51,10 +54,6 @@ public class HoodieCommandBlock extends HoodieLogBlock {
     super(header, footer, blockContentLocation, content, inputStreamSupplier, readBlockLazily);
     this.type =
         HoodieCommandBlockTypeEnum.values()[Integer.parseInt(header.get(HeaderMetadataType.COMMAND_BLOCK_TYPE))];
-  }
-
-  public HoodieCommandBlockTypeEnum getType() {
-    return type;
   }
 
   @Override

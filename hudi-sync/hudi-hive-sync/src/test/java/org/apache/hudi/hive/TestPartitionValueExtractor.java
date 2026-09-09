@@ -26,6 +26,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
+import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEPRECATED_DEFAULT_PARTITION_PATH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -38,6 +40,48 @@ public class TestPartitionValueExtractor {
     assertEquals(hourPartition.extractPartitionValuesInPath("2020/12/20/01"), list);
     assertThrows(IllegalArgumentException.class, () -> hourPartition.extractPartitionValuesInPath("2020/12/20"));
     assertEquals(hourPartition.extractPartitionValuesInPath("update_time=2020/12/20/01"), list);
+    // a null partition value is written to the single-segment default-partition directory rather
+    // than the yyyy/mm/dd/HH layout, and has to survive the extractor rather than blow it up
+    assertEquals(
+        Collections.singletonList(DEFAULT_PARTITION_PATH),
+        hourPartition.extractPartitionValuesInPath(DEFAULT_PARTITION_PATH));
+    assertEquals(
+        Collections.singletonList(DEFAULT_PARTITION_PATH),
+        hourPartition.extractPartitionValuesInPath("update_time=" + DEFAULT_PARTITION_PATH));
+    // the pre-0.12 marker lands in a "default" directory and maps to the same Hive null marker
+    assertEquals(
+        Collections.singletonList(DEFAULT_PARTITION_PATH),
+        hourPartition.extractPartitionValuesInPath(DEPRECATED_DEFAULT_PARTITION_PATH));
+    assertEquals(
+        Collections.singletonList(DEFAULT_PARTITION_PATH),
+        hourPartition.extractPartitionValuesInPath("update_time=" + DEPRECATED_DEFAULT_PARTITION_PATH));
+  }
+
+  @Test
+  public void testDayPartition() {
+    SlashEncodedDayPartitionValueExtractor dayPartition = new SlashEncodedDayPartitionValueExtractor();
+    assertEquals(
+        Collections.singletonList("2026-01-05"),
+        dayPartition.extractPartitionValuesInPath("2026/01/05"));
+    assertEquals(
+        Collections.singletonList("2026-01-05"),
+        dayPartition.extractPartitionValuesInPath("datestr=2026/01/05"));
+    assertThrows(IllegalArgumentException.class, () -> dayPartition.extractPartitionValuesInPath("2026/01"));
+    // a null partition value is written to the single-segment default-partition directory rather
+    // than the yyyy/mm/dd layout, and has to survive the extractor rather than blow it up
+    assertEquals(
+        Collections.singletonList(DEFAULT_PARTITION_PATH),
+        dayPartition.extractPartitionValuesInPath(DEFAULT_PARTITION_PATH));
+    assertEquals(
+        Collections.singletonList(DEFAULT_PARTITION_PATH),
+        dayPartition.extractPartitionValuesInPath("datestr=" + DEFAULT_PARTITION_PATH));
+    // the pre-0.12 marker lands in a "default" directory and maps to the same Hive null marker
+    assertEquals(
+        Collections.singletonList(DEFAULT_PARTITION_PATH),
+        dayPartition.extractPartitionValuesInPath(DEPRECATED_DEFAULT_PARTITION_PATH));
+    assertEquals(
+        Collections.singletonList(DEFAULT_PARTITION_PATH),
+        dayPartition.extractPartitionValuesInPath("datestr=" + DEPRECATED_DEFAULT_PARTITION_PATH));
   }
 
   @Test
@@ -49,6 +93,14 @@ public class TestPartitionValueExtractor {
     assertThrows(
         IllegalArgumentException.class,
         () -> hiveStylePartition.extractPartitionValuesInPath("2021/04/02"));
+    // Only the first '=' is the separator, so a value containing '=' is preserved.
+    assertEquals(
+        Collections.singletonList("a=b=c"),
+        hiveStylePartition.extractPartitionValuesInPath("k=a=b=c"));
+    // base64-encoded value with '=' padding must not be truncated
+    assertEquals(
+        Collections.singletonList("YWJjZA=="),
+        hiveStylePartition.extractPartitionValuesInPath("col=YWJjZA=="));
   }
 
   @Test

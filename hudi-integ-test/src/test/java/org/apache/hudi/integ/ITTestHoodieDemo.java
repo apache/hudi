@@ -38,28 +38,18 @@ import java.util.List;
  */
 public class ITTestHoodieDemo extends ITTestBase {
 
-  private static final String TRINO_TABLE_CHECK_FILENAME = "trino-table-check.commands";
-  private static final String TRINO_BATCH1_FILENAME = "trino-batch1.commands";
-  private static final String TRINO_BATCH2_FILENAME = "trino-batch2-after-compaction.commands";
-
   private static final String HDFS_DATA_DIR = "/usr/hive/data/input";
   private static final String HDFS_BATCH_PATH1 = HDFS_DATA_DIR + "/batch_1.json";
   private static final String HDFS_BATCH_PATH2 = HDFS_DATA_DIR + "/batch_2.json";
   private static final String HDFS_PRESTO_INPUT_TABLE_CHECK_PATH = HDFS_DATA_DIR + "/presto-table-check.commands";
   private static final String HDFS_PRESTO_INPUT_BATCH1_PATH = HDFS_DATA_DIR + "/presto-batch1.commands";
   private static final String HDFS_PRESTO_INPUT_BATCH2_PATH = HDFS_DATA_DIR + "/presto-batch2-after-compaction.commands";
-  private static final String HDFS_TRINO_INPUT_TABLE_CHECK_PATH = HDFS_DATA_DIR + "/" + TRINO_TABLE_CHECK_FILENAME;
-  private static final String HDFS_TRINO_INPUT_BATCH1_PATH = HDFS_DATA_DIR + "/" + TRINO_BATCH1_FILENAME;
-  private static final String HDFS_TRINO_INPUT_BATCH2_PATH = HDFS_DATA_DIR + "/" + TRINO_BATCH2_FILENAME;
 
   private static final String INPUT_BATCH_PATH1 = HOODIE_WS_ROOT + "/docker/demo/data/batch_1.json";
   private static final String PRESTO_INPUT_TABLE_CHECK_RELATIVE_PATH = "/docker/demo/presto-table-check.commands";
   private static final String PRESTO_INPUT_BATCH1_RELATIVE_PATH = "/docker/demo/presto-batch1.commands";
   private static final String INPUT_BATCH_PATH2 = HOODIE_WS_ROOT + "/docker/demo/data/batch_2.json";
   private static final String PRESTO_INPUT_BATCH2_RELATIVE_PATH = "/docker/demo/presto-batch2-after-compaction.commands";
-  private static final String TRINO_INPUT_TABLE_CHECK_RELATIVE_PATH = "/docker/demo/" + TRINO_TABLE_CHECK_FILENAME;
-  private static final String TRINO_INPUT_BATCH1_RELATIVE_PATH = "/docker/demo/" + TRINO_BATCH1_FILENAME;
-  private static final String TRINO_INPUT_BATCH2_RELATIVE_PATH = "/docker/demo/" + TRINO_BATCH2_FILENAME;
 
   private static final String COW_BASE_PATH = "/user/hive/warehouse/stock_ticks_cow";
   private static final String MOR_BASE_PATH = "/user/hive/warehouse/stock_ticks_mor";
@@ -120,16 +110,15 @@ public class ITTestHoodieDemo extends ITTestBase {
     // batch 1
     ingestFirstBatchAndHiveSync();
     testHiveAfterFirstBatch();
-    // TODO(HUDI-8269, HUDI-8270): fix integration tests with Presto and Trino
+    // TODO(HUDI-8269): fix integration tests with Presto. The legacy Trino demo
+    // path was retired in favor of the integ2 testcontainers Trino E2E suite.
     // testPrestoAfterFirstBatch();
-    // testTrinoAfterFirstBatch();
     testSparkSQLAfterFirstBatch();
 
     // batch 2
     ingestSecondBatchAndHiveSync();
     testHiveAfterSecondBatch();
     // testPrestoAfterSecondBatch();
-    // testTrinoAfterSecondBatch();
     testSparkSQLAfterSecondBatch();
     // TODO: HUDI-8572
     // testIncrementalHiveQueryBeforeCompaction();
@@ -141,7 +130,6 @@ public class ITTestHoodieDemo extends ITTestBase {
     testIncrementalSparkSQLQuery();
     testHiveAfterSecondBatchAfterCompaction();
     // testPrestoAfterSecondBatchAfterCompaction();
-    // testTrinoAfterSecondBatchAfterCompaction();
     // TODO: HUDI-8572
     // testIncrementalHiveQueryAfterCompaction();
   }
@@ -159,14 +147,12 @@ public class ITTestHoodieDemo extends ITTestBase {
     ingestFirstBatchAndHiveSync();
     testHiveAfterFirstBatch();
     //testPrestoAfterFirstBatch();
-    //testTrinoAfterFirstBatch();
     //testSparkSQLAfterFirstBatch();
 
     // batch 2
     ingestSecondBatchAndHiveSync();
     testHiveAfterSecondBatch();
     //testPrestoAfterSecondBatch();
-    //testTrinoAfterSecondBatch();
     //testSparkSQLAfterSecondBatch();
     testIncrementalHiveQueryBeforeCompaction();
     //testIncrementalSparkSQLQuery();
@@ -175,7 +161,6 @@ public class ITTestHoodieDemo extends ITTestBase {
     scheduleAndRunCompaction();
     testHiveAfterSecondBatchAfterCompaction();
     //testPrestoAfterSecondBatchAfterCompaction();
-    //testTrinoAfterSecondBatchAfterCompaction();
     //testIncrementalHiveQueryAfterCompaction();
   }
 
@@ -196,10 +181,6 @@ public class ITTestHoodieDemo extends ITTestBase {
     executePrestoCopyCommand(System.getProperty("user.dir") + "/.." + PRESTO_INPUT_TABLE_CHECK_RELATIVE_PATH, HDFS_DATA_DIR);
     executePrestoCopyCommand(System.getProperty("user.dir") + "/.." + PRESTO_INPUT_BATCH1_RELATIVE_PATH, HDFS_DATA_DIR);
     executePrestoCopyCommand(System.getProperty("user.dir") + "/.." + PRESTO_INPUT_BATCH2_RELATIVE_PATH, HDFS_DATA_DIR);
-
-    executeTrinoCopyCommand(System.getProperty("user.dir") + "/.." + TRINO_INPUT_TABLE_CHECK_RELATIVE_PATH, HDFS_DATA_DIR);
-    executeTrinoCopyCommand(System.getProperty("user.dir") + "/.." + TRINO_INPUT_BATCH1_RELATIVE_PATH, HDFS_DATA_DIR);
-    executeTrinoCopyCommand(System.getProperty("user.dir") + "/.." + TRINO_INPUT_BATCH2_RELATIVE_PATH, HDFS_DATA_DIR);
   }
 
   private void ingestFirstBatchAndHiveSync() throws Exception {
@@ -359,20 +340,6 @@ public class ITTestHoodieDemo extends ITTestBase {
         "\"GOOG\",\"2018-08-31 10:29:00\",\"3391\",\"1230.1899\",\"1230.085\"", 2);
   }
 
-  private void testTrinoAfterFirstBatch() throws Exception {
-    Pair<String, String> stdOutErrPair = executeTrinoCommandFile(HDFS_TRINO_INPUT_TABLE_CHECK_PATH);
-    assertStdOutContains(stdOutErrPair, "stock_ticks_cow", 2);
-    assertStdOutContains(stdOutErrPair, "stock_ticks_mor", 6);
-
-    stdOutErrPair = executeTrinoCommandFile(HDFS_TRINO_INPUT_BATCH1_PATH);
-    assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 10:29:00\"", 4);
-    assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 09:59:00\",\"6330\",\"1230.5\",\"1230.02\"", 2);
-    assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 10:29:00\",\"3391\",\"1230.1899\",\"1230.085\"", 2);
-  }
-
   private void testHiveAfterSecondBatch() throws Exception {
     Pair<String, String> stdOutErrPair = executeHiveCommandFile(HIVE_BATCH1_COMMANDS);
     assertStdOutContains(stdOutErrPair, "| symbol  |         _c1          |\n+---------+----------------------+\n"
@@ -406,20 +373,6 @@ public class ITTestHoodieDemo extends ITTestBase {
         "\"GOOG\",\"2018-08-31 10:59:00\",\"9021\",\"1227.1993\",\"1227.215\"");
   }
 
-  private void testTrinoAfterSecondBatch() throws Exception {
-    Pair<String, String> stdOutErrPair = executeTrinoCommandFile(HDFS_TRINO_INPUT_BATCH1_PATH);
-    assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 10:29:00\"", 2);
-    assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 10:59:00\"", 2);
-    assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 09:59:00\",\"6330\",\"1230.5\",\"1230.02\"", 2);
-    assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 10:29:00\",\"3391\",\"1230.1899\",\"1230.085\"");
-    assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 10:59:00\",\"9021\",\"1227.1993\",\"1227.215\"");
-  }
-
   private void testHiveAfterSecondBatchAfterCompaction() throws Exception {
     Pair<String, String> stdOutErrPair = executeHiveCommandFile(HIVE_BATCH2_COMMANDS);
     assertStdOutContains(stdOutErrPair, "| symbol  |         _c1          |\n+---------+----------------------+\n"
@@ -434,16 +387,6 @@ public class ITTestHoodieDemo extends ITTestBase {
 
   private void testPrestoAfterSecondBatchAfterCompaction() throws Exception {
     Pair<String, String> stdOutErrPair = executePrestoCommandFile(HDFS_PRESTO_INPUT_BATCH2_PATH);
-    assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 10:59:00\"", 2);
-    assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 09:59:00\",\"6330\",\"1230.5\",\"1230.02\"");
-    assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 10:59:00\",\"9021\",\"1227.1993\",\"1227.215\"");
-  }
-
-  private void testTrinoAfterSecondBatchAfterCompaction() throws Exception {
-    Pair<String, String> stdOutErrPair = executeTrinoCommandFile(HDFS_TRINO_INPUT_BATCH2_PATH);
     assertStdOutContains(stdOutErrPair,
         "\"GOOG\",\"2018-08-31 10:59:00\"", 2);
     assertStdOutContains(stdOutErrPair,

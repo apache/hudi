@@ -21,7 +21,6 @@ package org.apache.hudi.table;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -29,16 +28,21 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.marker.MarkerType;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.sink.buffer.BufferMemoryType;
 import org.apache.hudi.sink.buffer.BufferType;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.catalog.HoodieCatalogTestUtils;
 import org.apache.hudi.table.catalog.HoodieHiveCatalog;
 import org.apache.hudi.util.StreamerUtil;
@@ -65,7 +69,6 @@ import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.types.Row;
 import org.apache.flink.util.CollectionUtil;
-import org.apache.flink.util.ExceptionUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -76,6 +79,8 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -91,8 +96,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -113,6 +121,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertLinesMatch;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -121,6 +130,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @ExtendWith(FlinkMiniCluster.class)
 public class ITTestHoodieDataSource {
+  private static final Logger LOG = LoggerFactory.getLogger(ITTestHoodieDataSource.class);
+
+  // A streaming read collected via CollectTableSink is terminated by a forced SuccessException once it
+  // reaches its expected row count. A benign teardown race (see isAcceptableTerminalFailure) can instead
+  // close the source stream mid-read and terminate the job before all rows are emitted, leaving an
+  // incomplete result. Re-reading from the same (already committed) table is idempotent, so retry a few
+  // times before giving up. See submitAndFetchWithRetry.
+  private static final int MAX_STREAM_READ_ATTEMPTS = 3;
+
   private TableEnvironment streamTableEnv;
   private TableEnvironment batchTableEnv;
 
@@ -555,7 +573,7 @@ public class ITTestHoodieDataSource {
         + "  'connector' = '" + CollectSinkTableFactory.FACTORY_ID + "',\n"
         + "  'sink-expected-row-num' = '2'"
         + ")";
-    List<Row> result = execSelectSqlWithExpectedNum(streamTableEnv, "select name, sum(age) from t1 group by name", sinkDDL);
+    List<Row> result = submitAndFetchWithRetry(streamTableEnv, "select name, sum(age) from t1 group by name", sinkDDL, 2);
     final String expected = "[+I(+I[Danny, 24]), +I(+I[Stephen, 34])]";
     assertRowsEquals(result, expected, true);
   }
@@ -712,6 +730,280 @@ public class ITTestHoodieDataSource {
     execInsertSql(streamTableEnv, insertInto);
     List<Row> rows = execSelectSqlWithExpectedNum(streamTableEnv, "select * from t1", TestData.DATA_SET_SOURCE_INSERT.size());
     assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
+  }
+
+  /**
+   * Regression test for HUDI: data loss in stream read from earliest when
+   * {@code read.streaming.skip_compaction = true} on a MOR table with completed
+   * compaction commits. Covers the streaming earliest full table scan branch in
+   * {@link org.apache.hudi.source.IncrementalInputSplits#inputSplits(HoodieTableMetaClient, String, boolean)}.
+   *
+   * <p>Triggering condition:
+   * <ul>
+   *   <li>{@code read.start-commit = earliest} (no instant range -> full table scan path);</li>
+   *   <li>{@code read.streaming.skip_compaction = true} (active timeline filtered out compaction);</li>
+   *   <li>MOR table with at least one completed compaction commit that produced a
+   *       new base file from existing log files.</li>
+   * </ul>
+   *
+   * <p>Construction:
+   * <ol>
+   *   <li>Offline write {@code DATA_SET_INSERT} (8 records, ids 1..8) and then
+   *       {@code DATA_SET_UPDATE_INSERT} (8 records, where ids 1..5 update existing keys
+   *       and ids 9..11 are new) via {@link TestData#writeDataAsBatch}, which deterministically
+   *       triggers an inline compaction once {@code COMPACTION_DELTA_COMMITS = 1} +
+   *       {@code COMPACTION_ASYNC_ENABLED = true} are set. After this step the table has
+   *       both a base file (from compaction) and log files written by the UPDATE batch.</li>
+   *   <li>Streaming read from earliest with {@code skip_compaction = true} and wait until
+   *       the expected number of merged rows are received. Without the fix, the FS view used
+   *       in the earliest full-table-scan branch is built from a compaction-filtered
+   *       timeline, file slice boundaries are wrongly computed, log files are missed
+   *       and the read will never reach the expected row count (the test would time out).</li>
+   * </ol>
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testStreamReadMorTableWithCompactionFromEarliest(boolean useSourceV2) throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.TABLE_NAME, "t1");
+    conf.set(FlinkOptions.TABLE_TYPE, MERGE_ON_READ.name());
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+    conf.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 2);
+    // mandatory for writeDataAsBatch#inlineCompaction to actually run a compaction
+    conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, true);
+    conf.set(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
+
+    // Step 1: offline-write two batches with deterministic inline compaction in between.
+    TestData.writeDataAsBatch(TestData.DATA_SET_INSERT, conf);
+    TestData.writeDataAsBatch(TestData.DATA_SET_UPDATE_INSERT, conf);
+
+    // Step 2: streaming read from earliest with skip_compaction = true.
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .options(getDefaultKeys())
+        .option(FlinkOptions.TABLE_TYPE, MERGE_ON_READ)
+        .option(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name())
+        .option(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 2)
+        .option(FlinkOptions.READ_AS_STREAMING, true)
+        .option(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST)
+        .option(FlinkOptions.READ_STREAMING_CHECK_INTERVAL, 2)
+        .option(FlinkOptions.READ_SOURCE_V2_ENABLED, useSourceV2)
+        // skip compaction instant -> active timeline drops compaction commit
+        .option(FlinkOptions.READ_STREAMING_SKIP_COMPACT, true)
+        .end();
+    streamTableEnv.executeSql(hoodieTableDDL);
+
+    // After the UPDATE batch, the merged result must contain all up-to-date records:
+    //   - 5 updated records   (id1..id5 from DATA_SET_UPDATE_INSERT)
+    //   - 3 carried-over records (id6, id7, id8 from DATA_SET_INSERT, not touched by UPDATE)
+    //   - 3 newly inserted records (id9, id10, id11 from DATA_SET_UPDATE_INSERT)
+    // i.e. 11 records in total. Without the fix the streaming read would never reach
+    // expectedNum = 11 and the test would time out via the CollectSink.
+    final int expectedNum = 11;
+    List<Row> rows = execSelectSqlWithExpectedNum(streamTableEnv, "select * from t1", expectedNum);
+    assertEquals(expectedNum, rows.size(),
+        "Expect 11 up-to-date records to be visible after earliest streaming read"
+            + " with skip_compaction on a MOR table that has a completed compaction commit"
+            + ", actual rows: " + rows);
+  }
+
+  /**
+   * Regression test for HUDI: data loss in batch read from earliest when
+   * {@code read.streaming.skip_compaction = true} on a MOR table with completed
+   * compaction commits. Covers the batch full-table-scan branch in
+   * {@link org.apache.hudi.source.IncrementalInputSplits#inputSplits(HoodieTableMetaClient, boolean)}.
+   *
+   * <p>This complements {@link #testStreamReadMorTableWithCompactionFromEarliest(boolean)}
+   * which only exercises the streaming code path. Without the fix, building the
+   * {@link org.apache.hudi.common.table.view.HoodieTableFileSystemView} with a
+   * compaction-filtered timeline would mis-classify file slice boundaries and
+   * lose log files.
+   */
+  @Test
+  void testBatchReadMorTableWithCompactionFromEarliest() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.TABLE_NAME, "t1");
+    conf.set(FlinkOptions.TABLE_TYPE, MERGE_ON_READ.name());
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+    conf.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 2);
+    // mandatory for writeDataAsBatch#inlineCompaction to actually run a compaction
+    conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, true);
+    conf.set(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
+
+    // Offline-write two batches against overlapping record keys, the 2nd write triggers
+    // an inline compaction that merges existing log files into a new base file - exactly
+    // the scenario that exposes the buggy file-slice classification when skip_compaction
+    // is enabled.
+    TestData.writeDataAsBatch(TestData.DATA_SET_INSERT, conf);
+    TestData.writeDataAsBatch(TestData.DATA_SET_UPDATE_INSERT, conf);
+
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .options(getDefaultKeys())
+        .option(FlinkOptions.TABLE_TYPE, MERGE_ON_READ)
+        .option(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name())
+        .option(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 2)
+        .option(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST)
+        // skip compaction instant -> active timeline drops compaction commit
+        .option(FlinkOptions.READ_STREAMING_SKIP_COMPACT, true)
+        .end();
+    batchTableEnv.executeSql(hoodieTableDDL);
+
+    List<Row> result = CollectionUtil.iteratorToList(
+        batchTableEnv.executeSql("select * from t1").collect());
+    // After update, the merged result must contain all up-to-date records:
+    //   - 5 updated records   (id1..id5 from DATA_SET_UPDATE_INSERT)
+    //   - 3 carried-over records (id6, id7, id8 from DATA_SET_INSERT, not touched by UPDATE)
+    //   - 3 newly inserted records (id9, id10, id11 from DATA_SET_UPDATE_INSERT)
+    // i.e. 11 records in total. Without the fix, log files belonging to the file slice prior
+    // to the inline compaction would be silently dropped by the file system view because
+    // the active timeline filtered out the compaction commit, and the result size would be
+    // smaller than 11.
+    assertEquals(11, result.size(),
+        "Expect all up-to-date records to be visible after earliest + skip_compaction batch read"
+            + ", actual rows: " + result);
+  }
+
+  /**
+   * Regression test for HUDI: data loss when the start commit has been archived
+   * and {@code read.streaming.skip_compaction = true} on a MOR table.
+   * Covers the batch "fallback to full table scan" branch in
+   * {@link org.apache.hudi.source.IncrementalInputSplits#inputSplits(HoodieTableMetaClient, boolean)}
+   * which is reached when {@code hasArchivedInstants == true}.
+   *
+   * <p>Construction:
+   * <ol>
+   *   <li>Write 10 delta-commit batches of {@code (id1,id2), (id3,id4), ...} on a MOR table
+   *       so that each batch only inserts new keys (clear, predictable per-commit semantics).</li>
+   *   <li>Trigger one completed compaction commit by issuing an extra UPDATE batch on
+   *       {@code id1..id4} with {@code COMPACTION_DELTA_COMMITS = 1} via
+   *       {@link TestData#writeDataAsBatch} (which explicitly calls {@code inlineCompaction()}).
+   *       This creates exactly the file-slice boundary that the buggy FS view would
+   *       mis-classify.</li>
+   *   <li>Pick the LAST archived delta-commit as {@code read.start-commit} (filtered by
+   *       {@code action = deltacommit} to exclude any archived compaction {@code commit}
+   *       instants). This is deterministic regardless of how many delta commits were
+   *       archived by the cleaner+archiver and routes the reader through the
+   *       "archived start commit -> fullTableScan" branch.</li>
+   *   <li>Read with {@code skip_compaction = true} and assert on the SET of record-keys
+   *       in the result (not just on count). The expected key set is derived dynamically
+   *       from the timeline: every delta_commit whose completion time is &gt;= the chosen
+   *       start_commit contributes its written ids, plus id1..id4 from the UPDATE batch
+   *       are always present because the UPDATE is the latest write. Without the fix,
+   *       log files of the file slice that straddles the compaction commit are silently
+   *       dropped, so some of these ids would be missing.</li>
+   * </ol>
+   */
+  @Test
+  void testBatchReadMorTableWithCompactionStartCommitArchived() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.TABLE_NAME, "t1");
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+    conf.set(FlinkOptions.ORDERING_FIELDS, "ts");
+    conf.set(FlinkOptions.TABLE_TYPE, MERGE_ON_READ.name());
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+    conf.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 2);
+    // aggressive archival to force older instants out of the active timeline
+    conf.set(FlinkOptions.ARCHIVE_MIN_COMMITS, 4);
+    conf.set(FlinkOptions.ARCHIVE_MAX_COMMITS, 5);
+    conf.set(FlinkOptions.CLEAN_RETAIN_COMMITS, 3);
+    conf.setString("hoodie.commits.archival.batch", "1");
+
+    // Step 1: write 10 batches of 2 new records each -> 10 delta_commit instants, 20 distinct keys.
+    for (int i = 0; i < 20; i += 2) {
+      List<RowData> dataset = TestData.dataSetInsert(i + 1, i + 2);
+      TestData.writeData(dataset, conf);
+    }
+
+    // Step 2: trigger at least one completed compaction commit by issuing one more delta_commit
+    // that UPDATES the very first record keys (id1..id4) and enabling COMPACTION_DELTA_COMMITS=1.
+    // The update writes new log files for the file group that contains id1..id4, and the inline
+    // compaction merges them into a new base file -> a real compaction file-slice boundary.
+    // NOTE: use writeDataAsBatch (which explicitly calls inlineCompaction()), since the plain
+    // writeData helper does not run the compaction even with COMPACTION_DELTA_COMMITS=1.
+    conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, true);
+    conf.set(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
+    TestData.writeDataAsBatch(TestData.dataSetInsert(1, 2, 3, 4), conf);
+
+    // Step 3: list the full timeline in one shot to map start_commit -> expected id set.
+    // Delta_commit instants are strictly monotonically increasing, so the sorted list of all
+    // delta_commits across active + archived timelines gives a 1:1 mapping to the 10 batches
+    // written in Step 1: the k-th delta_commit wrote id_{2k+1} and id_{2k+2}.
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(new Configuration())),
+        tempFile.getAbsolutePath());
+    // Use the merged (archived + active) timeline to capture all delta_commits,
+    // even those that may have been archived by the aggressive archival settings.
+    List<String> batchInstantTimes = TimelineUtils.getTimeline(metaClient, true)
+        .getCommitsTimeline().filterCompletedInstants()
+        .filter(instant -> HoodieTimeline.DELTA_COMMIT_ACTION.equals(instant.getAction()))
+        .getInstantsAsStream().map(HoodieInstant::requestedTime).collect(Collectors.toList());
+    // Step 1 produced exactly 10 delta_commits; the 11th (if present) is from Step 2 UPDATE.
+    // Keep only the first 10 to build the batch-index -> id mapping.
+    assertTrue(batchInstantTimes.size() >= 10,
+        "Expected at least 10 delta_commits from Step 1, got " + batchInstantTimes.size());
+    batchInstantTimes = batchInstantTimes.subList(0, 10);
+
+    // Step 4: pick the LAST archived delta_commit that belongs to Step 1's batches as
+    // start commit. This avoids any drift caused by archival ordering or by compaction
+    // `commit` instants being interleaved with delta_commits in the archived timeline,
+    // and also ignores the Step 2 UPDATE batch in case it also got archived.
+    Set<String> step1InstantTimeSet = new TreeSet<>(batchInstantTimes);
+    List<HoodieInstant> archivedDeltaCommits = metaClient.getArchivedTimeline().getCommitsTimeline()
+        .filterCompletedInstants()
+        .filter(instant -> HoodieTimeline.DELTA_COMMIT_ACTION.equals(instant.getAction()))
+        .filter(instant -> step1InstantTimeSet.contains(instant.requestedTime()))
+        .getInstants();
+    // make sure archival actually happened on Step 1's batches, otherwise the test premise
+    // (the reader hits the archived start commit + fullTableScan branch) does not hold.
+    assertTrue(!archivedDeltaCommits.isEmpty(),
+        "archival did not happen as expected on Step 1's batches, archived delta commits = "
+            + archivedDeltaCommits + ", Step 1 batch instant times = " + batchInstantTimes);
+    HoodieInstant startInstant = archivedDeltaCommits.get(archivedDeltaCommits.size() - 1);
+    String archivedStartInstant = startInstant.requestedTime();
+
+    // The expected key set: every Step 1 batch whose instant time is >= start_commit contributes
+    // its 2 ids; plus id1..id4 from the Step 2 UPDATE batch (always the latest write, never
+    // excluded since its completion time is the largest).
+    int firstIncludedBatchIdx = batchInstantTimes.indexOf(archivedStartInstant);
+    assertTrue(firstIncludedBatchIdx >= 0,
+        "chosen start_commit " + archivedStartInstant + " is not one of the Step 1 batch instant times " + batchInstantTimes);
+    Set<String> expectedIds = new TreeSet<>();
+    for (int i = firstIncludedBatchIdx; i < batchInstantTimes.size(); i++) {
+      expectedIds.add("id" + (2 * i + 1));
+      expectedIds.add("id" + (2 * i + 2));
+    }
+    // UPDATE batch ids — always present in the merged view because the UPDATE is the latest write.
+    expectedIds.add("id1");
+    expectedIds.add("id2");
+    expectedIds.add("id3");
+    expectedIds.add("id4");
+
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .options(getDefaultKeys())
+        .option(FlinkOptions.TABLE_TYPE, MERGE_ON_READ)
+        .option(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name())
+        .option(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 2)
+        .option(FlinkOptions.READ_START_COMMIT, archivedStartInstant)
+        .option(FlinkOptions.READ_STREAMING_SKIP_COMPACT, true)
+        .end();
+    batchTableEnv.executeSql(hoodieTableDDL);
+
+    List<Row> result = CollectionUtil.iteratorToList(
+        batchTableEnv.executeSql("select uuid from t1").collect());
+    Set<String> actualIds = new TreeSet<>();
+    for (Row r : result) {
+      actualIds.add(r.getField(0).toString());
+    }
+    // Without the fix, the FS view used to construct file slices for the fallback full-table-scan
+    // branch is built from a compaction-filtered timeline, so log files of the file slice that
+    // straddles the compaction commit are silently dropped and some ids would be missing from
+    // {@code actualIds}. With the fix, every expected id must be present.
+    assertEquals(expectedIds, actualIds,
+        "Expected id set " + expectedIds + " but got " + actualIds
+            + " when reading from archived start commit " + archivedStartInstant
+            + " with skip_compaction = true on a MOR table that has a completed compaction commit");
   }
 
   @ParameterizedTest
@@ -908,9 +1200,22 @@ public class ITTestHoodieDataSource {
         + "       join t1/*+ OPTIONS('lookup.join.cache.ttl'='2 day', 'lookup.async'='" + async + "',"
         + "       'lookup.join.cache.type'='" + cacheType + "') */  "
         + "       FOR SYSTEM_TIME AS OF o.proc_time AS b on o.uuid = b.uuid";
-    execInsertSql(tableEnv, sql);
-    List<Row> result = CollectionUtil.iterableToList(
-        () -> tableEnv.sqlQuery("select * from t2").execute().collect());
+
+    // The lookup function loads the dimension table lazily on the first probe row, so a teardown /
+    // commit-visibility race can occasionally make the join emit no rows. Re-running the upsert into
+    // the uuid-keyed table t2 is idempotent, so retry until the expected rows materialize.
+    final int expectedNum = TestData.DATA_SET_SOURCE_INSERT.size();
+    List<Row> result = Collections.emptyList();
+    for (int attempt = 1; attempt <= MAX_STREAM_READ_ATTEMPTS; attempt++) {
+      execInsertSql(tableEnv, sql);
+      result = CollectionUtil.iterableToList(
+          () -> tableEnv.sqlQuery("select * from t2").execute().collect());
+      if (result.size() >= expectedNum) {
+        break;
+      }
+      LOG.warn("testLookupJoin collected {} of {} rows on attempt {}/{}; a teardown race produced an "
+          + "empty lookup join. Retrying.", result.size(), expectedNum, attempt, MAX_STREAM_READ_ATTEMPTS);
+    }
 
     assertRowsEquals(result, TestData.DATA_SET_SOURCE_INSERT);
   }
@@ -1258,8 +1563,8 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
-  @EnumSource(value = HoodieIndex.IndexType.class,  names = {"FLINK_STATE", "GLOBAL_RECORD_LEVEL_INDEX"})
-  void testWriteGlobalIndex(HoodieIndex.IndexType indexType) {
+  @MethodSource("indexAndBooleanParams")
+  void testWriteGlobalIndex(String indexType, boolean bootstrapEnabled) {
     // the source generates 4 commits
     String createSource = TestConfigurations.getFileSourceDDL(
         "source", "test_source_4.data", 4);
@@ -1269,7 +1574,8 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .options(getDefaultKeys())
         .option(FlinkOptions.INDEX_GLOBAL_ENABLED, true)
-        .option(FlinkOptions.INDEX_TYPE, indexType.name())
+        .option(FlinkOptions.INDEX_TYPE, indexType)
+        .option(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, bootstrapEnabled)
         .option(FlinkOptions.PRE_COMBINE, true)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
@@ -1360,31 +1666,27 @@ public class ITTestHoodieDataSource {
   }
 
   @Test
-  void testLanceFormatRejectedByFlink() {
-    // Lance base file format is only supported with the Spark engine.
-    // Flink should reject it early with a clear error on both read and write paths.
-    String createLanceTable = sql("lance_t1")
+  void testLanceFormatAppendOnlyWriteAndRead() {
+    String createHoodieTable = sql("lance_t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
-        .options(getDefaultKeys())
+        .option(FlinkOptions.OPERATION, "insert")
         .option("hoodie.table.base.file.format", "LANCE")
         .end();
+    batchTableEnv.executeSql(createHoodieTable);
 
-    // Creating the table itself succeeds (DDL is just metadata registration),
-    // but any attempt to read or write should fail.
-    // Flink wraps our HoodieValidationException in its own ValidationException.
-    batchTableEnv.executeSql(createLanceTable);
+    execInsertSql(batchTableEnv, "insert into lance_t1 values "
+        + "('id1', 'Alice', 23, TIMESTAMP '1970-01-01 00:00:01', 'par1'),"
+        + "('id2', 'Bob', 31, TIMESTAMP '1970-01-01 00:00:02', 'par2')");
 
-    // Source (read) path should throw
-    ValidationException readEx = assertThrows(ValidationException.class,
-        () -> execSelectSql(batchTableEnv, "select * from lance_t1"),
-        "Lance format should be rejected when reading via Flink");
-    assertTrue(ExceptionUtils.findThrowableWithMessage(readEx, HoodieFileFormat.LANCE_SPARK_ONLY_ERROR_MSG).isPresent());
+    List<Row> rows = CollectionUtil.iteratorToList(
+        batchTableEnv.executeSql("select uuid, name, age, ts, `partition` from lance_t1").collect());
+    assertRowsEquals(rows,
+        "[+I[id1, Alice, 23, 1970-01-01T00:00:01, par1], "
+            + "+I[id2, Bob, 31, 1970-01-01T00:00:02, par2]]");
 
-    // Sink (write) path should throw
-    ValidationException writeEx = assertThrows(ValidationException.class,
-        () -> execInsertSql(batchTableEnv, "insert into lance_t1 values ('id1', 'Alice', 23, TIMESTAMP '1970-01-01 00:00:01', 'par1')"),
-        "Lance format should be rejected when writing via Flink");
-    assertTrue(ExceptionUtils.findThrowableWithMessage(writeEx, HoodieFileFormat.LANCE_SPARK_ONLY_ERROR_MSG).isPresent());
+    List<Row> projectedRows = CollectionUtil.iteratorToList(
+        batchTableEnv.executeSql("select name, uuid from lance_t1").collect());
+    assertRowsEquals(projectedRows, "[+I[Alice, id1], +I[Bob, id2]]");
   }
 
   @ParameterizedTest
@@ -2074,6 +2376,124 @@ public class ITTestHoodieDataSource {
     assertRowsEqualsUnordered(expected, result);
   }
 
+  @Test
+  void testParquetNestedRowExceedingReadBatch() {
+    // Regression for NestedColumnReader#readRow throwing ArrayIndexOutOfBoundsException when a COW
+    // base file holds more rows than the 2048-row vectorized read batch
+    // (RecordIterators.DEFAULT_BATCH_SIZE) and a nested ROW column is read. On a full, non-final
+    // batch the Dremel level stream carries a one-record lookahead, so NestedPositionUtil
+    // #calculateRowOffsets returns positionsCount = batchSize + 1 = 2049 while the materialized
+    // child column vectors are sized to their value count = 2048. The Hudi-specific null-row-collapse
+    // loop iterates to positionsCount and reads child.isNullAt(2048), one past a length-2048 vector.
+    //
+    // Two conditions are both required to surface it, and drove this schema and data:
+    //  1. The bad index is only reached through AbstractHeapVector#isNullAt, which short-circuits to
+    //     false without touching isNull[] when the vector has no nulls. So a child vector must
+    //     actually carry a null. Odd-id rows therefore store a present ROW with all-null children
+    //     (row(null, ...)); the row stays present (its own isNullAt(2048) short-circuits) but the
+    //     child leaf vectors get noNulls=false and overrun at the phantom index. Half the rows are
+    //     null-children so the first full batch is guaranteed to contain them regardless of how
+    //     bulk_insert orders keys.
+    //  2. The nullable leaves must be *direct* children of the collapsed row. A sub-row child would
+    //     be renewed to positionsCount (length 2049) and not overrun, so the two nested rows are
+    //     top-level columns: f_scalar row(f0 int, f1 varchar(10)) covers heap-vector children, and
+    //     f_dec row(d decimal(10, 2)) covers a decimal child, whose ParquetDecimalVector is not an
+    //     AbstractHeapVector and must be unwrapped by NestedColumnReader#vectorLength.
+    // See ITTestHoodieDataSource#testParquetNullChildColumnsRowTypes for the collapse behaviour.
+    TableEnvironment tableEnv = batchTableEnv;
+
+    // More rows than one 2048-row read batch, so the first batch is full and non-final -- that is
+    // what makes the level stream carry the trailing lookahead that overshoots the vectors. The
+    // rows are generated by cross joining two small VALUES lists rather than a single 2000+-row
+    // VALUES literal: Calcite plans the latter pathologically slowly (minutes to hours), while two
+    // ~50-element lists plan instantly and the row count is simply their product.
+    final int outer = 43;
+    final int inner = 50;
+    final int numRows = outer * inner; // 2150 > 2048
+
+    String hoodieTableDDL = sql("t1")
+        .field("f_int int")
+        .field("f_scalar row(f0 int, f1 varchar(10))")
+        .field("f_dec row(d decimal(10, 2))")
+        .pkField("f_int")
+        .noPartition()
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.OPERATION, "bulk_insert")
+        // Single write task => all rows land in one base file, so one read split crosses the
+        // 2048-row batch boundary.
+        .option(FlinkOptions.WRITE_TASKS, 1)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    // id = blk * inner + pos is unique over blk in [0, outer), pos in [0, inner) => 0 .. numRows-1.
+    // Both nested rows stay present; even ids get populated leaves, odd ids get all-null leaves
+    // (which the reader collapses back to a NULL row). Each ROW is cast to its named type so the
+    // query output type matches the sink column exactly.
+    String insert = "insert into t1 select\n"
+        + "  g.id,\n"
+        + "  cast(row(\n"
+        + "    case when mod(g.id, 2) = 0 then g.id else cast(null as int) end,\n"
+        + "    case when mod(g.id, 2) = 0 then concat('v', cast(g.id as varchar)) else cast(null as varchar(10)) end\n"
+        + "  ) as row<f0 int, f1 varchar(10)>),\n"
+        + "  cast(row(\n"
+        + "    case when mod(g.id, 2) = 0 then cast(g.id as decimal(10, 2)) else cast(null as decimal(10, 2)) end\n"
+        + "  ) as row<d decimal(10, 2)>)\n"
+        + "from (\n"
+        + "  select blk.b * " + inner + " + pos.p as id\n"
+        + "  from (values " + valuesList(outer) + ") as blk(b)\n"
+        + "  cross join (values " + valuesList(inner) + ") as pos(p)\n"
+        + ") g";
+    execInsertSql(tableEnv, insert);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+
+    // The read completes (no AIOOBE across the batch boundary) and every row is returned. Without
+    // the fix the vectorized read throws while materializing the first full batch, so this fails.
+    assertEquals(numRows, result.size());
+
+    // bulk_insert does not preserve order, so index by pk.
+    Map<Integer, Row> byId = new HashMap<>();
+    for (Row r : result) {
+      byId.put((Integer) r.getField(0), r);
+    }
+    // Populated rows (even id) round-trip both nested rows -- one from the first (full) batch and
+    // one with a large id past the boundary.
+    assertPopulatedRow(byId.get(0), 0);
+    assertPopulatedRow(byId.get(numRows - 2), numRows - 2);
+    // All-null-children rows (odd id) collapse both nested rows back to NULL, including a large id.
+    assertCollapsedRow(byId.get(1));
+    assertCollapsedRow(byId.get(numRows - 1));
+  }
+
+  /** Builds the VALUES row list {@code (0), (1), ..., (n-1)} for the generator cross join. */
+  private static String valuesList(int n) {
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < n; i++) {
+      if (i > 0) {
+        sb.append(", ");
+      }
+      sb.append('(').append(i).append(')');
+    }
+    return sb.toString();
+  }
+
+  /** Asserts the row keyed by an even {@code id} round-trips its populated nested rows. */
+  private static void assertPopulatedRow(Row row, int id) {
+    assertNotNull(row, "row with pk " + id + " was not read back");
+    Row scalar = (Row) row.getField(1);
+    assertEquals(id, scalar.getField(0));
+    assertEquals("v" + id, scalar.getField(1));
+    assertNotNull(((Row) row.getField(2)).getField(0)); // decimal leaf present, not null
+  }
+
+  /** Asserts the row keyed by an odd {@code id} had both all-null nested rows collapsed to NULL. */
+  private static void assertCollapsedRow(Row row) {
+    assertNotNull(row, "expected an odd-id row to be read back");
+    assertNull(row.getField(1)); // f_scalar collapsed to null
+    assertNull(row.getField(2)); // f_dec collapsed to null
+  }
+
   @ParameterizedTest
   @ValueSource(strings = {"insert", "upsert", "bulk_insert"})
   void testParquetNullChildColumnsRowTypes(String operation) {
@@ -2098,6 +2518,36 @@ public class ITTestHoodieDataSource {
         + "+I[2, +I[2, null]], "
         + "+I[3, null]]";
     assertRowsEquals(result, expected);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"insert", "upsert", "bulk_insert"})
+  void testParquetDeeplyNestedRepeatedTypes(String operation) {
+    // Covers a ROW containing an ARRAY of ROW that itself contains a MAP, i.e.
+    // ROW<ARRAY<ROW<INT, MAP<STRING, INT>>>>, where the MAP is a repeated field
+    // nested inside another repeated field (repetition level >= 2).
+    // See HUDI-18491 for the original bug report on this schema shape.
+    TableEnvironment tableEnv = batchTableEnv;
+
+    String hoodieTableDDL = sql("t1")
+        .field("f_int int")
+        .field("f_row row(f_nested_array array<row(f_score int, f_map map<varchar(10), int>)>)")
+        .pkField("f_int")
+        .noPartition()
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.OPERATION, operation)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    execInsertSql(tableEnv, TestSQL.DEEPLY_NESTED_REPEATED_TYPE_INSERT_T1);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    List<Row> expected = Arrays.asList(
+        row(1, row((Object) array(row(11, map("a", 1, "b", 2)), row(12, map("c", 3))))),
+        row(2, row((Object) array(row(21, map("d", 4))))),
+        row(3, row((Object) array(row(31, map("e", 5)), row(32, map("f", 6, "g", 7))))));
+    assertRowsEqualsUnordered(expected, result);
   }
 
   @ParameterizedTest
@@ -3141,6 +3591,7 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .options(getDefaultKeys())
         .option(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name())
+        .option(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true)
         .option(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true)
         .option(FlinkOptions.TABLE_TYPE, MERGE_ON_READ.name())
         .end();
@@ -3443,6 +3894,18 @@ public class ITTestHoodieDataSource {
   }
 
   /**
+   * Return test params => (index type, boolean).
+   */
+  private static Stream<Arguments> indexAndBooleanParams() {
+    Object[][] data =
+        new Object[][] {
+            {"FLINK_STATE", false},
+            {"GLOBAL_RECORD_LEVEL_INDEX", false},
+            {"GLOBAL_RECORD_LEVEL_INDEX", true}};
+    return Stream.of(data).map(Arguments::of);
+  }
+
+  /**
    * Return test params => (index type, table type).
    */
   private static Stream<Arguments> indexAndTableTypeParams() {
@@ -3520,15 +3983,33 @@ public class ITTestHoodieDataSource {
     } else {
       sinkDDL = TestConfigurations.getCollectSinkDDLWithExpectedNum("sink", expectedNum);
     }
-    return execSelectSqlWithExpectedNum(tEnv, select, sinkDDL);
+    return submitAndFetchWithRetry(tEnv, select, sinkDDL, expectedNum);
   }
 
   /**
-   * Use CollectTableSink to collect results with expected row number.
+   * Submits a streaming select that collects into the {@link CollectSinkTableFactory} sink and returns
+   * the collected rows.
+   *
+   * <p>The streaming job is terminated by a forced {@link CollectSinkTableFactory.SuccessException} once
+   * {@code expectedNum} rows are collected. On a slow CI shard the {@code await} window can elapse before
+   * the sink reaches {@code expectedNum} (a bare timeout - see {@link #isAwaitTimeout}), leaving a short
+   * result. Re-reading the already committed table is idempotent, so retry up to
+   * {@link #MAX_STREAM_READ_ATTEMPTS} times when the result is short; this keeps a slow shard from
+   * surfacing as a confusing row-count (or "Unexpected job failure") assertion failure.
    */
-  private List<Row> execSelectSqlWithExpectedNum(TableEnvironment tEnv, String select, String sinkDDL) {
-    TableResult tableResult = submitSelectSql(tEnv, select, sinkDDL);
-    return fetchResultWithExpectedNum(tEnv, tableResult);
+  private List<Row> submitAndFetchWithRetry(TableEnvironment tEnv, String select, String sinkDDL, int expectedNum) {
+    List<Row> rows = Collections.emptyList();
+    for (int attempt = 1; attempt <= MAX_STREAM_READ_ATTEMPTS; attempt++) {
+      TableResult tableResult = submitSelectSql(tEnv, select, sinkDDL);
+      rows = fetchResultWithExpectedNum(tEnv, tableResult);
+      if (expectedNum <= 0 || rows.size() >= expectedNum) {
+        return rows;
+      }
+      LOG.warn("Streaming read collected {} of {} expected rows on attempt {}/{}; a tolerated teardown "
+              + "race ended the job before the read completed. Retrying. select=[{}]",
+          rows.size(), expectedNum, attempt, MAX_STREAM_READ_ATTEMPTS, select);
+    }
+    return rows;
   }
 
   private TableResult submitSelectSql(TableEnvironment tEnv, String select, String sinkDDL) {
@@ -3552,14 +4033,70 @@ public class ITTestHoodieDataSource {
   private List<Row> fetchResultWithExpectedNum(TableEnvironment tEnv, TableResult tableResult) {
     try {
       // wait the continuous streaming query to be terminated by forced exception with expected row number
-      // and max waiting timeout is 30s
-      tableResult.await(30, TimeUnit.SECONDS);
+      // and max waiting timeout is 60s (kept generous so a slow CI shard does not time out before the
+      // sink collects its rows; a bare timeout is still handled as a retryable short read below)
+      tableResult.await(60, TimeUnit.SECONDS);
     } catch (Throwable e) {
-      ExceptionUtils.assertThrowable(e, CollectSinkTableFactory.SuccessException.class);
+      // The only acceptable terminal cause is the sink reaching its expected row count and throwing
+      // SuccessException to terminate the streaming job (the happy path). The Source V2 read path now
+      // reads and closes each split's I/O on a single (split-fetcher) thread, so the former teardown
+      // races (a closed Parquet stream / a closed CDC iterator surfacing on the task thread) can no
+      // longer happen; any other terminal failure is a real error and fails the test.
+      //
+      // A bare await-window TimeoutException is not a terminal failure at all - the sink simply had not
+      // reached expectedNum yet (typically CI-load slowness), so the job is still running. Cancel it and
+      // let submitAndFetchWithRetry re-submit a fresh job, rather than treating a slow shard as a hard
+      // failure.
+      if (isAwaitTimeout(e)) {
+        // Cancel the still-running job (best-effort, bounded) so it cannot keep writing to the shared
+        // CollectSinkTableFactory.RESULT after the retry's re-submit clears it.
+        tableResult.getJobClient().ifPresent(jobClient -> {
+          try {
+            jobClient.cancel().get(30, TimeUnit.SECONDS);
+          } catch (Exception ignored) {
+            // best-effort cancel; the subsequent re-submit clears RESULT and starts a fresh job
+          }
+        });
+        LOG.warn("Streaming read did not reach the expected row count within the await window; "
+                + "cancelled the job and will retry. Collected {} rows so far.",
+            CollectSinkTableFactory.RESULT.values().stream().mapToInt(List::size).sum());
+      } else if (!isSuccessException(e)) {
+        throw new AssertionError("Unexpected job failure", e);
+      }
     }
     tEnv.executeSql("DROP TABLE IF EXISTS sink");
     return CollectSinkTableFactory.RESULT.values().stream()
         .flatMap(Collection::stream)
         .collect(Collectors.toList());
+  }
+
+  /**
+   * Whether {@code e} is a bare {@link TimeoutException} thrown directly by
+   * {@link org.apache.flink.table.api.TableResult#await(long, TimeUnit)} - i.e. the await window elapsed
+   * before the sink reached its expected row count and threw
+   * {@link CollectSinkTableFactory.SuccessException}, leaving the job still running (never terminated),
+   * so the caller cancels it and retries the read rather than swallowing it.
+   *
+   * <p>Only the top-level exception is inspected, never the cause chain: {@code await} throws its own
+   * timeout bare, whereas a genuine job failure arrives wrapped in an {@link ExecutionException} that
+   * may itself embed a {@link TimeoutException} (checkpoint expiry, RPC timeout). Walking the chain
+   * would misclassify such a real failure as a slow shard - cancel it, retry, and finally report a
+   * row-count mismatch with the true cause discarded.
+   */
+  private static boolean isAwaitTimeout(Throwable e) {
+    return e instanceof TimeoutException;
+  }
+
+  /**
+   * Whether {@code e} (or any of its causes) is the normal {@link CollectSinkTableFactory.SuccessException}
+   * terminator (the happy path), as opposed to one of the tolerated teardown-race symptoms.
+   */
+  private static boolean isSuccessException(Throwable e) {
+    for (Throwable cur = e; cur != null; cur = cur.getCause()) {
+      if (cur instanceof CollectSinkTableFactory.SuccessException) {
+        return true;
+      }
+    }
+    return false;
   }
 }

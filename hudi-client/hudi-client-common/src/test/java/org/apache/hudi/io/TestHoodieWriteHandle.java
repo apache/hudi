@@ -81,6 +81,7 @@ class TestHoodieWriteHandle {
     MockitoAnnotations.initMocks(this);
     when(mockHoodieTable.getMetaClient()).thenReturn(mockMetaClient);
     when(mockMetaClient.getTableConfig()).thenReturn(mockTableConfig);
+    when(mockTableConfig.getPayloadClassIfPresent()).thenReturn(Option.empty());
     when(mockWriteConfig.getRecordMerger()).thenReturn(mockRecordMerger);
 
     // Set up a basic schema for the write config

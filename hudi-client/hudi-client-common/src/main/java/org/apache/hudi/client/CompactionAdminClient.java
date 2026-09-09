@@ -299,13 +299,12 @@ public class CompactionAdminClient extends BaseHoodieClient {
         context.setJobStatus(this.getClass().getSimpleName(), "Execute unschedule operations: " + config.getTableName());
         return context.map(renameActions, lfPair -> {
           try {
-            log.info("RENAME " + lfPair.getLeft().getPath() + " => " + lfPair.getRight().getPath());
+            log.info("RENAME {} => {}", lfPair.getLeft().getPath(), lfPair.getRight().getPath());
             renameLogFile(metaClient, lfPair.getLeft(), lfPair.getRight());
             return new RenameOpResult(lfPair, true, Option.empty());
           } catch (IOException e) {
             log.error("Error renaming log file", e);
-            log.error("\n\n\n***NOTE Compaction is in inconsistent state. Try running \"compaction repair "
-                + lfPair.getLeft().getDeltaCommitTime() + "\" to recover from failure ***\n\n\n");
+            log.error("\n\n\n***NOTE Compaction is in inconsistent state. Try running \"compaction repair {}\" to recover from failure ***\n\n\n", lfPair.getLeft().getDeltaCommitTime());
             return new RenameOpResult(lfPair, false, Option.of(e));
           }
         }, parallelism);

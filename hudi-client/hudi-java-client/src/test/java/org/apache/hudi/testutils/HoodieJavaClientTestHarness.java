@@ -353,7 +353,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       runFullValidation(writeConfig, metadataTableBasePath, engineContext);
     }
 
-    log.info("Validation time=" + timer.endTimer());
+    log.info("Validation time={}", timer.endTimer());
   }
 
   protected void validateFilesPerPartition(HoodieTestTable testTable,

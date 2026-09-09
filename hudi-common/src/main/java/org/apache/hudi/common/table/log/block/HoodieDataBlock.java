@@ -30,8 +30,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -57,8 +57,8 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  *   2. Total number of records in the block
  *   3. Actual serialized content of the records
  */
+@Slf4j
 public abstract class HoodieDataBlock extends HoodieLogBlock {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieDataBlock.class);
 
   // TODO rebase records/content to leverage Either to warrant
   //      that they are mutex (used by read/write flows respectively)
@@ -67,6 +67,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   /**
    * Key field's name w/in the record's schema
    */
+  @Getter
   private final String keyFieldName;
 
   private final boolean enablePointLookups;
@@ -130,10 +131,6 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     }
 
     return serializeRecords(records.get(), storage);
-  }
-
-  public String getKeyFieldName() {
-    return keyFieldName;
   }
 
   public boolean containsPartialUpdates() {

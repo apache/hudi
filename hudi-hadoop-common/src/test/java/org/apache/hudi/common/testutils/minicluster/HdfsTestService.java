@@ -63,7 +63,7 @@ public class HdfsTestService {
 
     // If clean, then remove the work dir so we can start fresh.
     if (format) {
-      log.info("Cleaning HDFS cluster data at: " + dfsBaseDirPath + " and starting fresh.");
+      log.info("Cleaning HDFS cluster data at: {} and starting fresh.", dfsBaseDirPath);
       Files.deleteIfExists(dfsBaseDirPath);
     }
 
@@ -114,7 +114,7 @@ public class HdfsTestService {
   private static Configuration configureDFSCluster(Configuration config, String dfsBaseDir, String bindIP,
       int namenodeRpcPort, int datanodePort, int datanodeIpcPort, int datanodeHttpPort) {
 
-    log.info("HDFS force binding to ip: " + bindIP);
+    log.info("HDFS force binding to ip: {}", bindIP);
     config.set(DFSConfigKeys.FS_DEFAULT_NAME_KEY, "hdfs://" + bindIP + ":" + namenodeRpcPort);
     config.set(DFSConfigKeys.DFS_DATANODE_ADDRESS_KEY, bindIP + ":" + datanodePort);
     config.set(DFSConfigKeys.DFS_DATANODE_IPC_ADDRESS_KEY, bindIP + ":" + datanodeIpcPort);

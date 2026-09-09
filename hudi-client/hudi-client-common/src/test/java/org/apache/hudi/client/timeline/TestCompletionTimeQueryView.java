@@ -127,6 +127,59 @@ public class TestCompletionTimeQueryView {
     }
   }
 
+  /**
+   * The {@code completionTime} field of {@code HoodieLSMTimelineInstant} is declared
+   * {@code ["null","string"]} with a null default, and instants archived before the field existed carry
+   * no value for it. Reading such an instant must fall back to the instant time rather than throwing.
+   *
+   * <p>See HUDI-9655: upgrading a table written by 0.x produced
+   * {@code NullPointerException: Cannot invoke "Object.toString()" because the return value of
+   * "org.apache.avro.generic.GenericRecord.get(String)" is null} while loading the archived timeline.
+   */
+  @Test
+  void testReadCompletionTimeWithoutCompletionTime() throws Exception {
+    String tableName = "testTable";
+    String tablePath = tempFile.getAbsolutePath() + StoragePath.SEPARATOR + tableName;
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(
+        HoodieTestUtils.getDefaultStorageConf(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(tablePath)
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
+        .withMarkersType("DIRECT")
+        .build();
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+
+    // instant 1 only ever exists on the LSM timeline, as an instant archived by an older writer would.
+    String archivedInstantTime = String.format("%08d", 1);
+    HoodieCommitMetadata archivedMetadata = testTable.createCommitMetadata(
+        archivedInstantTime, WriteOperationType.INSERT, Arrays.asList("par1", "par2"), 10, false);
+    // instants 2..4 stay active, so that the query for instant 1 falls through to the archive.
+    for (int i = 2; i < 5; i++) {
+      String instantTime = String.format("%08d", i);
+      HoodieCommitMetadata metadata = testTable.createCommitMetadata(
+          instantTime, WriteOperationType.INSERT, Arrays.asList("par1", "par2"), 10, false);
+      testTable.addCommit(instantTime, Option.of(String.format("%08d", i + 1000)), Option.of(metadata));
+    }
+
+    // archive instant 1 with no completion time at all
+    ActiveAction activeAction = new DummyActiveAction(
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, "commit", archivedInstantTime, null),
+        convertMetadataToByteArray(archivedMetadata));
+    List<Exception> archiveFailures = new ArrayList<>();
+    // LSMTimelineWriter#write swallows per-instant failures, so surface them rather than
+    // silently archiving nothing and leaving the assertion below to pass vacuously.
+    LSMTimelineWriter.getInstance(writeConfig, getMockHoodieTable(metaClient))
+        .write(Collections.singletonList(activeAction), Option.empty(), Option.of(archiveFailures::add));
+    assertTrue(archiveFailures.isEmpty(),
+        "Archiving an instant without a completion time should not fail: " + archiveFailures);
+
+    metaClient.reloadActiveTimeline();
+    try (CompletionTimeQueryView view =
+             metaClient.getTableFormat().getTimelineFactory().createCompletionTimeQueryView(metaClient)) {
+      assertThat("An archived instant without a completion time should fall back to its instant time",
+          view.getCompletionTime(archivedInstantTime).orElse(""), is(archivedInstantTime));
+    }
+  }
+
   @Test
   void testReadStartTime() throws Exception {
     String tableName = "testTable";

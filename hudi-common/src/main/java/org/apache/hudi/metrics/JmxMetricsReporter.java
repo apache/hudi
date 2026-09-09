@@ -60,7 +60,7 @@ public class JmxMetricsReporter extends MetricsReporter {
             "Could not start JMX server on any configured port. Ports: " + portsConfig
                 + ". Maybe require port range for multiple hoodie tables");
       }
-      log.info("Configured JMXReporter with {port:" + portsConfig + "}");
+      log.info("Configured JMXReporter with {port: {}}", portsConfig);
     } catch (Exception e) {
       String msg = "Jmx initialize failed: ";
       log.error(msg, e);
@@ -76,13 +76,13 @@ public class JmxMetricsReporter extends MetricsReporter {
     for (int port : ports) {
       try {
         jmxReporterServer = createJmxReport(host, port);
-        log.info("Started JMX server on port " + port + ".");
+        log.info("Started JMX server on port {}.", port);
         break;
       } catch (Exception e) {
         if (e.getCause() instanceof ExportException) {
-          log.info("Skip for initializing jmx port " + port + " because of already in use");
+          log.info("Skip for initializing jmx port {} because of already in use", port);
         } else {
-          log.info("Failed to initialize jmx port " + port + ". " + e.getMessage());
+          log.info("Failed to initialize jmx port {}. {}", port, e.getMessage());
         }
       }
     }

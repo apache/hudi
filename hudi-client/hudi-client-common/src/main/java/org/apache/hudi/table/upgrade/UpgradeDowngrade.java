@@ -208,7 +208,7 @@ public class UpgradeDowngrade {
 
 
     // Perform the actual upgrade/downgrade; this has to be idempotent, for now.
-    log.info("Attempting to move table from version " + fromVersion + " to " + toVersion);
+    log.info("Attempting to move table from version {} to {}", fromVersion, toVersion);
     Map<ConfigProperty, String> tablePropsToAdd = new Hashtable<>();
     Set<ConfigProperty> tablePropsToRemove = new HashSet<>();
     if (isUpgrade) {

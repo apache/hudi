@@ -20,20 +20,33 @@ package org.apache.hudi.client.model;
 
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 
+import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.GenericRowData;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
+import org.apache.flink.table.data.TimestampData;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit tests for {@link HoodieFlinkRecord}.
@@ -265,5 +278,108 @@ public class TestHoodieFlinkRecord {
 
     HoodieFlinkRecord updatedRecord = (HoodieFlinkRecord) record.updateMetaField(schema, 0, "20240101000001");
     assertEquals(HoodieOperation.INSERT, updatedRecord.getOperation());
+  }
+
+  @Test
+  public void testRecordContract() {
+    HoodieKey key = new HoodieKey("id-001", "partition-1");
+    GenericRowData row = GenericRowData.of(StringData.fromString("id-001"));
+    HoodieFlinkRecord record = new HoodieFlinkRecord(
+        key, HoodieOperation.INSERT, 100L, row, true);
+
+    assertEquals(HoodieRecord.HoodieRecordType.FLINK, record.getRecordType());
+    assertEquals(key, record.newInstance().getKey());
+    assertEquals("new-key", record.newInstance(
+        new HoodieKey("new-key", "p"), HoodieOperation.UPDATE_AFTER).getRecordKey());
+    assertEquals("another-key", record.newInstance(
+        new HoodieKey("another-key", "p")).getRecordKey());
+    assertFalse(record.shouldIgnore(null, new Properties()));
+    assertSame(record, record.copy());
+    assertTrue(record.getMetadata().isEmpty());
+
+    HoodieFlinkRecord empty = new HoodieFlinkRecord(
+        key, HoodieOperation.INSERT, (RowData) null);
+    assertTrue(empty.checkIsDelete(null, new Properties()));
+  }
+
+  @Test
+  public void testConvertColumnValueForLogicalType() {
+    TimestampData timestamp = TimestampData.fromInstant(
+        Instant.parse("2025-02-03T04:05:06.123456Z"));
+    HoodieFlinkRecord record = new HoodieFlinkRecord(GenericRowData.of(timestamp));
+
+    assertNull(record.convertColumnValueForLogicalType(
+        HoodieSchema.create(HoodieSchemaType.STRING), null, true));
+    assertEquals(LocalDate.ofEpochDay(2), record.convertColumnValueForLogicalType(
+        HoodieSchema.createDate(), 2, true));
+
+    HoodieSchema millisSchema = HoodieSchema.createTimestampMillis();
+    HoodieSchema millisRecordSchema = HoodieSchema.createRecord(
+        "millis_record", null, null,
+        Arrays.asList(HoodieSchemaField.of("event_time", millisSchema)));
+    Object millisValue = record.getColumnValueAsJava(
+        millisRecordSchema, "event_time", new Properties());
+    assertEquals(timestamp.getMillisecond(), millisValue);
+    assertEquals(timestamp.getMillisecond(), record.convertColumnValueForLogicalType(
+        millisSchema, millisValue, true));
+
+    HoodieSchema microsSchema = HoodieSchema.createTimestampMicros();
+    HoodieSchema microsRecordSchema = HoodieSchema.createRecord(
+        "micros_record", null, null,
+        Arrays.asList(HoodieSchemaField.of("event_time", microsSchema)));
+    Object microsValue = record.getColumnValueAsJava(
+        microsRecordSchema, "event_time", new Properties());
+    long expectedMicros = timestamp.toInstant().getEpochSecond() * 1_000_000
+        + timestamp.toInstant().getNano() / 1_000;
+    assertEquals(expectedMicros, microsValue);
+    assertEquals(timestamp.getMillisecond(), record.convertColumnValueForLogicalType(
+        microsSchema, microsValue, true));
+
+    assertEquals(new BigDecimal("12.34"), record.convertColumnValueForLogicalType(
+        HoodieSchema.createDecimal("decimal", null, null, 10, 2, 5),
+        DecimalData.fromBigDecimal(new BigDecimal("12.34"), 10, 2), true));
+    assertSame(millisValue, record.convertColumnValueForLogicalType(
+        millisSchema, millisValue, false));
+  }
+
+  @Test
+  public void testUnsupportedOperations() {
+    HoodieKey key = new HoodieKey("id-001", "partition-1");
+    GenericRowData row = GenericRowData.of(StringData.fromString("id-001"));
+    HoodieFlinkRecord record = new HoodieFlinkRecord(
+        key, HoodieOperation.INSERT, 100L, row, true);
+    assertThrows(UnsupportedOperationException.class,
+        () -> record.writeRecordPayload(row, null, null));
+    assertThrows(UnsupportedOperationException.class,
+        () -> record.readRecordPayload(null, null));
+    assertThrows(UnsupportedOperationException.class,
+        () -> record.getColumnValues(null, null, false));
+    assertThrows(UnsupportedOperationException.class,
+        () -> record.joinWith(record, null));
+    assertThrows(UnsupportedOperationException.class,
+        () -> record.wrapIntoHoodieRecordPayloadWithParams(
+            null, null, Option.empty(), false, Option.empty(), false, Option.empty()));
+    assertThrows(UnsupportedOperationException.class,
+        () -> record.wrapIntoHoodieRecordPayloadWithKeyGen(null, null, Option.empty()));
+    assertThrows(UnsupportedOperationException.class,
+        () -> record.truncateRecordKey(null, null, null));
+  }
+
+  @Test
+  public void testKeyLookupAndAvroMaterialization() {
+    HoodieSchema schema = HoodieSchema.createRecord("test", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("value", HoodieSchema.create(HoodieSchemaType.INT))));
+    HoodieFlinkRecord record = new HoodieFlinkRecord(GenericRowData.of(
+        StringData.fromString("id-001"), 42));
+
+    assertEquals("id-001", record.getRecordKey(schema, "id"));
+    // The second lookup exercises the cached record-key path.
+    assertEquals("id-001", record.getRecordKey(schema, "id"));
+    assertEquals("id-001", record.toIndexedRecord(schema, new Properties())
+        .get().getData().get(0).toString());
+    assertTrue(record.getAvroBytes(schema, new Properties()).size() > 0);
+    assertEquals(OrderingValues.getDefault(),
+        record.getOrderingValueAsJava(schema, new Properties(), null));
   }
 }

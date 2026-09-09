@@ -20,7 +20,6 @@ package org.apache.hudi.integ.testsuite.helpers;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
-import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
@@ -41,6 +40,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.createCheckpoint;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 
 /**
@@ -99,14 +99,13 @@ public class DFSTestSuitePathSelector extends DFSPathSelector {
       // no data to readAvro
       if (eligibleFiles.size() == 0) {
         return new ImmutablePair<>(Option.empty(),
-            lastCheckpoint.orElseGet(() -> new StreamerCheckpointV2(String.valueOf(Long.MIN_VALUE))));
+            lastCheckpoint.orElseGet(() -> createCheckpoint(String.valueOf(Long.MIN_VALUE))));
       }
       // readAvro the files out.
       String pathStr = eligibleFiles.stream().map(f -> f.getPath().toString())
           .collect(Collectors.joining(","));
 
-      return new ImmutablePair<>(Option.ofNullable(pathStr),
-          new StreamerCheckpointV2(String.valueOf(nextBatchId)));
+      return new ImmutablePair<>(Option.ofNullable(pathStr), createCheckpoint(String.valueOf(nextBatchId)));
     } catch (IOException ioe) {
       throw new HoodieIOException(
           "Unable to readAvro from source from checkpoint: " + lastCheckpoint, ioe);

@@ -18,19 +18,22 @@
 
 package org.apache.hudi.internal.schema.utils;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.exception.SchemaCompatibilityException;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.action.TableChanges;
 import org.apache.hudi.internal.schema.action.TableChangesHelper;
-
-import org.apache.avro.Schema;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
@@ -64,12 +67,13 @@ public class AvroSchemaEvolutionUtils {
    *                                  nullable in the result. Otherwise, no updates will be made to those fields.
    * @return reconcile Schema
    */
-  public static InternalSchema reconcileSchema(Schema incomingSchema, InternalSchema oldTableSchema, boolean makeMissingFieldsNullable) {
+  public static InternalSchema reconcileSchema(HoodieSchema incomingSchema, InternalSchema oldTableSchema,
+                                               boolean makeMissingFieldsNullable, Map<String, Type> timestampLogicalTypeOverrides) {
     /* If incoming schema is null, we fall back on table schema. */
-    if (incomingSchema.getType() == Schema.Type.NULL) {
+    if (incomingSchema.isSchemaNull()) {
       return oldTableSchema;
     }
-    InternalSchema inComingInternalSchema = convert(HoodieSchema.fromAvroSchema(incomingSchema), oldTableSchema.getNameToPosition());
+    InternalSchema inComingInternalSchema = convert(incomingSchema, oldTableSchema.getNameToPosition());
     // check column add/missing
     List<String> colNamesFromIncoming = inComingInternalSchema.getAllColsFullName();
     List<String> colNamesFromOldSchema = oldTableSchema.getAllColsFullName();
@@ -80,7 +84,19 @@ public class AvroSchemaEvolutionUtils {
         .stream()
         .filter(f -> colNamesFromOldSchema.contains(f) && !inComingInternalSchema.findType(f).equals(oldTableSchema.findType(f)))
         .collect(Collectors.toList());
-    if (colNamesFromIncoming.size() == colNamesFromOldSchema.size() && diffFromOldSchema.size() == 0 && typeChangeColumns.isEmpty()) {
+    // check columns the incoming schema relaxed from required to nullable. Since the result is built from
+    // oldTableSchema (to preserve column order/ids and to null-fill missing columns), an existing column
+    // whose incoming counterpart became nullable would otherwise silently keep the table's REQUIRED
+    // nullability, blocking a valid required -> nullable evolution. We only ever relax (never tighten).
+    List<String> nullabilityRelaxColumns = colNamesFromIncoming
+        .stream()
+        .filter(f -> colNamesFromOldSchema.contains(f)
+            && !META_FIELD_NAMES.contains(f)
+            && inComingInternalSchema.findField(f).isOptional()
+            && !oldTableSchema.findField(f).isOptional())
+        .collect(Collectors.toList());
+    if (colNamesFromIncoming.size() == colNamesFromOldSchema.size() && diffFromOldSchema.size() == 0
+        && typeChangeColumns.isEmpty() && nullabilityRelaxColumns.isEmpty()) {
       return oldTableSchema;
     }
 
@@ -119,10 +135,26 @@ public class AvroSchemaEvolutionUtils {
 
     // do type evolution.
     InternalSchema internalSchemaAfterAddColumns = SchemaChangeUtils.applyTableChanges2Schema(oldTableSchema, addChange);
-    TableChanges.ColumnUpdateChange typeChange = TableChanges.ColumnUpdateChange.get(internalSchemaAfterAddColumns);
+    // The reconcile pre-validates timestamp precision changes per field below (against the explicit
+    // overrides), so the update change is constructed permissively; non-overridden precision changes
+    // are rejected here with an actionable error rather than deferred to the gate.
+    TableChanges.ColumnUpdateChange typeChange = TableChanges.ColumnUpdateChange.get(
+        internalSchemaAfterAddColumns, false, true);
     typeChangeColumns.stream().filter(f -> !inComingInternalSchema.findType(f).isNestedType()).forEach(col -> {
-      typeChange.updateColumnType(col, inComingInternalSchema.findType(col));
+      Type tableType = oldTableSchema.findType(col);
+      Type incomingType = inComingInternalSchema.findType(col);
+      if (SchemaChangeUtils.isGatedTimestampChange(tableType, incomingType)) {
+        // Skip-if equals the *table* type: the reconcile is producing the new table schema starting
+        // from oldTableSchema, so a coerce-to-table-precision override needs no schema update — the
+        // writer coerces incoming values via rewriteRecordWithNewSchema.
+        applyTimestampOverrideOrThrow(col, tableType, incomingType, timestampLogicalTypeOverrides, tableType, typeChange);
+      } else {
+        typeChange.updateColumnType(col, incomingType);
+      }
     });
+
+    // relax existing columns to nullable when the incoming schema made them nullable (valid widening)
+    nullabilityRelaxColumns.forEach(col -> typeChange.updateColumnNullability(col, true));
 
     if (makeMissingFieldsNullable) {
       // mark columns missing from incoming schema as nullable
@@ -149,8 +181,119 @@ public class AvroSchemaEvolutionUtils {
     return evolvedSchema;
   }
 
-  public static Schema reconcileSchema(Schema incomingSchema, Schema oldTableSchema, boolean makeMissingFieldsNullable) {
-    return convert(reconcileSchema(incomingSchema, convert(HoodieSchema.fromAvroSchema(oldTableSchema)), makeMissingFieldsNullable), oldTableSchema.getFullName()).toAvroSchema();
+  public static HoodieSchema reconcileSchema(HoodieSchema incomingSchema, HoodieSchema oldTableSchema, boolean makeMissingFieldsNullable,
+                                             Map<String, Type> timestampLogicalTypeOverrides) {
+    return convert(reconcileSchema(incomingSchema, convert(oldTableSchema), makeMissingFieldsNullable, timestampLogicalTypeOverrides), oldTableSchema.getFullName());
+  }
+
+  /**
+   * Reconciles only the timestamp logical-type precision of {@code writerSchema} against
+   * {@code tableSchema}, independent of column add/drop/nullability reconciliation. This is the
+   * single guard that every writer-schema deduction path must apply, including the non-reconcile
+   * paths that otherwise validate via the logical-type-blind Avro reader/writer compatibility check
+   * and would let an unverified micros/millis flip through silently.
+   *
+   * <p>For each field whose precision differs from the table: an override pins it (equal to the
+   * table type coerces the incoming values, a different type applies the authorized evolution), and
+   * a change with no override throws. A UTC/local zone change throws unconditionally, since no
+   * override authorizes one. Non-timestamp changes are left untouched here.
+   */
+  public static HoodieSchema reconcileTimestampLogicalType(HoodieSchema writerSchema, HoodieSchema tableSchema,
+                                                           Map<String, Type> timestampLogicalTypeOverrides) {
+    if (writerSchema == null || writerSchema.getType() != HoodieSchemaType.RECORD
+        || tableSchema == null || tableSchema.getType() != HoodieSchemaType.RECORD) {
+      return writerSchema;
+    }
+    InternalSchema writerInternal = convert(writerSchema);
+    InternalSchema tableInternal = convert(tableSchema);
+    List<String> tableCols = tableInternal.getAllColsFullName();
+    TableChanges.ColumnUpdateChange typeChange = TableChanges.ColumnUpdateChange.get(writerInternal, false, true);
+    boolean changed = false;
+    for (String col : writerInternal.getAllColsFullName()) {
+      if (!tableCols.contains(col)) {
+        continue;
+      }
+      Type writerType = writerInternal.findType(col);
+      Type tableType = tableInternal.findType(col);
+      if (writerType.isNestedType()) {
+        continue;
+      }
+      // A zone change is never authorizable, and this is the only guard on the default
+      // non-reconcile path -- the Avro reader/writer check that follows is logical-type-blind for
+      // two long-backed fields, so skipping here would let the flip through silently.
+      if (SchemaChangeUtils.isCrossZoneTimestampChange(tableType, writerType)) {
+        throw crossZoneTimestampChangeError(col, tableType, writerType);
+      }
+      if (!SchemaChangeUtils.isGatedTimestampChange(tableType, writerType)) {
+        continue;
+      }
+      // Skip-if equals the *writer* type: this method returns a modified writerSchema. When the
+      // override already matches the writer field, the writer schema is what we want; no update.
+      if (applyTimestampOverrideOrThrow(col, tableType, writerType, timestampLogicalTypeOverrides, writerType, typeChange)) {
+        changed = true;
+      }
+    }
+    if (!changed) {
+      return writerSchema;
+    }
+    return convert(SchemaChangeUtils.applyTableChanges2Schema(writerInternal, typeChange), writerSchema.getFullName());
+  }
+
+  /**
+   * Shared override-apply for a single field whose type is a gated timestamp precision change.
+   * Called from both {@link #reconcileSchema} and {@link #reconcileTimestampLogicalType} — those
+   * two paths differ only in which "current" schema they compare the override against (the table
+   * type vs. the writer type), so the caller passes that in as {@code skipIfEquals}.
+   *
+   * @param col                the fully-qualified column name (for the error message)
+   * @param tableType          the table's current type (for the error message)
+   * @param incomingType       the writer/incoming type (for the error message)
+   * @param overrides          the parsed per-field overrides map
+   * @param skipIfEquals       compare the override against this; no schema update when equal
+   * @param typeChange         the accumulator for schema updates
+   * @return {@code true} if the override was applied (schema will change), {@code false} otherwise
+   * @throws SchemaCompatibilityException when no override is present for this gated change
+   */
+  private static boolean applyTimestampOverrideOrThrow(String col, Type tableType, Type incomingType,
+                                                       Map<String, Type> overrides, Type skipIfEquals,
+                                                       TableChanges.ColumnUpdateChange typeChange) {
+    Type overrideType = overrides.get(col);
+    if (overrideType == null) {
+      throw timestampPrecisionChangeError(col, tableType, incomingType);
+    }
+    if (overrideType.equals(skipIfEquals)) {
+      return false;
+    }
+    typeChange.updateColumnType(col, overrideType);
+    return true;
+  }
+
+  private static SchemaCompatibilityException crossZoneTimestampChangeError(String col, Type from, Type to) {
+    return new SchemaCompatibilityException(String.format(
+        "Refusing to change the timestamp logical type of column '%s' from '%s' to '%s': this crosses the "
+            + "UTC/local boundary, which changes the instant the stored value denotes and cannot be repaired by "
+            + "rescaling. '%s' authorizes precision changes only, never a zone change. Keep writing the column "
+            + "with its existing zone, or add a new column and backfill it with an explicit conversion.",
+        col, from, to, HoodieCommonConfig.TIMESTAMP_LOGICAL_TYPE_OVERRIDES.key()));
+  }
+
+  /**
+   * Builds the actionable error for a gated timestamp logical-type change with no per-field override
+   * in {@code hoodie.write.timestamp.logical.type.overrides}. Public so tests can assert the exact
+   * message without duplicating its format.
+   */
+  public static SchemaCompatibilityException timestampPrecisionChangeError(String col, Type from, Type to) {
+    return new SchemaCompatibilityException(String.format(
+        "Refusing to change the timestamp logical type of column '%s' from '%s' to '%s' without an explicit "
+            + "verdict. This precision change is not applied automatically because the correct target depends "
+            + "on the stored values, not the incoming schema. Inspect the raw long values of '%s' in the existing "
+            + "base files: for instants after 1990 epoch-millis is around 1e12 and epoch-micros is around 1e15, "
+            + "so the ranges do not overlap (TimestampLogicalTypeClassifier implements this verdict). Then set "
+            + "'%s' to the precision the values actually are, for example '%s:timestamp-micros' to keep the "
+            + "current precision and coerce the incoming values, or '%s:timestamp-millis' to evolve the column. "
+            + "Existing base files are not rewritten by this change; rewrite them via clustering or compaction "
+            + "so that non-Hudi readers also see the corrected type.",
+        col, from, to, col, HoodieCommonConfig.TIMESTAMP_LOGICAL_TYPE_OVERRIDES.key(), col, col));
   }
 
   /**
@@ -159,37 +302,57 @@ public class AvroSchemaEvolutionUtils {
    * {@code target} one. Source is considered to be new incoming schema, while target could refer to prev table schema.
    * For example,
    * if colA in source is non-nullable, but is nullable in target, output schema will have colA as nullable.
-   * if "hoodie.datasource.write.new.columns.nullable" is set to true and if colB is not present in source, but
-   * is present in target, output schema will have colB as nullable.
+   * if colB is present in source, but not in target, output schema will have colB as nullable. If colB is a complex
+   * type, its existing descendants retain their nullability constraints.
    * if colC has different data type in source schema compared to target schema and if its promotable, (say source is int,
    * and target is long and since int can be promoted to long), colC will be long data type in output schema.
    *
    *
    * @param sourceSchema source schema that needs reconciliation
    * @param targetSchema target schema that source schema will be reconciled against
+   * @param shouldReorderColumns whether fields should be reordered to match the target schema
    * @return schema (based off {@code source} one) that has nullability constraints and datatypes reconciled
    */
-  public static Schema reconcileSchemaRequirements(Schema sourceSchema, Schema targetSchema, boolean shouldReorderColumns) {
-    if (targetSchema.getType() == Schema.Type.NULL || targetSchema.getFields().isEmpty()) {
+  public static HoodieSchema reconcileSchemaRequirements(HoodieSchema sourceSchema, HoodieSchema targetSchema,
+                                                          boolean shouldReorderColumns) {
+    if (targetSchema.isSchemaNull() || targetSchema.getFields().isEmpty()) {
       return sourceSchema;
     }
 
-    if (sourceSchema == null || sourceSchema.getType() == Schema.Type.NULL || sourceSchema.getFields().isEmpty()) {
+    if (sourceSchema == null || sourceSchema.isSchemaNull() || sourceSchema.getFields().isEmpty()) {
       return targetSchema;
     }
 
-    InternalSchema targetInternalSchema = convert(HoodieSchema.fromAvroSchema(targetSchema));
+    InternalSchema targetInternalSchema = convert(targetSchema);
     // Use existing fieldIds for consistent field ordering between commits when shouldReorderColumns is true
-    InternalSchema sourceInternalSchema = convert(HoodieSchema.fromAvroSchema(sourceSchema), shouldReorderColumns ? targetInternalSchema.getNameToPosition() : Collections.emptyMap());
+    InternalSchema sourceInternalSchema = convert(sourceSchema, shouldReorderColumns ? targetInternalSchema.getNameToPosition() : Collections.emptyMap());
 
     List<String> colNamesSourceSchema = sourceInternalSchema.getAllColsFullName();
     List<String> colNamesTargetSchema = targetInternalSchema.getAllColsFullName();
+    List<String> userColNamesSourceSchema = colNamesSourceSchema.stream()
+        .filter(field -> !META_FIELD_NAMES.contains(field))
+        .collect(Collectors.toList());
 
     List<String> nullableUpdateColsInSource = new ArrayList<>();
     List<String> typeUpdateColsInSource = new ArrayList<>();
-    colNamesSourceSchema.forEach(field -> {
-      // handle columns that needs to be made nullable
-      if (colNamesTargetSchema.contains(field) && sourceInternalSchema.findField(field).isOptional() != targetInternalSchema.findField(field).isOptional()) {
+
+    // Only relax the topmost field in a wholly new subtree. Relaxing every descendant would alter the
+    // element/field constraints supplied by the writer instead of only making the evolved field backfillable.
+    Set<String> visitedNewColumns = new HashSet<>();
+    userColNamesSourceSchema.stream()
+        .filter(field -> !colNamesTargetSchema.contains(field))
+        .sorted()
+        .forEach(field -> {
+          String parent = TableChangesHelper.getParentName(field);
+          if (!visitedNewColumns.contains(parent)) {
+            nullableUpdateColsInSource.add(field);
+          }
+          visitedNewColumns.add(field);
+        });
+
+    userColNamesSourceSchema.forEach(field -> {
+      if (colNamesTargetSchema.contains(field)
+          && sourceInternalSchema.findField(field).isOptional() != targetInternalSchema.findField(field).isOptional()) {
         nullableUpdateColsInSource.add(field);
       }
       // handle columns that needs type to be updated
@@ -200,7 +363,7 @@ public class AvroSchemaEvolutionUtils {
 
     if (nullableUpdateColsInSource.isEmpty() && typeUpdateColsInSource.isEmpty()) {
       //standardize order of unions
-      return convert(sourceInternalSchema, sourceSchema.getFullName()).toAvroSchema();
+      return convert(sourceInternalSchema, sourceSchema.getFullName());
     }
 
     TableChanges.ColumnUpdateChange schemaChange = TableChanges.ColumnUpdateChange.get(sourceInternalSchema);
@@ -218,7 +381,6 @@ public class AvroSchemaEvolutionUtils {
     }
 
 
-    return convert(SchemaChangeUtils.applyTableChanges2Schema(sourceInternalSchema, schemaChange), sourceSchema.getFullName()).toAvroSchema();
+    return convert(SchemaChangeUtils.applyTableChanges2Schema(sourceInternalSchema, schemaChange), sourceSchema.getFullName());
   }
 }
-

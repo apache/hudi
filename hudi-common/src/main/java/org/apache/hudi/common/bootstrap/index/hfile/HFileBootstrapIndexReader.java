@@ -38,8 +38,8 @@ import org.apache.hudi.io.util.IOUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -59,10 +59,11 @@ import static org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex.p
 /**
  * HFile Based Index Reader.
  */
+@Slf4j
 public class HFileBootstrapIndexReader extends BootstrapIndex.IndexReader {
-  private static final Logger LOG = LoggerFactory.getLogger(HFileBootstrapIndexReader.class);
 
   // Base Path of external files.
+  @Getter
   private final String bootstrapBasePath;
   // Well Known Paths for indices
   private final String indexByPartitionPath;
@@ -83,7 +84,7 @@ public class HFileBootstrapIndexReader extends BootstrapIndex.IndexReader {
     this.indexByFileIdPath = indexByFilePath.toString();
     initIndexInfo();
     this.bootstrapBasePath = bootstrapIndexInfo.getBootstrapBasePath();
-    LOG.info("Loaded HFileBasedBootstrapIndex with source base path :" + bootstrapBasePath);
+    log.info("Loaded HFileBasedBootstrapIndex with source base path :{}", bootstrapBasePath);
   }
 
   /**
@@ -93,7 +94,7 @@ public class HFileBootstrapIndexReader extends BootstrapIndex.IndexReader {
    * @param storage   {@link HoodieStorage} instance.
    */
   private static HFileReader createReader(String hFilePath, HoodieStorage storage) throws IOException {
-    LOG.info("Opening HFile for reading :" + hFilePath);
+    log.info("Opening HFile for reading :{}", hFilePath);
     StoragePath path = new StoragePath(hFilePath);
     long fileSize = storage.getPathInfo(path).getLength();
     SeekableDataInputStream stream = storage.openSeekable(path, false);
@@ -118,7 +119,7 @@ public class HFileBootstrapIndexReader extends BootstrapIndex.IndexReader {
 
   private synchronized HFileReader partitionIndexReader() throws IOException {
     if (indexByPartitionReader == null) {
-      LOG.info("Opening partition index :" + indexByPartitionPath);
+      log.info("Opening partition index :{}", indexByPartitionPath);
       this.indexByPartitionReader = createReader(indexByPartitionPath, metaClient.getStorage());
     }
     return indexByPartitionReader;
@@ -126,7 +127,7 @@ public class HFileBootstrapIndexReader extends BootstrapIndex.IndexReader {
 
   private synchronized HFileReader fileIdIndexReader() throws IOException {
     if (indexByFileIdReader == null) {
-      LOG.info("Opening fileId index :" + indexByFileIdPath);
+      log.info("Opening fileId index :{}", indexByFileIdPath);
       this.indexByFileIdReader = createReader(indexByFileIdPath, metaClient.getStorage());
     }
     return indexByFileIdReader;
@@ -181,17 +182,12 @@ public class HFileBootstrapIndexReader extends BootstrapIndex.IndexReader {
             .map(e -> new BootstrapFileMapping(bootstrapBasePath, metadata.getBootstrapPartitionPath(),
                 e.getValue(), partition, e.getKey())).collect(Collectors.toList());
       } else {
-        LOG.warn("No value found for partition key ({})", partition);
+        log.warn("No value found for partition key ({})", partition);
         return new ArrayList<>();
       }
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
-  }
-
-  @Override
-  public String getBootstrapBasePath() {
-    return bootstrapBasePath;
   }
 
   @Override

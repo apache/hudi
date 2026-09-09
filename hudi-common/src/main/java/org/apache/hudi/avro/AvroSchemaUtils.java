@@ -114,10 +114,6 @@ public class AvroSchemaUtils {
     return Schema.createUnion(Schema.create(Schema.Type.NULL), schema);
   }
 
-  public static String createSchemaErrorString(String errorMessage, Schema writerSchema, Schema tableSchema) {
-    return String.format("%s\nwriterSchema: %s\ntableSchema: %s", errorMessage, writerSchema, tableSchema);
-  }
-
   /**
    * Create a new schema by force changing all the fields as nullable.
    *

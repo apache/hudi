@@ -48,7 +48,7 @@ public class BootstrapRegexModeSelector extends BootstrapModeSelector {
     this.bootstrapModeOnMatch = writeConfig.getBootstrapModeForRegexMatch();
     this.defaultMode = BootstrapMode.FULL_RECORD.equals(bootstrapModeOnMatch)
         ? BootstrapMode.METADATA_ONLY : BootstrapMode.FULL_RECORD;
-    log.info("Default Mode :" + defaultMode + ", on Match Mode :" + bootstrapModeOnMatch);
+    log.info("Default Mode :{}, on Match Mode :{}", defaultMode, bootstrapModeOnMatch);
   }
 
   @Override

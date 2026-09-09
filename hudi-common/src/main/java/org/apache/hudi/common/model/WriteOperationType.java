@@ -189,6 +189,17 @@ public enum WriteOperationType {
   }
 
   /**
+   * Checks if the given operation type is a table service operation.
+   * Table service operations include compaction, clustering, log compaction, and indexing.
+   */
+  public static boolean isTableService(WriteOperationType operationType) {
+    return operationType == COMPACT
+        || operationType == CLUSTER
+        || operationType == LOG_COMPACT
+        || operationType == INDEX;
+  }
+
+  /**
    * @return true if streaming writes to metadata table is supported for a given {@link WriteOperationType}. false otherwise.
    */
   public static boolean streamingWritesToMetadataSupported(WriteOperationType writeOperationType) {

@@ -32,6 +32,11 @@ import java.io.IOException;
 public interface IndexingCatchupTask extends Runnable {
 
   /**
+   * Returns the latest instant successfully caught up by this task.
+   */
+  String getCurrentCaughtupInstant();
+
+  /**
    * Update the index for the write action.
    *
    * @param instant Hoodie instant corresponding to the write action

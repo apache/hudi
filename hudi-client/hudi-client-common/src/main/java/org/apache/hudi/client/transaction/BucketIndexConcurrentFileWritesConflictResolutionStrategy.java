@@ -51,8 +51,7 @@ public class BucketIndexConcurrentFileWritesConflictResolutionStrategy
     Set<String> intersection = new HashSet<>(partitionBucketIdSetForFirstInstant);
     intersection.retainAll(partitionBucketIdSetForSecondInstant);
     if (!intersection.isEmpty()) {
-      log.info("Found conflicting writes between first operation = " + thisOperation
-          + ", second operation = " + otherOperation + " , intersecting bucket ids " + intersection);
+      log.info("Found conflicting writes between first operation = {}, second operation = {} , intersecting bucket ids {}", thisOperation, otherOperation, intersection);
       return true;
     }
     return false;

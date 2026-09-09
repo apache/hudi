@@ -98,7 +98,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
     super(context, config, table, instantTime);
     this.txnManager = new TransactionManager(config, table.getStorage());
     if (config.getMetadataConfig().isMetricsEnabled()) {
-      this.metrics = Option.of(new HoodieMetadataMetrics(config.getMetricsConfig(), table.getStorage()));
+      this.metrics = Option.of(new HoodieMetadataMetrics(config.getMetricsConfig(), table.getStorage(), config.getMetadataConfig().isDetailedMetricsEnabled()));
     } else {
       this.metrics = Option.empty();
     }
@@ -180,9 +180,13 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
         String indexUptoInstant = fileIndexPartitionInfo.getIndexUptoInstant();
         // save index commit metadata and update table config
         // instantiation of metadata writer will automatically instantiate the partitions.
-        table.getIndexingMetadataWriter(instantTime)
+        try (HoodieTableMetadataWriter metadataWriter = table.getIndexingMetadataWriter(instantTime)
             .orElseThrow(() -> new HoodieIndexException(String.format(
-                "Could not get metadata writer to run index action for instant: %s", instantTime)));
+                "Could not get metadata writer to run index action for instant: %s", instantTime)))) {
+          // Initialization is performed when the writer is instantiated.
+        } catch (Exception e) {
+          throw new HoodieMetadataException("Failed to initialize metadata table", e);
+        }
         finalIndexPartitionInfos = Stream.of(fileIndexPartitionInfo)
             .map(info -> new HoodieIndexPartitionInfo(
                 info.getVersion(),
@@ -281,13 +285,15 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
     HoodieHeartbeatClient heartbeatClient = new HoodieHeartbeatClient(table.getStorage(), table.getMetaClient().getBasePath().toString(),
         table.getConfig().getHoodieClientHeartbeatIntervalInMs(), table.getConfig().getHoodieClientHeartbeatTolerableMisses());
     ExecutorService executorService = Executors.newFixedThreadPool(MAX_CONCURRENT_INDEXING);
-    Future<?> indexingCatchupTaskFuture = executorService.submit(
-        IndexingCatchupTaskFactory.createCatchupTask(indexPartitionInfos, metadataWriter, instantsToIndex, metadataCompletedTimestamps,
-            table, metadataMetaClient, currentCaughtupInstant, txnManager, context, heartbeatClient));
+    IndexingCatchupTask indexingCatchupTask = IndexingCatchupTaskFactory.createCatchupTask(
+        indexPartitionInfos, metadataWriter, instantsToIndex, metadataCompletedTimestamps,
+        table, metadataMetaClient, currentCaughtupInstant, txnManager, context, heartbeatClient);
+    Future<?> indexingCatchupTaskFuture = executorService.submit(indexingCatchupTask);
     try {
       log.info("Starting index catchup task");
       HoodieTimer timer = HoodieTimer.start();
       indexingCatchupTaskFuture.get(config.getIndexingCheckTimeoutSeconds(), TimeUnit.SECONDS);
+      currentCaughtupInstant = indexingCatchupTask.getCurrentCaughtupInstant();
       metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.ASYNC_INDEXER_CATCHUP_TIME, timer.endTimer()));
     } catch (Exception e) {
       indexingCatchupTaskFuture.cancel(true);

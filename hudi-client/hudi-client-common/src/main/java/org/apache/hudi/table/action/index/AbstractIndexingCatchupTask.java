@@ -107,7 +107,7 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
         try {
           // we need take a lock here as inflight writer could also try to update the timeline
           transactionManager.beginStateChange(Option.of(instant), Option.empty());
-          log.info("Updating metadata table for instant: " + instant);
+          log.info("Updating metadata table for instant: {}", instant);
           switch (instant.getAction()) {
             case HoodieTimeline.COMMIT_ACTION:
             case HoodieTimeline.DELTA_COMMIT_ACTION:
@@ -129,6 +129,7 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
             default:
               throw new IllegalStateException("Unexpected value: " + instant.getAction());
           }
+          currentCaughtupInstant = instantTime;
         } catch (IOException e) {
           throw new HoodieIndexException(String.format("Could not update metadata partition for instant: %s", instant), e);
         } finally {
@@ -136,6 +137,11 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
         }
       }
     }
+  }
+
+  @Override
+  public String getCurrentCaughtupInstant() {
+    return currentCaughtupInstant;
   }
 
   /**
