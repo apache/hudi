@@ -529,13 +529,11 @@ public final class HoodieSchemaUtils {
    * @param writeSchema      the source schema
    * @param schemaFieldsMap  prebuilt case-insensitive field-name map
    * @param fieldNames       the list of field names to include in the projection
-   * @param isError          whether the projected schema is an error schema
    * @return new HoodieSchema containing only the specified fields
    */
   public static HoodieSchema generateProjectionSchema(HoodieSchema writeSchema,
                                                       Map<String, HoodieSchemaField> schemaFieldsMap,
-                                                      List<String> fieldNames,
-                                                      boolean isError) {
+                                                      List<String> fieldNames) {
     ValidationUtils.checkArgument(writeSchema != null, "Write schema cannot be null");
     ValidationUtils.checkArgument(schemaFieldsMap != null, "Schema fields map cannot be null");
     ValidationUtils.checkArgument(fieldNames != null, "Field names cannot be null");
@@ -562,7 +560,7 @@ public final class HoodieSchemaUtils {
     }
 
     return HoodieSchema.createRecord(writeSchema.getName(), writeSchema.getDoc().orElse(null),
-            writeSchema.getNamespace().orElse(null), isError, projectedFields);
+            writeSchema.getNamespace().orElse(null), writeSchema.isError(), projectedFields);
   }
 
   /**
