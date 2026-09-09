@@ -26,15 +26,19 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.net.JarURLConnection;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.net.URLConnection;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -44,6 +48,7 @@ import java.util.stream.Stream;
 public class ReflectionUtils {
 
   private static final Map<String, Class<?>> CLAZZ_CACHE = new ConcurrentHashMap<>();
+  private static final String CLASS_FILE_SUFFIX = ".class";
 
   public static Class<?> getClass(String clazzName) {
     return CLAZZ_CACHE.computeIfAbsent(clazzName, c -> {
@@ -130,15 +135,79 @@ public class ReflectionUtils {
    */
   public static Stream<String> getTopLevelClassesInClasspath(Class<?> clazz) {
     ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-    String packageName = clazz.getPackage().getName();
+    // Arrays and primitives have no package, and Class#getPackage is also null when the class was
+    // loaded by a loader that defines no package for it.
+    Package pkg = clazz.getPackage();
+    if (pkg == null) {
+      return Stream.empty();
+    }
+    String packageName = pkg.getName();
     String path = packageName.replace('.', '/');
     try {
       return Collections.list(classLoader.getResources(path)).stream()
-          .map(ReflectionUtils::toDirectory)
-          .filter(Objects::nonNull)
-          .flatMap(directory -> findClasses(directory, packageName).stream());
+          .flatMap(resource -> classNamesIn(resource, packageName));
     } catch (IOException e) {
       log.error("Unable to fetch Resources in package {}", packageName, e);
+      return Stream.empty();
+    }
+  }
+
+  /**
+   * Class names under a single classpath entry for the package, whether that entry is an exploded
+   * directory or a jar.
+   *
+   * <p>A jar entry cannot go through {@link #toDirectory}: a {@code jar:} URL is non-hierarchical,
+   * so {@code new File(uri)} throws and the entry would be dropped. Every bundle {@code Main} class
+   * runs from inside a shaded jar, so that path has to be read through the jar connection instead.
+   *
+   * @param resource    a classpath entry holding the package
+   * @param packageName the package being scanned
+   * @return class names found under that entry, empty if it cannot be read
+   */
+  private static Stream<String> classNamesIn(URL resource, String packageName) {
+    if ("jar".equals(resource.getProtocol())) {
+      return classNamesInJar(resource, packageName);
+    }
+    File directory = toDirectory(resource);
+    return directory == null ? Stream.empty() : findClasses(directory, packageName).stream();
+  }
+
+  /**
+   * Class names under the package inside a jar, read through the jar connection.
+   *
+   * @param resource    a {@code jar:} classpath entry holding the package
+   * @param packageName the package being scanned
+   * @return class names found in that jar, empty if the jar cannot be read
+   */
+  private static Stream<String> classNamesInJar(URL resource, String packageName) {
+    try {
+      URLConnection connection = resource.openConnection();
+      if (!(connection instanceof JarURLConnection)) {
+        // A jar: URL served by a non-JDK stream handler. Skip it rather than let the cast throw,
+        // since this method exists to stop such an entry from failing the whole scan.
+        log.warn("Skipping classpath entry {}, {} is not a JarURLConnection", resource, connection.getClass());
+        return Stream.empty();
+      }
+      JarURLConnection jarConnection = (JarURLConnection) connection;
+      // Without this the JarFile is cached and shared JVM-wide, and closing it below would leave
+      // any reader that opened the same jar first with "IllegalStateException: zip file closed".
+      jarConnection.setUseCaches(false);
+      // Derived from the package rather than from JarURLConnection#getEntryName. On a multi-release
+      // jar the loader resolves the package to META-INF/versions/N/<pkg>/ on JDK 9-23 but to <pkg>/
+      // on 8 and 24+, so anchoring to the entry name would make the result JDK dependent and would
+      // drop classes that exist only in the base directory.
+      String entryPrefix = packageName.replace('.', '/') + '/';
+      try (JarFile jar = jarConnection.getJarFile()) {
+        // Collected before the jar is closed, since the returned stream outlives this method.
+        return jar.stream()
+            .map(JarEntry::getName)
+            .filter(name -> name.startsWith(entryPrefix) && name.endsWith(CLASS_FILE_SUFFIX))
+            .map(name -> name.substring(0, name.length() - CLASS_FILE_SUFFIX.length()).replace('/', '.'))
+            .collect(Collectors.toList())
+            .stream();
+      }
+    } catch (IOException e) {
+      log.error("Unable to read jar for {}", resource, e);
       return Stream.empty();
     }
   }
@@ -171,11 +240,18 @@ public class ReflectionUtils {
       return classes;
     }
     File[] files = directory.listFiles();
-    for (File file : Objects.requireNonNull(files)) {
+    if (files == null) {
+      // Null for an unreadable directory, or for a package path that is a regular file. Skipping it
+      // keeps one bad classpath entry from failing the whole scan, as the jar branch above does.
+      log.warn("Unable to list {}, skipping it", directory);
+      return classes;
+    }
+    for (File file : files) {
       if (file.isDirectory()) {
         classes.addAll(findClasses(file, packageName + "." + file.getName()));
-      } else if (file.getName().endsWith(".class")) {
-        classes.add(packageName + '.' + file.getName().substring(0, file.getName().length() - 6));
+      } else if (file.getName().endsWith(CLASS_FILE_SUFFIX)) {
+        classes.add(packageName + '.'
+            + file.getName().substring(0, file.getName().length() - CLASS_FILE_SUFFIX.length()));
       }
     }
     return classes;
