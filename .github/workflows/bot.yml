@@ -1507,9 +1507,36 @@ jobs:
           SPARK_ARCHIVE: ${{ matrix.sparkArchive }}
           SCALA_PROFILE: '-Dscala-2.12 -Dscala.binary.version=2.12'
         run: |
-          echo "Downloading $SPARK_ARCHIVE"
-          curl --retry 5 https://archive.apache.org/dist/spark/$SPARK_ARCHIVE --create-dirs -o $GITHUB_WORKSPACE/$SPARK_ARCHIVE
-          tar -xvf $GITHUB_WORKSPACE/$SPARK_ARCHIVE -C $GITHUB_WORKSPACE/
+          # dlcdn is the ASF CDN but only carries the current release of each
+          # line; superseded versions are served by archive.apache.org, a single
+          # un-CDN'd origin measured between 42s and 68min for this same 382MB
+          # file (see #19883). Try the CDN first so a current version is fast,
+          # and fall back so a version that has rolled off still resolves.
+          # Plain --retry (not --retry-all-errors) is deliberate: it retries
+          # transient 5xx and stalls but not a 404, so a CDN miss falls through
+          # immediately instead of sleeping through five pointless retries.
+          # --speed-limit/--speed-time abort a transfer stuck under 100KB/s for
+          # two minutes, which --retry then resumes via -C - against a fresh
+          # connection rather than crawling to the end.
+          DEST="$GITHUB_WORKSPACE/$SPARK_ARCHIVE"
+          downloaded=false
+          for base in https://dlcdn.apache.org/spark https://archive.apache.org/dist/spark; do
+            echo "Downloading $SPARK_ARCHIVE from $base"
+            if curl -fL --create-dirs -o "$DEST" \
+                --retry 5 --retry-delay 10 \
+                --connect-timeout 30 --speed-limit 100000 --speed-time 120 \
+                -C - "$base/$SPARK_ARCHIVE"; then
+              downloaded=true
+              break
+            fi
+            echo "$base did not serve $SPARK_ARCHIVE"
+            rm -f "$DEST"
+          done
+          if [ "$downloaded" != true ]; then
+            echo "ERROR: could not download $SPARK_ARCHIVE from any source"
+            exit 1
+          fi
+          tar -xf "$DEST" -C $GITHUB_WORKSPACE/
           mkdir /tmp/spark-events/
           SPARK_ARCHIVE_BASENAME=$(basename $SPARK_ARCHIVE)
           export SPARK_HOME=$GITHUB_WORKSPACE/${SPARK_ARCHIVE_BASENAME%.*}
