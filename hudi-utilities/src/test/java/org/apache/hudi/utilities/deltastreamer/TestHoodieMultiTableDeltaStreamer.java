@@ -353,8 +353,9 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     // must not stop the other.
     contexts.get(1).getProperties().setProperty(ContinuousTestSource.FAIL_AFTER_BARRIER, "true");
 
-    // sync() must complete without throwing even though one table failed.
-    streamer.sync();
+    // The job still fails, since continuous mode is not meant to end with a failed table, but only after the
+    // healthy table has run to completion on its own.
+    assertThrows(HoodieException.class, streamer::sync);
 
     assertEquals(1, streamer.getSuccessTables().size());
     assertEquals(1, streamer.getFailedTables().size());
