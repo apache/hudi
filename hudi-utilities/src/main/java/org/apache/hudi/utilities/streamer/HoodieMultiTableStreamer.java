@@ -540,7 +540,6 @@ public class HoodieMultiTableStreamer {
     final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
     final ExecutorService executor = Executors.newFixedThreadPool(tableExecutionContexts.size(),
         new CustomizedThreadFactory("multi-table-streamer", true));
-    boolean terminated = false;
     try {
       final List<CompletableFuture<Void>> tableFutures = tableExecutionContexts.stream()
           .map(context -> CompletableFuture.runAsync(
@@ -555,18 +554,12 @@ public class HoodieMultiTableStreamer {
       }
     } finally {
       // On an abnormal exit the siblings are still ingesting, since FutureUtils.allOf only cancels their futures.
-      // Stopping them here rather than in a catch covers every such exit, including an Error, which the workers do
-      // not catch; it is a no-op on the success path because each table has already shut its ingestion service down.
+      // Covers an Error too, which the workers do not catch. A no-op once a table has shut its service down.
       shutdownRequested.set(true);
       interruptAllIngestion(streamerInstances);
-      // Wait for every worker thread to finish (including its finally cleanup) before returning, so sync() does not
-      // return while a table is still writing and main() then stops the shared Spark context under it.
-      terminated = shutdownExecutor(executor);
-    }
-    // If the workers never terminated, ingestion may still be running. Fail loudly instead of returning as if the
-    // cleanup succeeded, so the caller does not silently proceed to Spark teardown with live writers.
-    if (!terminated) {
-      throw new HoodieException("Timed out shutting down table ingestion workers in continuous mode");
+      // Wait for the workers, cleanup included, so sync() does not return while a table is still writing.
+      // shutdownExecutor logs rather than throws. The failure path is already propagating its own exception.
+      shutdownExecutor(executor);
     }
   }
 
@@ -654,24 +647,23 @@ public class HoodieMultiTableStreamer {
    * Two-phase shutdown of the per-table executor: wait for the running syncs to finish, then force-cancel any that
    * ignore interruption. Bounded by {@link Constants#SHUTDOWN_TIMEOUT_SECONDS} so a stuck table cannot hang the job.
    *
-   * @return true if all workers terminated, false if any were still running when the timeout elapsed.
+   * Workers that refuse to stop are logged rather than thrown, since the caller is either already propagating a
+   * failure or has seen every worker return.
    */
-  private static boolean shutdownExecutor(ExecutorService executor) {
+  private static void shutdownExecutor(ExecutorService executor) {
     executor.shutdown();
     try {
       if (executor.awaitTermination(Constants.SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-        return true;
+        return;
       }
       executor.shutdownNow();
-      if (executor.awaitTermination(Constants.SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-        return true;
+      if (!executor.awaitTermination(Constants.SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+        log.error("table ingestion workers did not terminate; ingestion may still be running");
       }
-      log.error("executor service did not terminate after shutdown");
-      return false;
     } catch (InterruptedException e) {
       executor.shutdownNow();
       Thread.currentThread().interrupt();
-      return false;
+      log.error("interrupted while waiting for the table ingestion workers to terminate; ingestion may still be running");
     }
   }
 
@@ -680,7 +672,7 @@ public class HoodieMultiTableStreamer {
       try {
         streamer.interruptIngestion();
       } catch (Exception e) {
-        log.warn("error while interrupting the ingestion of a streamer instance", e);
+        log.warn("error while interrupting the ingestion of a streamer instance for the table: {}", streamer.getConfig().targetTableName, e);
       }
     }
   }

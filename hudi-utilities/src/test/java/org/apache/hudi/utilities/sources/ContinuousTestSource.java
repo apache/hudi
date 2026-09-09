@@ -57,7 +57,7 @@ public class ContinuousTestSource extends ParquetDFSSource {
 
   private static final long BARRIER_TIMEOUT_SECONDS = 60;
 
-  // lets awaitUntil be the one that reports a stall.
+  // Longer than the test's awaitUntil deadline, so a stall is reported by the test rather than by this source
   private static final long RELEASE_TIMEOUT_SECONDS = 300;
 
   private static volatile CyclicBarrier startBarrier = new CyclicBarrier(1);
