@@ -41,10 +41,19 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 
 public class CLIFunctionalTestHarness implements SparkProvider {
 
   protected static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
+
+  // Box drawing characters of a rendered table, kept as escapes so that the source stays ASCII.
+  private static final char TABLE_ROW_START = '\u2551'; // double vertical, starts and ends a row
+  private static final char TABLE_HEADER_DIVIDER = '\u2560'; // double vertical and right, under the header
+  private static final char TABLE_ROW_DIVIDER = '\u255F'; // double vertical and single right, between rows
+  private static final String TABLE_CELL_SEPARATORS = "[\u2551\u2502]"; // double and single vertical
+  protected static final String EMPTY_TABLE_CELL = "(empty)";
 
   protected static int timelineServicePort =
       FileSystemViewStorageConfig.REMOTE_PORT_NUM.defaultValue();
@@ -137,6 +146,66 @@ public class CLIFunctionalTestHarness implements SparkProvider {
    */
   protected static String removeNonWordAndStripSpace(String str) {
     return str.replaceAll("[\\s]+", ",").replaceAll("[\\W]+", ",");
+  }
+
+  /**
+   * Splits a table rendered by {@link org.apache.hudi.cli.HoodiePrintHelper} into its data rows,
+   * each row being the list of its trimmed cell values. Cells spanning several rendered lines are
+   * joined back into a single cell, separated by a space. The header and an empty table yield no
+   * rows.
+   *
+   * @param rendered Rendered table.
+   * @return One list of cell values per data row.
+   */
+  protected static List<List<String>> renderedRows(String rendered) {
+    List<List<String>> rows = new ArrayList<>();
+    boolean inData = false;
+    boolean startOfRow = false;
+    for (String line : rendered.split("\n")) {
+      if (line.isEmpty()) {
+        continue;
+      }
+      char first = line.charAt(0);
+      if (first == TABLE_HEADER_DIVIDER || first == TABLE_ROW_DIVIDER) {
+        inData = true;
+        startOfRow = true;
+        continue;
+      }
+      if (first != TABLE_ROW_START || !inData) {
+        continue;
+      }
+      List<String> cells = renderedCells(line);
+      if (cells.size() == 1 && EMPTY_TABLE_CELL.equals(cells.get(0))) {
+        continue;
+      }
+      if (startOfRow) {
+        rows.add(cells);
+        startOfRow = false;
+      } else {
+        List<String> previous = rows.get(rows.size() - 1);
+        for (int i = 0; i < cells.size(); i++) {
+          if (!cells.get(i).isEmpty()) {
+            previous.set(i, (previous.get(i) + " " + cells.get(i)).trim());
+          }
+        }
+      }
+    }
+    return rows;
+  }
+
+  /**
+   * Splits a single rendered line into its trimmed cell values.
+   *
+   * @param line One line of a rendered table.
+   * @return The cell values of that line.
+   */
+  protected static List<String> renderedCells(String line) {
+    String[] parts = line.split(TABLE_CELL_SEPARATORS, -1);
+    List<String> cells = new ArrayList<>();
+    for (int i = 1; i < parts.length - 1; i++) {
+      cells.add(parts[i].trim());
+    }
+    return cells;
   }
 
   protected int incrementTimelineServicePortToUse() {

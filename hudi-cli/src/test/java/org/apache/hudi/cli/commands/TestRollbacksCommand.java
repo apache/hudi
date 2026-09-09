@@ -61,6 +61,7 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_P
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -74,10 +75,12 @@ public class TestRollbacksCommand extends CLIFunctionalTestHarness {
   @Autowired
   private Shell shell;
 
+  private String tablePath;
+
   @BeforeEach
   public void init() throws Exception {
     String tableName = tableName();
-    String tablePath = tablePath(tableName);
+    tablePath = tablePath(tableName);
     new TableCommand().createTable(
         tablePath, tableName, HoodieTableType.MERGE_ON_READ.name(),
         "", HoodieTableVersion.current().versionCode(), "org.apache.hudi.common.model.HoodieAvroPayload");
@@ -204,5 +207,25 @@ public class TestRollbacksCommand extends CLIFunctionalTestHarness {
     expected = removeNonWordAndStripSpace(expected);
     String got = removeNonWordAndStripSpace(result.toString());
     assertEquals(expected, got);
+  }
+
+  /**
+   * Test case of the rollback entry point of {@link SparkMain}, which the 'commit rollback'
+   * command reaches through a spark-submit of its own. The fixture leaves commit 101 in the
+   * inflight state, which is the failed write such a rollback is meant to clean up.
+   */
+  @Test
+  public void testSparkMainRollback() throws Exception {
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+    HoodieActiveTimeline timeline = metaClient.reloadActiveTimeline();
+    assertTrue(timeline.getCommitsTimeline().filterInflightsAndRequested().containsInstant("101"));
+    int rollbacksBefore = timeline.getRollbackTimeline().filterCompletedInstants().countInstants();
+
+    assertEquals(0, SparkMain.rollback(jsc(), "101", tablePath, false));
+
+    timeline = metaClient.reloadActiveTimeline();
+    assertFalse(timeline.getCommitsTimeline().containsInstant("101"));
+    assertEquals(rollbacksBefore + 1,
+        timeline.getRollbackTimeline().filterCompletedInstants().countInstants());
   }
 }
