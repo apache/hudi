@@ -238,9 +238,7 @@ class TestMetadataTableWithSparkSQL extends SparkClientFunctionalTestHarnessScal
     PRECOMBINE_FIELD.key() -> "ts",
     HoodieMetadataConfig.ENABLE.key() -> "true",
     HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key() -> "true",
-    // On release-1.2.1 this key is a deprecated String constant, not a ConfigProperty;
-    // partition stats are driven by the column stats config above.
-    HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS -> "true",
+    HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key() -> "true",
     HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key() -> "true",
     HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key() -> streamingWrites.toString,
     HoodieMetadataConfig.RECORD_PREPARATION_PARALLELISM.key() -> "1",
