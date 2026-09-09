@@ -638,7 +638,7 @@ public class HoodieMultiTableStreamer {
    */
   private static void awaitFailFast(List<CompletableFuture<Void>> tableFutures) {
     try {
-      CompletableFuture.anyOf(tableFutures.toArray(new CompletableFuture[0])).join();
+      FutureUtils.allOf(tableFutures).join();
     } catch (CompletionException e) {
       Throwable cause = unwrapCompletionException(e);
       // An Error is rethrown as is rather than boxed, so the JVM-level failure reaches the caller unchanged.
