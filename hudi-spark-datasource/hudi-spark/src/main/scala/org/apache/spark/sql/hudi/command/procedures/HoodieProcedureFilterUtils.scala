@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.spark.SparkThrowable
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.FunctionIdentifier
-import org.apache.spark.sql.catalyst.analysis.{AnsiTypeCoercion, DecimalPrecision, TypeCoercion, UnresolvedAttribute, UnresolvedFunction}
+import org.apache.spark.sql.catalyst.analysis.{AnsiTypeCoercion, DecimalPrecision, TypeCoercion, TypeCoercionBase, UnresolvedAttribute, UnresolvedFunction}
 import org.apache.spark.sql.catalyst.expressions.{BinaryArithmetic, BinaryComparison, Cast, Coalesce, Divide, EqualNullSafe, Expression, GenericInternalRow, In, IntegralDivide, RuntimeReplaceable, Unevaluable}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.internal.SQLConf
@@ -416,71 +416,66 @@ object HoodieProcedureFilterUtils {
     }
   }
 
-  // Resolves a function not covered by the hardcoded table above via Spark's own FunctionRegistry.
-  // A resolved result is only usable if it can actually be eval()'d one row at a time, which
-  // several categories of otherwise-valid expressions cannot: RuntimeReplaceable placeholders
-  // (nvl, ifnull, left, right) need substitution the analyzer normally performs but skips here,
-  // and can themselves unwrap to another RuntimeReplaceable (regexp_substr -> NullIf) so the
-  // unwrap has to run to a fixed point; aggregates (percentile, collect_list) only make sense
-  // across real aggregation; generators (explode, inline) only work inside a projection;
-  // non-deterministic functions (rand, uuid, spark_partition_id) expect per-partition
-  // initialization; window/grouping-only builtins (current_user, lag, lead, ...) are Unevaluable
-  // outside their normal context; and a type mismatch the analyzer's implicit-cast pass would
-  // normally have caught still fails checkInputDataTypes - checked both on the raw lookup result
-  // (its own declared input-type contract, e.g. split_part's, is otherwise discarded once
-  // unwrapped) and again after unwrapping and widening (e.g. nvl(ts, 0) only becomes checkable
-  // once it's the Coalesce(ts, 0) the hardcoded coalesce(ts, 0) case would already have widened).
-  // Anything in one of those categories is treated as still-unresolved so it falls through to the
-  // existing rejection path instead of silently dropping every row.
+  // Resolves a function not covered by the hardcoded table above via Spark's own FunctionRegistry,
+  // then checks the result is actually usable outside a real query plan - both steps a plain
+  // lookupFunction call skips or can't tell on its own. Anything that isn't falls through to the
+  // existing rejection path (see #19850) instead of letting eval() throw silently.
   private def resolveViaFunctionRegistry(unresolvedFunc: UnresolvedFunction, sparkSession: SparkSession): Expression = {
     Try {
-      // Filter expressions only ever call plain builtins. FunctionRegistry registers builtins
-      // with no database, so a db-qualified or 3+ part name (db.func, catalog.db.func) can only
-      // be resolved by guessing which part is the real function name - that risks matching an
-      // unrelated same-named function, so those are left unresolved instead.
-      val resolved = unresolvedFunc.nameParts match {
-        case Seq(funcName) =>
-          sparkSession.sessionState.functionRegistry.lookupFunction(FunctionIdentifier(funcName), unresolvedFunc.arguments)
-        case _ => unresolvedFunc
-      }
-      // lookupFunction alone skips the analyzer's own implicit-cast rule, so a wrapper declaring
-      // a real input-type contract (nvl needing matching operand types, split_part needing
-      // string/string/int, ...) sees its raw, uncast arguments here. Casting via that same rule
-      // before checking the contract lets a fixable mismatch (nvl(ts, 0), a Long/Int pair) widen
-      // the way coalesce(ts, 0) already does, while a genuine mismatch (split_part's delimiter
-      // passed as Int, which nothing implicit-casts to String) still fails as it should.
-      val castedResolved = applyImplicitCasts(resolved)
-      // Checked against checkInputDataTypes only, not the resolved flag: a RuntimeReplaceable
-      // wrapper's own children typically include its still-not-yet-widened replacement, so
-      // resolved/childrenResolved report false here purely because that internal Coalesce(ts, 0)
-      // hasn't been widened yet, even though Nvl's own declared type contract is already
-      // satisfied. Whether the whole thing is actually resolved gets a real verdict from the
-      // second check below, once unwrapping and widening have both run.
+      val castedResolved = applyImplicitCasts(lookupBuiltin(unresolvedFunc, sparkSession))
+      // Checked here, on the raw wrapper, before unwrapping: a RuntimeReplaceable wrapper's own
+      // declared input-type contract (nvl needing matching operand types, split_part needing
+      // string/string/int) is otherwise discarded once unwrapped to a form with a weaker or
+      // absent contract of its own.
       if (!castedResolved.checkInputDataTypes().isSuccess) {
         unresolvedFunc
       } else {
-        def unwrapReplacements(expr: Expression): Expression = {
-          val next = expr.transformUp { case r: RuntimeReplaceable => r.replacement }
-          if (next.fastEquals(expr)) next else unwrapReplacements(next)
-        }
-        // Widen numeric operands (e.g. nvl(ts, 0) unwraps to Coalesce(ts, 0), a Long/Int mismatch
-        // the hardcoded coalesce(ts, 0) case would already have fixed via applyCoalesceTypeCoercion
-        // in the third pass) before checking whether the result is actually usable, so a registry
-        // function and its hardcoded-table equivalent agree on what counts as resolved.
-        val unwrapped = applyCoercionRules(unwrapReplacements(castedResolved))
-        val stillUnsupported =
-          unwrapped.isInstanceOf[org.apache.spark.sql.catalyst.expressions.aggregate.AggregateFunction] ||
-            unwrapped.isInstanceOf[org.apache.spark.sql.catalyst.expressions.Generator] ||
-            unwrapped.exists(_.isInstanceOf[Unevaluable]) ||
-            !unwrapped.deterministic ||
-            !unwrapped.resolved ||
-            !unwrapped.checkInputDataTypes().isSuccess
-        if (stillUnsupported) unresolvedFunc else unwrapped
+        val finalized = finalizeRegistryResolution(castedResolved)
+        if (isUsableOutsideQueryPlan(finalized)) finalized else unresolvedFunc
       }
     } match {
       case Success(resolved) => resolved
       case Failure(_) => unresolvedFunc
     }
+  }
+
+  // Filter expressions only ever call plain builtins. FunctionRegistry registers builtins with no
+  // database, so a db-qualified or 3+ part name (db.func, catalog.db.func) can only be resolved
+  // by guessing which part is the real function name - that risks matching an unrelated
+  // same-named function, so those are left unresolved instead.
+  private def lookupBuiltin(unresolvedFunc: UnresolvedFunction, sparkSession: SparkSession): Expression =
+    unresolvedFunc.nameParts match {
+      case Seq(funcName) =>
+        sparkSession.sessionState.functionRegistry.lookupFunction(FunctionIdentifier(funcName), unresolvedFunc.arguments)
+      case _ => unresolvedFunc
+    }
+
+  // RuntimeReplaceable placeholders (nvl, ifnull, left, right, ...) need substitution the analyzer
+  // normally performs but lookupFunction skips, and can themselves unwrap to another
+  // RuntimeReplaceable (regexp_substr -> NullIf), so the unwrap runs to a fixed point. Then widens
+  // numeric operands the same way pass three would - nvl(ts, 0) unwraps to Coalesce(ts, 0), which
+  // needs the same widening the hardcoded coalesce(ts, 0) case gets - so a registry function and
+  // its hardcoded-table equivalent agree on what counts as resolved.
+  private def finalizeRegistryResolution(expression: Expression): Expression = {
+    def unwrapReplacements(expr: Expression): Expression = {
+      val next = expr.transformUp { case r: RuntimeReplaceable => r.replacement }
+      if (next.fastEquals(expr)) next else unwrapReplacements(next)
+    }
+    applyCoercionRules(unwrapReplacements(expression))
+  }
+
+  // A resolved expression still isn't usable one row at a time if it's an aggregate (percentile,
+  // collect_list - only make sense across real aggregation), a generator (explode, inline - only
+  // work inside a projection), still Unevaluable somewhere in it (current_user, lag, lead, ... -
+  // only valid in their normal analyzer context), or non-deterministic (rand, uuid,
+  // spark_partition_id - expect per-partition initialization this evaluator never does).
+  private def isUsableOutsideQueryPlan(expression: Expression): Boolean = {
+    !expression.isInstanceOf[org.apache.spark.sql.catalyst.expressions.aggregate.AggregateFunction] &&
+      !expression.isInstanceOf[org.apache.spark.sql.catalyst.expressions.Generator] &&
+      !expression.exists(_.isInstanceOf[Unevaluable]) &&
+      expression.deterministic &&
+      expression.resolved &&
+      expression.checkInputDataTypes().isSuccess
   }
 
   private def evaluateExpressionOnRow(boundExpr: Expression, row: Row, schema: StructType): Boolean = {
@@ -504,18 +499,17 @@ object HoodieProcedureFilterUtils {
       case Success(result) => result
       // Spark raises SparkArithmeticException for an overflowing ANSI cast or arithmetic, and
       // SparkNumberFormatException or SparkDateTimeException for an ANSI cast of a malformed
-      // string; each extends the matching JDK type. SparkThrowable covers the equivalent runtime
-      // errors from registry-resolved functions (to_number/bit_get out-of-range, ...), and
-      // IllegalArgumentException covers a bad regex pattern, both of which the hardcoded table
-      // never reached before the registry fallback existed. Swallowing any of these would
-      // silently drop a row the same query keeps, so let them out and let the caller fail the
-      // way the equivalent query does. Only for an otherwise-evaluable expression, though: a
-      // caller that skips validateFilterExpression and evaluates a genuinely unsupported function
-      // directly still no-matches (calling eval() on the leftover UnresolvedFunction/Unevaluable
-      // node raises the same SparkThrowable-family INTERNAL_ERROR for an entirely different,
-      // expected reason), so this method stays safe to call on its own.
-      case Failure(e @ (_: ArithmeticException | _: NumberFormatException | _: DateTimeException
-        | _: SparkThrowable | _: IllegalArgumentException)) if !boundExpr.exists(_.isInstanceOf[Unevaluable]) =>
+      // string; each extends the matching JDK type. Swallowing one would silently drop a row the
+      // same query keeps, so let it out unconditionally, exactly as before the registry fallback.
+      case Failure(e @ (_: ArithmeticException | _: NumberFormatException | _: DateTimeException)) => throw e
+      // SparkThrowable covers the equivalent runtime errors from registry-resolved functions
+      // (to_number/bit_get out-of-range, ...), and IllegalArgumentException covers a bad regex
+      // pattern - both newly reachable through the registry fallback, so this guard only applies
+      // to these two: a caller that skips validateFilterExpression and evaluates a genuinely
+      // unsupported function directly still no-matches instead of hitting the same
+      // SparkThrowable-family INTERNAL_ERROR that Unevaluable.eval() raises for an unrelated
+      // reason, so this method stays safe to call on its own.
+      case Failure(e @ (_: SparkThrowable | _: IllegalArgumentException)) if !boundExpr.exists(_.isInstanceOf[Unevaluable]) =>
         throw e
       case Failure(_) => false
     }
@@ -841,15 +835,17 @@ object HoodieProcedureFilterUtils {
     }
   }
 
-  // Runs the analyzer's own implicit-cast rule on a single expression, the same rule
-  // lookupFunction skips. Only touches nodes declaring a real input-type contract
-  // (ImplicitCastInputTypes); anything else passes through unchanged.
+  // Runs a handful of the analyzer's own coercion rules on a single expression, the same rules
+  // lookupFunction skips: ImplicitTypeCasts for nodes declaring a real input-type contract,
+  // FunctionArgumentConversion/ConcatCoercion/IfCoercion for the builtins whose argument types get
+  // unified before the type check even sees them (concat(id, 'x') casts the Int to String via
+  // ConcatCoercion in a real query; without it Concat.checkInputDataTypes just fails). Order
+  // mirrors TypeCoercion's own rule list - ImplicitTypeCasts last, as a catch-all. Anything not
+  // covered by one of these four passes through unchanged.
   private def applyImplicitCasts(expression: Expression): Expression = {
-    if (SQLConf.get.ansiEnabled) {
-      AnsiTypeCoercion.ImplicitTypeCasts.transform.applyOrElse(expression, identity[Expression])
-    } else {
-      TypeCoercion.ImplicitTypeCasts.transform.applyOrElse(expression, identity[Expression])
-    }
+    val engine: TypeCoercionBase = if (SQLConf.get.ansiEnabled) AnsiTypeCoercion else TypeCoercion
+    Seq(engine.FunctionArgumentConversion, engine.ConcatCoercion, engine.IfCoercion, engine.ImplicitTypeCasts)
+      .foldLeft(expression) { (expr, rule) => rule.transform.applyOrElse(expr, identity[Expression]) }
   }
 
   private def castTo(expression: Expression, dataType: DataType): Expression = {
