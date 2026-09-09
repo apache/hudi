@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.GlueCatalogSyncClientConfig;
+import org.apache.hudi.config.HoodieAWSConfig;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.SchemaDifference;
 import org.apache.hudi.storage.StoragePath;
@@ -41,35 +42,50 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.glue.GlueAsyncClient;
+import software.amazon.awssdk.services.glue.GlueAsyncClientBuilder;
 import software.amazon.awssdk.services.glue.GlueServiceClientConfiguration;
 import software.amazon.awssdk.services.glue.model.BatchCreatePartitionRequest;
 import software.amazon.awssdk.services.glue.model.BatchCreatePartitionResponse;
 import software.amazon.awssdk.services.glue.model.BatchDeletePartitionRequest;
 import software.amazon.awssdk.services.glue.model.BatchDeletePartitionResponse;
+import software.amazon.awssdk.services.glue.model.BatchGetPartitionRequest;
+import software.amazon.awssdk.services.glue.model.BatchGetPartitionResponse;
+import software.amazon.awssdk.services.glue.model.BatchUpdatePartitionFailureEntry;
 import software.amazon.awssdk.services.glue.model.BatchUpdatePartitionRequest;
 import software.amazon.awssdk.services.glue.model.BatchUpdatePartitionRequestEntry;
 import software.amazon.awssdk.services.glue.model.BatchUpdatePartitionResponse;
 import software.amazon.awssdk.services.glue.model.Column;
 import software.amazon.awssdk.services.glue.model.CreateDatabaseRequest;
 import software.amazon.awssdk.services.glue.model.CreateDatabaseResponse;
+import software.amazon.awssdk.services.glue.model.CreatePartitionIndexRequest;
+import software.amazon.awssdk.services.glue.model.CreatePartitionIndexResponse;
 import software.amazon.awssdk.services.glue.model.CreateTableRequest;
 import software.amazon.awssdk.services.glue.model.CreateTableResponse;
 import software.amazon.awssdk.services.glue.model.Database;
+import software.amazon.awssdk.services.glue.model.DeletePartitionIndexRequest;
+import software.amazon.awssdk.services.glue.model.DeletePartitionIndexResponse;
 import software.amazon.awssdk.services.glue.model.DeleteTableRequest;
 import software.amazon.awssdk.services.glue.model.DeleteTableResponse;
 import software.amazon.awssdk.services.glue.model.EntityNotFoundException;
 import software.amazon.awssdk.services.glue.model.ErrorDetail;
 import software.amazon.awssdk.services.glue.model.GetDatabaseRequest;
 import software.amazon.awssdk.services.glue.model.GetDatabaseResponse;
+import software.amazon.awssdk.services.glue.model.GetPartitionIndexesRequest;
+import software.amazon.awssdk.services.glue.model.GetPartitionIndexesResponse;
 import software.amazon.awssdk.services.glue.model.GetPartitionsRequest;
 import software.amazon.awssdk.services.glue.model.GetPartitionsResponse;
 import software.amazon.awssdk.services.glue.model.GetTableRequest;
 import software.amazon.awssdk.services.glue.model.GetTableResponse;
+import software.amazon.awssdk.services.glue.model.KeySchemaElement;
 import software.amazon.awssdk.services.glue.model.PartitionError;
+import software.amazon.awssdk.services.glue.model.PartitionIndex;
+import software.amazon.awssdk.services.glue.model.PartitionIndexDescriptor;
+import software.amazon.awssdk.services.glue.model.PartitionValueList;
 import software.amazon.awssdk.services.glue.model.SerDeInfo;
 import software.amazon.awssdk.services.glue.model.StorageDescriptor;
 import software.amazon.awssdk.services.glue.model.Table;
@@ -82,18 +98,24 @@ import software.amazon.awssdk.services.sts.model.GetCallerIdentityRequest;
 import software.amazon.awssdk.services.sts.model.GetCallerIdentityResponse;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.aws.testutils.GlueTestUtil.glueSyncProps;
 import static org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_TABLE_NAME_KEY;
+import static org.apache.hudi.sync.common.HoodieMetaSyncOperations.HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC;
+import static org.apache.hudi.sync.common.HoodieMetaSyncOperations.HOODIE_LAST_COMMIT_TIME_SYNC;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
@@ -105,6 +127,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -113,6 +136,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class TestAWSGlueSyncClient {
   private static final String CATALOG_ID = "DEFAULT_AWS_ACCOUNT_ID";
+  private static final String GLUE_PARTITION_INDEX_ENABLE = "partition_filtering.enabled";
 
   @Mock
   private GlueAsyncClient mockAwsGlue;
@@ -1009,5 +1033,632 @@ class TestAWSGlueSyncClient {
 
     verify(mockAwsGlue, times(1)).updateTable(any(UpdateTableRequest.class));
     verify(mockAwsGlue, never()).batchUpdatePartition(any(BatchUpdatePartitionRequest.class));
+  }
+
+  @Test
+  void testGetPartitionsFromList_returnsPartitionsKnownToGlue() {
+    String tableName = "tbl";
+    software.amazon.awssdk.services.glue.model.Partition gluePartition =
+        software.amazon.awssdk.services.glue.model.Partition.builder()
+            .values("2024-01-15")
+            .storageDescriptor(StorageDescriptor.builder().location("s3://base/2024/01/15").build())
+            .build();
+    ArgumentCaptor<BatchGetPartitionRequest> captor = ArgumentCaptor.forClass(BatchGetPartitionRequest.class);
+    when(mockAwsGlue.batchGetPartition(captor.capture()))
+        .thenReturn(CompletableFuture.completedFuture(
+            BatchGetPartitionResponse.builder().partitions(gluePartition).build()));
+
+    List<Partition> result = awsGlueSyncClient.getPartitionsFromList(tableName, Arrays.asList("2024/01/15", "2024/01/16"));
+
+    assertEquals(1, result.size(), "only the partition Glue knows about is returned");
+    assertEquals(Collections.singletonList("2024-01-15"), result.get(0).getValues());
+    assertEquals("s3://base/2024/01/15", result.get(0).getStorageLocation());
+
+    BatchGetPartitionRequest sent = captor.getValue();
+    assertEquals(GlueTestUtil.DB_NAME, sent.databaseName());
+    assertEquals(tableName, sent.tableName());
+    assertEquals(Arrays.asList(Collections.singletonList("2024-01-15"), Collections.singletonList("2024-01-16")),
+        sent.partitionsToGet().stream().map(PartitionValueList::values).collect(Collectors.toList()),
+        "the requested partitions are the extracted partition values, not the storage paths");
+  }
+
+  @Test
+  void testGetPartitionsFromList_emptyListDoesNotCallGlue() {
+    assertTrue(awsGlueSyncClient.getPartitionsFromList("tbl", Collections.emptyList()).isEmpty());
+    verify(mockAwsGlue, never()).batchGetPartition(any(BatchGetPartitionRequest.class));
+  }
+
+  @Test
+  void testGetMetastoreSchema_mergesColumnsAndPartitionKeys() {
+    String tableName = "tbl";
+    List<Column> columns = Arrays.asList(GlueTestUtil.getColumn("name", "string", null),
+        GlueTestUtil.getColumn("age", "int", null));
+    List<Column> partitionKeys = Collections.singletonList(GlueTestUtil.getColumn("datestr", "string", null));
+    when(mockAwsGlue.getTable(any(GetTableRequest.class)))
+        .thenReturn(getTableWithDefaultProps(tableName, columns, partitionKeys));
+
+    Map<String, String> schema = awsGlueSyncClient.getMetastoreSchema(tableName);
+
+    assertEquals(3, schema.size());
+    assertEquals("STRING", schema.get("name"), "column types are upper cased");
+    assertEquals("INT", schema.get("age"));
+    assertEquals("STRING", schema.get("datestr"), "partition keys are merged into the schema");
+  }
+
+  @Test
+  void testGetMetastoreSchema_wrapsGlueFailure() {
+    when(mockAwsGlue.getTable(any(GetTableRequest.class))).thenThrow(new RuntimeException("boom"));
+    HoodieGlueSyncException ex = assertThrows(HoodieGlueSyncException.class,
+        () -> awsGlueSyncClient.getMetastoreSchema("tbl"));
+    assertTrue(ex.getMessage().contains("Fail to get schema for table"));
+  }
+
+  @Test
+  void testGetLastCommitTimeSynced_readsTableParameters() {
+    Map<String, String> parameters = new HashMap<>();
+    parameters.put(HOODIE_LAST_COMMIT_TIME_SYNC, "100");
+    parameters.put(HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC, "110");
+    Table withSyncTimes = tableWithParameters("synced", parameters);
+    Table withoutSyncTimes = tableWithParameters("unsynced", new HashMap<>());
+    when(mockAwsGlue.getTable(any(GetTableRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(GetTableResponse.builder().table(withSyncTimes).build()))
+        .thenReturn(CompletableFuture.completedFuture(GetTableResponse.builder().table(withoutSyncTimes).build()));
+
+    assertEquals("100", awsGlueSyncClient.getLastCommitTimeSynced("synced").get());
+    assertEquals("110", awsGlueSyncClient.getLastCommitCompletionTimeSynced("synced").get());
+    // the table is cached per name, so the second table name triggers the second stubbed response
+    assertFalse(awsGlueSyncClient.getLastCommitTimeSynced("unsynced").isPresent());
+    assertFalse(awsGlueSyncClient.getLastCommitCompletionTimeSynced("unsynced").isPresent());
+    verify(mockAwsGlue, times(2)).getTable(any(GetTableRequest.class));
+  }
+
+  @Test
+  void testGetStorageFieldSchemas_readsFieldsAndDocsFromStorage() {
+    Map<String, FieldSchema> byName = awsGlueSyncClient.getStorageFieldSchemas().stream()
+        .collect(Collectors.toMap(FieldSchema::getName, f -> f));
+
+    assertEquals("int", byName.get("id").getType());
+    assertEquals(GlueTestUtil.ID_FIELD_DOC, byName.get("id").getComment().get());
+    assertEquals("string", byName.get("name").getType());
+    assertEquals(GlueTestUtil.NAME_FIELD_DOC, byName.get("name").getComment().get());
+    assertTrue(byName.containsKey("_hoodie_commit_time"), "metadata fields are part of the storage schema");
+  }
+
+  @Test
+  void testManagePartitionIndexes_disabledDeactivatesFlagAndDropsIndexes() throws Exception {
+    String tableName = "tbl";
+    Map<String, String> parameters = new HashMap<>();
+    parameters.put(GLUE_PARTITION_INDEX_ENABLE, "true");
+    when(mockAwsGlue.getTable(any(GetTableRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(
+            GetTableResponse.builder().table(tableWithParameters(tableName, parameters)).build()));
+    ArgumentCaptor<UpdateTableRequest> updateCaptor = ArgumentCaptor.forClass(UpdateTableRequest.class);
+    when(mockAwsGlue.updateTable(updateCaptor.capture()))
+        .thenReturn(CompletableFuture.completedFuture(UpdateTableResponse.builder().build()));
+    when(mockAwsGlue.getPartitionIndexes(any(GetPartitionIndexesRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(GetPartitionIndexesResponse.builder()
+            .partitionIndexDescriptorList(partitionIndexDescriptor("idx_one", "datestr"))
+            .build()));
+    ArgumentCaptor<DeletePartitionIndexRequest> deleteCaptor = ArgumentCaptor.forClass(DeletePartitionIndexRequest.class);
+    when(mockAwsGlue.deletePartitionIndex(deleteCaptor.capture()))
+        .thenReturn(CompletableFuture.completedFuture(DeletePartitionIndexResponse.builder().build()));
+
+    awsGlueSyncClient.managePartitionIndexes(tableName);
+
+    assertEquals("false", updateCaptor.getValue().tableInput().parameters().get(GLUE_PARTITION_INDEX_ENABLE),
+        "partition index usage is deactivated when the feature is off");
+    assertEquals(Collections.singletonList("idx_one"), deleteCaptor.getAllValues().stream()
+        .map(DeletePartitionIndexRequest::indexName).collect(Collectors.toList()));
+    verify(mockAwsGlue, never()).createPartitionIndex(any(CreatePartitionIndexRequest.class));
+  }
+
+  @Test
+  void testManagePartitionIndexes_enabledDropsStaleIndexesAndCreatesMissingOnes() throws Exception {
+    String tableName = "tbl";
+    TypedProperties props = GlueTestUtil.getHiveSyncConfig().getProps();
+    props.setProperty(GlueCatalogSyncClientConfig.META_SYNC_PARTITION_INDEX_FIELDS_ENABLE.key(), "true");
+    props.setProperty(GlueCatalogSyncClientConfig.META_SYNC_PARTITION_INDEX_FIELDS.key(), "datestr;hour,region");
+    awsGlueSyncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, mockSts, new HiveSyncConfig(props), GlueTestUtil.getMetaClient());
+
+    // the table has no partition_filtering.enabled parameter, so indexing has to be activated first
+    when(mockAwsGlue.getTable(any(GetTableRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(
+            GetTableResponse.builder().table(tableWithParameters(tableName, new HashMap<>())).build()));
+    ArgumentCaptor<UpdateTableRequest> updateCaptor = ArgumentCaptor.forClass(UpdateTableRequest.class);
+    when(mockAwsGlue.updateTable(updateCaptor.capture()))
+        .thenReturn(CompletableFuture.completedFuture(UpdateTableResponse.builder().build()));
+
+    PartitionIndexDescriptor keptIndex = partitionIndexDescriptor("kept_idx", "datestr", "hour");
+    when(mockAwsGlue.getPartitionIndexes(any(GetPartitionIndexesRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(GetPartitionIndexesResponse.builder()
+            .partitionIndexDescriptorList(keptIndex, partitionIndexDescriptor("stale_idx", "old_col"))
+            .build()))
+        // after a drop the index list is re-read
+        .thenReturn(CompletableFuture.completedFuture(GetPartitionIndexesResponse.builder()
+            .partitionIndexDescriptorList(keptIndex)
+            .build()));
+    ArgumentCaptor<DeletePartitionIndexRequest> deleteCaptor = ArgumentCaptor.forClass(DeletePartitionIndexRequest.class);
+    when(mockAwsGlue.deletePartitionIndex(deleteCaptor.capture()))
+        .thenReturn(CompletableFuture.completedFuture(DeletePartitionIndexResponse.builder().build()));
+    ArgumentCaptor<CreatePartitionIndexRequest> createCaptor = ArgumentCaptor.forClass(CreatePartitionIndexRequest.class);
+    when(mockAwsGlue.createPartitionIndex(createCaptor.capture()))
+        .thenReturn(CompletableFuture.completedFuture(CreatePartitionIndexResponse.builder().build()));
+
+    awsGlueSyncClient.managePartitionIndexes(tableName);
+
+    assertEquals("true", updateCaptor.getValue().tableInput().parameters().get(GLUE_PARTITION_INDEX_ENABLE));
+    assertEquals(Collections.singletonList("stale_idx"), deleteCaptor.getAllValues().stream()
+        .map(DeletePartitionIndexRequest::indexName).collect(Collectors.toList()),
+        "only the index that is no longer configured is dropped");
+    assertEquals(1, createCaptor.getAllValues().size(), "the already existing index is not recreated");
+    PartitionIndex created = createCaptor.getValue().partitionIndex();
+    assertEquals(Collections.singletonList("region"), created.keys());
+    assertEquals("hudi_managed_[region]", created.indexName());
+    verify(mockAwsGlue, times(2)).getPartitionIndexes(any(GetPartitionIndexesRequest.class));
+  }
+
+  @Test
+  void testParsePartitionsIndexConfig_keepsOnlyTheFirstThreeIndexes() {
+    TypedProperties props = GlueTestUtil.getHiveSyncConfig().getProps();
+    props.setProperty(GlueCatalogSyncClientConfig.META_SYNC_PARTITION_INDEX_FIELDS.key(), "a;b,c,d,e");
+    awsGlueSyncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, mockSts, new HiveSyncConfig(props), GlueTestUtil.getMetaClient());
+
+    assertEquals(Arrays.asList(Arrays.asList("a", "b"), Collections.singletonList("c"), Collections.singletonList("d")),
+        awsGlueSyncClient.parsePartitionsIndexConfig(), "glue supports at most three partition indexes");
+  }
+
+  @Test
+  void testUpdateLastCommitTimeSynced_writesTimelineInstantToTableParameters() {
+    String tableName = "tbl";
+    when(mockAwsGlue.getTable(any(GetTableRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(
+            GetTableResponse.builder().table(tableWithParameters(tableName, new HashMap<>())).build()));
+    ArgumentCaptor<UpdateTableRequest> captor = ArgumentCaptor.forClass(UpdateTableRequest.class);
+    when(mockAwsGlue.updateTable(captor.capture()))
+        .thenReturn(CompletableFuture.completedFuture(UpdateTableResponse.builder().build()));
+    when(mockAwsGlue.getPartitionIndexes(any(GetPartitionIndexesRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(GetPartitionIndexesResponse.builder().build()));
+
+    awsGlueSyncClient.updateLastCommitTimeSynced(tableName);
+
+    Map<String, String> parameters = captor.getValue().tableInput().parameters();
+    assertEquals(GlueTestUtil.INSTANT_TIME, parameters.get(HOODIE_LAST_COMMIT_TIME_SYNC),
+        "the last instant of the active timeline is synced");
+    assertEquals(GlueTestUtil.COMPLETION_TIME, parameters.get(HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC),
+        "the completion time of that instant is synced alongside it");
+    assertTrue(captor.getValue().skipArchive(), "table archiving is skipped by default");
+  }
+
+  /**
+   * An indexation already in flight surfaces as an {@link ExecutionException}, anything else lands in the
+   * catch-all. Neither may fail the commit-time sync.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testUpdateLastCommitTimeSynced_partitionIndexFailureDoesNotFailTheSync(boolean asExecutionFailure) throws Exception {
+    String tableName = "tbl";
+    when(mockAwsGlue.getTable(any(GetTableRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(
+            GetTableResponse.builder().table(tableWithParameters(tableName, new HashMap<>())).build()));
+    when(mockAwsGlue.updateTable(any(UpdateTableRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(UpdateTableResponse.builder().build()));
+    if (asExecutionFailure) {
+      CompletableFuture<GetPartitionIndexesResponse> failed = mock(CompletableFuture.class);
+      when(failed.get()).thenThrow(new ExecutionException(new RuntimeException("indexing in progress")));
+      when(mockAwsGlue.getPartitionIndexes(any(GetPartitionIndexesRequest.class))).thenReturn(failed);
+    } else {
+      when(mockAwsGlue.getPartitionIndexes(any(GetPartitionIndexesRequest.class))).thenThrow(new RuntimeException("boom"));
+    }
+
+    awsGlueSyncClient.updateLastCommitTimeSynced(tableName);
+
+    verify(mockAwsGlue, times(1)).updateTable(any(UpdateTableRequest.class));
+  }
+
+  @Test
+  void testUpdateLastCommitTimeSynced_wrapsGlueFailure() {
+    String tableName = "tbl";
+    when(mockAwsGlue.getTable(any(GetTableRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(
+            GetTableResponse.builder().table(tableWithParameters(tableName, new HashMap<>())).build()));
+    when(mockAwsGlue.updateTable(any(UpdateTableRequest.class))).thenThrow(new RuntimeException("boom"));
+
+    HoodieGlueSyncException ex = assertThrows(HoodieGlueSyncException.class,
+        () -> awsGlueSyncClient.updateLastCommitTimeSynced(tableName));
+    assertTrue(ex.getMessage().contains("Fail to update last sync commit time"));
+  }
+
+  @Test
+  void testUpdateSerdeProperties_emptyPropertiesSkipUpdate() {
+    assertFalse(awsGlueSyncClient.updateSerdeProperties("tbl", Collections.emptyMap(), false));
+    verify(mockAwsGlue, never()).updateTable(any(UpdateTableRequest.class));
+  }
+
+  @Test
+  void testUpdateSerdeProperties_unchangedPropertiesSkipUpdate() {
+    String tableName = "tbl";
+    Map<String, String> serdeProperties = new HashMap<>();
+    serdeProperties.put("serialization.format", "1");
+    serdeProperties.put("path", "s3://base");
+    when(mockAwsGlue.getTable(any(GetTableRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(
+            GetTableResponse.builder().table(tableWithSerdeProperties(tableName, serdeProperties)).build()));
+
+    assertFalse(awsGlueSyncClient.updateSerdeProperties(tableName, new HashMap<>(serdeProperties), false));
+    verify(mockAwsGlue, never()).updateTable(any(UpdateTableRequest.class));
+  }
+
+  @Test
+  void testUpdateSerdeProperties_changedPropertiesRewriteSerdeInfo() {
+    String tableName = "tbl";
+    when(mockAwsGlue.getTable(any(GetTableRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(
+            GetTableResponse.builder().table(tableWithSerdeProperties(tableName,
+                serdePropertiesOf("serialization.format", "1", "location", "s3://old"))).build()));
+    ArgumentCaptor<UpdateTableRequest> captor = ArgumentCaptor.forClass(UpdateTableRequest.class);
+    when(mockAwsGlue.updateTable(captor.capture()))
+        .thenReturn(CompletableFuture.completedFuture(UpdateTableResponse.builder().build()));
+
+    Map<String, String> serdeProperties = new HashMap<>();
+    serdeProperties.put("path", "s3://new");
+    assertTrue(awsGlueSyncClient.updateSerdeProperties(tableName, serdeProperties, false));
+
+    SerDeInfo sent = captor.getValue().tableInput().storageDescriptor().serdeInfo();
+    assertEquals("org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe", sent.serializationLibrary(),
+        "the serde class is derived from the base file format");
+    assertEquals("s3://new", sent.parameters().get("path"));
+    assertEquals("1", sent.parameters().get("serialization.format"), "the serialization format is defaulted in");
+  }
+
+  @Test
+  void testUpdateSerdeProperties_wrapsGlueFailure() {
+    when(mockAwsGlue.getTable(any(GetTableRequest.class))).thenThrow(EntityNotFoundException.class);
+    HoodieGlueSyncException ex = assertThrows(HoodieGlueSyncException.class,
+        () -> awsGlueSyncClient.updateSerdeProperties("tbl", new HashMap<>(Collections.singletonMap("path", "s3://new")), false));
+    assertTrue(ex.getMessage().contains("Failed to update table serde info for table"));
+  }
+
+  @Test
+  void testCreateTable_existingTableIsNotRecreated() {
+    String tableName = "tbl";
+    when(mockAwsGlue.getTable(any(GetTableRequest.class)))
+        .thenReturn(getTableWithDefaultProps(tableName, Collections.emptyList(), Collections.emptyList()));
+
+    awsGlueSyncClient.createTable(tableName, GlueTestUtil.getSimpleSchema(), "inputFormat", "outputFormat",
+        "serde", new HashMap<>(), new HashMap<>());
+
+    verify(mockAwsGlue, never()).createTable(any(CreateTableRequest.class));
+  }
+
+  @Test
+  void testTableExists_wrapsNonEntityNotFoundExecutionFailure() throws Exception {
+    CompletableFuture<GetTableResponse> failed = mock(CompletableFuture.class);
+    when(failed.get()).thenThrow(new ExecutionException(new RuntimeException("boom")));
+    when(mockAwsGlue.getTable(any(GetTableRequest.class))).thenReturn(failed);
+
+    HoodieGlueSyncException ex = assertThrows(HoodieGlueSyncException.class, () -> awsGlueSyncClient.tableExists("tbl"));
+    assertTrue(ex.getMessage().contains("Fail to get table"));
+  }
+
+  @Test
+  void testTableExists_wrapsClientFailure() {
+    when(mockAwsGlue.getTable(any(GetTableRequest.class))).thenThrow(new RuntimeException("boom"));
+
+    HoodieGlueSyncException ex = assertThrows(HoodieGlueSyncException.class, () -> awsGlueSyncClient.tableExists("tbl"));
+    assertTrue(ex.getMessage().contains("Fail to get table"));
+  }
+
+  @Test
+  void testDatabaseExists_wrapsClientFailure() {
+    when(mockAwsGlue.getDatabase(any(GetDatabaseRequest.class))).thenThrow(new RuntimeException("boom"));
+
+    HoodieGlueSyncException ex = assertThrows(HoodieGlueSyncException.class, () -> awsGlueSyncClient.databaseExists("db"));
+    assertTrue(ex.getMessage().contains("Fail to check if database exists"));
+  }
+
+  @Test
+  void testDropTable_interruptionRestoresTheInterruptFlag() throws Exception {
+    CompletableFuture<DeleteTableResponse> failed = mock(CompletableFuture.class);
+    when(failed.get()).thenThrow(new InterruptedException("interrupted"));
+    when(mockAwsGlue.deleteTable(any(DeleteTableRequest.class))).thenReturn(failed);
+
+    assertThrows(HoodieGlueSyncException.class, () -> awsGlueSyncClient.dropTable("tbl"));
+    assertTrue(Thread.interrupted(), "the interrupt flag is restored for handlers up the stack");
+  }
+
+  @Test
+  void testBuildAsyncClient_appliesTheConfiguredEndpointAndRegion() {
+    TypedProperties props = GlueTestUtil.getHiveSyncConfig().getProps();
+    props.setProperty(HoodieAWSConfig.AWS_GLUE_ENDPOINT.key(), "https://glue.eu-west-1.amazonaws.com");
+    props.setProperty(HoodieAWSConfig.AWS_GLUE_REGION.key(), "eu-west-1");
+
+    try (MockedStatic<GlueAsyncClient> glueStatic = mockStatic(GlueAsyncClient.class);
+         MockedStatic<StsClient> stsStatic = mockStatic(StsClient.class)) {
+      GlueAsyncClientBuilder builder = mock(GlueAsyncClientBuilder.class);
+      glueStatic.when(GlueAsyncClient::builder).thenReturn(builder);
+      when(builder.credentialsProvider(any())).thenReturn(builder);
+      when(builder.endpointOverride(any(URI.class))).thenReturn(builder);
+      when(builder.region(any(Region.class))).thenReturn(builder);
+      when(builder.build()).thenReturn(mockAwsGlue);
+      stsStatic.when(StsClient::create).thenReturn(mockSts);
+
+      new AWSGlueCatalogSyncClient(new HiveSyncConfig(props), GlueTestUtil.getMetaClient());
+
+      verify(builder).endpointOverride(URI.create("https://glue.eu-west-1.amazonaws.com"));
+      verify(builder).region(Region.of("eu-west-1"));
+    }
+  }
+
+  @Test
+  void testBuildAsyncClient_rejectsAMalformedEndpoint() {
+    TypedProperties props = GlueTestUtil.getHiveSyncConfig().getProps();
+    props.setProperty(HoodieAWSConfig.AWS_GLUE_ENDPOINT.key(), "https://glue eu-west-1.amazonaws.com");
+    HiveSyncConfig config = new HiveSyncConfig(props);
+
+    try (MockedStatic<GlueAsyncClient> glueStatic = mockStatic(GlueAsyncClient.class)) {
+      GlueAsyncClientBuilder builder = mock(GlueAsyncClientBuilder.class);
+      glueStatic.when(GlueAsyncClient::builder).thenReturn(builder);
+      when(builder.credentialsProvider(any())).thenReturn(builder);
+
+      RuntimeException ex = assertThrows(RuntimeException.class,
+          () -> new AWSGlueCatalogSyncClient(config, GlueTestUtil.getMetaClient()));
+      assertTrue(ex.getCause() instanceof URISyntaxException, "the malformed endpoint is reported as its parse failure");
+    }
+  }
+
+  @Test
+  void testReplicationOperationsAreUnsupported() {
+    assertThrows(UnsupportedOperationException.class, () -> awsGlueSyncClient.getLastReplicatedTime("tbl"));
+    assertThrows(UnsupportedOperationException.class, () -> awsGlueSyncClient.updateLastReplicatedTimeStamp("tbl", "101"));
+    assertThrows(UnsupportedOperationException.class, () -> awsGlueSyncClient.deleteLastReplicatedTimeStamp("tbl"));
+  }
+
+  @Test
+  void testGeneratePushDownFilter_delegatesToTheGlueFilterGenerator() {
+    assertEquals("datestr = '2024-01-15'", awsGlueSyncClient.generatePushDownFilter(
+        Collections.singletonList("2024/01/15"), Collections.singletonList(new FieldSchema("datestr", "string"))));
+  }
+
+  @Test
+  void testGetPartitionsFromList_wrapsGlueFailure() throws Exception {
+    CompletableFuture<BatchGetPartitionResponse> failed = mock(CompletableFuture.class);
+    when(failed.get()).thenThrow(new ExecutionException(new RuntimeException("boom")));
+    when(mockAwsGlue.batchGetPartition(any(BatchGetPartitionRequest.class))).thenReturn(failed);
+
+    HoodieGlueSyncException ex = assertThrows(HoodieGlueSyncException.class,
+        () -> awsGlueSyncClient.getPartitionsFromList("tbl", Collections.singletonList("2024/01/15")));
+    assertTrue(ex.getMessage().contains("Failed to get all partitions for table"));
+  }
+
+  @Test
+  void testAddPartitionsToTable_nonAlreadyExistsErrorsFailTheSync() {
+    String tableName = "tbl";
+    when(mockAwsGlue.getTable(any(GetTableRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(GetTableResponse.builder()
+            .table(Table.builder().name(tableName)
+                .storageDescriptor(StorageDescriptor.builder().location("s3://base").build()).build())
+            .build()));
+    PartitionError error = PartitionError.builder()
+        .errorDetail(ErrorDetail.builder().errorCode("AccessDeniedException").build()).build();
+    when(mockAwsGlue.batchCreatePartition(any(BatchCreatePartitionRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(
+            BatchCreatePartitionResponse.builder().errors(Collections.singletonList(error)).build()));
+
+    HoodieGlueSyncException ex = assertThrows(HoodieGlueSyncException.class,
+        () -> awsGlueSyncClient.addPartitionsToTable(tableName, Collections.singletonList("2024/01/15")));
+    assertTrue(ex.getCause().getCause().getMessage().contains("Fail to add partitions to"),
+        "an error that is not AlreadyExists fails the sync");
+  }
+
+  @Test
+  void testUpdatePartitionsToTable_errorResponsesFailTheSync() {
+    String tableName = "tbl";
+    when(mockAwsGlue.getTable(any(GetTableRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(GetTableResponse.builder()
+            .table(Table.builder().name(tableName)
+                .storageDescriptor(StorageDescriptor.builder().location("s3://base").build()).build())
+            .build()));
+    BatchUpdatePartitionFailureEntry error = BatchUpdatePartitionFailureEntry.builder()
+        .partitionValueList("2024-01-15")
+        .errorDetail(ErrorDetail.builder().errorCode("AccessDeniedException").build()).build();
+    when(mockAwsGlue.batchUpdatePartition(any(BatchUpdatePartitionRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(
+            BatchUpdatePartitionResponse.builder().errors(Collections.singletonList(error)).build()));
+
+    HoodieGlueSyncException ex = assertThrows(HoodieGlueSyncException.class,
+        () -> awsGlueSyncClient.updatePartitionsToTable(tableName, Collections.singletonList("2024/01/15")));
+    assertTrue(ex.getCause().getCause().getMessage().contains("Fail to update partitions to"));
+  }
+
+  @Test
+  void testPartitionIndexEnableAccessors_wrapGlueFailures() {
+    when(mockAwsGlue.getTable(any(GetTableRequest.class))).thenThrow(new RuntimeException("boom"));
+
+    assertTrue(assertThrows(HoodieGlueSyncException.class,
+        () -> awsGlueSyncClient.getPartitionIndexEnable("tbl"))
+        .getMessage().contains("Fail to get parameter partition_filtering.enabled"));
+    assertTrue(assertThrows(HoodieGlueSyncException.class,
+        () -> awsGlueSyncClient.updatePartitionIndexEnable("tbl", true))
+        .getMessage().contains("Fail to update parameter partition_filtering.enabled"));
+  }
+
+  @Test
+  void testLastCommitTimeAccessors_wrapGlueFailures() {
+    when(mockAwsGlue.getTable(any(GetTableRequest.class))).thenThrow(new RuntimeException("boom"));
+
+    assertTrue(assertThrows(HoodieGlueSyncException.class,
+        () -> awsGlueSyncClient.getLastCommitTimeSynced("tbl"))
+        .getMessage().contains("Fail to get last sync commit time"));
+    assertTrue(assertThrows(HoodieGlueSyncException.class,
+        () -> awsGlueSyncClient.getLastCommitCompletionTimeSynced("other"))
+        .getMessage().contains("Failed to get the last commit completion time synced"));
+  }
+
+  @Test
+  void testUpdateTableProperties_propertiesAlreadyInTheCatalogSkipUpdate() {
+    String tableName = "tbl";
+    Map<String, String> existing = new HashMap<>();
+    existing.put("hudi.metadata-listing-enabled", "FALSE");
+    existing.put(HOODIE_LAST_COMMIT_TIME_SYNC, "100");
+    when(mockAwsGlue.getTable(any(GetTableRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(
+            GetTableResponse.builder().table(tableWithParameters(tableName, existing)).build()));
+
+    Map<String, String> update = new HashMap<>();
+    update.put(HOODIE_LAST_COMMIT_TIME_SYNC, "100");
+    assertFalse(awsGlueSyncClient.updateTableProperties(tableName, update));
+    verify(mockAwsGlue, never()).updateTable(any(UpdateTableRequest.class));
+  }
+
+  @Test
+  void testStorageSchemaReads_failWhenTheTableHasNoCommits() throws IOException {
+    AWSGlueCatalogSyncClient clientWithoutCommits = clientForTableWithoutCommits();
+    when(mockAwsGlue.getTable(any(GetTableRequest.class)))
+        .thenReturn(getTableWithDefaultProps("tbl", Collections.emptyList(), Collections.emptyList()));
+
+    assertTrue(assertThrows(HoodieGlueSyncException.class, clientWithoutCommits::getStorageFieldSchemas)
+        .getMessage().contains("Failed to get field schemas from storage"));
+    assertTrue(assertThrows(HoodieGlueSyncException.class,
+        () -> clientWithoutCommits.updateTableComments("tbl", Collections.emptyList(), Collections.emptyList()))
+        .getMessage().contains("Failed to get schema's doc from storage"));
+  }
+
+  @Test
+  void testUpdateLastCommitTimeSynced_withoutACommitNothingIsSynced() throws IOException {
+    AWSGlueCatalogSyncClient clientWithoutCommits = clientForTableWithoutCommits();
+    when(mockAwsGlue.getTable(any(GetTableRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(
+            GetTableResponse.builder().table(tableWithParameters("tbl", new HashMap<>())).build()));
+    when(mockAwsGlue.getPartitionIndexes(any(GetPartitionIndexesRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(GetPartitionIndexesResponse.builder().build()));
+
+    clientWithoutCommits.updateLastCommitTimeSynced("tbl");
+
+    verify(mockAwsGlue, never()).updateTable(any(UpdateTableRequest.class));
+  }
+
+  @Test
+  void testUpdateTableSchema_wrapsGlueFailure() {
+    when(mockAwsGlue.getTable(any(GetTableRequest.class))).thenThrow(new RuntimeException("boom"));
+    HoodieSchema schema = GlueTestUtil.getSimpleSchema();
+    SchemaDifference schemaDiff = SchemaDifference.newBuilder(schema, new HashMap<>()).build();
+
+    HoodieGlueSyncException ex = assertThrows(HoodieGlueSyncException.class,
+        () -> awsGlueSyncClient.updateTableSchema("tbl", schema, schemaDiff));
+    assertTrue(ex.getMessage().contains("Fail to update definition for table"));
+  }
+
+  @Test
+  void testUpdateTableSchema_cascadeWithoutPartitionsIssuesNoPartitionUpdate() {
+    String tableName = GlueTestUtil.TABLE_NAME;
+    Table table = tableWithColumns(tableName,
+        Collections.singletonList(Column.builder().name("name").type("string").build()),
+        Collections.singletonList(Column.builder().name("datestr").type("string").build()));
+    when(mockAwsGlue.getTable(any(GetTableRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(GetTableResponse.builder().table(table).build()));
+    when(mockAwsGlue.updateTable(any(UpdateTableRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(UpdateTableResponse.builder().build()));
+    when(mockAwsGlue.getPartitions(any(GetPartitionsRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(GetPartitionsResponse.builder().nextToken(null).build()));
+
+    HoodieSchema schema = GlueTestUtil.getSimpleSchema();
+    awsGlueSyncClient.updateTableSchema(tableName, schema,
+        SchemaDifference.newBuilder(schema, new HashMap<>()).updateTableColumn("name", "string").build());
+
+    verify(mockAwsGlue, never()).batchUpdatePartition(any(BatchUpdatePartitionRequest.class));
+  }
+
+  @Test
+  void testCreateOrReplaceTable_wrapsFailureOfTheReplace() {
+    String tableName = "tbl";
+    when(mockAwsGlue.getTable(any(GetTableRequest.class)))
+        .thenReturn(getTableWithDefaultProps(tableName, Collections.emptyList(), Collections.emptyList()));
+    when(mockAwsGlue.deleteTable(any(DeleteTableRequest.class))).thenThrow(new RuntimeException("boom"));
+
+    HoodieGlueSyncException ex = assertThrows(HoodieGlueSyncException.class,
+        () -> awsGlueSyncClient.createOrReplaceTable(tableName, GlueTestUtil.getSimpleSchema(), "inputFormat",
+            "outputFormat", "serde", new HashMap<>(), new HashMap<>()));
+    assertTrue(ex.getMessage().contains("Fail to recreate the table"));
+  }
+
+  @Test
+  void testCreateTable_wrapsGlueFailure() throws Exception {
+    String tableName = "tbl";
+    CompletableFuture<GetTableResponse> notFound = mock(CompletableFuture.class);
+    when(notFound.get()).thenThrow(new ExecutionException(EntityNotFoundException.builder().build()));
+    when(mockAwsGlue.getTable(any(GetTableRequest.class))).thenReturn(notFound);
+    when(mockAwsGlue.createTable(any(CreateTableRequest.class))).thenThrow(new RuntimeException("boom"));
+
+    HoodieGlueSyncException ex = assertThrows(HoodieGlueSyncException.class,
+        () -> awsGlueSyncClient.createTable(tableName, GlueTestUtil.getSimpleSchema(), "inputFormat",
+            "outputFormat", "serde", new HashMap<>(), new HashMap<>()));
+    assertTrue(ex.getMessage().contains("Fail to create"));
+  }
+
+  @Test
+  void testCreateDatabase_wrapsGlueFailure() throws Exception {
+    String dbName = "db";
+    CompletableFuture<GetDatabaseResponse> notFound = mock(CompletableFuture.class);
+    when(notFound.get()).thenThrow(new ExecutionException(EntityNotFoundException.builder().build()));
+    when(mockAwsGlue.getDatabase(any(GetDatabaseRequest.class))).thenReturn(notFound);
+    CompletableFuture<CreateDatabaseResponse> failed = mock(CompletableFuture.class);
+    when(failed.get()).thenThrow(new ExecutionException(new RuntimeException("boom")));
+    when(mockAwsGlue.createDatabase(any(CreateDatabaseRequest.class))).thenReturn(failed);
+
+    HoodieGlueSyncException ex = assertThrows(HoodieGlueSyncException.class,
+        () -> awsGlueSyncClient.createDatabase(dbName));
+    assertTrue(ex.getMessage().contains("Fail to create database"));
+  }
+
+  private AWSGlueCatalogSyncClient clientForTableWithoutCommits() throws IOException {
+    HoodieTableMetaClient withoutCommits = GlueTestUtil.createTableWithoutCommits();
+    TypedProperties props = TypedProperties.copy(GlueTestUtil.getHiveSyncConfig().getProps());
+    props.setProperty(META_SYNC_BASE_PATH.key(), withoutCommits.getBasePath().toString());
+    return new AWSGlueCatalogSyncClient(mockAwsGlue, mockSts, new HiveSyncConfig(props), withoutCommits);
+  }
+
+  private static Map<String, String> serdePropertiesOf(String... keysAndValues) {
+    Map<String, String> properties = new HashMap<>();
+    for (int i = 0; i < keysAndValues.length; i += 2) {
+      properties.put(keysAndValues[i], keysAndValues[i + 1]);
+    }
+    return properties;
+  }
+
+  private static PartitionIndexDescriptor partitionIndexDescriptor(String indexName, String... keys) {
+    return PartitionIndexDescriptor.builder()
+        .indexName(indexName)
+        .keys(Arrays.stream(keys).map(key -> KeySchemaElement.builder().name(key).build()).collect(Collectors.toList()))
+        .build();
+  }
+
+  private static Table tableWithParameters(String tableName, Map<String, String> parameters) {
+    return tableWithColumns(tableName, Collections.singletonList(Column.builder().name("name").type("string").build()),
+        Collections.singletonList(Column.builder().name("datestr").type("string").build()))
+        .toBuilder()
+        .parameters(parameters)
+        .build();
+  }
+
+  private static Table tableWithColumns(String tableName, List<Column> columns, List<Column> partitionKeys) {
+    return Table.builder()
+        .name(tableName)
+        .databaseName(GlueTestUtil.DB_NAME)
+        .tableType("COPY_ON_WRITE")
+        .parameters(new HashMap<>())
+        .storageDescriptor(StorageDescriptor.builder().location("s3://base").columns(columns).build())
+        .partitionKeys(partitionKeys)
+        .build();
+  }
+
+  private static Table tableWithSerdeProperties(String tableName, Map<String, String> serdeProperties) {
+    Table table = tableWithColumns(tableName,
+        Collections.singletonList(Column.builder().name("name").type("string").build()),
+        Collections.singletonList(Column.builder().name("datestr").type("string").build()));
+    return table.toBuilder()
+        .storageDescriptor(table.storageDescriptor().toBuilder()
+            .serdeInfo(SerDeInfo.builder().serializationLibrary("serde").parameters(serdeProperties).build())
+            .build())
+        .build();
   }
 }
