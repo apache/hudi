@@ -672,24 +672,19 @@ public class HoodieMultiTableStreamer {
   }
 
   /**
-   * Two-phase shutdown of the per-table executor: wait for the running syncs to finish, then force-cancel any that
-   * ignore interruption. Bounded by {@link Constants#SHUTDOWN_TIMEOUT_SECONDS} so a stuck table cannot hang the job.
-   *
-   * Workers that refuse to stop are logged rather than thrown, since the caller is either already propagating a
-   * failure or has seen every worker return.
+   * Waits for the per-table workers to unwind, bounded by {@link Constants#SHUTDOWN_TIMEOUT_SECONDS} so a stuck table
+   * cannot hang the job. The workers are not interrupted: their ingestion services have already been, and a worker
+   * only waits on its own service, so interrupting it would just make it abandon that wait and close its StreamSync
+   * while the ingestion thread is still writing. A table that does not stop is reported rather than thrown, since the
+   * caller is either already propagating a failure or has seen every worker return.
    */
   private static void shutdownExecutor(ExecutorService executor) {
     executor.shutdown();
     try {
-      if (executor.awaitTermination(Constants.SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-        return;
-      }
-      executor.shutdownNow();
       if (!executor.awaitTermination(Constants.SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
         log.error("table ingestion workers did not terminate; ingestion may still be running");
       }
     } catch (InterruptedException e) {
-      executor.shutdownNow();
       Thread.currentThread().interrupt();
       log.error("interrupted while waiting for the table ingestion workers to terminate; ingestion may still be running");
     }
@@ -716,7 +711,7 @@ public class HoodieMultiTableStreamer {
     private static final String DELIMITER = ".";
     private static final String UNDERSCORE = "_";
     private static final String COMMA_SEPARATOR = ",";
-    // How long each phase of the executor shutdown waits for running table syncs to terminate.
+    // How long the executor shutdown waits for the running table syncs to terminate.
     private static final long SHUTDOWN_TIMEOUT_SECONDS = 60;
   }
 }
