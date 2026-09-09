@@ -41,13 +41,13 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -87,18 +87,17 @@ public class TestSparkStreamingMetadataWriteHandler extends SparkClientFunctiona
   @MethodSource("coalesceDivisorTestArgs")
   public void testCoalesceDividentConfig(int numDataTableWriteStatuses, int coalesceDividentForDataTableWrites) {
     HoodieData<WriteStatus> dataTableWriteStatus = mockWriteStatuses(numDataTableWriteStatuses);
-    HoodieTableMetadataWriter mdtWriter = metadataWriterReturningEmptyStatuses();
+    HoodieTableMetadataWriter mdtWriter = mock(HoodieTableMetadataWriter.class);
     SparkStreamingMetadataWriteHandler metadataWriteHandler = new MockSparkStreamingMetadataWriteHandler(mdtWriter);
 
     HoodieData<WriteStatus> allWriteStatuses = metadataWriteHandler.streamWriteToMetadataTable(mockHoodieTable, dataTableWriteStatus, "00001",
         coalesceDividentForDataTableWrites);
-    assertEquals(Math.max(1, numDataTableWriteStatuses / coalesceDividentForDataTableWrites),
-        allWriteStatuses.getNumPartitions());
-    verify(mdtWriter).streamWriteToMetadataPartitions(any(), any());
+    assertEquals(Math.max(1, numDataTableWriteStatuses / coalesceDividentForDataTableWrites), allWriteStatuses.getNumPartitions());
+    verify(mdtWriter, never()).streamWriteToMetadataPartitions(any(), any());
   }
 
   @Test
-  void testSparkCollectsOnlySuccessfulRetriedTaskAttempt() {
+  void testSparkRetryMaterializesSuccessfulAttemptAndDefersMetadataGeneration() {
     HoodieData<WriteStatus> retryingDataWriteStatus = HoodieJavaRDD.of(jsc().parallelize(Arrays.asList(0, 1), 2)
         .map(partition -> {
           int attempt = TaskContext.get().attemptNumber();
@@ -108,51 +107,34 @@ public class TestSparkStreamingMetadataWriteHandler extends SparkClientFunctiona
           return writeStatus("file-" + partition + "-attempt-" + attempt, false);
         }));
     HoodieTableMetadataWriter mdtWriter = mock(HoodieTableMetadataWriter.class);
-    AtomicReference<HoodieData<WriteStatus>> metadataInput = new AtomicReference<>();
-    when(mdtWriter.streamWriteToMetadataPartitions(any(), any())).thenAnswer(invocation -> {
-      metadataInput.set(invocation.getArgument(0));
-      return HoodieJavaRDD.of(jsc().emptyRDD());
-    });
 
     List<WriteStatus> statuses = new MockSparkStreamingMetadataWriteHandler(mdtWriter)
         .streamWriteToMetadataTable(mockHoodieTable, retryingDataWriteStatus, "00001", 1000)
         .collectAsList();
     List<String> paths = statuses.stream().map(status -> status.getStat().getPath()).collect(java.util.stream.Collectors.toList());
 
-    List<String> metadataPaths = metadataInput.get().collectAsList().stream()
-        .map(status -> status.getStat().getPath())
-        .collect(java.util.stream.Collectors.toList());
-    assertTrue(paths.contains("file-0-attempt-1"), "Collected output must come from the successful attempt");
+    assertEquals(2, paths.size(), "One scheduler-selected status is expected per source partition");
+    assertTrue(paths.contains("file-0-attempt-1"), "Retry output must come from the successful attempt");
     assertTrue(paths.stream().noneMatch(path -> path.equals("file-0-attempt-0")));
-    assertTrue(metadataPaths.contains("file-0-attempt-1"),
-        "Metadata generation must consume the successful attempt");
-    assertTrue(metadataPaths.stream().noneMatch(path -> path.equals("file-0-attempt-0")));
-    verify(mdtWriter).streamWriteToMetadataPartitions(any(), any());
+    // This is the regression boundary: master invokes the metadata writer from pre-commit task
+    // lineage here. The Spark handler must only materialize scheduler-selected data statuses;
+    // completeStreamingCommit later derives RLI/SI updates from committed HoodieCommitMetadata.
+    verify(mdtWriter, never()).streamWriteToMetadataPartitions(any(), any());
   }
 
   @Test
-  void testSparkUnionsMetadataWriteStatusesAfterCommittedDataStatuses() {
+  void testSparkDefersMetadataGenerationUntilCommittedWriteStatsAreAvailable() {
     HoodieData<WriteStatus> lazyDataWriteStatus = HoodieJavaRDD.of(jsc().parallelize(Arrays.asList(0, 1), 2)
-        .map(partition -> writeStatus("file-" + partition, false)));
+        .map(partition -> writeStatus("file-" + partition + "-stage-" + org.apache.spark.TaskContext.get().stageId(), false)));
     HoodieTableMetadataWriter mdtWriter = mock(HoodieTableMetadataWriter.class);
-    when(mdtWriter.streamWriteToMetadataPartitions(any(), any()))
-        .thenReturn(HoodieJavaRDD.of(jsc().parallelize(
-            java.util.Collections.singletonList(writeStatus("metadata-file", true)), 1)));
 
-    List<WriteStatus> statuses = new MockSparkStreamingMetadataWriteHandler(mdtWriter)
-        .streamWriteToMetadataTable(mockHoodieTable, lazyDataWriteStatus, "00001", 1000)
-        .collectAsList();
+    HoodieData<WriteStatus> allWriteStatuses = new MockSparkStreamingMetadataWriteHandler(mdtWriter)
+        .streamWriteToMetadataTable(mockHoodieTable, lazyDataWriteStatus, "00001", 1000);
+    List<WriteStatus> statuses = allWriteStatuses.collectAsList();
 
-    assertEquals(3, statuses.size());
-    assertEquals(1, statuses.stream().filter(WriteStatus::isMetadataTable).count());
-    verify(mdtWriter).streamWriteToMetadataPartitions(any(), any());
-  }
-
-  private HoodieTableMetadataWriter metadataWriterReturningEmptyStatuses() {
-    HoodieTableMetadataWriter mdtWriter = mock(HoodieTableMetadataWriter.class);
-    when(mdtWriter.streamWriteToMetadataPartitions(any(), any()))
-        .thenReturn(HoodieJavaRDD.of(jsc().emptyRDD()));
-    return mdtWriter;
+    assertTrue(statuses.stream().noneMatch(WriteStatus::isMetadataTable));
+    assertTrue(statuses.size() > 1, "Test must exercise multiple source partitions");
+    verify(mdtWriter, never()).streamWriteToMetadataPartitions(any(), any());
   }
 
   private static WriteStatus writeStatus(String path, boolean isMetadataTable) {
