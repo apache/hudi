@@ -407,11 +407,12 @@ public class HoodieMultiTableStreamer {
     public Boolean continuousMode = false;
 
     @Parameter(names = {"--fail-fast-on-continuous"},
-        description = "Only applies in continuous mode. When enabled, the failure of any single table sync fails the "
-            + "whole job and the process exits with a non-zero status. The remaining table syncs are interrupted "
-            + "mid-round rather than allowed to finish the round, so a table can be left with an inflight instant "
-            + "that is rolled back on the next run. When disabled (default), each table is synced independently and "
-            + "a single failure does not stop the others.")
+        description = "Only applies in continuous mode. When enabled, the first table failure immediately tears "
+            + "down the remaining table syncs; they are interrupted mid-round rather than allowed to finish it, so a "
+            + "table can be left with an inflight instant that is rolled back on the next run. When disabled "
+            + "(default), each table is synced independently and a single failure does not stop the others. Either "
+            + "way the job exits with a non-zero status if any table failed, since continuous mode is not meant to "
+            + "end.")
     public Boolean failFastOnContinuousMode = false;
 
     @Parameter(names = {"--min-sync-interval-seconds"},
@@ -528,9 +529,9 @@ public class HoodieMultiTableStreamer {
    * Syncs all tables concurrently, one thread per table. Used for continuous mode where each table's sync blocks
    * indefinitely.
    *
-   * <p>When {@code --fail-fast-on-continuous} is enabled, the first table failure fails the whole job. The sibling
-   * streamers are shut down and a {@link HoodieException} is thrown so the caller can exit with a non-zero status.
-   * Otherwise, every table is synced independently and a single failure does not affect the others.
+   * <p>When {@code --fail-fast-on-continuous} is enabled, the first table failure tears the sibling streamers down
+   * at once. Otherwise every table is synced independently and a single failure does not affect the others. Either
+   * way a {@link HoodieException} is thrown if any table failed, so the caller exits with a non-zero status.
    *
    * <p>Teardown runs in a {@code finally} rather than a catch so that it also covers an {@link Error}, which the
    * workers do not catch, and it is a no-op once a table has shut its own ingestion service down. The siblings are
@@ -566,6 +567,11 @@ public class HoodieMultiTableStreamer {
       interruptAllIngestion(streamerInstances);
       // Logs rather than throws. The failure path is already propagating its own exception.
       shutdownExecutor(executor);
+    }
+    // Reached only when nothing was rethrown above. Continuous mode is not meant to end, so returning here with a
+    // failed table would exit 0 and tell an orchestrator that nothing is wrong while nothing is ingesting.
+    if (!failedTables.isEmpty()) {
+      throw new HoodieException("Continuous mode ended with failed tables: " + failedTables);
     }
   }
 
