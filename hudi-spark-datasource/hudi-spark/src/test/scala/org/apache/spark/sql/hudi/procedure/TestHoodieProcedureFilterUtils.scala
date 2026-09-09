@@ -702,4 +702,14 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     val ex = intercept[IllegalArgumentException](keep(scalarRows, "regexp_replace(name, '[', 'x') = 'x'", scalarSchema))
     assert(ex.getMessage.contains("regexp_replace"))
   }
+
+  test("evaluateFilter surfaces a runtime error from a hardcoded-table function too") {
+    // PatternSyntaxException is an IllegalArgumentException, so a bad regex now raises through
+    // the hardcoded rlike/regexp_extract cases the same way it does through the registry path
+    // above - deliberately, matching what the equivalent Spark query does, not just for functions
+    // the fallback newly makes reachable.
+    intercept[IllegalArgumentException](keep(scalarRows, "regexp_like(name, '[')", scalarSchema))
+    intercept[IllegalArgumentException](keep(scalarRows, "regexp_extract(name, '[', 1) = 'x'", scalarSchema))
+  }
+
 }
