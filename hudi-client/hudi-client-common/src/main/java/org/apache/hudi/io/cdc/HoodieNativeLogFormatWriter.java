@@ -56,7 +56,7 @@ import static org.apache.hudi.common.model.LogExtensions.DELETE_LOG_EXTENSION;
 
 /**
  * Writes MOR log blocks as native files, for example {@code .log.parquet} and {@code .deletes.parquet}.
- * Incoming records must carry their generated record key, including when metadata fields are disabled.
+ * Uses the key already carried by incoming {@link HoodieRecord}s, independently of whether metadata fields are populated.
  */
 public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
 
