@@ -19,9 +19,14 @@
 
 package org.apache.hudi.cli.functional;
 
+import org.apache.hudi.cli.HoodieCLI;
+import org.apache.hudi.cli.commands.TableCommand;
 import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -146,6 +151,31 @@ public class CLIFunctionalTestHarness implements SparkProvider {
    */
   protected static String removeNonWordAndStripSpace(String str) {
     return str.replaceAll("[\\s]+", ",").replaceAll("[\\W]+", ",");
+  }
+
+  /**
+   * Initializes a table and connects the CLI to it, which is what the 'create' command does once
+   * its check for an already existing table comes back empty. That check is what this skips: on a
+   * path that holds no table it spends five seconds in the hoodie.properties read retry loop (five
+   * attempts, one second apart) before it concludes there is nothing there, and a fixture creating
+   * its own table knows that already.
+   *
+   * @param tablePath    Base path of the table to create.
+   * @param tableName    Name of the table.
+   * @param tableType    Type of the table.
+   * @param payloadClass Payload class of the table.
+   */
+  protected void createTableAndConnect(String tablePath, String tableName, HoodieTableType tableType,
+                                       String payloadClass) throws IOException {
+    boolean initialized = HoodieCLI.initConf();
+    HoodieCLI.initFS(initialized);
+    HoodieTableMetaClient.newTableBuilder()
+        .setTableType(tableType.name())
+        .setTableName(tableName)
+        .setPayloadClassName(payloadClass)
+        .setTableVersion(HoodieTableVersion.current().versionCode())
+        .initTable(HoodieCLI.conf.newInstance(), tablePath);
+    new TableCommand().connect(tablePath, false, 0, 0, 0, "WAIT_TO_ADJUST_SKEW", 200L, true);
   }
 
   /**

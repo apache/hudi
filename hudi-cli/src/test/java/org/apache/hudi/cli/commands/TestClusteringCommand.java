@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.Assertions;
@@ -63,9 +62,7 @@ public class TestClusteringCommand extends CLIFunctionalTestHarness {
     tableName = tableName();
     tablePath = tablePath(tableName);
 
-    new TableCommand().createTable(
-        tablePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
-        "", HoodieTableVersion.current().versionCode(), HoodieAvroPayload.class.getName());
+    createTableAndConnect(tablePath, tableName, HoodieTableType.COPY_ON_WRITE, HoodieAvroPayload.class.getName());
   }
 
   @Test

@@ -25,9 +25,9 @@ import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
@@ -105,9 +105,7 @@ public class TestTimelineCommand extends CLIFunctionalTestHarness {
     String tableName = tableName();
     tablePath = tablePath(tableName);
 
-    new TableCommand().createTable(
-        tablePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
-        "", HoodieTableVersion.current().versionCode(), "org.apache.hudi.common.model.HoodieAvroPayload");
+    createTableAndConnect(tablePath, tableName, HoodieTableType.COPY_ON_WRITE, HoodieAvroPayload.class.getName());
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
 
     Map<String, String> partitionAndFileId = new HashMap<>();
@@ -137,10 +135,10 @@ public class TestTimelineCommand extends CLIFunctionalTestHarness {
       // left behind on the timeline so that the incomplete timeline is not empty
       testTable.addRequestedCommit(REQUESTED_COMMIT);
 
-      // A rollback that is scheduled but has not run yet. Unlike the completed one above it leaves
-      // the commit it targets on the timeline, which is the only way an instant is rendered as
-      // rolled back by another. Added straight through the test table so that it stays on the data
-      // table timeline only.
+      // A rollback that is scheduled but has not run yet. The completed rollback above deleted the
+      // commit it targeted, so on this table the scheduled one is what makes the "rolled back by"
+      // annotation reachable: it leaves its target on the timeline. Added straight through the test
+      // table so that it stays on the data table timeline only.
       HoodieRollbackPlan rollbackPlan = new HoodieRollbackPlan();
       rollbackPlan.setRollbackRequests(Collections.emptyList());
       rollbackPlan.setInstantToRollback(new HoodieInstantInfo(REQUESTED_COMMIT, HoodieTimeline.COMMIT_ACTION));

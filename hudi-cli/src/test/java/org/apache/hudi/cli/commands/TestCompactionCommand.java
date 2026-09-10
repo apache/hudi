@@ -265,19 +265,26 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
         .filter(entry -> entry.getValue().getKey().equals(PENDING_COMPACTION_INSTANT))
         .map(Map.Entry::getKey).findFirst().get();
     String outputPath = outputPath("unschedule-file-" + dryRun);
+    // both operations of this plan sit in the same partition, so there is a sibling to keep
+    Set<String> fileIdsBefore = fileIdsOf(PENDING_COMPACTION_INSTANT);
+    assertEquals(2, fileIdsBefore.size());
+    assertTrue(fileIdsBefore.contains(unscheduled.getFileId()));
 
     SparkMain.doCompactUnscheduleFile(jsc(), tablePath, unscheduled.getFileId(), unscheduled.getPartitionPath(),
         outputPath, 2, false, dryRun);
 
     assertTrue(readOperationResults(outputPath).isEmpty());
-    // the plan itself stays pending either way, only its operations change. Only the target file
-    // group is asserted: the admin client currently drops the other operations of the same
-    // partition as well (https://github.com/apache/hudi/issues/19881); assert they survive once fixed.
+    // the plan itself stays pending either way, only its operations change
     assertTrue(pendingCompactionInstants().contains(PENDING_COMPACTION_INSTANT));
     if (dryRun) {
-      assertTrue(fileIdsOf(PENDING_COMPACTION_INSTANT).contains(unscheduled.getFileId()));
+      assertEquals(fileIdsBefore, fileIdsOf(PENDING_COMPACTION_INSTANT));
     } else {
-      assertFalse(fileIdsOf(PENDING_COMPACTION_INSTANT).contains(unscheduled.getFileId()));
+      // The admin client keeps the operations that differ from the unscheduled one in file id AND
+      // in partition path, so the sibling operation goes with it and the plan is left with no
+      // operations at all (https://github.com/apache/hudi/issues/19881). When that is fixed this
+      // expectation has to become the sibling on its own:
+      // fileIdsBefore minus the unscheduled file id.
+      assertEquals(Collections.emptySet(), fileIdsOf(PENDING_COMPACTION_INSTANT));
     }
   }
 
@@ -288,9 +295,7 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
    * @return The pending compaction operations, by file group.
    */
   private Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> createPendingCompactions() throws IOException {
-    new TableCommand().createTable(
-        tablePath, tableName, HoodieTableType.MERGE_ON_READ.name(),
-        "", HoodieTableVersion.current().versionCode(), HoodieAvroPayload.class.getName());
+    createTableAndConnect(tablePath, tableName, HoodieTableType.MERGE_ON_READ, HoodieAvroPayload.class.getName());
     Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> operations =
         CompactionTestUtils.setupAndValidateCompactionOperations(HoodieCLI.getTableMetaClient(), false, 2, 1, 1, 1);
     HoodieCLI.getTableMetaClient().reloadActiveTimeline();
@@ -351,9 +356,7 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
    * the records of the first so that the file groups have log files to compact.
    */
   private void writeDeltaCommits() throws IOException {
-    new TableCommand().createTable(
-        tablePath, tableName, HoodieTableType.MERGE_ON_READ.name(),
-        "", HoodieTableVersion.current().versionCode(), HoodieAvroPayload.class.getName());
+    createTableAndConnect(tablePath, tableName, HoodieTableType.MERGE_ON_READ, HoodieAvroPayload.class.getName());
 
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(new String[] {DEFAULT_FIRST_PARTITION_PATH});
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(tablePath)

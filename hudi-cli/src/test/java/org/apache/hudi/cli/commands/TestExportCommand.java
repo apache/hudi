@@ -22,9 +22,12 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
+import org.apache.hudi.common.model.HoodieAvroPayload;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.exception.HoodieException;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -35,15 +38,20 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.shell.Shell;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -70,9 +78,7 @@ public class TestExportCommand extends CLIFunctionalTestHarness {
     tablePath = tablePath(tableName);
     exportFolder = Files.createDirectories(Paths.get(basePath(), "exported-instants"));
 
-    new TableCommand().createTable(
-        tablePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
-        "", HoodieTableVersion.current().versionCode(), "org.apache.hudi.common.model.HoodieAvroPayload");
+    createTableAndConnect(tablePath, tableName, HoodieTableType.COPY_ON_WRITE, HoodieAvroPayload.class.getName());
     for (String commitTime : COMMIT_TIMES) {
       HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, commitTime, storageConf());
     }
@@ -95,10 +101,36 @@ public class TestExportCommand extends CLIFunctionalTestHarness {
 
     // one file per completed instant, named after the instant file it was read from
     assertEquals(instantFileNames(COMMIT_TIMES), exportedFiles());
-    for (String fileName : exportedFiles()) {
-      // commit metadata is already json on the timeline and is copied over as is
-      String content = new String(Files.readAllBytes(exportFolder.resolve(fileName)));
-      assertTrue(content.contains("partitionToWriteStats"), content);
+
+    // The export copies the instant file off the timeline as it stands, in whatever format the
+    // table writes its commit metadata in, so it is read back through the table's own serde and
+    // compared with what the fixture wrote.
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+    Set<String> writtenPartitions = new HashSet<>(
+        Arrays.asList(DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH));
+    for (HoodieInstant instant : metaClient.getActiveTimeline().filterCompletedInstants().getInstants()) {
+      Map<String, List<HoodieWriteStat>> writeStats = readExportedCommit(metaClient, instant).getPartitionToWriteStats();
+      assertEquals(writtenPartitions, writeStats.keySet());
+      for (List<HoodieWriteStat> partitionStats : writeStats.values()) {
+        assertEquals(1, partitionStats.size());
+        assertEquals(HoodieTestCommitMetadataGenerator.DEFAULT_NUM_WRITES, partitionStats.get(0).getNumWrites());
+        assertEquals(HoodieTestCommitMetadataGenerator.DEFAULT_PRE_COMMIT, partitionStats.get(0).getPrevCommit());
+      }
+    }
+  }
+
+  /**
+   * Reads back the file the export wrote for one instant.
+   *
+   * @param metaClient Meta client of the exported table.
+   * @param instant    Instant whose exported file to read.
+   * @return The commit metadata the file holds.
+   */
+  private HoodieCommitMetadata readExportedCommit(HoodieTableMetaClient metaClient, HoodieInstant instant)
+      throws IOException {
+    String fileName = metaClient.getInstantFileNameGenerator().getFileName(instant);
+    try (InputStream exported = Files.newInputStream(exportFolder.resolve(fileName))) {
+      return metaClient.getCommitMetadataSerDe().deserialize(instant, exported, () -> false, HoodieCommitMetadata.class);
     }
   }
 
