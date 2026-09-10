@@ -31,10 +31,12 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.GlueCatalogSyncClientConfig;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.SchemaDifference;
+import org.apache.hudi.hive.util.HiveSchemaUtil;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
@@ -95,6 +97,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -122,6 +125,7 @@ import static org.apache.hudi.config.HoodieAWSConfig.AWS_GLUE_ENDPOINT;
 import static org.apache.hudi.config.HoodieAWSConfig.AWS_GLUE_REGION;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_COMMENT;
 import static org.apache.hudi.hive.util.HiveSchemaUtil.getPartitionKeyType;
 import static org.apache.hudi.hive.util.HiveSchemaUtil.hoodieSchemaToMapSchema;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
@@ -505,11 +509,42 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     }
   }
 
-  private void setComments(List<Column> columns, Map<String, Option<String>> commentsMap) {
-    columns.forEach(column -> {
-      String comment = commentsMap.getOrDefault(column.name(), Option.empty()).orElse(null);
-      Column.builder().comment(comment).build();
-    });
+  /**
+   * Returns {@code columns} with the comment of every column the storage schema knows about replaced by the
+   * one the schema carries, clearing it when the schema has none.
+   *
+   * <p>Columns the schema says nothing about are left untouched rather than cleared. The pre-SDK-v2 code
+   * cleared them, but only nominally: it built a {@code Column} and discarded it, so no comment was ever
+   * applied and nothing can depend on that behaviour. Clearing is also the more dangerous reading - the
+   * storage field names keep the Avro schema's case while a catalog may hold them lowercased, and a name
+   * that fails to match would silently wipe a comment. This matches
+   * {@code HMSDDLExecutor.applyFieldComments} on the Hive side, which only touches known columns.
+   *
+   * <p>SDK v2 model classes are immutable and their getters return unmodifiable lists, so the columns cannot
+   * be edited in place; a new list of rebuilt columns is returned instead.
+   */
+  @VisibleForTesting
+  static List<Column> withComments(List<Column> columns, Map<String, Option<String>> commentsMap) {
+    return columns.stream()
+        .map(column -> {
+          String key = column.name().toLowerCase(Locale.ROOT);
+          if (!commentsMap.containsKey(key)) {
+            return column;
+          }
+          String comment = commentsMap.get(key).orElse(null);
+          // Hudi's own createTable writes comment("") for every column, and a storage field with no doc
+          // yields null here, so comparing the two directly would rebuild every doc-less column and send
+          // an updateTable whose only effect is swapping "" for null. Treat them as the same absent
+          // comment, matching FieldSchema#getCommentOrEmpty on the Hive side.
+          return emptyIfNull(comment).equals(emptyIfNull(column.comment()))
+              ? column
+              : column.toBuilder().comment(comment).build();
+        })
+        .collect(Collectors.toList());
+  }
+
+  private static String emptyIfNull(String value) {
+    return value == null ? "" : value;
   }
 
   private String getTableDoc() {
@@ -537,19 +572,25 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   public boolean updateTableComments(String tableName, List<FieldSchema> fromMetastore, List<FieldSchema> fromStorage) {
     Table table = getTable(awsGlue, databaseName, tableName);
 
-    Map<String, Option<String>> commentsMap = fromStorage.stream().collect(Collectors.toMap(FieldSchema::getName, FieldSchema::getComment));
+    Map<String, Option<String>> commentsMap = fromStorage.stream()
+        .collect(Collectors.toMap(f -> f.getName().toLowerCase(Locale.ROOT), FieldSchema::getComment, (existing, duplicate) -> existing));
 
     StorageDescriptor storageDescriptor = table.storageDescriptor();
-    List<Column> columns = storageDescriptor.columns();
-    setComments(columns, commentsMap);
-
-    List<Column> partitionKeys = table.partitionKeys();
-    setComments(partitionKeys, commentsMap);
+    List<Column> partitionKeys = withComments(table.partitionKeys(), commentsMap);
+    List<Column> updatedColumns = withComments(storageDescriptor.columns(), commentsMap);
+    // Only rebuild the descriptor when a column actually changed. Rebuilding unconditionally is not
+    // equality-preserving: when columns was never set, storageDescriptor.columns() is an SDK
+    // auto-construct list and hasColumns() is false, so toBuilder().columns(<empty list>) flips it to
+    // true and the descriptor compares unequal to itself. That would report a change on every sync of a
+    // table with no columns and send an updateTable that changes nothing.
+    StorageDescriptor updatedStorageDescriptor = updatedColumns.equals(storageDescriptor.columns())
+        ? storageDescriptor
+        : storageDescriptor.toBuilder().columns(updatedColumns).build();
 
     String tableDescription = getTableDoc();
 
-    if (getTable(awsGlue, databaseName, tableName).storageDescriptor().equals(storageDescriptor)
-        && getTable(awsGlue, databaseName, tableName).partitionKeys().equals(partitionKeys)) {
+    // Compare against the table already fetched above rather than fetching it twice more.
+    if (storageDescriptor.equals(updatedStorageDescriptor) && table.partitionKeys().equals(partitionKeys)) {
       // no comments have been modified / added
       return false;
     } else {
@@ -560,7 +601,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
           .tableType(table.tableType())
           .parameters(table.parameters())
           .partitionKeys(partitionKeys)
-          .storageDescriptor(storageDescriptor)
+          .storageDescriptor(updatedStorageDescriptor)
           .lastAccessTime(now)
           .lastAnalyzedTime(now)
           .build();
@@ -568,6 +609,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       UpdateTableRequest request = UpdateTableRequest.builder()
           .catalogId(catalogId)
           .databaseName(databaseName)
+          .skipArchive(skipTableArchive)
           .tableInput(updatedTableInput)
           .build();
 
@@ -600,7 +642,12 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     try {
       Table table = getTable(awsGlue, databaseName, tableName);
       Map<String, String> newSchemaMap = hoodieSchemaToMapSchema(newSchema, config.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE), false);
-      List<Column> newColumns = getColumnsFromSchema(newSchemaMap);
+      // Carry the docs through schema evolution too, so a newly added column does not arrive with an
+      // empty comment and wait for the next updateTableComments pass.
+      Map<String, String> fieldDocs = config.getBoolean(HIVE_SYNC_COMMENT)
+          ? HiveSchemaUtil.getFieldDocs(newSchema)
+          : Collections.emptyMap();
+      List<Column> newColumns = getColumnsFromSchema(newSchemaMap, fieldDocs);
       StorageDescriptor sd = table.storageDescriptor();
       StorageDescriptor partitionSD = sd.copy(copySd -> copySd.columns(newColumns));
       final Instant now = Instant.now();
@@ -700,12 +747,21 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     try {
       Map<String, String> mapSchema = hoodieSchemaToMapSchema(storageSchema, config.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE), false);
 
-      List<Column> schemaWithoutPartitionKeys = getColumnsFromSchema(mapSchema);
+      // Populate comments at create time rather than leaving them to the next updateTableComments pass:
+      // HiveSyncTool.syncHoodieTable runs syncFirstTime without syncSchema, so a table created with
+      // empty comments would only pick them up on the second sync. Mirrors HiveSchemaUtil.generateCreateDDL
+      // on the HMS side, which gates the same lookup on HIVE_SYNC_COMMENT (#19289).
+      Map<String, String> fieldDocs = config.getBoolean(HIVE_SYNC_COMMENT)
+          ? HiveSchemaUtil.getFieldDocs(storageSchema)
+          : Collections.emptyMap();
+
+      List<Column> schemaWithoutPartitionKeys = getColumnsFromSchema(mapSchema, fieldDocs);
 
       // now create the schema partition
       List<Column> schemaPartitionKeys = config.getSplitStrings(META_SYNC_PARTITION_FIELDS).stream().map(partitionKey -> {
         String keyType = getPartitionKeyType(mapSchema, partitionKey);
-        return Column.builder().name(partitionKey).type(keyType.toLowerCase()).comment("").build();
+        return Column.builder().name(partitionKey).type(keyType.toLowerCase())
+            .comment(fieldDocs.getOrDefault(partitionKey.toLowerCase(Locale.ROOT), "")).build();
       }).collect(Collectors.toList());
 
       serdeProperties.put("serialization.format", "1");
@@ -1132,13 +1188,14 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     }
   }
 
-  private List<Column> getColumnsFromSchema(Map<String, String> mapSchema) {
+  private List<Column> getColumnsFromSchema(Map<String, String> mapSchema, Map<String, String> fieldDocs) {
     List<Column> cols = new ArrayList<>();
     for (String key : mapSchema.keySet()) {
       // In Glue, the full schema should exclude the partition keys
       if (!config.getSplitStrings(META_SYNC_PARTITION_FIELDS).contains(key)) {
         String keyType = getPartitionKeyType(mapSchema, key);
-        Column column = Column.builder().name(key).type(keyType.toLowerCase()).comment("").build();
+        Column column = Column.builder().name(key).type(keyType.toLowerCase())
+            .comment(fieldDocs.getOrDefault(key.toLowerCase(Locale.ROOT), "")).build();
         cols.add(column);
       }
     }

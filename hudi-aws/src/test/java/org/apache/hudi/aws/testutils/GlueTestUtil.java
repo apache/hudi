@@ -26,24 +26,22 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.versioning.DefaultInstantFileNameGenerator;
+import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import software.amazon.awssdk.services.glue.model.Column;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.Instant;
 import java.util.Arrays;
 
-import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_SYNC_DATABASE_NAME;
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_SYNC_TABLE_NAME;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
@@ -110,26 +108,31 @@ public class GlueTestUtil {
         .setPayloadClass(HoodieAvroPayload.class)
         .initTable(HadoopFSUtils.getStorageConf(new Configuration()), basePath);
 
-    String instantTime = "101";
+    // Write the commit through HoodieTestTable rather than by hand. A table-version-8+ timeline lives under
+    // .hoodie/timeline and is read through CommitMetadataSerDe, so a hand-written JSON file in .hoodie is not
+    // on the timeline at all and TableSchemaResolver finds no schema - which left every sync path that reads
+    // the table schema failing before it reached what it was meant to exercise.
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata(false);
-    createMetaFile(basePath, new DefaultInstantFileNameGenerator().makeCommitFileName(instantTime), commitMetadata);
+    commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, getSimpleSchema().toAvroSchema().toString());
+    try {
+      HoodieTestTable.of(metaClient).addCommit("101", Option.of(commitMetadata));
+    } catch (Exception e) {
+      throw new IOException("Failed to seed the test table with a commit", e);
+    }
+    metaClient.reloadActiveTimeline();
   }
+
+  /** The doc on {@code name} is load bearing: it is the only place a real Avro doc reaches
+   * {@code AWSGlueCatalogSyncClient.getStorageFieldSchemas()}, which is what actually sources the
+   * comments the sync applies. Every other test hand-builds its {@code FieldSchema}s. */
+  public static final String NAME_FIELD_DOC = "the person's name";
 
   public static HoodieSchema getSimpleSchema() {
     return HoodieSchema.createRecord("example_schema", null, null,
         Arrays.asList(
             HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
-            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING))
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), NAME_FIELD_DOC, null)
         ));
-  }
-
-  private static void createMetaFile(String basePath, String fileName, HoodieCommitMetadata metadata)
-      throws IOException {
-    byte[] bytes = metadata.toJsonString().getBytes(StandardCharsets.UTF_8);
-    Path fullPath = new Path(basePath + "/" + METAFOLDER_NAME + "/" + fileName);
-    FSDataOutputStream fsout = fileSystem.create(fullPath, true);
-    fsout.write(bytes);
-    fsout.close();
   }
 
   public static Column getColumn(String name, String type, String comment) {
