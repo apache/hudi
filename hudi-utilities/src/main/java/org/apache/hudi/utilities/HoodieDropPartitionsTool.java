@@ -301,6 +301,11 @@ public class HoodieDropPartitionsTool implements Serializable {
       log.info(cfg.toString());
 
       Mode mode = Mode.valueOf(cfg.runningMode.toUpperCase());
+      if (cfg.syncToHive) {
+        // Check the hive configs before anything is dropped: they are otherwise only read once the partitions
+        // have already been masked, so a typo in --hive-database would cost the partitions before it surfaces.
+        verifyHiveConfigs();
+      }
       switch (mode) {
         case DELETE:
           log.info(" ****** The Hoodie Drop Partitions Tool is in delete mode ****** ");
@@ -357,12 +362,12 @@ public class HoodieDropPartitionsTool implements Serializable {
     props.put(DataSourceWriteOptions.HIVE_PASS().key(), cfg.hivePassWord);
     props.put(DataSourceWriteOptions.HIVE_URL().key(), cfg.hiveURL);
     props.put(DataSourceWriteOptions.HIVE_PARTITION_FIELDS().key(), cfg.hivePartitionsField);
-    props.put(DataSourceWriteOptions.HIVE_USE_JDBC().key(), cfg.hiveUseJdbc);
+    props.put(DataSourceWriteOptions.HIVE_USE_JDBC().key(), String.valueOf(cfg.hiveUseJdbc));
     props.put(DataSourceWriteOptions.HIVE_SYNC_MODE().key(), cfg.hiveSyncMode);
-    props.put(DataSourceWriteOptions.HIVE_IGNORE_EXCEPTIONS().key(), cfg.hiveSyncIgnoreException);
+    props.put(DataSourceWriteOptions.HIVE_IGNORE_EXCEPTIONS().key(), String.valueOf(cfg.hiveSyncIgnoreException));
     props.put(DataSourceWriteOptions.HIVE_PASS().key(), cfg.hivePassWord);
-    props.put(HiveSyncConfig.META_SYNC_BASE_PATH, cfg.basePath);
-    props.put(HiveSyncConfig.META_SYNC_BASE_FILE_FORMAT, "PARQUET");
+    props.put(HiveSyncConfig.META_SYNC_BASE_PATH.key(), cfg.basePath);
+    props.put(HiveSyncConfig.META_SYNC_BASE_FILE_FORMAT.key(), "PARQUET");
     props.put(DataSourceWriteOptions.PARTITIONS_TO_DELETE().key(), cfg.partitions);
     props.put(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS().key(), cfg.partitionValueExtractorClass);
     props.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), cfg.hivePartitionsField);

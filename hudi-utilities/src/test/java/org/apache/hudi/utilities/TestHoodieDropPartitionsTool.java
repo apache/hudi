@@ -22,6 +22,7 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -30,7 +31,9 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
+import org.apache.hudi.utilities.testutils.CapturingLogAppender;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
@@ -46,6 +49,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
@@ -53,7 +57,6 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_S
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -110,19 +113,43 @@ public class TestHoodieDropPartitionsTool extends HoodieSparkClientTestBase {
     }
   }
 
+  private List<String> latestFileIds(String partition) {
+    HoodieTableMetaClient reloaded = HoodieTableMetaClient.reload(metaClient);
+    try (HoodieTableFileSystemView fsView = FileSystemViewManager.createInMemoryFileSystemView(
+        context, reloaded, HoodieMetadataConfig.newBuilder().enable(false).build())) {
+      return fsView.getLatestBaseFiles(partition).map(HoodieBaseFile::getFileId).collect(Collectors.toList());
+    }
+  }
+
   private List<String> completedInstants() {
     return HoodieTableMetaClient.reload(metaClient).getActiveTimeline().filterCompletedInstants()
         .getInstantsAsStream().map(HoodieInstant::requestedTime).collect(Collectors.toList());
   }
 
   @Test
-  public void testDryRunLeavesTableUntouched() {
+  public void testDryRunReportsTheFilesItWouldDeleteAndLeavesTheTableUntouched() {
     writeThreePartitionTable();
     List<String> instantsBefore = completedInstants();
+    // what the tool prints must be the file ids the two partitions really hold
+    Set<String> expectedReport = new HashSet<>(Arrays.asList(
+        "Partitions : " + DEFAULT_FIRST_PARTITION_PATH + ", corresponding data file IDs : "
+            + latestFileIds(DEFAULT_FIRST_PARTITION_PATH),
+        "Partitions : " + DEFAULT_SECOND_PARTITION_PATH + ", corresponding data file IDs : "
+            + latestFileIds(DEFAULT_SECOND_PARTITION_PATH)));
 
     HoodieDropPartitionsTool.Config cfg = toolConfig("dry_run",
         DEFAULT_FIRST_PARTITION_PATH + "," + DEFAULT_SECOND_PARTITION_PATH);
-    new HoodieDropPartitionsTool(jsc, cfg).run();
+    List<String> messages;
+    try (CapturingLogAppender logs = CapturingLogAppender.attachTo(HoodieDropPartitionsTool.class)) {
+      new HoodieDropPartitionsTool(jsc, cfg).run();
+      messages = logs.messages();
+    }
+
+    assertTrue(messages.contains("Data files and partitions to delete : "), messages.toString());
+    assertEquals(expectedReport,
+        messages.stream().filter(m -> m.startsWith("Partitions : ")).collect(Collectors.toSet()));
+    assertTrue(messages.stream().noneMatch(m -> m.contains(DEFAULT_THIRD_PARTITION_PATH)),
+        "the partition that was not named must not be reported: " + messages);
 
     assertEquals(instantsBefore, completedInstants(), "dry run must not add any instant");
     assertEquals(1, latestBaseFileCount(DEFAULT_FIRST_PARTITION_PATH));
@@ -198,11 +225,10 @@ public class TestHoodieDropPartitionsTool extends HoodieSparkClientTestBase {
   }
 
   /**
-   * Hive sync is verified after the partitions have already been masked, so a missing --hive-database fails the
-   * job even though the drop itself is committed.
+   * A missing --hive-database is caught before the delete runs, so the partitions are still there afterwards.
    */
   @Test
-  public void testHiveSyncWithoutDatabaseFailsAfterTheDrop() {
+  public void testHiveSyncConfigIsVerifiedBeforeTheDrop() {
     writeThreePartitionTable();
     HoodieDropPartitionsTool.Config cfg = toolConfig("delete", DEFAULT_THIRD_PARTITION_PATH);
     cfg.syncToHive = true;
@@ -212,17 +238,22 @@ public class TestHoodieDropPartitionsTool extends HoodieSparkClientTestBase {
     HoodieException thrown = assertThrows(HoodieException.class, tool::run);
     assertTrue(thrown.getCause() instanceof IllegalArgumentException, "got " + thrown.getCause());
     assertTrue(thrown.getCause().getMessage().contains("--hive-database"));
-    assertEquals(1, HoodieTableMetaClient.reload(metaClient).getActiveTimeline()
-        .getCompletedReplaceTimeline().countInstants(), "the partitions are dropped before hive sync runs");
-    assertEquals(0, latestBaseFileCount(DEFAULT_THIRD_PARTITION_PATH));
+    assertEquals(0, HoodieTableMetaClient.reload(metaClient).getActiveTimeline()
+        .getCompletedReplaceTimeline().countInstants(), "nothing may be dropped once the hive configs are bad");
+    assertEquals(1, latestBaseFileCount(DEFAULT_THIRD_PARTITION_PATH));
   }
 
   /**
-   * With the hive configs in place the sync props are built and the sync itself is attempted; pointing it at a
-   * port nothing listens on keeps the test free of a metastore while still running that path.
+   * With the hive configs in place the sync props are built and the sync is attempted for real; pointing it at a
+   * port nothing listens on keeps the test free of a metastore. The drop is committed before that attempt, so a
+   * metastore that is down costs the sync, not the partitions.
    */
   @Test
   public void testHiveSyncFailureLeavesTheDropCommitted() {
+    // the tool feeds the FileSystem's hadoop conf into the HiveConf, which is the only way in for these
+    jsc.hadoopConfiguration().set("hive.metastore.connect.retries", "1");
+    jsc.hadoopConfiguration().set("hive.metastore.client.connect.retry.delay", "0s");
+    jsc.hadoopConfiguration().set("hive.metastore.failure.retries", "0");
     writeThreePartitionTable();
     HoodieDropPartitionsTool.Config cfg = toolConfig("delete", DEFAULT_THIRD_PARTITION_PATH);
     cfg.syncToHive = true;
@@ -233,7 +264,11 @@ public class TestHoodieDropPartitionsTool extends HoodieSparkClientTestBase {
     HoodieDropPartitionsTool tool = new HoodieDropPartitionsTool(jsc, cfg);
 
     HoodieException thrown = assertThrows(HoodieException.class, tool::run);
-    assertNotNull(thrown.getCause(), "the hive sync failure must be reported as the cause");
+    assertTrue(thrown.getCause() instanceof HoodieHiveSyncException, "got " + thrown.getCause());
+    assertTrue(stackMessages(thrown).contains("Failed to create HiveMetaStoreClient"), stackMessages(thrown));
+    assertTrue(stackMessages(thrown).contains("Could not connect to meta store using any of the URIs provided"),
+        stackMessages(thrown));
+
     assertEquals(1, HoodieTableMetaClient.reload(metaClient).getActiveTimeline()
         .getCompletedReplaceTimeline().countInstants(), "the drop is committed before hive sync runs");
     assertEquals(0, latestBaseFileCount(DEFAULT_THIRD_PARTITION_PATH));

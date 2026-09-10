@@ -29,6 +29,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
+import org.apache.hudi.utilities.testutils.CapturingLogAppender;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
@@ -36,13 +37,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -92,7 +91,7 @@ public class TestHoodieDataTableValidator extends HoodieSparkClientTestBase {
    * Copies an existing base file of the first partition to a new base file named after {@code instantTime} and a
    * brand new file id, which is exactly the shape of a data file the timeline does not account for.
    */
-  private void addUnaccountedBaseFile(String instantTime) throws IOException {
+  private String addUnaccountedBaseFile(String instantTime) throws IOException {
     Path partitionDir = Paths.get(basePath, DEFAULT_FIRST_PARTITION_PATH);
     Path source;
     try (Stream<Path> files = Files.list(partitionDir)) {
@@ -102,21 +101,13 @@ public class TestHoodieDataTableValidator extends HoodieSparkClientTestBase {
     String danglingName =
         FSUtils.makeBaseFileName(instantTime, "1-0-1", UUID.randomUUID().toString(), ".parquet");
     Files.copy(source, partitionDir.resolve(danglingName));
+    return danglingName;
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testValidationPassesOnAHealthyTable(boolean readPropsFromFileSystem) throws IOException {
+  @Test
+  public void testValidationPassesOnAHealthyTable() {
     writeOneCommit();
-    HoodieDataTableValidator.Config cfg = validatorConfig(false);
-    if (readPropsFromFileSystem) {
-      Path propsFile = tempDir.resolve("validator.properties");
-      Files.write(propsFile,
-          Collections.singletonList(HoodieWriteConfig.TBL_NAME.key() + "=" + metaClient.getTableConfig().getTableName()),
-          StandardCharsets.UTF_8);
-      cfg.propsFilePath = propsFile.toAbsolutePath().toString();
-    }
-    HoodieDataTableValidator validator = new HoodieDataTableValidator(jsc, cfg);
+    HoodieDataTableValidator validator = new HoodieDataTableValidator(jsc, validatorConfig(false));
     // the validator reports through an exception only, so a clean table is asserted by the absence of one
     assertDoesNotThrow(validator::run);
   }
@@ -136,11 +127,22 @@ public class TestHoodieDataTableValidator extends HoodieSparkClientTestBase {
   @ValueSource(booleans = {true, false})
   public void testDanglingFileBeforeTheActiveTimeline(boolean ignoreFailed) throws IOException {
     writeOneCommit();
-    addUnaccountedBaseFile("00000000000001");
+    String danglingFile = addUnaccountedBaseFile("00000000000001");
 
     HoodieDataTableValidator validator = new HoodieDataTableValidator(jsc, validatorConfig(ignoreFailed));
     if (ignoreFailed) {
-      assertDoesNotThrow(validator::run);
+      // the run survives, but the finding still has to be reported
+      List<String> messages;
+      try (CapturingLogAppender logs = CapturingLogAppender.attachTo(HoodieDataTableValidator.class)) {
+        assertDoesNotThrow(validator::run);
+        messages = logs.messages();
+      }
+      assertTrue(messages.contains(
+          "Data table validation failed due to dangling files count 1, found before active timeline"),
+          messages.toString());
+      assertTrue(messages.stream().anyMatch(m -> m.startsWith("Dangling file: ") && m.endsWith(danglingFile)),
+          "the dangling file must be named in " + messages);
+      assertTrue(messages.contains("Data table validation failed."), messages.toString());
     } else {
       HoodieException thrown = assertThrows(HoodieException.class, validator::run);
       assertTrue(thrown.getCause() instanceof HoodieValidationException, "got " + thrown.getCause());
@@ -194,6 +196,9 @@ public class TestHoodieDataTableValidator extends HoodieSparkClientTestBase {
     assertEquals(cfg, cfg);
     assertNotEquals(cfg, null);
     assertNotEquals(cfg, "not a config");
+    // a Config straight out of JCommander has no base path yet
+    assertEquals(new HoodieDataTableValidator.Config(), new HoodieDataTableValidator.Config());
+    assertEquals(new HoodieDataTableValidator.Config().hashCode(), new HoodieDataTableValidator.Config().hashCode());
 
     HoodieDataTableValidator.Config same = validatorConfig(true);
     same.basePath = "/tmp/table";

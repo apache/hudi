@@ -24,13 +24,10 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
+import org.apache.hudi.utilities.testutils.CapturingLogAppender;
 
-import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.core.LogEvent;
-import org.apache.logging.log4j.core.Logger;
-import org.apache.logging.log4j.core.appender.AbstractAppender;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -74,9 +71,8 @@ public class TestTableSizeStats extends HoodieSparkClientTestBase {
         // only the 2015 partitions are before the end date
         Arguments.of(null, "2016/1/1", 0L,
             Arrays.asList(DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH)),
-        // half open interval [start, end)
-        Arguments.of("2015/1/1", "2016/1/1", 0L,
-            Arrays.asList(DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH)),
+        // half open interval [start, end): the start date is included, the end date is not
+        Arguments.of("2015/3/16", "2015/3/17", 0L, Collections.singletonList(DEFAULT_SECOND_PARTITION_PATH)),
         // --num-days walks back from today, so every partition of this table is out of the window
         Arguments.of(null, null, 10L, Collections.emptyList()));
   }
@@ -107,19 +103,10 @@ public class TestTableSizeStats extends HoodieSparkClientTestBase {
   }
 
   private List<String> runAndCollectLogs(TableSizeStats.Config cfg) {
-    CapturingAppender appender = new CapturingAppender();
-    Logger logger = (Logger) LogManager.getLogger(TableSizeStats.class);
-    Level previousLevel = logger.getLevel();
-    try {
-      appender.start();
-      logger.setLevel(Level.INFO);
-      logger.addAppender(appender);
+    try (CapturingLogAppender logs = CapturingLogAppender.attachTo(TableSizeStats.class)) {
       new TableSizeStats(jsc, cfg).run();
-    } finally {
-      logger.removeAppender(appender);
-      logger.setLevel(previousLevel);
+      return logs.messages();
     }
-    return appender.messages();
   }
 
   private static Set<String> partitionStatHeaders(List<String> messages) {
@@ -200,11 +187,32 @@ public class TestTableSizeStats extends HoodieSparkClientTestBase {
     assertEquals("Number of files: 3", lineAfter(messages, "Table stats [path: " + basePath + "]"));
   }
 
+  /**
+   * --props-path is read twice: once by the constructor as a hoodie properties file, and again by run() as the
+   * list of base paths. A file that is missing from the start never reaches the second read.
+   */
   @Test
-  public void testUnreadablePropsFileFails() {
+  public void testMissingPropsFileFailsInTheConstructor() {
     TableSizeStats.Config cfg = statsConfig();
     cfg.propsFilePath = tempDir.resolve("missing-" + UUID.randomUUID() + ".properties").toAbsolutePath().toString();
-    assertThrows(HoodieException.class, () -> new TableSizeStats(jsc, cfg).run());
+    HoodieIOException thrown =
+        assertThrows(HoodieIOException.class, () -> new TableSizeStats(jsc, cfg).run());
+    assertTrue(thrown.getMessage().contains("Properties file does not exist"), thrown.getMessage());
+  }
+
+  @Test
+  public void testPropsFileRemovedAfterTheConstructorFailsTheRun() throws IOException {
+    Path propsFile = tempDir.resolve("base-paths.properties");
+    Files.write(propsFile, Collections.singletonList(basePath), StandardCharsets.UTF_8);
+    TableSizeStats.Config cfg = statsConfig();
+    cfg.propsFilePath = propsFile.toAbsolutePath().toString();
+
+    TableSizeStats stats = new TableSizeStats(jsc, cfg);
+    Files.delete(propsFile);
+
+    HoodieException thrown = assertThrows(HoodieException.class, stats::run);
+    assertTrue(thrown.getCause().getMessage().contains("Cannot read properties from dfs from file"),
+        thrown.getCause().getMessage());
   }
 
   @Test
@@ -284,28 +292,5 @@ public class TestTableSizeStats extends HoodieSparkClientTestBase {
     assertTrue(printed.contains("--num-days 3"));
     assertTrue(printed.contains("--enable-table-stats true"));
     assertTrue(printed.contains("--hoodie-conf [k=v]"));
-  }
-
-  /**
-   * Collects the messages {@link TableSizeStats} logs. The appender lands on the nearest configured logger, which
-   * is shared, so events of other loggers are dropped here.
-   */
-  private static class CapturingAppender extends AbstractAppender {
-    private final List<String> messages = Collections.synchronizedList(new ArrayList<>());
-
-    CapturingAppender() {
-      super("TableSizeStatsCapture-" + UUID.randomUUID(), null, null, false, null);
-    }
-
-    @Override
-    public void append(LogEvent event) {
-      if (TableSizeStats.class.getName().equals(event.getLoggerName())) {
-        messages.add(event.getMessage().getFormattedMessage());
-      }
-    }
-
-    List<String> messages() {
-      return new ArrayList<>(messages);
-    }
   }
 }

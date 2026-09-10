@@ -213,7 +213,7 @@ public class HoodieDataTableValidator implements Serializable {
         return false;
       }
       Config config = (Config) o;
-      return basePath.equals(config.basePath)
+      return Objects.equals(basePath, config.basePath)
           && Objects.equals(continuous, config.continuous)
           && Objects.equals(minValidateIntervalSeconds, config.minValidateIntervalSeconds)
           && Objects.equals(parallelism, config.parallelism)
