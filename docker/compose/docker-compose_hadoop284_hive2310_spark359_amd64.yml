@@ -17,10 +17,11 @@ services:
 
   namenode:
     image: apachehudi/hudi-hadoop_2.8.4-namenode:latest
+    platform: linux/amd64
     hostname: namenode
     container_name: namenode
     environment:
-      - CLUSTER_NAME=hudi_hadoop284_hive2310_spark353
+      - CLUSTER_NAME=hudi_hadoop284_hive2310_spark359
     ports:
       - "50070:50070"
       - "8020:8020"
@@ -34,10 +35,11 @@ services:
 
   datanode1:
     image: apachehudi/hudi-hadoop_2.8.4-datanode:latest
+    platform: linux/amd64
     container_name: datanode1
     hostname: datanode1
     environment:
-      - CLUSTER_NAME=hudi_hadoop284_hive2310_spark353
+      - CLUSTER_NAME=hudi_hadoop284_hive2310_spark359
     env_file:
       - ./hadoop.env
     ports:
@@ -56,10 +58,11 @@ services:
 
   historyserver:
     image: apachehudi/hudi-hadoop_2.8.4-history:latest
+    platform: linux/amd64
     hostname: historyserver
     container_name: historyserver
     environment:
-      - CLUSTER_NAME=hudi_hadoop284_hive2310_spark353
+      - CLUSTER_NAME=hudi_hadoop284_hive2310_spark359
     depends_on:
       - "namenode"
     links:
@@ -85,6 +88,7 @@ services:
 
   hivemetastore:
     image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.10:latest
+    platform: linux/amd64
     hostname: hivemetastore
     container_name: hivemetastore
     links:
@@ -108,6 +112,7 @@ services:
 
   hiveserver:
     image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.10:latest
+    platform: linux/amd64
     hostname: hiveserver
     container_name: hiveserver
     env_file:
@@ -126,7 +131,8 @@ services:
       - ${HUDI_WS}:/var/hoodie/ws
 
   sparkmaster:
-    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.10-sparkmaster_3.5.3:latest
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.10-sparkmaster_3.5.9:latest
+    platform: linux/amd64
     hostname: sparkmaster
     container_name: sparkmaster
     env_file:
@@ -143,7 +149,8 @@ services:
       - "namenode"
 
   spark-worker-1:
-    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.10-sparkworker_3.5.3:latest
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.10-sparkworker_3.5.9:latest
+    platform: linux/amd64
     hostname: spark-worker-1
     container_name: spark-worker-1
     env_file:
@@ -161,7 +168,7 @@ services:
       - "namenode"
 
   zookeeper:
-    image: 'bitnamilegacy/zookeeper:3.6.4'
+    image: 'bitnamilegacy/zookeeper:3.4.12-r68'
     hostname: zookeeper
     container_name: zookeeper
     ports:
@@ -170,7 +177,7 @@ services:
       - ALLOW_ANONYMOUS_LOGIN=yes
 
   kafka:
-    image: 'bitnamilegacy/kafka:3.4.1'
+    image: 'bitnamilegacy/kafka:2.0.0'
     hostname: kafkabroker
     container_name: kafkabroker
     ports:
@@ -189,7 +196,8 @@ services:
       - 8126:8126
 
   adhoc-1:
-    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.10-sparkadhoc_3.5.3:latest
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.10-sparkadhoc_3.5.9:latest
+    platform: linux/amd64
     hostname: adhoc-1
     container_name: adhoc-1
     env_file:
@@ -211,7 +219,8 @@ services:
       - ${HUDI_WS}:/var/hoodie/ws
 
   adhoc-2:
-    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.10-sparkadhoc_3.5.3:latest
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.10-sparkadhoc_3.5.9:latest
+    platform: linux/amd64
     hostname: adhoc-2
     container_name: adhoc-2
     env_file:
@@ -238,4 +247,4 @@ volumes:
 
 networks:
   default:
-    name: hudi
+     name: hudi

@@ -21,7 +21,7 @@
 
 # Default versions for Hadoop, Spark, and Hive
 HADOOP_VERSION="2.8.4"
-SPARK_VERSION="3.5.3"
+SPARK_VERSION="3.5.9"
 HIVE_VERSION="2.3.10"
 VERSION_TAG_ARG="" # Initialize to empty, will be set by command-line arg if provided
 MULTI_ARCH=false
