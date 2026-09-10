@@ -25,10 +25,12 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 
 import com.esotericsoftware.kryo.Kryo;
@@ -104,7 +106,58 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
 
   @Override
   public Comparable<?> doGetOrderingValue(HoodieSchema recordSchema, Properties props, String[] orderingFields) {
-    return this.getData().getOrderingValue();
+    Comparable<?> payloadOrderingValue = getData().getOrderingValue();
+    if (!canReadOrderingFieldsFromRecord(payloadOrderingValue, recordSchema, props, orderingFields)) {
+      return payloadOrderingValue;
+    }
+    // The payload carries no ordering value: payloads constructed from the record alone
+    // (HoodieRecordUtils#loadPayload(String, GenericRecord)) default to OrderingValues#getDefault,
+    // an Integer. Read the ordering fields off the record instead, the way
+    // HoodieAvroIndexedRecord#doGetOrderingValue does, so that both Avro record representations
+    // yield an ordering value of the type the ordering field declares. This is best effort: any
+    // record we cannot read leaves the payload's value in place, which is what callers saw before.
+    try {
+      Option<IndexedRecord> avroData = getData().getIndexedRecord(recordSchema.toAvroSchema(), props);
+      if (!avroData.isPresent()) {
+        return payloadOrderingValue;
+      }
+      boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(props.getProperty(
+          KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
+          KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
+      Comparable<?> recordOrderingValue = OrderingValues.create(
+          orderingFields,
+          field -> (Comparable<?>) HoodieAvroUtils.getNestedFieldVal(
+              (GenericRecord) avroData.get(), field, true, consistentLogicalTimestampEnabled));
+      // A nullable ordering field holding null reads back as null, which no caller expects here.
+      return recordOrderingValue == null ? payloadOrderingValue : recordOrderingValue;
+    } catch (Exception e) {
+      // Reading the record is an optimization over the payload's default, never a new failure
+      // mode: a schema the payload cannot decode, or props an exotic payload requires and does
+      // not get here, must not turn an ordering value lookup into a write failure.
+      return payloadOrderingValue;
+    }
+  }
+
+  /**
+   * Whether the ordering value is worth reading off the record rather than taking the payload's.
+   * Only when the payload has none, the table declares ordering fields, and the record is not a
+   * delete: BufferedRecord#isCommitTimeOrderingDelete treats a delete carrying the default
+   * ordering value as commit time ordered, so giving deletes a real value here would silently
+   * change which delete wins.
+   */
+  private boolean canReadOrderingFieldsFromRecord(Comparable<?> payloadOrderingValue,
+      HoodieSchema recordSchema, Properties props, String[] orderingFields) {
+    if (orderingFields == null || orderingFields.length == 0 || props == null) {
+      return false;
+    }
+    if (!OrderingValues.isDefault(payloadOrderingValue)) {
+      return false;
+    }
+    if (Boolean.TRUE.equals(isDelete) || HoodieOperation.isDelete(getOperation())) {
+      return false;
+    }
+    return !(this.data instanceof BaseAvroPayload)
+        || !((BaseAvroPayload) this.data).isDeleted(recordSchema.toAvroSchema(), props);
   }
 
   @Override
