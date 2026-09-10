@@ -21,6 +21,9 @@ concurrency:
 
 jobs:
   # [CI-TRIM] to revisit for CI improvement
+  # This only blocks PRs whose checks predate the matrix trim (#19514). Since bot.yml and
+  # java_ci_engines.yml are path-filtered, a green result here no longer means any Java CI
+  # job ran; reviewers gate on the checks the PR shows. Delete under #19535.
   validate-ci-baseline:
     runs-on: ubuntu-latest
     steps:

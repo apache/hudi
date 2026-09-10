@@ -16,6 +16,8 @@ on:
       - branch-0.x
     paths:
       - '**'
+      # Listed explicitly so the filter does not depend on '**' matching dot-prefixed paths.
+      - '.github/**'
       - '!**.bmp'
       - '!**.gif'
       - '!**.jpg'
@@ -32,6 +34,8 @@ on:
       - branch-0.x
     paths:
       - '**'
+      # Listed explicitly so the filter does not depend on '**' matching dot-prefixed paths.
+      - '.github/**'
       - '!**.bmp'
       - '!**.gif'
       - '!**.jpg'
@@ -52,6 +56,7 @@ env:
   # serviceUnavailable lists the HTTP codes retried instead of failing the build. 403 is deliberately
   # absent: Maven Central answers 403 when its CDN has blocked the runner's egress IP, and retrying
   # that is what escalates the block.
+  # Keep MVN_ARGS in sync with java_ci_engines.yml.
   MVN_ARGS: -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn -Daether.connector.http.retryHandler.count=5 -Daether.connector.http.retryHandler.interval=3000 -Daether.connector.http.retryHandler.intervalMax=30000 -Daether.connector.http.retryHandler.serviceUnavailable=429,500,502,503,504 -Daether.connector.http.connectionMaxTtl=25 -Dorg.eclipse.jetty.LEVEL=WARN
   SPARK_COMMON_MODULES: hudi-spark-datasource/hudi-spark,hudi-spark-datasource/hudi-spark-common
   JAVA_UT_FILTER1: -Dtest=!TestCOWDataSource,!TestMORDataSource,!TestHoodieFileSystemViews
@@ -64,8 +69,6 @@ env:
   SCALA_TEST_OTHERS_FILTER: -DwildcardSuites=org.apache.hudi,org.apache.spark.hudi,org.apache.spark.sql.avro,org.apache.spark.sql.execution,org.apache.spark.sql.hive,org.apache.spark.sql.hudi.analysis,org.apache.spark.sql.hudi.blob,org.apache.spark.sql.hudi.catalog,org.apache.spark.sql.hudi.command,org.apache.spark.sql.hudi.common,org.apache.spark.sql.hudi.ddl,org.apache.spark.sql.hudi.procedure,org.apache.spark.sql.hudi.feature
   SCALA_TEST_OTHERS1_FILTER: -DwildcardSuites=org.apache.spark.sql.hudi.procedure,org.apache.spark.sql.hudi.ddl
   SCALA_TEST_OTHERS2_FILTER: -DwildcardSuites=org.apache.hudi,org.apache.spark.hudi,org.apache.spark.sql.avro,org.apache.spark.sql.execution,org.apache.spark.sql.hive,org.apache.spark.sql.hudi.analysis,org.apache.spark.sql.hudi.blob,org.apache.spark.sql.hudi.catalog,org.apache.spark.sql.hudi.command,org.apache.spark.sql.hudi.common,org.apache.spark.sql.hudi.feature
-  FLINK_IT_FILTER1: -Dit.test=ITTestHoodieDataSource
-  FLINK_IT_FILTER2: -Dit.test=!ITTestHoodieDataSource
 
 jobs:
   # hudi-cli rides along with hudi-spark-client here rather than joining the catch-all
