@@ -220,6 +220,10 @@
     <skipUTs>${skipTests}</skipUTs>
     <skipFTs>${skipTests}</skipFTs>
     <skipITs>${skipTests}</skipITs>
+    <!-- Surefire forks per module. Two fill the 4-vCPU CI runners; each fork gets the argLine heap.
+         Override with -Dhudi.surefire.forkCount=1 to serialise a module, for example when bisecting
+         a test that depends on fixed shared state. -->
+    <hudi.surefire.forkCount>2</hudi.surefire.forkCount>
     <skip.hudi-spark3.unit.tests>${skipTests}</skip.hudi-spark3.unit.tests>
     <skip.hudi-spark4.unit.tests>${skipTests}</skip.hudi-spark4.unit.tests>
     <skipDocker>${skipTests}</skipDocker>
@@ -556,6 +560,8 @@
           <version>${maven-surefire-plugin.version}</version>
           <configuration>
             <rerunFailingTestsCount>3</rerunFailingTestsCount>
+            <forkCount>${hudi.surefire.forkCount}</forkCount>
+            <reuseForks>true</reuseForks>
             <argLine>@{argLine}</argLine>
             <trimStackTrace>false</trimStackTrace>
             <systemPropertyVariables>
@@ -2217,8 +2223,6 @@
             <version>${maven-surefire-plugin.version}</version>
             <configuration combine.self="append">
               <skip>${skipFTs}</skip>
-              <forkCount>1</forkCount>
-              <reuseForks>true</reuseForks>
               <groups>functional</groups>
             </configuration>
           </plugin>
@@ -2265,8 +2269,6 @@
             <version>${maven-surefire-plugin.version}</version>
             <configuration combine.self="append">
               <skip>${skipFTs}</skip>
-              <forkCount>1</forkCount>
-              <reuseForks>true</reuseForks>
               <groups>functional-b</groups>
             </configuration>
           </plugin>
@@ -2313,8 +2315,6 @@
             <version>${maven-surefire-plugin.version}</version>
             <configuration combine.self="append">
               <skip>${skipFTs}</skip>
-              <forkCount>1</forkCount>
-              <reuseForks>true</reuseForks>
               <groups>functional-c</groups>
             </configuration>
           </plugin>
