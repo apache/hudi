@@ -72,12 +72,9 @@ object HoodieProcedureFilterUtils {
         case Success(filteredRows) => filteredRows
         // Surface an overflowing ANSI cast or arithmetic, or an ANSI cast of a malformed string,
         // with Spark's own exception rather than restating it as a filter-expression problem: the
-        // expression is fine, the data does not fit. A per-row runtime error from a
-        // registry-resolved function is rethrown one level down in evaluateExpressionOnRow and
-        // reaches this same Failure(exception) branch below, still surfacing rather than being
-        // swallowed - it doesn't need its own case here, and adding one would also catch a parse
-        // failure (ParseException is a SparkThrowable too) that this method's own wrapped message
-        // is meant to explain.
+        // expression is fine, the data does not fit. A registry-resolved function's own runtime
+        // error is rethrown the same way from evaluateExpressionOnRow and lands in the generic
+        // Failure branch below.
         case Failure(e @ (_: ArithmeticException | _: NumberFormatException | _: DateTimeException)) => throw e
         case Failure(exception) =>
           throw new IllegalArgumentException(
@@ -425,7 +422,7 @@ object HoodieProcedureFilterUtils {
   // existing rejection path (see #19850) instead of letting eval() throw silently.
   private def resolveViaFunctionRegistry(unresolvedFunc: UnresolvedFunction, sparkSession: SparkSession): Expression = {
     Try {
-      val castedResolved = applyImplicitCasts(lookupBuiltin(unresolvedFunc, sparkSession))
+      val castedResolved = applySparkTypeCoercionRules(lookupBuiltin(unresolvedFunc, sparkSession))
       // Checked here, on the raw wrapper, before unwrapping: a RuntimeReplaceable wrapper's own
       // declared input-type contract (nvl needing matching operand types, split_part needing
       // string/string/int) is otherwise discarded once unwrapped to a form with a weaker or
@@ -449,7 +446,7 @@ object HoodieProcedureFilterUtils {
   // ConcatCoercion in a real query; without it Concat.checkInputDataTypes just fails). Order
   // mirrors TypeCoercion's own rule list - ImplicitTypeCasts last, as a catch-all. Anything not
   // covered by one of these four passes through unchanged.
-  private def applyImplicitCasts(expression: Expression): Expression = {
+  private def applySparkTypeCoercionRules(expression: Expression): Expression = {
     val engine: TypeCoercionBase = if (SQLConf.get.ansiEnabled) AnsiTypeCoercion else TypeCoercion
     Seq(engine.FunctionArgumentConversion, engine.ConcatCoercion, engine.IfCoercion, engine.ImplicitTypeCasts)
       .foldLeft(expression) { (expr, rule) => rule.transform.applyOrElse(expr, identity[Expression]) }
@@ -478,12 +475,21 @@ object HoodieProcedureFilterUtils {
   // builtins are actually registered - a bare name pre-4.2, but the fully qualified
   // system.builtin.<name> from 4.2 onward, where a session-level clone (unlike the builtin
   // singleton itself) stops auto-qualifying a bare name it's given and asserts instead.
-  private def builtinFunctionIdentifier(funcName: String): FunctionIdentifier =
+  private def builtinFunctionIdentifier(funcName: String): FunctionIdentifier = {
+    val bareIdentifier = FunctionIdentifier(funcName)
     if (HoodieSparkUtils.gteqSpark4_2) {
-      FunctionIdentifier(funcName, Some("builtin"), Some("system"))
+      // FunctionIdentifier only gained the catalog parameter from Spark 3.4 onward - this file
+      // still compiles against 3.3 too, where the case class has just funcName/database, so a
+      // direct 3-arg call wouldn't compile there. Reached through reflection instead, the same way
+      // the With handling below reaches classes that don't exist on every targeted version.
+      bareIdentifier.getClass
+        .getConstructor(classOf[String], classOf[Option[_]], classOf[Option[_]])
+        .newInstance(funcName, Some("builtin"), Some("system"))
+        .asInstanceOf[FunctionIdentifier]
     } else {
-      FunctionIdentifier(funcName)
+      bareIdentifier
     }
+  }
 
   // RuntimeReplaceable placeholders (nvl, ifnull, left, right, ...) need substitution the analyzer
   // normally performs but lookupFunction skips, and can themselves unwrap to another
