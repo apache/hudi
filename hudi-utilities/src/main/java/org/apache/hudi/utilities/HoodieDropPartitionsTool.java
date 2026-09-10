@@ -270,7 +270,7 @@ public class HoodieDropPartitionsTool implements Serializable {
       return Objects.hash(basePath, runningMode, tableName, partitions,
           syncToHive, hiveDataBase, hiveTableName, hiveUserName, hivePassWord, hiveURL,
           hivePartitionsField, hiveUseJdbc, hiveHMSUris, partitionValueExtractorClass,
-          sparkMaster, sparkMemory, propsFilePath, configs, hiveSyncIgnoreException, help);
+          sparkMaster, sparkMemory, propsFilePath, configs, hiveSyncIgnoreException);
     }
   }
 

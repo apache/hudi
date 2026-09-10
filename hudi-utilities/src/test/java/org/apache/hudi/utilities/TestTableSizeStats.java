@@ -292,6 +292,11 @@ public class TestTableSizeStats extends HoodieSparkClientTestBase {
     // a Config straight out of JCommander has no base path yet
     assertEquals(new TableSizeStats.Config(), new TableSizeStats.Config());
     assertEquals(new TableSizeStats.Config().hashCode(), new TableSizeStats.Config().hashCode());
+    // --help is not compared, so it must not be hashed either
+    TableSizeStats.Config askedForHelp = new TableSizeStats.Config();
+    askedForHelp.help = true;
+    assertEquals(new TableSizeStats.Config(), askedForHelp);
+    assertEquals(new TableSizeStats.Config().hashCode(), askedForHelp.hashCode());
 
     right.endDate = "2016/1/1";
     assertNotEquals(left, right);

@@ -219,7 +219,7 @@ public class TableSizeStats implements Serializable {
 
     @Override
     public int hashCode() {
-      return Objects.hash(basePath, numDays, startDate, endDate, tableStats, partitionStats, parallelism, sparkMaster, sparkMemory, propsFilePath, configs, help);
+      return Objects.hash(basePath, numDays, startDate, endDate, tableStats, partitionStats, parallelism, sparkMaster, sparkMemory, propsFilePath, configs);
     }
   }
 

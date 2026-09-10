@@ -339,6 +339,11 @@ public class TestHoodieDropPartitionsTool extends HoodieSparkClientTestBase {
     // a Config straight out of JCommander has no base path yet
     assertEquals(new HoodieDropPartitionsTool.Config(), new HoodieDropPartitionsTool.Config());
     assertEquals(new HoodieDropPartitionsTool.Config().hashCode(), new HoodieDropPartitionsTool.Config().hashCode());
+    // --help is not compared, so it must not be hashed either
+    HoodieDropPartitionsTool.Config askedForHelp = new HoodieDropPartitionsTool.Config();
+    askedForHelp.help = true;
+    assertEquals(new HoodieDropPartitionsTool.Config(), askedForHelp);
+    assertEquals(new HoodieDropPartitionsTool.Config().hashCode(), askedForHelp.hashCode());
 
     right.hiveDataBase = "db";
     assertNotEquals(left, right);
