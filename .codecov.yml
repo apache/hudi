@@ -82,7 +82,7 @@ comment:
 
 # Carry the last known coverage forward for a flag when its CI job is skipped by the
 # path filter on a given PR, so a partial run does not zero out that flag's coverage.
-# Flags uploaded by .github/workflows/bot.yml: spark-client-hadoop-common, utilities,
+# Flags uploaded by .github/workflows/bot.yml and java_ci_engines.yml: spark-client-hadoop-common, utilities,
 # common-and-other-modules, spark-java-tests, spark-scala-tests, hadoop-mr-java-client,
 # integration-tests.
 flag_management:
