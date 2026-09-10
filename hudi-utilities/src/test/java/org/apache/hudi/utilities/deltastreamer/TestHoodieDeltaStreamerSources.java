@@ -118,6 +118,7 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
 @Slf4j
 public class TestHoodieDeltaStreamerSources extends HoodieDeltaStreamerTestBase {
 
+  // Kept per class rather than hoisted to the base, because the other base subclasses deliberately do not increment testNum.
   @AfterEach
   public void perTestAfterEach() {
     testNum++;

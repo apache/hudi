@@ -135,6 +135,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Slf4j
 public class TestHoodieDeltaStreamerSchemaAndTypes extends HoodieDeltaStreamerTestBase {
 
+  // Kept per class rather than hoisted to the base, because the other base subclasses deliberately do not increment testNum.
   @AfterEach
   public void perTestAfterEach() {
     testNum++;

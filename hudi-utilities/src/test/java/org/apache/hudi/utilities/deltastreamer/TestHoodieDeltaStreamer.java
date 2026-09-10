@@ -122,6 +122,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   // the wait: once that budget blows, JUnit replaces the test's own failure with its timeout.
   private static final long STREAMER_STOP_TIMEOUT_SECS = 30;
 
+  // Kept per class rather than hoisted to the base, because the other base subclasses deliberately do not increment testNum.
   @AfterEach
   public void perTestAfterEach() {
     testNum++;

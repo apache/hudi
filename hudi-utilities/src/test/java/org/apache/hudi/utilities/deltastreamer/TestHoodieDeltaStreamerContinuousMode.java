@@ -124,6 +124,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 @Slf4j
 public class TestHoodieDeltaStreamerContinuousMode extends HoodieDeltaStreamerTestBase {
 
+  // Kept per class rather than hoisted to the base, because the other base subclasses deliberately do not increment testNum.
   @AfterEach
   public void perTestAfterEach() {
     testNum++;
@@ -811,6 +812,7 @@ public class TestHoodieDeltaStreamerContinuousMode extends HoodieDeltaStreamerTe
   }
 
   @Disabled("HUDI-6753")
+  @Test
   public void testAsyncClusteringServiceSparkRecordType() throws Exception {
     testAsyncClusteringService(HoodieRecordType.SPARK);
   }
@@ -1091,6 +1093,7 @@ public class TestHoodieDeltaStreamerContinuousMode extends HoodieDeltaStreamerTe
   }
 
   @Disabled("HUDI-6609")
+  @Test
   public void testDeltaStreamerMultiwriterCheckpoint() throws Exception {
     // prep parquet source
     PARQUET_SOURCE_ROOT = basePath + "/parquetFilesMultiCheckpoint" + testNum;
