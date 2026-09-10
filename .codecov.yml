@@ -28,7 +28,8 @@ codecov:
 coverage:
   precision: 2
   round: down
-  range: "50...100"
+  # Bars are green only at or above the upper bound; 100 never is, 80 is our target.
+  range: "70...80"
   status:
     # Statuses are informational for now: they surface the delta on each PR but do
     # not fail the build. Flip a component to blocking (drop `informational`, set a
