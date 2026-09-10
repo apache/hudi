@@ -19,6 +19,7 @@
 package org.apache.hudi.aws.utils;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -38,6 +39,8 @@ import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.dynamodb.model.TableDescription;
 import software.amazon.awssdk.services.dynamodb.model.TableStatus;
 
+import java.util.concurrent.TimeUnit;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -49,8 +52,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Tests {@link DynamoTableUtils} against a mocked DynamoDB client. The polling helpers are always
- * given an explicit, short timeout so the tests stay fast and deterministic.
+ * Tests {@link DynamoTableUtils} against a mocked DynamoDB client. Most tests hand the polling helpers a
+ * short explicit timeout so they bound their own runtime; the one that exercises the default-timeout
+ * overloads (20 minutes, polled every 10 seconds) is bounded by {@code @Timeout} instead.
  */
 @ExtendWith(MockitoExtension.class)
 class TestDynamoTableUtils {
@@ -130,6 +134,7 @@ class TestDynamoTableUtils {
   }
 
   @Test
+  @Timeout(value = 10, unit = TimeUnit.SECONDS)
   void testDefaultTimeoutOverloadsReturnAsSoonAsTheTableIsReady() throws Exception {
     when(dynamoDb.describeTable(any(DescribeTableRequest.class))).thenReturn(describeResponse(TableStatus.ACTIVE));
 

@@ -1198,6 +1198,33 @@ class TestAWSGlueSyncClient {
   }
 
   @Test
+  void testManagePartitionIndexes_enabledWithTheConfiguredIndexesInPlaceChangesNothing() throws Exception {
+    String tableName = "tbl";
+    TypedProperties props = GlueTestUtil.getHiveSyncConfig().getProps();
+    props.setProperty(GlueCatalogSyncClientConfig.META_SYNC_PARTITION_INDEX_FIELDS_ENABLE.key(), "true");
+    props.setProperty(GlueCatalogSyncClientConfig.META_SYNC_PARTITION_INDEX_FIELDS.key(), "datestr;hour");
+    awsGlueSyncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, mockSts, new HiveSyncConfig(props), GlueTestUtil.getMetaClient());
+
+    Map<String, String> parameters = new HashMap<>();
+    parameters.put(GLUE_PARTITION_INDEX_ENABLE, "true");
+    when(mockAwsGlue.getTable(any(GetTableRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(
+            GetTableResponse.builder().table(tableWithParameters(tableName, parameters)).build()));
+    when(mockAwsGlue.getPartitionIndexes(any(GetPartitionIndexesRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(GetPartitionIndexesResponse.builder()
+            .partitionIndexDescriptorList(partitionIndexDescriptor("kept_idx", "datestr", "hour"))
+            .build()));
+
+    awsGlueSyncClient.managePartitionIndexes(tableName);
+
+    // nothing was dropped, so the index list is not re-read
+    verify(mockAwsGlue, times(1)).getPartitionIndexes(any(GetPartitionIndexesRequest.class));
+    verify(mockAwsGlue, never()).updateTable(any(UpdateTableRequest.class));
+    verify(mockAwsGlue, never()).deletePartitionIndex(any(DeletePartitionIndexRequest.class));
+    verify(mockAwsGlue, never()).createPartitionIndex(any(CreatePartitionIndexRequest.class));
+  }
+
+  @Test
   void testParsePartitionsIndexConfig_keepsOnlyTheFirstThreeIndexes() {
     TypedProperties props = GlueTestUtil.getHiveSyncConfig().getProps();
     props.setProperty(GlueCatalogSyncClientConfig.META_SYNC_PARTITION_INDEX_FIELDS.key(), "a;b,c,d,e");
@@ -1231,18 +1258,19 @@ class TestAWSGlueSyncClient {
 
   /**
    * An indexation already in flight surfaces as an {@link ExecutionException}, anything else lands in the
-   * catch-all. Neither may fail the commit-time sync.
+   * catch-all. Neither may fail the commit-time sync. The two parameter values exist to run each catch arm;
+   * both arms only log, so the observable effect is the same by design.
    */
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  void testUpdateLastCommitTimeSynced_partitionIndexFailureDoesNotFailTheSync(boolean asExecutionFailure) throws Exception {
+  void testUpdateLastCommitTimeSynced_partitionIndexFailureDoesNotFailTheSync(boolean throughExecutionException) throws Exception {
     String tableName = "tbl";
     when(mockAwsGlue.getTable(any(GetTableRequest.class)))
         .thenReturn(CompletableFuture.completedFuture(
             GetTableResponse.builder().table(tableWithParameters(tableName, new HashMap<>())).build()));
     when(mockAwsGlue.updateTable(any(UpdateTableRequest.class)))
         .thenReturn(CompletableFuture.completedFuture(UpdateTableResponse.builder().build()));
-    if (asExecutionFailure) {
+    if (throughExecutionException) {
       CompletableFuture<GetPartitionIndexesResponse> failed = mock(CompletableFuture.class);
       when(failed.get()).thenThrow(new ExecutionException(new RuntimeException("indexing in progress")));
       when(mockAwsGlue.getPartitionIndexes(any(GetPartitionIndexesRequest.class))).thenReturn(failed);
@@ -1288,26 +1316,41 @@ class TestAWSGlueSyncClient {
     verify(mockAwsGlue, never()).updateTable(any(UpdateTableRequest.class));
   }
 
-  @Test
-  void testUpdateSerdeProperties_changedPropertiesRewriteSerdeInfo() {
+  // useRealtimeFormat is not read by the Glue client: unlike the Hive client it never picks an input format
+  // from the flag, it only rewrites the serde parameters, so both values must produce the same request.
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testUpdateSerdeProperties_changedPropertiesRewriteSerdeInfo(boolean useRealtimeFormat) {
     String tableName = "tbl";
+    Table table = tableWithSerdeProperties(tableName,
+        serdePropertiesOf("serialization.format", "1", "location", "s3://old"));
+    Table tableWithFormats = table.toBuilder()
+        .storageDescriptor(table.storageDescriptor().toBuilder()
+            .inputFormat("org.apache.hudi.hadoop.HoodieParquetInputFormat")
+            .outputFormat("org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat")
+            .build())
+        .build();
     when(mockAwsGlue.getTable(any(GetTableRequest.class)))
         .thenReturn(CompletableFuture.completedFuture(
-            GetTableResponse.builder().table(tableWithSerdeProperties(tableName,
-                serdePropertiesOf("serialization.format", "1", "location", "s3://old"))).build()));
+            GetTableResponse.builder().table(tableWithFormats).build()));
     ArgumentCaptor<UpdateTableRequest> captor = ArgumentCaptor.forClass(UpdateTableRequest.class);
     when(mockAwsGlue.updateTable(captor.capture()))
         .thenReturn(CompletableFuture.completedFuture(UpdateTableResponse.builder().build()));
 
     Map<String, String> serdeProperties = new HashMap<>();
     serdeProperties.put("path", "s3://new");
-    assertTrue(awsGlueSyncClient.updateSerdeProperties(tableName, serdeProperties, false));
+    assertTrue(awsGlueSyncClient.updateSerdeProperties(tableName, serdeProperties, useRealtimeFormat));
 
-    SerDeInfo sent = captor.getValue().tableInput().storageDescriptor().serdeInfo();
+    StorageDescriptor sentStorageDescriptor = captor.getValue().tableInput().storageDescriptor();
+    SerDeInfo sent = sentStorageDescriptor.serdeInfo();
     assertEquals("org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe", sent.serializationLibrary(),
-        "the serde class is derived from the base file format");
+        "the serde class is derived from the base file format, not from useRealtimeFormat");
     assertEquals("s3://new", sent.parameters().get("path"));
     assertEquals("1", sent.parameters().get("serialization.format"), "the serialization format is defaulted in");
+    assertEquals(tableWithFormats.storageDescriptor().inputFormat(), sentStorageDescriptor.inputFormat(),
+        "the input format is carried over from the catalog for both values of useRealtimeFormat");
+    assertEquals(tableWithFormats.storageDescriptor().outputFormat(), sentStorageDescriptor.outputFormat(),
+        "the output format is carried over from the catalog for both values of useRealtimeFormat");
   }
 
   @Test
@@ -1374,9 +1417,7 @@ class TestAWSGlueSyncClient {
 
     try (MockedStatic<GlueAsyncClient> glueStatic = mockStatic(GlueAsyncClient.class);
          MockedStatic<StsClient> stsStatic = mockStatic(StsClient.class)) {
-      GlueAsyncClientBuilder builder = mock(GlueAsyncClientBuilder.class);
-      glueStatic.when(GlueAsyncClient::builder).thenReturn(builder);
-      when(builder.credentialsProvider(any())).thenReturn(builder);
+      GlueAsyncClientBuilder builder = mockGlueClientBuilder(glueStatic);
       when(builder.endpointOverride(any(URI.class))).thenReturn(builder);
       when(builder.region(any(Region.class))).thenReturn(builder);
       when(builder.build()).thenReturn(mockAwsGlue);
@@ -1396,13 +1437,30 @@ class TestAWSGlueSyncClient {
     HiveSyncConfig config = new HiveSyncConfig(props);
 
     try (MockedStatic<GlueAsyncClient> glueStatic = mockStatic(GlueAsyncClient.class)) {
-      GlueAsyncClientBuilder builder = mock(GlueAsyncClientBuilder.class);
-      glueStatic.when(GlueAsyncClient::builder).thenReturn(builder);
-      when(builder.credentialsProvider(any())).thenReturn(builder);
+      mockGlueClientBuilder(glueStatic);
 
       RuntimeException ex = assertThrows(RuntimeException.class,
           () -> new AWSGlueCatalogSyncClient(config, GlueTestUtil.getMetaClient()));
       assertTrue(ex.getCause() instanceof URISyntaxException, "the malformed endpoint is reported as its parse failure");
+    }
+  }
+
+  @Test
+  void testBuildAsyncClient_withoutAnEndpointOrRegionKeepsTheSdkDefaults() {
+    HiveSyncConfig config = GlueTestUtil.getHiveSyncConfig();
+
+    try (MockedStatic<GlueAsyncClient> glueStatic = mockStatic(GlueAsyncClient.class);
+         MockedStatic<StsClient> stsStatic = mockStatic(StsClient.class)) {
+      GlueAsyncClientBuilder builder = mockGlueClientBuilder(glueStatic);
+      when(builder.build()).thenReturn(mockAwsGlue);
+      stsStatic.when(StsClient::create).thenReturn(mockSts);
+
+      new AWSGlueCatalogSyncClient(config, GlueTestUtil.getMetaClient());
+
+      verify(builder).credentialsProvider(any());
+      verify(builder).build();
+      verify(builder, never()).endpointOverride(any(URI.class));
+      verify(builder, never()).region(any(Region.class));
     }
   }
 
@@ -1608,6 +1666,14 @@ class TestAWSGlueSyncClient {
     HoodieGlueSyncException ex = assertThrows(HoodieGlueSyncException.class,
         () -> awsGlueSyncClient.createDatabase(dbName));
     assertTrue(ex.getMessage().contains("Fail to create database"));
+  }
+
+  /** Stubs {@code GlueAsyncClient.builder()} onto a mocked builder; callers add whatever else they exercise. */
+  private static GlueAsyncClientBuilder mockGlueClientBuilder(MockedStatic<GlueAsyncClient> glueStatic) {
+    GlueAsyncClientBuilder builder = mock(GlueAsyncClientBuilder.class);
+    glueStatic.when(GlueAsyncClient::builder).thenReturn(builder);
+    when(builder.credentialsProvider(any())).thenReturn(builder);
+    return builder;
   }
 
   private AWSGlueCatalogSyncClient clientForTableWithoutCommits() throws IOException {
