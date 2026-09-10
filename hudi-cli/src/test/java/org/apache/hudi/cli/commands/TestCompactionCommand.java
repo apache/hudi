@@ -58,7 +58,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -210,19 +209,18 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
   }
 
   /**
-   * Repair only validates the plan and reports the renames it would need; with the plan intact
-   * there is nothing to rename and the plan is left alone, whether or not this is a dry run.
-   * The dry run flag is currently ignored by the admin client, see
+   * Repair runs the plan validation and returns an empty result: the log file renaming it was
+   * written for is gone from the admin client, which leaves the plan untouched and never reads
+   * the dry run flag, so there is only one arm to exercise. See
    * https://github.com/apache/hudi/issues/19881.
    */
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testSparkMainCompactRepair(boolean dryRun) throws Exception {
+  @Test
+  public void testSparkMainCompactRepair() throws Exception {
     createPendingCompactions();
     Set<String> fileIdsBefore = fileIdsOf(PENDING_COMPACTION_INSTANT);
-    String outputPath = outputPath("repair-" + dryRun);
+    String outputPath = outputPath("repair");
 
-    SparkMain.doCompactRepair(jsc(), tablePath, PENDING_COMPACTION_INSTANT, outputPath, 2, dryRun);
+    SparkMain.doCompactRepair(jsc(), tablePath, PENDING_COMPACTION_INSTANT, outputPath, 2, false);
 
     assertTrue(readOperationResults(outputPath).isEmpty());
     assertTrue(pendingCompactionInstants().contains(PENDING_COMPACTION_INSTANT));
@@ -231,16 +229,17 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
 
   /**
    * Unscheduling a plan takes the requested compaction instant off the timeline, unless this is a
-   * dry run. The other pending plans are left alone either way.
+   * dry run. The other pending plans are left alone either way. Skip validation is held at false:
+   * the admin client takes the flag but never reads it, so toggling it repeats the same run.
    */
   @ParameterizedTest
-  @CsvSource({"true, true", "true, false", "false, true", "false, false"})
-  public void testSparkMainCompactUnschedulePlan(boolean skipValidation, boolean dryRun) throws Exception {
+  @ValueSource(booleans = {true, false})
+  public void testSparkMainCompactUnschedulePlan(boolean dryRun) throws Exception {
     createPendingCompactions();
     Set<String> pendingBefore = pendingCompactionInstants();
-    String outputPath = outputPath("unschedule-" + skipValidation + "-" + dryRun);
+    String outputPath = outputPath("unschedule-" + dryRun);
 
-    SparkMain.doCompactUnschedule(jsc(), tablePath, PENDING_COMPACTION_INSTANT, outputPath, 2, skipValidation, dryRun);
+    SparkMain.doCompactUnschedule(jsc(), tablePath, PENDING_COMPACTION_INSTANT, outputPath, 2, false, dryRun);
 
     assertTrue(readOperationResults(outputPath).isEmpty());
     Set<String> pendingAfter = pendingCompactionInstants();
@@ -254,19 +253,21 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
   }
 
   /**
-   * Unscheduling a single file group rewrites the plan without it, unless this is a dry run.
+   * Unscheduling a single file group rewrites the plan without it, unless this is a dry run. Skip
+   * validation is held at false: the admin client takes the flag but never reads it, so toggling
+   * it repeats the same run.
    */
   @ParameterizedTest
-  @CsvSource({"true, true", "false, false"})
-  public void testSparkMainCompactUnscheduleFile(boolean skipValidation, boolean dryRun) throws Exception {
+  @ValueSource(booleans = {true, false})
+  public void testSparkMainCompactUnscheduleFile(boolean dryRun) throws Exception {
     Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> pendingOperations = createPendingCompactions();
     HoodieFileGroupId unscheduled = pendingOperations.entrySet().stream()
         .filter(entry -> entry.getValue().getKey().equals(PENDING_COMPACTION_INSTANT))
         .map(Map.Entry::getKey).findFirst().get();
-    String outputPath = outputPath("unschedule-file-" + skipValidation + "-" + dryRun);
+    String outputPath = outputPath("unschedule-file-" + dryRun);
 
     SparkMain.doCompactUnscheduleFile(jsc(), tablePath, unscheduled.getFileId(), unscheduled.getPartitionPath(),
-        outputPath, 2, skipValidation, dryRun);
+        outputPath, 2, false, dryRun);
 
     assertTrue(readOperationResults(outputPath).isEmpty());
     // the plan itself stays pending either way, only its operations change. Only the target file

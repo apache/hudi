@@ -265,7 +265,8 @@ public class TestMetadataCommand extends CLIFunctionalTestHarness {
       assertTrue(files.toString().contains(baseFile), files.toString());
     }
 
-    // Without a partition the base path itself is listed, which holds no data files.
+    // Without --partition the lookup key is the non-partitioned name ("."), which the files index
+    // of a partitioned table has no record for, so the lookup misses and nothing is listed.
     Object rootFiles = shell.evaluate(() -> "metadata list-files");
     assertTrue(ShellEvaluationResultUtil.isSuccess(rootFiles));
     assertTrue(renderedRows(rootFiles.toString()).isEmpty(), rootFiles.toString());

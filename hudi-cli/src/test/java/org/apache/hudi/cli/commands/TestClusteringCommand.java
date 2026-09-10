@@ -75,8 +75,7 @@ public class TestClusteringCommand extends CLIFunctionalTestHarness {
     assertEquals(0, metaClient.getActiveTimeline().filterPendingClusteringTimeline().countInstants());
 
     int returnCode = SparkMain.cluster(jsc(), tablePath, tableName, null, 1, "1g", 0,
-        UtilHelpers.SCHEDULE_AND_EXECUTE, null,
-        Collections.singletonList("hoodie.clustering.inline.max.commits=1"));
+        UtilHelpers.SCHEDULE_AND_EXECUTE, null, Collections.emptyList());
 
     assertEquals(0, returnCode);
     metaClient = HoodieTableMetaClient.reload(metaClient);

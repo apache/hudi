@@ -18,6 +18,8 @@
 
 package org.apache.hudi.cli.commands;
 
+import org.apache.hudi.avro.model.HoodieInstantInfo;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
@@ -27,6 +29,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
@@ -45,6 +48,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.shell.Shell;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -75,6 +79,11 @@ public class TestTimelineCommand extends CLIFunctionalTestHarness {
   private static final int COL_MT_ACTION = 7;
   private static final int COL_MT_STATE = 8;
 
+  // The commit left in the requested state, and the rollback scheduled against it.
+  private static final String REQUESTED_COMMIT = "103";
+  private static final String PENDING_ROLLBACK_INSTANT = "104";
+  private static final String ROLLED_BACK_COMMIT = "102";
+
   private static final String DATE_NO_SECONDS = "\\d{2}-\\d{2} \\d{2}:\\d{2}";
   private static final String DATE_WITH_SECONDS = "\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}";
 
@@ -87,8 +96,8 @@ public class TestTimelineCommand extends CLIFunctionalTestHarness {
 
   /**
    * Builds a table whose active timeline holds two completed commits, a completed rollback of a
-   * third commit and one commit left in the requested state, with the metadata table enabled so
-   * that the metadata table timeline is populated too.
+   * third commit, one commit left in the requested state and a rollback scheduled against that
+   * commit, with the metadata table enabled so that the metadata table timeline is populated too.
    */
   @BeforeEach
   public void init() throws Exception {
@@ -119,14 +128,24 @@ public class TestTimelineCommand extends CLIFunctionalTestHarness {
           .withPartitionMetaFiles(DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH)
           .addCommit("100").withBaseFilesInPartitions(partitionAndFileId).getLeft()
           .addCommit("101").withBaseFilesInPartitions(partitionAndFileId).getLeft()
-          .addInflightCommit("102");
+          .addInflightCommit(ROLLED_BACK_COMMIT);
       testTable.withBaseFilesInPartitions(partitionAndFileId);
 
       try (SparkRDDWriteClient client = new SparkRDDWriteClient(context(), config)) {
-        client.rollback("102");
+        client.rollback(ROLLED_BACK_COMMIT);
       }
       // left behind on the timeline so that the incomplete timeline is not empty
-      testTable.addRequestedCommit("103");
+      testTable.addRequestedCommit(REQUESTED_COMMIT);
+
+      // A rollback that is scheduled but has not run yet. Unlike the completed one above it leaves
+      // the commit it targets on the timeline, which is the only way an instant is rendered as
+      // rolled back by another. Added straight through the test table so that it stays on the data
+      // table timeline only.
+      HoodieRollbackPlan rollbackPlan = new HoodieRollbackPlan();
+      rollbackPlan.setRollbackRequests(Collections.emptyList());
+      rollbackPlan.setInstantToRollback(new HoodieInstantInfo(REQUESTED_COMMIT, HoodieTimeline.COMMIT_ACTION));
+      testTable.addRequestedRollback(PENDING_ROLLBACK_INSTANT, rollbackPlan);
+      testTable.addInflightRollback(PENDING_ROLLBACK_INSTANT);
     }
 
     HoodieCLI.refreshTableMetadata();
@@ -152,7 +171,7 @@ public class TestTimelineCommand extends CLIFunctionalTestHarness {
     assertTrue(commit100.get(COL_INFLIGHT_TIME).matches(DATE_NO_SECONDS), commit100.toString());
     assertTrue(commit100.get(COL_COMPLETED_TIME).matches(DATE_NO_SECONDS), commit100.toString());
 
-    List<String> commit103 = rowOf(rows, "103");
+    List<String> commit103 = rowOf(rows, REQUESTED_COMMIT);
     assertEquals("commit", commit103.get(COL_ACTION));
     assertEquals(HoodieInstant.State.REQUESTED.toString(), commit103.get(COL_STATE));
     // only the requested file exists for it, the other two states render as a dash
@@ -194,9 +213,15 @@ public class TestTimelineCommand extends CLIFunctionalTestHarness {
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     List<List<String>> rows = renderedRows(result.toString());
-    // the rollback instant is annotated with the commit it rolls back
-    assertEquals("rollback Rolls back 102", rowOf(rows, rollbackInstantTime).get(COL_ACTION));
-    // instants that were not rolled back carry no annotation
+    // the completed rollback is annotated with the commit it rolled back, read from its metadata
+    assertEquals("rollback Rolls back " + ROLLED_BACK_COMMIT, rowOf(rows, rollbackInstantTime).get(COL_ACTION));
+    // the scheduled one with the commit its plan targets
+    assertEquals("rollback Rolls back " + REQUESTED_COMMIT,
+        rowOf(rows, PENDING_ROLLBACK_INSTANT).get(COL_ACTION));
+    // and that commit is annotated back with the rollback scheduled against it
+    assertEquals("commit Rolled back by " + PENDING_ROLLBACK_INSTANT,
+        rowOf(rows, REQUESTED_COMMIT).get(COL_ACTION));
+    // instants that no rollback refers to carry no annotation
     assertEquals("commit", rowOf(rows, "100").get(COL_ACTION));
     assertTrue(rowOf(rows, "100").get(COL_COMPLETED_TIME).matches(DATE_WITH_SECONDS),
         rowOf(rows, "100").toString());
@@ -208,11 +233,17 @@ public class TestTimelineCommand extends CLIFunctionalTestHarness {
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     List<List<String>> rows = renderedRows(result.toString());
-    assertEquals(1, rows.size(), result.toString());
-    assertEquals("103", rows.get(0).get(COL_INSTANT));
-    assertEquals("commit", rows.get(0).get(COL_ACTION));
-    assertEquals(HoodieInstant.State.REQUESTED.toString(), rows.get(0).get(COL_STATE));
-    assertEquals("-", rows.get(0).get(COL_COMPLETED_TIME));
+    assertEquals(2, rows.size(), result.toString());
+
+    List<String> requestedCommit = rowOf(rows, REQUESTED_COMMIT);
+    assertEquals("commit", requestedCommit.get(COL_ACTION));
+    assertEquals(HoodieInstant.State.REQUESTED.toString(), requestedCommit.get(COL_STATE));
+    assertEquals("-", requestedCommit.get(COL_COMPLETED_TIME));
+
+    List<String> pendingRollback = rowOf(rows, PENDING_ROLLBACK_INSTANT);
+    assertEquals("rollback", pendingRollback.get(COL_ACTION));
+    assertEquals(HoodieInstant.State.INFLIGHT.toString(), pendingRollback.get(COL_STATE));
+    assertEquals("-", pendingRollback.get(COL_COMPLETED_TIME));
   }
 
   @Test
@@ -229,8 +260,8 @@ public class TestTimelineCommand extends CLIFunctionalTestHarness {
     assertEquals(expected, rows.stream().map(r -> r.get(COL_INSTANT)).collect(Collectors.toSet()));
 
     // the data table columns of a data table only instant, and its empty metadata table columns
-    List<String> commit103 = rowOf(rows, "103");
-    assertEquals("commit", commit103.get(COL_ACTION));
+    List<String> commit103 = rowOf(rows, REQUESTED_COMMIT);
+    assertEquals("commit Rolled back by " + PENDING_ROLLBACK_INSTANT, commit103.get(COL_ACTION));
     assertEquals("-", commit103.get(COL_MT_ACTION));
     assertEquals("-", commit103.get(COL_MT_STATE));
 

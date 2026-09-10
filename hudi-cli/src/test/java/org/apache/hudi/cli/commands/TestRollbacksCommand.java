@@ -228,4 +228,18 @@ public class TestRollbacksCommand extends CLIFunctionalTestHarness {
     assertEquals(rollbacksBefore + 1,
         timeline.getRollbackTimeline().filterCompletedInstants().countInstants());
   }
+
+  /**
+   * An instant that is not on the timeline cannot be rolled back, and nothing on the timeline
+   * moves because of the attempt.
+   */
+  @Test
+  public void testSparkMainRollbackOfUnknownInstant() throws Exception {
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+    List<HoodieInstant> before = metaClient.reloadActiveTimeline().getInstants();
+
+    assertEquals(-1, SparkMain.rollback(jsc(), "999", tablePath, false));
+
+    assertEquals(before, metaClient.reloadActiveTimeline().getInstants());
+  }
 }
