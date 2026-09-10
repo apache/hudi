@@ -157,19 +157,19 @@ public class TestHoodieRowCreateHandle extends HoodieSparkClientTestHarness {
     assertFalse(status.hasErrors());
     List<Row> written = sqlContext.read().parquet(basePath + "/" + status.getStat().getPath()).collectAsList();
     Map<String, Row> original = input.collectAsList().stream()
-        .collect(Collectors.toMap(row -> row.getString(5), row -> row));
+        .collect(Collectors.toMap(row -> row.<String>getAs(SparkDatasetTestUtils.RECORD_KEY_FIELD_NAME), row -> row));
     assertEquals(10, written.size());
     for (Row row : written) {
-      Row source = original.get(row.getString(5));
-      assertNull(row.get(2));
-      assertEquals(partitionPath, row.getString(3));
-      assertEquals(handle.getFileName(), row.getString(4));
+      Row source = original.get(row.<String>getAs(SparkDatasetTestUtils.RECORD_KEY_FIELD_NAME));
+      assertNull(row.getAs(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+      assertEquals(partitionPath, row.<String>getAs(HoodieRecord.PARTITION_PATH_METADATA_FIELD));
+      assertEquals(handle.getFileName(), row.<String>getAs(HoodieRecord.FILENAME_METADATA_FIELD));
       if (preserveMetadata) {
-        assertEquals(source.getString(0), row.getString(0));
-        assertEquals(source.getString(1), row.getString(1));
+        assertEquals(source.<String>getAs(HoodieRecord.COMMIT_TIME_METADATA_FIELD), row.<String>getAs(HoodieRecord.COMMIT_TIME_METADATA_FIELD));
+        assertEquals(source.<String>getAs(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD), row.<String>getAs(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD));
       } else {
-        assertEquals("002", row.getString(0));
-        assertTrue(row.getString(1).startsWith("002_0_"));
+        assertEquals("002", row.<String>getAs(HoodieRecord.COMMIT_TIME_METADATA_FIELD));
+        assertTrue(row.<String>getAs(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).startsWith("002_0_"));
       }
     }
   }

@@ -179,9 +179,9 @@ class TestMetaFieldsModeE2E extends SparkClientFunctionalTestHarness {
         .map(row -> row.getString(0)).sorted().collect(Collectors.toList()),
         "concat must preserve both existing records and the duplicate insert");
     assertMetaColumn(latest, 3, HoodieRecord.COMMIT_TIME_METADATA_FIELD, mode.isCommitTimePopulated(), mode);
-    assertMetaColumn(latest, 3, HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, mode == MetaFieldsMode.ALL, mode);
+    assertMetaColumn(latest, 3, HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, mode.isCommitSeqnoPopulated(), mode);
     assertMetaColumn(latest, 3, HoodieRecord.RECORD_KEY_METADATA_FIELD, mode.isRecordKeyPopulated(), mode);
-    assertMetaColumn(latest, 3, HoodieRecord.PARTITION_PATH_METADATA_FIELD, mode == MetaFieldsMode.ALL, mode);
+    assertMetaColumn(latest, 3, HoodieRecord.PARTITION_PATH_METADATA_FIELD, mode.isPartitionPathPopulated(), mode);
     assertMetaColumn(latest, 3, HoodieRecord.FILENAME_METADATA_FIELD, mode.isFileNamePopulated(), mode);
     if (mode.isFileNamePopulated()) {
       for (Row row : latest.collectAsList()) {
