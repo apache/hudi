@@ -635,7 +635,7 @@ Once the release candidate has been reviewed and approved by the community, the 
 4. Repeat the steps from **_Generate Source Release (f) to Stage source releases on [dist.apache.org](http://dist.apache.org/) (i)_**. Including staging jars with the release version and uploading source release.
    > **Note that make sure remove the -rc${RC_NUM} suffix when repeat the above steps. and please also verify the steps.  Ensure git tag is also done without -rc${RC_NUM}**
 5. One more step is to [deploy source code to release](https://www.apache.org/legal/release-policy.html#upload-ci) dist. [https://dist.apache.org/repos/dist/release/hudi](https://dist.apache.org/repos/dist/release/hudi). 
-   Only PMC will have access to this repo. So, if you are not a PMC, do get help from somone who is.
+   Only PMC will have access to this repo. So, if you are not a PMC, do get help from someone who is.
    1. svn checkout https://dist.apache.org/repos/dist/release/hudi --depth=immediates, if you would not checkout, please try svn checkout https://dist.apache.org/repos/dist/release/hudi again.
    2. Make a directory for the new release:
       ```shell

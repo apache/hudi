@@ -109,7 +109,7 @@ Based on our experiments, here is the storage comparison across different key en
 
 #### Analysis
 Both uncompressed and compressed sizes of record key columns in UUID6/7 are much bigger than our original formats, which means we can discard them.
-Compared with the base line format Original, Base64 and ASCII formats can produce better results based on the storage usage.Specifially, Base64 format can produce around 17% of storage reduction after Parquet compression, and ASCII can produce around 28% of reduction. However, to extract relevant bytes and do the bit distribution and encoding, Base64 and ASCII can definitely require more CPU powers during writings (400x).
+Compared with the base line format Original, Base64 and ASCII formats can produce better results based on the storage usage. Specifically, Base64 format can produce around 17% of storage reduction after Parquet compression, and ASCII can produce around 28% of reduction. However, to extract relevant bytes and do the bit distribution and encoding, Base64 and ASCII can definitely require more CPU powers during writings (400x).
 
 #### Consensus
 So considering the storage size and runtimes across different encoding formats we will settle with the original format ie. "${commit_timestamp}_${spark partition id}, ${row Id}" for our auto record key generation.

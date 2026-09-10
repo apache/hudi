@@ -89,7 +89,7 @@ To perform CDC queries, users need to set `hoodie.datasource.query.incremental.f
 |--------------------------------------------|----------------|--------------------------------------------------------------------------------------------------------------------------------------|
 | hoodie.datasource.query.type               | `snapshot`     | set to `incremental` for incremental query.                                                                                          |
 | hoodie.datasource.query.incremental.format | `latest_state` | `latest_state` (current incremental query behavior) returns the latest records' values. Set to `cdc` to return the full CDC results. |
-| hoodie.datasource.read.begin.instanttime   | -              | requried.                                                                                                                            |
+| hoodie.datasource.read.begin.instanttime   | -              | required.                                                                                                                            |
 | hoodie.datasource.read.end.instanttime     | -              | optional.                                                                                                                            |
 
 ## When `supplemental.logging.mode=KEY_OP`
