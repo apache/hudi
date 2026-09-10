@@ -286,8 +286,9 @@ public class SparkMain {
     }
   }
 
-  private static void doCompactValidate(JavaSparkContext jsc, String basePath, String compactionInstant,
-                                        String outputPath, int parallelism) throws Exception {
+  @VisibleForTesting
+  static void doCompactValidate(JavaSparkContext jsc, String basePath, String compactionInstant,
+                                String outputPath, int parallelism) throws Exception {
     HoodieCompactionAdminTool.Config cfg = new HoodieCompactionAdminTool.Config();
     cfg.basePath = basePath;
     cfg.operation = Operation.VALIDATE;
@@ -297,8 +298,9 @@ public class SparkMain {
     new HoodieCompactionAdminTool(cfg).run(jsc);
   }
 
-  private static void doCompactRepair(JavaSparkContext jsc, String basePath, String compactionInstant,
-                                      String outputPath, int parallelism, boolean dryRun) throws Exception {
+  @VisibleForTesting
+  static void doCompactRepair(JavaSparkContext jsc, String basePath, String compactionInstant,
+                              String outputPath, int parallelism, boolean dryRun) throws Exception {
     HoodieCompactionAdminTool.Config cfg = new HoodieCompactionAdminTool.Config();
     cfg.basePath = basePath;
     cfg.operation = Operation.REPAIR;
@@ -309,8 +311,9 @@ public class SparkMain {
     new HoodieCompactionAdminTool(cfg).run(jsc);
   }
 
-  private static void doCompactUnschedule(JavaSparkContext jsc, String basePath, String compactionInstant,
-                                          String outputPath, int parallelism, boolean skipValidation, boolean dryRun) throws Exception {
+  @VisibleForTesting
+  static void doCompactUnschedule(JavaSparkContext jsc, String basePath, String compactionInstant,
+                                  String outputPath, int parallelism, boolean skipValidation, boolean dryRun) throws Exception {
     HoodieCompactionAdminTool.Config cfg = new HoodieCompactionAdminTool.Config();
     cfg.basePath = basePath;
     cfg.operation = Operation.UNSCHEDULE_PLAN;
@@ -322,8 +325,9 @@ public class SparkMain {
     new HoodieCompactionAdminTool(cfg).run(jsc);
   }
 
-  private static void doCompactUnscheduleFile(JavaSparkContext jsc, String basePath, String fileId, String partitionPath,
-                                              String outputPath, int parallelism, boolean skipValidation, boolean dryRun)
+  @VisibleForTesting
+  static void doCompactUnscheduleFile(JavaSparkContext jsc, String basePath, String fileId, String partitionPath,
+                                      String outputPath, int parallelism, boolean skipValidation, boolean dryRun)
       throws Exception {
     HoodieCompactionAdminTool.Config cfg = new HoodieCompactionAdminTool.Config();
     cfg.basePath = basePath;
@@ -337,9 +341,10 @@ public class SparkMain {
     new HoodieCompactionAdminTool(cfg).run(jsc);
   }
 
-  private static int compact(JavaSparkContext jsc, String basePath, String tableName, String compactionInstant,
-                             int parallelism, String schemaFile, int retry, String mode, String propsFilePath,
-                             List<String> configs) {
+  @VisibleForTesting
+  static int compact(JavaSparkContext jsc, String basePath, String tableName, String compactionInstant,
+                     int parallelism, String schemaFile, int retry, String mode, String propsFilePath,
+                     List<String> configs) {
     HoodieCompactor.Config cfg = new HoodieCompactor.Config();
     cfg.basePath = basePath;
     cfg.tableName = tableName;
@@ -354,8 +359,9 @@ public class SparkMain {
     return new HoodieCompactor(jsc, cfg).compact(retry);
   }
 
-  private static int cluster(JavaSparkContext jsc, String basePath, String tableName, String clusteringInstant,
-                             int parallelism, String sparkMemory, int retry, String runningMode, String propsFilePath, List<String> configs) {
+  @VisibleForTesting
+  static int cluster(JavaSparkContext jsc, String basePath, String tableName, String clusteringInstant,
+                     int parallelism, String sparkMemory, int retry, String runningMode, String propsFilePath, List<String> configs) {
     HoodieClusteringJob.Config cfg = new HoodieClusteringJob.Config();
     cfg.basePath = basePath;
     cfg.tableName = tableName;
@@ -504,7 +510,8 @@ public class SparkMain {
     return 0;
   }
 
-  private static int rollback(JavaSparkContext jsc, String instantTime, String basePath, Boolean rollbackUsingMarkers) throws Exception {
+  @VisibleForTesting
+  static int rollback(JavaSparkContext jsc, String instantTime, String basePath, Boolean rollbackUsingMarkers) throws Exception {
     SparkRDDWriteClient client = createHoodieClient(jsc, basePath, rollbackUsingMarkers, false);
     if (client.rollback(instantTime)) {
       log.info("The commit \"{}\" rolled back.", instantTime);
@@ -515,8 +522,9 @@ public class SparkMain {
     }
   }
 
-  private static int createSavepoint(JavaSparkContext jsc, String commitTime, String user,
-                                     String comments, String basePath) throws Exception {
+  @VisibleForTesting
+  static int createSavepoint(JavaSparkContext jsc, String commitTime, String user,
+                             String comments, String basePath) throws Exception {
     try (SparkRDDWriteClient client = createHoodieClient(jsc, basePath, false)) {
       client.savepoint(commitTime, user, comments);
       log.info("The commit \"{}\" has been savepointed.", commitTime);
@@ -527,7 +535,8 @@ public class SparkMain {
     }
   }
 
-  private static int rollbackToSavepoint(JavaSparkContext jsc, String savepointTime, String basePath, boolean lazyCleanPolicy) throws Exception {
+  @VisibleForTesting
+  static int rollbackToSavepoint(JavaSparkContext jsc, String savepointTime, String basePath, boolean lazyCleanPolicy) throws Exception {
     try (SparkRDDWriteClient client = createHoodieClient(jsc, basePath, lazyCleanPolicy)) {
       client.restoreToSavepoint(savepointTime);
       log.info("The commit \"{}\" rolled back.", savepointTime);
@@ -538,7 +547,8 @@ public class SparkMain {
     }
   }
 
-  private static int deleteSavepoint(JavaSparkContext jsc, String savepointTime, String basePath) throws Exception {
+  @VisibleForTesting
+  static int deleteSavepoint(JavaSparkContext jsc, String savepointTime, String basePath) throws Exception {
     try (SparkRDDWriteClient client = createHoodieClient(jsc, basePath, false)) {
       client.deleteSavepoint(savepointTime);
       log.info("Savepoint \"{}\" deleted.", savepointTime);

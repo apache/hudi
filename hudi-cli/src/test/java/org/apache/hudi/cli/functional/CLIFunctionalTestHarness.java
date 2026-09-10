@@ -19,9 +19,14 @@
 
 package org.apache.hudi.cli.functional;
 
+import org.apache.hudi.cli.HoodieCLI;
+import org.apache.hudi.cli.commands.TableCommand;
 import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -41,10 +46,19 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 
 public class CLIFunctionalTestHarness implements SparkProvider {
 
   protected static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
+
+  // Box drawing characters of a rendered table, kept as escapes so that the source stays ASCII.
+  private static final char TABLE_ROW_START = '\u2551'; // double vertical, starts and ends a row
+  private static final char TABLE_HEADER_DIVIDER = '\u2560'; // double vertical and right, under the header
+  private static final char TABLE_ROW_DIVIDER = '\u255F'; // double vertical and single right, between rows
+  private static final String TABLE_CELL_SEPARATORS = "[\u2551\u2502]"; // double and single vertical
+  protected static final String EMPTY_TABLE_CELL = "(empty)";
 
   protected static int timelineServicePort =
       FileSystemViewStorageConfig.REMOTE_PORT_NUM.defaultValue();
@@ -137,6 +151,91 @@ public class CLIFunctionalTestHarness implements SparkProvider {
    */
   protected static String removeNonWordAndStripSpace(String str) {
     return str.replaceAll("[\\s]+", ",").replaceAll("[\\W]+", ",");
+  }
+
+  /**
+   * Initializes a table and connects the CLI to it, which is what the 'create' command does once
+   * its check for an already existing table comes back empty. That check is what this skips: on a
+   * path that holds no table it spends five seconds in the hoodie.properties read retry loop (five
+   * attempts, one second apart) before it concludes there is nothing there, and a fixture creating
+   * its own table knows that already.
+   *
+   * @param tablePath    Base path of the table to create.
+   * @param tableName    Name of the table.
+   * @param tableType    Type of the table.
+   * @param payloadClass Payload class of the table.
+   */
+  protected void createTableAndConnect(String tablePath, String tableName, HoodieTableType tableType,
+                                       String payloadClass) throws IOException {
+    boolean initialized = HoodieCLI.initConf();
+    HoodieCLI.initFS(initialized);
+    HoodieTableMetaClient.newTableBuilder()
+        .setTableType(tableType.name())
+        .setTableName(tableName)
+        .setPayloadClassName(payloadClass)
+        .setTableVersion(HoodieTableVersion.current().versionCode())
+        .initTable(HoodieCLI.conf.newInstance(), tablePath);
+    new TableCommand().connect(tablePath, false, 0, 0, 0, "WAIT_TO_ADJUST_SKEW", 200L, true);
+  }
+
+  /**
+   * Splits a table rendered by {@link org.apache.hudi.cli.HoodiePrintHelper} into its data rows,
+   * each row being the list of its trimmed cell values. Cells spanning several rendered lines are
+   * joined back into a single cell, separated by a space. The header and an empty table yield no
+   * rows.
+   *
+   * @param rendered Rendered table.
+   * @return One list of cell values per data row.
+   */
+  protected static List<List<String>> renderedRows(String rendered) {
+    List<List<String>> rows = new ArrayList<>();
+    boolean inData = false;
+    boolean startOfRow = false;
+    for (String line : rendered.split("\n")) {
+      if (line.isEmpty()) {
+        continue;
+      }
+      char first = line.charAt(0);
+      if (first == TABLE_HEADER_DIVIDER || first == TABLE_ROW_DIVIDER) {
+        inData = true;
+        startOfRow = true;
+        continue;
+      }
+      if (first != TABLE_ROW_START || !inData) {
+        continue;
+      }
+      List<String> cells = renderedCells(line);
+      if (cells.size() == 1 && EMPTY_TABLE_CELL.equals(cells.get(0))) {
+        continue;
+      }
+      if (startOfRow) {
+        rows.add(cells);
+        startOfRow = false;
+      } else {
+        List<String> previous = rows.get(rows.size() - 1);
+        for (int i = 0; i < cells.size(); i++) {
+          if (!cells.get(i).isEmpty()) {
+            previous.set(i, (previous.get(i) + " " + cells.get(i)).trim());
+          }
+        }
+      }
+    }
+    return rows;
+  }
+
+  /**
+   * Splits a single rendered line into its trimmed cell values.
+   *
+   * @param line One line of a rendered table.
+   * @return The cell values of that line.
+   */
+  protected static List<String> renderedCells(String line) {
+    String[] parts = line.split(TABLE_CELL_SEPARATORS, -1);
+    List<String> cells = new ArrayList<>();
+    for (int i = 1; i < parts.length - 1; i++) {
+      cells.add(parts[i].trim());
+    }
+    return cells;
   }
 
   protected int incrementTimelineServicePortToUse() {
