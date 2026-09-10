@@ -442,6 +442,19 @@ object HoodieProcedureFilterUtils {
     }
   }
 
+  // Runs a handful of the analyzer's own coercion rules on a single expression, the same rules
+  // lookupFunction skips: ImplicitTypeCasts for nodes declaring a real input-type contract,
+  // FunctionArgumentConversion/ConcatCoercion/IfCoercion for the builtins whose argument types get
+  // unified before the type check even sees them (concat(id, 'x') casts the Int to String via
+  // ConcatCoercion in a real query; without it Concat.checkInputDataTypes just fails). Order
+  // mirrors TypeCoercion's own rule list - ImplicitTypeCasts last, as a catch-all. Anything not
+  // covered by one of these four passes through unchanged.
+  private def applyImplicitCasts(expression: Expression): Expression = {
+    val engine: TypeCoercionBase = if (SQLConf.get.ansiEnabled) AnsiTypeCoercion else TypeCoercion
+    Seq(engine.FunctionArgumentConversion, engine.ConcatCoercion, engine.IfCoercion, engine.ImplicitTypeCasts)
+      .foldLeft(expression) { (expr, rule) => rule.transform.applyOrElse(expr, identity[Expression]) }
+  }
+
   // Filter expressions only ever call plain builtins. A db-qualified or 3+ part name (db.func,
   // catalog.db.func) can only be resolved by guessing which part is the real function name - that
   // risks matching an unrelated same-named function, so those are left unresolved instead.
@@ -489,12 +502,20 @@ object HoodieProcedureFilterUtils {
     def unwrapReplacements(expr: Expression): Expression = {
       val next = expr.transformUp {
         case r: RuntimeReplaceable => r.replacement
-        case withExpr if withExpr.getClass.getSimpleName == "With" => inlineCommonExpressions(withExpr)
+        case withExpr if isWithNode(withExpr) => inlineCommonExpressions(withExpr)
       }
       if (next.fastEquals(expr)) next else unwrapReplacements(next)
     }
     applyCoercionRules(unwrapReplacements(expression))
   }
+
+  // With/CommonExpressionDef/CommonExpressionRef don't exist before Spark 4.0, so these go by
+  // reflection rather than a direct import to keep this file compiling across the same 3.3-4.2
+  // range as the rest of it - the single place to update if the class name or shape ever changes.
+  private def isWithNode(expression: Expression): Boolean = expression.getClass.getSimpleName == "With"
+
+  private def isCommonExpressionRef(expression: Expression): Boolean =
+    expression.getClass.getSimpleName == "CommonExpressionRef"
 
   private def inlineCommonExpressions(withExpr: Expression): Expression = {
     val defsById = withExpr.getClass.getMethod("defs").invoke(withExpr)
@@ -506,7 +527,7 @@ object HoodieProcedureFilterUtils {
       }.toMap
     val child = withExpr.getClass.getMethod("child").invoke(withExpr).asInstanceOf[Expression]
     child.transformUp {
-      case ref if ref.getClass.getSimpleName == "CommonExpressionRef" =>
+      case ref if isCommonExpressionRef(ref) =>
         defsById(ref.getClass.getMethod("id").invoke(ref))
     }
   }
@@ -904,19 +925,6 @@ object HoodieProcedureFilterUtils {
     } else {
       TypeCoercion.findWiderCommonType(types)
     }
-  }
-
-  // Runs a handful of the analyzer's own coercion rules on a single expression, the same rules
-  // lookupFunction skips: ImplicitTypeCasts for nodes declaring a real input-type contract,
-  // FunctionArgumentConversion/ConcatCoercion/IfCoercion for the builtins whose argument types get
-  // unified before the type check even sees them (concat(id, 'x') casts the Int to String via
-  // ConcatCoercion in a real query; without it Concat.checkInputDataTypes just fails). Order
-  // mirrors TypeCoercion's own rule list - ImplicitTypeCasts last, as a catch-all. Anything not
-  // covered by one of these four passes through unchanged.
-  private def applyImplicitCasts(expression: Expression): Expression = {
-    val engine: TypeCoercionBase = if (SQLConf.get.ansiEnabled) AnsiTypeCoercion else TypeCoercion
-    Seq(engine.FunctionArgumentConversion, engine.ConcatCoercion, engine.IfCoercion, engine.ImplicitTypeCasts)
-      .foldLeft(expression) { (expr, rule) => rule.transform.applyOrElse(expr, identity[Expression]) }
   }
 
   private def castTo(expression: Expression, dataType: DataType): Expression = {
