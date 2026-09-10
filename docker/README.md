@@ -27,24 +27,20 @@ docker demo environment.
 The `/hoodie` folder contains all the configs for assembling necessary docker images. The name and repository of each
 docker image, e.g., `apachehudi/hudi-hadoop_2.8.4-prestobase_0.232`, is defined in the maven configuration file `pom.xml`.
 
-### Base images by Java version
+### Base image
 
-`build_docker_images.sh` auto-selects one of the two supported base images from `--spark-version`:
-
-| Base module   | JDK     | Used for   |
-|---------------|---------|------------|
-| `base_java11` | Java 11 | Spark 3.x  |
-| `base_java17` | Java 17 | Spark 4.0+ |
+`build_and_publish_docker_images.sh` picks the base module from `--spark-version`: `base_java11` for Spark 3.x, which
+is the default and what the compose files under `/compose` use, and `base_java17` for a 4.x version. The demo compose
+files are all Spark 3.x, so the Java 17 base is only reached if you ask for a 4.x `--spark-version` explicitly.
 
 The legacy Java 8 `base` module under `/hoodie/hadoop/base` is retained for historical reference only; Spark 2.x is no
-longer supported and `build_docker_images.sh` never selects it.
+longer supported and `build_and_publish_docker_images.sh` never selects it.
 
 Downstream Dockerfiles (`datanode`, `historyserver`, `hive_base`, `namenode`, `prestobase`) pick the base via the
-`BASE_IMAGE_TAG` build arg (default `java11`). `build_docker_images.sh` sets it automatically; bare `docker build`
-invocations targeting the Java 17 base must pass `--build-arg BASE_IMAGE_TAG=java17`.
+`BASE_IMAGE_TAG` build arg, which `build_and_publish_docker_images.sh` sets automatically.
 
 `spark_base` additionally takes `HADOOP_AWS_VERSION`, `AWS_SDK_VERSION` and `ANALYTICS_ACCELERATOR_VERSION` for the
-S3A jars it adds to the Spark classpath. `build_docker_images.sh` derives all three from `--spark-version`, matching
+S3A jars it adds to the Spark classpath. `build_and_publish_docker_images.sh` derives all three from `--spark-version`, matching
 the Hadoop line each Spark distribution bundles: Spark 4.0.x gets `hadoop-aws` 3.4.1, Spark 4.1.x gets 3.4.2 and
 Spark 4.2.x gets 3.5.0, all with the AWS SDK v2 bundle; Spark 3.x gets 3.3.4 with the SDK v1 bundle. Spark 4.1.x and
 4.2.x also get `analyticsaccelerator-s3` (1.2.1 and 1.3.1), which backs the S3A analytics input stream that
@@ -70,32 +66,38 @@ To build the Docker demo images with `docker` directly, rather than through the 
 `build_local_docker_images.sh` above, run the script from under `<HUDI_REPO_DIR>/docker`:
 
 ```shell
-# With no flags, builds Hadoop 2.8.4 / Spark 3.5.3 / Hive 2.3.10, matching
-# docker-compose_hadoop284_hive2310_spark353_{amd64,arm64}.yml
-./build_docker_images.sh
+# Builds Hadoop 3.3.4 / Spark 3.5.3 / Hive 3.1.3, matching
+# docker-compose_hadoop334_hive313_spark353_{amd64,arm64}.yml, which is the set setup_demo.sh runs
+./build_and_publish_docker_images.sh
 ```
 
-You can override the Hadoop, Spark, and Hive versions from the command line. If you plan to use `setup_demo.sh`,
-build the image set matching the default compose files first. For other flows, use one of the supported version
-combinations under `docker/compose`.
+To build one of the other version combinations under `docker/compose`, pass the versions as flags. They default to
+Hadoop 3.3.4, Spark 3.5.3 and Hive 3.1.3, and each can be set on its own:
 
 ```shell
-# Matches setup_demo.sh and
-# docker-compose_hadoop334_hive313_spark353_{amd64,arm64}.yml
-./build_docker_images.sh --hadoop-version 3.3.4 --spark-version 3.5.3 --hive-version 3.1.3
-
-# Another supported combination is
-# docker-compose_hadoop340_hive313_spark401_{amd64,arm64}.yml
-./build_docker_images.sh --hadoop-version 3.4.0 --spark-version 4.0.1 --hive-version 3.1.3
+./build_and_publish_docker_images.sh --hadoop-version 3.3.4 --spark-version 3.5.3 --hive-version 3.1.3
 ```
+
+If you plan to use `setup_demo.sh`, build the image set matching its compose file first.
 
 `setup_demo.sh` currently defaults to `docker-compose_hadoop334_hive313_spark353_{amd64,arm64}.yml`. If you build a
 different image set for the demo flow, update `COMPOSE_FILE_NAME` in `setup_demo.sh` to point to the matching compose
 file before running the script. Run `./setup_demo.sh dev` to use your locally built images; a plain run pulls the
 Docker Hub images over them.
 
-By default, the script builds images for the current machine architecture and derives the version tag from the root
-`pom.xml`. Use `--version-tag` to set an explicit tag if needed.
+The script builds images for the current machine architecture and tags each one `:latest` plus a version tag. That
+second tag is resolved in this order: the `--version-tag` flag, then an exported `VERSION_TAG`, then the Hudi version
+read from the root `pom.xml`. Both forms work and the flag wins:
+
+```shell
+./build_and_publish_docker_images.sh --version-tag my-test   # flag
+VERSION_TAG=my-test ./build_and_publish_docker_images.sh     # environment variable
+```
+
+Nothing is pushed to any registry unless you pass `--publish true`; see
+[Publishing Images to Docker Hub](#publishing-images-to-docker-hub).
+
+Run `./build_and_publish_docker_images.sh --help` for the full list of options.
 
 To build a single image target, you can run
 
@@ -132,10 +134,28 @@ After new images are built, you can run the following script to bring up docker 
 ./setup_demo.sh dev
 ```
 
-## Upload Updated Image to Repository on Docker Hub
+## Publishing Images to Docker Hub
 
-Once you have built the updated image locally, you can push the corresponding this repository of the image to the Docker
-Hud registry designated by its name or tag:
+Publishing is a release action for Hudi maintainers, not part of the normal build or demo flow. It overwrites the
+images that every `setup_demo.sh` user pulls, so it needs write access to the `apachehudi/...` Docker Hub
+repositories and a prior `docker login`. If you are contributing a Dockerfile change, build without `--publish true` and
+let a maintainer publish.
+
+`build_and_publish_docker_images.sh` publishes the whole image set it just built when given `--publish true`:
+
+```shell
+# Build the image set and publish it
+./build_and_publish_docker_images.sh --publish true
+```
+
+Each image is pushed under both the `latest` tag and the version tag, the latter taken from the root `pom.xml`
+unless `VERSION_TAG` overrides it. The script reports a per-tag summary and exits non-zero if any push fails, so a
+partial publish is not mistaken for a successful one. Without `--publish true` nothing is pushed.
+
+## Upload a Single Image to Docker Hub Manually
+
+To push one image you built by hand, rather than the whole set, push it to the Docker Hub registry by its name or
+tag:
 
 ```shell
 docker push <hub-user>/<repo-name>:<tag>
@@ -158,8 +178,8 @@ Please refer to the [Docker Demo Docs page](https://hudi.apache.org/docs/docker_
 
 ## Building Multi-Arch Images
 
-The `build_docker_images.sh` script supports multi-arch image builds through Docker `buildx`. First ensure a `buildx`
-builder is set up locally:
+The `build_and_publish_docker_images.sh` script supports multi-arch image builds through Docker `buildx`, with
+`--multi-arch true`. First ensure a `buildx` builder is set up locally:
 
 ```shell
 # List builders 
@@ -191,18 +211,30 @@ Platforms: linux/amd64, linux/arm64, linux/arm/v7, linux/arm/v6
 Then run the script from under `<HUDI_REPO_DIR>/docker`:
 
 ```shell
-./build_docker_images.sh --multi-arch
+# Build both architectures, publish nothing
+./build_and_publish_docker_images.sh --multi-arch true
+
+# Build both architectures and publish them (maintainers only)
+./build_and_publish_docker_images.sh --multi-arch true --publish true
 
 # Example with explicit component versions
-./build_docker_images.sh --hadoop-version 3.4.0 --spark-version 4.0.1 --hive-version 3.1.3 --multi-arch
+./build_and_publish_docker_images.sh --hadoop-version 3.3.4 --spark-version 3.5.3 --hive-version 3.1.3 \
+  --multi-arch true --publish true
 ```
 
-When `--multi-arch` is enabled, the script builds and pushes the amd64 and arm64 variants in one pass. Use
-`--version-tag <tag>` to override the image tag used for the push.
+A multi-arch build cannot be left nowhere: `buildx` either pushes the result or loads it into the local image store.
+With `--publish true` it is pushed, which is also what makes each image visible to the next one in the set, since
+every image after the base starts `FROM` the previous one. Without it the images are loaded locally instead, which
+needs two things:
 
-Note that `--multi-arch` uses `docker buildx build --push` and the image names in the script are hardcoded to the
-`apachehudi/...` Docker Hub repositories, so this flow requires push access to those repositories. No Dockerfile
-changes are needed for the current amd64 plus arm64 image set in this repository.
+- the **containerd image store**, since the legacy store cannot hold a multi-platform image. Recent Docker Desktop
+  enables it by default; the script checks and stops with an explanation if it is missing.
+- a **docker-driver builder**, which the script selects from the current docker context. A `docker-container` builder
+  runs buildkit in its own container and resolves `FROM` against registries only, so it cannot see the image the
+  previous iteration just loaded.
+
+If neither is available, pass `--multi-arch false` to build for your own architecture only. No Dockerfile changes are
+needed for the current amd64 plus arm64 image set in this repository.
 
 ## Trino E2E image - `/trino`
 
