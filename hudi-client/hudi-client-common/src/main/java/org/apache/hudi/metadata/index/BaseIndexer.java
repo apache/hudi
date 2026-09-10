@@ -21,9 +21,7 @@ package org.apache.hudi.metadata.index;
 
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.index.model.IndexPartitionAndRecords;
@@ -33,8 +31,6 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.Collections;
 import java.util.List;
-
-import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
  * Base implementation of {@link Indexer} that handles common metadata-partition bootstrap flow,
@@ -74,16 +70,5 @@ public abstract class BaseIndexer implements Indexer {
   @Override
   public List<IndexPartitionAndRecords> buildRestore(IndexRestoreContext context) {
     return Collections.emptyList();
-  }
-
-  /**
-   * Fails when a clustering commit reaches a table without record keys. The record index and the secondary index
-   * key the rows of such a table by file path and row position, and clustering rewrites the rows into new files,
-   * so neither index could follow them. Every other operation type either keeps the keys or registers new files.
-   */
-  protected void checkClusteringKeepsRecordKeys(HoodieCommitMetadata commitMetadata) {
-    checkState(commitMetadata.getOperationType() != WriteOperationType.CLUSTER || dataTableMetaClient.getTableConfig().hasRecordKey(),
-        "Table " + dataTableMetaClient.getBasePath() + " cannot be clustered because it has no record key: the record index and the "
-            + "secondary index key its rows by file path and row position, which clustering changes");
   }
 }

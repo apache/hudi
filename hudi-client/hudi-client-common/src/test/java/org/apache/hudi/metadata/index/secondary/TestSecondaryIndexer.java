@@ -196,21 +196,6 @@ class TestSecondaryIndexer {
     return metaClient;
   }
 
-  @Test
-  void testBuildUpdateRejectsClusteringOfTableWithoutRecordKeys() {
-    // the rows of such a table are keyed by file path and position, which clustering changes
-    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
-    HoodieTableMetaClient metaClient = mockMetaClientWithSecondaryIndex(writeConfig, mock(HoodieMetadataConfig.class), mock(HoodieIndexDefinition.class));
-    when(metaClient.getTableConfig().hasRecordKey()).thenReturn(false);
-    HoodieReplaceCommitMetadata commitMetadata = new HoodieReplaceCommitMetadata();
-    commitMetadata.setOperationType(WriteOperationType.CLUSTER);
-
-    SecondaryIndexer indexer = new SecondaryIndexer(new HoodieLocalEngineContext(getDefaultStorageConf()), writeConfig, metaClient);
-    IllegalStateException clustering = assertThrows(IllegalStateException.class, () -> indexer.buildUpdate(IndexUpdateContext.of(
-        "016", mock(HoodieBackedTableMetadata.class), Lazy.lazily(() -> mock(HoodieTableFileSystemView.class)), commitMetadata)));
-    assertTrue(clustering.getMessage().contains("cannot be clustered because it has no record key"), clustering.getMessage());
-  }
-
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void testBuildUpdateForReplaceCommitFromExternalWriterWithoutWriteStats(boolean dropsFileGroups) {

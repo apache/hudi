@@ -178,7 +178,7 @@ public class ExternalFilePathUtil {
         .map(prefix -> {
           String parentPath = parent.toString();
           checkArgument(parentPath.endsWith(StoragePath.SEPARATOR + prefix),
-              "External file " + fileName + " carries the file group prefix " + prefix + " but its parent " + parentPath + " does not end with it");
+              () -> "External file " + fileName + " carries the file group prefix " + prefix + " but its parent " + parentPath + " does not end with it");
           return new StoragePath(parentPath.substring(0, parentPath.length() - prefix.length() - 1));
         })
         .orElse(parent);

@@ -367,25 +367,6 @@ class TestRecordIndexer {
   }
 
   @Test
-  @SuppressWarnings("unchecked")
-  void testBuildUpdateRejectsClusteringOfTableWithoutRecordKeys() {
-    // the rows of such a table are keyed by file path and position, which clustering changes
-    HoodieEngineContext engineContext = new HoodieLocalEngineContext(getDefaultStorageConf());
-    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
-    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
-    HoodieTableMetaClient metaClient = mockMetaClientForUpdate(writeConfig, tableConfig);
-    when(tableConfig.hasRecordKey()).thenReturn(false);
-    HoodieReplaceCommitMetadata commitMetadata = new HoodieReplaceCommitMetadata();
-    commitMetadata.setOperationType(WriteOperationType.CLUSTER);
-    ExposedRecordIndexer indexer = new ExposedRecordIndexer(engineContext, writeConfig, metaClient,
-        new DataPartitionAndRecords(1, Option.empty(), (HoodieData<HoodieRecord>) (HoodieData<?>) engineContext.emptyHoodieData()));
-
-    IllegalStateException clustering = assertThrows(IllegalStateException.class, () -> indexer.buildUpdate(IndexUpdateContext.of(
-        "20240101010103", mock(HoodieBackedTableMetadata.class), Lazy.lazily(() -> mock(HoodieTableFileSystemView.class)), commitMetadata)));
-    assertTrue(clustering.getMessage().contains("cannot be clustered because it has no record key"), clustering.getMessage());
-  }
-
-  @Test
   void testSnapshotKeysOfTableWithoutRecordKeysNeedBaseFileWithoutLogFiles() {
     // the rows of such a table are keyed by their position in the base file, which the rows of a merged file slice
     // would not line up with

@@ -113,7 +113,6 @@ public class SecondaryIndexer extends BaseIndexer {
     if (!SECONDARY_INDEX.isMetadataPartitionAvailable(dataTableMetaClient)) {
       return Collections.emptyList();
     }
-    checkClusteringKeepsRecordKeys(context.commitMetadata());
     // If write operation type based on commit metadata is COMPACT or CLUSTER then no need to update,
     // because these operations do not change the secondary key - record key mapping.
     WriteOperationType operationType = context.commitMetadata().getOperationType();

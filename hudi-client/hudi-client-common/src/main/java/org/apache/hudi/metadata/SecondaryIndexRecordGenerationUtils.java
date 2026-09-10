@@ -329,14 +329,18 @@ public class SecondaryIndexRecordGenerationUtils {
     ReaderContextFactory<T> readerContextFactory = engineContext.getReaderContextFactory(metaClient);
     engineContext.setJobStatus(activeModule, "Secondary Index: reading secondary keys from " + fileSlices.size() + " file slices");
     HoodieFileFormat baseFileFormat = metaClient.getTableConfig().getBaseFileFormat();
+    // a file slice without a base file has only log files, whose schema is the table schema. It is resolved once here
+    // rather than in every task, because resolving it loads the timeline
+    Option<HoodieSchema> tableSchema = fileSlices.stream().anyMatch(slice -> !slice.getFileSlice().getBaseFile().isPresent())
+        ? Option.of(resolveTableSchema(metaClient))
+        : Option.empty();
     return engineContext.parallelize(fileSlices, parallelism).flatMap(partitionAndBaseFile -> {
       final FileSlice fileSlice = partitionAndBaseFile.getFileSlice();
       // the storage path keeps the directory prefix of a file written outside Hudi, which its file name alone loses
       Option<StoragePath> dataFilePath = fileSlice.getBaseFile().map(HoodieBaseFile::getStoragePath);
-      // a file slice without a base file has only log files, whose schema is the table schema
       HoodieSchema readerSchema = dataFilePath.isPresent()
           ? HoodieIOFactory.getIOFactory(metaClient.getStorage()).getFileFormatUtils(baseFileFormat).readSchema(metaClient.getStorage(), dataFilePath.get())
-          : resolveTableSchema(metaClient);
+          : tableSchema.get();
       ClosableIterator<Pair<String, String>> secondaryIndexGenerator = createSecondaryIndexRecordGenerator(
           readerContextFactory.getContext(), metaClient, fileSlice, readerSchema, indexDefinition,
           metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::requestedTime).orElse(""), props, false);

@@ -29,6 +29,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -45,6 +46,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.metadata.index.Indexer;
+import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -122,6 +124,62 @@ class TestHoodieBackedTableMetadataWriter {
 
     verify(writeClient).postCommit(instantTime);
     verifyNoMoreInteractions(writeClient);
+  }
+
+  @ParameterizedTest
+  @CsvSource({"true", "false"})
+  void rejectsClusteringOfTableWithoutRecordKeysOnBothUpdatePaths(boolean streamingWrite) throws Exception {
+    // the record index and the secondary index key the rows of such a table by file path and position, which
+    // clustering changes, so the check must sit ahead of the streaming and the batch path alike
+    HoodieBackedTableMetadataWriter<List<HoodieRecord>, List<?>> writer = writerForClustering(false, true);
+    HoodieCommitMetadata clusteringMetadata = new HoodieCommitMetadata();
+    clusteringMetadata.setOperationType(WriteOperationType.CLUSTER);
+
+    IllegalStateException clustering = assertThrows(IllegalStateException.class, () -> {
+      if (streamingWrite) {
+        writer.completeStreamingCommit("001", mock(HoodieEngineContext.class), Collections.emptyList(), clusteringMetadata);
+      } else {
+        writer.update(clusteringMetadata, "001");
+      }
+    });
+    assertTrue(clustering.getMessage().contains("cannot be clustered because it has no record key"), clustering.getMessage());
+  }
+
+  @ParameterizedTest
+  @CsvSource({"true,true", "false,false"})
+  void allowsClusteringWhenRecordKeysOrPositionalIndexesAreAbsent(boolean hasRecordKey, boolean recordIndexEnabled) throws Exception {
+    // a table with record keys keeps them through clustering, and a table without a record index or a secondary
+    // index has nothing keyed by position
+    HoodieBackedTableMetadataWriter<List<HoodieRecord>, List<?>> writer = writerForClustering(hasRecordKey, recordIndexEnabled);
+    HoodieCommitMetadata clusteringMetadata = new HoodieCommitMetadata();
+    clusteringMetadata.setOperationType(WriteOperationType.CLUSTER);
+    HoodieTableMetaClient metadataMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
+    BaseHoodieWriteClient writeClient = mock(BaseHoodieWriteClient.class);
+    when(metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant("001")).thenReturn(true);
+    when(writer.initializeWriteClient()).thenReturn(writeClient);
+    writer.metadataMetaClient = metadataMetaClient;
+
+    writer.completeStreamingCommit("001", mock(HoodieEngineContext.class), Collections.emptyList(), clusteringMetadata);
+
+    verify(writeClient).postCommit("001");
+  }
+
+  private static HoodieBackedTableMetadataWriter<List<HoodieRecord>, List<?>> writerForClustering(boolean hasRecordKey, boolean recordIndexEnabled)
+      throws Exception {
+    HoodieBackedTableMetadataWriter<List<HoodieRecord>, List<?>> writer = mock(HoodieBackedTableMetadataWriter.class, CALLS_REAL_METHODS);
+    HoodieTableMetaClient dataMetaClient = mock(HoodieTableMetaClient.class);
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    when(dataMetaClient.getTableConfig()).thenReturn(tableConfig);
+    when(dataMetaClient.getBasePath()).thenReturn(new StoragePath("/tmp/table"));
+    when(tableConfig.hasRecordKey()).thenReturn(hasRecordKey);
+    when(tableConfig.getMetadataPartitions()).thenReturn(Collections.emptySet());
+    writer.dataMetaClient = dataMetaClient;
+    Map<MetadataPartitionType, Indexer> enabledIndexers = new HashMap<>();
+    if (recordIndexEnabled) {
+      enabledIndexers.put(MetadataPartitionType.RECORD_INDEX, mock(Indexer.class));
+    }
+    setField(writer, "enabledIndexerMap", enabledIndexers);
+    return writer;
   }
 
   @ParameterizedTest

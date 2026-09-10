@@ -34,9 +34,11 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.testutils.HoodieClientTestBase;
@@ -52,10 +54,10 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.execution.FileSourceScanExec;
 import org.apache.spark.sql.execution.SparkPlan;
 import org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -73,6 +75,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -182,28 +185,43 @@ public class TestExternalFileRecordAndSecondaryIndex extends HoodieClientTestBas
         readSecondaryIndex(tableMetadata, secondaryIndexPartition, Arrays.asList("alice", "bob", "carol")));
   }
 
-  @Test
-  public void testClusteringIsRejectedBecausePositionalKeysDoNotSurviveIt() throws Exception {
+  /**
+   * Clustering rewrites the rows into a new file, so their keys, which are file path and position, would change.
+   * The rejection must hold under the Spark default, which streams the index updates and never reaches the
+   * indexers for the record index and the secondary index, and with streaming off, which updates them from the
+   * commit metadata.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testClusteringIsRejectedBecausePositionalKeysDoNotSurviveIt(boolean streamingWriteEnabled) throws Exception {
     initExternalTable("");
-    HoodieWriteConfig writeConfig = writeConfig(true, false);
+    // the table has no record key, so the clustering writer must not derive keys from a record key field
+    HoodieWriteConfig writeConfig = writeConfigBuilder(true, false, streamingWriteEnabled)
+        .withKeyGenerator(NonpartitionedKeyGenerator.class.getName())
+        .withClusteringConfig(HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10).withClusteringTargetPartitions(0).build())
+        .build();
     writeClient = getHoodieWriteClient(writeConfig);
     writeClient.setOperationType(WriteOperationType.UNKNOWN);
-    commitReplace(Arrays.asList(
-        Pair.of(new ExternalFile("", Option.empty(), "file_1.parquet"), rows(1, "alice", 2, "bob")),
-        Pair.of(new ExternalFile("", Option.empty(), "file_2.parquet"), rows(3, "carol"))), Collections.emptyMap());
+    ExternalFile file1 = new ExternalFile("", Option.empty(), "file_1.parquet");
+    ExternalFile file2 = new ExternalFile("", Option.empty(), "file_2.parquet");
+    commitReplace(Arrays.asList(Pair.of(file1, rows(1, "alice", 2, "bob")), Pair.of(file2, rows(3, "carol"))), Collections.emptyMap());
 
-    // clustering rewrites the rows into a new file, so their keys, which are file path and position, would change.
-    // The clustering commit is replayed the way clustering completes it: a replace commit of the rewritten file that
-    // carries the CLUSTER operation type and updates the indexes from its commit metadata.
-    writeClient.setOperationType(WriteOperationType.CLUSTER);
-    Exception clustering = assertThrows(Exception.class, () -> commitReplace(
-        Collections.singletonList(Pair.of(new ExternalFile("", Option.empty(), "file_3.parquet"), rows(1, "alice", 2, "bob", 3, "carol"))),
-        Collections.singletonMap("", Arrays.asList("file_1.parquet", "file_2.parquet"))));
+    String clusteringInstant = (String) writeClient.scheduleClustering(Option.empty()).get();
+    Exception clustering = assertThrows(Exception.class, () -> writeClient.cluster(clusteringInstant));
     Throwable cause = clustering;
     while (cause.getCause() != null && (cause.getMessage() == null || !cause.getMessage().contains("cannot be clustered"))) {
       cause = cause.getCause();
     }
     assertTrue(String.valueOf(cause.getMessage()).contains("cannot be clustered because it has no record key"), String.valueOf(clustering));
+
+    // the clustering did not complete, and both indexes still point at the registered files
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertFalse(metaClient.getActiveTimeline().filterCompletedInstants().containsInstant(clusteringInstant));
+    HoodieBackedTableMetadata tableMetadata = tableMetadata(writeConfig);
+    assertRecordIndex(tableMetadata, Option.empty(), file1, 2);
+    assertRecordIndex(tableMetadata, Option.empty(), file2, 1);
+    assertEquals(mapOf("alice", setOf(file1.key(0)), "bob", setOf(file1.key(1)), "carol", setOf(file2.key(0))),
+        readSecondaryIndex(tableMetadata, secondaryIndexPartition(), Arrays.asList("alice", "bob", "carol")));
   }
 
   /**
@@ -221,10 +239,14 @@ public class TestExternalFileRecordAndSecondaryIndex extends HoodieClientTestBas
   }
 
   private HoodieWriteConfig writeConfig(boolean withIndexes, boolean partitionedRecordIndex) {
+    // the indexes are updated from the commit metadata, the way replace commits and table services update them
+    return writeConfigBuilder(withIndexes, partitionedRecordIndex, false).build();
+  }
+
+  private HoodieWriteConfig.Builder writeConfigBuilder(boolean withIndexes, boolean partitionedRecordIndex, boolean streamingWriteEnabled) {
     HoodieMetadataConfig.Builder metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(true)
-        // the indexes are updated from the commit metadata, the way replace commits and table services update them
-        .withStreamingWriteEnabled(false)
+        .withStreamingWriteEnabled(streamingWriteEnabled)
         .withMetadataIndexColumnStats(false);
     if (withIndexes && partitionedRecordIndex) {
       // the secondary index builds on the global record index only
@@ -240,8 +262,7 @@ public class TestExternalFileRecordAndSecondaryIndex extends HoodieClientTestBas
         .withPopulateMetaFields(false)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(INMEMORY).build())
         .withEmbeddedTimelineServerEnabled(false)
-        .withMetadataConfig(metadataConfig.build())
-        .build();
+        .withMetadataConfig(metadataConfig.build());
   }
 
   /**

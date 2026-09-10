@@ -145,7 +145,6 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
 
   @Override
   public List<IndexPartitionAndRecords> buildUpdate(IndexUpdateContext context) {
-    checkClusteringKeepsRecordKeys(context.commitMetadata());
     HoodieData<HoodieRecord> updatesFromWriteStatuses = convertMetadataToRecordIndexRecords(engineContext, context.commitMetadata(),
         dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient, getFileIdEncoding(dataTableMetaClient, dataTableWriteConfig), context.instantTime());
     HoodieData<HoodieRecord> additionalUpdates = getRecordIndexAdditionalUpserts(updatesFromWriteStatuses, context.commitMetadata(), context.lazyFileSystemView());
