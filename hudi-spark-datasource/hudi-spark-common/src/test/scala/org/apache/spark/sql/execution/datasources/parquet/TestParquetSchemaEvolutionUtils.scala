@@ -28,6 +28,7 @@ import org.apache.parquet.hadoop.metadata.FileMetaData
 import org.apache.parquet.schema.{MessageType, Type, Types}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.spark.sql.execution.datasources.parquet.VariantParquetTestFixtures.{shreddedVariant, stringKeyMap, threeLevelList, twoLevelList, unshreddedVariant}
+import org.apache.spark.sql.sources.{AlwaysTrue, And, EqualTo, Filter, GreaterThan, GreaterThanOrEqual, IsNotNull, IsNull, Not, Or, StringStartsWith}
 import org.apache.spark.sql.types.{ArrayType, BinaryType, IntegerType, MapType, MetadataBuilder, StringType, StructField, StructType}
 import org.junit.jupiter.api.{Assertions, Test}
 
@@ -328,4 +329,51 @@ class TestParquetSchemaEvolutionUtils {
    */
   private def nestedVariantElement: Type =
     Types.optionalGroup().addField(shreddedVariant("inner")).named("e")
+
+  /**
+   * The filter rebuild the four legacy parquet formats share with the SparkNNParquetReader family.
+   * Field ids are positional, so the file's "original" carries the same id 1 the query spells
+   * "renamed", and "added" (id 2) has no field in the file at all.
+   */
+  @Test
+  def testRebuildFilterFromParquetRespellsFiltersOntoFileNames(): Unit = {
+    val intType = HoodieSchema.create(HoodieSchemaType.INT)
+    val stringType = HoodieSchema.create(HoodieSchemaType.STRING)
+    val querySchema = internalSchemaOf(("id", intType), ("renamed", stringType), ("added", intType))
+    val fileSchema = internalSchemaOf(("id", intType), ("original", stringType))
+
+    def rebuild(filter: Filter): Filter =
+      ParquetSchemaEvolutionUtils.rebuildFilterFromParquet(filter, fileSchema, querySchema)
+
+    // A renamed column is re-spelled to the name the file carries; an untouched one is left alone.
+    Assertions.assertEquals(EqualTo("original", "x"), rebuild(EqualTo("renamed", "x")))
+    Assertions.assertEquals(StringStartsWith("original", "a"), rebuild(StringStartsWith("renamed", "a")))
+    Assertions.assertEquals(GreaterThan("id", 1), rebuild(GreaterThan("id", 1)))
+
+    // A column added after the file was written has no field to filter on, and a filter that
+    // cannot be evaluated must not skip any of the file's row groups.
+    Assertions.assertEquals(AlwaysTrue, rebuild(IsNotNull("added")))
+
+    // And/Or/Not rebuild their children.
+    Assertions.assertEquals(
+      And(EqualTo("original", "x"), AlwaysTrue),
+      rebuild(And(EqualTo("renamed", "x"), IsNull("added"))))
+    Assertions.assertEquals(
+      Or(Not(EqualTo("original", "x")), GreaterThanOrEqual("id", 2)),
+      rebuild(Or(Not(EqualTo("renamed", "x")), GreaterThanOrEqual("id", 2))))
+
+    // A table with no internal schema on either side pushes its filters down untouched.
+    val untouched = EqualTo("renamed", "x")
+    Assertions.assertSame(untouched,
+      ParquetSchemaEvolutionUtils.rebuildFilterFromParquet(untouched, null, querySchema))
+    Assertions.assertSame(untouched,
+      ParquetSchemaEvolutionUtils.rebuildFilterFromParquet(untouched, fileSchema, null))
+    Assertions.assertSame(untouched,
+      ParquetSchemaEvolutionUtils.rebuildFilterFromParquet(untouched, null, null))
+  }
+
+  /** An internal schema over the given top-level columns, in order; field ids are positional. */
+  private def internalSchemaOf(fields: (String, HoodieSchema)*): InternalSchema =
+    InternalSchemaConverter.convert(HoodieSchema.createRecord("query", "org.apache.hudi.test", null,
+      Arrays.asList(fields.map { case (name, schema) => HoodieSchemaField.of(name, schema) }: _*)))
 }
