@@ -17,7 +17,9 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.spark.SparkThrowable
+import org.apache.hudi.HoodieSparkUtils
+
+import org.apache.spark.{SparkException, SparkThrowable}
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.FunctionIdentifier
 import org.apache.spark.sql.catalyst.analysis.{AnsiTypeCoercion, DecimalPrecision, TypeCoercion, TypeCoercionBase, UnresolvedAttribute, UnresolvedFunction}
@@ -376,9 +378,9 @@ object HoodieProcedureFilterUtils {
 
   // Whatever the hardcoded table produced - a real expression, or nothing at all (wrong arity, or
   // a name not in the table) - still an UnresolvedFunction? Try the registry before giving up.
-  private def resolveOrFallback(hardcodedResolved: Expression, unresolvedFunc: UnresolvedFunction, sparkSession: SparkSession): Expression =
-    hardcodedResolved match {
-      case _: UnresolvedFunction => resolveViaFunctionRegistry(unresolvedFunc, sparkSession)
+  private def resolveOrFallback(firstAttempt: Expression, original: UnresolvedFunction, sparkSession: SparkSession): Expression =
+    firstAttempt match {
+      case _: UnresolvedFunction => resolveViaFunctionRegistry(original, sparkSession)
       case resolved => resolved
     }
 
@@ -440,15 +442,34 @@ object HoodieProcedureFilterUtils {
     }
   }
 
-  // Filter expressions only ever call plain builtins. FunctionRegistry registers builtins with no
-  // database, so a db-qualified or 3+ part name (db.func, catalog.db.func) can only be resolved
-  // by guessing which part is the real function name - that risks matching an unrelated
-  // same-named function, so those are left unresolved instead.
+  // Filter expressions only ever call plain builtins. A db-qualified or 3+ part name (db.func,
+  // catalog.db.func) can only be resolved by guessing which part is the real function name - that
+  // risks matching an unrelated same-named function, so those are left unresolved instead.
+  //
+  // Each argument gets widened before the lookup, not just the call's own result afterward: an
+  // argument like ts + 1 (Long + Int) is still an unresolved Add at this point, and the wrapper's
+  // checkInputDataTypes right after runs before pass three ever gets a chance to widen it -
+  // sqrt(ts + 1) would fail that check for the same reason nvl(ts, 0) needed pre-lookup widening,
+  // while the hardcoded abs(ts + 1) already works because pass three widens its argument too, just
+  // later in the pipeline.
   private def lookupBuiltin(unresolvedFunc: UnresolvedFunction, sparkSession: SparkSession): Expression =
     unresolvedFunc.nameParts match {
       case Seq(funcName) =>
-        sparkSession.sessionState.functionRegistry.lookupFunction(FunctionIdentifier(funcName), unresolvedFunc.arguments)
+        val widenedArguments = unresolvedFunc.arguments.map(applyCoercionRules)
+        sparkSession.sessionState.functionRegistry
+          .lookupFunction(builtinFunctionIdentifier(funcName), widenedArguments)
       case _ => unresolvedFunc
+    }
+
+  // A session's function registry is a clone of FunctionRegistry.builtin, keyed the same way
+  // builtins are actually registered - a bare name pre-4.2, but the fully qualified
+  // system.builtin.<name> from 4.2 onward, where a session-level clone (unlike the builtin
+  // singleton itself) stops auto-qualifying a bare name it's given and asserts instead.
+  private def builtinFunctionIdentifier(funcName: String): FunctionIdentifier =
+    if (HoodieSparkUtils.gteqSpark4_2) {
+      FunctionIdentifier(funcName, Some("builtin"), Some("system"))
+    } else {
+      FunctionIdentifier(funcName)
     }
 
   // RuntimeReplaceable placeholders (nvl, ifnull, left, right, ...) need substitution the analyzer
@@ -457,12 +478,37 @@ object HoodieProcedureFilterUtils {
   // numeric operands the same way pass three would - nvl(ts, 0) unwraps to Coalesce(ts, 0), which
   // needs the same widening the hardcoded coalesce(ts, 0) case gets - so a registry function and
   // its hardcoded-table equivalent agree on what counts as resolved.
+  //
+  // A replacement can itself be a With(child, defs) common-subexpression wrapper from 4.0 onward
+  // (NullIf's, for instance) - Unevaluable like any other holder, so it needs inlining here too or
+  // isUsableOutsideQueryPlan rejects it outright. With/CommonExpressionDef/CommonExpressionRef
+  // don't exist before 4.0, so this goes by reflection rather than a direct import; evaluating a
+  // filter once per row rather than once per query makes the dedup With exists for irrelevant, so
+  // inlining each reference in place of its definition is exactly equivalent to keeping it.
   private def finalizeRegistryResolution(expression: Expression): Expression = {
     def unwrapReplacements(expr: Expression): Expression = {
-      val next = expr.transformUp { case r: RuntimeReplaceable => r.replacement }
+      val next = expr.transformUp {
+        case r: RuntimeReplaceable => r.replacement
+        case withExpr if withExpr.getClass.getSimpleName == "With" => inlineCommonExpressions(withExpr)
+      }
       if (next.fastEquals(expr)) next else unwrapReplacements(next)
     }
     applyCoercionRules(unwrapReplacements(expression))
+  }
+
+  private def inlineCommonExpressions(withExpr: Expression): Expression = {
+    val defsById = withExpr.getClass.getMethod("defs").invoke(withExpr)
+      .asInstanceOf[Seq[Expression]]
+      .map { commonExprDef =>
+        val id = commonExprDef.getClass.getMethod("id").invoke(commonExprDef)
+        val child = commonExprDef.getClass.getMethod("child").invoke(commonExprDef).asInstanceOf[Expression]
+        id -> child
+      }.toMap
+    val child = withExpr.getClass.getMethod("child").invoke(withExpr).asInstanceOf[Expression]
+    child.transformUp {
+      case ref if ref.getClass.getSimpleName == "CommonExpressionRef" =>
+        defsById(ref.getClass.getMethod("id").invoke(ref))
+    }
   }
 
   // A resolved expression still isn't usable one row at a time if it's an aggregate (percentile,
@@ -473,10 +519,19 @@ object HoodieProcedureFilterUtils {
   //
   // Unevaluable alone doesn't cover the whole family on every Spark version: current_timestamp
   // and its relatives are foldable (Spark computes them once and reuses the value, rather than
-  // per row) but which marker trait exempts them from eval() varies between the 3.x and 4.x lines
-  // this builds against, so a foldable result gets a real probe instead of a trait check - eval()
-  // against EmptyRow only touches its own constant inputs, never a real column, so a throw here
-  // means it genuinely can't be evaluated standalone rather than that this row's data is missing.
+  // per row) but which marker trait exempts them from eval() varies even within the 4.x line this
+  // builds against (current_timestamp is Unevaluable-free on 4.0 but foldable-but-uneval'able
+  // there, fine again on 4.1+), so a foldable result gets a real probe instead of a trait check -
+  // eval() against EmptyRow only touches its own constant inputs, never a real column, so a throw
+  // here means it genuinely can't be evaluated standalone rather than that this row's data is
+  // missing.
+  //
+  // Only a bare SparkException - the marker Unevaluable.eval() itself throws - counts as that
+  // structural "can't evaluate at all" signal. An all-literal call can also be foldable (nothing
+  // references a column), and a data-specific failure there (regexp_replace('a', '[', 'x'), an
+  // invalid pattern) is a SparkThrowable or IllegalArgumentException, not a bare SparkException -
+  // treating it as unusable here would silently reject it instead of letting it raise normally,
+  // exactly the silent-drop behavior the whole registry fallback exists to avoid.
   private def isUsableOutsideQueryPlan(expression: Expression): Boolean = {
     !expression.isInstanceOf[org.apache.spark.sql.catalyst.expressions.aggregate.AggregateFunction] &&
       !expression.isInstanceOf[org.apache.spark.sql.catalyst.expressions.Generator] &&
@@ -484,8 +539,15 @@ object HoodieProcedureFilterUtils {
       expression.deterministic &&
       expression.resolved &&
       expression.checkInputDataTypes().isSuccess &&
-      (!expression.foldable || Try(expression.eval(org.apache.spark.sql.catalyst.expressions.EmptyRow)).isSuccess)
+      (!expression.foldable || evalsOnItsOwn(expression))
   }
+
+  private def evalsOnItsOwn(expression: Expression): Boolean =
+    Try(expression.eval(org.apache.spark.sql.catalyst.expressions.EmptyRow)) match {
+      case Success(_) => true
+      case Failure(_: SparkException) => false
+      case Failure(_) => true
+    }
 
   private def evaluateExpressionOnRow(boundExpr: Expression, row: Row, schema: StructType): Boolean = {
 

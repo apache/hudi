@@ -428,12 +428,20 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     // deterministic check catches them without needing their own case.
     assert(validate("monotonically_increasing_id() = 1").isLeft)
     assert(validate("input_file_name() = 'x'").isLeft)
-    // current_timestamp is deterministic-at-eval-time (Spark computes it directly rather than
-    // requiring rule substitution), so it resolves and evaluates for real instead of needing
-    // denylist treatment. current_date doesn't share that: it's a TimeZoneAwareExpression that
-    // stays unresolved without a session zone the same way hour(t) does above, not because of
-    // anything this guard rejects.
-    assertResult(scalarRows)(keep(scalarRows, "current_timestamp() > t", scalarSchema))
+    // current_timestamp is deterministic-at-eval-time on most of the Spark line this builds
+    // against (Spark computes it directly rather than requiring rule substitution), so it
+    // resolves and evaluates for real instead of needing denylist treatment - except on 4.0
+    // specifically, where CurrentTimestampLike briefly implemented FoldableUnevaluable and threw
+    // on eval(); the eval-safety probe correctly rejects it there instead of crashing the whole
+    // procedure call. current_date doesn't share the evaluating half at all: it's a
+    // TimeZoneAwareExpression that stays unresolved without a session zone the same way hour(t)
+    // does above, not because of anything this guard rejects.
+    if (HoodieSparkUtils.gteqSpark4_0 && !HoodieSparkUtils.gteqSpark4_1) {
+      assert(validate("current_timestamp() > t").isLeft)
+      assertResult(Seq.empty)(keep(scalarRows, "current_timestamp() > t", scalarSchema))
+    } else {
+      assertResult(scalarRows)(keep(scalarRows, "current_timestamp() > t", scalarSchema))
+    }
     assert(validate("current_date() > d").isLeft)
   }
 
@@ -710,6 +718,27 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     // the fallback newly makes reachable.
     intercept[IllegalArgumentException](keep(scalarRows, "regexp_like(name, '[')", scalarSchema))
     intercept[IllegalArgumentException](keep(scalarRows, "regexp_extract(name, '[', 1) = 'x'", scalarSchema))
+  }
+
+  test("evaluateFilter surfaces a data error from an all-literal foldable call") {
+    // A call whose arguments are all literals (no column reference) is foldable itself, the same
+    // property that lets the eval-safety probe catch a structurally-unusable result like
+    // current_timestamp() on some Spark versions. That probe has to tell a genuine data error
+    // (an invalid regex, still fixable by different literal arguments) apart from a structural
+    // one: only a bare SparkException, the marker Unevaluable.eval() itself throws, means "not
+    // usable at all" - anything else (SparkThrowable, IllegalArgumentException, ...) still raises
+    // normally instead of getting silently rejected as an unsupported function.
+    assertResult(Right(()))(validate("regexp_replace('a', '[', 'x') = 'x'"))
+    intercept[IllegalArgumentException](keep(scalarRows, "regexp_replace('a', '[', 'x') = 'x'", scalarSchema))
+  }
+
+  test("evaluateFilter widens a registry function's arguments before looking it up") {
+    // ts + 1 (Long + Int) is still an unresolved Add at the point the wrapper's own
+    // checkInputDataTypes runs, before pass three ever gets a chance to widen it - sqrt needs its
+    // argument widened first, the same way nvl needed its own operands widened before its wrapper
+    // contract could pass.
+    assertKeeps(scalarRows, "sqrt(ts + 1) > 0", scalarRows)
+    assertKeeps(scalarRows, "concat(name, ts + 1) = 'a11001'", Seq(scalarRows.head))
   }
 
 }
