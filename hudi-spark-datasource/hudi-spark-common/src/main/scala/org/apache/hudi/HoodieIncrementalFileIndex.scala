@@ -17,7 +17,7 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.common.model.HoodieLogFile
+import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.storage.StoragePathInfo
 import org.apache.hudi.util.JFunction
@@ -42,6 +42,25 @@ class HoodieIncrementalFileIndex(override val spark: SparkSession,
   extends HoodieFileIndex(
     spark, metaClient, schemaSpec, options, fileStatusCache, includeLogFiles, shouldEmbedFileSlices = true
   ) with FileIndex {
+
+  // Skip the Spark optimizer's partition pruning rule (e.g. Spark33HoodiePruneFileSourcePartitions)
+  // which would trigger a full-table partition listing via the base class. The incremental file
+  // index already selects only modified file groups via listFileSplits().
+  hasPushedDownPartitionPredicates = true
+
+  override def filterFileSlices(dataFilters: Seq[Expression], partitionFilters: Seq[Expression], isPartitionPruned: Boolean = false)
+  : Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])] = {
+    hasPushedDownPartitionPredicates = true
+    val fileSliceMap = mergeOnReadIncrementalRelation.listFileSplits(partitionFilters, dataFilters)
+    fileSliceMap.toSeq.flatMap { case (partitionValues, fileSlices) =>
+      val nonEmpty = fileSlices.filter(!_.isEmpty)
+      if (nonEmpty.nonEmpty) {
+        Seq((Option.empty[BaseHoodieTableFileIndex.PartitionPath], nonEmpty))
+      } else {
+        Seq.empty
+      }
+    }
+  }
 
   override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
     val fileSlices = mergeOnReadIncrementalRelation.listFileSplits(partitionFilters, dataFilters).toSeq.flatMap(
