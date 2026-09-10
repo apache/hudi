@@ -244,7 +244,7 @@ public class HoodieDropPartitionsTool implements Serializable {
         return false;
       }
       Config config = (Config) o;
-      return basePath.equals(config.basePath)
+      return Objects.equals(basePath, config.basePath)
           && Objects.equals(runningMode, config.runningMode)
           && Objects.equals(tableName, config.tableName)
           && Objects.equals(partitions, config.partitions)
@@ -301,14 +301,14 @@ public class HoodieDropPartitionsTool implements Serializable {
       log.info(cfg.toString());
 
       Mode mode = Mode.valueOf(cfg.runningMode.toUpperCase());
-      if (cfg.syncToHive) {
-        // Check the hive configs before anything is dropped: they are otherwise only read once the partitions
-        // have already been masked, so a typo in --hive-database would cost the partitions before it surfaces.
-        verifyHiveConfigs();
-      }
       switch (mode) {
         case DELETE:
           log.info(" ****** The Hoodie Drop Partitions Tool is in delete mode ****** ");
+          if (cfg.syncToHive) {
+            // Check the hive configs before anything is dropped: they are otherwise only read once the partitions
+            // have already been masked, so a typo in --hive-database would cost the partitions before it surfaces.
+            verifyHiveConfigs();
+          }
           doDeleteTablePartitions();
           syncToHiveIfNecessary();
           break;
@@ -378,6 +378,10 @@ public class HoodieDropPartitionsTool implements Serializable {
   private void verifyHiveConfigs() {
     ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(cfg.hiveDataBase), "Hive database name couldn't be null or empty when enable sync meta, please set --hive-database/-db.");
     ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(cfg.hiveTableName), "Hive table name couldn't be null or empty when enable sync meta, please set --hive-table-name/-tn.");
+    // This is written into the sync props verbatim, which stops HoodieSyncConfig inferring the fields from the
+    // table config; left empty, hive sync skips every partition and the drop is never reflected in the metastore.
+    ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(cfg.hivePartitionsField),
+        "Hive partition fields couldn't be null or empty when enable sync meta, otherwise no partition is synced, please set --hive-partition-field.");
   }
 
   private void syncHive(HiveSyncConfig hiveSyncConfig) {

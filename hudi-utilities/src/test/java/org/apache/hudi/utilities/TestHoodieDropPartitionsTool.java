@@ -268,6 +268,53 @@ public class TestHoodieDropPartitionsTool extends HoodieSparkClientTestBase {
     assertEquals(0, latestBaseFileCount(context, metaClient, DEFAULT_THIRD_PARTITION_PATH));
   }
 
+  /**
+   * Dry run touches no partition, so it does not need the hive configs to be sound: it still prints its listing.
+   */
+  @Test
+  public void testDryRunDoesNotNeedHiveConfigs() {
+    writeThreePartitionTable();
+    List<String> instantsBefore = completedInstants();
+    HoodieDropPartitionsTool.Config cfg = toolConfig("dry_run", DEFAULT_THIRD_PARTITION_PATH);
+    cfg.syncToHive = true;
+    cfg.hiveDataBase = null;
+
+    List<String> messages;
+    try (CapturingLogAppender logs = CapturingLogAppender.attachTo(HoodieDropPartitionsTool.class)) {
+      new HoodieDropPartitionsTool(jsc, cfg).run();
+      messages = logs.messages();
+    }
+
+    assertEquals(
+        Collections.singleton("Partitions : " + DEFAULT_THIRD_PARTITION_PATH + ", corresponding data file IDs : "
+            + latestFileIds(DEFAULT_THIRD_PARTITION_PATH)),
+        messages.stream().filter(m -> m.startsWith("Partitions : ")).collect(Collectors.toSet()));
+    assertEquals(instantsBefore, completedInstants(), "dry run must not add any instant");
+  }
+
+  /**
+   * The partition fields are written into the sync props verbatim; empty, hive sync silently skips every
+   * partition, so the tool refuses the run rather than dropping partitions the metastore never hears about.
+   */
+  @Test
+  public void testHiveSyncWithoutPartitionFieldIsRejectedBeforeTheDrop() {
+    writeThreePartitionTable();
+    HoodieDropPartitionsTool.Config cfg = toolConfig("delete", DEFAULT_THIRD_PARTITION_PATH);
+    cfg.syncToHive = true;
+    cfg.hiveDataBase = "db";
+    cfg.hiveTableName = "tbl";
+    // cfg.hivePartitionsField is left at its default, the empty string
+    HoodieDropPartitionsTool tool = new HoodieDropPartitionsTool(jsc, cfg);
+
+    HoodieException thrown = assertThrows(HoodieException.class, tool::run);
+    assertTrue(thrown.getCause() instanceof IllegalArgumentException, "got " + thrown.getCause());
+    assertTrue(thrown.getCause().getMessage().contains("--hive-partition-field"),
+        thrown.getCause().getMessage());
+    assertEquals(0, HoodieTableMetaClient.reload(metaClient).getActiveTimeline()
+        .getCompletedReplaceTimeline().countInstants(), "nothing may be dropped once the hive configs are bad");
+    assertEquals(1, latestBaseFileCount(context, metaClient, DEFAULT_THIRD_PARTITION_PATH));
+  }
+
   @Test
   public void testConfigEqualsHashCodeAndToString() {
     HoodieDropPartitionsTool.Config left = new HoodieDropPartitionsTool.Config();
@@ -289,6 +336,9 @@ public class TestHoodieDropPartitionsTool extends HoodieSparkClientTestBase {
     assertEquals(left.hashCode(), right.hashCode());
     assertNotEquals(left, null);
     assertNotEquals(left, "not a config");
+    // a Config straight out of JCommander has no base path yet
+    assertEquals(new HoodieDropPartitionsTool.Config(), new HoodieDropPartitionsTool.Config());
+    assertEquals(new HoodieDropPartitionsTool.Config().hashCode(), new HoodieDropPartitionsTool.Config().hashCode());
 
     right.hiveDataBase = "db";
     assertNotEquals(left, right);

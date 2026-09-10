@@ -38,6 +38,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -63,18 +65,22 @@ public class TestTableSizeStats extends HoodieSparkClientTestBase {
 
   private static final int RECORDS_PER_PARTITION = 4;
   private static final String PARTITION_STATS_PREFIX = "Partition stats [name: ";
+  // the tool parses partition names as yyyy/M/d, so a partition from yesterday is one --num-days can select
+  private static final String YESTERDAY_PARTITION_PATH =
+      LocalDate.now().minusDays(1).format(DateTimeFormatter.ofPattern("yyyy/M/d"));
 
   private static Stream<Arguments> dateIntervalArgs() {
     return Stream.of(
-        // only the 2016 partition is on or after the start date
-        Arguments.of("2016/1/1", null, 0L, Collections.singletonList(DEFAULT_FIRST_PARTITION_PATH)),
+        // everything on or after the start date: the 2016 partition and yesterday's
+        Arguments.of("2016/1/1", null, 0L,
+            Arrays.asList(DEFAULT_FIRST_PARTITION_PATH, YESTERDAY_PARTITION_PATH)),
         // only the 2015 partitions are before the end date
         Arguments.of(null, "2016/1/1", 0L,
             Arrays.asList(DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH)),
         // half open interval [start, end): the start date is included, the end date is not
         Arguments.of("2015/3/16", "2015/3/17", 0L, Collections.singletonList(DEFAULT_SECOND_PARTITION_PATH)),
-        // --num-days walks back from today, so every partition of this table is out of the window
-        Arguments.of(null, null, 10L, Collections.emptyList()));
+        // --num-days walks back from today: only yesterday's partition falls inside a ten day window
+        Arguments.of(null, null, 10L, Collections.singletonList(YESTERDAY_PARTITION_PATH)));
   }
 
   private TableSizeStats.Config statsConfig() {
@@ -158,7 +164,8 @@ public class TestTableSizeStats extends HoodieSparkClientTestBase {
   @MethodSource("dateIntervalArgs")
   public void testOnlyPartitionsInsideTheDateIntervalAreCounted(String startDate, String endDate, long numDays,
                                                                 List<String> expectedPartitions) {
-    writeDefaultPartitions();
+    writeOneCommit(DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH,
+        YESTERDAY_PARTITION_PATH);
     TableSizeStats.Config cfg = statsConfig();
     cfg.partitionStats = true;
     cfg.startDate = startDate;
@@ -282,6 +289,9 @@ public class TestTableSizeStats extends HoodieSparkClientTestBase {
     assertEquals(left.hashCode(), right.hashCode());
     assertNotEquals(left, null);
     assertNotEquals(left, "not a config");
+    // a Config straight out of JCommander has no base path yet
+    assertEquals(new TableSizeStats.Config(), new TableSizeStats.Config());
+    assertEquals(new TableSizeStats.Config().hashCode(), new TableSizeStats.Config().hashCode());
 
     right.endDate = "2016/1/1";
     assertNotEquals(left, right);

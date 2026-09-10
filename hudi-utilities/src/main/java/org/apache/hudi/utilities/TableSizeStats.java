@@ -204,7 +204,7 @@ public class TableSizeStats implements Serializable {
         return false;
       }
       Config config = (Config) o;
-      return basePath.equals(config.basePath)
+      return Objects.equals(basePath, config.basePath)
           && Objects.equals(numDays, config.numDays)
           && Objects.equals(startDate, config.startDate)
           && Objects.equals(endDate, config.endDate)
