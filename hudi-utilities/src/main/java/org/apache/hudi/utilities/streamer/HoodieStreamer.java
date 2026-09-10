@@ -228,7 +228,7 @@ public class HoodieStreamer implements Serializable {
   public void interruptIngestion() {
     ingestionService.ifPresent(ds -> {
       if (!ds.isShutdown()) {
-        log.info("Forcefully shutting down DeltaStreamer");
+        log.info("Interrupting ingestion for table {}", cfg.targetTableName);
         ds.shutdown(true);
       }
     });

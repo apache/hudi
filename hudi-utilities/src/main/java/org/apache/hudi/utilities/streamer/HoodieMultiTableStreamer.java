@@ -407,13 +407,7 @@ public class HoodieMultiTableStreamer {
     public Boolean continuousMode = false;
 
     @Parameter(names = {"--fail-fast-on-continuous"},
-        description = "Only applies in continuous mode. When enabled, the first table failure immediately tears "
-            + "down the remaining table syncs; they are interrupted mid-round rather than allowed to finish it, so a "
-            + "table can be left with an inflight instant that is rolled back on the next run. When disabled "
-            + "(default), each table is synced independently and a single failure does not stop the others. Either "
-            + "way, if the run ends at all with a failed table the job exits with a non-zero status, since continuous "
-            + "mode is not meant to end. A table failing while the others keep running does not end the run, so it "
-            + "surfaces through that table's error log and metrics rather than the exit code.")
+        description = "In continuous mode, stop all table syncs on the first table failure. Default: false")
     public Boolean failFastOnContinuousMode = false;
 
     @Parameter(names = {"--min-sync-interval-seconds"},
@@ -531,9 +525,13 @@ public class HoodieMultiTableStreamer {
    * indefinitely.
    *
    * <p>When {@code --fail-fast-on-continuous} is enabled, the first table failure tears the sibling streamers down
-   * at once. Otherwise every table is synced independently and a single failure does not affect the others. Either
-   * way, a {@link HoodieException} is thrown if the run ends with a failed table. Note that the run only ends once
-   * every table has stopped, so a failure alongside still-running tables surfaces in logs and metrics instead.
+   * at once. They are interrupted mid-round rather than allowed to finish it, so a table can be left with an inflight
+   * instant that is rolled back on the next run. Otherwise every table is synced independently and a single failure
+   * does not affect the others.
+   *
+   * <p>Either way, a {@link HoodieException} is thrown if the run ends with a failed table, so the job exits with a
+   * non-zero status. Note that the run only ends once every table has stopped: a table failing while the others keep
+   * running does not end it, and surfaces through that table's error log and metrics rather than the exit code.
    *
    * <p>Teardown runs in a {@code finally} rather than a catch so that it also covers an {@link Error}, which the
    * workers do not catch, and it is a no-op once a table has shut its own ingestion service down. The siblings are
