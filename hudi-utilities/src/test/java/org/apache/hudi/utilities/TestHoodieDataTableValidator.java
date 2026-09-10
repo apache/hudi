@@ -51,6 +51,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
+import static org.apache.hudi.utilities.testutils.ToolTestUtils.stackMessages;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -224,13 +225,5 @@ public class TestHoodieDataTableValidator extends HoodieSparkClientTestBase {
     assertTrue(printed.contains("--continuous true"));
     assertTrue(printed.contains("--ignore-failed true"));
     assertTrue(printed.contains("--min-validate-interval-seconds 30"));
-  }
-
-  private static String stackMessages(Throwable throwable) {
-    StringBuilder sb = new StringBuilder();
-    for (Throwable t = throwable; t != null; t = t.getCause()) {
-      sb.append(t.getMessage()).append('\n');
-    }
-    return sb.toString();
   }
 }

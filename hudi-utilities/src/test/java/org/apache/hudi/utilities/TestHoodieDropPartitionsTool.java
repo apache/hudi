@@ -55,6 +55,8 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
+import static org.apache.hudi.utilities.testutils.ToolTestUtils.latestBaseFileCount;
+import static org.apache.hudi.utilities.testutils.ToolTestUtils.stackMessages;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -105,14 +107,6 @@ public class TestHoodieDropPartitionsTool extends HoodieSparkClientTestBase {
     client.commit(instantTime, writeStatuses);
   }
 
-  private long latestBaseFileCount(String partition) {
-    HoodieTableMetaClient reloaded = HoodieTableMetaClient.reload(metaClient);
-    try (HoodieTableFileSystemView fsView = FileSystemViewManager.createInMemoryFileSystemView(
-        context, reloaded, HoodieMetadataConfig.newBuilder().enable(false).build())) {
-      return fsView.getLatestBaseFiles(partition).count();
-    }
-  }
-
   private List<String> latestFileIds(String partition) {
     HoodieTableMetaClient reloaded = HoodieTableMetaClient.reload(metaClient);
     try (HoodieTableFileSystemView fsView = FileSystemViewManager.createInMemoryFileSystemView(
@@ -152,9 +146,9 @@ public class TestHoodieDropPartitionsTool extends HoodieSparkClientTestBase {
         "the partition that was not named must not be reported: " + messages);
 
     assertEquals(instantsBefore, completedInstants(), "dry run must not add any instant");
-    assertEquals(1, latestBaseFileCount(DEFAULT_FIRST_PARTITION_PATH));
-    assertEquals(1, latestBaseFileCount(DEFAULT_SECOND_PARTITION_PATH));
-    assertEquals(1, latestBaseFileCount(DEFAULT_THIRD_PARTITION_PATH));
+    assertEquals(1, latestBaseFileCount(context, metaClient, DEFAULT_FIRST_PARTITION_PATH));
+    assertEquals(1, latestBaseFileCount(context, metaClient, DEFAULT_SECOND_PARTITION_PATH));
+    assertEquals(1, latestBaseFileCount(context, metaClient, DEFAULT_THIRD_PARTITION_PATH));
   }
 
   @Test
@@ -177,9 +171,9 @@ public class TestHoodieDropPartitionsTool extends HoodieSparkClientTestBase {
     // the file group of the first partition, written by both commits, is masked
     assertEquals(1, replaceMetadata.getPartitionToReplaceFileIds().get(DEFAULT_FIRST_PARTITION_PATH).size());
 
-    assertEquals(0, latestBaseFileCount(DEFAULT_FIRST_PARTITION_PATH));
-    assertEquals(0, latestBaseFileCount(DEFAULT_SECOND_PARTITION_PATH));
-    assertEquals(1, latestBaseFileCount(DEFAULT_THIRD_PARTITION_PATH),
+    assertEquals(0, latestBaseFileCount(context, metaClient, DEFAULT_FIRST_PARTITION_PATH));
+    assertEquals(0, latestBaseFileCount(context, metaClient, DEFAULT_SECOND_PARTITION_PATH));
+    assertEquals(1, latestBaseFileCount(context, metaClient, DEFAULT_THIRD_PARTITION_PATH),
         "the partition that was not named must survive");
   }
 
@@ -240,7 +234,7 @@ public class TestHoodieDropPartitionsTool extends HoodieSparkClientTestBase {
     assertTrue(thrown.getCause().getMessage().contains("--hive-database"));
     assertEquals(0, HoodieTableMetaClient.reload(metaClient).getActiveTimeline()
         .getCompletedReplaceTimeline().countInstants(), "nothing may be dropped once the hive configs are bad");
-    assertEquals(1, latestBaseFileCount(DEFAULT_THIRD_PARTITION_PATH));
+    assertEquals(1, latestBaseFileCount(context, metaClient, DEFAULT_THIRD_PARTITION_PATH));
   }
 
   /**
@@ -271,7 +265,7 @@ public class TestHoodieDropPartitionsTool extends HoodieSparkClientTestBase {
 
     assertEquals(1, HoodieTableMetaClient.reload(metaClient).getActiveTimeline()
         .getCompletedReplaceTimeline().countInstants(), "the drop is committed before hive sync runs");
-    assertEquals(0, latestBaseFileCount(DEFAULT_THIRD_PARTITION_PATH));
+    assertEquals(0, latestBaseFileCount(context, metaClient, DEFAULT_THIRD_PARTITION_PATH));
   }
 
   @Test
@@ -305,13 +299,5 @@ public class TestHoodieDropPartitionsTool extends HoodieSparkClientTestBase {
     assertTrue(printed.contains("--partitions p1,p2"));
     assertTrue(printed.contains("--hoodie-conf [k=v]"));
     assertTrue(printed.contains("--hive-user-name Masked"), "credentials must not be printed");
-  }
-
-  private static String stackMessages(Throwable throwable) {
-    StringBuilder sb = new StringBuilder();
-    for (Throwable t = throwable; t != null; t = t.getCause()) {
-      sb.append(t.getMessage()).append('\n');
-    }
-    return sb.toString();
   }
 }

@@ -21,14 +21,11 @@ package org.apache.hudi.utilities;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.view.FileSystemViewManager;
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieTTLConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -51,6 +48,7 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_F
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.getCommitTimeAtUTC;
+import static org.apache.hudi.utilities.testutils.ToolTestUtils.latestBaseFileCount;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
@@ -105,9 +103,9 @@ public class TestHoodieTTLJob extends HoodieSparkClientTestBase {
         replaceMetadata.getPartitionToReplaceFileIds().keySet(),
         "only the partitions older than the retention are dropped");
 
-    assertEquals(0, latestBaseFileCount(DEFAULT_FIRST_PARTITION_PATH));
-    assertEquals(0, latestBaseFileCount(DEFAULT_SECOND_PARTITION_PATH));
-    assertEquals(1, latestBaseFileCount(DEFAULT_THIRD_PARTITION_PATH),
+    assertEquals(0, latestBaseFileCount(context, metaClient, DEFAULT_FIRST_PARTITION_PATH));
+    assertEquals(0, latestBaseFileCount(context, metaClient, DEFAULT_SECOND_PARTITION_PATH));
+    assertEquals(1, latestBaseFileCount(context, metaClient, DEFAULT_THIRD_PARTITION_PATH),
         "the fresh partition must survive");
     assertFalse(replaceMetadata.getPartitionToReplaceFileIds().containsKey(DEFAULT_THIRD_PARTITION_PATH));
   }
@@ -128,13 +126,5 @@ public class TestHoodieTTLJob extends HoodieSparkClientTestBase {
     WriteClientTestUtils.startCommitWithTime(client, instantTime);
     JavaRDD<WriteStatus> writeStatuses = client.insert(jsc.parallelize(records, 1), instantTime);
     client.commit(instantTime, writeStatuses);
-  }
-
-  private long latestBaseFileCount(String partition) {
-    HoodieTableMetaClient reloaded = HoodieTableMetaClient.reload(metaClient);
-    try (HoodieTableFileSystemView fsView = FileSystemViewManager.createInMemoryFileSystemView(
-        context, reloaded, HoodieMetadataConfig.newBuilder().enable(false).build())) {
-      return fsView.getLatestBaseFiles(partition).count();
-    }
   }
 }
