@@ -298,7 +298,7 @@ public class TestHoodieCdcSplitReaderFunction {
 
     try (MockedStatic<FormatUtils> mocked = mockStatic(FormatUtils.class)) {
       mocked.when(() -> FormatUtils.getLanceRecordIterator(
-          anyString(), anyList(), anyList(), any(int[].class), any()))
+          anyString(), any(HoodieSchema.class), any()))
           .thenReturn(nested);
       try (ClosableIterator<RowData> iterator = createFunction().createRecordIterator(split)) {
         assertTrue(iterator.hasNext());
