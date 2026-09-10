@@ -367,6 +367,30 @@ public class HiveTestUtil {
     createReplaceCommitFile(replaceCommitMetadata, instantTime);
   }
 
+  /**
+   * Writes the data files and the requested + inflight markers of an INSERT_OVERWRITE replacecommit
+   * but not the completed file, i.e. a write that is still running. Complete it with
+   * {@link #createReplaceCommitFile}.
+   */
+  public static HoodieReplaceCommitMetadata startInsertOverwritePartition(String partitionPath, String instantTime)
+      throws IOException, URISyntaxException {
+    HoodieCommitMetadata commitMetadata = createPartition(partitionPath, true, true, instantTime);
+    HoodieReplaceCommitMetadata replaceCommitMetadata = new HoodieReplaceCommitMetadata();
+    commitMetadata.getPartitionToWriteStats().forEach((p, stats) -> stats.forEach(s -> replaceCommitMetadata.addWriteStat(p, s)));
+    replaceCommitMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE);
+    replaceCommitMetadata.setPartitionToReplaceFileIds(Collections.singletonMap(partitionPath, new ArrayList<>()));
+    commitMetadata.getExtraMetadata().forEach(replaceCommitMetadata::addMetadata);
+    createMetaFile(basePath, INSTANT_FILE_NAME_GENERATOR.makeRequestedReplaceFileName(instantTime), Option.empty());
+    createMetaFile(basePath, INSTANT_FILE_NAME_GENERATOR.makeInflightReplaceFileName(instantTime), Option.empty());
+    createdTablesSet.add(DB_NAME + "." + TABLE_NAME);
+    return replaceCommitMetadata;
+  }
+
+  /** A completed commit that touched no partition, like a streaming writer's empty micro-batch. */
+  public static void addEmptyCommit(String instantTime) throws IOException {
+    createCommitFileWithSchema(new HoodieCommitMetadata(), instantTime, true);
+  }
+
   public static void addRollbackInstantToTable(String instantTime, String commitToRollback)
       throws IOException {
     HoodieRollbackMetadata rollbackMetadata = HoodieRollbackMetadata.newBuilder()

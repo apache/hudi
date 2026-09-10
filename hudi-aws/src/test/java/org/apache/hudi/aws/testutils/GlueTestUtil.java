@@ -58,6 +58,10 @@ public class GlueTestUtil {
   public static TypedProperties glueSyncProps;
   public static final String DB_NAME = "testdb";
   public static final String TABLE_NAME = "test1";
+  /** Instant time of the single completed commit that {@link #createHoodieTable} seeds the fixture table with. */
+  public static final String INSTANT_TIME = "101";
+  /** Completion time of the fixture commit; commits completing later use a greater value. */
+  public static final String INSTANT_COMPLETION_TIME = "20250101000000000";
   private static String basePath;
   public static FileSystem fileSystem;
   private static HiveSyncConfig hiveSyncConfig;
@@ -110,9 +114,20 @@ public class GlueTestUtil {
         .setPayloadClass(HoodieAvroPayload.class)
         .initTable(HadoopFSUtils.getStorageConf(new Configuration()), basePath);
 
-    String instantTime = "101";
-    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata(false);
-    createMetaFile(basePath, new DefaultInstantFileNameGenerator().makeCommitFileName(instantTime), commitMetadata);
+    createCommitFile(INSTANT_TIME, INSTANT_COMPLETION_TIME);
+  }
+
+  /** Writes a completed commit whose completion time is carried in the file name, as the 1.x timeline expects. */
+  public static void createCommitFile(String instantTime, String completionTime) throws IOException {
+    createMetaFile(basePath,
+        new DefaultInstantFileNameGenerator().makeCommitFileName(instantTime + "_" + completionTime),
+        new HoodieCommitMetadata(false));
+  }
+
+  public static void deleteCommitFile(String instantTime, String completionTime) throws IOException {
+    Path fullPath = new Path(timelinePath(basePath),
+        new DefaultInstantFileNameGenerator().makeCommitFileName(instantTime + "_" + completionTime));
+    fileSystem.delete(fullPath, false);
   }
 
   public static HoodieSchema getSimpleSchema() {
@@ -126,10 +141,14 @@ public class GlueTestUtil {
   private static void createMetaFile(String basePath, String fileName, HoodieCommitMetadata metadata)
       throws IOException {
     byte[] bytes = metadata.toJsonString().getBytes(StandardCharsets.UTF_8);
-    Path fullPath = new Path(basePath + "/" + METAFOLDER_NAME + "/" + fileName);
+    Path fullPath = new Path(timelinePath(basePath), fileName);
     FSDataOutputStream fsout = fileSystem.create(fullPath, true);
     fsout.write(bytes);
     fsout.close();
+  }
+
+  private static String timelinePath(String basePath) {
+    return basePath + "/" + METAFOLDER_NAME + "/" + HoodieTableMetaClient.TIMELINEFOLDER_NAME;
   }
 
   public static Column getColumn(String name, String type, String comment) {
