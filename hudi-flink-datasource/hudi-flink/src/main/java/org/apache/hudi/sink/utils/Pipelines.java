@@ -415,17 +415,19 @@ public class Pipelines {
 
     final boolean isRLI = OptionsResolver.isGlobalRecordLevelIndex(conf) || OptionsResolver.isRecordLevelIndex(conf);
     // Bounded writes require bootstrap automatically only for non-RLI indexes.
-    final boolean needsBootstrap = conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED) || (bounded && !isRLI);
-    if (!needsBootstrap) {
-      return rowDataToHoodieRecord(conf, rowType, dataStream);
+    if (bounded && !isRLI) {
+      final boolean globalIndex = conf.get(FlinkOptions.INDEX_GLOBAL_ENABLED);
+      if (!globalIndex && OptionsResolver.isPartitionedTable(conf)) {
+        return boundedBootstrap(conf, rowType, dataStream);
+      }
+      return streamBootstrap(conf, rowType, dataStream);
     }
 
-    final boolean globalIndex = conf.get(FlinkOptions.INDEX_GLOBAL_ENABLED);
-    if (bounded && !globalIndex && !isRLI && OptionsResolver.isPartitionedTable(conf)) {
-      return boundedBootstrap(conf, rowType, dataStream);
+    // Unbounded sources and RLI indexes bootstrap only when explicitly enabled.
+    if (conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
+      return streamBootstrap(conf, rowType, dataStream);
     }
-
-    return streamBootstrap(conf, rowType, dataStream);
+    return rowDataToHoodieRecord(conf, rowType, dataStream);
   }
 
   private static DataStream<HoodieFlinkInternalRow> streamBootstrap(
