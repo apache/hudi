@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -27,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestExternalFilePathUtil {
@@ -236,9 +238,23 @@ public class TestExternalFilePathUtil {
     // a file written by Hudi is returned as is
     String hudiFileName = "3a9f-1234_1-0-1_20240101000000.parquet";
     assertEquals(hudiFileName, ExternalFilePathUtil.getFilePathInPartition(hudiFileName));
-    // an external file with a nested prefix resolves to its path below the partition
+    // an external file resolves to its path below the partition, with the prefix restored at any depth
+    assertEquals("file1.parquet", ExternalFilePathUtil.getFilePathInPartition("file1.parquet_20240101000000_hudiext"));
+    assertEquals("bucket-0/file1.parquet", ExternalFilePathUtil.getFilePathInPartition("file1.parquet_20240101000000_fg%3Dbucket-0_hudiext"));
     assertEquals("bucket-0/subdir/file1.parquet",
         ExternalFilePathUtil.getFilePathInPartition("file1.parquet_20240101000000_fg%3Dbucket-0%2Fsubdir_hudiext"));
+  }
+
+  @Test
+  public void testMalformedExternalFileNamesAreRejected() {
+    // a marked name without a commit time cannot be parsed
+    HoodieException noCommitTime = assertThrows(HoodieException.class,
+        () -> ExternalFilePathUtil.parseFileIdAndCommitTimeFromExternalFile("file1.parquet_hudiext"));
+    assertTrue(noCommitTime.getMessage().contains("file1.parquet_hudiext"), noCommitTime.getMessage());
+    // a file group prefix that its parent path does not end with cannot be stripped
+    IllegalArgumentException wrongParent = assertThrows(IllegalArgumentException.class,
+        () -> ExternalFilePathUtil.getFullPathOfPartition(new StoragePath("/table/partition1"), "file1.parquet_20240101000000_fg%3Dbucket-0_hudiext"));
+    assertTrue(wrongParent.getMessage().contains("/table/partition1"), wrongParent.getMessage());
   }
 
   @Test

@@ -32,8 +32,11 @@ import org.apache.hudi.metadata.index.model.IndexInitializationContext;
 import org.apache.hudi.metadata.index.model.IndexInitializationPlan;
 import org.apache.hudi.metadata.index.model.IndexPartitionAndRecords;
 import org.apache.hudi.metadata.index.model.IndexUpdateContext;
+import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.MockedStatic;
 
 import java.io.IOException;
@@ -176,30 +179,56 @@ class TestSecondaryIndexer {
         commitMetadata)).isEmpty());
   }
 
-  @Test
-  void testBuildUpdateForReplaceCommitFromExternalWriterWithoutWriteStats() {
-    // files written outside Hudi are registered through replace commits without a known operation type. A fresh
-    // HoodieCommitMetadata carries UNKNOWN; a writer may also leave the type null. A commit that only drops files has
-    // no write stats but still removes the records of the replaced file groups from the index.
-    HoodieEngineContext engineContext = new HoodieLocalEngineContext(getDefaultStorageConf());
-    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
-    HoodieMetadataConfig metadataConfig = mock(HoodieMetadataConfig.class);
+  /** Mocks a table with one secondary index partition, {@code secondary_index_idx}, on top of the given write config. */
+  private static HoodieTableMetaClient mockMetaClientWithSecondaryIndex(HoodieWriteConfig writeConfig, HoodieMetadataConfig metadataConfig,
+                                                                       HoodieIndexDefinition indexDefinition) {
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     HoodieIndexMetadata indexMetadata = mock(HoodieIndexMetadata.class);
-    HoodieIndexDefinition indexDefinition = mock(HoodieIndexDefinition.class);
-
     when(writeConfig.getMetadataConfig()).thenReturn(metadataConfig);
     when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    when(metaClient.getBasePath()).thenReturn(new StoragePath("/tmp/table"));
     when(metaClient.getIndexForMetadataPartition("secondary_index_idx")).thenReturn(Option.of(indexDefinition));
     when(tableConfig.getMetadataPartitions()).thenReturn(Collections.singleton("secondary_index_idx"));
     when(indexMetadata.getIndexDefinitions()).thenReturn(Collections.singletonMap("secondary_index_idx", indexDefinition));
     when(indexDefinition.getIndexName()).thenReturn("secondary_index_idx");
+    return metaClient;
+  }
+
+  @Test
+  void testBuildUpdateRejectsClusteringOfTableWithoutRecordKeys() {
+    // the rows of such a table are keyed by file path and position, which clustering changes
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    HoodieTableMetaClient metaClient = mockMetaClientWithSecondaryIndex(writeConfig, mock(HoodieMetadataConfig.class), mock(HoodieIndexDefinition.class));
+    when(metaClient.getTableConfig().hasRecordKey()).thenReturn(false);
+    HoodieReplaceCommitMetadata commitMetadata = new HoodieReplaceCommitMetadata();
+    commitMetadata.setOperationType(WriteOperationType.CLUSTER);
+
+    SecondaryIndexer indexer = new SecondaryIndexer(new HoodieLocalEngineContext(getDefaultStorageConf()), writeConfig, metaClient);
+    IllegalStateException clustering = assertThrows(IllegalStateException.class, () -> indexer.buildUpdate(IndexUpdateContext.of(
+        "016", mock(HoodieBackedTableMetadata.class), Lazy.lazily(() -> mock(HoodieTableFileSystemView.class)), commitMetadata)));
+    assertTrue(clustering.getMessage().contains("cannot be clustered because it has no record key"), clustering.getMessage());
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testBuildUpdateForReplaceCommitFromExternalWriterWithoutWriteStats(boolean dropsFileGroups) {
+    // files written outside Hudi are registered through replace commits without a known operation type. A fresh
+    // HoodieCommitMetadata carries UNKNOWN; a writer may also leave the type null. A commit that only drops files has
+    // no write stats but still removes the records of the replaced file groups from the index; one that drops nothing
+    // and writes nothing leaves the index alone.
+    HoodieEngineContext engineContext = new HoodieLocalEngineContext(getDefaultStorageConf());
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    HoodieMetadataConfig metadataConfig = mock(HoodieMetadataConfig.class);
+    HoodieIndexDefinition indexDefinition = mock(HoodieIndexDefinition.class);
+    HoodieTableMetaClient metaClient = mockMetaClientWithSecondaryIndex(writeConfig, metadataConfig, indexDefinition);
 
     HoodieReplaceCommitMetadata commitMetadata = new HoodieReplaceCommitMetadata();
     commitMetadata.setOperationType(null);
-    commitMetadata.addReplaceFileId("p1", "file_1.parquet");
+    if (dropsFileGroups) {
+      commitMetadata.addReplaceFileId("p1", "file_1.parquet");
+    }
 
     HoodieData<HoodieRecord> deletes = engineContext.parallelize(Collections.singletonList(
         HoodieMetadataPayload.createSecondaryIndexRecord("p1/file_1.parquet_0", "alice", "secondary_index_idx", true)), 1);
@@ -217,7 +246,7 @@ class TestSecondaryIndexer {
 
       assertEquals(1, result.size());
       assertEquals("secondary_index_idx", result.get(0).indexPartitionName());
-      assertEquals(1, result.get(0).indexRecords().collectAsList().size());
+      assertEquals(dropsFileGroups ? deletes.collectAsList() : Collections.emptyList(), result.get(0).indexRecords().collectAsList());
     }
   }
 

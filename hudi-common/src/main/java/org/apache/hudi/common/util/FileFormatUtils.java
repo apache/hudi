@@ -267,10 +267,10 @@ public abstract class FileFormatUtils {
   public abstract Set<Pair<String, Long>> filterRowKeys(HoodieStorage storage, StoragePath filePath, Set<String> filter);
 
   /**
-   * Read the rowKey list matching the given filter, from the given data file.
-   * If the filter is empty, then this will return all the row keys and corresponding positions.
-   * Formats that support data files written outside Hudi override this method to key every row of such a file,
-   * which carries no record key, by the file path relative to the table base path and the row position.
+   * Read the rowKey list matching the given filter, from the given data file, which was written outside Hudi and
+   * carries no record key. If the filter is empty, then this will return all the row keys and corresponding positions.
+   * Formats that support such files override this method to key every row by the file path relative to the table
+   * base path and the row position.
    *
    * @param storage  {@link HoodieStorage} instance.
    * @param filePath the data file path.
@@ -279,7 +279,25 @@ public abstract class FileFormatUtils {
    * @return set of pairs of row key and position matching candidateRecordKeys.
    */
   public Set<Pair<String, Long>> filterRowKeys(HoodieStorage storage, StoragePath filePath, StoragePath basePath, Set<String> filter) {
-    return filterRowKeys(storage, filePath, filter);
+    throw positionalRowKeysUnsupported();
+  }
+
+  /**
+   * Provides a closable iterator over the row keys of the given data file, which was written outside Hudi and carries
+   * no record key. Every row is keyed by the file path relative to the table base path and the row position, so the
+   * keys stream out in row order without being held in memory. Formats that support such files override this method.
+   *
+   * @param storage  {@link HoodieStorage} instance.
+   * @param filePath the data file path.
+   * @param basePath the table base path.
+   * @return {@link ClosableIterator} of the row keys in row order.
+   */
+  public ClosableIterator<String> getRowKeyIterator(HoodieStorage storage, StoragePath filePath, StoragePath basePath) {
+    throw positionalRowKeysUnsupported();
+  }
+
+  private UnsupportedOperationException positionalRowKeysUnsupported() {
+    return new UnsupportedOperationException("Positional row keys are only supported for parquet base files, not " + getClass().getSimpleName());
   }
 
   /**

@@ -129,6 +129,14 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
         HoodieTestUtils.getStorage(filePath), new StoragePath(filePath), new StoragePath(basePath));
     assertEquals(new HashSet<>(Arrays.asList("2024/external.parquet_0", "2024/external.parquet_1", "2024/external.parquet_2")), generatedKeys);
 
+    // the keys stream out in row order
+    List<String> streamedKeys = new ArrayList<>();
+    try (ClosableIterator<String> rowKeyIterator = parquetUtils.getRowKeyIterator(
+        HoodieTestUtils.getStorage(filePath), new StoragePath(filePath), new StoragePath(basePath))) {
+      rowKeyIterator.forEachRemaining(streamedKeys::add);
+    }
+    assertEquals(Arrays.asList("2024/external.parquet_0", "2024/external.parquet_1", "2024/external.parquet_2"), streamedKeys);
+
     Set<Pair<String, Long>> filtered = parquetUtils.filterRowKeys(
         HoodieTestUtils.getStorage(filePath), new StoragePath(filePath), new StoragePath(basePath), Collections.singleton("2024/external.parquet_1"));
     assertEquals(Collections.singleton(Pair.of("2024/external.parquet_1", 1L)), filtered);

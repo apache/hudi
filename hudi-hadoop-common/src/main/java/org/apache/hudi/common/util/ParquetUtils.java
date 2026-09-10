@@ -121,7 +121,7 @@ public class ParquetUtils extends FileFormatUtils {
    */
   @Override
   public Set<Pair<String, Long>> filterRowKeys(HoodieStorage storage, StoragePath filePath, Set<String> filter) {
-    return filterParquetRowKeys(storage, new Path(filePath.toUri()), Option.empty(), filter, HoodieSchemaUtils.getRecordKeySchema());
+    return filterParquetRowKeys(storage, new Path(filePath.toUri()), filter, HoodieSchemaUtils.getRecordKeySchema());
   }
 
   /**
@@ -137,7 +137,63 @@ public class ParquetUtils extends FileFormatUtils {
    */
   @Override
   public Set<Pair<String, Long>> filterRowKeys(HoodieStorage storage, StoragePath filePath, StoragePath basePath, Set<String> filter) {
-    return filterParquetRowKeys(storage, new Path(filePath.toUri()), Option.of(basePath), filter, HoodieSchemaUtils.getRecordKeySchema());
+    Set<Pair<String, Long>> rowKeys = new HashSet<>();
+    long rowPosition = 0;
+    try (ClosableIterator<String> rowKeyIterator = getRowKeyIterator(storage, filePath, basePath)) {
+      while (rowKeyIterator.hasNext()) {
+        String rowKey = rowKeyIterator.next();
+        if (filter.isEmpty() || filter.contains(rowKey)) {
+          rowKeys.add(Pair.of(rowKey, rowPosition));
+        }
+        rowPosition++;
+      }
+    }
+    return rowKeys;
+  }
+
+  /**
+   * Streams the row keys of the given parquet file, which was written by a system other than Hudi and carries no
+   * record key. Every row is keyed by the file path relative to the table base path and the row position, the same
+   * key the secondary index generates for it. Only the row count is read from the file, no column.
+   *
+   * @param storage  {@link HoodieStorage} instance.
+   * @param filePath The parquet file path.
+   * @param basePath The table base path.
+   * @return {@link ClosableIterator} of the row keys in row order
+   */
+  @Override
+  public ClosableIterator<String> getRowKeyIterator(HoodieStorage storage, StoragePath filePath, StoragePath basePath) {
+    String relativeFilePath = FSUtils.getRelativePartitionPath(basePath, filePath);
+    Configuration conf = storage.getConf().unwrapCopyAs(Configuration.class);
+    conf.addResource(storage.newInstance(filePath, storage.getConf()).getConf().unwrapAs(Configuration.class));
+    // the record key schema projects no column of the file, so every row is read as an empty record
+    AvroReadSupport.setAvroReadSchema(conf, HoodieSchemaUtils.getRecordKeySchema().toAvroSchema());
+    AvroReadSupport.setRequestedProjection(conf, HoodieSchemaUtils.getRecordKeySchema().toAvroSchema());
+    try {
+      ParquetReaderIterator<GenericRecord> rowIterator = new ParquetReaderIterator<>(
+          AvroParquetReader.<GenericRecord>builder(new Path(filePath.toUri())).withConf(conf).build());
+      return new ClosableIterator<String>() {
+        private long rowPosition = 0;
+
+        @Override
+        public boolean hasNext() {
+          return rowIterator.hasNext();
+        }
+
+        @Override
+        public String next() {
+          rowIterator.next();
+          return ExternalFilePathUtil.generateRecordKeyForRow(relativeFilePath, rowPosition++);
+        }
+
+        @Override
+        public void close() {
+          rowIterator.close();
+        }
+      };
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to read row keys from Parquet " + filePath, e);
+    }
   }
 
   public static ParquetMetadata readMetadata(HoodieStorage storage, StoragePath parquetFilePath) {
@@ -167,15 +223,12 @@ public class ParquetUtils extends FileFormatUtils {
    *
    * @param storage    {@link HoodieStorage} instance.
    * @param filePath   The parquet file path.
-   * @param basePath   The table base path; when present, the file carries no record keys and every row is keyed
-   *                   by its relative path and position
    * @param filter     record keys filter
    * @param readSchema schema of columns to be read
    * @return Set of pairs of row key and position matching candidateRecordKeys
    */
   private static Set<Pair<String, Long>> filterParquetRowKeys(HoodieStorage storage,
                                                               Path filePath,
-                                                              Option<StoragePath> basePath,
                                                               Set<String> filter,
                                                               HoodieSchema readSchema) {
     Option<RecordKeysFilterFunction> filterFunction = Option.empty();
@@ -187,24 +240,16 @@ public class ParquetUtils extends FileFormatUtils {
     AvroReadSupport.setAvroReadSchema(conf, readSchema.toAvroSchema());
     AvroReadSupport.setRequestedProjection(conf, readSchema.toAvroSchema());
     Set<Pair<String, Long>> rowKeys = new HashSet<>();
-    // with the table base path given, the file was written outside Hudi and carries no record key: every row is keyed
-    // by the file path relative to the table and its position, the same key the secondary index generates for it
-    Option<String> relativeFilePath = basePath.map(path -> FSUtils.getRelativePartitionPath(path, convertToStoragePath(filePath)));
     long rowPosition = 0;
     try (ParquetReader reader = AvroParquetReader.builder(filePath).withConf(conf).build()) {
       Object obj = reader.read();
       while (obj != null) {
         if (obj instanceof GenericRecord) {
-          String recordKey;
-          if (relativeFilePath.isPresent()) {
-            recordKey = ExternalFilePathUtil.generateRecordKeyForRow(relativeFilePath.get(), rowPosition);
-          } else {
-            Object recordKeyValue = ((GenericRecord) obj).get(HoodieRecord.RECORD_KEY_METADATA_FIELD);
-            if (recordKeyValue == null) {
-              throw new HoodieException("Record key is missing in row " + rowPosition + " of " + filePath);
-            }
-            recordKey = recordKeyValue.toString();
+          Object recordKeyValue = ((GenericRecord) obj).get(HoodieRecord.RECORD_KEY_METADATA_FIELD);
+          if (recordKeyValue == null) {
+            throw new HoodieException("Record key is missing in row " + rowPosition + " of " + filePath);
           }
+          String recordKey = recordKeyValue.toString();
           if (!filterFunction.isPresent() || filterFunction.get().apply(recordKey)) {
             rowKeys.add(Pair.of(recordKey, rowPosition));
           }

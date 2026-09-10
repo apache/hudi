@@ -297,7 +297,7 @@ class TestGlobalRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
 
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
-  def testPrunedStoragePaths(includeLogFiles: Boolean): Unit = {
+  def testPrunedFileSlices(includeLogFiles: Boolean): Unit = {
     val hudiOpts = commonOpts ++ metadataOpts ++ rliEnableOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> "MERGE_ON_READ")
     val df = doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
@@ -317,13 +317,14 @@ class TestGlobalRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     val selectedPartition = "2016/03/15"
     val partitionFilter: Expression = EqualTo(AttributeReference("partition", StringType)(), Literal(selectedPartition))
     val (isPruned, prunedPaths) = fileIndex.prunePartitionsAndGetFileSlices(Seq.empty, Seq(partitionFilter))
-    val storagePaths = RecordLevelIndexSupport.getPrunedStoragePaths(prunedPaths, fileIndex)
-    // verify pruned paths contain the selected partition and the size of the pruned file paths
-    // when includeLogFiles is set to true, there are two storages paths - base file and log file
+    val fileSlices = RecordLevelIndexSupport.getPrunedFileSlices(prunedPaths, fileIndex)
+    // verify the pruned file slices belong to the selected partition and the number of their files
+    // when includeLogFiles is set to true, there are two files - base file and log file
     // every partition contains only one file slice
     assertTrue(isPruned)
-    assertEquals(if (includeLogFiles) 2 else 1, storagePaths.size)
-    assertTrue(storagePaths.forall(path => path.toString.contains(selectedPartition)))
+    assertEquals(1, fileSlices.size)
+    assertTrue(fileSlices.forall(fileSlice => fileSlice.getPartitionPath == selectedPartition))
+    assertEquals(if (includeLogFiles) 2 else 1, fileSlices.flatMap(fileSlice => RecordLevelIndexSupport.getFileNames(fileSlice, fileIndex)).size)
 
     val recordKey: String = df.filter("partition = '" + selectedPartition + "'").limit(1).collect().apply(0).getAs("_row_key")
     val dataFilter = EqualTo(attribute("_row_key"), Literal(recordKey))

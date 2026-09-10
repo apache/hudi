@@ -61,23 +61,9 @@ public class BaseFileRecordParsingUtils {
    * @param instantTime          instant time of interest.
    * @param storage              instance of {@link HoodieStorage}.
    * @param isPartitionedRLI     whether the record index is partitioned.
+   * @param generateRecordKeys   whether the table carries no record key, so that every row is keyed by the file path
+   *                             relative to the table base path and the row position, see {@link HoodieTableConfig#hasRecordKey()}.
    * @return Iterator of {@link HoodieRecord}s for RLI Metadata partition.
-   */
-  public static Iterator<HoodieRecord> generateRLIMetadataHoodieRecordsForBaseFile(String basePath,
-                                                                                   HoodieWriteStat writeStat,
-                                                                                   Integer writesFileIdEncoding,
-                                                                                   String instantTime,
-                                                                                   HoodieStorage storage,
-                                                                                   boolean isPartitionedRLI) {
-    return generateRLIMetadataHoodieRecordsForBaseFile(basePath, writeStat, writesFileIdEncoding, instantTime, storage, isPartitionedRLI, false);
-  }
-
-  /**
-   * Generates RLI Metadata records for base files, see
-   * {@link #generateRLIMetadataHoodieRecordsForBaseFile(String, HoodieWriteStat, Integer, String, HoodieStorage, boolean)}.
-   *
-   * @param generateRecordKeys whether the table carries no record key, so that every row is keyed by the file path
-   *                           relative to the table base path and the row position, see {@link HoodieTableConfig#hasRecordKey()}.
    */
   public static Iterator<HoodieRecord> generateRLIMetadataHoodieRecordsForBaseFile(String basePath,
                                                                                    HoodieWriteStat writeStat,

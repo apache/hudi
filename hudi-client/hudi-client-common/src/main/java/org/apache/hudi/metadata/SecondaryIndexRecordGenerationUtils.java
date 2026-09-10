@@ -46,6 +46,7 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -58,6 +59,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.model.FileSliceAndPartition;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -79,6 +82,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.tryResolveSchemaF
 /**
  * Utility methods for generating secondary index records during initialization and updates.
  */
+@Slf4j
 public class SecondaryIndexRecordGenerationUtils {
 
   /**
@@ -113,18 +117,7 @@ public class SecondaryIndexRecordGenerationUtils {
       throw new HoodieIOException("Secondary index cannot support logs having inserts with current offering. Please disable secondary index.");
     }
 
-    HoodieSchema tableSchema;
-    try {
-      // a table without any completed commit, e.g. one that registers files written outside Hudi for the first time,
-      // only has the schema of the current commit.
-      tableSchema = tryResolveSchemaForTable(dataMetaClient)
-          .orElseGet(() -> Option.ofNullable(commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY))
-              .map(HoodieSchema::parse)
-              .orElseThrow(() -> new HoodieException("The table has no completed commit to resolve its schema from and the commit metadata has no "
-                  + HoodieCommitMetadata.SCHEMA_KEY)));
-    } catch (Exception e) {
-      throw new HoodieException("Failed to get latest schema for " + dataMetaClient.getBasePath(), e);
-    }
+    HoodieSchema tableSchema = resolveTableSchema(dataMetaClient, commitMetadata);
     Map<String, List<HoodieWriteStat>> writeStatsByFileId = allWriteStats.stream().collect(Collectors.groupingBy(HoodieWriteStat::getFileId));
     int parallelism = Math.max(Math.min(writeStatsByFileId.size(), metadataConfig.getSecondaryIndexParallelism()), 1);
 
@@ -228,9 +221,35 @@ public class SecondaryIndexRecordGenerationUtils {
   }
 
   /**
+   * Resolves the schema of the table from its completed commits. A table without any completed commit, e.g. one
+   * that registers files written outside Hudi for the first time, only has the schema of the current commit, which
+   * Hudi stores as an empty string when the commit carries no schema.
+   */
+  private static HoodieSchema resolveTableSchema(HoodieTableMetaClient dataMetaClient, HoodieCommitMetadata commitMetadata) {
+    Option<HoodieSchema> tableSchema;
+    try {
+      tableSchema = tryResolveSchemaForTable(dataMetaClient);
+    } catch (Exception e) {
+      throw new HoodieException("Failed to get latest schema for " + dataMetaClient.getBasePath(), e);
+    }
+    if (tableSchema.isPresent()) {
+      return tableSchema.get();
+    }
+    String commitSchema = commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY);
+    if (StringUtils.isNullOrEmpty(commitSchema)) {
+      throw new HoodieException("Table " + dataMetaClient.getBasePath() + " has no completed commit to resolve its schema from and the commit "
+          + "metadata carries no " + HoodieCommitMetadata.SCHEMA_KEY);
+    }
+    return HoodieSchema.parse(commitSchema);
+  }
+
+  /**
    * Generates delete records for every record of the file groups that the given replace commit replaces without
-   * writing to them again, e.g. files written outside Hudi that are superseded by newer files. Records that the same
-   * commit writes again are kept by {@link HoodieTableMetadataUtil#reduceByKeys}, which prefers the non-deleted record.
+   * writing to them again, e.g. files written outside Hudi that are superseded by newer files. A file group that
+   * the same commit writes again is skipped, because its rewritten records reach the index through the write stats.
+   * A keyed table that takes this path can delete and insert the same key in one commit when a record moves
+   * between file groups; {@link HoodieTableMetadataUtil#reduceByKeys} then prefers the non-deleted record.
+   * A table without record keys never writes a file group it replaces, because the record index rejects such a commit.
    */
   private static <T> HoodieData<HoodieRecord> convertReplacedFileGroupsToSecondaryIndexRecords(HoodieReplaceCommitMetadata replaceCommitMetadata,
                                                                                                Set<String> writtenFileIds,
@@ -256,6 +275,8 @@ public class SecondaryIndexRecordGenerationUtils {
       Option<FileSlice> replacedFileSlice = getSliceView(writeConfig, dataMetaClient)
           .getLatestMergedFileSliceBeforeOrOn(partitionAndFileId.getKey(), instantTime, partitionAndFileId.getValue());
       if (!replacedFileSlice.isPresent()) {
+        log.warn("Replaced file group {} in partition {} has no file slice to read the secondary keys to delete from",
+            partitionAndFileId.getValue(), partitionAndFileId.getKey());
         return Collections.<HoodieRecord>emptyIterator();
       }
       ClosableIterator<Pair<String, String>> recordKeyAndSecondaryKeyIterator = createSecondaryIndexRecordGenerator(
@@ -305,34 +326,30 @@ public class SecondaryIndexRecordGenerationUtils {
       return engineContext.emptyHoodieData();
     }
     final int parallelism = Math.min(fileSlices.size(), secondaryIndexMaxParallelism);
-    final StoragePath basePath = metaClient.getBasePath();
-    HoodieSchema tableSchema;
-    try {
-      tableSchema = new TableSchemaResolver(metaClient).getTableSchema();
-    } catch (Exception e) {
-      throw new HoodieException("Failed to get latest schema for " + metaClient.getBasePath(), e);
-    }
     ReaderContextFactory<T> readerContextFactory = engineContext.getReaderContextFactory(metaClient);
     engineContext.setJobStatus(activeModule, "Secondary Index: reading secondary keys from " + fileSlices.size() + " file slices");
     HoodieFileFormat baseFileFormat = metaClient.getTableConfig().getBaseFileFormat();
     return engineContext.parallelize(fileSlices, parallelism).flatMap(partitionAndBaseFile -> {
-      final String partition = partitionAndBaseFile.getPartitionPath();
       final FileSlice fileSlice = partitionAndBaseFile.getFileSlice();
       // the storage path keeps the directory prefix of a file written outside Hudi, which its file name alone loses
       Option<StoragePath> dataFilePath = fileSlice.getBaseFile().map(HoodieBaseFile::getStoragePath);
-      HoodieSchema readerSchema;
-      if (dataFilePath.isPresent()) {
-        readerSchema = HoodieIOFactory.getIOFactory(metaClient.getStorage())
-            .getFileFormatUtils(baseFileFormat)
-            .readSchema(metaClient.getStorage(), dataFilePath.get());
-      } else {
-        readerSchema = tableSchema;
-      }
+      // a file slice without a base file has only log files, whose schema is the table schema
+      HoodieSchema readerSchema = dataFilePath.isPresent()
+          ? HoodieIOFactory.getIOFactory(metaClient.getStorage()).getFileFormatUtils(baseFileFormat).readSchema(metaClient.getStorage(), dataFilePath.get())
+          : resolveTableSchema(metaClient);
       ClosableIterator<Pair<String, String>> secondaryIndexGenerator = createSecondaryIndexRecordGenerator(
           readerContextFactory.getContext(), metaClient, fileSlice, readerSchema, indexDefinition,
           metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::requestedTime).orElse(""), props, false);
       return new CloseableMappingIterator<>(secondaryIndexGenerator, pair -> createSecondaryIndexRecord(pair.getKey(), pair.getValue(), indexDefinition.getIndexName(), false));
     });
+  }
+
+  private static HoodieSchema resolveTableSchema(HoodieTableMetaClient metaClient) {
+    try {
+      return new TableSchemaResolver(metaClient).getTableSchema();
+    } catch (Exception e) {
+      throw new HoodieException("Failed to get latest schema for " + metaClient.getBasePath(), e);
+    }
   }
 
   /**

@@ -17,7 +17,6 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.RecordLevelIndexSupport.getPrunedStoragePaths
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieListData
 import org.apache.hudi.common.model.FileSlice
@@ -40,11 +39,10 @@ class GlobalRecordLevelIndexSupport(spark: SparkSession,
   override protected def lookupCandidateFilesForRecordKeys(fileIndex: HoodieFileIndex,
                                                            prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
                                                            recordKeys: List[String]): Option[Set[String]] = {
-    val prunedStoragePaths = getPrunedStoragePaths(prunedPartitionsAndFileSlices, fileIndex)
     val recordIndexData = metadataTable.readRecordIndexLocationsWithKeys(HoodieListData.eager(recordKeys.asJava))
     try {
       val fileIdToPartitionMap = collectFileIdToPartitionMap(recordIndexData)
-      Option.apply(filterCandidateFiles(prunedStoragePaths, fileIdToPartitionMap))
+      Option.apply(filterCandidateFiles(prunedPartitionsAndFileSlices, fileIndex, fileIdToPartitionMap))
     } finally {
       // Clean up the RDD to avoid memory leaks
       recordIndexData.unpersistWithDependencies()

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.functional;
 
+import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
@@ -46,6 +47,12 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.execution.FileSourceScanExec;
+import org.apache.spark.sql.execution.SparkPlan;
+import org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -66,6 +73,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -103,7 +111,7 @@ public class TestExternalFileRecordAndSecondaryIndex extends HoodieClientTestBas
   @ParameterizedTest
   @MethodSource("partitionsPrefixesAndRecordIndexKinds")
   public void testRecordAndSecondaryIndexForExternalFiles(String partitionPath, Option<String> prefix, boolean partitionedRecordIndex) throws Exception {
-    initExternalTable();
+    initExternalTable(partitionPath);
     HoodieWriteConfig writeConfig = writeConfig(true, partitionedRecordIndex);
     writeClient = getHoodieWriteClient(writeConfig);
     writeClient.setOperationType(WriteOperationType.UNKNOWN);
@@ -137,7 +145,7 @@ public class TestExternalFileRecordAndSecondaryIndex extends HoodieClientTestBas
   @ParameterizedTest
   @MethodSource("partitionsAndPrefixes")
   public void testIndexesAreBuiltFromRegisteredFilesWhenEnabledLater(String partitionPath, Option<String> prefix) throws Exception {
-    initExternalTable();
+    initExternalTable(partitionPath);
     // the first file is registered while both indexes are off
     writeClient = getHoodieWriteClient(writeConfig(false, false));
     writeClient.setOperationType(WriteOperationType.UNKNOWN);
@@ -157,6 +165,12 @@ public class TestExternalFileRecordAndSecondaryIndex extends HoodieClientTestBas
     String secondaryIndexPartition = secondaryIndexPartition();
     assertEquals(mapOf("alice", setOf(file1.key(0), file1.key(2)), "bob", setOf(file1.key(1)), "carol", setOf(file2.key(0))),
         readSecondaryIndex(tableMetadata, secondaryIndexPartition, Arrays.asList("alice", "bob", "carol")));
+    if (partitionPath.isEmpty()) {
+      // a query on the indexed column reads only the file the secondary index points at. The partitioned shape is not
+      // read here: the test harness declares a partition field that the schema of the external files does not carry.
+      assertSecondaryIndexPrunesRead("carol", setOf(4), 1);
+      assertSecondaryIndexPrunesRead("alice", setOf(1, 3), 1);
+    }
 
     // the third commit only drops the first file
     commitReplace(Collections.emptyList(), Collections.singletonMap(partitionPath, Collections.singletonList(file1.fileId())));
@@ -168,17 +182,49 @@ public class TestExternalFileRecordAndSecondaryIndex extends HoodieClientTestBas
         readSecondaryIndex(tableMetadata, secondaryIndexPartition, Arrays.asList("alice", "bob", "carol")));
   }
 
-  /** Tables registered from other formats carry neither meta fields nor record key fields. */
-  private void initExternalTable() throws IOException {
+  @Test
+  public void testClusteringIsRejectedBecausePositionalKeysDoNotSurviveIt() throws Exception {
+    initExternalTable("");
+    HoodieWriteConfig writeConfig = writeConfig(true, false);
+    writeClient = getHoodieWriteClient(writeConfig);
+    writeClient.setOperationType(WriteOperationType.UNKNOWN);
+    commitReplace(Arrays.asList(
+        Pair.of(new ExternalFile("", Option.empty(), "file_1.parquet"), rows(1, "alice", 2, "bob")),
+        Pair.of(new ExternalFile("", Option.empty(), "file_2.parquet"), rows(3, "carol"))), Collections.emptyMap());
+
+    // clustering rewrites the rows into a new file, so their keys, which are file path and position, would change.
+    // The clustering commit is replayed the way clustering completes it: a replace commit of the rewritten file that
+    // carries the CLUSTER operation type and updates the indexes from its commit metadata.
+    writeClient.setOperationType(WriteOperationType.CLUSTER);
+    Exception clustering = assertThrows(Exception.class, () -> commitReplace(
+        Collections.singletonList(Pair.of(new ExternalFile("", Option.empty(), "file_3.parquet"), rows(1, "alice", 2, "bob", 3, "carol"))),
+        Collections.singletonMap("", Arrays.asList("file_1.parquet", "file_2.parquet"))));
+    Throwable cause = clustering;
+    while (cause.getCause() != null && (cause.getMessage() == null || !cause.getMessage().contains("cannot be clustered"))) {
+      cause = cause.getCause();
+    }
+    assertTrue(String.valueOf(cause.getMessage()).contains("cannot be clustered because it has no record key"), String.valueOf(clustering));
+  }
+
+  /**
+   * Tables registered from other formats carry neither meta fields nor record key fields. An unpartitioned table
+   * declares no partition field either; the test harness otherwise declares one that the schema does not carry.
+   */
+  private void initExternalTable(String partitionPath) throws IOException {
     Properties tableProperties = new Properties();
     tableProperties.setProperty(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
     tableProperties.setProperty(HoodieTableConfig.RECORDKEY_FIELDS.key(), "");
+    if (partitionPath.isEmpty()) {
+      tableProperties.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), "");
+    }
     initMetaClient(tableProperties);
   }
 
   private HoodieWriteConfig writeConfig(boolean withIndexes, boolean partitionedRecordIndex) {
     HoodieMetadataConfig.Builder metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(true)
+        // the indexes are updated from the commit metadata, the way replace commits and table services update them
+        .withStreamingWriteEnabled(false)
         .withMetadataIndexColumnStats(false);
     if (withIndexes && partitionedRecordIndex) {
       // the secondary index builds on the global record index only
@@ -192,8 +238,6 @@ public class TestExternalFileRecordAndSecondaryIndex extends HoodieClientTestBas
         .withPath(metaClient.getBasePath())
         .withSchema(SCHEMA.toString())
         .withPopulateMetaFields(false)
-        // file ids of external files are file names, not UUIDs, so the record index stores them as raw strings
-        .withWritesFileIdEncoding(1)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(INMEMORY).build())
         .withEmbeddedTimelineServerEnabled(false)
         .withMetadataConfig(metadataConfig.build())
@@ -246,6 +290,24 @@ public class TestExternalFileRecordAndSecondaryIndex extends HoodieClientTestBas
     return path.getFileSystem(conf).getFileStatus(path).getLen();
   }
 
+  /**
+   * Reads the table through Spark with a filter on the indexed column and asserts the rows returned and the number of
+   * files scanned, which the secondary index prunes to the files that hold the secondary key.
+   */
+  private void assertSecondaryIndexPrunesRead(String secondaryKey, Set<Integer> expectedIds, long expectedFileCount) {
+    Dataset<Row> rows = sparkSession.read().format("hudi")
+        .option(HoodieMetadataConfig.ENABLE.key(), "true")
+        .option(DataSourceReadOptions.ENABLE_DATA_SKIPPING().key(), "true")
+        .load(metaClient.getBasePath().toString())
+        .where(NAME_FIELD + " = '" + secondaryKey + "'");
+    assertEquals(expectedIds, rows.collectAsList().stream().map(row -> row.getInt(row.fieldIndex(ID_FIELD))).collect(Collectors.toSet()));
+    SparkPlan scan = rows.queryExecution().executedPlan().collectLeaves().head();
+    if (scan instanceof AdaptiveSparkPlanExec) {
+      scan = ((AdaptiveSparkPlanExec) scan).executedPlan().collectLeaves().head();
+    }
+    assertEquals(expectedFileCount, ((FileSourceScanExec) scan).metrics().apply("numFiles").value());
+  }
+
   private HoodieBackedTableMetadata tableMetadata(HoodieWriteConfig writeConfig) {
     return new HoodieBackedTableMetadata(context, metaClient.getStorage(), writeConfig.getMetadataConfig(), writeConfig.getBasePath(), true);
   }
@@ -296,7 +358,8 @@ public class TestExternalFileRecordAndSecondaryIndex extends HoodieClientTestBas
     return map;
   }
 
-  private static Set<String> setOf(String... values) {
+  @SafeVarargs
+  private static <T> Set<T> setOf(T... values) {
     return Arrays.stream(values).collect(Collectors.toSet());
   }
 

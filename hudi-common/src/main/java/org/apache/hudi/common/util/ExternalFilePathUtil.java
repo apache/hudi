@@ -18,8 +18,11 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 /**
  * Utility methods for handling externally created files.
@@ -154,6 +157,9 @@ public class ExternalFilePathUtil {
         ? prefixMarkerIndex
         : fileName.lastIndexOf(EXTERNAL_FILE_SUFFIX);
     int commitTimeStart = fileName.lastIndexOf('_', markerEnd - 1);
+    if (commitTimeStart == -1) {
+      throw new HoodieException("External file name " + fileName + " carries no commit time before its marker");
+    }
     return fileName.substring(0, commitTimeStart);
   }
 
@@ -169,7 +175,12 @@ public class ExternalFilePathUtil {
    */
   public static StoragePath getFullPathOfPartition(StoragePath parent, String fileName) {
     return getExternalFileGroupPrefix(fileName)
-        .map(prefix -> new StoragePath(parent.toString().substring(0, parent.toString().length() - prefix.length() - 1)))
+        .map(prefix -> {
+          String parentPath = parent.toString();
+          checkArgument(parentPath.endsWith(StoragePath.SEPARATOR + prefix),
+              "External file " + fileName + " carries the file group prefix " + prefix + " but its parent " + parentPath + " does not end with it");
+          return new StoragePath(parentPath.substring(0, parentPath.length() - prefix.length() - 1));
+        })
         .orElse(parent);
   }
 

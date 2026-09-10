@@ -167,6 +167,8 @@ class TestPartitionedRecordIndexer {
     when(metadataConfig.isRecordLevelIndexEnabled()).thenReturn(true);
     when(dataMetaClient.getTableConfig()).thenReturn(tableConfig);
     when(tableConfig.getBaseFileFormat()).thenReturn(HoodieFileFormat.PARQUET);
+    // the table carries record keys, so none are generated
+    when(tableConfig.hasRecordKey()).thenReturn(true);
     when(dataMetaClient.getBasePath()).thenReturn(new StoragePath("/tmp/hudi-partitioned-record-index-test"));
     doReturn(getDefaultStorageConf()).when(dataMetaClient).getStorageConf();
 
@@ -198,7 +200,7 @@ class TestPartitionedRecordIndexer {
       mockedMetadataUtil.when(() -> HoodieTableMetadataUtil.reduceByKeys(any(), anyInt(), anyBoolean()))
           .thenAnswer(invocation -> invocation.getArgument(0));
       mockedBaseFileParsingUtils.when(() -> BaseFileRecordParsingUtils
-              .generateRLIMetadataHoodieRecordsForBaseFile(any(), any(), any(), any(), any(), anyBoolean(), anyBoolean()))
+              .generateRLIMetadataHoodieRecordsForBaseFile(any(), any(), any(), any(), any(), anyBoolean(), eq(false)))
           .thenReturn(Collections.singletonList(
               HoodieMetadataPayload.createRecordIndexUpdate(
                   "rk1", "p1", fileId, "20240101010101", 0)).iterator());
@@ -217,7 +219,7 @@ class TestPartitionedRecordIndexer {
       assertEquals("p1", payload.getDataPartition());
 
       mockedBaseFileParsingUtils.verify(() -> BaseFileRecordParsingUtils
-          .generateRLIMetadataHoodieRecordsForBaseFile(any(), any(), anyInt(), any(), any(), eq(true), anyBoolean()));
+          .generateRLIMetadataHoodieRecordsForBaseFile(any(), any(), anyInt(), any(), any(), eq(true), eq(false)));
       mockedMetadataUtil.verify(() -> HoodieTableMetadataUtil
           .reduceByKeys(any(), anyInt(), eq(true)));
     }
