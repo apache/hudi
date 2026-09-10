@@ -123,13 +123,10 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
     }
     HoodieRecord populatedRecord = hoodieRecord.prependMetaFields(
         schema, writeSchemaWithMetaFields, populateMetadataFields(hoodieRecord), recordProperties);
-    String keyField = config.populateMetaFields()
-        ? HoodieRecord.RECORD_KEY_METADATA_FIELD
-        : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
     if (!canWriteDataFile()) {
       flushAppend();
     }
-    writer.appendRecord(populatedRecord, writeSchemaWithMetaFields, keyField);
+    writer.appendRecord(populatedRecord, writeSchemaWithMetaFields);
     if (isUpdateRecord || isLogCompaction) {
       updatedRecordsWritten++;
     } else {
@@ -143,13 +140,10 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
     hoodieRecord.unseal();
     hoodieRecord.clearNewLocation();
     hoodieRecord.seal();
-    String keyField = schema.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD).isPresent()
-        ? HoodieRecord.RECORD_KEY_METADATA_FIELD
-        : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
     if (!canWriteDeleteFile()) {
       flushAppend();
     }
-    writer.appendDeleteRecord(hoodieRecord, schema, keyField);
+    writer.appendDeleteRecord(hoodieRecord, schema);
     recordsDeleted++;
   }
 

@@ -91,12 +91,10 @@ public class TestHoodieNativeLogAppendHandle {
       HoodieNativeLogFormatWriter writer = writers.constructed().get(0);
 
       handle.writeData(inputRecord, true);
-      verify(writer).appendRecord(eq(populatedRecord), any(HoodieSchema.class),
-          eq(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+      verify(writer).appendRecord(eq(populatedRecord), any(HoodieSchema.class));
       handle.writeDeleteRecord(inputRecord);
       verify(inputRecord).clearNewLocation();
-      verify(writer).appendDeleteRecord(eq(inputRecord), any(HoodieSchema.class),
-          eq(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+      verify(writer).appendDeleteRecord(eq(inputRecord), any(HoodieSchema.class));
 
       handle.flushWriter();
       verify(writer).flushAppend(any());
@@ -133,7 +131,7 @@ public class TestHoodieNativeLogAppendHandle {
       handle.writeData(inputRecord, false);
       InOrder rolloverOrder = inOrder(writer);
       rolloverOrder.verify(writer).flushAppend(any());
-      rolloverOrder.verify(writer).appendRecord(eq(populatedRecord), any(HoodieSchema.class), any());
+      rolloverOrder.verify(writer).appendRecord(eq(populatedRecord), any(HoodieSchema.class));
 
       handle.flushWriter();
       verify(writer, times(2)).flushAppend(any());
@@ -162,7 +160,7 @@ public class TestHoodieNativeLogAppendHandle {
   }
 
   @Test
-  public void testUsesConfiguredKeyWithoutMetadataFieldsAndSkipsIgnoredRecords() throws Exception {
+  public void testWritesWithoutMetadataFieldsAndSkipsIgnoredRecords() throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withPath("/tmp")
         .withSchema(SCHEMA)
@@ -171,7 +169,6 @@ public class TestHoodieNativeLogAppendHandle {
         .withWriteRecordPositionsEnabled(false)
         .build();
     HoodieTable table = table(config);
-    when(table.getMetaClient().getTableConfig().getRecordKeyFieldProp()).thenReturn("id");
 
     try (MockedConstruction<HoodieNativeLogFormatWriter> writers = mockConstruction(
         HoodieNativeLogFormatWriter.class, (writer, context) -> {
@@ -186,16 +183,16 @@ public class TestHoodieNativeLogAppendHandle {
       HoodieRecord ignoredRecord = mock(HoodieRecord.class);
       when(ignoredRecord.shouldIgnore(any(HoodieSchema.class), any())).thenReturn(true);
       handle.writeData(ignoredRecord, false);
-      verify(writer, never()).appendRecord(eq(ignoredRecord), any(), any());
+      verify(writer, never()).appendRecord(eq(ignoredRecord), any());
 
       HoodieRecord inputRecord = mock(HoodieRecord.class);
       HoodieRecord populatedRecord = mock(HoodieRecord.class);
       when(inputRecord.prependMetaFields(any(HoodieSchema.class), any(HoodieSchema.class), any(), any()))
           .thenReturn(populatedRecord);
       handle.writeData(inputRecord, false);
-      verify(writer).appendRecord(eq(populatedRecord), any(HoodieSchema.class), eq("id"));
+      verify(writer).appendRecord(eq(populatedRecord), any(HoodieSchema.class));
       handle.writeDeleteWithoutMetadata(inputRecord);
-      verify(writer).appendDeleteRecord(eq(inputRecord), any(HoodieSchema.class), eq("id"));
+      verify(writer).appendDeleteRecord(eq(inputRecord), any(HoodieSchema.class));
     }
   }
 
