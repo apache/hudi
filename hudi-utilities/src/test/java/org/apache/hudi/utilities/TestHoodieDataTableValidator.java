@@ -33,6 +33,7 @@ import org.apache.hudi.utilities.testutils.CapturingLogAppender;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -44,6 +45,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
@@ -173,6 +175,7 @@ public class TestHoodieDataTableValidator extends HoodieSparkClientTestBase {
    * first round throws, which is what stops the job.
    */
   @Test
+  @Timeout(value = 2, unit = TimeUnit.MINUTES)
   public void testContinuousModeStopsOnValidationFailure() throws IOException {
     writeOneCommit();
     addUnaccountedBaseFile("00000000000001");
@@ -199,6 +202,11 @@ public class TestHoodieDataTableValidator extends HoodieSparkClientTestBase {
     // a Config straight out of JCommander has no base path yet
     assertEquals(new HoodieDataTableValidator.Config(), new HoodieDataTableValidator.Config());
     assertEquals(new HoodieDataTableValidator.Config().hashCode(), new HoodieDataTableValidator.Config().hashCode());
+    // --help is not compared, so it must not be hashed either
+    HoodieDataTableValidator.Config askedForHelp = new HoodieDataTableValidator.Config();
+    askedForHelp.help = true;
+    assertEquals(new HoodieDataTableValidator.Config(), askedForHelp);
+    assertEquals(new HoodieDataTableValidator.Config().hashCode(), askedForHelp.hashCode());
 
     HoodieDataTableValidator.Config same = validatorConfig(true);
     same.basePath = "/tmp/table";

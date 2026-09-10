@@ -228,7 +228,7 @@ public class HoodieDataTableValidator implements Serializable {
     @Override
     public int hashCode() {
       return Objects.hash(basePath, continuous, minValidateIntervalSeconds, parallelism, ignoreFailed, sparkMaster, sparkMemory,
-          assumeDatePartitioning, propsFilePath, configs, help);
+          assumeDatePartitioning, propsFilePath, configs);
     }
   }
 
