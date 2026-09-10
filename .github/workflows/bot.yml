@@ -1510,14 +1510,17 @@ jobs:
           # dlcdn only carries the current release of each line; fall back to
           # the archive for older pins (#19883). Plain --retry, not
           # --retry-all-errors, so a 404 on the CDN falls through immediately.
+          # --speed-limit is a dead-connection detector, not a slowness one:
+          # --retry truncates the output back to byte 0, so a floor set near
+          # the archive's real throughput re-downloads 382MB per abort.
           DEST="$GITHUB_WORKSPACE/$SPARK_ARCHIVE"
           downloaded=false
           for base in https://dlcdn.apache.org/spark https://archive.apache.org/dist/spark; do
             echo "Downloading $SPARK_ARCHIVE from $base"
             if curl -fL --create-dirs -o "$DEST" \
                 --retry 5 --retry-delay 10 \
-                --connect-timeout 30 --speed-limit 100000 --speed-time 120 \
-                -C - "$base/$SPARK_ARCHIVE"; then
+                --connect-timeout 30 --speed-limit 1000 --speed-time 120 \
+                "$base/$SPARK_ARCHIVE"; then
               downloaded=true
               break
             fi
