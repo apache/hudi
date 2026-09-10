@@ -23,18 +23,18 @@ This module packages the Hudi Flink bundle for reading and writing Hudi tables w
 ## Lance dependencies
 
 The Hudi Flink bundle does not include Lance runtime dependencies. To use Lance with Hudi,
-ensure that the Flink runtime includes the following dependencies.
+ensure that the Flink runtime includes the following dependencies and their required transitive
+dependencies. Use versions compatible with the dependencies of your Hudi version; see its
+[root POM](../../pom.xml) for the Lance and Arrow versions.
 
-| Dependency | Version |
-|------------|---------|
-| `org.lance:lance-core` | 4.0.0 |
-| `org.apache.arrow:arrow-vector` | 18.3.0 |
-| `org.apache.arrow:arrow-format` | 18.3.0 |
-| `org.apache.arrow:arrow-memory-core` | 18.3.0 |
-| `org.apache.arrow:arrow-memory-netty` | 18.3.0 |
-| `org.apache.arrow:arrow-memory-netty-buffer-patch` | 18.3.0 |
-| `org.apache.arrow:arrow-c-data` | 18.3.0 |
-| `org.questdb:jar-jni` | 1.1.1 |
-| `com.google.flatbuffers:flatbuffers-java` | 25.2.10 |
-| `io.netty:netty-buffer` | 4.1.119.Final |
-| `io.netty:netty-common` | 4.1.119.Final |
+- `org.lance:lance-core`
+- `org.apache.arrow:arrow-vector`
+- `org.apache.arrow:arrow-format`
+- `org.apache.arrow:arrow-memory-core`
+- `org.apache.arrow:arrow-memory-netty`
+- `org.apache.arrow:arrow-memory-netty-buffer-patch`
+- `org.apache.arrow:arrow-c-data`
+- `org.questdb:jar-jni`
+- `com.google.flatbuffers:flatbuffers-java`
+- `io.netty:netty-buffer`
+- `io.netty:netty-common`
