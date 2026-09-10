@@ -28,9 +28,14 @@ import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
@@ -47,6 +52,7 @@ import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieSimpleIndex;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
@@ -60,6 +66,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
@@ -69,6 +76,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -78,6 +86,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.apache.hudi.testutils.Assertions.assertComplexKeyGeneratorValidationThrows;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -102,6 +111,85 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
   private static BaseHoodieWriteClient<?, ?, ?, ?> validatorClient(HoodieWriteConfig writeConfig) {
     return new TestWriteClient(writeConfig, mock(HoodieTable.class), Option.empty(),
         mock(BaseHoodieTableServiceClient.class));
+  }
+
+  private static HoodieSchema cdcDataSchema(boolean vector) {
+    HoodieSchema fieldSchema = vector ? HoodieSchema.createVector(2)
+        : HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.FLOAT));
+    return HoodieSchema.createRecord("cdc_record", null, null, Collections.singletonList(
+        HoodieSchemaField.of("embedding", HoodieSchema.createNullable(fieldSchema))));
+  }
+
+  @ParameterizedTest
+  @EnumSource(HoodieCDCSupplementalLoggingMode.class)
+  void validateCdcVectorSchema(HoodieCDCSupplementalLoggingMode mode) throws IOException {
+    initCdcTable(mode, true);
+    // CDC settings deliberately come from the table, not the writer's defaults.
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath).withSchema(cdcDataSchema(true).toString()).build();
+    try (BaseHoodieWriteClient<?, ?, ?, ?> client = validatorClient(writeConfig)) {
+      if (mode != HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY) {
+        HoodieNotSupportedException error = assertThrows(HoodieNotSupportedException.class,
+            () -> client.initTable(WriteOperationType.INSERT, Option.empty()));
+        assertTrue(error.getMessage().contains(mode.name()));
+        assertTrue(metaClient.reloadActiveTimeline().empty());
+      } else {
+        assertDoesNotThrow(() -> client.initTable(WriteOperationType.INSERT, Option.empty()));
+      }
+    }
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieCDCSupplementalLoggingMode.class, names = {"DATA_BEFORE", "DATA_BEFORE_AFTER"})
+  void validateCdcVectorSchemaEvolution(HoodieCDCSupplementalLoggingMode mode) throws IOException {
+    initCdcTable(mode, true);
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath).withSchema(cdcDataSchema(false).toString()).build();
+    try (BaseHoodieWriteClient<?, ?, ?, ?> client = validatorClient(writeConfig)) {
+      assertDoesNotThrow(() -> client.initTable(WriteOperationType.INSERT, Option.empty()));
+      List<HoodieSchemaField> evolvedFields = cdcDataSchema(false).getFields().stream()
+          .map(field -> HoodieSchemaField.of(field.name(), field.schema())).collect(Collectors.toList());
+      evolvedFields.add(HoodieSchemaField.of("new_embedding", HoodieSchema.createNullable(HoodieSchema.createVector(2))));
+      writeConfig.setSchema(HoodieSchema.createRecord("cdc_record", null, null, evolvedFields).toString());
+      assertThrows(HoodieNotSupportedException.class,
+          () -> client.initTable(WriteOperationType.INSERT, Option.empty()));
+    }
+  }
+
+  @Test
+  void validateCdcVectorWriteSchemaOverrideAndDefaultMode() throws IOException {
+    initCdcTable(null, true);
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath).withSchema(cdcDataSchema(false).toString()).build();
+    writeConfig.setValue(HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE, cdcDataSchema(true).toString());
+    try (BaseHoodieWriteClient<?, ?, ?, ?> client = validatorClient(writeConfig)) {
+      HoodieNotSupportedException error = assertThrows(HoodieNotSupportedException.class,
+          () -> client.initTable(WriteOperationType.INSERT, Option.empty()));
+      assertTrue(error.getMessage().contains("DATA_BEFORE_AFTER"));
+    }
+  }
+
+  private void initCdcTable(HoodieCDCSupplementalLoggingMode mode, boolean enabled) throws IOException {
+    initPath();
+    Properties tableProperties = new Properties();
+    tableProperties.setProperty(HoodieTableConfig.CDC_ENABLED.key(), Boolean.toString(enabled));
+    if (mode != null) {
+      tableProperties.setProperty(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key(), mode.name());
+    }
+    metaClient = HoodieTestUtils.init(getDefaultStorageConf(), basePath, getTableType(), tableProperties);
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieCDCSupplementalLoggingMode.class, names = {"DATA_BEFORE", "DATA_BEFORE_AFTER"})
+  void validateCdcVectorOnExplicitSchemaChange(HoodieCDCSupplementalLoggingMode mode) throws IOException {
+    initCdcTable(mode, true);
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath).forTable("cdc_table").withSchema(cdcDataSchema(false).toString()).build();
+    try (BaseHoodieWriteClient<?, ?, ?, ?> client = validatorClient(writeConfig)) {
+      assertThrows(HoodieNotSupportedException.class,
+          () -> client.commitTableChange(InternalSchemaConverter.convert(cdcDataSchema(true)), metaClient));
+      assertTrue(metaClient.reloadActiveTimeline().empty());
+    }
   }
 
   @Test

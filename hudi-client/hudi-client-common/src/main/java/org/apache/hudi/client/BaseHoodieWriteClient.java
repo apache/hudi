@@ -61,6 +61,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
@@ -1557,6 +1558,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     // mismatch of table versions.
     CommonClientUtils.validateTableVersion(tableConfig, writeConfig);
 
+    // The writer schema may establish the first schema or evolve it without an ALTER_SCHEMA commit.
+    if (tableConfig.isCDCEnabled() && !StringUtils.isNullOrEmpty(writeConfig.getWriteSchema())) {
+      HoodieCDCUtils.validateCdcSchema(tableConfig, HoodieSchema.parse(writeConfig.getWriteSchema()));
+    }
+
     // Meta-field population is physical, so a writer must not disagree with the table about which
     // meta columns hold values. Compare the full enum rather than the legacy booleans: those collapse
     // every selective mode to false, so a writer claiming COMMIT_TIME_ONLY against a NONE table would
@@ -1838,10 +1844,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   public void commitTableChange(InternalSchema newSchema, HoodieTableMetaClient metaClient) {
+    HoodieSchema schema = InternalSchemaConverter.convert(newSchema, HoodieSchemaUtils.getRecordQualifiedName(config.getTableName()));
+    HoodieCDCUtils.validateCdcSchema(metaClient.getTableConfig(), schema);
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
     String historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata().orElseGet(
         () -> SerDeHelper.inheritSchemas(getInternalSchema(schemaUtil), ""));
-    HoodieSchema schema = InternalSchemaConverter.convert(newSchema, HoodieSchemaUtils.getRecordQualifiedName(config.getTableName()));
     String commitActionType = CommitUtils.getCommitActionType(WriteOperationType.ALTER_SCHEMA, metaClient.getTableType());
     String instantTime = startCommit(commitActionType, metaClient);
     config.setSchema(schema.toString());

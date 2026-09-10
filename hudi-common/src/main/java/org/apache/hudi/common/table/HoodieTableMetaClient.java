@@ -39,6 +39,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.model.MetaFieldsMode;
+import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
@@ -1655,6 +1656,9 @@ public class HoodieTableMetaClient implements Serializable {
         tableConfig.setValue(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER, deleteFieldAndMarker.getRight());
       }
 
+      if (tableConfig.isCDCEnabled()) {
+        tableConfig.getTableCreateSchema().ifPresent(schema -> HoodieCDCUtils.validateCdcSchema(tableConfig, schema));
+      }
       return tableConfig.getProps();
     }
 

@@ -21,7 +21,9 @@ package org.apache.hudi.common.table.cdc;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -81,6 +83,32 @@ public class HoodieCDCUtils {
       return createCDCSchema(tableSchema, true);
     } else {
       throw new HoodieException("not support this supplemental logging mode: " + supplementalLoggingMode);
+    }
+  }
+
+  /**
+   * Validates that the table schema is compatible with the CDC supplemental logging mode.
+   *
+   * <p>DATA_BEFORE and DATA_BEFORE_AFTER embed the table schema in the CDC record's
+   * {@code before}/{@code after} fields. This makes any VECTOR column a nested field,
+   * which is unsupported because VECTOR schemas and readers currently require top-level fields.
+   * OP_KEY_ONLY stores only the operation and record key, so images can be reconstructed
+   * from the original file slices without nesting VECTOR columns in the CDC schema.
+   *
+   * @param tableConfig table configuration containing the CDC settings
+   * @param tableSchema table schema to validate
+   * @throws HoodieNotSupportedException if CDC image logging is enabled for a schema containing VECTOR columns
+   */
+  public static void validateCdcSchema(HoodieTableConfig tableConfig, HoodieSchema tableSchema) {
+    if (!tableConfig.isCDCEnabled() || tableConfig.cdcSupplementalLoggingMode() == HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY) {
+      return;
+    }
+    for (HoodieSchemaField field : tableSchema.getNonNullType().getFields()) {
+      if (field.schema().getNonNullType().getType() == HoodieSchemaType.VECTOR) {
+        throw new HoodieNotSupportedException("CDC supplemental logging mode " + tableConfig.cdcSupplementalLoggingMode()
+            + " is not supported for VECTOR column '" + field.name() + "'. Set "
+            + HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key() + "=OP_KEY_ONLY or disable CDC.");
+      }
     }
   }
 
