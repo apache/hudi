@@ -28,8 +28,7 @@ codecov:
 coverage:
   precision: 2
   round: down
-  # Dashboard bars turn green only at or above the upper bound, so an upper
-  # bound of 100 can never be green. 80 is the project coverage target.
+  # Bars are green only at or above the upper bound; 100 never is, 80 is our target.
   range: "70...80"
   status:
     # Statuses are informational for now: they surface the delta on each PR but do
