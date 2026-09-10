@@ -611,8 +611,9 @@ public class HoodieMultiTableStreamer {
         return;
       }
       streamer.sync();
-      // Fail fast may have tripped while this streamer was starting: the interrupt found no executor to stop, but
-      // the flag it set makes HoodieIngestionService's loop exit at once, so nothing was written.
+      // sync() also returns when fail fast stopped this table, so do not call that a success. The stop can arrive
+      // as a flag rather than an interrupt if it lands while the table is starting up; the ingestion loop reads the
+      // flag between rounds, so the table finishes any round already in flight and then stops.
       if (!shutdownRequested.get()) {
         successTables.add(table);
       }
