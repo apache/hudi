@@ -30,6 +30,7 @@ import org.apache.hudi.testutils.HoodieClientTestBase
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.FileSystem
+import org.apache.spark.SparkException
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.blob.BatchedBlobReader
@@ -441,10 +442,9 @@ class TestBatchedBlobReader extends HoodieClientTestBase {
   }
 
   @Test
-  def testOverlappingRangesAreServedFromOneRead(): Unit = {
+  def testOverlappingRangesThrowsException(): Unit = {
     val filePath = createTestFile(tempDir, "overlap.bin", 1000)
-    // Overlapping: [0, 100) and [50, 150). Whether two such rows share a task depends only on
-    // partitioning, so the reader must serve both.
+    // Overlapping: [0, 100) and [50, 100)
     val inputDF = sparkSession.createDataFrame(Seq(
       (filePath, 0L, 100L),
       (filePath, 50L, 100L)
@@ -453,13 +453,36 @@ class TestBatchedBlobReader extends HoodieClientTestBase {
       .select("offset", "data")
       .coalesce(1)
 
+    val thrown = assertThrows(classOf[SparkException], () => {
+      val rows = BatchedBlobReader.readBatched(inputDF, storageConf).collect()
+      // Force access to the data column to trigger the batch read logic
+      rows.foreach(row => row.getAs[Array[Byte]]("data"))
+    })
+    assertTrue(thrown.getCause.isInstanceOf[IllegalArgumentException])
+    assertTrue(thrown.getCause.getMessage.contains("Overlapping blob ranges detected"))
+  }
+
+  @Test
+  def testIdenticalRangesAreServedFromOneRead(): Unit = {
+    // A join fan-out or a duplicate record puts the same descriptor in one task twice. That is one
+    // blob referenced by two rows, not two blobs sharing bytes, so the reader must serve both from
+    // the single read of that range.
+    val filePath = createTestFile(tempDir, "identical.bin", 1000)
+    val inputDF = sparkSession.createDataFrame(Seq(
+      (filePath, 0L, 100L),
+      (filePath, 0L, 100L)
+    )).toDF("external_path", "offset", "length")
+      .withColumn("data", blobStructCol("data", col("external_path"), col("offset"), col("length")))
+      .select("offset", "data")
+      .coalesce(1)
+
     val results = BatchedBlobReader.readBatched(inputDF, storageConf).collect()
+
     assertEquals(2, results.length)
     results.foreach { row =>
-      val offset = row.getAs[Long]("offset")
       val data = row.getAs[Array[Byte]]("data")
       assertEquals(100, data.length)
-      assertBytesContent(data, expectedOffset = offset.toInt)
+      assertBytesContent(data, expectedOffset = 0)
     }
   }
 
