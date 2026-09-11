@@ -71,6 +71,20 @@ class HoodieIncrementalFileIndex(override val spark: SparkSession,
     }).map(fileStatus => fileStatus.getPath.toString).toArray
   }
 
+  private val reportMaxFileSize: Boolean = options.getOrElse(
+    DataSourceReadOptions.INCREMENTAL_REPORT_MAX_FILE_SIZE.key,
+    DataSourceReadOptions.INCREMENTAL_REPORT_MAX_FILE_SIZE.defaultValue.toString
+  ).toBoolean
+
+  override def sizeInBytes: Long = {
+    if (reportMaxFileSize) {
+      Long.MaxValue
+    } else {
+      val actualSize = mergeOnReadIncrementalRelation.getIncrementalFilesSize
+      if (actualSize > 0) actualSize else Long.MaxValue
+    }
+  }
+
   def getRequiredFilters: Seq[Filter] = {
     mergeOnReadIncrementalRelation.getRequiredFilters
   }
