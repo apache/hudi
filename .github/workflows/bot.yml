@@ -117,7 +117,6 @@ jobs:
         run:
           mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DskipTests=true -Phudi-platform-service $MVN_ARGS -am -pl hudi-client/hudi-spark-client,hudi-cli -Dmaven.build.cache.enabled=true
       - name: Save build cache
-        if: github.event_name == 'push'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.m2/build-cache
@@ -909,7 +908,6 @@ jobs:
         run:
           mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" -Dmaven.build.cache.enabled=true
       - name: Save build cache
-        if: github.event_name == 'push'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.m2/build-cache
