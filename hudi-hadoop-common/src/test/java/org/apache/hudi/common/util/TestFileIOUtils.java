@@ -88,6 +88,9 @@ public class TestFileIOUtils extends HoodieCommonTestHarness {
       field.setAccessible(true);
       envMaps = (Map<String, String>) field.get(env);
       envMaps.put("CONTAINER_ID", "xxxxx");
+      // getConfiguredLocalDirs now also consults SPARK_LOCAL_DIRS; drop any value inherited
+      // from the developer's shell so this assertion stays about the tmpdir fallback.
+      envMaps.remove("SPARK_LOCAL_DIRS");
     } catch (NoSuchFieldException | IllegalAccessException e) {
       throw new IllegalArgumentException(e);
     }
@@ -96,6 +99,61 @@ public class TestFileIOUtils extends HoodieCommonTestHarness {
     envMaps.put("LOCAL_DIRS", "/xxx");
     assertEquals(String.join("", FileIOUtils.getConfiguredLocalDirs()),
             envMaps.get("LOCAL_DIRS"));
+  }
+
+  @Test
+  public void testGetConfiguredLocalDirsPrefersSparkLocalDirs() {
+    Map<String, String> envMaps = mutableEnv();
+    String originalContainerId = envMaps.get("CONTAINER_ID");
+    String originalLocalDirs = envMaps.get("LOCAL_DIRS");
+    String originalSparkLocalDirs = envMaps.get("SPARK_LOCAL_DIRS");
+    try {
+      // Not under YARN: SPARK_LOCAL_DIRS is used in preference to java.io.tmpdir.
+      envMaps.remove("CONTAINER_ID");
+      envMaps.remove("LOCAL_DIRS");
+      envMaps.put("SPARK_LOCAL_DIRS", "/spark-dir-1");
+      assertEquals("/spark-dir-1", String.join("", FileIOUtils.getConfiguredLocalDirs()));
+
+      // Comma separated values are split, as they are for YARN.
+      envMaps.put("SPARK_LOCAL_DIRS", "/spark-dir-1,/spark-dir-2");
+      assertEquals(Arrays.asList("/spark-dir-1", "/spark-dir-2"),
+          Arrays.asList(FileIOUtils.getConfiguredLocalDirs()));
+
+      // YARN keeps precedence when both are present.
+      envMaps.put("CONTAINER_ID", "container_xxx");
+      envMaps.put("LOCAL_DIRS", "/yarn-dir");
+      assertEquals("/yarn-dir", String.join("", FileIOUtils.getConfiguredLocalDirs()));
+
+      // Neither set: unchanged fallback to java.io.tmpdir.
+      envMaps.remove("CONTAINER_ID");
+      envMaps.remove("LOCAL_DIRS");
+      envMaps.remove("SPARK_LOCAL_DIRS");
+      assertEquals(System.getProperty("java.io.tmpdir"),
+          String.join("", FileIOUtils.getConfiguredLocalDirs()));
+    } finally {
+      restoreEnv(envMaps, "CONTAINER_ID", originalContainerId);
+      restoreEnv(envMaps, "LOCAL_DIRS", originalLocalDirs);
+      restoreEnv(envMaps, "SPARK_LOCAL_DIRS", originalSparkLocalDirs);
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Map<String, String> mutableEnv() {
+    try {
+      Field field = System.getenv().getClass().getDeclaredField("m");
+      field.setAccessible(true);
+      return (Map<String, String>) field.get(System.getenv());
+    } catch (NoSuchFieldException | IllegalAccessException e) {
+      throw new IllegalArgumentException(e);
+    }
+  }
+
+  private static void restoreEnv(Map<String, String> envMaps, String key, String original) {
+    if (original == null) {
+      envMaps.remove(key);
+    } else {
+      envMaps.put(key, original);
+    }
   }
 
   @Test
