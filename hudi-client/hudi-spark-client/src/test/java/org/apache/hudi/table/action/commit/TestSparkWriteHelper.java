@@ -80,7 +80,8 @@ public class TestSparkWriteHelper extends TestWriterHelperBase<HoodieData<Hoodie
   @CsvSource({"true,0", "true,50", "false,0", "false,50"})
   public void testCombineParallelism(boolean shouldCombine, int configuredShuffleParallelism) {
     int inputParallelism = 5;
-    int expectDefaultParallelism = 4;
+    // parallelism 0 falls back to the context's default parallelism, whatever the harness set it to
+    int expectDefaultParallelism = jsc.defaultParallelism();
     inputRecords = getInputRecords(
         dataGen.generateInserts("20230915000000000", 10), inputParallelism);
     HoodieData<HoodieRecord> outputRecords = (HoodieData<HoodieRecord>) writeHelper.combineOnCondition(

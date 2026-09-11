@@ -666,66 +666,83 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
           Arguments.of("200", 101, "300", 100, 1),
           Arguments.of("300", 101, "300", 0, 0)
       */
-      TypedProperties extraProps = new TypedProperties();
-      extraProps.setProperty(TestSnapshotQuerySplitterImpl.MAX_ROWS_PER_BATCH, String.valueOf(1));
-      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
-          Option.empty(),
-          100,
-          new StreamerCheckpointV2(inserts.get(0).getCompletionTime()),
-          Option.of(TestSnapshotQuerySplitterImpl.class.getName()),
-          extraProps,
-          Option.ofNullable(1), Option.empty());
-
-      extraProps.setProperty(TestSnapshotQuerySplitterImpl.MAX_ROWS_PER_BATCH, String.valueOf(101));
-      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
-          Option.empty(),
-          200,
-          new StreamerCheckpointV2(inserts.get(1).getCompletionTime()),
-          Option.of(TestSnapshotQuerySplitterImpl.class.getName()),
-          extraProps,
-          Option.ofNullable(3), Option.empty());
-
-      extraProps.setProperty(TestSnapshotQuerySplitterImpl.MAX_ROWS_PER_BATCH, String.valueOf(10001));
-      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
-          Option.empty(),
-          300,
-          new StreamerCheckpointV2(inserts.get(2).getCompletionTime()),
-          Option.of(TestSnapshotQuerySplitterImpl.class.getName()),
-          extraProps,
-          Option.ofNullable(3), Option.empty());
-
-      // even if TestSnapshotQuerySplitterImpl is configured, it shouldn't be used if it's not a snapshot query
-      // Conditions to determine if HoodieIncrSource should run a snapshot query
-      //   1. checkpoint exists or checkpoint is missing but the MissingCheckpointStrategy is set to READ_LATEST
-      //   2. start completion time/checkpoint is archived
-      // The tests below do not meet either of one of the condition, so they should run normal incremental queries
-      extraProps.setProperty(TestSnapshotQuerySplitterImpl.MAX_ROWS_PER_BATCH, String.valueOf(101));
-      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
-          Option.of(new StreamerCheckpointV2(inserts.get(0).getCompletionTime())),
-          200,
-          new StreamerCheckpointV2(inserts.get(2).getCompletionTime()),
-          Option.of(TestSnapshotQuerySplitterImpl.class.getName()),
-          extraProps,
-          Option.ofNullable(2), Option.empty());
-
-      extraProps.setProperty(TestSnapshotQuerySplitterImpl.MAX_ROWS_PER_BATCH, String.valueOf(101));
-      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
-          Option.of(new StreamerCheckpointV2(inserts.get(1).getCompletionTime())),
-          100,
-          new StreamerCheckpointV2(inserts.get(2).getCompletionTime()),
-          Option.of(TestSnapshotQuerySplitterImpl.class.getName()),
-          extraProps,
-          Option.ofNullable(1), Option.empty());
-
-      extraProps.setProperty(TestSnapshotQuerySplitterImpl.MAX_ROWS_PER_BATCH, String.valueOf(101));
-      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
-          Option.of(new StreamerCheckpointV2(inserts.get(2).getCompletionTime())),
-          0,
-          new StreamerCheckpointV2(inserts.get(2).getCompletionTime()),
-          Option.of(TestSnapshotQuerySplitterImpl.class.getName()),
-          extraProps,
-          Option.ofNullable(0), Option.empty());
+      // The expected partition counts are one Spark task per file group. Spark's file scan
+      // packs small files into fewer tasks based on spark.default.parallelism, so pin the
+      // open cost high enough that every file gets its own task whatever the harness sets.
+      String openCostInBytes = spark().conf().get("spark.sql.files.openCostInBytes", null);
+      spark().conf().set("spark.sql.files.openCostInBytes", String.valueOf(512L * 1024 * 1024));
+      try {
+        runPartitionPruningReads(inserts);
+      } finally {
+        if (openCostInBytes == null) {
+          spark().conf().unset("spark.sql.files.openCostInBytes");
+        } else {
+          spark().conf().set("spark.sql.files.openCostInBytes", openCostInBytes);
+        }
+      }
     }
+  }
+
+  private void runPartitionPruningReads(List<WriteResult> inserts) {
+    TypedProperties extraProps = new TypedProperties();
+    extraProps.setProperty(TestSnapshotQuerySplitterImpl.MAX_ROWS_PER_BATCH, String.valueOf(1));
+    readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
+        Option.empty(),
+        100,
+        new StreamerCheckpointV2(inserts.get(0).getCompletionTime()),
+        Option.of(TestSnapshotQuerySplitterImpl.class.getName()),
+        extraProps,
+        Option.ofNullable(1), Option.empty());
+
+    extraProps.setProperty(TestSnapshotQuerySplitterImpl.MAX_ROWS_PER_BATCH, String.valueOf(101));
+    readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
+        Option.empty(),
+        200,
+        new StreamerCheckpointV2(inserts.get(1).getCompletionTime()),
+        Option.of(TestSnapshotQuerySplitterImpl.class.getName()),
+        extraProps,
+        Option.ofNullable(3), Option.empty());
+
+    extraProps.setProperty(TestSnapshotQuerySplitterImpl.MAX_ROWS_PER_BATCH, String.valueOf(10001));
+    readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
+        Option.empty(),
+        300,
+        new StreamerCheckpointV2(inserts.get(2).getCompletionTime()),
+        Option.of(TestSnapshotQuerySplitterImpl.class.getName()),
+        extraProps,
+        Option.ofNullable(3), Option.empty());
+
+    // even if TestSnapshotQuerySplitterImpl is configured, it shouldn't be used if it's not a snapshot query
+    // Conditions to determine if HoodieIncrSource should run a snapshot query
+    //   1. checkpoint exists or checkpoint is missing but the MissingCheckpointStrategy is set to READ_LATEST
+    //   2. start completion time/checkpoint is archived
+    // The tests below do not meet either of one of the condition, so they should run normal incremental queries
+    extraProps.setProperty(TestSnapshotQuerySplitterImpl.MAX_ROWS_PER_BATCH, String.valueOf(101));
+    readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
+        Option.of(new StreamerCheckpointV2(inserts.get(0).getCompletionTime())),
+        200,
+        new StreamerCheckpointV2(inserts.get(2).getCompletionTime()),
+        Option.of(TestSnapshotQuerySplitterImpl.class.getName()),
+        extraProps,
+        Option.ofNullable(2), Option.empty());
+
+    extraProps.setProperty(TestSnapshotQuerySplitterImpl.MAX_ROWS_PER_BATCH, String.valueOf(101));
+    readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
+        Option.of(new StreamerCheckpointV2(inserts.get(1).getCompletionTime())),
+        100,
+        new StreamerCheckpointV2(inserts.get(2).getCompletionTime()),
+        Option.of(TestSnapshotQuerySplitterImpl.class.getName()),
+        extraProps,
+        Option.ofNullable(1), Option.empty());
+
+    extraProps.setProperty(TestSnapshotQuerySplitterImpl.MAX_ROWS_PER_BATCH, String.valueOf(101));
+    readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
+        Option.of(new StreamerCheckpointV2(inserts.get(2).getCompletionTime())),
+        0,
+        new StreamerCheckpointV2(inserts.get(2).getCompletionTime()),
+        Option.of(TestSnapshotQuerySplitterImpl.class.getName()),
+        extraProps,
+        Option.ofNullable(0), Option.empty());
   }
 
   @Test
