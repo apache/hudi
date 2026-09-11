@@ -446,7 +446,7 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
   }
 
   test("evaluateFilter runs the same coercion rules the analyzer would for concat/if/functions") {
-    // lookupFunction skips the analyzer's implicit-cast pass, but applySparkTypeCoercionRules now runs
+    // lookupFunction skips the analyzer's implicit-cast pass, but applySparkAnalyzerCoercionRules now runs
     // ConcatCoercion too, so concat(id, 'x') casts the Int column to String exactly as a real
     // query would - a genuine mismatch (Map, below) is what checkInputDataTypes still has to
     // catch, not a fixable one like this.

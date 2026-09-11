@@ -370,7 +370,7 @@ object HoodieProcedureFilterUtils {
     }
 
     // Third pass: handle type coercion for numeric comparisons
-    applyCoercionRules(functionResolved)
+    applyHudiWideningRules(functionResolved)
   }
 
   // Whatever the hardcoded table produced - a real expression, or nothing at all (wrong arity, or
@@ -386,7 +386,7 @@ object HoodieProcedureFilterUtils {
   // resolveViaFunctionRegistry, so a RuntimeReplaceable unwrap (nvl -> Coalesce, for instance)
   // gets the same widening its hardcoded-table equivalent (coalesce) gets, before either is
   // checked for remaining type errors.
-  private def applyCoercionRules(expression: Expression): Expression = {
+  private def applyHudiWideningRules(expression: Expression): Expression = {
     expression.transformUp {
       case eq: org.apache.spark.sql.catalyst.expressions.EqualTo =>
         applyTypeCoercion(eq)
@@ -422,7 +422,7 @@ object HoodieProcedureFilterUtils {
   // existing rejection path (see #19850) instead of letting eval() throw silently.
   private def resolveViaFunctionRegistry(unresolvedFunc: UnresolvedFunction, sparkSession: SparkSession): Expression = {
     Try {
-      val castedResolved = applySparkTypeCoercionRules(lookupBuiltin(unresolvedFunc, sparkSession))
+      val castedResolved = applySparkAnalyzerCoercionRules(lookupBuiltin(unresolvedFunc, sparkSession))
       // Checked here, on the raw wrapper, before unwrapping: a RuntimeReplaceable wrapper's own
       // declared input-type contract (nvl needing matching operand types, split_part needing
       // string/string/int) is otherwise discarded once unwrapped to a form with a weaker or
@@ -446,7 +446,7 @@ object HoodieProcedureFilterUtils {
   // ConcatCoercion in a real query; without it Concat.checkInputDataTypes just fails). Order
   // mirrors TypeCoercion's own rule list - ImplicitTypeCasts last, as a catch-all. Anything not
   // covered by one of these four passes through unchanged.
-  private def applySparkTypeCoercionRules(expression: Expression): Expression = {
+  private def applySparkAnalyzerCoercionRules(expression: Expression): Expression = {
     val engine: TypeCoercionBase = if (SQLConf.get.ansiEnabled) AnsiTypeCoercion else TypeCoercion
     Seq(engine.FunctionArgumentConversion, engine.ConcatCoercion, engine.IfCoercion, engine.ImplicitTypeCasts)
       .foldLeft(expression) { (expr, rule) => rule.transform.applyOrElse(expr, identity[Expression]) }
@@ -465,7 +465,7 @@ object HoodieProcedureFilterUtils {
   private def lookupBuiltin(unresolvedFunc: UnresolvedFunction, sparkSession: SparkSession): Expression =
     unresolvedFunc.nameParts match {
       case Seq(funcName) =>
-        val widenedArguments = unresolvedFunc.arguments.map(applyCoercionRules)
+        val widenedArguments = unresolvedFunc.arguments.map(applyHudiWideningRules)
         sparkSession.sessionState.functionRegistry
           .lookupFunction(builtinFunctionIdentifier(funcName), widenedArguments)
       case _ => unresolvedFunc
@@ -512,7 +512,7 @@ object HoodieProcedureFilterUtils {
       }
       if (next.fastEquals(expr)) next else unwrapReplacements(next)
     }
-    applyCoercionRules(unwrapReplacements(expression))
+    applyHudiWideningRules(unwrapReplacements(expression))
   }
 
   // With/CommonExpressionDef/CommonExpressionRef don't exist before Spark 4.0, so these go by
@@ -544,21 +544,11 @@ object HoodieProcedureFilterUtils {
   // only valid in their normal analyzer context), or non-deterministic (rand, uuid,
   // spark_partition_id - expect per-partition initialization this evaluator never does).
   //
-  // Unevaluable alone doesn't cover the whole family on every Spark version: current_timestamp
-  // and its relatives are foldable (Spark computes them once and reuses the value, rather than
-  // per row) but which marker trait exempts them from eval() varies even within the 4.x line this
-  // builds against (current_timestamp is Unevaluable-free on 4.0 but foldable-but-uneval'able
-  // there, fine again on 4.1+), so a foldable result gets a real probe instead of a trait check -
-  // eval() against EmptyRow only touches its own constant inputs, never a real column, so a throw
-  // here means it genuinely can't be evaluated standalone rather than that this row's data is
-  // missing.
-  //
-  // Only a bare SparkException - the marker Unevaluable.eval() itself throws - counts as that
-  // structural "can't evaluate at all" signal. An all-literal call can also be foldable (nothing
-  // references a column), and a data-specific failure there (regexp_replace('a', '[', 'x'), an
-  // invalid pattern) is a SparkThrowable or IllegalArgumentException, not a bare SparkException -
-  // treating it as unusable here would silently reject it instead of letting it raise normally,
-  // exactly the silent-drop behavior the whole registry fallback exists to avoid.
+  // Unevaluable alone doesn't cover the whole family on every Spark version (see the
+  // current_timestamp test below), so a foldable result also gets a real eval() probe against
+  // EmptyRow rather than only a trait check; only a bare SparkException - the marker
+  // Unevaluable.eval() itself throws - counts as "structurally unusable", so a genuine data error
+  // (regexp_replace('a', '[', 'x')) still raises normally instead of being silently rejected.
   private def isUsableOutsideQueryPlan(expression: Expression): Boolean = {
     !expression.isInstanceOf[org.apache.spark.sql.catalyst.expressions.aggregate.AggregateFunction] &&
       !expression.isInstanceOf[org.apache.spark.sql.catalyst.expressions.Generator] &&
