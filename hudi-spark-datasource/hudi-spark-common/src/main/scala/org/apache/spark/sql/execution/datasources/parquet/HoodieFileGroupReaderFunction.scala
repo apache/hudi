@@ -128,6 +128,7 @@ private[parquet] object JavaSerializedValue {
  */
 private[parquet] class HoodieFileGroupReaderFunction(baseFileReader: Broadcast[SparkColumnarFileReader],
                                                      fileGroupBaseFileReader: Broadcast[SparkColumnarFileReader],
+                                                     stockParquetReader: Option[Broadcast[PartitionedFile => Iterator[InternalRow]]],
                                                      storageConf: Broadcast[SerializableConfiguration],
                                                      broadcastedState: Broadcast[JavaSerializedValue[HoodieFileGroupReadState]])
   extends (PartitionedFile => Iterator[InternalRow]) with Serializable {
@@ -145,6 +146,13 @@ private[parquet] class HoodieFileGroupReaderFunction(baseFileReader: Broadcast[S
         val fileGroupName = FSUtils.getFileIdFromFilePath(sparkAdapter
           .getSparkPartitionedFileUtils.getPathFromPartitionedFile(file))
         fileSliceMapping.getSlice(fileGroupName) match {
+          case Some(fileSlice) if stockParquetReader.isDefined && !state.isCount && state.requiredSchema.nonEmpty
+            && !fileSlice.getLogFiles.findAny().isPresent =>
+            // COW base-file-only read: use stock Spark ParquetFileFormat reader directly.
+            // This bypasses HoodieFileGroupReader overhead (schema handler, record merger,
+            // row copy/seal) when there are no log files to merge.
+            stockParquetReader.get.value(file)
+
           case Some(fileSlice) if !state.isCount && (state.requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
             val tableConfig = state.tableState.getTableConfig
             // requiredFilters preserve Spark's row-level filtering semantics, while instantRangeOpt
