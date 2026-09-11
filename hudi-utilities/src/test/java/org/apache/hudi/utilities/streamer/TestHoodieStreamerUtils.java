@@ -19,11 +19,14 @@
 
 package org.apache.hudi.utilities.streamer;
 
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.PartialUpdateAvroPayload;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
@@ -51,10 +54,12 @@ import org.mockito.Mockito;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Properties;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doNothing;
@@ -84,6 +89,55 @@ public class TestHoodieStreamerUtils extends UtilitiesTestBase {
                 .flatMap(booleanValue ->
                     Stream.of(recordKeyFields)
                         .map(recordKeyField -> Arguments.of(recordType, booleanValue, recordKeyField))));
+  }
+
+  /**
+   * INSERT leaves shouldCombine false, and a payload class outside DEPRECATED_PAYLOADS takes the
+   * HoodieAvroRecord branch of HoodieRecordUtils#createHoodieRecord regardless of requiresPayload.
+   * The record then serves the payload's Integer default instead of the ordering field's value,
+   * and inserts do reach a merge: the partitioner packs them into existing small files as
+   * BucketType.UPDATE, where BufferedRecordMergerFactory compares the two ordering values.
+   */
+  @Test
+  void testInsertWithCustomPayloadCarriesTheOrderingValue() {
+    HoodieSchema schema = HoodieSchema.parse(SCHEMA_STRING);
+    JavaRDD<GenericRecord> recordRdd = jsc.parallelize(Collections.singletonList(1)).map(i -> {
+      GenericRecord genericRecord = new GenericData.Record(schema.toAvroSchema());
+      genericRecord.put(0, 1757000000000L);
+      genericRecord.put(1, "key" + i);
+      genericRecord.put(2, "path" + i);
+      genericRecord.put(3, "rider1");
+      genericRecord.put(4, "driver1");
+      return genericRecord;
+    });
+
+    HoodieStreamer.Config cfg = new HoodieStreamer.Config();
+    // Not in DEPRECATED_PAYLOADS, so the record is a HoodieAvroRecord either way.
+    cfg.payloadClassName = PartialUpdateAvroPayload.class.getName();
+    cfg.operation = WriteOperationType.INSERT;
+    cfg.filterDupes = false;
+
+    TypedProperties props = new TypedProperties();
+    props.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition_path");
+    props.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
+
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    tableConfig.getProps().put(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp");
+    tableConfig.getProps().put(HoodieTableConfig.RECORD_MERGE_MODE.key(),
+        RecordMergeMode.EVENT_TIME_ORDERING.name());
+
+    Option<JavaRDD<HoodieRecord>> recordOpt = HoodieStreamerUtils.createHoodieRecords(
+        cfg, props, Option.of(recordRdd), new SimpleSchemaProvider(jsc, schema, props),
+        HoodieRecordType.AVRO, false, "000", Option.empty(), tableConfig);
+
+    assertTrue(recordOpt.isPresent());
+    List<HoodieRecord> records = recordOpt.get().collect();
+    assertEquals(1, records.size());
+    Comparable<?> orderingValue =
+        records.get(0).getOrderingValue(schema, new Properties(), new String[] {"timestamp"});
+    assertInstanceOf(Long.class, orderingValue,
+        "the record must carry the ordering field's value, not the payload's Integer default");
+    assertEquals(1757000000000L, orderingValue);
   }
 
   @ParameterizedTest

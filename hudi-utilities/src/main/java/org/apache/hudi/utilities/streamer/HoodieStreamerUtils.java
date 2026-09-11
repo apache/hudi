@@ -23,6 +23,7 @@ import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.avro.AvroRecordContext;
 import org.apache.hudi.common.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -91,7 +92,14 @@ public class HoodieStreamerUtils {
                                                                   String instantTime, Option<BaseErrorTableWriter> errorTableWriter, HoodieTableConfig tableConfig) {
     boolean shouldCombine = cfg.filterDupes || cfg.operation.equals(WriteOperationType.UPSERT);
     String orderingFieldsStr = tableConfig.getOrderingFieldsStr().orElse(cfg.sourceOrderingFields);
-    boolean shouldUseOrderingField = shouldCombine && !StringUtils.isNullOrEmpty(orderingFieldsStr);
+    // `shouldCombine` says whether the incoming batch needs de-duplicating, which is not the same
+    // question as whether a record needs an ordering value. It is false for INSERT and
+    // BULK_INSERT, and those records still reach a merge: the partitioner packs inserts into
+    // existing small files as BucketType.UPDATE. A table that orders by event time needs the
+    // value either way.
+    boolean requiresOrderingValue = tableConfig.getRecordMergeMode() != RecordMergeMode.COMMIT_TIME_ORDERING;
+    boolean shouldUseOrderingField = (shouldCombine || requiresOrderingValue)
+        && !StringUtils.isNullOrEmpty(orderingFieldsStr);
     boolean shouldErrorTable = errorTableWriter.isPresent() && props.getBoolean(ERROR_ENABLE_VALIDATE_RECORD_CREATION.key(), ERROR_ENABLE_VALIDATE_RECORD_CREATION.defaultValue());
     boolean useConsistentLogicalTimestamp = ConfigUtils.getBooleanWithAltKeys(
         props, KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED);
@@ -129,11 +137,15 @@ public class HoodieStreamerUtils {
                   HoodieKey hoodieKey = new HoodieKey(builtinKeyGenerator.getRecordKey(genRec), builtinKeyGenerator.getPartitionPath(genRec));
                   GenericRecord gr = isDropPartitionColumns(props) ? HoodieAvroUtils.removeFields(genRec, partitionColumns) : genRec;
                   boolean isDelete = AvroRecordContext.getFieldAccessorInstance().isDeleteRecord(gr, deleteContext);
-                  Comparable orderingValue = shouldUseOrderingField
+                  // Deletes keep the default ordering value: BufferedRecordMergerFactory treats a
+                  // delete carrying the default as commit time ordered, and giving it a real value
+                  // would make a delete lose to a stored record with a higher ordering value.
+                  boolean computeOrderingValue = shouldUseOrderingField && !(isDelete && !shouldCombine);
+                  Comparable orderingValue = computeOrderingValue
                       ? OrderingValues.create(orderingFieldsStr.split(","),
                          field -> (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, field, false, useConsistentLogicalTimestamp))
                       : null;
-                  HoodieRecord record = shouldUseOrderingField ? HoodieRecordUtils.createHoodieRecord(gr, orderingValue, hoodieKey, payloadClassName, requiresPayload, isDelete)
+                  HoodieRecord record = computeOrderingValue ? HoodieRecordUtils.createHoodieRecord(gr, orderingValue, hoodieKey, payloadClassName, requiresPayload, isDelete)
                       : HoodieRecordUtils.createHoodieRecord(gr, hoodieKey, payloadClassName, requiresPayload, isDelete);
                   return Either.left(record);
                 } catch (Exception e) {
