@@ -100,7 +100,9 @@ public class HoodieCDCUtils {
    * @throws HoodieNotSupportedException if CDC image logging is enabled for a schema containing VECTOR columns
    */
   public static void validateCdcSchema(HoodieTableConfig tableConfig, HoodieSchema tableSchema) {
-    if (!tableConfig.isCDCEnabled() || tableConfig.cdcSupplementalLoggingMode() == HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY) {
+    if (!tableConfig.isCDCEnabled()
+        || tableConfig.cdcSupplementalLoggingMode() == HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY
+        || tableSchema.isSchemaNull()) {
       return;
     }
     for (HoodieSchemaField field : tableSchema.getNonNullType().getFields()) {

@@ -169,6 +169,19 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     }
   }
 
+  @ParameterizedTest
+  @CsvSource(value = {"DEFAULT", "DATA_BEFORE", "DATA_BEFORE_AFTER"}, nullValues = "DEFAULT")
+  void validateCdcNullSchemaForBootstrap(HoodieCDCSupplementalLoggingMode mode) throws IOException {
+    initCdcTable(mode, true);
+    // Spark bootstrap uses a NULL schema when the input DataFrame has no schema.
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath).withSchema(HoodieSchema.NULL_SCHEMA.toString()).build();
+    try (BaseHoodieWriteClient<?, ?, ?, ?> client = validatorClient(writeConfig)) {
+      assertDoesNotThrow(() -> client.initTable(WriteOperationType.UPSERT,
+          Option.of(HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS)));
+    }
+  }
+
   private void initCdcTable(HoodieCDCSupplementalLoggingMode mode, boolean enabled) throws IOException {
     initPath();
     Properties tableProperties = new Properties();
