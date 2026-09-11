@@ -140,12 +140,12 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
       } else {
         null
       }
-      // For empty projections (e.g. COUNT(*), partition-only queries, or missing columns under schema
-      // evolution), use metadata-only row count without reading data columns. For BLOB-containing reads,
-      // drain the file in <=512-row range chunks to avoid JNI aborts. Otherwise, keep the single streamed reader.
+      // Empty projections (e.g. COUNT(*), partition-only queries, or missing columns under
+      // schema evolution) can use the Lance metadata row count without reading data columns.
       lanceIterator = if (iteratorSchema.isEmpty) {
         new ClosableIterator[UnsafeRow] {
           private var remaining = lanceReader.numRows()
+          private var closed = false
           private val emptyRow = {
             val r = new UnsafeRow(0)
             r.pointTo(new Array[Byte](0), 0)
@@ -163,14 +163,20 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
           }
 
           override def close(): Unit = {
-            try {
-              lanceReader.close()
-            } finally {
-              allocator.close()
+            if (!closed) {
+              closed = true
+              try {
+                lanceReader.close()
+              } finally {
+                allocator.close()
+              }
             }
           }
         }
       } else if (containsBlobField(iteratorSchema)) {
+        // lance-core 4.0.0 aborts the JVM when a single readAll stream crosses Lance's internal
+        // BLOB page boundary (512 rows). Drain BLOB reads in <=512-row range chunks; non-BLOB reads
+        // keep the single streamed reader.
         LanceRecordIterator.chunkedBlobReader(
           allocator, lanceReader, columnNames, readOpts, lanceReader.numRows(),
           iteratorSchema, filePath, blobTransform)
