@@ -56,6 +56,13 @@ env:
   # serviceUnavailable lists the HTTP codes retried instead of failing the build. 403 is deliberately
   # absent: Maven Central answers 403 when its CDN has blocked the runner's egress IP, and retrying
   # that is what escalates the block.
+  # Maven Build Cache Extension, configured in .mvn/maven-build-cache-config.xml and only active
+  # where a command passes -Dmaven.build.cache.enabled=true. Each host job's Build Project step
+  # restores the newest cache saved from a push to the base branch, so a module the PR did not
+  # touch is unpacked instead of compiled; the install and test steps run unchanged. One job per
+  # JDK lane saves the cache after a push build. test-common-and-other-modules builds inside a
+  # docker image whose Maven 3.6.3 predates the extension, so it stays uncached.
+  BUILD_CACHE_KEY_PREFIX: build-cache-${{ github.base_ref || github.ref_name }}
   # Keep MVN_ARGS in sync with java_ci_engines.yml.
   MVN_ARGS: -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn -Daether.connector.http.retryHandler.count=5 -Daether.connector.http.retryHandler.interval=3000 -Daether.connector.http.retryHandler.intervalMax=30000 -Daether.connector.http.retryHandler.serviceUnavailable=429,500,502,503,504 -Daether.connector.http.connectionMaxTtl=25 -Dorg.eclipse.jetty.LEVEL=WARN
   SPARK_COMMON_MODULES: hudi-spark-datasource/hudi-spark,hudi-spark-datasource/hudi-spark-common
@@ -96,13 +103,30 @@ jobs:
           distribution: 'temurin'
           architecture: x64
           cache: maven
+      - name: Restore build cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/build-cache
+          key: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk11-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-${{ github.sha }}
+          restore-keys: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk11-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
-          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DskipTests=true -Phudi-platform-service $MVN_ARGS -am -pl hudi-client/hudi-spark-client,hudi-cli
+          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DskipTests=true -Phudi-platform-service $MVN_ARGS -am -pl hudi-client/hudi-spark-client,hudi-cli -Dmaven.build.cache.enabled=true
+      - name: Save build cache
+        if: github.event_name == 'push'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/build-cache
+          key: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk11-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-${{ github.sha }}
+      - name: Refresh restored build outputs
+        # A cache hit unpacks class files with the timestamps they were compiled at, older than
+        # this run's checkout, so the test steps' incremental compilers would rebuild every
+        # module under test. Touching them restores the ordering a real build leaves behind.
+        run: find . -path '*/target/*' -type f -exec touch {} +
       - name: UT - hudi-hadoop-common
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -169,13 +193,24 @@ jobs:
           distribution: 'temurin'
           architecture: x64
           cache: maven
+      - name: Restore build cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/build-cache
+          key: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk11-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-${{ github.sha }}
+          restore-keys: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk11-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
-          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DskipTests=true -Phudi-platform-service -Pthrift-gen-source $MVN_ARGS -am -pl hudi-utilities
+          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DskipTests=true -Phudi-platform-service -Pthrift-gen-source $MVN_ARGS -am -pl hudi-utilities -Dmaven.build.cache.enabled=true
+      - name: Refresh restored build outputs
+        # A cache hit unpacks class files with the timestamps they were compiled at, older than
+        # this run's checkout, so the test steps' incremental compilers would rebuild every
+        # module under test. Touching them restores the ordering a real build leaves behind.
+        run: find . -path '*/target/*' -type f -exec touch {} +
       - name: UT - hudi-utilities (TestHoodieDeltaStreamer*)
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -214,13 +249,24 @@ jobs:
           distribution: 'temurin'
           architecture: x64
           cache: maven
+      - name: Restore build cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/build-cache
+          key: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk11-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-${{ github.sha }}
+          restore-keys: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk11-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
-          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DskipTests=true -Phudi-platform-service -Pthrift-gen-source $MVN_ARGS -am -pl hudi-utilities
+          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DskipTests=true -Phudi-platform-service -Pthrift-gen-source $MVN_ARGS -am -pl hudi-utilities -Dmaven.build.cache.enabled=true
+      - name: Refresh restored build outputs
+        # A cache hit unpacks class files with the timestamps they were compiled at, older than
+        # this run's checkout, so the test steps' incremental compilers would rebuild every
+        # module under test. Touching them restores the ordering a real build leaves behind.
+        run: find . -path '*/target/*' -type f -exec touch {} +
       - name: UT - hudi-utilities (non-TestHoodieDeltaStreamer)
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -352,13 +398,24 @@ jobs:
 #          distribution: 'temurin'
 #          architecture: x64
 #          cache: maven
+#      - name: Restore build cache
+#        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+#        with:
+#          path: ~/.m2/build-cache
+#          key: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk11-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-${{ github.sha }}
+#          restore-keys: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk11-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-
 #      - name: Build Project
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
 #          SPARK_MODULES: ${{ matrix.sparkModules }}
 #        run:
-#          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+#          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES" -Dmaven.build.cache.enabled=true
+#      - name: Refresh restored build outputs
+#        # A cache hit unpacks class files with the timestamps they were compiled at, older than
+#        # this run's checkout, so the test steps' incremental compilers would rebuild every
+#        # module under test. Touching them restores the ordering a real build leaves behind.
+#        run: find . -path '*/target/*' -type f -exec touch {} +
 #      - name: Java UT 1 - Common & Spark
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -405,13 +462,24 @@ jobs:
 #          distribution: 'temurin'
 #          architecture: x64
 #          cache: maven
+#      - name: Restore build cache
+#        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+#        with:
+#          path: ~/.m2/build-cache
+#          key: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk11-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-${{ github.sha }}
+#          restore-keys: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk11-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-
 #      - name: Build Project
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
 #          SPARK_MODULES: ${{ matrix.sparkModules }}
 #        run:
-#          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+#          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES" -Dmaven.build.cache.enabled=true
+#      - name: Refresh restored build outputs
+#        # A cache hit unpacks class files with the timestamps they were compiled at, older than
+#        # this run's checkout, so the test steps' incremental compilers would rebuild every
+#        # module under test. Touching them restores the ordering a real build leaves behind.
+#        run: find . -path '*/target/*' -type f -exec touch {} +
 #      - name: Quickstart Test
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -471,13 +539,24 @@ jobs:
 #          distribution: 'temurin'
 #          architecture: x64
 #          cache: maven
+#      - name: Restore build cache
+#        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+#        with:
+#          path: ~/.m2/build-cache
+#          key: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk11-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-${{ github.sha }}
+#          restore-keys: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk11-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-
 #      - name: Build Project
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
 #          SPARK_MODULES: ${{ matrix.sparkModules }}
 #        run:
-#          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+#          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES" -Dmaven.build.cache.enabled=true
+#      - name: Refresh restored build outputs
+#        # A cache hit unpacks class files with the timestamps they were compiled at, older than
+#        # this run's checkout, so the test steps' incremental compilers would rebuild every
+#        # module under test. Touching them restores the ordering a real build leaves behind.
+#        run: find . -path '*/target/*' -type f -exec touch {} +
 #      - name: Java FTB - Spark
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -531,13 +610,24 @@ jobs:
 #          distribution: 'temurin'
 #          architecture: x64
 #          cache: maven
+#      - name: Restore build cache
+#        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+#        with:
+#          path: ~/.m2/build-cache
+#          key: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk11-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-${{ github.sha }}
+#          restore-keys: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk11-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-
 #      - name: Build Project
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
 #          SPARK_MODULES: ${{ matrix.sparkModules }}
 #        run:
-#          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+#          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES" -Dmaven.build.cache.enabled=true
+#      - name: Refresh restored build outputs
+#        # A cache hit unpacks class files with the timestamps they were compiled at, older than
+#        # this run's checkout, so the test steps' incremental compilers would rebuild every
+#        # module under test. Touching them restores the ordering a real build leaves behind.
+#        run: find . -path '*/target/*' -type f -exec touch {} +
 #      - name: Scala UT - Common & Spark
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -591,13 +681,24 @@ jobs:
 #          distribution: 'temurin'
 #          architecture: x64
 #          cache: maven
+#      - name: Restore build cache
+#        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+#        with:
+#          path: ~/.m2/build-cache
+#          key: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk11-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-${{ github.sha }}
+#          restore-keys: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk11-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-
 #      - name: Build Project
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
 #          SPARK_MODULES: ${{ matrix.sparkModules }}
 #        run:
-#          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+#          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES" -Dmaven.build.cache.enabled=true
+#      - name: Refresh restored build outputs
+#        # A cache hit unpacks class files with the timestamps they were compiled at, older than
+#        # this run's checkout, so the test steps' incremental compilers would rebuild every
+#        # module under test. Touching them restores the ordering a real build leaves behind.
+#        run: find . -path '*/target/*' -type f -exec touch {} +
 #      - name: Scala UT - Common & Spark
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -643,13 +744,24 @@ jobs:
           distribution: 'temurin'
           architecture: x64
           cache: maven
+      - name: Restore build cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/build-cache
+          key: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk11-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-${{ github.sha }}
+          restore-keys: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk11-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
-          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DskipTests=true -Phudi-platform-service $MVN_ARGS -am -pl hudi-hadoop-mr,hudi-client/hudi-java-client
+          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DskipTests=true -Phudi-platform-service $MVN_ARGS -am -pl hudi-hadoop-mr,hudi-client/hudi-java-client -Dmaven.build.cache.enabled=true
+      - name: Refresh restored build outputs
+        # A cache hit unpacks class files with the timestamps they were compiled at, older than
+        # this run's checkout, so the test steps' incremental compilers would rebuild every
+        # module under test. Touching them restores the ordering a real build leaves behind.
+        run: find . -path '*/target/*' -type f -exec touch {} +
       - name: UT - hudi-hadoop-mr and hudi-client/hudi-java-client
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -714,13 +826,24 @@ jobs:
           distribution: 'temurin'
           architecture: x64
           cache: maven
+      - name: Restore build cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/build-cache
+          key: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk17-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-${{ github.sha }}
+          restore-keys: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk17-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" -Dmaven.build.cache.enabled=true
+      - name: Refresh restored build outputs
+        # A cache hit unpacks class files with the timestamps they were compiled at, older than
+        # this run's checkout, so the test steps' incremental compilers would rebuild every
+        # module under test. Touching them restores the ordering a real build leaves behind.
+        run: find . -path '*/target/*' -type f -exec touch {} +
       - name: Java UT - functional package
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -772,13 +895,30 @@ jobs:
           distribution: 'temurin'
           architecture: x64
           cache: maven
+      - name: Restore build cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/build-cache
+          key: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk17-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-${{ github.sha }}
+          restore-keys: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk17-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" -Dmaven.build.cache.enabled=true
+      - name: Save build cache
+        if: github.event_name == 'push'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/build-cache
+          key: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk17-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-${{ github.sha }}
+      - name: Refresh restored build outputs
+        # A cache hit unpacks class files with the timestamps they were compiled at, older than
+        # this run's checkout, so the test steps' incremental compilers would rebuild every
+        # module under test. Touching them restores the ordering a real build leaves behind.
+        run: find . -path '*/target/*' -type f -exec touch {} +
       - name: Quickstart Test
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -832,13 +972,24 @@ jobs:
           distribution: 'temurin'
           architecture: x64
           cache: maven
+      - name: Restore build cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/build-cache
+          key: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk17-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-${{ github.sha }}
+          restore-keys: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk17-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" -Dmaven.build.cache.enabled=true
+      - name: Refresh restored build outputs
+        # A cache hit unpacks class files with the timestamps they were compiled at, older than
+        # this run's checkout, so the test steps' incremental compilers would rebuild every
+        # module under test. Touching them restores the ordering a real build leaves behind.
+        run: find . -path '*/target/*' -type f -exec touch {} +
       - name: Java UT 2 - Common & Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -893,13 +1044,24 @@ jobs:
           distribution: 'temurin'
           architecture: x64
           cache: maven
+      - name: Restore build cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/build-cache
+          key: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk17-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-${{ github.sha }}
+          restore-keys: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk17-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" -Dmaven.build.cache.enabled=true
+      - name: Refresh restored build outputs
+        # A cache hit unpacks class files with the timestamps they were compiled at, older than
+        # this run's checkout, so the test steps' incremental compilers would rebuild every
+        # module under test. Touching them restores the ordering a real build leaves behind.
+        run: find . -path '*/target/*' -type f -exec touch {} +
       - name: Java FTA - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -947,13 +1109,24 @@ jobs:
           distribution: 'temurin'
           architecture: x64
           cache: maven
+      - name: Restore build cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/build-cache
+          key: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk17-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-${{ github.sha }}
+          restore-keys: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk17-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" -Dmaven.build.cache.enabled=true
+      - name: Refresh restored build outputs
+        # A cache hit unpacks class files with the timestamps they were compiled at, older than
+        # this run's checkout, so the test steps' incremental compilers would rebuild every
+        # module under test. Touching them restores the ordering a real build leaves behind.
+        run: find . -path '*/target/*' -type f -exec touch {} +
       - name: Java FTB - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -1001,13 +1174,24 @@ jobs:
           distribution: 'temurin'
           architecture: x64
           cache: maven
+      - name: Restore build cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/build-cache
+          key: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk17-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-${{ github.sha }}
+          restore-keys: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk17-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" -Dmaven.build.cache.enabled=true
+      - name: Refresh restored build outputs
+        # A cache hit unpacks class files with the timestamps they were compiled at, older than
+        # this run's checkout, so the test steps' incremental compilers would rebuild every
+        # module under test. Touching them restores the ordering a real build leaves behind.
+        run: find . -path '*/target/*' -type f -exec touch {} +
       - name: Scala UT - Common & Spark (dml.others)
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -1062,13 +1246,24 @@ jobs:
           distribution: 'temurin'
           architecture: x64
           cache: maven
+      - name: Restore build cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/build-cache
+          key: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk17-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-${{ github.sha }}
+          restore-keys: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk17-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" -Dmaven.build.cache.enabled=true
+      - name: Refresh restored build outputs
+        # A cache hit unpacks class files with the timestamps they were compiled at, older than
+        # this run's checkout, so the test steps' incremental compilers would rebuild every
+        # module under test. Touching them restores the ordering a real build leaves behind.
+        run: find . -path '*/target/*' -type f -exec touch {} +
       - name: Scala UT - Common & Spark (dml.insert, dml.schema)
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -1123,13 +1318,24 @@ jobs:
           distribution: 'temurin'
           architecture: x64
           cache: maven
+      - name: Restore build cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/build-cache
+          key: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk17-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-${{ github.sha }}
+          restore-keys: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk17-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" -Dmaven.build.cache.enabled=true
+      - name: Refresh restored build outputs
+        # A cache hit unpacks class files with the timestamps they were compiled at, older than
+        # this run's checkout, so the test steps' incremental compilers would rebuild every
+        # module under test. Touching them restores the ordering a real build leaves behind.
+        run: find . -path '*/target/*' -type f -exec touch {} +
       - name: Scala UT - Common & Spark (procedure, ddl)
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -1184,13 +1390,24 @@ jobs:
           distribution: 'temurin'
           architecture: x64
           cache: maven
+      - name: Restore build cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/build-cache
+          key: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk17-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-${{ github.sha }}
+          restore-keys: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk17-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" -Dmaven.build.cache.enabled=true
+      - name: Refresh restored build outputs
+        # A cache hit unpacks class files with the timestamps they were compiled at, older than
+        # this run's checkout, so the test steps' incremental compilers would rebuild every
+        # module under test. Touching them restores the ordering a real build leaves behind.
+        run: find . -path '*/target/*' -type f -exec touch {} +
       - name: Scala UT - Common & Spark (remaining packages)
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -1244,13 +1461,24 @@ jobs:
 #          distribution: 'temurin'
 #          architecture: x64
 #          cache: maven
+#      - name: Restore build cache
+#        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+#        with:
+#          path: ~/.m2/build-cache
+#          key: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk17-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-${{ github.sha }}
+#          restore-keys: ${{ env.BUILD_CACHE_KEY_PREFIX }}-jdk17-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-
 #      - name: Build Project
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
 #          SPARK_MODULES: ${{ matrix.sparkModules }}
 #        run:
-#          mvn clean install -T 2 -Djava17 -Djava.version=17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+#          mvn clean install -T 2 -Djava17 -Djava.version=17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES" -Dmaven.build.cache.enabled=true
+#      - name: Refresh restored build outputs
+#        # A cache hit unpacks class files with the timestamps they were compiled at, older than
+#        # this run's checkout, so the test steps' incremental compilers would rebuild every
+#        # module under test. Touching them restores the ordering a real build leaves behind.
+#        run: find . -path '*/target/*' -type f -exec touch {} +
 #      - name: Quickstart Test
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
