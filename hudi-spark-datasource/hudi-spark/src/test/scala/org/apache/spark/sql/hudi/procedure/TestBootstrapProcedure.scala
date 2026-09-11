@@ -83,10 +83,11 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
           result.length
         }
 
-        // show bootstrap's index mapping
+        // show bootstrap's index mapping: one row per source file. The number of source files
+        // follows the default parallelism the data was generated with, so count them.
         result = spark.sql(
           s"""call show_bootstrap_mapping(table => '$tableName')""".stripMargin).collect()
-        assertResult(10) {
+        assertResult(spark.read.parquet(sourcePath).inputFiles.length) {
           result.length
         }
 
@@ -154,10 +155,11 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
           result.length
         }
 
-        // show bootstrap's index mapping
+        // show bootstrap's index mapping: one row per source file. The number of source files
+        // follows the default parallelism the data was generated with, so count them.
         result = spark.sql(
           s"""call show_bootstrap_mapping(table => '$tableName')""".stripMargin).collect()
-        assertResult(10) {
+        assertResult(spark.read.parquet(sourcePath).inputFiles.length) {
           result.length
         }
 

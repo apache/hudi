@@ -138,9 +138,10 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
 
     // Ensure the number of outcomes are correct for all Spark versions
     // including Spark3.5.
+    // collect() order follows the file layout, which follows the write parallelism; sort it.
     val usRecords = allRecords
       .select("userid")
-      .filter("country = 'US'").map(_.getInt(0)).collect()
+      .filter("country = 'US'").map(_.getInt(0)).collect().sorted
     assertArrayEquals(Array[Int](1, 3), usRecords)
   }
 }
