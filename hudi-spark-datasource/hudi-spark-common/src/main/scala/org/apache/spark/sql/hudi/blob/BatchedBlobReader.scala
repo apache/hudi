@@ -286,7 +286,7 @@ class BatchedBlobReader(
    * Identify consecutive ranges that can be batched together.
    *
    * This method groups rows by file path, sorts by offset, and merges
-   * ranges that are consecutive or within maxGapBytes of each other.
+   * ranges that overlap, are consecutive, or are within maxGapBytes of each other.
    *
    * @param rows Sequence of row information
    * @return Sequence of merged ranges
@@ -332,15 +332,15 @@ class BatchedBlobReader(
         currentEndOffset = row.offset + row.length
         currentRows = ArrayBuffer(row)
       } else {
+        // Rows are sorted by offset, so a negative gap means this row's range overlaps the
+        // current merged range. Overlapping references are legitimate (two rows may point at
+        // nested or shared bytes of one file) and the merged read already covers them: each row
+        // is sliced out of the buffer by its own offset and length below. Which rows share a
+        // task is a partitioning accident, so rejecting overlaps here would make a read fail
+        // or succeed depending on the layout.
         val gap = row.offset - currentEndOffset
-        // Check for overlap
-        if (row.offset < currentEndOffset) {
-          throw new IllegalArgumentException(
-            s"Overlapping blob ranges detected: previous range [${currentStartOffset}, ${currentEndOffset}) and current row [${row.offset}, ${row.offset + row.length}) in file ${row.filePath}"
-          )
-        }
-        if (gap >= 0 && gap <= maxGap) {
-          // Merge into current range
+        if (gap <= maxGap) {
+          // Merge into current range (overlapping, adjacent or within the gap threshold)
           currentEndOffset = math.max(currentEndOffset, row.offset + row.length)
           currentRows += row
         } else {

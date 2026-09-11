@@ -20,7 +20,7 @@
 package org.apache.spark.sql.hudi.blob
 
 import org.apache.spark.sql.Row
-import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
 
 /**
@@ -170,14 +170,15 @@ class TestBatchedBlobReaderMerge {
   }
 
   @Test
-  def testOverlappingRangesThrow(): Unit = {
-    // [0,100) followed by [50,100) -> overlap
+  def testOverlappingRangesMergeIntoOne(): Unit = {
+    // [0,100) followed by [50,150) -> one merged range [0,150) carrying both rows
     val rows = Seq(
       row("/f", 0, 100, index = 0),
       row("/f", 50, 100, index = 1))
-    val ex = assertThrows(
-      classOf[IllegalArgumentException],
-      () => reader().mergeRanges(rows, maxGap = 4096))
-    assertTrue(ex.getMessage.contains("Overlapping blob ranges detected"))
+    val merged = reader().mergeRanges(rows, maxGap = 4096)
+    assertEquals(1, merged.size)
+    assertEquals(0L, merged.head.startOffset)
+    assertEquals(150L, merged.head.endOffset)
+    assertEquals(Seq(0L, 1L), merged.head.rows.map(_.index))
   }
 }
