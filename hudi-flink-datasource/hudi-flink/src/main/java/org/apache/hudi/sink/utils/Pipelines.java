@@ -510,7 +510,7 @@ public class Pipelines {
                                                       DataStream<HoodieFlinkInternalRow> dataStream) {
     // Validate the finalized write operation (after overwrite/static-partition resolution) at the
     // single point all production callers (table sink, flink streamer, sink v2) funnel through.
-    OptionsResolver.checkNonBlockingConcurrencyControl(conf);
+    OptionsResolver.checkInsertOverwriteSupported(conf);
     if (OptionsResolver.isBucketIndexType(conf)) {
       return bucketStreamWrite(conf, rowType, dataStream);
     }

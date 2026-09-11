@@ -472,7 +472,7 @@ public class OptionsResolver {
    * freshly overwritten data would become invisible. Reject the combination to avoid data loss.
    *
    */
-  public static void checkNonBlockingConcurrencyControl(Configuration conf) {
+  public static void checkInsertOverwriteSupported(Configuration conf) {
     WriteConcurrencyMode.checkInsertOverwriteSupported(
         isNonBlockingConcurrencyControl(conf), isInsertOverwrite(conf));
   }

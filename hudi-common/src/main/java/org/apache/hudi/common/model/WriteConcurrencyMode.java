@@ -46,7 +46,7 @@ public enum WriteConcurrencyMode {
       + "by the query reader and the compactor. Insert overwrite is not supported in this mode.")
   NON_BLOCKING_CONCURRENCY_CONTROL;
 
-  //Error message thrown when insert overwrite is combined with non-blocking concurrency control.
+  // Error message thrown when insert overwrite is combined with non-blocking concurrency control.
   public static final String INSERT_OVERWRITE_NOT_SUPPORTED_ERROR =
       "Insert overwrite is not supported with non-blocking concurrency control";
 

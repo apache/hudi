@@ -24,7 +24,12 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
@@ -32,8 +37,14 @@ import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieErrorTableConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
@@ -52,10 +63,13 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.Arrays;
@@ -72,8 +86,10 @@ import static org.apache.hudi.utilities.streamer.HoodieStreamer.CHECKPOINT_KEY;
 import static org.apache.hudi.utilities.streamer.HoodieStreamer.CHECKPOINT_RESET_KEY;
 import static org.apache.hudi.utilities.streamer.StreamSync.CHECKPOINT_IGNORE_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -307,6 +323,44 @@ public class TestStreamSync extends SparkClientFunctionalTestHarness {
 
     // then
     verify(tableBuilder, times(1)).setTableVersion(HoodieTableVersion.SIX);
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = WriteOperationType.class, names = {"INSERT_OVERWRITE", "INSERT_OVERWRITE_TABLE"})
+  void testRejectInsertOverwriteWithNonBlockingConcurrencyControlBeforeClientInit(
+      WriteOperationType operation, @TempDir File tempDir) {
+    String basePath = new File(tempDir, "nbcc_" + operation.value()).getAbsolutePath();
+
+    HoodieStreamer.Config cfg = new HoodieStreamer.Config();
+    cfg.targetTableName = "nbcc_insert_overwrite_table";
+    cfg.targetBasePath = basePath;
+    cfg.tableType = HoodieTableType.MERGE_ON_READ.name();
+    cfg.operation = operation;
+    // HoodieStreamer infers a non-null record merge mode before constructing StreamSync; mirror that
+    // here so the write config builder does not NPE before it reaches the insert overwrite guard.
+    cfg.recordMergeMode = RecordMergeMode.COMMIT_TIME_ORDERING;
+
+    TypedProperties props = new TypedProperties();
+    props.put(HoodieTableConfig.TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
+    props.put(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(),
+        WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL.name());
+    props.put(HoodieIndexConfig.INDEX_TYPE.key(), HoodieIndex.IndexType.BUCKET.name());
+    props.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "id");
+    props.put(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(),
+        HoodieFailedWritesCleaningPolicy.LAZY.name());
+
+    FileSystem fs = HadoopFSUtils.getFs(basePath, new Configuration(false));
+    // The invalid combination is rejected during construction, before the write client is built or any
+    // table metadata is written on disk.
+    HoodieException exception = assertThrows(HoodieException.class,
+        () -> new StreamSync(cfg, mock(SparkSession.class), props, mock(HoodieSparkEngineContext.class),
+            fs, fs.getConf(), client -> true,
+            new DefaultStreamContext(mock(SchemaProvider.class), Option.empty())));
+    assertTrue(exception.getMessage()
+        .contains(WriteConcurrencyMode.INSERT_OVERWRITE_NOT_SUPPORTED_ERROR));
+    // The write config is rejected before the client is built, so no table metadata is created.
+    assertFalse(new File(basePath, HoodieTableMetaClient.METAFOLDER_NAME).exists(),
+        "The table should not be initialized when the write operation is rejected");
   }
 
   private StreamSync setupStreamSync() {
