@@ -14,6 +14,7 @@ metastore_db/
 !/.mvn/
 /.mvn/*
 !/.mvn/extensions.xml
+!/.mvn/maven-build-cache-config.xml
 *.bloop/
 *.vscode/
 *.metals/
