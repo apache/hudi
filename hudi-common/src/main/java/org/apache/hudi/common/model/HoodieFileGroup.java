@@ -32,6 +32,7 @@ import java.io.Serializable;
 import java.util.Comparator;
 import java.util.List;
 import java.util.TreeMap;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
@@ -117,12 +118,32 @@ public class HoodieFileGroup implements Serializable {
    *
    * <p>CAUTION: the log file must be added in sequence of the delta commit time.
    */
-  public void addLogFile(CompletionTimeQueryView completionTimeQueryView, HoodieLogFile logFile) {
+  private void addLogFile(CompletionTimeQueryView completionTimeQueryView, HoodieLogFile logFile) {
     String baseInstantTime = getBaseInstantTime(completionTimeQueryView, logFile);
     if (!fileSlices.containsKey(baseInstantTime)) {
       fileSlices.put(baseInstantTime, new FileSlice(fileGroupId, baseInstantTime));
     }
     fileSlices.get(baseInstantTime).addLogFile(logFile);
+  }
+
+  /**
+   * Add a batch of log files into the group, sorted by the delta commit time.
+   *
+   * <p>When the group has no existing slice yet, the earliest completed log establishes the initial
+   * slice before any log is added. An earlier pending log then follows the normal pending-log rule
+   * and attaches to that slice, instead of creating its own uncommitted slice that would also hide
+   * every later committed log in the group.
+   */
+  public void addLogFiles(CompletionTimeQueryView completionTimeQueryView, List<HoodieLogFile> logFiles) {
+    List<HoodieLogFile> sortedLogFiles = logFiles.stream()
+        .sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
+    if (fileSlices.isEmpty()) {
+      sortedLogFiles.stream()
+          .filter(logFile -> completionTimeQueryView.isCompleted(logFile.getDeltaCommitTime()))
+          .findFirst()
+          .ifPresent(logFile -> addNewFileSliceAtInstant(logFile.getDeltaCommitTime()));
+    }
+    sortedLogFiles.forEach(logFile -> addLogFile(completionTimeQueryView, logFile));
   }
 
   @VisibleForTesting
