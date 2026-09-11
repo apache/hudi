@@ -419,7 +419,7 @@ object HoodieProcedureFilterUtils {
   // Resolves a function not covered by the hardcoded table above via Spark's own FunctionRegistry,
   // then checks the result is actually usable outside a real query plan - both steps a plain
   // lookupFunction call skips or can't tell on its own. Anything that isn't falls through to the
-  // existing rejection path (see #19850) instead of letting eval() throw silently.
+  // existing rejection path instead of letting eval() throw silently.
   private def resolveViaFunctionRegistry(unresolvedFunc: UnresolvedFunction, sparkSession: SparkSession): Expression = {
     Try {
       val castedResolved = applySparkAnalyzerCoercionRules(lookupBuiltin(unresolvedFunc, sparkSession))
@@ -520,9 +520,6 @@ object HoodieProcedureFilterUtils {
   // range as the rest of it - the single place to update if the class name or shape ever changes.
   private def isWithNode(expression: Expression): Boolean = expression.getClass.getSimpleName == "With"
 
-  private def isCommonExpressionRef(expression: Expression): Boolean =
-    expression.getClass.getSimpleName == "CommonExpressionRef"
-
   private def inlineCommonExpressions(withExpr: Expression): Expression = {
     val defsById = withExpr.getClass.getMethod("defs").invoke(withExpr)
       .asInstanceOf[Seq[Expression]]
@@ -537,6 +534,9 @@ object HoodieProcedureFilterUtils {
         defsById(ref.getClass.getMethod("id").invoke(ref))
     }
   }
+
+  private def isCommonExpressionRef(expression: Expression): Boolean =
+    expression.getClass.getSimpleName == "CommonExpressionRef"
 
   // A resolved expression still isn't usable one row at a time if it's an aggregate (percentile,
   // collect_list - only make sense across real aggregation), a generator (explode, inline - only
@@ -912,8 +912,8 @@ object HoodieProcedureFilterUtils {
    *
    * Decimal pairs go through Spark's own precision rules, which likewise only moved between the
    * majors: 3.5.5 analysis/DecimalPrecision.scala, 4.1.1 analysis/DecimalPrecisionTypeCoercion
-   * .scala. Parity for a comparison whose common precision would exceed 38 is not settled here;
-   * see HUDI #19860.
+   * .scala. A comparison whose common precision would exceed 38 is a known, unhandled gap here -
+   * Spark's own rule caps it at DECIMAL(38, ...), which this method does not yet replicate.
    */
   private def findWiderNumericType(types: Seq[DataType]): Option[DataType] = {
     if (SQLConf.get.ansiEnabled) {

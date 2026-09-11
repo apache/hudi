@@ -362,8 +362,7 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
   }
 
   test("evaluateFilter binds quoted column names") {
-    // show_column_stats_overlap, the second procedure named in #19632, outputs columns like
-    // "Average overlap" and "50% overlap".
+    // show_column_stats_overlap outputs columns like "Average overlap" and "50% overlap".
     val schema = schemaOf("Average overlap" -> DoubleType, "50% overlap" -> IntegerType)
     val rows = Seq(Row(0.75d, 10), Row(0.25d, 20))
     assertResult(Seq(rows.head))(keep(rows, "`Average overlap` > 0.5", schema))
@@ -373,7 +372,7 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
 
   test("evaluateFilter resolves functions outside the hardcoded table via FunctionRegistry") {
     // Functions missing from the hardcoded table now fall back to Spark's own FunctionRegistry
-    // instead of being rejected as unsupported. See #19852.
+    // instead of being rejected as unsupported.
     assertKeeps(scalarRows, "concat(name, 'x') = 'a1x'", Seq(scalarRows.head))
     assertKeeps(scalarRows, "instr(name, 'a') = 1", Seq(scalarRows.head))
     assertKeeps(scalarRows, "if(name = 'a1', true, false)", Seq(scalarRows.head))
@@ -410,8 +409,8 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
 
   test("evaluateFilter still rejects aggregate/generator/nondeterministic functions resolved via FunctionRegistry") {
     // Aggregate functions resolve fine as expressions but can't be eval()'d per row - make sure
-    // those still go through the existing #19850 rejection path instead of silently resolving to
-    // a broken, always-false filter. Same story for generators (explode only makes sense in a
+    // those still go through the existing rejection path instead of silently resolving to a
+    // broken, always-false filter. Same story for generators (explode only makes sense in a
     // projection) and non-deterministic functions (rand()/uuid() rely on per-partition
     // initialization this evaluator never does). any_value is covered separately below - the
     // parser lowers it straight to an AggregateExpression before it ever reaches this guard.
@@ -606,7 +605,7 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     assertResult(rows)(keep(rows, "isnotnull(inst) AND isnotnull(ld) AND isnotnull(ldt)", schema))
     // Known limitation: array values are converted to a plain Array instead of Catalyst ArrayData,
     // so every array predicate (even isnotnull) fails to evaluate and drops the row instead of
-    // matching. Pinned here so a fix flips these assertions; see #19633.
+    // matching. Pinned here so a fix to that conversion flips these assertions.
     assertResult(Seq.empty)(keep(rows, "size(arrScala) >= 0", schema))
     assertResult(Seq.empty)(keep(rows, "isnotnull(arrScala)", schema))
   }
@@ -640,10 +639,9 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
   }
 
   test("validateFilterExpression rejects expressions the evaluator cannot resolve") {
-    // concat/instr/substring(2-arg) now resolve via the FunctionRegistry fallback (see #19852),
-    // so they're no longer rejected here — covered by the "resolves functions ... via
-    // FunctionRegistry" test above instead, including the "id = 1 OR concat(...)" short-circuit
-    // case.
+    // concat/instr/substring(2-arg) now resolve via the FunctionRegistry fallback, so they're no
+    // longer rejected here — covered by the "resolves functions ... via FunctionRegistry" test
+    // above instead, including the "id = 1 OR concat(...)" short-circuit case.
     assert(validate("hour(t) = 12").isLeft)
     assert(validate("date_format(t, 'yyyy') = '2024'").isLeft)
     assert(validate("any_value(id) = 1").isLeft)
