@@ -116,7 +116,7 @@ public class TestMetadataWriterCommit extends BaseTestHandle {
     mdtWriter.startCommit(instantTime);
     HoodieData<WriteStatus> mdtWriteStatus = mdtWriter.streamWriteToMetadataPartitions(HoodieJavaRDD.of(Collections.singletonList(writeStatus), context, 1), instantTime);
     List<HoodieWriteStat> mdtWriteStats = mdtWriteStatus.collectAsList().stream().map(WriteStatus::getStat).collect(Collectors.toList());
-    mdtWriter.completeStreamingCommit(instantTime, context, mdtWriteStats, commitMetadata);
+    mdtWriter.completeStreamingCommit(instantTime, context, mdtWriteStats, commitMetadata, true);
     // 3 bootstrap commits for 2 enabled partitions, 1 commit due to update
     assertEquals(3, mdtMetaClient.reloadActiveTimeline().filterCompletedInstants().countInstants());
 
@@ -136,7 +136,7 @@ public class TestMetadataWriterCommit extends BaseTestHandle {
     mdtWriter.startCommit(instantTime);
     mdtWriteStatus = mdtWriter.streamWriteToMetadataPartitions(HoodieJavaRDD.of(Collections.singletonList(writeStatus), context, 1), instantTime);
     mdtWriteStats = mdtWriteStatus.collectAsList().stream().map(WriteStatus::getStat).collect(Collectors.toList());
-    mdtWriter.completeStreamingCommit(instantTime, context, mdtWriteStats, commitMetadata);
+    mdtWriter.completeStreamingCommit(instantTime, context, mdtWriteStats, commitMetadata, true);
     // 3 bootstrap commits for 4 enabled partitions, 2 commits due to update
     assertEquals(6, mdtMetaClient.reloadActiveTimeline().filterCompletedInstants().countInstants());
 
@@ -233,7 +233,7 @@ public class TestMetadataWriterCommit extends BaseTestHandle {
     mdtWriter.startCommit(instantTime);
     HoodieData<WriteStatus> mdtWriteStatus = mdtWriter.streamWriteToMetadataPartitions(HoodieJavaRDD.of(Collections.singletonList(writeStatus), context, 1), instantTime);
     List<HoodieWriteStat> mdtWriteStats = mdtWriteStatus.collectAsList().stream().map(WriteStatus::getStat).collect(Collectors.toList());
-    mdtWriter.completeStreamingCommit(instantTime, context, mdtWriteStats, commitMetadata);
+    mdtWriter.completeStreamingCommit(instantTime, context, mdtWriteStats, commitMetadata, true);
     // 3 bootstrap commits for 3 enabled partitions, 1 commit due to update
     assertEquals(4, mdtMetaClient.reloadActiveTimeline().filterCompletedInstants().countInstants());
 

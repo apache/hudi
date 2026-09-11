@@ -640,7 +640,13 @@ public class StreamWriteOperatorCoordinator
       writeClient.cleanResources(instant);
       return false;
     }
-    doCommit(checkpointId, instant, dataWriteResults, eventBuffer.collectIndexWriteStatuses());
+    List<WriteStatus> indexWriteResults = eventBuffer.collectIndexWriteStatuses();
+    if (eventBuffer.hasIndexWriteEvents()) {
+      // Index writers may legitimately emit no statuses for update-only RLI/SI commits. Preserve
+      // the fact that streaming ran so commit completion does not initialize or regenerate them.
+      writeClient.markMetadataPartitionsWereStreamed(instant);
+    }
+    doCommit(checkpointId, instant, dataWriteResults, indexWriteResults);
     return true;
   }
 

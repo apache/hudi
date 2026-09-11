@@ -32,11 +32,16 @@ import org.apache.hudi.table.HoodieTable;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 public abstract class StreamingMetadataWriteHandler {
   // Mappings of {instant -> metadata writer option} for each action in data table.
   // This will be cleaned up when action is completed or when write client is closed.
   protected final Map<String, Option<HoodieTableMetadataWriter>> metadataWriterMap = new HashMap<>();
+  // Tracks actual engine-side streaming work. Write stats cannot carry this signal because an
+  // update-only RLI/SI write may legitimately produce no metadata records.
+  private final Set<String> instantsWithStreamingMetadataWrites = ConcurrentHashMap.newKeySet();
 
   /**
    * Called by data table write client and table service client to perform streaming writes to metadata table.
@@ -73,13 +78,30 @@ public abstract class StreamingMetadataWriteHandler {
                                     List<HoodieWriteStat> partialMetadataWriteStats) {
     Option<HoodieTableMetadataWriter> metadataWriterOpt = getMetadataWriter(instantTime, table);
     ValidationUtils.checkState(metadataWriterOpt.isPresent(), "Should not be reachable. Metadata Writer should have been instantiated by now");
+    boolean metadataPartitionsWereStreamed = instantsWithStreamingMetadataWrites.contains(instantTime);
+    boolean commitCompleted = false;
     try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
-      metadataWriter.completeStreamingCommit(instantTime, table.getContext(), partialMetadataWriteStats, metadata);
+      metadataWriter.completeStreamingCommit(instantTime, table.getContext(), partialMetadataWriteStats, metadata,
+          metadataPartitionsWereStreamed);
+      commitCompleted = true;
     } catch (Exception e) {
       throw new HoodieException("Error while completing streaming commit to metadata with instant " + instantTime, e);
     } finally {
       metadataWriterMap.remove(instantTime);
+      if (commitCompleted) {
+        instantsWithStreamingMetadataWrites.remove(instantTime);
+      }
     }
+  }
+
+  /** Marks that this engine invoked the streaming metadata path for the instant. */
+  protected void markStreamingMetadataWrite(String instantTime) {
+    instantsWithStreamingMetadataWrites.add(instantTime);
+  }
+
+  /** Clears streaming state when an engine abandons an instant before commit completion. */
+  protected void clearStreamingMetadataWrite(String instantTime) {
+    instantsWithStreamingMetadataWrites.remove(instantTime);
   }
 
   /**

@@ -21,6 +21,7 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
@@ -94,6 +95,19 @@ public class TestSparkStreamingMetadataWriteHandler extends SparkClientFunctiona
         coalesceDividentForDataTableWrites);
     assertEquals(Math.max(1, numDataTableWriteStatuses / coalesceDividentForDataTableWrites), allWriteStatuses.getNumPartitions());
     verify(mdtWriter, never()).streamWriteToMetadataPartitions(any(), any());
+  }
+
+  @Test
+  void testSparkCompletionExplicitlyUsesCommittedMetadataPath() {
+    String instantTime = "00001";
+    HoodieTableMetadataWriter mdtWriter = mock(HoodieTableMetadataWriter.class);
+    HoodieCommitMetadata commitMetadata = mock(HoodieCommitMetadata.class);
+
+    new MockSparkStreamingMetadataWriteHandler(mdtWriter)
+        .commitToMetadataTable(mockHoodieTable, instantTime, commitMetadata, java.util.Collections.emptyList());
+
+    verify(mdtWriter).completeStreamingCommit(
+        instantTime, mockHoodieTable.getContext(), java.util.Collections.emptyList(), commitMetadata, false);
   }
 
   @Test

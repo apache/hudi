@@ -260,6 +260,13 @@ public class EventBuffers implements Serializable {
     }
 
     /**
+     * Returns whether index writers reported this instant, even when no index records were emitted.
+     */
+    public boolean hasIndexWriteEvents() {
+      return Arrays.stream(indexWriteEventBuffer).anyMatch(Objects::nonNull);
+    }
+
+    /**
      * Returns the write status for index partitions of the metadata table.
      */
     public List<WriteStatus> collectIndexWriteStatuses() {

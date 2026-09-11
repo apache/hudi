@@ -175,8 +175,9 @@ public class TestStreamWriteOperatorCoordinator {
     coordinator.handleEventFromOperator(1, event1);
 
     if (isStreamingIndexWriteEnabled) {
-      OperatorEvent indexEvent0 = createOperatorEvent(0, -1, instant, "record_index", false, true, 0.1, true);
-      OperatorEvent indexEvent1 = createOperatorEvent(1, -1, instant, "record_index", false, true, 0.2, true);
+      // Update-only RLI/SI batches can report completion without producing metadata write statuses.
+      OperatorEvent indexEvent0 = createEmptyIndexOperatorEvent(0, instant);
+      OperatorEvent indexEvent1 = createEmptyIndexOperatorEvent(1, instant);
       coordinator.handleEventFromOperator(0, indexEvent0);
       coordinator.handleEventFromOperator(1, indexEvent1);
     }
@@ -191,6 +192,7 @@ public class TestStreamWriteOperatorCoordinator {
       EventBuffers.EventBuffer eventBuffer = restoredCoordinator.getEventBuffer(-1);
       assertEquals(2, eventBuffer.getDataWriteEventBuffer().length);
       assertEquals(isStreamingIndexWriteEnabled ? 2 : 0, eventBuffer.getIndexWriteEventBuffer().length);
+      assertEquals(isStreamingIndexWriteEnabled, eventBuffer.hasIndexWriteEvents());
     }
 
     // Case 2: global failover recommits the live buffers of the already started coordinator.
@@ -806,6 +808,16 @@ public class TestStreamWriteOperatorCoordinator {
 
   private static WriteMetadataEvent createBootstrapEvent(int taskId, long checkpointId, String instant, String partitionPath) {
     return createOperatorEvent(taskId, checkpointId, instant, partitionPath, true, false, 0.1);
+  }
+
+  private static WriteMetadataEvent createEmptyIndexOperatorEvent(int taskId, String instant) {
+    return WriteMetadataEvent.builder()
+        .taskID(taskId)
+        .instantTime(instant)
+        .writeStatus(Collections.emptyList())
+        .lastBatch(true)
+        .metadataTable(true)
+        .build();
   }
 
   private static WriteMetadataEvent createOperatorEvent(

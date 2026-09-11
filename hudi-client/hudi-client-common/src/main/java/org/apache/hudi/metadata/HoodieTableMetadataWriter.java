@@ -94,8 +94,10 @@ public interface HoodieTableMetadataWriter<I,O> extends Serializable, AutoClosea
    * @param context           The engine context {@link HoodieEngineContext}.
    * @param partialWriteStats List<HoodieWriteStat> for partial/streaming writes to metadata table completed so far.
    * @param commitMetadata    The data table {@link HoodieCommitMetadata}.
+   * @param metadataPartitionsWereStreamed Whether the engine invoked the streaming RLI/SI path, including an update-only write that emitted no stats.
    */
-  void completeStreamingCommit(String instantTime, HoodieEngineContext context, List<HoodieWriteStat> partialWriteStats, HoodieCommitMetadata commitMetadata);
+  void completeStreamingCommit(String instantTime, HoodieEngineContext context, List<HoodieWriteStat> partialWriteStats,
+                               HoodieCommitMetadata commitMetadata, boolean metadataPartitionsWereStreamed);
 
   /**
    * Builds the given metadata partitions to create index.
