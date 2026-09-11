@@ -1806,15 +1806,18 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     val externalDir = Files.createDirectories(
       Paths.get(s"$basePath/_blob_ext${modeSuffix}_${tableType.name().toLowerCase}"))
     val filePath1 = BlobTestHelpers.createTestFile(externalDir, "blob_file_1.bin", 1024)
-    val filePath2 = BlobTestHelpers.createTestFile(externalDir, "blob_file_2.bin", 1024)
+    val filePath2 = BlobTestHelpers.createTestFile(externalDir, "blob_file_2.bin", 1536)
 
     val sparkSess = spark
     import sparkSess.implicits._
+    // Every row references a disjoint range. A blob is a distinct entity (#18098), so
+    // BatchedBlobReader rejects overlapping ranges within a task, and which rows share a
+    // task depends only on partitioning.
     val baseDf = Seq(
       (1, filePath1, 0L, 256L),
       (2, filePath1, 256L, 256L),
       (3, filePath2, 0L, 1024L),
-      (4, filePath2, 0L, 512L)
+      (4, filePath2, 1024L, 512L)
     ).toDF("id", "path", "offset", "length")
     val rawDf = baseDf.select($"id",
       BlobTestHelpers.blobStructCol("payload", $"path", $"offset", $"length"))
@@ -1860,7 +1863,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       s"SELECT id, read_blob(payload) AS bytes FROM $viewName ORDER BY id").collect()
     assertEquals(4, materialized.length)
 
-    val expectedRanges = Map(1 -> 0L, 2 -> 256L, 3 -> 0L, 4 -> 0L)
+    val expectedRanges = Map(1 -> 0L, 2 -> 256L, 3 -> 0L, 4 -> 1024L)
     val expectedLengths = Map(1 -> 256, 2 -> 256, 3 -> 1024, 4 -> 512)
     materialized.foreach { row =>
       val id = row.getInt(row.fieldIndex("id"))
