@@ -80,20 +80,11 @@ public class TestFileIOUtils extends HoodieCommonTestHarness {
   
   @Test
   public void testGetConfiguredLocalDirs() {
-    Map<String, String> env = System.getenv();
-    Class<?> clazz = env.getClass();
-    Map<String, String> envMaps = null;
-    try {
-      Field field = clazz.getDeclaredField("m");
-      field.setAccessible(true);
-      envMaps = (Map<String, String>) field.get(env);
-      envMaps.put("CONTAINER_ID", "xxxxx");
-      // getConfiguredLocalDirs now also consults SPARK_LOCAL_DIRS; drop any value inherited
-      // from the developer's shell so this assertion stays about the tmpdir fallback.
-      envMaps.remove("SPARK_LOCAL_DIRS");
-    } catch (NoSuchFieldException | IllegalAccessException e) {
-      throw new IllegalArgumentException(e);
-    }
+    Map<String, String> envMaps = mutableEnv();
+    envMaps.put("CONTAINER_ID", "xxxxx");
+    // getConfiguredLocalDirs now also consults SPARK_LOCAL_DIRS; drop any value inherited
+    // from the developer's shell so this assertion stays about the tmpdir fallback.
+    envMaps.remove("SPARK_LOCAL_DIRS");
     assertEquals(String.join("", FileIOUtils.getConfiguredLocalDirs()),
             System.getProperty("java.io.tmpdir"));
     envMaps.put("LOCAL_DIRS", "/xxx");
