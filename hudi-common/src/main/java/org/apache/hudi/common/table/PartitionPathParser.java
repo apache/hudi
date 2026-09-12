@@ -43,18 +43,37 @@ public class PartitionPathParser {
   public Object[] getPartitionFieldVals(Option<String[]> partitionFields,
                                         String partitionPath,
                                         HoodieSchema writerSchema) {
+    return getPartitionFieldVals(partitionFields, partitionPath, writerSchema, false);
+  }
+
+  /**
+   * @param slashSeparatedDatePartitioning whether the table was written with
+   *        {@code hoodie.datasource.write.slash.separated.date.partitioning}, in which case a
+   *        partition value spans several path segments rather than one.
+   */
+  public Object[] getPartitionFieldVals(Option<String[]> partitionFields,
+                                        String partitionPath,
+                                        HoodieSchema writerSchema,
+                                        boolean slashSeparatedDatePartitioning) {
     if (!partitionFields.isPresent()) {
       return new Object[0];
     }
-    return getPartitionValues(partitionFields.get(), partitionPath, writerSchema);
+    return getPartitionValues(partitionFields.get(), partitionPath, writerSchema, slashSeparatedDatePartitioning);
   }
 
   private static Object[] getPartitionValues(String[] partitionFields,
                                              String partitionPath,
-                                             HoodieSchema schema) {
+                                             HoodieSchema schema,
+                                             boolean slashSeparatedDatePartitioning) {
     String[] parts = partitionPath.split("/");
     int pathSegment = 0;
     boolean hasDateField = false;
+    // NOTE: The writer only slash-separates a table partitioned by a single column -- see the guard
+    //       in [[KeyGenUtils#getRecordPartitionPath]] -- so that is the only shape whose value is
+    //       known to span several segments here. Multi-field slash partitioning produces a layout
+    //       that cannot be lined up with the partition columns at all; that is tracked in HUDI
+    //       issue #19666 and deliberately left alone
+    boolean valueSpansSegments = slashSeparatedDatePartitioning && partitionFields.length == 1;
     Object[] partitionValues = new Object[partitionFields.length];
     for (int i = 0; i < partitionFields.length; i++) {
       String partitionField = partitionFields[i];
@@ -70,13 +89,33 @@ public class PartitionPathParser {
         partitionValues[i] = inferDateValue(partitionPath, parts, pathSegment, numDateDirs, fieldSchema);
         pathSegment += numDateDirs;
       } else {
-        String segment = parts[pathSegment];
+        // A slash-separated value occupies every segment this field is entitled to, mirroring the
+        // way [[#inferDateValue]] consumes them for a time-based column
+        int numDirs = valueSpansSegments ? parts.length - partitionFields.length + 1 : 1;
+        String segment = joinSegmentsWithDash(parts, pathSegment, numDirs);
         String[] segmentParts = segment.split(EQUALS_SIGN);
         partitionValues[i] = parseValue(segmentParts[segmentParts.length - 1], fieldSchema);
-        pathSegment++;
+        pathSegment += numDirs;
       }
     }
     return partitionValues;
+  }
+
+  /**
+   * Undoes the {@code -} -> {@code /} substitution the writer performs for
+   * {@code hoodie.datasource.write.slash.separated.date.partitioning}, rejoining the {@code numDirs}
+   * path segments starting at {@code pathSegment} back into the single value they were written from.
+   * For a value that was not slash-separated {@code numDirs} is 1 and the segment is returned as-is.
+   */
+  private static String joinSegmentsWithDash(String[] parts, int pathSegment, int numDirs) {
+    if (numDirs == 1) {
+      return parts[pathSegment];
+    }
+    StringBuilder value = new StringBuilder(parts[pathSegment]);
+    for (int i = 1; i < numDirs; i++) {
+      value.append(DASH).append(parts[pathSegment + i]);
+    }
+    return value.toString();
   }
 
   @VisibleForTesting
