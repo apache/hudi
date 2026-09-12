@@ -659,11 +659,9 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     // already a real expression by the time its enclosing call (instr) is checked - otherwise
     // the outer call would look unresolved and get rejected even though both functions
     // individually resolve fine. This is the regression case for the transformUp fix.
-    assertResult(Right(()))(validate("instr(upper(name), 'A') = 1"))
-    assertResult(Seq(scalarRows.head))(keep(scalarRows, "instr(upper(name), 'A') = 1", scalarSchema))
+    assertKeeps(scalarRows, "instr(upper(name), 'A') = 1", Seq(scalarRows.head))
     // Two levels of registry-only nesting.
-    assertResult(Right(()))(validate("instr(concat(name, 'x'), 'a') = 1"))
-    assertResult(Seq(scalarRows.head))(keep(scalarRows, "instr(concat(name, 'x'), 'a') = 1", scalarSchema))
+    assertKeeps(scalarRows, "instr(concat(name, 'x'), 'a') = 1", Seq(scalarRows.head))
     // Registry function nested inside a hardcoded-table function, and vice versa three levels deep.
     assertResult(Seq(scalarRows.head))(keep(scalarRows, "upper(concat(name, 'x')) = 'A1X'", scalarSchema))
     assertResult(Seq(scalarRows.head))(
@@ -677,24 +675,20 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
   test("evaluateFilter widens nvl the same way as the equivalent hardcoded coalesce") {
     // ts is LongType, 0 is an Int literal. nvl(ts, 0) unwraps to the same Coalesce shape as the
     // hardcoded coalesce(ts, 0) case, so both need the same widening to resolve.
-    assertResult(Right(()))(validate("coalesce(ts, 0) = 1000"))
-    assertResult(Seq(scalarRows.head))(keep(scalarRows, "coalesce(ts, 0) = 1000", scalarSchema))
-    assertResult(Right(()))(validate("nvl(ts, 0) = 1000"))
-    assertResult(Seq(scalarRows.head))(keep(scalarRows, "nvl(ts, 0) = 1000", scalarSchema))
+    assertKeeps(scalarRows, "coalesce(ts, 0) = 1000", Seq(scalarRows.head))
+    assertKeeps(scalarRows, "nvl(ts, 0) = 1000", Seq(scalarRows.head))
   }
 
   test("evaluateFilter unwraps a chained RuntimeReplaceable to a fixed point") {
     // regexp_substr unwraps to NullIf, itself RuntimeReplaceable - a single non-recursive unwrap
     // would leave NullIf's own eval() throwing, silently swallowed.
-    assertResult(Right(()))(validate("regexp_substr(name, 'a1') = 'a1'"))
-    assertResult(Seq(scalarRows.head))(keep(scalarRows, "regexp_substr(name, 'a1') = 'a1'", scalarSchema))
+    assertKeeps(scalarRows, "regexp_substr(name, 'a1') = 'a1'", Seq(scalarRows.head))
   }
 
   test("evaluateFilter checks a RuntimeReplaceable wrapper's own declared input types") {
     // split_part's Int delimiter implicit-casts to String the same way a real query allows, so
     // this resolves and evaluates correctly rather than being rejected outright.
-    assertResult(Right(()))(validate("split_part(name, 1, 1) = 'a'"))
-    assertResult(Seq(scalarRows.head))(keep(scalarRows, "split_part(name, 1, 1) = 'a'", scalarSchema))
+    assertKeeps(scalarRows, "split_part(name, 1, 1) = 'a'", Seq(scalarRows.head))
     // An array delimiter can't implicit-cast to the String split_part declares, and nothing about
     // its unwrapped form (ElementAt over StringSplitSQL) enforces that contract on its own - the
     // wrapper's own checkInputDataTypes is what has to catch this.
