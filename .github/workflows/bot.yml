@@ -980,6 +980,7 @@ jobs:
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
           mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+      # sharedSession + parallel: the dml packages hold only HoodieSparkSqlTestBase suites, which share one SparkContext and run two at a time
       - name: Scala UT - Common & Spark
         if: needs.changes.outputs.relevant == 'true'
         env:
@@ -987,7 +988,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false -Dhudi.spark.test.sharedSession=true -Dhudi.scalatest.parallel=true -Dhudi.scalatest.threads=2
       - name: Scala FT - Spark
         if: needs.changes.outputs.relevant == 'true'
         env:
@@ -995,7 +996,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false -Dhudi.spark.test.sharedSession=true -Dhudi.scalatest.parallel=true -Dhudi.scalatest.threads=2
       - name: Generate merged coverage report
         if: always() && needs.changes.outputs.relevant == 'true'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
