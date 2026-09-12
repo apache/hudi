@@ -59,7 +59,9 @@ env:
   # Keep MVN_ARGS in sync with bot.yml.
   MVN_ARGS: -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn -Daether.connector.http.retryHandler.count=5 -Daether.connector.http.retryHandler.interval=3000 -Daether.connector.http.retryHandler.intervalMax=30000 -Daether.connector.http.retryHandler.serviceUnavailable=429,500,502,503,504 -Daether.connector.http.connectionMaxTtl=25 -Dorg.eclipse.jetty.LEVEL=WARN
   FLINK_IT_FILTER1: -Dit.test=ITTestHoodieDataSource
-  FLINK_IT_FILTER2: -Dit.test=!ITTestHoodieDataSource
+  # An include is required next to the exclusion: a bare exclusion replaces failsafe's IT*
+  # include pattern with every test class, which ran hudi-flink's unit tests a second time here.
+  FLINK_IT_FILTER2: -Dit.test=ITTest*,!ITTestHoodieDataSource
 
 jobs:
   test-flink-1:

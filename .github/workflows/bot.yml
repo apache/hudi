@@ -259,9 +259,21 @@ jobs:
 
     env:
       UT_MODULES: >-
-        !hudi-hadoop-common,!hudi-hadoop-mr,!hudi-client/hudi-java-client,!hudi-client/hudi-spark-client,!hudi-cli,!hudi-examples,!hudi-examples/hudi-examples-common,!hudi-examples/hudi-examples-flink,!hudi-examples/hudi-examples-java,!hudi-examples/hudi-examples-spark,!hudi-spark-datasource,!hudi-spark-datasource/hudi-spark,!hudi-spark-datasource/hudi-spark3.5.x,!hudi-spark-datasource/hudi-spark3-common,!hudi-spark-datasource/hudi-spark-common,!hudi-utilities
+        !hudi-hadoop-common,!hudi-hadoop-mr,!hudi-client/hudi-java-client,!hudi-client/hudi-spark-client,!hudi-cli,!hudi-examples,!hudi-examples/hudi-examples-common,!hudi-examples/hudi-examples-flink,!hudi-examples/hudi-examples-java,!hudi-examples/hudi-examples-k8s,!hudi-examples/hudi-examples-spark,!hudi-spark-datasource,!hudi-spark-datasource/hudi-spark,!hudi-spark-datasource/hudi-spark3.5.x,!hudi-spark-datasource/hudi-spark3-common,!hudi-spark-datasource/hudi-spark-common,!hudi-utilities
       FT_MODULES: >-
-        !hudi-client/hudi-spark-client,!hudi-cli,!hudi-examples,!hudi-examples/hudi-examples-common,!hudi-examples/hudi-examples-flink,!hudi-examples/hudi-examples-java,!hudi-examples/hudi-examples-spark,!hudi-spark-datasource/hudi-spark,!hudi-utilities
+        !hudi-client/hudi-spark-client,!hudi-cli,!hudi-examples,!hudi-examples/hudi-examples-common,!hudi-examples/hudi-examples-flink,!hudi-examples/hudi-examples-java,!hudi-examples/hudi-examples-k8s,!hudi-examples/hudi-examples-spark,!hudi-spark-datasource/hudi-spark,!hudi-utilities
+      # The fourteen bundles of the default reactor. None has tests, validate-bundles shades and
+      # exercises every one, and nothing this job tests depends on them, so the build and the two
+      # test steps below all leave them out (a bundle left in a test reactor would try to resolve
+      # the modules the trimmed build no longer installs).
+      BUNDLE_MODULES: >-
+        !packaging/hudi-hadoop-mr-bundle,!packaging/hudi-datahub-sync-bundle,!packaging/hudi-hive-sync-bundle,!packaging/hudi-aws-bundle,!packaging/hudi-gcp-bundle,!packaging/hudi-azure-bundle,!packaging/hudi-spark-bundle,!packaging/hudi-presto-bundle,!packaging/hudi-utilities-slim-bundle,!packaging/hudi-timeline-server-bundle,!packaging/hudi-flink-bundle,!packaging/hudi-kafka-connect-bundle,!packaging/hudi-cli-bundle,!packaging/hudi-utilities-bundle
+      # Also skipped by the build: the metaserver bundle, which only exists under
+      # -Phudi-platform-service and so cannot be listed for the test steps; the examples, which
+      # this job never tests; and hudi-cli, which depends on the utilities bundle and is built
+      # and tested in test-spark-client-and-hadoop-common.
+      BUILD_SKIP_MODULES: >-
+        !packaging/hudi-metaserver-server-bundle,!hudi-cli,!hudi-examples/hudi-examples-common,!hudi-examples/hudi-examples-spark,!hudi-examples/hudi-examples-flink,!hudi-examples/hudi-examples-java,!hudi-examples/hudi-examples-k8s
 
     steps:
       - uses: actions/checkout@v5
@@ -286,7 +298,7 @@ jobs:
             -v /var/run/docker.sock:/var/run/docker.sock \
             -w /hudi \
             hudi-ci \
-            /bin/bash -c "MAVEN_OPTS='-Xmx8g' mvn clean install -T 2 -D$SCALA_PROFILE -D$SPARK_PROFILE -D$FLINK_PROFILE -Phudi-platform-service -Pthrift-gen-source -DskipTests=true -Dmaven.compiler.maxmem=8192m -Dcheckstyle.skip=true -Drat.skip=true $MVN_ARGS"
+            /bin/bash -c "MAVEN_OPTS='-Xmx8g' mvn clean install -T 2 -D$SCALA_PROFILE -D$SPARK_PROFILE -D$FLINK_PROFILE -Phudi-platform-service -Pthrift-gen-source -DskipTests=true -Dmaven.compiler.maxmem=8192m -Dcheckstyle.skip=true -Drat.skip=true $MVN_ARGS -pl $BUILD_SKIP_MODULES,$BUNDLE_MODULES"
       - name: UT - common and other modules
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -299,7 +311,7 @@ jobs:
             -v /var/run/docker.sock:/var/run/docker.sock \
             -w /hudi \
             hudi-ci \
-            /bin/bash -c "MAVEN_OPTS='-Xmx4g' mvn test -Punit-tests -D$SCALA_PROFILE -D$SPARK_PROFILE -D$FLINK_PROFILE -fae -pl $UT_MODULES -Dcheckstyle.skip=true -Drat.skip=true $MVN_ARGS -Djacoco.skip=false"
+            /bin/bash -c "MAVEN_OPTS='-Xmx4g' mvn test -Punit-tests -D$SCALA_PROFILE -D$SPARK_PROFILE -D$FLINK_PROFILE -fae -pl $UT_MODULES,$BUNDLE_MODULES -Dcheckstyle.skip=true -Drat.skip=true $MVN_ARGS -Djacoco.skip=false"
       - name: FT - common and other modules
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -312,7 +324,7 @@ jobs:
             -v /var/run/docker.sock:/var/run/docker.sock \
             -w /hudi \
             hudi-ci \
-            /bin/bash -c "MAVEN_OPTS='-Xmx4g' mvn test -Pfunctional-tests -D$SCALA_PROFILE -D$SPARK_PROFILE -D$FLINK_PROFILE -fae -pl $FT_MODULES -Dcheckstyle.skip=true -Drat.skip=true $MVN_ARGS -Djacoco.skip=false"
+            /bin/bash -c "MAVEN_OPTS='-Xmx4g' mvn test -Pfunctional-tests -D$SCALA_PROFILE -D$SPARK_PROFILE -D$FLINK_PROFILE -fae -pl $FT_MODULES,$BUNDLE_MODULES -Dcheckstyle.skip=true -Drat.skip=true $MVN_ARGS -Djacoco.skip=false"
       - name: Generate merged coverage report
         if: always()
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
@@ -358,7 +370,7 @@ jobs:
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
 #          SPARK_MODULES: ${{ matrix.sparkModules }}
 #        run:
-#          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+#          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES"
 #      - name: Java UT 1 - Common & Spark
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -477,7 +489,7 @@ jobs:
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
 #          SPARK_MODULES: ${{ matrix.sparkModules }}
 #        run:
-#          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+#          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES"
 #      - name: Java FTB - Spark
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -537,7 +549,7 @@ jobs:
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
 #          SPARK_MODULES: ${{ matrix.sparkModules }}
 #        run:
-#          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+#          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES"
 #      - name: Scala UT - Common & Spark
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -597,7 +609,7 @@ jobs:
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
 #          SPARK_MODULES: ${{ matrix.sparkModules }}
 #        run:
-#          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+#          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES"
 #      - name: Scala UT - Common & Spark
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -720,7 +732,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
       - name: Java UT - functional package
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -838,7 +850,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
       - name: Java UT 2 - Common & Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -899,7 +911,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
       - name: Java FTA - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -953,7 +965,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
       - name: Java FTB - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -1007,7 +1019,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
       - name: Scala UT - Common & Spark (dml.others)
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -1068,7 +1080,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
       - name: Scala UT - Common & Spark (dml.insert, dml.schema)
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -1129,7 +1141,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
       - name: Scala UT - Common & Spark (procedure, ddl)
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -1190,7 +1202,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
       - name: Scala UT - Common & Spark (remaining packages)
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
