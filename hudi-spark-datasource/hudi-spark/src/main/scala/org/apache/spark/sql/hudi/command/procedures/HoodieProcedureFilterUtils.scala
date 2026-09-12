@@ -475,21 +475,19 @@ object HoodieProcedureFilterUtils {
   // builtins are actually registered - a bare name pre-4.2, but the fully qualified
   // system.builtin.<name> from 4.2 onward, where a session-level clone (unlike the builtin
   // singleton itself) stops auto-qualifying a bare name it's given and asserts instead.
-  private def builtinFunctionIdentifier(funcName: String): FunctionIdentifier = {
-    val bareIdentifier = FunctionIdentifier(funcName)
+  private def builtinFunctionIdentifier(funcName: String): FunctionIdentifier =
     if (HoodieSparkUtils.gteqSpark4_2) {
       // FunctionIdentifier only gained the catalog parameter from Spark 3.4 onward - this file
       // still compiles against 3.3 too, where the case class has just funcName/database, so a
       // direct 3-arg call wouldn't compile there. Reached through reflection instead, the same way
       // the With handling below reaches classes that don't exist on every targeted version.
-      bareIdentifier.getClass
+      classOf[FunctionIdentifier]
         .getConstructor(classOf[String], classOf[Option[_]], classOf[Option[_]])
         .newInstance(funcName, Some("builtin"), Some("system"))
         .asInstanceOf[FunctionIdentifier]
     } else {
-      bareIdentifier
+      FunctionIdentifier(funcName)
     }
-  }
 
   // RuntimeReplaceable placeholders (nvl, ifnull, left, right, ...) need substitution the analyzer
   // normally performs but lookupFunction skips, and can themselves unwrap to another
