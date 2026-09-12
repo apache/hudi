@@ -130,7 +130,8 @@ public class TestBaseHoodieTable extends HoodieTable {
 
   @Override
   public Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context, String instantTime, HoodieInstant instantToRollback,
-                                                     boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers, boolean isRestore) {
+                                                     boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers, boolean isRestore,
+                                                     Option extraMetadata) {
     countOfScheduleRollbackFunctionCalls++;
     return null;
   }
@@ -161,7 +162,8 @@ public class TestBaseHoodieTable extends HoodieTable {
   }
 
   @Override
-  public Option<HoodieRestorePlan> scheduleRestore(HoodieEngineContext context, String restoreInstantTimestamp, String savepointToRestoreTimestamp) {
+  public Option<HoodieRestorePlan> scheduleRestore(HoodieEngineContext context, String restoreInstantTimestamp, String savepointToRestoreTimestamp,
+                                                    Option extraMetadata) {
     return null;
   }
 

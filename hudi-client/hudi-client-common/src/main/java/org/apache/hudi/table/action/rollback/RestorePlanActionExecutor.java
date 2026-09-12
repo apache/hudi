@@ -38,6 +38,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -55,14 +56,17 @@ public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T,
   public static final Integer RESTORE_PLAN_VERSION_2 = 2;
   public static final Integer LATEST_RESTORE_PLAN_VERSION = RESTORE_PLAN_VERSION_2;
   private final String savepointToRestoreTimestamp;
+  private final Option<Map<String, String>> extraMetadata;
 
   public RestorePlanActionExecutor(HoodieEngineContext context,
                                    HoodieWriteConfig config,
                                    HoodieTable<T, I, K, O> table,
                                    String instantTime,
-                                   String savepointToRestoreTimestamp) {
+                                   String savepointToRestoreTimestamp,
+                                   Option<Map<String, String>> extraMetadata) {
     super(context, config, table, instantTime);
     this.savepointToRestoreTimestamp = savepointToRestoreTimestamp;
+    this.extraMetadata = extraMetadata;
   }
 
   @Override
@@ -100,7 +104,7 @@ public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T,
             .map(entry -> new HoodieInstantInfo(entry.requestedTime(), entry.getAction()))
             .collect(Collectors.toList());
       }
-      HoodieRestorePlan restorePlan = new HoodieRestorePlan(instantsToRollback, LATEST_RESTORE_PLAN_VERSION, savepointToRestoreTimestamp);
+      HoodieRestorePlan restorePlan = new HoodieRestorePlan(instantsToRollback, LATEST_RESTORE_PLAN_VERSION, savepointToRestoreTimestamp, extraMetadata.orElse(null));
       table.getActiveTimeline().saveToRestoreRequested(restoreInstant, restorePlan);
       table.getMetaClient().reloadActiveTimeline();
       log.info("Requesting Restore with instant time {}", restoreInstant);

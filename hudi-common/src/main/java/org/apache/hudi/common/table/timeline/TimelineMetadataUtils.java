@@ -76,14 +76,29 @@ public class TimelineMetadataUtils {
                                                              long durationInMs,
                                                              List<HoodieInstant> instants,
                                                              Map<String, List<HoodieRollbackMetadata>> instantToRollbackMetadata) {
+    return convertRestoreMetadata(startRestoreTime, durationInMs, instants, instantToRollbackMetadata, null);
+  }
+
+  public static HoodieRestoreMetadata convertRestoreMetadata(String startRestoreTime,
+                                                             long durationInMs,
+                                                             List<HoodieInstant> instants,
+                                                             Map<String, List<HoodieRollbackMetadata>> instantToRollbackMetadata,
+                                                             Map<String, String> extraMetadata) {
     return new HoodieRestoreMetadata(startRestoreTime, durationInMs,
         instants.stream().map(HoodieInstant::requestedTime).collect(Collectors.toList()),
         Collections.unmodifiableMap(instantToRollbackMetadata), DEFAULT_VERSION,
-        instants.stream().map(instant -> new HoodieInstantInfo(instant.requestedTime(), instant.getAction())).collect(Collectors.toList()));
+        instants.stream().map(instant -> new HoodieInstantInfo(instant.requestedTime(), instant.getAction())).collect(Collectors.toList()),
+        extraMetadata);
   }
 
   public static HoodieRollbackMetadata convertRollbackMetadata(String startRollbackTime, Option<Long> durationInMs,
                                                                List<HoodieInstant> instants, List<HoodieRollbackStat> rollbackStats) {
+    return convertRollbackMetadata(startRollbackTime, durationInMs, instants, rollbackStats, null);
+  }
+
+  public static HoodieRollbackMetadata convertRollbackMetadata(String startRollbackTime, Option<Long> durationInMs,
+                                                               List<HoodieInstant> instants, List<HoodieRollbackStat> rollbackStats,
+                                                               Map<String, String> extraMetadata) {
     Map<String, HoodieRollbackPartitionMetadata> partitionMetadataBuilder = new HashMap<>();
     int totalDeleted = 0;
     for (HoodieRollbackStat stat : rollbackStats) {
@@ -98,18 +113,25 @@ public class TimelineMetadataUtils {
     return new HoodieRollbackMetadata(startRollbackTime, durationInMs.orElseGet(() -> -1L), totalDeleted,
         instants.stream().map(HoodieInstant::requestedTime).collect(Collectors.toList()),
         Collections.unmodifiableMap(partitionMetadataBuilder), DEFAULT_VERSION,
-        instants.stream().map(instant -> new HoodieInstantInfo(instant.requestedTime(), instant.getAction())).collect(Collectors.toList()));
+        instants.stream().map(instant -> new HoodieInstantInfo(instant.requestedTime(), instant.getAction())).collect(Collectors.toList()),
+        extraMetadata);
   }
 
   public static HoodieSavepointMetadata convertSavepointMetadata(String user, String comment,
                                                                  Map<String, List<String>> latestFiles) {
+    return convertSavepointMetadata(user, comment, latestFiles, null);
+  }
+
+  public static HoodieSavepointMetadata convertSavepointMetadata(String user, String comment,
+                                                                 Map<String, List<String>> latestFiles,
+                                                                 Map<String, String> extraMetadata) {
     Map<String, HoodieSavepointPartitionMetadata> partitionMetadataBuilder = new HashMap<>();
     for (Map.Entry<String, List<String>> stat : latestFiles.entrySet()) {
       HoodieSavepointPartitionMetadata metadata = new HoodieSavepointPartitionMetadata(stat.getKey(), stat.getValue());
       partitionMetadataBuilder.put(stat.getKey(), metadata);
     }
     return new HoodieSavepointMetadata(user, System.currentTimeMillis(), comment,
-        Collections.unmodifiableMap(partitionMetadataBuilder), DEFAULT_VERSION);
+        Collections.unmodifiableMap(partitionMetadataBuilder), DEFAULT_VERSION, extraMetadata);
   }
 
   public static <T extends SpecificRecordBase> Option<byte[]> serializeAvroMetadata(T metadata, Class<T> clazz)

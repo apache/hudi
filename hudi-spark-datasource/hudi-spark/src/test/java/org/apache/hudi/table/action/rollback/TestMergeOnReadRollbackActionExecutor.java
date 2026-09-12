@@ -139,7 +139,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
         HoodieTimeline.DELTA_COMMIT_ACTION, timestampToRollback);
     BaseRollbackPlanActionExecutor mergeOnReadRollbackPlanActionExecutor =
         new BaseRollbackPlanActionExecutor(context, cfg, table, rollbackTime, rollBackInstant, false,
-            cfg.shouldRollbackUsingMarkers(), false);
+            cfg.shouldRollbackUsingMarkers(), false, Option.empty());
     mergeOnReadRollbackPlanActionExecutor.execute().get();
     MergeOnReadRollbackActionExecutor mergeOnReadRollbackActionExecutor = new MergeOnReadRollbackActionExecutor(
         context,
@@ -236,7 +236,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
       String rollbackTime = InProcessTimeGenerator.createNewInstantTime();
       BaseRollbackPlanActionExecutor mergeOnReadRollbackPlanActionExecutor =
           new BaseRollbackPlanActionExecutor(context, cfg, table, rollbackTime, rollBackInstant, false,
-              cfg.shouldRollbackUsingMarkers(), false);
+              cfg.shouldRollbackUsingMarkers(), false, Option.empty());
       mergeOnReadRollbackPlanActionExecutor.execute().get();
       MergeOnReadRollbackActionExecutor mergeOnReadRollbackActionExecutor = new MergeOnReadRollbackActionExecutor(
           context,
@@ -326,7 +326,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
         HoodieTimeline.DELTA_COMMIT_ACTION, timestampToRollback);
     BaseRollbackPlanActionExecutor mergeOnReadRollbackPlanActionExecutor =
         new BaseRollbackPlanActionExecutor(context, cfg, table, rollbackTime, rollBackInstant, false,
-            cfg.shouldRollbackUsingMarkers(), true);
+            cfg.shouldRollbackUsingMarkers(), true, Option.empty());
     mergeOnReadRollbackPlanActionExecutor.execute().get();
     MergeOnReadRollbackActionExecutor mergeOnReadRollbackActionExecutor = new MergeOnReadRollbackActionExecutor(
         context,
@@ -348,7 +348,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
         HoodieTimeline.DELTA_COMMIT_ACTION, timestampToRollback);
     BaseRollbackPlanActionExecutor mergeOnReadRollbackPlanActionExecutor1 =
         new BaseRollbackPlanActionExecutor(context, cfg, table, rollbackTime, rollBackInstant1, false,
-            cfg.shouldRollbackUsingMarkers(), true);
+            cfg.shouldRollbackUsingMarkers(), true, Option.empty());
     mergeOnReadRollbackPlanActionExecutor1.execute().get();
     MergeOnReadRollbackActionExecutor mergeOnReadRollbackActionExecutor1 = new MergeOnReadRollbackActionExecutor(
         context,
@@ -457,7 +457,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     String rollbackTimestamp = InProcessTimeGenerator.createNewInstantTime();
     BaseRollbackPlanActionExecutor mergeOnReadRollbackPlanActionExecutor =
         new BaseRollbackPlanActionExecutor(context, cfg, table, rollbackTimestamp, rollBackInstant, false,
-            cfg.shouldRollbackUsingMarkers(), false);
+            cfg.shouldRollbackUsingMarkers(), false, Option.empty());
     mergeOnReadRollbackPlanActionExecutor.execute().get();
     MergeOnReadRollbackActionExecutor mergeOnReadRollbackActionExecutor = new MergeOnReadRollbackActionExecutor(
         context,
