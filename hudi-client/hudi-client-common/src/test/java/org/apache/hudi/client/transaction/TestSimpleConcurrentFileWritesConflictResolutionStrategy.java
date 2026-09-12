@@ -20,13 +20,16 @@ package org.apache.hudi.client.transaction;
 
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieWriteConflictException;
@@ -36,6 +39,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -60,6 +64,44 @@ import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyU
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 
 public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends HoodieCommonTestHarness {
+
+  @Test
+  public void testOverwritesOfTheSamePartitionConflictWithoutSharedFileIds() {
+    String partition = HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
+    HoodieInstant completed = INSTANT_GENERATOR.createNewInstant(State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, "001");
+    HoodieInstant pending = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, "002");
+    SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
+
+    // Two overwrites planned against an empty partition: fresh file ids on both sides, nothing replaced on either.
+    ConcurrentOperation completedOverwrite = new ConcurrentOperation(completed, overwriteMetadata(partition, "file-a"));
+    ConcurrentOperation committingOverwrite = new ConcurrentOperation(pending, overwriteMetadata(partition, "file-b"));
+    Assertions.assertTrue(strategy.hasConflict(committingOverwrite, completedOverwrite));
+
+    // First to commit wins: a still-pending overwrite does not block the one committing now.
+    ConcurrentOperation otherPendingOverwrite = new ConcurrentOperation(
+        INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, "003"), overwriteMetadata(partition, "file-c"));
+    Assertions.assertFalse(strategy.hasConflict(committingOverwrite, otherPendingOverwrite));
+
+    // Different partitions never conflict.
+    ConcurrentOperation completedOverwriteElsewhere = new ConcurrentOperation(completed,
+        overwriteMetadata(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, "file-d"));
+    Assertions.assertFalse(strategy.hasConflict(committingOverwrite, completedOverwriteElsewhere));
+
+    // Non-overwrite writes keep file-id semantics.
+    ConcurrentOperation insert = new ConcurrentOperation(
+        INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "004"), createCommitMetadata("004", "file-e"));
+    Assertions.assertFalse(strategy.hasConflict(insert, completedOverwrite));
+  }
+
+  private static HoodieReplaceCommitMetadata overwriteMetadata(String partition, String writtenFileId) {
+    HoodieReplaceCommitMetadata metadata = new HoodieReplaceCommitMetadata();
+    HoodieWriteStat writeStat = new HoodieWriteStat();
+    writeStat.setFileId(writtenFileId);
+    metadata.addWriteStat(partition, writeStat);
+    metadata.setPartitionToReplaceFileIds(Collections.singletonMap(partition, Collections.emptyList()));
+    metadata.setOperationType(WriteOperationType.INSERT_OVERWRITE);
+    return metadata;
+  }
 
   @Test
   public void testNoConcurrentWrites() throws Exception {
