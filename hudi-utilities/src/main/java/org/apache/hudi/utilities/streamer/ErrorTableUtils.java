@@ -27,13 +27,18 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieErrorTableConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.RowFactory;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.StructType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 
@@ -43,6 +48,7 @@ import static org.apache.hudi.utilities.streamer.BaseErrorTableWriter.ERROR_TABL
 import static org.apache.spark.sql.functions.lit;
 
 public final class ErrorTableUtils {
+  private static final Logger LOG = LoggerFactory.getLogger(ErrorTableUtils.class);
   public static Option<BaseErrorTableWriter> getErrorTableWriter(HoodieStreamer.Config cfg,
                                                                  SparkSession sparkSession,
                                                                  TypedProperties props,
@@ -79,17 +85,6 @@ public final class ErrorTableUtils {
     return HoodieErrorTableConfig.ErrorWriteFailureStrategy.valueOf(writeFailureStrategy);
   }
 
-  /**
-   * validates for constraints on ErrorRecordColumn when ErrorTable enabled configs are set.
-   * @param dataset
-   */
-  public static void validate(Dataset<Row> dataset) {
-    if (!isErrorTableCorruptRecordColumnPresent(dataset)) {
-      throw new HoodieValidationException(String.format("Invalid condition, columnName=%s "
-              + "is not present in transformer " + "output schema", ERROR_TABLE_CURRUPT_RECORD_COL_NAME));
-    }
-  }
-
   public static Dataset<Row> addNullValueErrorTableCorruptRecordColumn(Dataset<Row> dataset) {
     if (!isErrorTableCorruptRecordColumnPresent(dataset)) {
       dataset = dataset.withColumn(ERROR_TABLE_CURRUPT_RECORD_COL_NAME, lit(null));
@@ -97,7 +92,54 @@ public final class ErrorTableUtils {
     return dataset;
   }
 
-  private static boolean isErrorTableCorruptRecordColumnPresent(Dataset<Row> dataset) {
+  public static boolean isErrorTableCorruptRecordColumnPresent(Dataset<Row> dataset) {
     return Arrays.stream(dataset.columns()).anyMatch(col -> col.equals(ERROR_TABLE_CURRUPT_RECORD_COL_NAME));
+  }
+
+  /**
+   * Restores stashed {@code _corrupt_record} values onto a transformed dataset via positional
+   * RDD zip. Works when the transformer only projects columns (row count and partition layout
+   * unchanged). Falls back to {@link #addNullValueErrorTableCorruptRecordColumn} with a WARN
+   * if the zip fails (e.g. because the transformer filtered or repartitioned rows).
+   *
+   * <p><b>Limitation:</b> a transformer that reorders rows (e.g. {@code orderBy}) without
+   * changing the count will produce a successful zip with misaligned values. This is no worse
+   * than the null-re-injection alternative, but callers should be aware.
+   *
+   * @param sparkSession the active Spark session
+   * @param transformed  the dataset after the transformer ran (missing {@code _corrupt_record})
+   * @param stash        single-column dataset of pre-transform {@code _corrupt_record} values
+   * @return {@code transformed} with the {@code _corrupt_record} column restored
+   */
+  public static Dataset<Row> restoreCorruptRecordColumn(
+      SparkSession sparkSession, Dataset<Row> transformed, Dataset<Row> stash) {
+    try {
+      JavaRDD<Row> zipped = transformed.javaRDD()
+          .zip(stash.javaRDD())
+          .map(pair -> {
+            Row dataRow = pair._1();
+            Row stashRow = pair._2();
+            int size = dataRow.size();
+            Object[] fields = new Object[size + 1];
+            for (int i = 0; i < size; i++) {
+              fields[i] = dataRow.get(i);
+            }
+            fields[size] = stashRow.isNullAt(0) ? null : stashRow.get(0);
+            return RowFactory.create(fields);
+          });
+      StructType schema = transformed.schema()
+          .add(ERROR_TABLE_CURRUPT_RECORD_COL_NAME, DataTypes.StringType, true);
+      Dataset<Row> result = sparkSession.createDataFrame(zipped, schema);
+      // Force eager evaluation so zip failures (partition/element count mismatches)
+      // are caught here instead of surfacing downstream. Without this, the entire
+      // zip/map/createDataFrame chain is lazy and the catch block never triggers.
+      result.count();
+      return result;
+    } catch (Exception e) {
+      LOG.warn("Failed to restore {} column after transformer dropped it "
+          + "(row count or partitioning changed): {}",
+          ERROR_TABLE_CURRUPT_RECORD_COL_NAME, e.getMessage());
+      return addNullValueErrorTableCorruptRecordColumn(transformed);
+    }
   }
 }
