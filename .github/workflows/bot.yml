@@ -813,6 +813,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -874,6 +875,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -941,6 +943,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -1005,6 +1008,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -1062,6 +1066,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -1119,6 +1124,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -1183,6 +1189,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -1283,6 +1290,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -1347,6 +1355,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
