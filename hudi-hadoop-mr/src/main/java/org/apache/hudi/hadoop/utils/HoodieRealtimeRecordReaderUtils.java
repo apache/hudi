@@ -119,37 +119,6 @@ public class HoodieRealtimeRecordReaderUtils {
     return builder.toString();
   }
 
-  /**
-   * Generate a reader schema off the provided writeSchema, to just project out the provided columns.
-   */
-  public static HoodieSchema generateProjectionSchema(HoodieSchema writeSchema, Map<String, HoodieSchemaField> schemaFieldsMap,
-                                                List<String> fieldNames) {
-    /**
-     * Avro & Presto field names seems to be case sensitive (support fields differing only in case) whereas
-     * Hive/Impala/SparkSQL(default) are case-insensitive. Spark allows this to be configurable using
-     * spark.sql.caseSensitive=true
-     *
-     * For a RT table setup with no delta-files (for a latest file-slice) -> we translate parquet schema to Avro Here
-     * the field-name case is dependent on parquet schema. Hive (1.x/2.x/CDH) translate column projections to
-     * lower-cases
-     *
-     */
-    List<HoodieSchemaField> projectedFields = new ArrayList<>();
-    for (String fn : fieldNames) {
-      HoodieSchemaField field = schemaFieldsMap.get(fn.toLowerCase(Locale.ROOT));
-      if (field == null) {
-        throw new HoodieException("Field " + fn + " not found in log schema. Query cannot proceed! "
-            + "Derived Schema Fields: " + new ArrayList<>(schemaFieldsMap.keySet()));
-      } else {
-        projectedFields.add(HoodieSchemaUtils.createNewSchemaField(field));
-      }
-    }
-
-    HoodieSchema projectedSchema = HoodieSchema.createRecord(writeSchema.getName(), writeSchema.getDoc().orElse(null),
-        writeSchema.getNamespace().orElse(null), writeSchema.isError(), projectedFields);
-    return projectedSchema;
-  }
-
   public static Map<String, HoodieSchemaField> getNameToFieldMap(HoodieSchema schema) {
     return schema.getFields().stream().map(r -> Pair.of(r.name().toLowerCase(Locale.ROOT), r))
         .collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
