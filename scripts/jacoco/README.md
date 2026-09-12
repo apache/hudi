@@ -115,7 +115,7 @@ In addition to the aggregated Azure report described above, coverage is uploaded
 [Codecov](https://app.codecov.io/gh/apache/hudi) on every pull request and every commit to master.
 This is the canonical per-PR view.
 
-- Each test job in `.github/workflows/bot.yml` runs with the JaCoCo agent, builds a merged report
+- Each test job in `.github/workflows/bot.yml` and `java_ci_engines.yml` runs with the JaCoCo agent, builds a merged report
   via `scripts/jacoco/generate_merged_coverage_report.sh`, and uploads `jacoco-report.xml` to
   Codecov under a flag (`spark-java-tests`, `spark-scala-tests`, `utilities`,
   `common-and-other-modules`, `spark-client-hadoop-common`, `hadoop-mr-java-client`,
