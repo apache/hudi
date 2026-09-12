@@ -102,6 +102,28 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
     spark.sql("use default")
   }
 
+  test("Test Select On Empty Table Falls Back To HMS Schema") {
+    val tableName = generateTableName
+    spark.sql(
+      s"""
+         | create table $tableName (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  ts long
+         | ) using hudi
+         | tblproperties (
+         |   primaryKey = 'id',
+         |   orderingFields = 'ts'
+         | )
+       """.stripMargin)
+
+    // No data has been written to the table yet, so TableSchemaResolver cannot resolve
+    // a schema from commit metadata or data files on the file system. The read path
+    // should fall back to the table's schema in the catalog (HMS) rather than throwing.
+    checkAnswer(s"select id, name, price, ts from $tableName")()
+  }
+
   test("Test Create Hoodie Table With Options") {
     val tableName = generateTableName
     spark.sql(
