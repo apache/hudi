@@ -102,7 +102,7 @@ public class HoodieMetadataMetrics implements Serializable {
   // a separate pipeline that does not call it, and this gauge is not emitted there. Read it alongside
   // TABLE_SERVICE_EXECUTION_STATUS and COMPACTION_FAILURES, which distinguish a failing compaction from
   // table services having stopped running at all.
-  public static final String STAT_DELTA_COMMITS_SINCE_LAST_COMPACTION = "deltaCommitsSinceLastCompaction";
+  public static final String DELTA_COMMITS_SINCE_LAST_COMPACTION = "delta_commits_since_last_compaction";
 
   private final transient MetricRegistry metricsRegistry;
   private final transient Metrics metrics;
