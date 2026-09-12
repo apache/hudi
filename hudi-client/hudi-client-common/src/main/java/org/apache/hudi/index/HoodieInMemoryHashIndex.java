@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.ArrayList;
@@ -40,32 +41,43 @@ import java.util.concurrent.ConcurrentMap;
 /**
  * Hoodie Index implementation backed by an in-memory Hash map.
  * <p>
+ * Record locations are kept per table (keyed by base path) so that tables written in the same JVM
+ * do not see each other's keys. The commit-time check in tagLocation only rejects locations whose
+ * instant is missing from the current timeline; an entry left by an earlier table at the same base
+ * path is accepted, so a caller that re-creates a table at a path it used before must call
+ * clear(basePath) first.
+ * <p>
  * ONLY USE FOR LOCAL TESTING
  */
 public class HoodieInMemoryHashIndex
     extends HoodieIndex<Object, Object> {
 
-  private static ConcurrentMap<HoodieKey, HoodieRecordLocation> recordLocationMap;
+  private static final ConcurrentMap<String, ConcurrentMap<HoodieKey, HoodieRecordLocation>> RECORD_LOCATIONS_PER_TABLE =
+      new ConcurrentHashMap<>();
 
   public HoodieInMemoryHashIndex(HoodieWriteConfig config) {
     super(config);
-    synchronized (HoodieInMemoryHashIndex.class) {
-      if (recordLocationMap == null) {
-        recordLocationMap = new ConcurrentHashMap<>();
-      }
-    }
+  }
+
+  private static String tableKey(StoragePath basePath) {
+    return basePath.toUri().getPath();
+  }
+
+  private static ConcurrentMap<HoodieKey, HoodieRecordLocation> locationsOf(String tableKey) {
+    return RECORD_LOCATIONS_PER_TABLE.computeIfAbsent(tableKey, k -> new ConcurrentHashMap<>());
   }
 
   @Override
   public <R> HoodieData<HoodieRecord<R>> tagLocation(
       HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
       HoodieTable hoodieTable) {
+    String key = tableKey(hoodieTable.getMetaClient().getBasePath());
     return records.mapPartitions(hoodieRecordIterator -> {
       List<HoodieRecord<R>> taggedRecords = new ArrayList<>();
       HoodieTimeline commitsTimeline = hoodieTable.getMetaClient().getCommitsTimeline().filterCompletedInstants();
       while (hoodieRecordIterator.hasNext()) {
         HoodieRecord<R> record = hoodieRecordIterator.next();
-        HoodieRecordLocation location = recordLocationMap.get(record.getKey());
+        HoodieRecordLocation location = locationsOf(key).get(record.getKey());
         if ((location != null) && HoodieIndexUtils.checkIfValidCommit(commitsTimeline, location.getInstantTime())) {
           record.unseal();
           record.setCurrentLocation(location);
@@ -81,15 +93,16 @@ public class HoodieInMemoryHashIndex
   public HoodieData<WriteStatus> updateLocation(
       HoodieData<WriteStatus> writeStatuses, HoodieEngineContext context,
       HoodieTable hoodieTable) {
+    String key = tableKey(hoodieTable.getMetaClient().getBasePath());
     return writeStatuses.map(writeStatus -> {
       for (HoodieRecordDelegate recordDelegate : writeStatus.getIndexStats().getWrittenRecordDelegates()) {
         if (!writeStatus.isErrored(recordDelegate.getHoodieKey())) {
           Option<HoodieRecordLocation> newLocation = recordDelegate.getNewLocation();
           if (newLocation.isPresent()) {
-            recordLocationMap.put(recordDelegate.getHoodieKey(), newLocation.get());
+            locationsOf(key).put(recordDelegate.getHoodieKey(), newLocation.get());
           } else {
             // Delete existing index for a deleted record
-            recordLocationMap.remove(recordDelegate.getHoodieKey());
+            locationsOf(key).remove(recordDelegate.getHoodieKey());
           }
         }
       }
@@ -126,10 +139,19 @@ public class HoodieInMemoryHashIndex
     return false;
   }
 
+  /**
+   * Clears the locations of every table in this JVM.
+   */
   @VisibleForTesting
   public static void clear() {
-    if (recordLocationMap != null) {
-      recordLocationMap.clear();
-    }
+    RECORD_LOCATIONS_PER_TABLE.clear();
+  }
+
+  /**
+   * Clears the locations of a single table.
+   */
+  @VisibleForTesting
+  public static void clear(String basePath) {
+    RECORD_LOCATIONS_PER_TABLE.remove(tableKey(new StoragePath(basePath)));
   }
 }
