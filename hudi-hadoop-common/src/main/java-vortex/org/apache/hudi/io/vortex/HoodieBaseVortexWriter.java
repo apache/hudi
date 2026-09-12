@@ -21,27 +21,22 @@ package org.apache.hudi.io.vortex;
 
 import org.apache.hudi.common.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.io.memory.HoodieArrowAllocator;
+import org.apache.hudi.io.arrow.HoodieBaseArrowWriter;
 import org.apache.hudi.storage.StoragePath;
 
 import dev.vortex.api.Session;
 import dev.vortex.api.VortexWriter;
-import lombok.AccessLevel;
-import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
-import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.types.pojo.Schema;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
-import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
@@ -50,16 +45,16 @@ import java.util.Collections;
 /**
  * Base class for Hudi Vortex file writers supporting different record types.
  *
- * This class handles common Vortex file operations including:
+ * This class handles the Vortex-specific file operations:
  * - {@link VortexWriter} lifecycle management (vortex-jni {@code dev.vortex.api})
- * - BufferAllocator management
- * - Record buffering and batch flushing. Each flushed batch is exported through the Arrow C Data
- *   Interface and handed to {@link VortexWriter#writeBatch(long, long)}; because vortex copies the
- *   batch without invoking the C release callback, {@link ArrowArray#release()} is called after each
- *   write so the exported buffers are freed.
- * - File size checks
+ * - Writing flushed Arrow batches: each batch is exported through the Arrow C Data Interface and
+ *   handed to {@link VortexWriter#writeBatch(long, long)}; because vortex copies the batch without
+ *   invoking the C release callback, {@link ArrowArray#release()} is called after each write so
+ *   the exported buffers are freed.
  *
- * Subclasses must implement type-specific conversion to Arrow format and provide the Arrow schema.
+ * Record buffering, batch flushing, allocator management, and close ordering are inherited from
+ * {@link HoodieBaseArrowWriter}. Subclasses must implement type-specific conversion to Arrow
+ * format and provide the Arrow schema.
  *
  * <p>NOTE: vortex-jni 0.76.0 exposes no file-level custom-metadata API, so Hudi's bloom filter and
  * min/max record-key footers cannot be persisted into the Vortex file yet. Record keys are still
@@ -70,22 +65,9 @@ import java.util.Collections;
  */
 @Slf4j
 @NotThreadSafe
-public abstract class HoodieBaseVortexWriter<R, K extends Comparable<K>> implements Closeable {
-  protected static final int DEFAULT_BATCH_SIZE = 1000;
-  private final StoragePath path;
-  private final BufferAllocator allocator;
-  private final int batchSize;
-  private final long flushByteWatermark;
-  @Getter(value = AccessLevel.PROTECTED)
-  private long writtenRecordCount = 0;
-  private long totalFlushedDataSize = 0;
-  private int currentBatchSize = 0;
-  private VectorSchemaRoot root;
-  private ArrowWriter<R> arrowWriter;
-  protected final Option<HoodieBloomFilterWriteSupport<K>> bloomFilterWriteSupportOpt;
-
+public abstract class HoodieBaseVortexWriter<R, K extends Comparable<K>> extends HoodieBaseArrowWriter<R, K> {
   // Held for the writer's lifetime. session/nativeAllocator back the native writer; nativeAllocator
-  // is a dedicated allocator isolated from the strict data allocator (see initializeWriter).
+  // is a dedicated allocator isolated from the strict data allocator (see initializeFormatWriter).
   private Session session;
   private VortexWriter writer;
   private BufferAllocator nativeAllocator;
@@ -104,191 +86,17 @@ public abstract class HoodieBaseVortexWriter<R, K extends Comparable<K>> impleme
    */
   protected HoodieBaseVortexWriter(StoragePath path, int batchSize, long allocatorSize, long flushByteWatermark,
                                    Option<HoodieBloomFilterWriteSupport<K>> bloomFilterWriteSupportOpt) {
-    this.path = path;
-    this.allocator = HoodieArrowAllocator.newChildAllocator(
-        getClass().getSimpleName() + "-data-" + path.getName(), allocatorSize);
-    this.batchSize = batchSize;
-    this.flushByteWatermark = flushByteWatermark;
-    this.bloomFilterWriteSupportOpt = bloomFilterWriteSupportOpt;
+    super(path, batchSize, allocatorSize, flushByteWatermark, bloomFilterWriteSupportOpt);
   }
 
-  /**
-   * Create and initialize the arrow writer for writing records to VectorSchemaRoot.
-   * Called once during lazy initialization when the first record is written.
-   *
-   * @param root The VectorSchemaRoot to write into
-   * @return An arrow writer implementation that writes records of type R to the root
-   */
-  protected abstract ArrowWriter<R> createArrowWriter(VectorSchemaRoot root);
-
-  /**
-   * Get the Arrow schema for this writer. It is passed directly to {@link VortexWriter} and each
-   * written batch must conform to it.
-   *
-   * @return Arrow schema
-   */
-  protected abstract Schema getArrowSchema();
-
-  /**
-   * Write a single record. Records are buffered and flushed in batches.
-   *
-   * @param record Record to write
-   * @throws IOException if write fails
-   */
-  public void write(R record) throws IOException {
-    // Lazy initialization on first write
-    if (writer == null) {
-      initializeWriter();
-    }
-    if (root == null) {
-      root = VectorSchemaRoot.create(getArrowSchema(), allocator);
-    }
-    if (arrowWriter == null) {
-      arrowWriter = createArrowWriter(root);
-    }
-
-    // Reset arrow writer at the start of each new batch
-    if (currentBatchSize == 0) {
-      arrowWriter.reset();
-    }
-
-    arrowWriter.write(record);
-    currentBatchSize++;
-    writtenRecordCount++;
-
-    // Flush when row-count batch is full OR in-flight Arrow buffers cross the byte watermark.
-    if (currentBatchSize >= batchSize || currentBufferBytes() >= flushByteWatermark) {
-      flushBatch();
-    }
-  }
-
-  /**
-   * Bytes currently held by the writer's Arrow child allocator.
-   */
-  private long currentBufferBytes() {
-    return allocator.getAllocatedMemory();
-  }
-
-  /**
-   * Close the writer, flushing any remaining buffered records.
-   *
-   * @throws IOException if close fails
-   */
   @Override
-  public void close() throws IOException {
-    Exception primaryException = null;
-
-    // 1. Flush remaining records
-    try {
-      if (currentBatchSize > 0) {
-        flushBatch();
-      }
-
-      // Ensure the file is created even if no data was written, by emitting a single empty batch.
-      if (writer == null) {
-        initializeWriter();
-        try (VectorSchemaRoot emptyRoot = VectorSchemaRoot.create(getArrowSchema(), allocator)) {
-          emptyRoot.setRowCount(0);
-          writeBatchFfi(emptyRoot);
-        }
-      }
-    } catch (Exception e) {
-      primaryException = e;
-    }
-
-    // Close Vortex writer (finalizes the file)
-    if (writer != null) {
-      try {
-        writer.close();
-      } catch (Exception e) {
-        primaryException = addSuppressed(primaryException, e);
-      }
-    }
-
-    // Close the exported schema handle.
-    if (exportedSchema != null) {
-      try {
-        exportedSchema.release();
-        exportedSchema.close();
-      } catch (Exception e) {
-        primaryException = addSuppressed(primaryException, e);
-      }
-    }
-
-    // Close VectorSchemaRoot
-    if (root != null) {
-      try {
-        root.close();
-      } catch (Exception e) {
-        primaryException = addSuppressed(primaryException, e);
-      }
-    }
-
-    // Close the strict data allocator (per-batch exports are released, so this should be clean).
-    try {
-      allocator.close();
-    } catch (Exception e) {
-      primaryException = addSuppressed(primaryException, e);
-    }
-
-    // Close the native allocator last. vortex-jni 0.76.0's VortexWriter.create exports the file
-    // schema into this allocator and relies on GC/Cleaner-based cleanup rather than freeing it on
-    // close(), so a small one-time amount can still be outstanding here; tolerate it (it is freed
-    // when the native writer is reclaimed) rather than failing the whole write.
-    // TODO(#18623): drop this once vortex-jni frees the create() schema export on writer close.
-    if (nativeAllocator != null) {
-      try {
-        nativeAllocator.close();
-      } catch (IllegalStateException e) {
-        log.warn("Vortex native allocator retained memory at close for {} (vortex-jni create() "
-            + "schema export, reclaimed on GC): {}", path, e.getMessage());
-      }
-    }
-
-    if (primaryException != null) {
-      throw new HoodieException("Failed to close Vortex writer: " + path, primaryException);
-    }
+  protected String getFormatName() {
+    return "Vortex";
   }
 
-  private static Exception addSuppressed(Exception primary, Exception e) {
-    if (primary == null) {
-      return e;
-    }
-    primary.addSuppressed(e);
-    return primary;
-  }
-
-  /**
-   * Returns the estimated data size in bytes, including both flushed batches and the current
-   * in-progress batch.
-   */
-  protected long getDataSize() {
-    long currentBufferSize = currentBatchSize > 0 ? allocator.getAllocatedMemory() : 0;
-    return totalFlushedDataSize + currentBufferSize;
-  }
-
-  /**
-   * Flush buffered records to Vortex file.
-   */
-  private void flushBatch() throws IOException {
-    if (currentBatchSize == 0) {
-      return;
-    }
-
-    arrowWriter.finishBatch();
-
-    for (FieldVector vector : root.getFieldVectors()) {
-      totalFlushedDataSize += vector.getBufferSize();
-    }
-
-    writeBatchFfi(root);
-
-    // Release Arrow buffers so capacity does not accumulate across batches.
-    root.close();
-    root = null;
-    arrowWriter = null;
-
-    currentBatchSize = 0;
+  @Override
+  protected boolean isFormatWriterInitialized() {
+    return writer != null;
   }
 
   /**
@@ -296,7 +104,9 @@ public abstract class HoodieBaseVortexWriter<R, K extends Comparable<K>> impleme
    * file. The array is exported from the strict data allocator and released after the write (vortex
    * copies the batch but does not invoke the C release callback), so no data-allocator memory leaks.
    */
-  private void writeBatchFfi(VectorSchemaRoot batch) throws IOException {
+  @Override
+  protected void writeBatch(VectorSchemaRoot batch) throws IOException {
+    BufferAllocator allocator = getAllocator();
     try (ArrowArray cArray = ArrowArray.allocateNew(allocator)) {
       Data.exportVectorSchemaRoot(allocator, batch, null, cArray);
       writer.writeBatch(cArray.memoryAddress(), exportedSchemaAddr);
@@ -309,14 +119,55 @@ public abstract class HoodieBaseVortexWriter<R, K extends Comparable<K>> impleme
    * use a dedicated {@link #nativeAllocator} so the native side's non-deterministic cleanup does
    * not pollute the strict per-batch data allocator.
    */
-  private void initializeWriter() throws IOException {
+  @Override
+  protected void initializeFormatWriter() throws IOException {
     session = Session.create();
     nativeAllocator = new RootAllocator();
     Schema arrowSchema = getArrowSchema();
-    writer = VortexWriter.create(session, toVortexUri(path), arrowSchema, Collections.emptyMap(), nativeAllocator);
+    writer = VortexWriter.create(session, toVortexUri(getPath()), arrowSchema, Collections.emptyMap(), nativeAllocator);
     exportedSchema = ArrowSchema.allocateNew(nativeAllocator);
     Data.exportSchema(nativeAllocator, arrowSchema, null, exportedSchema);
     exportedSchemaAddr = exportedSchema.memoryAddress();
+  }
+
+  /**
+   * Close the Vortex writer (finalizes the file).
+   */
+  @Override
+  protected void closeFormatWriter() throws IOException {
+    if (writer != null) {
+      writer.close();
+    }
+  }
+
+  /**
+   * Close the exported schema handle.
+   */
+  @Override
+  protected void closeFormatResources() throws Exception {
+    if (exportedSchema != null) {
+      exportedSchema.release();
+      exportedSchema.close();
+    }
+  }
+
+  /**
+   * Close the native allocator last. vortex-jni 0.76.0's VortexWriter.create exports the file
+   * schema into this allocator and relies on GC/Cleaner-based cleanup rather than freeing it on
+   * close(), so a small one-time amount can still be outstanding here; tolerate it (it is freed
+   * when the native writer is reclaimed) rather than failing the whole write.
+   * TODO(#18623): drop this once vortex-jni frees the create() schema export on writer close.
+   */
+  @Override
+  protected void closeAfterAllocator() {
+    if (nativeAllocator != null) {
+      try {
+        nativeAllocator.close();
+      } catch (IllegalStateException e) {
+        log.warn("Vortex native allocator retained memory at close for {} (vortex-jni create() "
+            + "schema export, reclaimed on GC): {}", getPath(), e.getMessage());
+      }
+    }
   }
 
   /**
@@ -329,17 +180,5 @@ public abstract class HoodieBaseVortexWriter<R, K extends Comparable<K>> impleme
       return new File(uri.getPath()).toURI().toString();
     }
     return uri.toString();
-  }
-
-  /**
-   * Arrow writer interface for writing records of type T to a VectorSchemaRoot.
-   * @param <T> the record type
-   */
-  protected interface ArrowWriter<T> {
-    void write(T row) throws IOException;
-
-    void finishBatch() throws IOException;
-
-    void reset();
   }
 }
