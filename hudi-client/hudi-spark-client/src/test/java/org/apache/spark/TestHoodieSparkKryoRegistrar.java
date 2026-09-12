@@ -19,26 +19,78 @@
 
 package org.apache.spark;
 
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import org.apache.avro.Schema;
+import org.apache.avro.SchemaBuilder;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.GenericRecordBuilder;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.objenesis.strategy.StdInstantiatorStrategy;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
  * Tests {@link HoodieSparkKryoRegistrar}
  */
 public class TestHoodieSparkKryoRegistrar {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testLegacyPayloadFormatAcrossIndependentKryoInstances(boolean deleted) throws IOException {
+    Schema writerSchema = SchemaBuilder.record("payload").fields()
+        .requiredString("id").requiredLong("ts").requiredString("value").endRecord();
+    Schema projection = SchemaBuilder.record("payload").fields()
+        .requiredString("value").requiredString("id").endRecord();
+    GenericRecord record = deleted ? null : new GenericRecordBuilder(writerSchema)
+        .set("id", "key").set("ts", 42L).set("value", "updated").build();
+    OverwriteWithLatestAvroPayload payload = new OverwriteWithLatestAvroPayload(record, 42L);
+    Kryo writer = newKryo();
+
+    // Reusing a Spark Kryo instance must preserve its format after each graph is reset.
+    for (int round = 0; round < 3; round++) {
+      try (Output header = new Output(256, -1)) {
+        payload.write(writer, header);
+        try (Input input = new Input(header.toBytes())) {
+          assertEquals(payload.getRecordBytes().length, input.readInt());
+        }
+      }
+      byte[] bytes;
+      try (Output output = new Output(256, -1)) {
+        writer.writeClassAndObject(output, payload);
+        bytes = output.toBytes();
+      }
+      try (Input input = new Input(bytes)) {
+        payload = (OverwriteWithLatestAvroPayload) newKryo().readClassAndObject(input);
+      }
+      assertEquals(42L, payload.getOrderingVal());
+      if (deleted) {
+        assertFalse(payload.getInsertValue(writerSchema).isPresent());
+      } else {
+        // Legacy Spark transport supplies the writer schema before requesting projections.
+        assertEquals("key", payload.getInsertValue(writerSchema).get().get(0).toString());
+        IndexedRecord projected = payload.getInsertValue(projection).get();
+        assertEquals("updated", projected.get(0).toString());
+        assertEquals("key", projected.get(1).toString());
+        assertEquals(42L, payload.getInsertValue(writerSchema).get().get(1));
+      }
+    }
+  }
+
   @Test
   public void testSerdeHoodieHadoopConfiguration() {
     Kryo kryo = newKryo();
