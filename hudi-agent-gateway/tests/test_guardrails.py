@@ -102,3 +102,38 @@ def test_string_literal_containing_dml_is_fine() -> None:
 def test_quoted_identifiers_round_trip() -> None:
     out = enforce_guardrails('SELECT "weird col" FROM "my table"', row_cap=CAP)
     assert '"weird col"' in out
+
+
+# --- spark dialect ---
+
+
+def test_spark_dialect_backticks_parse_and_render() -> None:
+    out = enforce_guardrails(
+        "SELECT `city` FROM `default`.`trips`", row_cap=CAP, dialect="spark"
+    )
+    assert "LIMIT" in out
+
+
+def test_spark_dialect_rejects_dml_with_spark_hint() -> None:
+    import pytest
+
+    from hudi_agent_gateway.tools.registry import ToolInputError
+
+    with pytest.raises(ToolInputError) as exc:
+        enforce_guardrails("INSERT INTO t VALUES (1)", row_cap=CAP, dialect="spark")
+    assert "Spark SQL" in exc.value.hint
+
+
+def test_spark_dialect_limit_injected() -> None:
+    out = enforce_guardrails("SELECT a FROM t", row_cap=CAP, dialect="spark")
+    assert f"LIMIT {CAP}" in out
+
+
+def test_default_dialect_is_trino() -> None:
+    import pytest
+
+    from hudi_agent_gateway.tools.registry import ToolInputError
+
+    with pytest.raises(ToolInputError) as exc:
+        enforce_guardrails("DELETE FROM t", row_cap=CAP)
+    assert "Trino SQL" in exc.value.hint

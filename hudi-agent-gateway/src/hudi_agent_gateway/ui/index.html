@@ -42,19 +42,19 @@ limitations under the License.
   <section id="connect-panel" hidden>
     <div class="endpoint">
       <div>
-        <strong>Trino SQL</strong>
+        <strong id="ep-sql-label">SQL endpoint</strong>
         <small>point any SQL client / BI tool at the lakehouse directly</small>
       </div>
-      <code id="ep-trino">&hellip;</code>
-      <button class="copy" data-copy="ep-trino" title="Copy">&#x2398;</button>
+      <code id="ep-sql">&hellip;</code>
+      <button class="copy" data-copy="ep-sql" title="Copy">&#x2398;</button>
     </div>
-    <div class="endpoint">
+    <div class="endpoint" id="ep-web-ui-row">
       <div>
-        <strong>Trino Web UI</strong>
+        <strong>Engine Web UI</strong>
         <small>query monitoring &amp; cluster overview</small>
       </div>
-      <code><a id="ep-trino-ui" href="#" target="_blank" rel="noopener">&hellip;</a></code>
-      <button class="copy" data-copy="ep-trino-ui" title="Copy">&#x2398;</button>
+      <code><a id="ep-web-ui" href="#" target="_blank" rel="noopener">&hellip;</a></code>
+      <button class="copy" data-copy="ep-web-ui" title="Copy">&#x2398;</button>
     </div>
     <div class="endpoint">
       <div>
@@ -72,8 +72,9 @@ limitations under the License.
       <code id="ep-mcp">&hellip;</code>
       <button class="copy" data-copy="ep-mcp" title="Copy">&#x2398;</button>
     </div>
-    <p class="endpoint-note">Trino is addressed by its in-cluster service name; from outside the
-    cluster, port-forward or expose the service. The inference and MCP URLs are this gateway.</p>
+    <p class="endpoint-note">The SQL engine is addressed by its in-cluster service name; from
+    outside the cluster, port-forward or expose the service. The inference and MCP URLs are this
+    gateway.</p>
   </section>
 
   <main id="messages" aria-live="polite">
