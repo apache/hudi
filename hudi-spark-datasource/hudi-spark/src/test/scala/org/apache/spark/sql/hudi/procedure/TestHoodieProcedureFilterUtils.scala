@@ -45,6 +45,14 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
   private def validate(expr: String, schema: StructType = scalarSchema): Either[String, Unit] =
     HoodieProcedureFilterUtils.validateFilterExpression(expr, schema, spark)
 
+  // Every filterable procedure calls validateFilterExpression before evaluateFilter, so a
+  // "resolves correctly" claim needs both: this pairs the two instead of asserting through keep
+  // alone.
+  private def assertKeeps(rows: Seq[Row], expr: String, expected: Seq[Row], schema: StructType = scalarSchema): Unit = {
+    assertResult(Right(()))(validate(expr, schema))
+    assertResult(expected)(keep(rows, expr, schema))
+  }
+
   // Not the scalarRows factory: only id and ts matter to the widening tests that use it.
   private def tsRow(id: Int, ts: Long): Row =
     Row(id, s"n$id", 10.0d * id, ts, true, -id,
@@ -184,6 +192,15 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     withSQLConf("spark.sql.ansi.enabled" -> "true") {
       intercept[NumberFormatException] {
         keep(scalarRows, "int(name) > 1", scalarSchema)
+      }
+    }
+    // The registry-fallback guard added to protect a direct eval() on a genuinely unsupported
+    // function must not narrow this pre-existing, unconditional ANSI rethrow: OR'd together with
+    // a call to an unknown function (itself Unevaluable), the ANSI cast error still has to win
+    // over the unrelated function being unsupported, not get silently swallowed by that guard.
+    withSQLConf("spark.sql.ansi.enabled" -> "true") {
+      intercept[NumberFormatException] {
+        keep(scalarRows, "int(name) > 1 OR no_such_fn(name) = 'x'", scalarSchema)
       }
     }
   }
@@ -345,8 +362,7 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
   }
 
   test("evaluateFilter binds quoted column names") {
-    // show_column_stats_overlap, the second procedure named in #19632, outputs columns like
-    // "Average overlap" and "50% overlap".
+    // show_column_stats_overlap outputs columns like "Average overlap" and "50% overlap".
     val schema = schemaOf("Average overlap" -> DoubleType, "50% overlap" -> IntegerType)
     val rows = Seq(Row(0.75d, 10), Row(0.25d, 20))
     assertResult(Seq(rows.head))(keep(rows, "`Average overlap` > 0.5", schema))
@@ -354,15 +370,100 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     assertResult(Seq(rows(1)))(keep(rows, "`50% overlap` > 15", schema))
   }
 
-  test("evaluateFilter silently drops rows for expressions it cannot resolve") {
-    assertResult(Seq.empty)(keep(scalarRows, "concat(name, 'x') = 'a1x'", scalarSchema))
-    assertResult(Seq.empty)(keep(scalarRows, "instr(name, 'a') = 1", scalarSchema))
-    assertResult(Seq.empty)(keep(scalarRows, "if(name = 'a1', true, false)", scalarSchema))
+  test("evaluateFilter resolves functions outside the hardcoded table via FunctionRegistry") {
+    // Functions missing from the hardcoded table now fall back to Spark's own FunctionRegistry
+    // instead of being rejected as unsupported.
+    assertKeeps(scalarRows, "concat(name, 'x') = 'a1x'", Seq(scalarRows.head))
+    assertKeeps(scalarRows, "instr(name, 'a') = 1", Seq(scalarRows.head))
+    assertKeeps(scalarRows, "if(name = 'a1', true, false)", Seq(scalarRows.head))
     assertResult(Seq(scalarRows.head))(
       keep(scalarRows, "case when name = 'a1' then true else false end", scalarSchema))
     // Or short-circuits on the resolved side, which is what the unresolved-operand guard preserves.
-    assertResult(Seq(scalarRows.head))(
-      keep(scalarRows, "id = 1 OR concat(name, 'x') = 'a1x'", scalarSchema))
+    assertKeeps(scalarRows, "id = 1 OR concat(name, 'x') = 'a1x'", Seq(scalarRows.head))
+
+    // RuntimeReplaceable builtins (nvl, left, right, ...) resolve to a placeholder node that
+    // FunctionRegistry.lookupFunction doesn't substitute on its own - make sure we unwrap it
+    // rather than letting eval() blow up on the raw placeholder.
+    assertKeeps(scalarRows, "nvl(name, 'z') = 'a1'", Seq(scalarRows.head))
+    assertKeeps(scalarRows, "left(name, 1) = 'a'", Seq(scalarRows.head))
+    assertKeeps(scalarRows, "right(name, 1) = '1'", Seq(scalarRows.head))
+
+    // A hardcoded-table entry called with an arity the table doesn't handle (substring only
+    // handles 3 args) should still fall back to the registry instead of getting stuck.
+    assertKeeps(scalarRows, "substring(name, 2) = '1'", Seq(scalarRows.head))
+
+    // The rejection message for multiple unknown functions lists every name, sorted.
+    assert(validate("no_such_fn(name) = 'x' OR other_missing(name) = 1")
+      .left.exists(_ == "Unsupported functions: no_such_fn, other_missing"))
+
+    // A 3+ part name (catalog.db.func) isn't safe to look up by bare function name alone - make
+    // sure it's rejected rather than silently resolved against a same-named function elsewhere.
+    assert(validate("some_catalog.some_db.upper(name) = 'A1'").isLeft)
+    assertResult(Seq.empty)(keep(scalarRows, "some_catalog.some_db.upper(name) = 'A1'", scalarSchema))
+    // Same story for a 2-part db-qualified name: builtins register with no database, so
+    // FunctionRegistry has no "default.upper" to find, and guessing by dropping the qualifier
+    // would risk the same wrong-function-match problem as the 3+ part case.
+    assert(validate("default.upper(name) = 'A1'").isLeft)
+    assertResult(Seq.empty)(keep(scalarRows, "default.upper(name) = 'A1'", scalarSchema))
+  }
+
+  test("evaluateFilter still rejects aggregate/generator/nondeterministic functions resolved via FunctionRegistry") {
+    // Aggregate functions resolve fine as expressions but can't be eval()'d per row - make sure
+    // those still go through the existing rejection path instead of silently resolving to a
+    // broken, always-false filter. Same story for generators (explode only makes sense in a
+    // projection) and non-deterministic functions (rand()/uuid() rely on per-partition
+    // initialization this evaluator never does). any_value is covered separately below - the
+    // parser lowers it straight to an AggregateExpression before it ever reaches this guard.
+    // max(id) is an unambiguous AggregateFunction case (no decimal-literal argument to complicate
+    // why it's rejected, unlike percentile's 0.5), so it's what actually pins the guard clause.
+    assert(validate("max(id) > 0").left.exists(_.contains("Unsupported functions: max")))
+    assertResult(Seq.empty)(keep(scalarRows, "max(id) > 0", scalarSchema))
+    assert(validate("percentile(id, 0.5) = 1").isLeft)
+    assert(validate("explode(array(1, 2)) = 1").left.exists(_.contains("Unsupported functions: explode")))
+    assert(validate("rand() = 1").isLeft)
+    assert(validate("uuid() = 'x'").isLeft)
+    assertResult(Seq.empty)(keep(scalarRows, "rand() = 1", scalarSchema))
+    // monotonically_increasing_id/input_file_name are also Nondeterministic, so the same
+    // deterministic check catches them without needing their own case.
+    assert(validate("monotonically_increasing_id() = 1").isLeft)
+    assert(validate("input_file_name() = 'x'").isLeft)
+    // current_timestamp is deterministic-at-eval-time on most of the Spark line this builds
+    // against (Spark computes it directly rather than requiring rule substitution), so it
+    // resolves and evaluates for real instead of needing denylist treatment - except on 4.0
+    // specifically, where CurrentTimestampLike briefly implemented FoldableUnevaluable and threw
+    // on eval(); the eval-safety probe correctly rejects it there instead of crashing the whole
+    // procedure call. current_date doesn't share the evaluating half at all: it's a
+    // TimeZoneAwareExpression that stays unresolved without a session zone the same way hour(t)
+    // does above, not because of anything this guard rejects.
+    if (HoodieSparkUtils.gteqSpark4_0 && !HoodieSparkUtils.gteqSpark4_1) {
+      assert(validate("current_timestamp() > t").isLeft)
+      assertResult(Seq.empty)(keep(scalarRows, "current_timestamp() > t", scalarSchema))
+    } else {
+      assertResult(scalarRows)(keep(scalarRows, "current_timestamp() > t", scalarSchema))
+    }
+    assert(validate("current_date() > d").isLeft)
+  }
+
+  test("evaluateFilter runs the same coercion rules the analyzer would for concat/if/functions") {
+    // lookupFunction skips the analyzer's implicit-cast pass, but applySparkAnalyzerCoercionRules now runs
+    // ConcatCoercion too, so concat(id, 'x') casts the Int column to String exactly as a real
+    // query would - a genuine mismatch (Map, below) is what checkInputDataTypes still has to
+    // catch, not a fixable one like this.
+    assertKeeps(scalarRows, "concat(id, 'x') = '1x'", Seq(scalarRows.head))
+    // IfCoercion unifies the then/else branch types (ts: Long, 0: Int).
+    assertKeeps(scalarRows, "if(flag, ts, 0) = 1000", Seq(scalarRows.head))
+    // FunctionArgumentConversion widens greatest/least's arguments to a common type (id: Int,
+    // price: Double).
+    assertKeeps(scalarRows, "greatest(id, price) = 10.0", Seq(scalarRows.head))
+    // ... and array_contains's element type against the array's.
+    assertKeeps(scalarRows, "array_contains(array(1, 2, 3), id)", scalarRows)
+
+    // A genuine mismatch nothing coerces (a Map argument to concat) still gets rejected -
+    // widening the coercion rules didn't loosen the underlying type check.
+    val mapSchema = schemaOf("name" -> StringType, "m" -> MapType(StringType, IntegerType))
+    val mapRows = Seq(Row("a1", Map("k" -> 1)))
+    assert(HoodieProcedureFilterUtils.validateFilterExpression("concat(name, m) = 'x'", mapSchema, spark).isLeft)
+    assertResult(Seq.empty)(keep(mapRows, "concat(name, m) = 'x'", mapSchema))
   }
 
   test("evaluateFilter handles AND / OR / NOT / IN / BETWEEN") {
@@ -504,7 +605,7 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     assertResult(rows)(keep(rows, "isnotnull(inst) AND isnotnull(ld) AND isnotnull(ldt)", schema))
     // Known limitation: array values are converted to a plain Array instead of Catalyst ArrayData,
     // so every array predicate (even isnotnull) fails to evaluate and drops the row instead of
-    // matching. Pinned here so a fix flips these assertions; see #19633.
+    // matching. Pinned here so a fix to that conversion flips these assertions.
     assertResult(Seq.empty)(keep(rows, "size(arrScala) >= 0", schema))
     assertResult(Seq.empty)(keep(rows, "isnotnull(arrScala)", schema))
   }
@@ -538,12 +639,9 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
   }
 
   test("validateFilterExpression rejects expressions the evaluator cannot resolve") {
-    val unknown = validate("concat(name, 'x') = 'a1x' OR instr(name, 'a') = 1")
-    assert(unknown.left.exists(_.contains("Unsupported functions: concat, instr")))
-
-    assert(validate("if(name = 'a1', true, false)").isLeft)
-    assert(validate("substring(name, 2)").isLeft)
-    assert(validate("id = 1 OR concat(name, 'x') = 'a1x'").left.exists(_.contains("Unsupported functions: concat")))
+    // concat/instr/substring(2-arg) now resolve via the FunctionRegistry fallback, so they're no
+    // longer rejected here — covered by the "resolves functions ... via FunctionRegistry" test
+    // above instead, including the "id = 1 OR concat(...)" short-circuit case.
     assert(validate("hour(t) = 12").isLeft)
     assert(validate("date_format(t, 'yyyy') = '2024'").isLeft)
     assert(validate("any_value(id) = 1").isLeft)
@@ -555,4 +653,84 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
 
     assertResult(Right(()))(validate("upper(name) = 'A1'"))
   }
+
+  test("evaluateFilter resolves deeper nesting and more RuntimeReplaceable functions") {
+    // Function resolution runs bottom-up, so a registry-resolved argument (upper(name)) is
+    // already a real expression by the time its enclosing call (instr) is checked - otherwise
+    // the outer call would look unresolved and get rejected even though both functions
+    // individually resolve fine. This is the regression case for the transformUp fix.
+    assertKeeps(scalarRows, "instr(upper(name), 'A') = 1", Seq(scalarRows.head))
+    // Two levels of registry-only nesting.
+    assertKeeps(scalarRows, "instr(concat(name, 'x'), 'a') = 1", Seq(scalarRows.head))
+    // Registry function nested inside a hardcoded-table function, and vice versa three levels deep.
+    assertResult(Seq(scalarRows.head))(keep(scalarRows, "upper(concat(name, 'x')) = 'A1X'", scalarSchema))
+    assertResult(Seq(scalarRows.head))(
+      keep(scalarRows, "upper(concat(lower(name), 'x')) = 'A1X'", scalarSchema))
+    // Other RuntimeReplaceable builtins beyond nvl/left/right also need the replacement unwrap.
+    assertResult(Seq(scalarRows.head))(keep(scalarRows, "ifnull(name, 'z') = 'a1'", scalarSchema))
+    assertResult(scalarRows)(keep(scalarRows, "nvl2(name, 'yes', 'no') = 'yes'", scalarSchema))
+    assertResult(Seq(scalarRows.head))(keep(scalarRows, "nullif(name, 'a1') IS NULL", scalarSchema))
+  }
+
+  test("evaluateFilter widens nvl the same way as the equivalent hardcoded coalesce") {
+    // ts is LongType, 0 is an Int literal. nvl(ts, 0) unwraps to the same Coalesce shape as the
+    // hardcoded coalesce(ts, 0) case, so both need the same widening to resolve.
+    assertKeeps(scalarRows, "coalesce(ts, 0) = 1000", Seq(scalarRows.head))
+    assertKeeps(scalarRows, "nvl(ts, 0) = 1000", Seq(scalarRows.head))
+  }
+
+  test("evaluateFilter unwraps a chained RuntimeReplaceable to a fixed point") {
+    // regexp_substr unwraps to NullIf, itself RuntimeReplaceable - a single non-recursive unwrap
+    // would leave NullIf's own eval() throwing, silently swallowed.
+    assertKeeps(scalarRows, "regexp_substr(name, 'a1') = 'a1'", Seq(scalarRows.head))
+  }
+
+  test("evaluateFilter checks a RuntimeReplaceable wrapper's own declared input types") {
+    // split_part's Int delimiter implicit-casts to String the same way a real query allows, so
+    // this resolves and evaluates correctly rather than being rejected outright.
+    assertKeeps(scalarRows, "split_part(name, 1, 1) = 'a'", Seq(scalarRows.head))
+    // An array delimiter can't implicit-cast to the String split_part declares, and nothing about
+    // its unwrapped form (ElementAt over StringSplitSQL) enforces that contract on its own - the
+    // wrapper's own checkInputDataTypes is what has to catch this.
+    assert(validate("split_part(name, array(1), 1) = 'a'").isLeft)
+  }
+
+  test("evaluateFilter surfaces a runtime error from a registry-resolved function") {
+    // An invalid regex pattern raises the same way the equivalent Spark query would, instead of
+    // getting swallowed by the per-row Try and silently returning no matches.
+    assertResult(Right(()))(validate("regexp_replace(name, '[', 'x') = 'x'"))
+    val ex = intercept[IllegalArgumentException](keep(scalarRows, "regexp_replace(name, '[', 'x') = 'x'", scalarSchema))
+    assert(ex.getMessage.contains("regexp_replace"))
+  }
+
+  test("evaluateFilter surfaces a runtime error from a hardcoded-table function too") {
+    // PatternSyntaxException is an IllegalArgumentException, so a bad regex now raises through
+    // the hardcoded rlike/regexp_extract cases the same way it does through the registry path
+    // above - deliberately, matching what the equivalent Spark query does, not just for functions
+    // the fallback newly makes reachable.
+    intercept[IllegalArgumentException](keep(scalarRows, "regexp_like(name, '[')", scalarSchema))
+    intercept[IllegalArgumentException](keep(scalarRows, "regexp_extract(name, '[', 1) = 'x'", scalarSchema))
+  }
+
+  test("evaluateFilter surfaces a data error from an all-literal foldable call") {
+    // A call whose arguments are all literals (no column reference) is foldable itself, the same
+    // property that lets the eval-safety probe catch a structurally-unusable result like
+    // current_timestamp() on some Spark versions. That probe has to tell a genuine data error
+    // (an invalid regex, still fixable by different literal arguments) apart from a structural
+    // one: only a bare SparkException, the marker Unevaluable.eval() itself throws, means "not
+    // usable at all" - anything else (SparkThrowable, IllegalArgumentException, ...) still raises
+    // normally instead of getting silently rejected as an unsupported function.
+    assertResult(Right(()))(validate("regexp_replace('a', '[', 'x') = 'x'"))
+    intercept[IllegalArgumentException](keep(scalarRows, "regexp_replace('a', '[', 'x') = 'x'", scalarSchema))
+  }
+
+  test("evaluateFilter widens a registry function's arguments before looking it up") {
+    // ts + 1 (Long + Int) is still an unresolved Add at the point the wrapper's own
+    // checkInputDataTypes runs, before pass three ever gets a chance to widen it - sqrt needs its
+    // argument widened first, the same way nvl needed its own operands widened before its wrapper
+    // contract could pass.
+    assertKeeps(scalarRows, "sqrt(ts + 1) > 0", scalarRows)
+    assertKeeps(scalarRows, "concat(name, ts + 1) = 'a11001'", Seq(scalarRows.head))
+  }
+
 }
