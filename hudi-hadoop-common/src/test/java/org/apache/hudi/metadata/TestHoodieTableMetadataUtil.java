@@ -605,6 +605,48 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         Lazy.eagerly(Option.of(schema)), true, V1).keySet()));
   }
 
+  /**
+   * The schema-absent branch of {@code getColumnsToIndexWithoutRequiredMetaFields}, which
+   * {@link #testGetColumnsToIndex()} never reaches because every case there supplies a schema.
+   *
+   * <p>Two outcomes, and the difference matters: with no explicit column list the inner call returns an
+   * empty map, so the caller is left with just the always-indexed meta columns rather than failing. With
+   * an explicit list it
+   * throws instead, because the names cannot be resolved to field schemas without a schema to resolve
+   * them against, and silently indexing nothing would look like the config had been honoured.
+   */
+  @Test
+  public void testGetColumnsToIndexWhenTableSchemaIsAbsent() {
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+
+    HoodieMetadataConfig noColumnList = HoodieMetadataConfig.newBuilder()
+        .enable(true).withMetadataIndexColumnStats(true)
+        .build();
+    assertListEquality(new ArrayList<>(Arrays.asList(HoodieTableMetadataUtil.META_COLS_TO_ALWAYS_INDEX)),
+        new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, noColumnList,
+            Lazy.eagerly(Option.empty()), false, V1).keySet()));
+
+    HoodieMetadataConfig withColumnList = HoodieMetadataConfig.newBuilder()
+        .enable(true).withMetadataIndexColumnStats(true)
+        .withColumnStatsIndexForColumns("col_1,col_2")
+        .build();
+    Throwable thrown = assertThrows(IllegalArgumentException.class,
+        () -> HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, withColumnList,
+            Lazy.eagerly(Option.empty()), false, V1),
+        "an explicit column list cannot be resolved without a table schema");
+    assertTrue(String.valueOf(thrown.getMessage()).contains("Table schema not found"),
+        () -> "the failure should name the missing schema, but was: " + thrown.getMessage());
+
+    // Table initialisation is the exception: the configured names are recorded without schemas, so col
+    // stats can be enabled before the first commit has produced one. The meta columns are added by the
+    // caller either way.
+    List<String> expectedWhileInitialising = new ArrayList<>(Arrays.asList(HoodieTableMetadataUtil.META_COLS_TO_ALWAYS_INDEX));
+    expectedWhileInitialising.addAll(Arrays.asList("col_1", "col_2"));
+    assertListEquality(expectedWhileInitialising,
+        new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, withColumnList,
+            Lazy.eagerly(Option.empty()), true, V1).keySet()));
+  }
+
   private void assertListEquality(List<String> expected, List<String> actual) {
     Collections.sort(expected);
     Collections.sort(actual);
