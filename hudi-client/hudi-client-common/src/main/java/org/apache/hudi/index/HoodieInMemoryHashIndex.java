@@ -42,7 +42,10 @@ import java.util.concurrent.ConcurrentMap;
  * Hoodie Index implementation backed by an in-memory Hash map.
  * <p>
  * Record locations are kept per table (keyed by base path) so that tables written in the same JVM
- * do not see each other's keys.
+ * do not see each other's keys. The commit-time check in tagLocation only rejects locations whose
+ * instant is missing from the current timeline; an entry left by an earlier table at the same base
+ * path is accepted, so a caller that re-creates a table at a path it used before must call
+ * clear(basePath) first.
  * <p>
  * ONLY USE FOR LOCAL TESTING
  */
