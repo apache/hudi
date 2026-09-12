@@ -753,6 +753,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
           throw new RuntimeException(e);
         }
       }));
+      // Add small wait time to avoid flakiness
+      Thread.sleep(100);
     }
 
     futures.forEach(f -> {
