@@ -22,6 +22,7 @@ import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieTableServiceManagerConfig;
 import org.apache.hudi.common.model.ActionType;
+import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -34,11 +35,14 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
@@ -51,6 +55,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -269,7 +274,7 @@ class TestHoodieBackedTableMetadataWriterTableVersionSix {
     when(metadataTimeline.filterPendingCompactionTimeline().firstInstant()).thenReturn(Option.of(pendingCompaction));
     writer.metadataMetaClient = metadataMetaClient;
 
-    assertFalse(writer.validateCompactionScheduling(Option.empty(), "20250101120000002"));
+    assertFalse(writer.validateCompactionScheduling("20250101120000002"));
   }
 
   @Test
@@ -296,11 +301,11 @@ class TestHoodieBackedTableMetadataWriterTableVersionSix {
         .build();
 
     assertThrows(HoodieMetadataException.class,
-        () -> writer.validateCompactionScheduling(Option.empty(), "20250101120000001"));
+        () -> writer.validateCompactionScheduling("20250101120000001"));
   }
 
   @Test
-  void testCompactIfNecessaryCoversExistingDelegatedAndLogCompactionPaths() {
+  void testRunCompactionServicesCoversExistingDelegatedAndLogCompactionPaths() {
     // Exercise completed, delegated, and log-compaction fallback paths.
     Properties tableServiceManagerProperties = new Properties();
     tableServiceManagerProperties.put(
@@ -335,9 +340,10 @@ class TestHoodieBackedTableMetadataWriterTableVersionSix {
     when(writeClient.scheduleLogCompactionAtInstant("300005", Option.empty())).thenReturn(true);
 
     // Version 6 derives compaction and log-compaction instants with fixed suffixes.
-    writer.compactIfNecessary(writeClient, Option.of("100"));
-    writer.compactIfNecessary(writeClient, Option.of("200"));
-    writer.compactIfNecessary(writeClient, Option.of("300"));
+    MetadataTableServiceRequest request = MetadataTableServiceRequest.newBuilder().build();
+    writer.runCompactionServicesIfNecessary(writeClient, Option.of("100"), request);
+    writer.runCompactionServicesIfNecessary(writeClient, Option.of("200"), request);
+    writer.runCompactionServicesIfNecessary(writeClient, Option.of("300"), request);
 
     Properties allTableServicesProperties = new Properties();
     allTableServicesProperties.put(
@@ -350,11 +356,91 @@ class TestHoodieBackedTableMetadataWriterTableVersionSix {
             .build());
     when(writeClient.scheduleCompactionAtInstant("400001", Option.empty())).thenReturn(false);
     when(writeClient.scheduleLogCompactionAtInstant("400005", Option.empty())).thenReturn(true);
-    writer.compactIfNecessary(writeClient, Option.of("400"));
+    writer.runCompactionServicesIfNecessary(writeClient, Option.of("400"), request);
 
     verify(writeClient).scheduleCompactionAtInstant("200001", Option.empty());
+    verify(writeClient, never()).scheduleCompactionAtInstant("100001", Option.empty());
+    verify(writeClient, never()).scheduleLogCompactionAtInstant("100005", Option.empty());
+    verify(writeClient, never()).scheduleLogCompactionAtInstant("200005", Option.empty());
+    verify(writeClient, never()).compact("200001", true);
     verify(writeClient).scheduleLogCompactionAtInstant("300005", Option.empty());
     verify(writeClient).logCompact("300005", true);
+    verify(writeClient).scheduleLogCompactionAtInstant("400005", Option.empty());
+    verify(writeClient, never()).logCompact("400005", true);
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = MetadataTableServiceMode.class, names = {"SCHEDULE", "SCHEDULE_AND_EXECUTE"})
+  void testSchedulingDelegationAndExternalBypass(MetadataTableServiceMode mode) {
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+        .withTableServiceManagerEnabled(true)
+        .withTableServiceManagerScheduleActions(ActionType.compaction.name())
+        .build();
+    HoodieWriteConfig dataWriteConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp/table")
+        .withMetadataConfig(metadataConfig)
+        .build();
+    HoodieWriteConfig metadataWriteConfig = mock(HoodieWriteConfig.class);
+    Properties tableServiceManagerProperties = new Properties();
+    tableServiceManagerProperties.put(
+        HoodieTableServiceManagerConfig.TABLE_SERVICE_MANAGER_ENABLED.key(), "true");
+    tableServiceManagerProperties.put(
+        HoodieTableServiceManagerConfig.TABLE_SERVICE_MANAGER_ACTIONS.key(), ActionType.compaction.name());
+    tableServiceManagerProperties.put(
+        HoodieTableServiceManagerConfig.TABLE_SERVICE_MANAGER_SCHEDULE_ACTIONS.key(), metadataConfig.getTableServiceManagerScheduleActions());
+    when(metadataWriteConfig.getTableServiceManagerConfig()).thenReturn(
+        HoodieTableServiceManagerConfig.newBuilder()
+            .fromProperties(tableServiceManagerProperties)
+            .build());
+    when(metadataWriteConfig.isLogCompactionEnabled()).thenReturn(true);
+
+    HoodieTableMetaClient metadataMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
+    when(metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(any(String.class)))
+        .thenReturn(false);
+    HoodieBackedTableMetadataWriterTableVersionSix<?, ?> writer =
+        mock(HoodieBackedTableMetadataWriterTableVersionSix.class, CALLS_REAL_METHODS);
+    writer.dataWriteConfig = dataWriteConfig;
+    writer.metadataWriteConfig = metadataWriteConfig;
+    writer.metadataMetaClient = metadataMetaClient;
+
+    BaseHoodieWriteClient writeClient = mock(BaseHoodieWriteClient.class);
+    when(writeClient.scheduleCompactionAtInstant("600001", Option.empty())).thenReturn(true);
+    when(writeClient.scheduleLogCompactionAtInstant("700005", Option.empty())).thenReturn(true);
+
+    MetadataTableServiceRequest inlineRequest = MetadataTableServiceRequest.newBuilder()
+        .withMode(mode)
+        .withServices(EnumSet.of(TableServiceType.COMPACT, TableServiceType.LOG_COMPACT))
+        .build();
+    writer.runCompactionServicesIfNecessary(writeClient, Option.of("500"), inlineRequest);
+    verify(writeClient, never()).scheduleCompactionAtInstant("500001", Option.empty());
+    verify(writeClient, never()).scheduleLogCompactionAtInstant("500005", Option.empty());
+    verify(writeClient, never()).compact("500001", true);
+    verify(writeClient, never()).logCompact("500005", true);
+
+    MetadataTableServiceRequest externalRequest = MetadataTableServiceRequest.newBuilder()
+        .withMode(mode)
+        .withServices(EnumSet.of(TableServiceType.COMPACT, TableServiceType.LOG_COMPACT))
+        .disableTableServiceManagerDelegation(true)
+        .build();
+    writer.runCompactionServicesIfNecessary(writeClient, Option.of("600"), externalRequest);
+    verify(writeClient).scheduleCompactionAtInstant("600001", Option.empty());
+    verify(writeClient, never()).scheduleLogCompactionAtInstant("600005", Option.empty());
+
+    // Compaction delegation must not block a request that only asks for log compaction.
+    MetadataTableServiceRequest logCompactionOnlyRequest = MetadataTableServiceRequest.newBuilder()
+        .withMode(mode)
+        .withServices(EnumSet.of(TableServiceType.LOG_COMPACT))
+        .build();
+    writer.runCompactionServicesIfNecessary(writeClient, Option.of("700"), logCompactionOnlyRequest);
+    verify(writeClient, never()).scheduleCompactionAtInstant("700001", Option.empty());
+    verify(writeClient).scheduleLogCompactionAtInstant("700005", Option.empty());
+    if (mode.includesExecute()) {
+      verify(writeClient).compact("600001", true);
+      verify(writeClient).logCompact("700005", true);
+    } else {
+      verify(writeClient, never()).compact("600001", true);
+      verify(writeClient, never()).logCompact("700005", true);
+    }
   }
 
   @Test

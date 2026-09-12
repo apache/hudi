@@ -217,9 +217,9 @@ class TestHoodieMetadataConfig {
     assertEquals("", config.getTableServiceManagerActions());
 
     HoodieMetadataConfig configWithActions = HoodieMetadataConfig.newBuilder()
-        .withTableServiceManagerActions("compaction,logcompaction")
+        .withTableServiceManagerActions("compaction,logcompaction,clean,archive")
         .build();
-    assertEquals("compaction,logcompaction", configWithActions.getTableServiceManagerActions());
+    assertEquals("compaction,logcompaction,clean,archive", configWithActions.getTableServiceManagerActions());
 
     Properties props = new Properties();
     props.put(HoodieMetadataConfig.TABLE_SERVICE_MANAGER_ACTIONS.key(), "compaction");
@@ -233,17 +233,12 @@ class TestHoodieMetadataConfig {
   void testTableServiceManagerActionsRejectsUnsupportedActions() {
     assertThrows(IllegalArgumentException.class, () ->
         HoodieMetadataConfig.newBuilder()
-            .withTableServiceManagerActions("clean")
-            .build());
-
-    assertThrows(IllegalArgumentException.class, () ->
-        HoodieMetadataConfig.newBuilder()
             .withTableServiceManagerActions("clustering")
             .build());
 
     assertThrows(IllegalArgumentException.class, () ->
         HoodieMetadataConfig.newBuilder()
-            .withTableServiceManagerActions("compaction,clean")
+            .withTableServiceManagerActions("compaction,savepoint")
             .build());
 
     assertThrows(IllegalArgumentException.class, () ->
@@ -255,10 +250,25 @@ class TestHoodieMetadataConfig {
   @Test
   void testTableServiceManagerActionsValidatedInBuildFromProperties() {
     Properties props = new Properties();
-    props.put(HoodieMetadataConfig.TABLE_SERVICE_MANAGER_ACTIONS.key(), "clean");
+    props.put(HoodieMetadataConfig.TABLE_SERVICE_MANAGER_ACTIONS.key(), "clustering");
     assertThrows(IllegalArgumentException.class, () ->
         HoodieMetadataConfig.newBuilder()
             .fromProperties(props)
+            .build());
+  }
+
+  @Test
+  void testTableServiceManagerScheduleActions() {
+    HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder()
+        .withTableServiceManagerEnabled(true)
+        .withTableServiceManagerScheduleActions("compaction,logcompaction")
+        .build();
+
+    assertEquals("compaction,logcompaction", config.getTableServiceManagerScheduleActions());
+
+    assertThrows(IllegalArgumentException.class, () ->
+        HoodieMetadataConfig.newBuilder()
+            .withTableServiceManagerScheduleActions("clean")
             .build());
   }
 
@@ -267,6 +277,21 @@ class TestHoodieMetadataConfig {
     assertThrows(IllegalArgumentException.class, () ->
         HoodieMetadataConfig.newBuilder()
             .withTableServiceManagerEnabled(true)
+            .build());
+
+    assertThrows(IllegalArgumentException.class, () ->
+        HoodieMetadataConfig.newBuilder()
+            .withTableServiceManagerEnabled(true)
+            .withTableServiceManagerActions(" , ")
+            .build());
+
+    Properties props = new Properties();
+    props.put(HoodieMetadataConfig.TABLE_SERVICE_MANAGER_ENABLED.key(), "true");
+    props.put(HoodieMetadataConfig.TABLE_SERVICE_MANAGER_ACTIONS.key(), " , ");
+    props.put(HoodieMetadataConfig.TABLE_SERVICE_MANAGER_SCHEDULE_ACTIONS.key(), " , ");
+    assertThrows(IllegalArgumentException.class, () ->
+        HoodieMetadataConfig.newBuilder()
+            .fromProperties(props)
             .build());
   }
 

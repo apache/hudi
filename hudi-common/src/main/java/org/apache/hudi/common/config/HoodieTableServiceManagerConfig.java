@@ -19,13 +19,13 @@
 package org.apache.hudi.common.config;
 
 import org.apache.hudi.common.model.ActionType;
+import org.apache.hudi.common.util.StringUtils;
 
 import javax.annotation.concurrent.Immutable;
 
-import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Configurations used by the Hudi Table Service Manager.
@@ -57,6 +57,16 @@ public class HoodieTableServiceManagerConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("The actions deployed on table service manager, such as compaction or clean.");
+
+  public static final ConfigProperty<String> TABLE_SERVICE_MANAGER_SCHEDULE_ACTIONS = ConfigProperty
+      .key(TABLE_SERVICE_MANAGER_PREFIX + ".schedule.actions")
+      .defaultValue("")
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Comma-separated actions whose scheduling is delegated to a table service manager. "
+          + "Currently consumed by the metadata table writer for compaction and logcompaction; "
+          + "it is derived from hoodie.metadata.table.service.manager.schedule.actions. "
+          + "Setting this key on a data-table writer does not enable data-table scheduling delegation.");
 
   public static final ConfigProperty<String> TABLE_SERVICE_MANAGER_DEPLOY_USERNAME = ConfigProperty
       .key(TABLE_SERVICE_MANAGER_PREFIX + ".deploy.username")
@@ -137,6 +147,10 @@ public class HoodieTableServiceManagerConfig extends HoodieConfig {
     return getStringOrDefault(TABLE_SERVICE_MANAGER_ACTIONS);
   }
 
+  public String getTableServiceManagerScheduleActions() {
+    return getStringOrDefault(TABLE_SERVICE_MANAGER_SCHEDULE_ACTIONS);
+  }
+
   public String getDeployUsername() {
     return getStringOrDefault(TABLE_SERVICE_MANAGER_DEPLOY_USERNAME);
   }
@@ -174,15 +188,17 @@ public class HoodieTableServiceManagerConfig extends HoodieConfig {
   }
 
   public boolean isEnabledAndActionSupported(ActionType actionType) {
-    Set<String> actions = Arrays.stream(getTableServiceManagerActions().split(","))
-        .map(String::trim)
-        .filter(s -> !s.isEmpty())
-        .collect(Collectors.toSet());
+    Set<String> actions = parseTableServiceActions(getTableServiceManagerActions());
     boolean isActionSupported = actions.contains(actionType.name());
     if (actionType.equals(ActionType.clustering)) {
       isActionSupported = isActionSupported || actions.contains(ActionType.replacecommit.name());
     }
     return isTableServiceManagerEnabled() && isActionSupported;
+  }
+
+  /** Parses comma-separated service names, trimming whitespace and ignoring empty entries. */
+  public static Set<String> parseTableServiceActions(String actions) {
+    return new HashSet<>(StringUtils.split(actions, ","));
   }
 
   public static class Builder {

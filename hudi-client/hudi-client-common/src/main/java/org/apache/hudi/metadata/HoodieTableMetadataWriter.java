@@ -179,6 +179,25 @@ public interface HoodieTableMetadataWriter<I,O> extends Serializable, AutoClosea
   }
 
   /**
+   * Schedule the requested metadata table services whose trigger conditions are met. External callers should
+   * hold the data-table lock and use a single-writer MDT client for this phase.
+   * The request is copied and validated in {@link MetadataTableServiceMode#SCHEDULE} mode without modifying
+   * the original. Requests containing an execution instant are rejected before any table-service work begins;
+   * callers must construct a separate request without an instant for scheduling.
+   *
+   * @throws IllegalArgumentException if the request is invalid in scheduling mode, including having an instant time
+   */
+  void scheduleTableServices(MetadataTableServiceRequest request);
+
+  /**
+   * Execute pending metadata table services selected by the request. Compaction execution can use an OCC MDT
+   * client without an outer data-table lock.
+   * The request is copied and validated in {@link MetadataTableServiceMode#EXECUTE} mode without modifying
+   * the original. An optional instant is preserved and must select exactly one compaction or log-compaction service.
+   */
+  void executeTableServices(MetadataTableServiceRequest request);
+
+  /**
    * This returns true if the metadata table's partitions state is changed.
    */
   boolean hasPartitionsStateChanged();
