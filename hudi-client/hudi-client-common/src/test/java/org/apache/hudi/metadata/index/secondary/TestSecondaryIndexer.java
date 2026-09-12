@@ -16,11 +16,13 @@ import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
@@ -68,6 +70,84 @@ class TestSecondaryIndexer {
       List<IndexInitializationPlan> result = indexer.buildInitialization(IndexInitializationContext.of(
           "001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList), Lazy.lazily(Option::empty)));
       assertTrue(result.isEmpty());
+    }
+  }
+
+  @Test
+  void testInitializesTheRequestedPartitionAmongSeveralUninitialized() throws IOException {
+    HoodieEngineContext engineContext = new HoodieLocalEngineContext(getDefaultStorageConf());
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    HoodieMetadataConfig metadataConfig = mock(HoodieMetadataConfig.class);
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    HoodieIndexDefinition definition = mock(HoodieIndexDefinition.class);
+
+    when(writeConfig.getMetadataConfig()).thenReturn(metadataConfig);
+    when(metadataConfig.getSecondaryIndexParallelism()).thenReturn(8);
+    when(writeConfig.getProps()).thenReturn(new TypedProperties());
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    when(tableConfig.getMetadataPartitions()).thenReturn(Collections.emptySet());
+    when(metaClient.getIndexForMetadataPartition("sec1")).thenReturn(Option.of(definition));
+
+    try (MockedStatic<HoodieTableMetadataUtil> mockedUtil = mockStatic(HoodieTableMetadataUtil.class);
+         MockedStatic<org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils> mockedSecondaryUtil = mockStatic(org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.class)) {
+      mockedUtil.when(() -> HoodieTableMetadataUtil.getSecondaryIndexPartitionsToInit(any(), any(), any()))
+          .thenReturn(Set.of("sec1", "sec2"));
+      mockedUtil.when(() -> HoodieTableMetadataUtil.getHoodieIndexDefinition("sec1", metaClient)).thenReturn(definition);
+      mockedSecondaryUtil.when(() -> org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.readSecondaryKeysFromFileSlices(any(), any(), anyInt(), any(), any(), any(), any()))
+          .thenReturn(engineContext.emptyHoodieData());
+      mockedUtil.when(() -> HoodieTableMetadataUtil.estimateFileGroupCount(any(), any(), anyInt(), anyInt(), anyInt(), anyFloat(), anyLong()))
+          .thenReturn(1);
+
+      SecondaryIndexer indexer = new SecondaryIndexer(engineContext, writeConfig, metaClient);
+      List<IndexInitializationPlan> initializationList = indexer.buildInitialization(IndexInitializationContext.of(
+          "001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList), Lazy.lazily(Option::empty), Option.of("sec1")));
+      assertEquals(1, initializationList.size());
+      assertEquals("sec1", initializationList.get(0).indexPartitionName());
+    }
+  }
+
+  @Test
+  void testSkipsTheRequestedPartitionAlreadyInitialized() throws IOException {
+    HoodieEngineContext engineContext = mock(HoodieEngineContext.class);
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+
+    when(writeConfig.getMetadataConfig()).thenReturn(mock(HoodieMetadataConfig.class));
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    when(tableConfig.getMetadataPartitions()).thenReturn(Set.of("sec1"));
+
+    try (MockedStatic<HoodieTableMetadataUtil> mockedUtil = mockStatic(HoodieTableMetadataUtil.class)) {
+      mockedUtil.when(() -> HoodieTableMetadataUtil.getSecondaryIndexPartitionsToInit(any(), any(), any()))
+          .thenReturn(Set.of("sec2"));
+
+      SecondaryIndexer indexer = new SecondaryIndexer(engineContext, writeConfig, metaClient);
+      List<IndexInitializationPlan> result = indexer.buildInitialization(IndexInitializationContext.of(
+          "001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList), Lazy.lazily(Option::empty), Option.of("sec1")));
+      assertTrue(result.isEmpty());
+    }
+  }
+
+  @Test
+  void testFailsWhenTheRequestedPartitionCannotBeResolved() {
+    HoodieEngineContext engineContext = mock(HoodieEngineContext.class);
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+
+    when(writeConfig.getMetadataConfig()).thenReturn(mock(HoodieMetadataConfig.class));
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    when(tableConfig.getMetadataPartitions()).thenReturn(Collections.emptySet());
+    when(metaClient.getIndexForMetadataPartition("sec_ghost")).thenReturn(Option.empty());
+
+    try (MockedStatic<HoodieTableMetadataUtil> mockedUtil = mockStatic(HoodieTableMetadataUtil.class)) {
+      mockedUtil.when(() -> HoodieTableMetadataUtil.getSecondaryIndexPartitionsToInit(any(), any(), any()))
+          .thenReturn(Set.of("sec1", "sec2"));
+
+      SecondaryIndexer indexer = new SecondaryIndexer(engineContext, writeConfig, metaClient);
+      assertThrows(HoodieMetadataException.class, () -> indexer.buildInitialization(IndexInitializationContext.of(
+          "001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList), Lazy.lazily(Option::empty), Option.of("sec_ghost"))));
     }
   }
 
