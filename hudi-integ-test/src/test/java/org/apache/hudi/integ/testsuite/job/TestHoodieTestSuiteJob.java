@@ -22,6 +22,7 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.testutils.minicluster.ZookeeperTestService;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.integ.testsuite.HoodieTestSuiteJob;
 import org.apache.hudi.integ.testsuite.HoodieTestSuiteJob.HoodieTestSuiteConfig;
@@ -190,7 +191,7 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     props.setProperty("hoodie.write.lock.hivemetastore.database", "testdb1");
     props.setProperty("hoodie.write.lock.hivemetastore.table", "table1");
     props.setProperty("hoodie.write.lock.zookeeper.url", "127.0.0.1");
-    props.setProperty("hoodie.write.lock.zookeeper.port", "2828");
+    props.setProperty("hoodie.write.lock.zookeeper.port", String.valueOf(ZookeeperTestService.clientPort()));
     props.setProperty("hoodie.write.lock.wait_time_ms", "1200000");
     props.setProperty("hoodie.write.lock.num_retries", "10");
     props.setProperty("hoodie.write.lock.zookeeper.lock_key", "test_table");
