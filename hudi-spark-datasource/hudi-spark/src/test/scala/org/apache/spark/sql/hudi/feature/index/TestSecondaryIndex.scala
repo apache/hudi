@@ -35,14 +35,14 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY
 import org.apache.hudi.storage.StoragePath
 
 import org.apache.spark.sql.SaveMode
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.common.{ExclusiveSuite, HoodieSparkSqlTestBase}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
 
 import java.util.concurrent.atomic.AtomicInteger
 
 import scala.collection.JavaConverters._
 
-class TestSecondaryIndex extends HoodieSparkSqlTestBase {
+class TestSecondaryIndex extends HoodieSparkSqlTestBase with ExclusiveSuite {
 
   var instantTime: AtomicInteger = new AtomicInteger(1)
   val metadataOpts: Map[String, String] = Map(

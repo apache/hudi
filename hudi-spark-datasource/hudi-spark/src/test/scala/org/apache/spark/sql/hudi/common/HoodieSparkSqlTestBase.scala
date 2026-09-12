@@ -54,7 +54,10 @@ import org.slf4j.LoggerFactory
 import java.io.File
 import java.util.{Collections, Optional, TimeZone}
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.regex.Pattern
+
+import scala.util.Try
 
 class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   org.apache.log4j.Logger.getRootLogger.setLevel(org.apache.log4j.Level.WARN)
@@ -137,22 +140,41 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   }
 
   override protected def test(testName: String, testTags: Tag*)(testFun: => Any /* Assertion */)(implicit pos: source.Position): Unit = {
-    super.test(testName, testTags: _*)(
+    super.test(testName, testTags: _*)({
+      // Held for the whole test, cleanup included, so an ExclusiveSuite never overlaps it.
+      val readLock = HoodieSparkSqlTestBase.suiteLock.readLock()
+      readLock.lock()
       try {
-        if (sharedSessionEnabled) {
-          bindSuiteSession()
+        try {
+          if (sharedSessionEnabled) {
+            bindSuiteSession()
+          }
+          testFun
+        } finally {
+          // The INMEMORY index keeps a JVM-static record-location map; reset it after every test so
+          // stale keys from an earlier test cannot misroute writes in a later one. withRecordType
+          // clears it between record-type iterations, but only on success and only for tests that use
+          // it, so a throwing or non-withRecordType INMEMORY test would otherwise leak state here.
+          // Runs before the catalog cleanup so it holds even if a drop throws. In shared mode this is
+          // a no-op, see clearInMemoryIndex.
+          clearInMemoryIndex()
+          dropSuiteTables()
         }
-        testFun
       } finally {
-        // The INMEMORY index keeps a JVM-static record-location map; reset it after every test so
-        // stale keys from an earlier test cannot misroute writes in a later one. withRecordType
-        // clears it between record-type iterations, but only on success and only for tests that use
-        // it, so a throwing or non-withRecordType INMEMORY test would otherwise leak state here.
-        // Runs before the catalog cleanup so it holds even if a drop throws.
-        HoodieInMemoryHashIndex.clear()
-        dropSuiteTables()
+        readLock.unlock()
       }
-    )
+    })
+  }
+
+  /**
+   * Per-suite mode: reset the JVM-static INMEMORY index between tests (see the note in test()).
+   * Shared mode: the index is keyed per table and dropSuiteTables clears each dropped table's
+   * entry, so a global clear would only wipe other suites' tables.
+   */
+  protected def clearInMemoryIndex(): Unit = {
+    if (!sharedSessionEnabled) {
+      HoodieInMemoryHashIndex.clear()
+    }
   }
 
   /**
@@ -184,7 +206,14 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     catalog.listDatabases().foreach { db =>
       val tables = catalog.listTables(db)
       val toDrop = if (sharedSessionEnabled) tables.filter(table => ownsTable(table.table)) else tables
-      toDrop.foreach(table => catalog.dropTable(table, true, true))
+      toDrop.foreach { table =>
+        if (sharedSessionEnabled && !catalog.isTempView(table)) {
+          // Shared mode keeps one index map per table; drop this table's entry with the table.
+          Try(catalog.getTableMetadata(table).location.getPath)
+            .foreach(path => HoodieInMemoryHashIndex.clear(path))
+        }
+        catalog.dropTable(table, true, true)
+      }
     }
   }
 
@@ -431,6 +460,14 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     try {
       f(tableName)
     } finally {
+      if (sharedSessionEnabled) {
+        val catalog = spark.sessionState.catalog
+        val ident = spark.sessionState.sqlParser.parseTableIdentifier(tableName)
+        if (catalog.tableExists(ident) && !catalog.isTempView(ident)) {
+          Try(catalog.getTableMetadata(ident).location.getPath)
+            .foreach(path => HoodieInMemoryHashIndex.clear(path))
+        }
+      }
       spark.sql(s"drop table if exists $tableName purge")
     }
   }
@@ -470,7 +507,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
       withSQLConf(config.toList: _*) {
         f
         // We need to clear indexed location in memory after each test.
-        HoodieInMemoryHashIndex.clear()
+        clearInMemoryIndex()
       }
     }
   }
@@ -505,6 +542,9 @@ object HoodieSparkSqlTestBase {
    */
   val SHARED_SESSION_PROPERTY = "hudi.spark.test.sharedSession"
   val sharedSessionEnabled: Boolean = java.lang.Boolean.getBoolean(SHARED_SESSION_PROPERTY)
+
+  // Read side held by every test, write side by an ExclusiveSuite for its whole run.
+  val suiteLock = new ReentrantReadWriteLock(true)
 
   // Table names produced by generateTableName (without a database prefix).
   private[common] val GENERATED_TABLE_NAME: Pattern = Pattern.compile("h[a-z0-9]+_[0-9]+")
