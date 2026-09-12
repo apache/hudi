@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -41,11 +42,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.FlatMapFunction;
+import org.apache.spark.internal.config.Network$;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.SAMPLE_WRITES_FOLDER_PATH;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -61,6 +65,18 @@ import static org.apache.hudi.utilities.config.HoodieStreamerConfig.SAMPLE_WRITE
  */
 @Slf4j
 public class SparkSampleWritesUtils {
+
+  /**
+   * The sampled records are shipped to the executor inside a single Spark task
+   * ({@code jsc.parallelize(samples, 1)}). If their total serialized size approaches the RPC frame
+   * limit, launching that task fails with "exceeds max allowed: spark.rpc.message.maxSize". We
+   * therefore cap the sample at this fraction of {@code spark.rpc.message.maxSize}; the remaining
+   * headroom absorbs the task closure, RDD metadata, and the difference between the Kryo estimate
+   * used here and the serializer Spark actually uses when shipping the task.
+   */
+  private static final double SAMPLE_WRITES_TASK_BYTES_FRACTION = 0.5;
+
+  private static final long BYTES_PER_MB = 1048576;
 
   public static Option<HoodieWriteConfig> getWriteConfigWithRecordSizeEstimate(JavaSparkContext jsc, Option<JavaRDD<HoodieRecord>> recordsOpt, HoodieWriteConfig writeConfig) {
     if (!writeConfig.getBoolean(SAMPLE_WRITES_ENABLED)) {
@@ -114,12 +130,16 @@ public class SparkSampleWritesUtils {
     Pair<Boolean, String> emptyRes = Pair.of(false, null);
     try (SparkRDDWriteClient sampleWriteClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), sampleWriteConfig, Option.empty())) {
       int size = writeConfig.getIntOrDefault(SAMPLE_WRITES_SIZE);
+      long maxSampleBytes = resolveMaxSampleBytes(jsc);
       return recordsOpt.map(records -> {
-        // Empty partition path so all sampled records write to a single non-partitioned file,
-        // instead of fanning out into one tiny file per source partition and skewing the estimate.
-        List<HoodieRecord> samples = records.coalesce(1).take(size).stream()
-            .map(r -> r.newInstance(new HoodieKey(r.getRecordKey(), "")))
-            .collect(Collectors.toList());
+        // Collapse to a single partition, then take a sample bounded by both record count and total
+        // serialized bytes on the executor. The sample is later shipped inside one Spark task, so
+        // bounding its serialized size keeps that task under spark.rpc.message.maxSize even when the
+        // source records are large.
+        List<HoodieRecord> samples = records.coalesce(1)
+            .mapPartitions((FlatMapFunction<Iterator<HoodieRecord>, HoodieRecord>) sourceRecords ->
+                takeBoundedSample(sourceRecords, size, maxSampleBytes))
+            .collect();
         if (samples.isEmpty()) {
           return emptyRes;
         }
@@ -142,6 +162,46 @@ public class SparkSampleWritesUtils {
         }
       }).orElse(emptyRes);
     }
+  }
+
+  /**
+   * Resolves the maximum total serialized size (in bytes) allowed for the sampled records, derived
+   * as {@link #SAMPLE_WRITES_TASK_BYTES_FRACTION} of the cluster's {@code spark.rpc.message.maxSize}
+   * (read from {@link org.apache.spark.internal.config.Network#RPC_MESSAGE_MAX_SIZE}, which also
+   * supplies Spark's default). Deriving it from the RPC limit keeps the bound correct if operators
+   * raise that limit.
+   */
+  private static long resolveMaxSampleBytes(JavaSparkContext jsc) {
+    int rpcMaxSizeMb = (Integer) jsc.getConf().get(Network$.MODULE$.RPC_MESSAGE_MAX_SIZE());
+    return (long) (rpcMaxSizeMb * BYTES_PER_MB * SAMPLE_WRITES_TASK_BYTES_FRACTION);
+  }
+
+  /**
+   * Takes up to {@code maxCount} records from {@code sourceRecords}, stopping early once the
+   * accumulated serialized size would exceed {@code maxBytes}. Each sampled record is re-keyed with
+   * an empty partition path so the whole sample writes to a single non-partitioned file, instead of
+   * fanning out into one tiny file per source partition and skewing the estimate. At least one
+   * record is always retained so a single oversized record still yields an estimate.
+   *
+   * @param sourceRecords the source records to sample from
+   * @param maxCount      the maximum number of records to sample
+   * @param maxBytes      the maximum total serialized size (in bytes) of the sampled records
+   * @return an iterator over the bounded sample
+   */
+  static Iterator<HoodieRecord> takeBoundedSample(Iterator<HoodieRecord> sourceRecords, int maxCount, long maxBytes) throws IOException {
+    List<HoodieRecord> samples = new ArrayList<>();
+    long accumulatedBytes = 0L;
+    while (sourceRecords.hasNext() && samples.size() < maxCount) {
+      HoodieRecord source = sourceRecords.next();
+      HoodieRecord sample = source.newInstance(new HoodieKey(source.getRecordKey(), ""));
+      long recordBytes = SerializationUtils.serialize(sample).length;
+      if (!samples.isEmpty() && accumulatedBytes + recordBytes > maxBytes) {
+        break;
+      }
+      samples.add(sample);
+      accumulatedBytes += recordBytes;
+    }
+    return samples.iterator();
   }
 
   private static String getSampleWritesBasePath(JavaSparkContext jsc, HoodieWriteConfig writeConfig, String uniqueId) throws IOException {
