@@ -90,15 +90,16 @@ class TestSparkSqlWithTimestampKeyGenerator extends HoodieSparkSqlTestBase {
     withTempDir { tmp =>
       val keyGeneratorSettings = timestampKeyGeneratorSettings(3)
       val tsType = if (keyGeneratorSettings.contains("DATE_STRING")) "string" else "long"
+      val tableName = generateTableName
       spark.sql(
         s"""
-           | CREATE TABLE test_default_path_ts (
+           | CREATE TABLE $tableName (
            |   id int,
            |   name string,
            |   precomb long,
            |   ts TIMESTAMP
            | ) USING HUDI
-           | LOCATION '${tmp.getCanonicalPath + "/test_default_path_ts"}'
+           | LOCATION '${tmp.getCanonicalPath + "/" + tableName}'
            | PARTITIONED BY (ts)
            | TBLPROPERTIES (
            |   type = 'COPY_ON_WRITE',
@@ -111,11 +112,11 @@ class TestSparkSqlWithTimestampKeyGenerator extends HoodieSparkSqlTestBase {
         "(2, 'a3', 1, null)"
       )
       val expectedQueryResult: String = "[1,a1,1,2025-01-15 01:02:03.0]; [2,a3,1,null]"
-      spark.sql(s"INSERT INTO test_default_path_ts VALUES ${dataBatches(0)}")
+      spark.sql(s"INSERT INTO $tableName VALUES ${dataBatches(0)}")
       // inserting value with partition_timestamp value as null
-      spark.sql(s"INSERT INTO test_default_path_ts VALUES ${dataBatches(1)}")
+      spark.sql(s"INSERT INTO $tableName VALUES ${dataBatches(1)}")
 
-      val queryResult = spark.sql(s"SELECT id, name, precomb, ts FROM test_default_path_ts ORDER BY id").collect().mkString("; ")
+      val queryResult = spark.sql(s"SELECT id, name, precomb, ts FROM $tableName ORDER BY id").collect().mkString("; ")
       LOG.warn(s"Query result: $queryResult")
       assertResult(expectedQueryResult)(queryResult)
 
@@ -124,15 +125,16 @@ class TestSparkSqlWithTimestampKeyGenerator extends HoodieSparkSqlTestBase {
 
   test("Test mandatory partitioning for timestamp key generator") {
     withTempDir { tmp =>
+      val tableName = generateTableName
       spark.sql(
         s"""
-           | CREATE TABLE should_fail (
+           | CREATE TABLE $tableName (
            |   id int,
            |   name string,
            |   precomb long,
            |   ts long
            | ) USING HUDI
-           | LOCATION '${tmp.getCanonicalPath + "/should_fail"}'
+           | LOCATION '${tmp.getCanonicalPath + "/" + tableName}'
            | TBLPROPERTIES (
            |   type = 'COPY_ON_WRITE',
            |   primaryKey = 'id',
@@ -143,7 +145,7 @@ class TestSparkSqlWithTimestampKeyGenerator extends HoodieSparkSqlTestBase {
            |""".stripMargin)
       // should fail due to absent partitioning
       assertThrows[HoodieException] {
-        spark.sql(s"INSERT INTO should_fail VALUES ${dataBatchesWithLongOfSeconds(0)}")
+        spark.sql(s"INSERT INTO $tableName VALUES ${dataBatchesWithLongOfSeconds(0)}")
       }
 
     }

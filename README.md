@@ -26,6 +26,7 @@ to ingest, index, store, serve, transform and manage your data across multiple c
 <https://hudi.apache.org/>
 
 [![Build](https://github.com/apache/hudi/actions/workflows/bot.yml/badge.svg)](https://github.com/apache/hudi/actions/workflows/bot.yml)
+[![Engines](https://github.com/apache/hudi/actions/workflows/java_ci_engines.yml/badge.svg)](https://github.com/apache/hudi/actions/workflows/java_ci_engines.yml)
 [![Test](https://dev.azure.com/apachehudi/hudi-oss-ci/_apis/build/status/apachehudi-ci.hudi-mirror?branchName=master)](https://dev.azure.com/apachehudi/hudi-oss-ci/_build/latest?definitionId=5&branchName=master)
 [![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/org.apache.hudi/hudi/badge.svg)](http://search.maven.org/#search%7Cga%7C1%7Cg%3A%22org.apache.hudi%22)

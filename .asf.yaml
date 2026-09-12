@@ -51,6 +51,10 @@ github:
           # is what made every change to the CI matrix in .github/workflows/bot.yml a
           # two-sided edit, and a context left without a job to report it blocks merges
           # indefinitely. Reviewers gate on the checks the PR shows.
+          # Only contexts from always-on workflows may be listed. bot.yml and
+          # java_ci_engines.yml are path-filtered: on a PR the filter skips, GitHub never
+          # instantiates them, so any context of theirs would stay pending forever
+          # (#18598 hit exactly this and worked around it with a gating job).
           - validate-ci-baseline
           - validate-source
           - validate-pr
