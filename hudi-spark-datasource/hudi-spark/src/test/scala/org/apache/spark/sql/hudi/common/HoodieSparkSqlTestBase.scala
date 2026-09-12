@@ -99,9 +99,10 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
 
   /**
    * Shared mode: the context-level SparkConf is fixed, so the deltas a suite adds through extraConf or a
-   * sparkConf() override go to its session conf, except spark.hadoop.* keys, which the write client reads
-   * from sparkContext.hadoopConfiguration and which are restored in afterAll. Any other context-level key
-   * fails loudly in RuntimeConfig.set.
+   * sparkConf() override go to its session conf (hoodie.* and spark.sql.* keys), except spark.hadoop.*
+   * keys, which the write client reads from sparkContext.hadoopConfiguration and which are restored in
+   * afterAll. Any other spark.* key is a SparkContext setting that a child session cannot change, so it
+   * is rejected here rather than accepted into the session conf with no effect.
    */
   private def applySuiteConfToSharedSession(session: SparkSession): Unit = {
     val defaults = getSparkConfForTest("Hoodie SQL Test").getAll.toMap
@@ -111,14 +112,10 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
         val key = k.stripPrefix("spark.hadoop.")
         hadoopConfOverrides :+= (key -> hadoopConf.get(key))
         hadoopConf.set(key, v)
+      case (k, _) if k.startsWith("spark.") && !k.startsWith("spark.sql.") =>
+        throw new IllegalArgumentException(
+          s"$k is a SparkContext-level setting; shared session mode cannot apply it per suite")
       case (k, v) => session.conf.set(k, v)
-    }
-  }
-
-  override protected def beforeAll(): Unit = {
-    super.beforeAll()
-    if (sharedSessionEnabled) {
-      SparkSession.setActiveSession(spark)
     }
   }
 
@@ -185,15 +182,15 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   private def dropSuiteTables(): Unit = {
     val catalog = spark.sessionState.catalog
     catalog.listDatabases().foreach { db =>
-      catalog.listTables(db).filter(table => ownsTable(table.table)).foreach { table =>
-        catalog.dropTable(table, true, true)
-      }
+      val tables = catalog.listTables(db)
+      val toDrop = if (sharedSessionEnabled) tables.filter(table => ownsTable(table.table)) else tables
+      toDrop.foreach(table => catalog.dropTable(table, true, true))
     }
   }
 
+  /** Shared mode: a table is this suite's if generateTableName produced it, or if no suite's generateTableName could have. */
   private def ownsTable(name: String): Boolean = {
-    !sharedSessionEnabled || name.startsWith(tableNamePrefix) ||
-      !HoodieSparkSqlTestBase.GENERATED_TABLE_NAME.matcher(name).matches()
+    name.startsWith(tableNamePrefix) || !HoodieSparkSqlTestBase.GENERATED_TABLE_NAME.matcher(name).matches()
   }
 
   protected def generateTableName: String = {
