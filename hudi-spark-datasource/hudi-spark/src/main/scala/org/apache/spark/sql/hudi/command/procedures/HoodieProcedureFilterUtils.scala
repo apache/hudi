@@ -521,22 +521,20 @@ object HoodieProcedureFilterUtils {
   private def isWithNode(expression: Expression): Boolean = expression.getClass.getSimpleName == "With"
 
   private def inlineCommonExpressions(withExpr: Expression): Expression = {
-    val defsById = withExpr.getClass.getMethod("defs").invoke(withExpr)
-      .asInstanceOf[Seq[Expression]]
+    val defsById = reflectField(withExpr, "defs").asInstanceOf[Seq[Expression]]
       .map { commonExprDef =>
-        val id = commonExprDef.getClass.getMethod("id").invoke(commonExprDef)
-        val child = commonExprDef.getClass.getMethod("child").invoke(commonExprDef).asInstanceOf[Expression]
-        id -> child
+        reflectField(commonExprDef, "id") -> reflectField(commonExprDef, "child").asInstanceOf[Expression]
       }.toMap
-    val child = withExpr.getClass.getMethod("child").invoke(withExpr).asInstanceOf[Expression]
+    val child = reflectField(withExpr, "child").asInstanceOf[Expression]
     child.transformUp {
-      case ref if isCommonExpressionRef(ref) =>
-        defsById(ref.getClass.getMethod("id").invoke(ref))
+      case ref if isCommonExpressionRef(ref) => defsById(reflectField(ref, "id"))
     }
   }
 
   private def isCommonExpressionRef(expression: Expression): Boolean =
     expression.getClass.getSimpleName == "CommonExpressionRef"
+
+  private def reflectField(target: AnyRef, name: String): AnyRef = target.getClass.getMethod(name).invoke(target)
 
   // A resolved expression still isn't usable one row at a time if it's an aggregate (percentile,
   // collect_list - only make sense across real aggregation), a generator (explode, inline - only
