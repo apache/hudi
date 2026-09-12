@@ -55,7 +55,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
   test("Test delete all records in filegroup") {
     Seq("cow", "mor").foreach { tableType =>
       withTempDir { tmp =>
-        val databaseName = "hudi_database"
+        val databaseName = generateTableName
         spark.sql(s"create database if not exists $databaseName")
         spark.sql(s"use $databaseName")
         val tableName = generateTableName
@@ -100,7 +100,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
    * Test CDC in cases that it's a COW/MOR non--partitioned table and `cdcSupplementalLoggingMode` is true or not.
    */
   test("Test Non-Partitioned Hoodie Table") {
-    val databaseName = "hudi_database"
+    val databaseName = generateTableName
     spark.sql(s"create database if not exists $databaseName")
     spark.sql(s"use $databaseName")
 
@@ -226,7 +226,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
    * Test CDC in cases that it's a COW/MOR partitioned table and `cdcSupplementalLoggingMode` is true or not.
    */
   test("Test Partitioned Hoodie Table") {
-    val databaseName = "hudi_database"
+    val databaseName = generateTableName
     spark.sql(s"create database if not exists $databaseName")
     spark.sql(s"use $databaseName")
 
@@ -307,7 +307,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
   }
 
   test("Test Partial Updates With Spark CDC") {
-    val databaseName = "hudi_database"
+    val databaseName = generateTableName
     spark.sql(s"create database if not exists $databaseName")
     spark.sql(s"use $databaseName")
     withSQLConf(HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key -> "0",
