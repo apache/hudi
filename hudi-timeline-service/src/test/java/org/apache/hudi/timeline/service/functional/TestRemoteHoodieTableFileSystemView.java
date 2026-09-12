@@ -41,6 +41,7 @@ import org.apache.hudi.timeline.service.TimelineServiceTestHarness;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 
@@ -110,6 +111,24 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
     getFileSystemView(metaClient.getActiveTimeline(), 3);
     RemoteHoodieTableFileSystemView viewWithRetries = initFsView(metaClient, server.getServerPort(), true);
     viewWithRetries.getLatestBaseFiles();
+  }
+
+  /**
+   * The base class reads {@code AbstractTableFileSystemView.bootstrapIndex} through the
+   * {@code @VisibleForTesting getBootstrapIndex()} accessor to verify non-bootstrap tables get
+   * NoOpBootstrapIndex (avoiding S3 HEAD probes during init). {@link RemoteHoodieTableFileSystemView}
+   * does not extend {@code AbstractTableFileSystemView} — the real view, and hence that accessor,
+   * lives server-side, so the assertion isn't applicable here.
+   */
+  @Test
+  @Disabled("bootstrapIndex lives on the server-side AbstractTableFileSystemView; not reachable through the remote view. Covered by the base test against the local view.")
+  public void testBootstrapIndexIsNoOpWhenBootstrapBasePathAbsent() throws Exception {
+  }
+
+  /** See {@link #testBootstrapIndexIsNoOpWhenBootstrapBasePathAbsent()}. */
+  @Test
+  @Disabled("bootstrapIndex lives on the server-side AbstractTableFileSystemView; not reachable through the remote view. Covered by the base test against the local view.")
+  public void testBootstrapIndexIsLoadedWhenBootstrapBasePathPresent() throws Exception {
   }
 
   @Test
