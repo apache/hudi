@@ -1309,6 +1309,16 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   /**
+   * @return true when the rows of this table carry a record key, either in the populated
+   * {@code _hoodie_record_key} meta column or in configured record key fields. A table that only
+   * registers files written by another system has neither; the record index and the secondary
+   * index then key its rows by file path and row position instead.
+   */
+  public boolean hasRecordKey() {
+    return isRecordKeyPopulated() || getRecordKeyFields().map(fields -> fields.length > 0).orElse(false);
+  }
+
+  /**
    * @returns the record key field prop.
    */
   public String getRecordKeyFieldProp() {

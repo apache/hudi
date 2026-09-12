@@ -242,7 +242,7 @@ with StagingTableCatalog {
   }
     
   override def alterTable(Identifier ident, TableChange... changes): Table = {
-    // check schema compability
+    // check schema compatibility
     // HoodieDatasouceTable
   }
     

@@ -285,8 +285,10 @@ class BatchedBlobReader(
   /**
    * Identify consecutive ranges that can be batched together.
    *
-   * This method groups rows by file path, sorts by offset, and merges
-   * ranges that are consecutive or within maxGapBytes of each other.
+   * This method groups rows by file path, sorts them by (offset, length), and merges
+   * ranges that are adjacent or within maxGapBytes of each other. Rows carrying the identical
+   * descriptor (same file path, offset and length) share one read. Overlapping ranges throw,
+   * because a blob is a distinct entity and two blobs never share bytes.
    *
    * @param rows Sequence of row information
    * @return Sequence of merged ranges
@@ -298,8 +300,8 @@ class BatchedBlobReader(
     val allRanges = ArrayBuffer[MergedRange[R]]()
 
     byFile.foreach { case (filePath, fileRows) =>
-      // Sort by offset
-      val sorted = fileRows.sortBy(_.offset)
+      // Sort by offset, then by length, so rows carrying the identical descriptor are adjacent
+      val sorted = fileRows.sortBy(r => (r.offset, r.length))
 
       // Merge consecutive ranges
       val merged = mergeRanges(sorted, maxGapBytes)
@@ -312,7 +314,13 @@ class BatchedBlobReader(
   /**
    * Merge consecutive ranges within the gap threshold.
    *
-   * @param rows   Sorted rows from the same file
+   * Rows are grouped by file and sorted by (offset, length) before they reach this method.
+   * Adjacent ranges and ranges within the gap threshold are merged into a single read, and rows
+   * carrying the identical descriptor (same file path, offset and length) share one read: that
+   * is one blob referenced by more than one row. Overlapping ranges throw, because a blob is a
+   * distinct entity and two blobs never share bytes.
+   *
+   * @param rows   Rows from the same file, sorted by (offset, length)
    * @param maxGap Maximum gap to consider for merging
    * @return Sequence of merged ranges
    */
@@ -331,9 +339,16 @@ class BatchedBlobReader(
         currentStartOffset = row.offset
         currentEndOffset = row.offset + row.length
         currentRows = ArrayBuffer(row)
+      } else if (row.offset == currentRows.last.offset && row.length == currentRows.last.length) {
+        // Same descriptor as the previous row: one blob referenced by more than one row (join
+        // fan-out, duplicate records). It is served from the current read and the range does
+        // not grow.
+        currentRows += row
       } else {
         val gap = row.offset - currentEndOffset
-        // Check for overlap
+        // A blob is a distinct entity, so two blobs never share bytes. Rows are sorted by
+        // (offset, length) and identical descriptors were handled above, so a start inside the
+        // current range means two different blobs overlap, which indicates corruption.
         if (row.offset < currentEndOffset) {
           throw new IllegalArgumentException(
             s"Overlapping blob ranges detected: previous range [${currentStartOffset}, ${currentEndOffset}) and current row [${row.offset}, ${row.offset + row.length}) in file ${row.filePath}"

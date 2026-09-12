@@ -23,11 +23,18 @@ import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
+import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.testutils.Assertions;
 
+import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -37,9 +44,13 @@ import org.springframework.shell.Shell;
 
 import java.io.IOException;
 import java.util.Comparator;
+import java.util.List;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -116,5 +127,56 @@ public class TestSavepointsCommand extends CLIFunctionalTestHarness {
 
     // After refresh, there are 4 instants
     assertEquals(4, timeline.countInstants(), "there should have 4 instants");
+  }
+
+  /**
+   * Test case of the savepoint entry points of {@link SparkMain}, which the savepoint commands
+   * reach through a spark-submit of their own.
+   */
+  @Test
+  public void testSparkMainSavepointLifecycle() throws Exception {
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(new String[] {DEFAULT_FIRST_PARTITION_PATH});
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath(tablePath).withSchema(TRIP_EXAMPLE_SCHEMA).build();
+    String firstCommit;
+    String secondCommit;
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(context(), config)) {
+      firstCommit = writeInserts(client, dataGen);
+      secondCommit = writeInserts(client, dataGen);
+    }
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+
+    assertEquals(0, SparkMain.createSavepoint(jsc(), firstCommit, "test-user", "test-comment", tablePath));
+    HoodieTimeline savepoints = metaClient.reloadActiveTimeline().getSavePointTimeline().filterCompletedInstants();
+    assertEquals(1, savepoints.countInstants());
+    assertEquals(firstCommit, savepoints.firstInstant().get().requestedTime());
+    assertEquals("test-user", savepoints.readSavepointMetadata(savepoints.firstInstant().get()).getSavepointedBy());
+
+    // a commit that is not on the timeline cannot be savepointed
+    assertEquals(-1, SparkMain.createSavepoint(jsc(), "001", "test-user", "test-comment", tablePath));
+    assertEquals(1, metaClient.reloadActiveTimeline().getSavePointTimeline().countInstants());
+
+    // restoring to the savepoint takes the commits made after it off the timeline
+    assertEquals(0, SparkMain.rollbackToSavepoint(jsc(), firstCommit, tablePath, false));
+    HoodieTimeline commits = metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+    assertTrue(commits.containsInstant(firstCommit));
+    assertFalse(commits.containsInstant(secondCommit));
+    assertEquals(-1, SparkMain.rollbackToSavepoint(jsc(), "001", tablePath, false));
+
+    assertEquals(0, SparkMain.deleteSavepoint(jsc(), firstCommit, tablePath));
+    assertEquals(0, metaClient.reloadActiveTimeline().getSavePointTimeline().countInstants());
+    // deleting a savepoint that is already gone is a no-op rather than a failure
+    assertEquals(0, SparkMain.deleteSavepoint(jsc(), firstCommit, tablePath));
+    assertEquals(0, metaClient.reloadActiveTimeline().getSavePointTimeline().countInstants());
+  }
+
+  private String writeInserts(SparkRDDWriteClient client, HoodieTestDataGenerator dataGen) {
+    String commitTime = client.startCommit();
+    List<HoodieRecord> records = dataGen.generateInserts(commitTime, 10);
+    JavaRDD<HoodieRecord> writeRecords = context().getJavaSparkContext().parallelize(records, 1);
+    List<WriteStatus> result = client.upsert(writeRecords, commitTime).collect();
+    client.commit(commitTime, jsc().parallelize(result));
+    Assertions.assertNoWriteErrors(result);
+    return commitTime;
   }
 }

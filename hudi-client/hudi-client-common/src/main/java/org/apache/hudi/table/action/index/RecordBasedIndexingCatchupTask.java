@@ -25,6 +25,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.HoodieTable;
 
@@ -52,8 +53,8 @@ public class RecordBasedIndexingCatchupTask extends AbstractIndexingCatchupTask 
 
   @Override
   public void updateIndexForWriteAction(HoodieInstant instant) throws IOException {
-    HoodieCommitMetadata commitMetadata =
-        metaClient.getActiveTimeline().readCommitMetadata(instant);
+    // a replace commit is read as such, so that the replaced file groups reach the indexes
+    HoodieCommitMetadata commitMetadata = TimelineUtils.getCommitMetadata(instant, metaClient.getActiveTimeline());
     metadataWriter.update(commitMetadata, instant.requestedTime());
   }
 }

@@ -24,6 +24,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -115,7 +116,7 @@ public class SecondaryIndexer extends BaseIndexer {
     // If write operation type based on commit metadata is COMPACT or CLUSTER then no need to update,
     // because these operations do not change the secondary key - record key mapping.
     WriteOperationType operationType = context.commitMetadata().getOperationType();
-    if (operationType.isInsertOverwriteOrDeletePartition()) {
+    if (operationType != null && operationType.isInsertOverwriteOrDeletePartition()) {
       throw new HoodieIndexException(String.format("Can not perform operation %s on secondary index", operationType));
     } else if (operationType == WriteOperationType.COMPACT || operationType == WriteOperationType.CLUSTER) {
       return Collections.emptyList();
@@ -144,11 +145,17 @@ public class SecondaryIndexer extends BaseIndexer {
     List<HoodieWriteStat> allWriteStats = commitMetadata.getPartitionToWriteStats().values().stream()
         .flatMap(Collection::stream).collect(Collectors.toList());
     // Return early if there are no write stats, or if this helper is reached for a table-service operation.
-    if (allWriteStats.isEmpty() || WriteOperationType.isCompactionOrClustering(commitMetadata.getOperationType())) {
+    // A replace commit without a known operation type on a table without a record key, e.g. one that only drops files
+    // written outside Hudi, has no write stats but still removes the records of the replaced file groups from the index.
+    boolean dropsReplacedFileGroups = commitMetadata instanceof HoodieReplaceCommitMetadata
+        && WriteOperationType.isUnknown(commitMetadata.getOperationType())
+        && !dataTableMetaClient.getTableConfig().hasRecordKey()
+        && !((HoodieReplaceCommitMetadata) commitMetadata).getPartitionToReplaceFileIds().isEmpty();
+    if ((allWriteStats.isEmpty() && !dropsReplacedFileGroups) || WriteOperationType.isCompactionOrClustering(commitMetadata.getOperationType())) {
       return engineContext.emptyHoodieData();
     }
     HoodieIndexDefinition indexDefinition = HoodieTableMetadataUtil.getHoodieIndexDefinition(indexPartition, dataTableMetaClient);
     return convertWriteStatsToSecondaryIndexRecords(allWriteStats, instantTime, indexDefinition,
-        dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient, engineContext, dataTableWriteConfig);
+        dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient, engineContext, dataTableWriteConfig, commitMetadata);
   }
 }

@@ -187,7 +187,7 @@ Each key-value pair has the following format:
 Header:
 
 - **Key Length**: 4 bytes, integer, length of the key part.
-- **Value Length**: 4 bytes, integer, lenghth of the value part.
+- **Value Length**: 4 bytes, integer, length of the value part.
 
 Key:
 

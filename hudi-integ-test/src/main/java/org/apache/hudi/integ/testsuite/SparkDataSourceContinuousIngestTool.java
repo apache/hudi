@@ -43,7 +43,7 @@ import java.util.Map;
 /**
  * Sample command
  *
- * ./bin/spark-submit --packages org.apache.spark:spark-avro_2.12:3.5.5 --driver-memory 4g   --executor-memory 4g \
+ * ./bin/spark-submit --packages org.apache.spark:spark-avro_2.12:3.5.9 --driver-memory 4g   --executor-memory 4g \
  * --conf spark.serializer=org.apache.spark.serializer.KryoSerializer   --conf spark.sql.catalogImplementation=hive \
  * --class org.apache.hudi.integ.testsuite.SparkDSContinuousIngestTool \
  * ${HUDI_ROOT_DIR}/packaging/hudi-integ-test-bundle/target/hudi-integ-test-bundle-0.11.0-SNAPSHOT.jar \

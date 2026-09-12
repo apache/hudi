@@ -325,6 +325,50 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
         "Total number of file-groups in view matches expected");
   }
 
+  @Test
+  public void testUncommittedFirstLogUsesFirstCommittedLogAsBaseInstant() throws Exception {
+    String partitionPath = "2016/05/01";
+    Paths.get(basePath, partitionPath).toFile().mkdirs();
+    String fileId = UUID.randomUUID().toString();
+
+    String failedInstant = "2";
+    String firstCommittedInstant = "3";
+    String secondCommittedInstant = "4";
+    for (String instant : Arrays.asList(failedInstant, firstCommittedInstant, secondCommittedInstant)) {
+      String fileName = FSUtils.makeInlineLogFileName(
+          fileId, HoodieLogFile.DELTA_EXTENSION, instant, Integer.parseInt(instant), TEST_WRITE_TOKEN);
+      Paths.get(basePath, partitionPath, fileName).toFile().createNewFile();
+    }
+
+    HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
+    saveAsComplete(commitTimeline,
+        INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "1"),
+        new HoodieCommitMetadata());
+    HoodieInstant failedRequested =
+        INSTANT_GENERATOR.createNewInstant(State.REQUESTED, HoodieTimeline.DELTA_COMMIT_ACTION, failedInstant);
+    commitTimeline.createNewInstant(failedRequested);
+    commitTimeline.transitionRequestedToInflight(failedRequested, Option.empty());
+    saveAsComplete(commitTimeline,
+        INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, firstCommittedInstant),
+        new HoodieCommitMetadata());
+    saveAsComplete(commitTimeline,
+        INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, secondCommittedInstant),
+        new HoodieCommitMetadata());
+
+    refreshFsView();
+
+    HoodieFileGroup fileGroup = fsView.getAllFileGroups(partitionPath).findFirst().get();
+    List<FileSlice> rawSlices = fileGroup.getAllFileSlicesIncludingInflight().collect(Collectors.toList());
+    assertEquals(1, rawSlices.size());
+    assertEquals(firstCommittedInstant, rawSlices.get(0).getBaseInstantTime());
+    assertEquals(3, rawSlices.get(0).getLogFileCnt());
+
+    FileSlice visibleSlice = rtView.getLatestFileSlices(partitionPath).findFirst().get();
+    assertEquals(firstCommittedInstant, visibleSlice.getBaseInstantTime());
+    assertEquals(Arrays.asList(firstCommittedInstant, secondCommittedInstant),
+        visibleSlice.getLogFiles().map(HoodieLogFile::getDeltaCommitTime).sorted().collect(Collectors.toList()));
+  }
+
   @ParameterizedTest(name = TEST_NAME_WITH_PARAMS_2)
   @MethodSource("configParams2x2")
   public void testViewForFileSlicesWithNoBaseFileAndRequestedCompaction(boolean testBootstrap, boolean preTableVersion8) throws Exception {

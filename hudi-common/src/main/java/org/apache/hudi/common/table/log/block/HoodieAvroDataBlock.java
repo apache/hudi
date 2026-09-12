@@ -477,9 +477,8 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
   }
 
   private static String decompress(byte[] bytes) {
-    InputStream in = new InflaterInputStream(new ByteArrayInputStream(bytes));
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    try {
+    try (InputStream in = new InflaterInputStream(new ByteArrayInputStream(bytes))) {
       byte[] buffer = new byte[8192];
       int len;
       while ((len = in.read(buffer)) > 0) {

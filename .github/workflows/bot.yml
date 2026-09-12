@@ -1468,7 +1468,7 @@ jobs:
         include:
           - sparkProfile: 'spark3.5'
             flinkProfile: 'flink2.2'
-            sparkArchive: 'spark-3.5.3/spark-3.5.3-bin-hadoop3.tgz'
+            sparkArchive: 'spark-3.5.9/spark-3.5.9-bin-hadoop3.tgz'
     steps:
       - if: needs.changes.outputs.relevant == 'true'
         uses: actions/checkout@v5
@@ -1516,9 +1516,31 @@ jobs:
           SPARK_ARCHIVE: ${{ matrix.sparkArchive }}
           SCALA_PROFILE: '-Dscala-2.12 -Dscala.binary.version=2.12'
         run: |
-          echo "Downloading $SPARK_ARCHIVE"
-          curl --retry 5 https://archive.apache.org/dist/spark/$SPARK_ARCHIVE --create-dirs -o $GITHUB_WORKSPACE/$SPARK_ARCHIVE
-          tar -xvf $GITHUB_WORKSPACE/$SPARK_ARCHIVE -C $GITHUB_WORKSPACE/
+          # dlcdn only carries the current release of each line; fall back to
+          # the archive for older pins (#19883). Plain --retry, not
+          # --retry-all-errors, so a 404 on the CDN falls through immediately.
+          # --speed-limit is a dead-connection detector, not a slowness one:
+          # --retry truncates the output back to byte 0, so a floor set near
+          # the archive's real throughput re-downloads 382MB per abort.
+          DEST="$GITHUB_WORKSPACE/$SPARK_ARCHIVE"
+          downloaded=false
+          for base in https://dlcdn.apache.org/spark https://archive.apache.org/dist/spark; do
+            echo "Downloading $SPARK_ARCHIVE from $base"
+            if curl -fL --create-dirs -o "$DEST" \
+                --retry 5 --retry-delay 10 \
+                --connect-timeout 30 --speed-limit 1000 --speed-time 120 \
+                "$base/$SPARK_ARCHIVE"; then
+              downloaded=true
+              break
+            fi
+            echo "$base did not serve $SPARK_ARCHIVE"
+            rm -f "$DEST"
+          done
+          if [ "$downloaded" != true ]; then
+            echo "ERROR: could not download $SPARK_ARCHIVE from any source"
+            exit 1
+          fi
+          tar -xf "$DEST" -C $GITHUB_WORKSPACE/
           mkdir /tmp/spark-events/
           SPARK_ARCHIVE_BASENAME=$(basename $SPARK_ARCHIVE)
           export SPARK_HOME=$GITHUB_WORKSPACE/${SPARK_ARCHIVE_BASENAME%.*}
@@ -1540,7 +1562,7 @@ jobs:
 #  integration-tests-hive-sync:
 #    # Testcontainers-based E2E hive sync coverage for Hudi's custom logical types
 #    # (VECTOR, BLOB) and the Spark 4.0+ VARIANT type. Runs the integ2 testcontainers
-#    # suite (ITTestCustomTypeHiveSync) against a real Hive metastore on Spark 3.5.3,
+#    # suite (ITTestCustomTypeHiveSync) against a real Hive metastore on Spark 3.5.9,
 #    # 4.0.2, and 4.1.1 stacks.
 #    runs-on: ubuntu-latest
 #    needs: changes
@@ -1552,8 +1574,8 @@ jobs:
 #            scalaProfile: '-Dscala-2.12 -Dscala.binary.version=2.12'
 #            flinkProfile: 'flink1.20'
 #            jdkVersion: '11'
-#            composePrefix: 'docker-compose_hadoop284_hive2310_spark353'
-#            sparkAdhocImage: 'apachehudi/hudi-hadoop_2.8.4-hive_2.3.10-sparkadhoc_3.5.3:latest'
+#            composePrefix: 'docker-compose_hadoop284_hive2310_spark359'
+#            sparkAdhocImage: 'apachehudi/hudi-hadoop_2.8.4-hive_2.3.10-sparkadhoc_3.5.9:latest'
 #          - sparkProfile: 'spark4.0'
 #            scalaProfile: '-Dscala-2.13 -Dscala.binary.version=2.13'
 #            flinkProfile: 'flink1.20'

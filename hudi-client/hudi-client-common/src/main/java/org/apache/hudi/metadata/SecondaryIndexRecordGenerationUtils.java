@@ -28,11 +28,14 @@ import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -41,7 +44,9 @@ import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.TableFileSystemView;
+import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -55,6 +60,8 @@ import org.apache.hudi.metadata.model.FileSliceAndPartition;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -64,6 +71,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -74,6 +82,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.tryResolveSchemaF
 /**
  * Utility methods for generating secondary index records during initialization and updates.
  */
+@Slf4j
 public class SecondaryIndexRecordGenerationUtils {
 
   /**
@@ -86,6 +95,8 @@ public class SecondaryIndexRecordGenerationUtils {
    * @param dataMetaClient  data table meta client
    * @param engineContext   engine context
    * @param writeConfig     hoodie write config.
+   * @param commitMetadata  metadata of the commit the write stats belong to. Provides the schema when the table has no
+   *                        completed commit yet, and the replaced file groups for a replace commit.
    * @return {@link HoodieData} of {@link HoodieRecord} to be updated in the metadata table for the given secondary index partition
    */
   @VisibleForTesting
@@ -95,7 +106,8 @@ public class SecondaryIndexRecordGenerationUtils {
                                                                                       HoodieMetadataConfig metadataConfig,
                                                                                       HoodieTableMetaClient dataMetaClient,
                                                                                       HoodieEngineContext engineContext,
-                                                                                      HoodieWriteConfig writeConfig) {
+                                                                                      HoodieWriteConfig writeConfig,
+                                                                                      HoodieCommitMetadata commitMetadata) {
     TypedProperties props = writeConfig.getProps();
     // Secondary index cannot support logs having inserts with current offering. So, lets validate that.
     if (allWriteStats.stream().anyMatch(writeStat -> {
@@ -105,12 +117,7 @@ public class SecondaryIndexRecordGenerationUtils {
       throw new HoodieIOException("Secondary index cannot support logs having inserts with current offering. Please disable secondary index.");
     }
 
-    HoodieSchema tableSchema;
-    try {
-      tableSchema = tryResolveSchemaForTable(dataMetaClient).get();
-    } catch (Exception e) {
-      throw new HoodieException("Failed to get latest schema for " + dataMetaClient.getBasePath(), e);
-    }
+    HoodieSchema tableSchema = resolveTableSchema(dataMetaClient, commitMetadata);
     Map<String, List<HoodieWriteStat>> writeStatsByFileId = allWriteStats.stream().collect(Collectors.groupingBy(HoodieWriteStat::getFileId));
     int parallelism = Math.max(Math.min(writeStatsByFileId.size(), metadataConfig.getSecondaryIndexParallelism()), 1);
 
@@ -197,12 +204,87 @@ public class SecondaryIndexRecordGenerationUtils {
       return records.iterator();
     });
 
+    if (commitMetadata instanceof HoodieReplaceCommitMetadata && WriteOperationType.isUnknown(commitMetadata.getOperationType())
+        && !dataMetaClient.getTableConfig().hasRecordKey()) {
+      // a replace commit without a known operation type registers files written outside Hudi and drops the replaced
+      // file groups without rewriting their records under the same key
+      secondaryIndexRecords = secondaryIndexRecords.union(convertReplacedFileGroupsToSecondaryIndexRecords(
+          (HoodieReplaceCommitMetadata) commitMetadata, writeStatsByFileId.keySet(), instantTime, indexDefinition, metadataConfig,
+          dataMetaClient, engineContext, writeConfig, tableSchema));
+    }
+
     // Deduplicate secondary index records by grouping by the secondary index key
     // (secondaryKey$recordKey). This handles the case where a record moves from one file group to
     // another (partition path update), which generates both a delete (from old fileId) and an
     // insert (to new fileId). Similar to how Record Level Index handles partition path update,
     // we prefer non-deleted records.
     return HoodieTableMetadataUtil.reduceByKeys(secondaryIndexRecords, parallelism, false);
+  }
+
+  /**
+   * Resolves the schema of the table from its completed commits. A table without any completed commit, e.g. one
+   * that registers files written outside Hudi for the first time, only has the schema of the current commit, which
+   * Hudi stores as an empty string when the commit carries no schema.
+   */
+  private static HoodieSchema resolveTableSchema(HoodieTableMetaClient dataMetaClient, HoodieCommitMetadata commitMetadata) {
+    Option<HoodieSchema> tableSchema;
+    try {
+      tableSchema = tryResolveSchemaForTable(dataMetaClient);
+    } catch (Exception e) {
+      throw new HoodieException("Failed to get latest schema for " + dataMetaClient.getBasePath(), e);
+    }
+    if (tableSchema.isPresent()) {
+      return tableSchema.get();
+    }
+    String commitSchema = commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY);
+    if (StringUtils.isNullOrEmpty(commitSchema)) {
+      throw new HoodieException("Table " + dataMetaClient.getBasePath() + " has no completed commit to resolve its schema from and the commit "
+          + "metadata carries no " + HoodieCommitMetadata.SCHEMA_KEY);
+    }
+    return HoodieSchema.parse(commitSchema);
+  }
+
+  /**
+   * Generates delete records for every record of the file groups that the given replace commit replaces without
+   * writing to them again, e.g. files written outside Hudi that are superseded by newer files. A file group that
+   * the same commit writes again is skipped, because its rewritten records reach the index through the write stats.
+   * A keyed table that takes this path can delete and insert the same key in one commit when a record moves
+   * between file groups; {@link HoodieTableMetadataUtil#reduceByKeys} then prefers the non-deleted record.
+   * A table without record keys never writes a file group it replaces, because the record index rejects such a commit.
+   */
+  private static <T> HoodieData<HoodieRecord> convertReplacedFileGroupsToSecondaryIndexRecords(HoodieReplaceCommitMetadata replaceCommitMetadata,
+                                                                                               Set<String> writtenFileIds,
+                                                                                               String instantTime,
+                                                                                               HoodieIndexDefinition indexDefinition,
+                                                                                               HoodieMetadataConfig metadataConfig,
+                                                                                               HoodieTableMetaClient dataMetaClient,
+                                                                                               HoodieEngineContext engineContext,
+                                                                                               HoodieWriteConfig writeConfig,
+                                                                                               HoodieSchema tableSchema) {
+    List<Pair<String, String>> replacedFileGroups = replaceCommitMetadata.getPartitionToReplaceFileIds().entrySet().stream()
+        .flatMap(partitionAndFileIds -> partitionAndFileIds.getValue().stream()
+            .filter(fileId -> !writtenFileIds.contains(fileId))
+            .map(fileId -> Pair.of(partitionAndFileIds.getKey(), fileId)))
+        .collect(Collectors.toList());
+    if (replacedFileGroups.isEmpty()) {
+      return engineContext.emptyHoodieData();
+    }
+    TypedProperties props = writeConfig.getProps();
+    ReaderContextFactory<T> readerContextFactory = engineContext.getReaderContextFactory(dataMetaClient);
+    int parallelism = Math.max(Math.min(replacedFileGroups.size(), metadataConfig.getSecondaryIndexParallelism()), 1);
+    return engineContext.parallelize(replacedFileGroups, parallelism).flatMap(partitionAndFileId -> {
+      Option<FileSlice> replacedFileSlice = getSliceView(writeConfig, dataMetaClient)
+          .getLatestMergedFileSliceBeforeOrOn(partitionAndFileId.getKey(), instantTime, partitionAndFileId.getValue());
+      if (!replacedFileSlice.isPresent()) {
+        log.warn("Replaced file group {} in partition {} has no file slice to read the secondary keys to delete from",
+            partitionAndFileId.getValue(), partitionAndFileId.getKey());
+        return Collections.<HoodieRecord>emptyIterator();
+      }
+      ClosableIterator<Pair<String, String>> recordKeyAndSecondaryKeyIterator = createSecondaryIndexRecordGenerator(
+          readerContextFactory.getContext(), dataMetaClient, replacedFileSlice.get(), tableSchema, indexDefinition, instantTime, props, false);
+      return new CloseableMappingIterator<>(recordKeyAndSecondaryKeyIterator,
+          pair -> createSecondaryIndexRecord(pair.getKey(), pair.getValue(), indexDefinition.getIndexName(), true));
+    });
   }
 
   private static TableFileSystemView.SliceView getSliceView(HoodieWriteConfig config, HoodieTableMetaClient dataMetaClient) {
@@ -245,33 +327,34 @@ public class SecondaryIndexRecordGenerationUtils {
       return engineContext.emptyHoodieData();
     }
     final int parallelism = Math.min(fileSlices.size(), secondaryIndexMaxParallelism);
-    final StoragePath basePath = metaClient.getBasePath();
-    HoodieSchema tableSchema;
-    try {
-      tableSchema = new TableSchemaResolver(metaClient).getTableSchema();
-    } catch (Exception e) {
-      throw new HoodieException("Failed to get latest schema for " + metaClient.getBasePath(), e);
-    }
     ReaderContextFactory<T> readerContextFactory = engineContext.getReaderContextFactory(metaClient);
     engineContext.setJobStatus(activeModule, "Secondary Index: reading secondary keys from " + fileSlices.size() + " file slices");
     HoodieFileFormat baseFileFormat = metaClient.getTableConfig().getBaseFileFormat();
+    // a file slice without a base file has only log files, whose schema is the table schema. It is resolved once here
+    // rather than in every task, because resolving it loads the timeline
+    Option<HoodieSchema> tableSchema = fileSlices.stream().anyMatch(slice -> !slice.getFileSlice().getBaseFile().isPresent())
+        ? Option.of(resolveTableSchema(metaClient))
+        : Option.empty();
     return engineContext.parallelize(fileSlices, parallelism).flatMap(partitionAndBaseFile -> {
-      final String partition = partitionAndBaseFile.getPartitionPath();
       final FileSlice fileSlice = partitionAndBaseFile.getFileSlice();
-      Option<StoragePath> dataFilePath = Option.ofNullable(fileSlice.getBaseFile().map(baseFile -> FSUtils.getAbsoluteFilePath(basePath, partition, baseFile.getFileName())).orElseGet(null));
-      HoodieSchema readerSchema;
-      if (dataFilePath.isPresent()) {
-        readerSchema = HoodieIOFactory.getIOFactory(metaClient.getStorage())
-            .getFileFormatUtils(baseFileFormat)
-            .readSchema(metaClient.getStorage(), dataFilePath.get());
-      } else {
-        readerSchema = tableSchema;
-      }
+      // the storage path keeps the directory prefix of a file written outside Hudi, which its file name alone loses
+      Option<StoragePath> dataFilePath = fileSlice.getBaseFile().map(HoodieBaseFile::getStoragePath);
+      HoodieSchema readerSchema = dataFilePath.isPresent()
+          ? HoodieIOFactory.getIOFactory(metaClient.getStorage()).getFileFormatUtils(baseFileFormat).readSchema(metaClient.getStorage(), dataFilePath.get())
+          : tableSchema.get();
       ClosableIterator<Pair<String, String>> secondaryIndexGenerator = createSecondaryIndexRecordGenerator(
           readerContextFactory.getContext(), metaClient, fileSlice, readerSchema, indexDefinition,
           metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::requestedTime).orElse(""), props, false);
       return new CloseableMappingIterator<>(secondaryIndexGenerator, pair -> createSecondaryIndexRecord(pair.getKey(), pair.getValue(), indexDefinition.getIndexName(), false));
     });
+  }
+
+  private static HoodieSchema resolveTableSchema(HoodieTableMetaClient metaClient) {
+    try {
+      return new TableSchemaResolver(metaClient).getTableSchema();
+    } catch (Exception e) {
+      throw new HoodieException("Failed to get latest schema for " + metaClient.getBasePath(), e);
+    }
   }
 
   /**
@@ -287,6 +370,18 @@ public class SecondaryIndexRecordGenerationUtils {
                                                                                                 boolean allowInflightInstants) throws IOException {
     String secondaryKeyField = indexDefinition.getSourceFieldsKey();
     HoodieSchema requestedSchema = getRequestedSchemaForSecondaryIndex(metaClient, tableSchema, secondaryKeyField);
+    // a table without record keys, e.g. one that registers files written outside Hudi, keys every row by the path of its
+    // base file relative to the table and the row position, the same key the record index generates from the base file.
+    // The positions of a merged file slice would not line up with the base file, so such a slice must not have log files.
+    boolean generateRecordKeys = !metaClient.getTableConfig().hasRecordKey();
+    if (generateRecordKeys) {
+      ValidationUtils.checkState(fileSlice.getBaseFile().isPresent() && !fileSlice.hasLogFiles(),
+          "File group " + fileSlice.getFileId() + " in partition " + fileSlice.getPartitionPath() + " needs a base file and no log files "
+              + "to key its rows by position, because the table has no record key");
+    }
+    Option<String> relativeFilePath = generateRecordKeys
+        ? Option.of(FSUtils.getRelativePartitionPath(metaClient.getBasePath(), fileSlice.getBaseFile().get().getStoragePath()))
+        : Option.empty();
     HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>builder()
         .withReaderContext(readerContext)
         .withBaseFileOption(fileSlice.getBaseFile())
@@ -303,6 +398,7 @@ public class SecondaryIndexRecordGenerationUtils {
     return new ClosableIterator<Pair<String, String>>() {
       private final ClosableIterator<T> recordIterator = fileGroupReader.getClosableIterator();
       private Pair<String, String> nextValidRecord;
+      private long rowPosition = 0;
 
       @Override
       public void close() {
@@ -319,15 +415,20 @@ public class SecondaryIndexRecordGenerationUtils {
         while (recordIterator.hasNext()) {
           T record = recordIterator.next();
           Object secondaryKey = readerContext.getRecordContext().getValue(record, requestedSchema, secondaryKeyField);
-            nextValidRecord = Pair.of(
-                readerContext.getRecordContext().getRecordKey(record, requestedSchema),
-                secondaryKey == null ? null : secondaryKey.toString()
-            );
+          nextValidRecord = Pair.of(getRecordKey(record), secondaryKey == null ? null : secondaryKey.toString());
+          rowPosition++;
           return true;
         }
 
         // If no valid records are found
         return false;
+      }
+
+      private String getRecordKey(T record) {
+        if (relativeFilePath.isPresent()) {
+          return ExternalFilePathUtil.generateRecordKeyForRow(relativeFilePath.get(), rowPosition);
+        }
+        return readerContext.getRecordContext().getRecordKey(record, requestedSchema);
       }
 
       @Override

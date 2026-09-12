@@ -168,6 +168,24 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
   }
 
   @Test
+  public void testConfigEqualsAndHashCodeIgnoreHelp() {
+    HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
+    config.basePath = "/tmp/table";
+    HoodieMetadataTableValidator.Config askedForHelp = new HoodieMetadataTableValidator.Config();
+    askedForHelp.basePath = "/tmp/table";
+    askedForHelp.help = true;
+
+    // --help is not compared, so it must not be hashed either
+    assertEquals(config, askedForHelp);
+    assertEquals(config.hashCode(), askedForHelp.hashCode());
+
+    // a Config straight out of JCommander has no base path yet
+    assertEquals(new HoodieMetadataTableValidator.Config(), new HoodieMetadataTableValidator.Config());
+    assertEquals(new HoodieMetadataTableValidator.Config().hashCode(),
+        new HoodieMetadataTableValidator.Config().hashCode());
+  }
+
+  @Test
   public void testAggregateColumnStats() {
     HoodieColumnRangeMetadata<Comparable> fileColumn1Range1 = HoodieColumnRangeMetadata.<Comparable>create(
         "path/to/file1", "col1", 1, 5, 0, 10, 100, 200, ValueMetadata.V1EmptyMetadata.get());
