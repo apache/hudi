@@ -70,14 +70,6 @@ public class TestSparkSampleWritesUtils extends SparkClientFunctionalTestHarness
     dataGen.close();
   }
 
-  /*
-   * TODO remove this and fix parent class (HUDI-6042)
-   */
-  @Override
-  public String basePath() {
-    return tempDir.toAbsolutePath().toString();
-  }
-
   @Test
   public void skipOverwriteRecordSizeEstimateWhenTimelineNonEmpty() throws Exception {
     String commitTime = HoodieTestTable.makeNewCommitTime();

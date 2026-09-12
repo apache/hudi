@@ -410,7 +410,10 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
   private void validateFileListingInMetadataTable() {
     List<String> partitionPaths = FSUtils.getAllPartitionPaths(context(), metaClient, false)
         .stream()
-        .map(e -> new StoragePath(basePath(), e).toString())
+        // Scheme-qualified, because the listing below is compared against storage listings whose
+        // paths the filesystem qualifies. Use baseUri() rather than basePath() to keep both sides
+        // in the same form.
+        .map(e -> new StoragePath(new StoragePath(baseUri()), e).toString())
         .collect(Collectors.toList());
     Map<String, List<StoragePathInfo>> filesFromStorage = FSUtils.getFilesInPartitions(
         context(),
