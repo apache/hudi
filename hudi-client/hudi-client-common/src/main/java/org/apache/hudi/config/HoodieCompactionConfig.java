@@ -23,6 +23,8 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.plan.generators.HoodieCompactionPlanGenerator;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
@@ -105,7 +107,34 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("During upsert operation, we opportunistically expand existing small files on storage, instead of writing"
           + " new files, to keep number of files to an optimum. This config sets the file size limit below which a file on storage "
           + " becomes a candidate to be selected as such a `small file`. By default, treat any file <= 100MB as a small file."
-          + " Also note that if this set <= 0, will not try to get small files and directly write new files");
+          + " Also note that if this set <= 0, will not try to get small files and directly write new files."
+          + " As of the fraction-based small-file config, this byte value is no longer read directly at runtime — it feeds"
+          + " the infer function of `hoodie.parquet.small.file.fraction.max.file.size` so tables that only set this key keep"
+          + " working. If both this and the fraction config are set explicitly, the fraction config takes precedence.");
+
+  public static final ConfigProperty<Double> PARQUET_SMALL_FILE_FRACTION_MAX_FILE_SIZE = ConfigProperty
+      .key("hoodie.parquet.small.file.fraction.max.file.size")
+      .defaultValue(0.0)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withInferFunction(cfg -> {
+        // Fall back to the built-in defaults of the byte-based configs when the keys are not yet
+        // present in props. This happens when HoodieCompactionConfig.Builder.build() runs
+        // standalone (before HoodieStorageConfig defaults are merged in the outer
+        // HoodieWriteConfig.Builder.setDefaults path). Using *OrDefault ensures the fraction is
+        // still correctly inferred as 100MB/120MB in that path.
+        long maxFileBytes = cfg.getLongOrDefault(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE);
+        if (maxFileBytes <= 0) {
+          return Option.empty();
+        }
+        long smallFileBytes = cfg.getLongOrDefault(PARQUET_SMALL_FILE_LIMIT);
+        return Option.of(((double) smallFileBytes) / ((double) maxFileBytes));
+      })
+      .withDocumentation("Small-file threshold expressed as a fraction of `hoodie.parquet.max.file.size`. When unset, this is"
+          + " inferred from `hoodie.parquet.small.file.limit / hoodie.parquet.max.file.size` so existing tables see identical"
+          + " behavior. When explicitly set, this config takes precedence and the byte-limit config is ignored. A value of 0.0"
+          + " disables small-file bin-packing (equivalent to setting `hoodie.parquet.small.file.limit=0`). The default of 0.0"
+          + " is only observed when max.file.size is misconfigured to <= 0.");
 
   public static final ConfigProperty<String> RECORD_SIZE_ESTIMATION_THRESHOLD = ConfigProperty
       .key("hoodie.record.size.estimation.threshold")
@@ -389,6 +418,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder compactionSmallFileSize(long smallFileLimitBytes) {
       compactionConfig.setValue(PARQUET_SMALL_FILE_LIMIT, String.valueOf(smallFileLimitBytes));
+      return this;
+    }
+
+    public Builder withParquetSmallFileFractionOfMaxFileSize(double fraction) {
+      compactionConfig.setValue(PARQUET_SMALL_FILE_FRACTION_MAX_FILE_SIZE, String.valueOf(fraction));
       return this;
     }
 
