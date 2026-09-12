@@ -238,7 +238,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     name.startsWith(tableNamePrefix) || !HoodieSparkSqlTestBase.GENERATED_TABLE_NAME.matcher(name).matches()
   }
 
-  private lazy val tableNamePrefix: String = s"h${getClass.getSimpleName.toLowerCase}_"
+  protected lazy val tableNamePrefix: String = s"h${getClass.getSimpleName.toLowerCase}_"
 
   protected def generateTableName: String = {
     s"$tableNamePrefix${tableId.incrementAndGet()}"
