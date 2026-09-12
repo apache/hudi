@@ -38,6 +38,8 @@ import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSpa
 import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.catalog.SessionCatalog
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.connector.catalog.CatalogManager
 import org.apache.spark.sql.hudi.catalog.HoodieCatalog
@@ -197,29 +199,32 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
 
   /**
    * Drops the tables a test left behind. Per-suite mode owns the whole catalog. Shared mode shares the
-   * external catalog with every other suite in the JVM, so it drops only this suite's generateTableName
-   * tables plus any table whose name is not of that form (fixed names and temp views); under serial
-   * execution those can only come from the test that just ran. Fixed names are renamed in a later step.
+   * external catalog with every other suite in the JVM and those suites may be mid-test, so it drops
+   * only the tables whose name carries this suite's generateTableName prefix, plus its own temp views.
    */
   private def dropSuiteTables(): Unit = {
     val catalog = spark.sessionState.catalog
+    // Concurrent suites may drop their own databases at any time, so every per-database step is best effort.
     catalog.listDatabases().foreach { db =>
-      val tables = catalog.listTables(db)
-      val toDrop = if (sharedSessionEnabled) tables.filter(table => ownsTable(table.table)) else tables
+      val tables = Try(catalog.listTables(db)).getOrElse(Seq.empty)
+      val toDrop = if (sharedSessionEnabled) tables.filter(table => ownsTable(catalog, table)) else tables
       toDrop.foreach { table =>
         if (sharedSessionEnabled && !catalog.isTempView(table)) {
           // Shared mode keeps one index map per table; drop this table's entry with the table.
           Try(catalog.getTableMetadata(table).location.getPath)
             .foreach(path => HoodieInMemoryHashIndex.clear(path))
         }
-        catalog.dropTable(table, true, true)
+        Try(catalog.dropTable(table, true, true))
       }
     }
   }
 
-  /** Shared mode: a table is this suite's if generateTableName produced it, or if no suite's generateTableName could have. */
-  private def ownsTable(name: String): Boolean = {
-    name.startsWith(tableNamePrefix) || !HoodieSparkSqlTestBase.GENERATED_TABLE_NAME.matcher(name).matches()
+  /**
+   * Shared mode: a table is this suite's if generateTableName produced its name (derived names such as
+   * `s"${generateTableName}_pt"` keep the prefix), or if it is a temp view, which is session-scoped.
+   */
+  private def ownsTable(catalog: SessionCatalog, table: TableIdentifier): Boolean = {
+    catalog.isTempView(table) || table.table.startsWith(tableNamePrefix)
   }
 
   protected def generateTableName: String = {
@@ -545,9 +550,6 @@ object HoodieSparkSqlTestBase {
 
   // Read side held by every test, write side by an ExclusiveSuite for its whole run.
   val suiteLock = new ReentrantReadWriteLock(true)
-
-  // Table names produced by generateTableName (without a database prefix).
-  private[common] val GENERATED_TABLE_NAME: Pattern = Pattern.compile("h[a-z0-9]+_[0-9]+")
 
   private[common] lazy val sharedWarehouse: File = {
     val dir = Utils.createTempDir()
