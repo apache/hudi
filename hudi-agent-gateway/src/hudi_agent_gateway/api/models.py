@@ -100,13 +100,17 @@ class ReadyResponse(BaseModel):
 class InfoResponse(BaseModel):
     name: str
     version: str
+    engine: str
     provider: str
     model: str
     catalog: str
     schema_: str = Field(alias="schema")
-    # In-cluster/network endpoints, for the UI's connect panel.
-    trino_url: str
-    trino_ui_url: str
+    # In-cluster/network endpoints, for the UI's connect panel. For the trino
+    # engine `sql_url` is the coordinator's HTTP endpoint; for spark it is the
+    # Thrift Server's JDBC URL. `web_ui_url` is None when the engine has no
+    # web UI to link.
+    sql_url: str
+    web_ui_url: str | None = None
     mcp_enabled: bool
 
     model_config = {"populate_by_name": True}

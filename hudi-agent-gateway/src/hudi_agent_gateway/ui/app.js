@@ -47,12 +47,20 @@
   }
 
   fetch("../v1/info").then(function (r) { return r.json(); }).then(function (info) {
-    modelInfoEl.textContent = info.provider + " · catalog " + info.catalog;
+    modelInfoEl.textContent = info.provider + " · " +
+      (info.engine === "spark" ? "database " + info.schema : "catalog " + info.catalog);
     var base = window.location.origin;
-    document.getElementById("ep-trino").textContent = info.trino_url;
-    var trinoUi = document.getElementById("ep-trino-ui");
-    trinoUi.textContent = info.trino_ui_url;
-    trinoUi.href = info.trino_ui_url;
+    document.getElementById("ep-sql-label").textContent =
+      info.engine === "spark" ? "Spark SQL (JDBC)" : "Trino SQL";
+    document.getElementById("ep-sql").textContent = info.sql_url;
+    var webUiRow = document.getElementById("ep-web-ui-row");
+    if (info.web_ui_url) {
+      var webUi = document.getElementById("ep-web-ui");
+      webUi.textContent = info.web_ui_url;
+      webUi.href = info.web_ui_url;
+    } else {
+      webUiRow.hidden = true;
+    }
     document.getElementById("ep-chat").textContent = base + "/v1/chat";
     document.getElementById("ep-mcp").textContent = base + "/mcp/";
     document.getElementById("ep-mcp-hint").textContent =
