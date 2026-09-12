@@ -273,6 +273,9 @@
     <lance.skip.tests>false</lance.skip.tests>
     <!-- Scala SQL suites: one shared SparkContext per JVM with a child session per suite (see HoodieSparkSqlTestBase) -->
     <hudi.spark.test.sharedSession>false</hudi.spark.test.sharedSession>
+    <!-- Run scalatest suites concurrently (needs hudi.spark.test.sharedSession=true); 0 threads = scalatest's default -->
+    <hudi.scalatest.parallel>false</hudi.scalatest.parallel>
+    <hudi.scalatest.threads>0</hudi.scalatest.threads>
     <vortex.version>0.76.0</vortex.version>
     <vortex.spark.artifact>vortex-spark_${scala.binary.version}</vortex.spark.artifact>
     <vortex.skip.tests>false</vortex.skip.tests>
@@ -621,6 +624,8 @@
               <vortex.skip.tests>${vortex.skip.tests}</vortex.skip.tests>
               <hudi.spark.test.sharedSession>${hudi.spark.test.sharedSession}</hudi.spark.test.sharedSession>
             </systemProperties>
+            <parallel>${hudi.scalatest.parallel}</parallel>
+            <threadCount>${hudi.scalatest.threads}</threadCount>
           </configuration>
           <executions>
             <execution>
