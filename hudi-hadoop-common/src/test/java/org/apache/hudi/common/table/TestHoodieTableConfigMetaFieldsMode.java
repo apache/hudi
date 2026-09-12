@@ -156,4 +156,22 @@ class TestHoodieTableConfigMetaFieldsMode {
     HoodieTableConfig cfg = configOf(false, "CoMmIt_TiMe_OnLy");
     assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, cfg.getMetaFieldsMode());
   }
+
+  @Test
+  void hasRecordKeyWhenTheMetaColumnIsPopulatedOrKeyFieldsAreConfigured() {
+    // the default mode populates _hoodie_record_key
+    assertTrue(configOf(null, null).hasRecordKey());
+    // a selective mode leaves the meta column null but still keys records through the configured fields
+    HoodieTableConfig commitTimeOnlyWithKeyFields = configOf(false, "COMMIT_TIME_ONLY");
+    commitTimeOnlyWithKeyFields.setValue(HoodieTableConfig.RECORDKEY_FIELDS, "id");
+    assertTrue(commitTimeOnlyWithKeyFields.hasRecordKey());
+    HoodieTableConfig noneWithKeyFields = configOf(false, null);
+    noneWithKeyFields.setValue(HoodieTableConfig.RECORDKEY_FIELDS, "id,name");
+    assertTrue(noneWithKeyFields.hasRecordKey());
+    // a table that only registers files written by another system has neither
+    assertFalse(configOf(false, null).hasRecordKey());
+    HoodieTableConfig noneWithEmptyKeyFields = configOf(false, null);
+    noneWithEmptyKeyFields.setValue(HoodieTableConfig.RECORDKEY_FIELDS, "");
+    assertFalse(noneWithEmptyKeyFields.hasRecordKey());
+  }
 }

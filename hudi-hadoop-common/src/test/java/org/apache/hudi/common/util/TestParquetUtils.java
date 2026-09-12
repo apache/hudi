@@ -33,6 +33,7 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.StoragePath;
@@ -68,6 +69,7 @@ import static org.apache.hudi.common.schema.HoodieSchemaUtils.METADATA_FIELD_SCH
 import static org.apache.hudi.metadata.HoodieIndexVersion.V1;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -113,6 +115,36 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     for (String rowKey : rowKeys) {
       assertTrue(filterInFile.mightContain(rowKey), "key should be found in bloom filter");
     }
+  }
+
+  @Test
+  public void testReadRowKeysFromFileWithoutRecordKeys() throws Exception {
+    // a file written outside Hudi has no record key column, so each row is keyed by the relative file path and row position
+    List<String> rowKeys = Arrays.asList("a", "b", "c");
+    HoodieSchema schema = getSchemaWithFields(Collections.singletonList("id"));
+    String filePath = Paths.get(basePath, "2024", "external.parquet").toUri().toString();
+    writeParquetFile(BloomFilterTypeCode.SIMPLE.name(), filePath, rowKeys, schema, false, "", false, "id", null);
+
+    Set<String> generatedKeys = parquetUtils.readRowKeys(
+        HoodieTestUtils.getStorage(filePath), new StoragePath(filePath), new StoragePath(basePath));
+    assertEquals(new HashSet<>(Arrays.asList("2024/external.parquet_0", "2024/external.parquet_1", "2024/external.parquet_2")), generatedKeys);
+
+    // the keys stream out in row order
+    List<String> streamedKeys = new ArrayList<>();
+    try (ClosableIterator<String> rowKeyIterator = parquetUtils.getRowKeyIterator(
+        HoodieTestUtils.getStorage(filePath), new StoragePath(filePath), new StoragePath(basePath))) {
+      rowKeyIterator.forEachRemaining(streamedKeys::add);
+    }
+    assertEquals(Arrays.asList("2024/external.parquet_0", "2024/external.parquet_1", "2024/external.parquet_2"), streamedKeys);
+
+    Set<Pair<String, Long>> filtered = parquetUtils.filterRowKeys(
+        HoodieTestUtils.getStorage(filePath), new StoragePath(filePath), new StoragePath(basePath), Collections.singleton("2024/external.parquet_1"));
+    assertEquals(Collections.singleton(Pair.of("2024/external.parquet_1", 1L)), filtered);
+
+    // without the table base path the missing record key is an error
+    HoodieException missingKey = assertThrows(HoodieException.class,
+        () -> parquetUtils.readRowKeys(HoodieTestUtils.getStorage(filePath), new StoragePath(filePath)));
+    assertTrue(missingKey.getMessage().startsWith("Record key is missing in row 0 of "));
   }
 
   @ParameterizedTest

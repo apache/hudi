@@ -15,7 +15,9 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Lazy;
@@ -24,12 +26,17 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils;
 import org.apache.hudi.metadata.index.model.IndexCleanContext;
 import org.apache.hudi.metadata.index.model.IndexInitializationContext;
 import org.apache.hudi.metadata.index.model.IndexInitializationPlan;
+import org.apache.hudi.metadata.index.model.IndexPartitionAndRecords;
 import org.apache.hudi.metadata.index.model.IndexUpdateContext;
+import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.MockedStatic;
 
 import java.io.IOException;
@@ -45,6 +52,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyFloat;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
@@ -169,6 +177,64 @@ class TestSecondaryIndexer {
         mock(HoodieBackedTableMetadata.class),
         Lazy.lazily(() -> mock(HoodieTableFileSystemView.class)),
         commitMetadata)).isEmpty());
+  }
+
+  /** Mocks a table with one secondary index partition, {@code secondary_index_idx}, on top of the given write config. */
+  private static HoodieTableMetaClient mockMetaClientWithSecondaryIndex(HoodieWriteConfig writeConfig, HoodieMetadataConfig metadataConfig,
+                                                                       HoodieIndexDefinition indexDefinition) {
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    HoodieIndexMetadata indexMetadata = mock(HoodieIndexMetadata.class);
+    when(writeConfig.getMetadataConfig()).thenReturn(metadataConfig);
+    when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    when(metaClient.getBasePath()).thenReturn(new StoragePath("/tmp/table"));
+    when(metaClient.getIndexForMetadataPartition("secondary_index_idx")).thenReturn(Option.of(indexDefinition));
+    when(tableConfig.getMetadataPartitions()).thenReturn(Collections.singleton("secondary_index_idx"));
+    when(indexMetadata.getIndexDefinitions()).thenReturn(Collections.singletonMap("secondary_index_idx", indexDefinition));
+    when(indexDefinition.getIndexName()).thenReturn("secondary_index_idx");
+    return metaClient;
+  }
+
+  @ParameterizedTest
+  @CsvSource({"true,false", "false,false", "true,true"})
+  void testBuildUpdateForReplaceCommitFromExternalWriterWithoutWriteStats(boolean dropsFileGroups, boolean hasRecordKey) {
+    // files written outside Hudi are registered through replace commits without a known operation type on a table
+    // without a record key. A fresh HoodieCommitMetadata carries UNKNOWN; a writer may also leave the type null. A
+    // commit that only drops files has no write stats but still removes the records of the replaced file groups from
+    // the index; one that drops nothing and writes nothing, and one on a table with a record key, leave the index alone.
+    HoodieEngineContext engineContext = new HoodieLocalEngineContext(getDefaultStorageConf());
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    HoodieMetadataConfig metadataConfig = mock(HoodieMetadataConfig.class);
+    HoodieIndexDefinition indexDefinition = mock(HoodieIndexDefinition.class);
+    HoodieTableMetaClient metaClient = mockMetaClientWithSecondaryIndex(writeConfig, metadataConfig, indexDefinition);
+    when(metaClient.getTableConfig().hasRecordKey()).thenReturn(hasRecordKey);
+
+    HoodieReplaceCommitMetadata commitMetadata = new HoodieReplaceCommitMetadata();
+    commitMetadata.setOperationType(null);
+    if (dropsFileGroups) {
+      commitMetadata.addReplaceFileId("p1", "file_1.parquet");
+    }
+
+    HoodieData<HoodieRecord> deletes = engineContext.parallelize(Collections.singletonList(
+        HoodieMetadataPayload.createSecondaryIndexRecord("p1/file_1.parquet_0", "alice", "secondary_index_idx", true)), 1);
+    try (MockedStatic<SecondaryIndexRecordGenerationUtils> mockedGenerationUtils = mockStatic(SecondaryIndexRecordGenerationUtils.class)) {
+      mockedGenerationUtils.when(() -> SecondaryIndexRecordGenerationUtils.convertWriteStatsToSecondaryIndexRecords(
+              eq(Collections.emptyList()), eq("016"), eq(indexDefinition), eq(metadataConfig), eq(metaClient), eq(engineContext), eq(writeConfig), eq(commitMetadata)))
+          .thenReturn(deletes);
+
+      SecondaryIndexer indexer = new SecondaryIndexer(engineContext, writeConfig, metaClient);
+      List<IndexPartitionAndRecords> result = indexer.buildUpdate(IndexUpdateContext.of(
+          "016",
+          mock(HoodieBackedTableMetadata.class),
+          Lazy.lazily(() -> mock(HoodieTableFileSystemView.class)),
+          commitMetadata));
+
+      assertEquals(1, result.size());
+      assertEquals("secondary_index_idx", result.get(0).indexPartitionName());
+      assertEquals(dropsFileGroups && !hasRecordKey ? deletes.collectAsList() : Collections.emptyList(),
+          result.get(0).indexRecords().collectAsList());
+    }
   }
 
   @Test
