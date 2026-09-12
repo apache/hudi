@@ -156,6 +156,10 @@ case class MergeOnReadIncrementalRelationV1(override val sqlContext: SQLContext,
     }
   }
 
+  override def getIncrementalFilesSize: Long = {
+    affectedFilesInCommits.asScala.map(_.getLength).sum
+  }
+
   override def shouldIncludeLogFiles(): Boolean = fullTableScan
 
   private def filterFileSlices(fileSlices: Seq[FileSlice], pathGlobPattern: String): Seq[FileSlice] = {

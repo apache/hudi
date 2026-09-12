@@ -466,9 +466,10 @@ case class HoodieFileIndex(spark: SparkSession,
   override def sizeInBytes: Long = {
     val size = getTotalCachedFilesSize
     if (size == 0 && !enableHoodieExtension) {
-      // Avoid always broadcast the hudi table if not enable HoodieExtension
       logWarning("Note: Please add 'org.apache.spark.sql.hudi.HoodieSparkSessionExtension' to the Spark SQL configuration property " +
         "'spark.sql.extensions'.\n Multiple extensions can be set using a comma-separated list.")
+      Long.MaxValue
+    } else if (size == 0) {
       Long.MaxValue
     } else {
       size
