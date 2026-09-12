@@ -1571,8 +1571,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
           ? String.format("%s.%s", metadataTableName, HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_STATUS)
           : HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_STATUS;
       String deltaCommitsMetricName = tableNameExists
-          ? String.format("%s.%s", metadataTableName, HoodieMetadataMetrics.STAT_DELTA_COMMITS_SINCE_LAST_COMPACTION)
-          : HoodieMetadataMetrics.STAT_DELTA_COMMITS_SINCE_LAST_COMPACTION;
+          ? String.format("%s.%s", metadataTableName, HoodieMetadataMetrics.DELTA_COMMITS_SINCE_LAST_COMPACTION)
+          : HoodieMetadataMetrics.DELTA_COMMITS_SINCE_LAST_COMPACTION;
       long timeSpent = metadataTableServicesTimer.endTimer();
       metrics.ifPresent(m -> m.setMetric(executionDurationMetricName, timeSpent));
       if (allTableServicesExecutedSuccessfullyOrSkipped) {
@@ -1605,19 +1605,18 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
    * rather than swallowed in order to publish a gauge.
    */
   private void reportDeltaCommitsSinceLastCompaction(String metricName) {
-    if (!metrics.isPresent()) {
-      return;
-    }
-    try {
-      long deltaCommits = CompactionUtils
-          .getCompletedDeltaCommitsSinceLatestCompaction(metadataMetaClient.reloadActiveTimeline())
-          .map(deltaCommitsInfo -> (long) deltaCommitsInfo.getLeft().countInstants())
-          .orElse(0L);
-      metrics.get().setMetric(metricName, deltaCommits);
-    } catch (Exception e) {
-      // Matches Metrics#registerGauge: a metrics problem must not fail the write path.
-      LOG.warn("Failed to report {} on the metadata table", metricName, e);
-    }
+    metrics.ifPresent(m -> {
+      try {
+        long deltaCommits = CompactionUtils
+            .getCompletedDeltaCommitsSinceLatestCompaction(metadataMetaClient.reloadActiveTimeline())
+            .map(deltaCommitsInfo -> (long) deltaCommitsInfo.getLeft().countInstants())
+            .orElse(0L);
+        m.setMetric(metricName, deltaCommits);
+      } catch (Exception e) {
+        // Matches Metrics#registerGauge: a metrics problem must not fail the write path.
+        LOG.warn("Failed to report {} on the metadata table", metricName, e);
+      }
+    });
   }
 
   static HoodieActiveTimeline runPendingTableServicesOperationsAndRefreshTimeline(HoodieTableMetaClient metadataMetaClient,

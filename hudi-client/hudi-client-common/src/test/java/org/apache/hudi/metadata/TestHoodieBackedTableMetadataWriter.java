@@ -95,7 +95,7 @@ class TestHoodieBackedTableMetadataWriter {
   // Prefixed with the metadata table name, like TABLE_SERVICE_EXECUTION_*, so that reporters which derive
   // a table dimension from the first dotted segment do not drop it (see CloudWatchReporter#stageMetricDatum).
   private static final String DELTA_COMMITS_METRIC =
-      TABLE_NAME + "." + HoodieMetadataMetrics.STAT_DELTA_COMMITS_SINCE_LAST_COMPACTION;
+      TABLE_NAME + "." + HoodieMetadataMetrics.DELTA_COMMITS_SINCE_LAST_COMPACTION;
 
   @Test
   void tableStorageLayoutForMetadataTable() {
