@@ -18,11 +18,15 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.MetaFieldsMode;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -30,6 +34,7 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -40,6 +45,8 @@ import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -51,6 +58,7 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -71,6 +79,38 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   @AfterEach
   public void tearDown() throws Exception {
     cleanMetaClient();
+  }
+
+  private HoodieTableMetaClient.TableBuilder cdcVectorTableBuilder() {
+    HoodieSchema schema = HoodieSchema.createRecord("data", null, null, Collections.singletonList(
+        HoodieSchemaField.of("embedding", HoodieSchema.createNullable(HoodieSchema.createVector(2)))));
+    return HoodieTableMetaClient.newTableBuilder().setTableName("cdc_vector")
+        .setTableType(HoodieTableType.COPY_ON_WRITE).setRecordMergeMode(RecordMergeMode.COMMIT_TIME_ORDERING)
+        .setTableCreateSchema(schema.toString()).setCDCEnabled(true);
+  }
+
+  @ParameterizedTest
+  @EnumSource(HoodieCDCSupplementalLoggingMode.class)
+  void testCdcVectorTableCreation(HoodieCDCSupplementalLoggingMode mode) throws Exception {
+    for (boolean enabled : new boolean[] {false, true}) {
+      HoodieTableMetaClient.TableBuilder builder = cdcVectorTableBuilder()
+          .setCDCEnabled(enabled).setCDCSupplementalLoggingMode(mode.name());
+      StoragePath path = new StoragePath(basePath, "vector_" + enabled);
+      if (enabled && mode != HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY) {
+        assertThrows(HoodieNotSupportedException.class, () -> builder.initTable(metaClient.getStorageConf(), path));
+        assertFalse(metaClient.getStorage().exists(path));
+      } else {
+        HoodieTableMetaClient table = builder.initTable(metaClient.getStorageConf(), path);
+        assertEquals(enabled, table.getTableConfig().isCDCEnabled());
+      }
+    }
+  }
+
+  @Test
+  void testCdcVectorDefaultModeAndMissingSchema() {
+    HoodieTableMetaClient.TableBuilder builder = cdcVectorTableBuilder();
+    assertThrows(HoodieNotSupportedException.class, builder::build);
+    assertDoesNotThrow(() -> builder.setTableCreateSchema(null).build());
   }
 
   @Test
