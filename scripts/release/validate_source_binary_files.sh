@@ -20,7 +20,7 @@
 #
 
 # Run this from the root of a source release tree, i.e. the output of
-# create_source_directory.sh (see the validate-source job in bot.yml) or an
+# create_source_directory.sh (see the validate-source job in validate_source.yml) or an
 # extracted source tarball (see validate_staged_release.sh). Paths that never
 # reach the source release are excluded by create_source_directory.sh, not here.
 
