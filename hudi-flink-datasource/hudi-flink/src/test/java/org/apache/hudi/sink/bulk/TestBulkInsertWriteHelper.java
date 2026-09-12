@@ -102,9 +102,9 @@ public class TestBulkInsertWriteHelper {
         if (preserveMetadata) {
           // Clustering reads rows with metadata columns, but selective modes leave keys null.
           row = HoodieRowDataCreation.create(mode.isCommitTimePopulated() ? expectedCommitTime : null,
-              mode == MetaFieldsMode.ALL ? "old-sequence" : null,
+              mode.isCommitSeqnoPopulated() ? "old-sequence" : null,
               mode.isRecordKeyPopulated() ? row.getString(0).toString() : null,
-              mode == MetaFieldsMode.ALL ? row.getString(4).toString() : null,
+              mode.isPartitionPathPopulated() ? row.getString(4).toString() : null,
               mode.isFileNamePopulated() ? "old.parquet" : null, row, false, false);
         }
         helper.write(row);
@@ -126,10 +126,10 @@ public class TestBulkInsertWriteHelper {
           assertEquals(row.get("partition").toString(), status.getStat().getPartitionPath());
           assertEquals(mode.isCommitTimePopulated() ? expectedCommitTime : null,
               Objects.toString(row.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD), null));
-          assertEquals(mode != MetaFieldsMode.ALL, row.get(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD) == null);
+          assertEquals(!mode.isCommitSeqnoPopulated(), row.get(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD) == null);
           assertEquals(mode.isRecordKeyPopulated() ? row.get("uuid").toString() : null,
               Objects.toString(row.get(HoodieRecord.RECORD_KEY_METADATA_FIELD), null));
-          assertEquals(mode == MetaFieldsMode.ALL ? status.getStat().getPartitionPath() : null,
+          assertEquals(mode.isPartitionPathPopulated() ? status.getStat().getPartitionPath() : null,
               Objects.toString(row.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD), null));
           assertEquals(mode.isFileNamePopulated() ? file.getName() : null,
               Objects.toString(row.get(HoodieRecord.FILENAME_METADATA_FIELD), null));

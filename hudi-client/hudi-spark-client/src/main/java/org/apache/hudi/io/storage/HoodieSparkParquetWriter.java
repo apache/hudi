@@ -87,6 +87,12 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
         if (metaFieldsMode.isCommitTimePopulated()) {
           row.update(COMMIT_TIME_METADATA_FIELD.ordinal(), instantTime);
         }
+        if (metaFieldsMode.isCommitSeqnoPopulated()) {
+          row.update(COMMIT_SEQNO_METADATA_FIELD.ordinal(), UTF8String.fromString(seqIdGenerator.apply(getWrittenRecordCount())));
+        }
+        if (metaFieldsMode.isPartitionPathPopulated()) {
+          row.update(PARTITION_PATH_METADATA_FIELD.ordinal(), UTF8String.fromString(key.getPartitionPath()));
+        }
         if (metaFieldsMode.isFileNamePopulated()) {
           row.update(FILENAME_METADATA_FIELD.ordinal(), fileName);
         }

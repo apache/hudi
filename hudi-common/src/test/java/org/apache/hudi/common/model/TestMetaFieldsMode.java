@@ -27,10 +27,12 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.hudi.common.model.MetaFieldsMode.ALL;
+import static org.apache.hudi.common.model.MetaFieldsMode.ALL_EXCEPT_RECORD_KEY;
 import static org.apache.hudi.common.model.MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME;
 import static org.apache.hudi.common.model.MetaFieldsMode.COMMIT_TIME_ONLY;
 import static org.apache.hudi.common.model.MetaFieldsMode.FILE_NAME_ONLY;
@@ -107,6 +109,7 @@ class TestMetaFieldsMode {
     assertTrue(COMMIT_TIME_ONLY.isSelective());
     assertTrue(FILE_NAME_ONLY.isSelective());
     assertTrue(COMMIT_TIME_AND_FILE_NAME.isSelective());
+    assertTrue(ALL_EXCEPT_RECORD_KEY.isSelective());
   }
 
   @ParameterizedTest
@@ -124,11 +127,13 @@ class TestMetaFieldsMode {
     assertFalse(COMMIT_TIME_ONLY.toLegacyPopulateMetaFields());
     assertFalse(FILE_NAME_ONLY.toLegacyPopulateMetaFields());
     assertFalse(COMMIT_TIME_AND_FILE_NAME.toLegacyPopulateMetaFields());
+    assertFalse(ALL_EXCEPT_RECORD_KEY.toLegacyPopulateMetaFields());
   }
 
   @Test
   void recordKeyIsPopulatedOnlyByAll() {
     assertTrue(ALL.isRecordKeyPopulated());
+    assertFalse(ALL_EXCEPT_RECORD_KEY.isRecordKeyPopulated());
     assertFalse(COMMIT_TIME_AND_FILE_NAME.isRecordKeyPopulated());
     assertFalse(COMMIT_TIME_ONLY.isRecordKeyPopulated());
     assertFalse(FILE_NAME_ONLY.isRecordKeyPopulated());
@@ -137,7 +142,7 @@ class TestMetaFieldsMode {
 
   @ParameterizedTest
   @CsvSource({
-      // Every ordered pair of the five modes: is the first wider than the second?
+      // Every ordered pair of the six modes: is the first wider than the second?
       "ALL,                       ALL,                       false",
       "ALL,                       NONE,                      true",
       "ALL,                       COMMIT_TIME_ONLY,          true",
@@ -164,10 +169,52 @@ class TestMetaFieldsMode {
       "COMMIT_TIME_AND_FILE_NAME, NONE,                      true",
       "COMMIT_TIME_AND_FILE_NAME, COMMIT_TIME_ONLY,          true",
       "COMMIT_TIME_AND_FILE_NAME, FILE_NAME_ONLY,            true",
-      "COMMIT_TIME_AND_FILE_NAME, COMMIT_TIME_AND_FILE_NAME, false"
+      "COMMIT_TIME_AND_FILE_NAME, COMMIT_TIME_AND_FILE_NAME, false",
+      "ALL,                       ALL_EXCEPT_RECORD_KEY,    true",
+      "NONE,                      ALL_EXCEPT_RECORD_KEY,    false",
+      "COMMIT_TIME_ONLY,          ALL_EXCEPT_RECORD_KEY,    false",
+      "FILE_NAME_ONLY,            ALL_EXCEPT_RECORD_KEY,    false",
+      "COMMIT_TIME_AND_FILE_NAME, ALL_EXCEPT_RECORD_KEY,    false",
+      "ALL_EXCEPT_RECORD_KEY,    ALL,                       false",
+      "ALL_EXCEPT_RECORD_KEY,    NONE,                      true",
+      "ALL_EXCEPT_RECORD_KEY,    COMMIT_TIME_ONLY,          true",
+      "ALL_EXCEPT_RECORD_KEY,    FILE_NAME_ONLY,            true",
+      "ALL_EXCEPT_RECORD_KEY,    COMMIT_TIME_AND_FILE_NAME, true",
+      "ALL_EXCEPT_RECORD_KEY,    ALL_EXCEPT_RECORD_KEY,    false"
   })
   void isWiderThanCoversEveryOrderedPair(MetaFieldsMode writer, MetaFieldsMode table, boolean wider) {
     assertEquals(wider, writer.isWiderThan(table));
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+      "ALL, true, true, true, true, true",
+      "NONE, false, false, false, false, false",
+      "COMMIT_TIME_ONLY, true, false, false, false, false",
+      "FILE_NAME_ONLY, false, false, false, false, true",
+      "COMMIT_TIME_AND_FILE_NAME, true, false, false, false, true",
+      "ALL_EXCEPT_RECORD_KEY, true, true, false, true, true"
+  })
+  void columnPopulation(MetaFieldsMode mode, boolean commitTime, boolean commitSeqno,
+                        boolean recordKey, boolean partitionPath, boolean fileName) {
+    assertEquals(commitTime, mode.isCommitTimePopulated());
+    assertEquals(commitSeqno, mode.isCommitSeqnoPopulated());
+    assertEquals(recordKey, mode.isRecordKeyPopulated());
+    assertEquals(partitionPath, mode.isPartitionPathPopulated());
+    assertEquals(fileName, mode.isFileNamePopulated());
+  }
+
+  @ParameterizedTest
+  @EnumSource(MetaFieldsMode.class)
+  void resolveEveryModeThroughAllOverloads(MetaFieldsMode mode) {
+    Properties props = new Properties();
+    props.setProperty(HoodieTableConfig.META_FIELDS_MODE.key(), " " + mode.name().toLowerCase(Locale.ROOT) + " ");
+    props.setProperty(HoodieTableConfig.POPULATE_META_FIELDS.key(), "true");
+    assertEquals(mode, MetaFieldsMode.resolve(props));
+    assertEquals(mode, MetaFieldsMode.resolve(HoodieConfig.copy(props)));
+    Map<String, String> propsMap = new HashMap<>();
+    props.forEach((key, value) -> propsMap.put(key.toString(), value.toString()));
+    assertEquals(mode, MetaFieldsMode.resolve(propsMap));
   }
 
   @Test
