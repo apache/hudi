@@ -102,7 +102,12 @@ public class RetryHelper<T, R extends Exception> implements Serializable {
           log.error(message, e);
           throw e;
         }
-        log.warn("Task [{}] failed. current retry number {}, will retry after {} ms.", taskInfo, retries, waitTime, e);
+        // Only summarize the cause here: a retry that goes on to succeed does not warrant a stack
+        // trace, and printing one per attempt buries the genuine failures. The full trace is still
+        // logged at DEBUG, and at ERROR below once the retries are exhausted.
+        log.warn("Task [{}] failed with {}. current retry number {}, will retry after {} ms.",
+            taskInfo, summarize(e), retries, waitTime);
+        log.debug("Task [{}] failed, attempt {}.", taskInfo, retries, e);
         try {
           Thread.sleep(waitTime);
         } catch (InterruptedException ex) {
@@ -120,6 +125,20 @@ public class RetryHelper<T, R extends Exception> implements Serializable {
 
   public T start() throws R {
     return start(this.func);
+  }
+
+  /**
+   * Renders an exception as a single line, keeping the root cause so that the warning stays
+   * actionable without the whole stack trace.
+   */
+  @VisibleForTesting
+  static String summarize(Throwable t) {
+    Throwable rootCause = t;
+    while (rootCause.getCause() != null && rootCause.getCause() != rootCause) {
+      rootCause = rootCause.getCause();
+    }
+    String summary = t.getClass().getName() + ": " + t.getMessage();
+    return rootCause == t ? summary : summary + ", caused by " + rootCause.getClass().getName() + ": " + rootCause.getMessage();
   }
 
   private boolean checkIfExceptionInRetryList(Exception e) {

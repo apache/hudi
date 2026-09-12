@@ -106,20 +106,57 @@ public class HoodiePartitionMetadata {
     RetryHelper<Void, HoodieIOException>  retryHelper = new RetryHelper(1000, 3, 1000, HoodieIOException.class.getName())
         .tryWith(() -> {
           if (!storage.exists(metaPath)) {
-            if (format.isPresent()) {
-              writeMetafileInFormat(metaPath, format.get());
-            } else {
-              // Backwards compatible properties file format
-              try (ByteArrayOutputStream os = new ByteArrayOutputStream()) {
-                props.store(os, "partition metadata");
-                Option<byte []> content = Option.of(os.toByteArray());
-                storage.createImmutableFileInPath(metaPath, content.map(HoodieInstantWriter::convertByteArrayToWriter));
+            try {
+              writeMetafile(metaPath);
+            } catch (IOException | HoodieIOException e) {
+              // The metafile is immutable, so tasks writing to the same partition concurrently race
+              // to create it and all but the winner fail with an 'already exists' error. Losing that
+              // race means the metafile is in place, which is what the caller asked for: retrying
+              // would only re-observe the same file, and warning about it is pure noise.
+              if (!metafileExistsAfterFailedWrite(metaPath, e)) {
+                throw e;
               }
+              log.debug("Partition metafile {} was concurrently created by another task.", metaPath);
             }
           }
           return null;
         });
     retryHelper.start();
+  }
+
+  /**
+   * Whether the metafile is there after a write that failed, which is how a lost creation race is
+   * recognised.
+   * <p>
+   * The check is only ever used to soften the failure that was just caught, so it must not replace
+   * it. If storage cannot answer, report the metafile as absent and let the original failure be
+   * thrown: that keeps the caller's exception, and with it the retry classification the write
+   * failure was entitled to, rather than substituting a fresh {@link IOException} that
+   * {@link RetryHelper} would not retry.
+   *
+   * @param metaPath    the metafile being written.
+   * @param writeFailure the failure to attach the check failure to, should the check itself fail.
+   */
+  private boolean metafileExistsAfterFailedWrite(StoragePath metaPath, Exception writeFailure) {
+    try {
+      return storage.exists(metaPath);
+    } catch (IOException checkFailure) {
+      writeFailure.addSuppressed(checkFailure);
+      return false;
+    }
+  }
+
+  private void writeMetafile(StoragePath metaPath) throws IOException {
+    if (format.isPresent()) {
+      writeMetafileInFormat(metaPath, format.get());
+    } else {
+      // Backwards compatible properties file format
+      try (ByteArrayOutputStream os = new ByteArrayOutputStream()) {
+        props.store(os, "partition metadata");
+        Option<byte []> content = Option.of(os.toByteArray());
+        storage.createImmutableFileInPath(metaPath, content.map(HoodieInstantWriter::convertByteArrayToWriter));
+      }
+    }
   }
 
   private String getMetafileExtension() {
