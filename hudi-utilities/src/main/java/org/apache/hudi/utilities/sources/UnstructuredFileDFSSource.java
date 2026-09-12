@@ -19,37 +19,24 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.LazyIterableIterator;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.sources.helpers.CloudObjectMetadata;
 import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
 import org.apache.hudi.utilities.sources.helpers.unstructured.UnstructuredFileRecordBuilder;
+import org.apache.hudi.utilities.sources.helpers.unstructured.UnstructuredFileRows;
 
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
-import org.apache.spark.sql.types.DataTypes;
-import org.apache.spark.sql.types.Metadata;
-import org.apache.spark.sql.types.MetadataBuilder;
-import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -78,39 +65,8 @@ import static org.apache.hudi.utilities.config.UnstructuredFileSourceConfig.LIST
  */
 public class UnstructuredFileDFSSource extends RowSource {
 
-  private static final Metadata BLOB_METADATA = new MetadataBuilder()
-      .putString(HoodieSchema.TYPE_METADATA_FIELD, HoodieSchemaType.BLOB.name())
-      .build();
-
-  private static final StructType BLOB_REFERENCE_TYPE = DataTypes.createStructType(new StructField[] {
-      DataTypes.createStructField(HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH, DataTypes.StringType, true),
-      DataTypes.createStructField(HoodieSchema.Blob.EXTERNAL_REFERENCE_OFFSET, DataTypes.LongType, true),
-      DataTypes.createStructField(HoodieSchema.Blob.EXTERNAL_REFERENCE_LENGTH, DataTypes.LongType, true),
-      DataTypes.createStructField(HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED, DataTypes.BooleanType, true)});
-
-  private static final StructType BLOB_TYPE = DataTypes.createStructType(new StructField[] {
-      DataTypes.createStructField(HoodieSchema.Blob.TYPE, DataTypes.StringType, false),
-      DataTypes.createStructField(HoodieSchema.Blob.INLINE_DATA_FIELD, DataTypes.BinaryType, true),
-      DataTypes.createStructField(HoodieSchema.Blob.EXTERNAL_REFERENCE, BLOB_REFERENCE_TYPE, true)});
-
-  private static final StructType CHUNK_TYPE = DataTypes.createStructType(new StructField[] {
-      DataTypes.createStructField("chunk_id", DataTypes.IntegerType, false),
-      DataTypes.createStructField("text", DataTypes.StringType, false),
-      DataTypes.createStructField("char_start", DataTypes.IntegerType, false)});
-
-  public static final StructType SOURCE_SCHEMA = new StructType(new StructField[] {
-      DataTypes.createStructField("path", DataTypes.StringType, false),
-      DataTypes.createStructField("file_name", DataTypes.StringType, false),
-      DataTypes.createStructField("extension", DataTypes.StringType, false),
-      DataTypes.createStructField("size", DataTypes.LongType, false),
-      DataTypes.createStructField("modification_time", DataTypes.LongType, false),
-      new StructField("content", BLOB_TYPE, false, BLOB_METADATA),
-      DataTypes.createStructField("extracted_text", DataTypes.StringType, true),
-      DataTypes.createStructField("doc_metadata",
-          DataTypes.createMapType(DataTypes.StringType, DataTypes.StringType, true), true),
-      DataTypes.createStructField("chunks", DataTypes.createArrayType(CHUNK_TYPE, false), true),
-      DataTypes.createStructField("parse_status", DataTypes.StringType, false),
-      DataTypes.createStructField("parse_error", DataTypes.StringType, true)});
+  /** Retained for callers that referenced the schema on this class. */
+  public static final StructType SOURCE_SCHEMA = UnstructuredFileRows.SOURCE_SCHEMA;
 
   private final DFSPathSelector pathSelector;
   private final UnstructuredFileRecordBuilder recordBuilder;
@@ -123,25 +79,11 @@ public class UnstructuredFileDFSSource extends RowSource {
     super(props, sparkContext, sparkSession, schemaProvider);
     this.pathSelector = DFSPathSelector.createSourceSelector(props, sparkContext.hadoopConfiguration());
     this.recordBuilder = new UnstructuredFileRecordBuilder(props);
-    this.allowedExtensions = parseExtensions(getStringWithAltKeys(props, FILE_EXTENSIONS, true));
-    this.ignoredExtensions = parseExtensions(getStringWithAltKeys(props, FILE_EXTENSIONS_IGNORE, true));
+    this.allowedExtensions = UnstructuredFileRows.parseExtensions(getStringWithAltKeys(props, FILE_EXTENSIONS, true));
+    this.ignoredExtensions = UnstructuredFileRows.parseExtensions(getStringWithAltKeys(props, FILE_EXTENSIONS_IGNORE, true));
     int configuredParallelism = getIntWithAltKeys(props, LISTING_PARALLELISM);
     this.listingParallelism = configuredParallelism > 0
         ? configuredParallelism : sparkContext.defaultParallelism();
-  }
-
-  private static Set<String> parseExtensions(String csv) {
-    return csv == null || csv.trim().isEmpty()
-        ? new HashSet<>()
-        : Arrays.stream(csv.toLowerCase(Locale.ROOT).split(","))
-            .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toSet());
-  }
-
-  private boolean isEligible(String fileName) {
-    String extension = UnstructuredFileRecordBuilder.extensionOf(fileName);
-    // an explicit allowlist decides alone; otherwise everything except the denylist
-    return allowedExtensions.isEmpty()
-        ? !ignoredExtensions.contains(extension) : allowedExtensions.contains(extension);
   }
 
   @Override
@@ -154,31 +96,11 @@ public class UnstructuredFileDFSSource extends RowSource {
   }
 
   private Dataset<Row> fromFiles(String pathStr) {
-    List<String> paths = Arrays.stream(pathStr.split(","))
-        .filter(p -> isEligible(new Path(p).getName()))
+    List<CloudObjectMetadata> objects = Arrays.stream(pathStr.split(","))
+        .filter(p -> UnstructuredFileRows.isEligible(new Path(p).getName(), allowedExtensions, ignoredExtensions))
+        // listing gives no usable size here, so the row builder interrogates each file as before
+        .map(p -> new CloudObjectMetadata(p, 0L))
         .collect(Collectors.toList());
-    int parallelism = Math.max(1, Math.min(paths.size(), listingParallelism));
-    HadoopStorageConfiguration storageConf = new HadoopStorageConfiguration(sparkContext.hadoopConfiguration());
-    UnstructuredFileRecordBuilder builder = this.recordBuilder;
-    // one file -> one row, lazily: inline bytes and extracted text of a partition must
-    // never be resident all at once, or partition memory scales with total corpus size
-    JavaRDD<Row> rows = sparkContext.parallelize(paths, parallelism).mapPartitions(pathIterator ->
-        new LazyIterableIterator<String, Row>(pathIterator) {
-          private FileSystem fs;
-
-          @Override
-          protected Row computeNext() {
-            String path = inputItr.next();
-            try {
-              if (fs == null) {
-                fs = HadoopFSUtils.getFs(new Path(path), storageConf);
-              }
-              return builder.buildRow(fs, path);
-            } catch (IOException e) {
-              throw new UncheckedIOException("Failed to build record for " + path, e);
-            }
-          }
-        });
-    return sparkSession.createDataFrame(rows, SOURCE_SCHEMA);
+    return UnstructuredFileRows.toDataset(sparkSession, sparkContext, objects, recordBuilder, listingParallelism);
   }
 }
