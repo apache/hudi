@@ -27,8 +27,10 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.exception.HoodieRecordCreationException;
+import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SimpleSchemaProvider;
@@ -42,10 +44,12 @@ import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.unsafe.types.UTF8String;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
@@ -67,6 +71,12 @@ public class TestHoodieStreamerUtils extends UtilitiesTestBase {
       + "{\"name\": \"timestamp\",\"type\": \"long\"}," + "{\"name\": \"_row_key\", \"type\": \"string\"},"
       + "{\"name\": \"partition_path\", \"type\": [\"null\", \"string\"], \"default\": null },"
       + "{\"name\": \"rider\", \"type\": \"string\"}," + "{\"name\": \"driver\", \"type\": \"string\"}]}";
+  private static final String ORDERING_FIELD = "event_time";
+  private static final String NULLABLE_ORDERING_SCHEMA_STRING = "{\"type\": \"record\"," + "\"name\": \"rec\"," + "\"fields\": [ "
+      + "{\"name\": \"timestamp\",\"type\": \"long\"}," + "{\"name\": \"_row_key\", \"type\": \"string\"},"
+      + "{\"name\": \"partition_path\", \"type\": [\"null\", \"string\"], \"default\": null },"
+      + "{\"name\": \"rider\", \"type\": \"string\"}," + "{\"name\": \"driver\", \"type\": \"string\"},"
+      + "{\"name\": \"" + ORDERING_FIELD + "\", \"type\": [\"null\", \"long\"], \"default\": null }]}";
 
   @BeforeAll
   public static void setupOnce() throws Exception {
@@ -237,5 +247,55 @@ public class TestHoodieStreamerUtils extends UtilitiesTestBase {
 
     // propsOverride takes precedence
     assertEquals("overrideValue", result.getString("hoodie.overridden.key"));
+  }
+
+  /**
+   * A null value in the ordering field must be quarantined as a record-creation failure rather than
+   * flowing into the write, on both the payload and the file-group-reader record paths.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  @Disabled("A null ordering field value is written through instead of being routed to the error table, "
+      + "on both the payload and the file-group-reader record paths. Enable together with the change "
+      + "that makes record creation reject a null ordering value.")
+  void testCreateHoodieRecordsWithNullOrderingValue(boolean fileGroupReaderMergeHandle) {
+    HoodieSchema schema = HoodieSchema.parse(NULLABLE_ORDERING_SCHEMA_STRING);
+    JavaRDD<GenericRecord> recordRdd = jsc.parallelize(Collections.singletonList(1)).map(i -> {
+      GenericRecord genericRecord = new GenericData.Record(schema.toAvroSchema());
+      genericRecord.put(0, i * 1000L);
+      genericRecord.put(1, "key" + i);
+      genericRecord.put(2, "path" + i);
+      genericRecord.put(3, "rider1");
+      genericRecord.put(4, "driver1");
+      genericRecord.put(5, null);
+      return genericRecord;
+    });
+    HoodieStreamer.Config cfg = new HoodieStreamer.Config();
+    cfg.payloadClassName = DefaultHoodieRecordPayload.class.getName();
+    cfg.sourceOrderingFields = ORDERING_FIELD;
+    TypedProperties props = new TypedProperties();
+    props.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition_path");
+    props.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
+    if (!fileGroupReaderMergeHandle) {
+      props.put(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(), HoodieMergeHandle.class.getName());
+    }
+    BaseErrorTableWriter errorTableWriter = Mockito.mock(BaseErrorTableWriter.class);
+    ArgumentCaptor<JavaRDD<?>> errorEventCaptor = ArgumentCaptor.forClass(JavaRDD.class);
+    doNothing().when(errorTableWriter).addErrorEvents(errorEventCaptor.capture());
+
+    Option<JavaRDD<HoodieRecord>> recordOpt = HoodieStreamerUtils.createHoodieRecords(
+        cfg, props, Option.of(recordRdd), new SimpleSchemaProvider(jsc, schema, props),
+        HoodieRecordType.AVRO, false, "000", Option.of(errorTableWriter), new HoodieTableConfig());
+
+    assertTrue(recordOpt.isPresent());
+    assertEquals(Collections.emptyList(), recordOpt.get().collect());
+    List<ErrorEvent<String>> errorEvents = (List<ErrorEvent<String>>) errorEventCaptor.getValue().collect();
+    // The record is schema-valid, so it is serialized by the Avro JsonEncoder, which wraps
+    // nullable union values.
+    ErrorEvent<String> expectedErrorEvent = new ErrorEvent<>(
+        "{\"timestamp\":1000,\"_row_key\":\"key1\",\"partition_path\":{\"string\":\"path1\"},"
+            + "\"rider\":\"rider1\",\"driver\":\"driver1\",\"" + ORDERING_FIELD + "\":null}",
+        ErrorEvent.ErrorReason.RECORD_CREATION);
+    assertEquals(Collections.singletonList(expectedErrorEvent), errorEvents);
   }
 }
