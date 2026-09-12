@@ -31,7 +31,8 @@ import org.scalatest.BeforeAndAfter
 import java.io.File
 import java.nio.file.{Files, Paths}
 
-class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
+// Exclusive: sets HUDI_CONF_DIR and Hudi's JVM-wide global properties, which a concurrent suite would read.
+class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter with ExclusiveSuite {
 
   // The backing mutable map field name inside java.util.Collections$unmodifiableMap,
   // used to modify JVM environment variables at runtime via reflection
@@ -158,5 +159,8 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
   after {
     unsetEnv(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME)
     DFSPropertiesConfiguration.clearGlobalProps()
+    // Reload the globals with HUDI_CONF_DIR unset, so the JVM is back to its pre-suite state
+    // instead of an empty props set that would stop a later reader from loading the defaults.
+    DFSPropertiesConfiguration.refreshGlobalProps()
   }
 }

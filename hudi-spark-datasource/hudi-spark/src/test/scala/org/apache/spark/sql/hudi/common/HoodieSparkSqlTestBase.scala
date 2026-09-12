@@ -48,7 +48,7 @@ import org.apache.spark.util.Utils
 import org.joda.time.DateTimeZone
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.scalactic.source
-import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
+import org.scalatest.{Args, BeforeAndAfterAll, FunSuite, Status, Tag}
 import org.scalatest.Assertions.assertResult
 import org.slf4j.LoggerFactory
 
@@ -146,29 +146,37 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     new File(sparkWareHouse, tableName).getCanonicalPath
   }
 
+  /**
+   * Holds the read side of [[HoodieSparkSqlTestBase.suiteLock]] for the whole suite, beforeAll and afterAll
+   * included, so an [[ExclusiveSuite]] never overlaps any part of another suite. ExclusiveSuite takes the
+   * write side around this method; ReentrantReadWriteLock lets a writer also acquire the read side.
+   */
+  override def run(testName: Option[String], args: Args): Status = {
+    val readLock = HoodieSparkSqlTestBase.suiteLock.readLock()
+    readLock.lock()
+    try {
+      super.run(testName, args)
+    } finally {
+      readLock.unlock()
+    }
+  }
+
   override protected def test(testName: String, testTags: Tag*)(testFun: => Any /* Assertion */)(implicit pos: source.Position): Unit = {
     super.test(testName, testTags: _*)({
-      // Held for the whole test, cleanup included, so an ExclusiveSuite never overlaps it.
-      val readLock = HoodieSparkSqlTestBase.suiteLock.readLock()
-      readLock.lock()
       try {
-        try {
-          if (sharedSessionEnabled) {
-            bindSuiteSession()
-          }
-          testFun
-        } finally {
-          // The INMEMORY index keeps a JVM-static record-location map; reset it after every test so
-          // stale keys from an earlier test cannot misroute writes in a later one. withRecordType
-          // clears it between record-type iterations, but only on success and only for tests that use
-          // it, so a throwing or non-withRecordType INMEMORY test would otherwise leak state here.
-          // Runs before the catalog cleanup so it holds even if a drop throws. In shared mode this is
-          // a no-op, see clearInMemoryIndex.
-          clearInMemoryIndex()
-          dropSuiteTables()
+        if (sharedSessionEnabled) {
+          bindSuiteSession()
         }
+        testFun
       } finally {
-        readLock.unlock()
+        // The INMEMORY index keeps a JVM-static record-location map; reset it after every test so
+        // stale keys from an earlier test cannot misroute writes in a later one. withRecordType
+        // clears it between record-type iterations, but only on success and only for tests that use
+        // it, so a throwing or non-withRecordType INMEMORY test would otherwise leak state here.
+        // Runs before the catalog cleanup so it holds even if a drop throws. In shared mode this is
+        // a no-op, see clearInMemoryIndex.
+        clearInMemoryIndex()
+        dropSuiteTables()
       }
     })
   }
@@ -176,7 +184,10 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   /**
    * Per-suite mode: reset the JVM-static INMEMORY index between tests (see the note in test()).
    * Shared mode: the index is keyed per table and dropSuiteTables clears each dropped table's
-   * entry, so a global clear would only wipe other suites' tables.
+   * entry, so a global clear would only wipe other suites' tables. A test that drops and re-creates
+   * a table at the same path inside one test must clear that path itself
+   * (HoodieInMemoryHashIndex.clear(basePath)); tagLocation's commit-time check accepts entries from
+   * an earlier table at the same path.
    */
   protected def clearInMemoryIndex(): Unit = {
     if (!sharedSessionEnabled) {
@@ -550,7 +561,7 @@ object HoodieSparkSqlTestBase {
   val SHARED_SESSION_PROPERTY = "hudi.spark.test.sharedSession"
   val sharedSessionEnabled: Boolean = java.lang.Boolean.getBoolean(SHARED_SESSION_PROPERTY)
 
-  // Read side held by every test, write side by an ExclusiveSuite for its whole run.
+  // Read side held by every suite for its whole run, write side by an ExclusiveSuite for its whole run.
   val suiteLock = new ReentrantReadWriteLock(true)
 
   // Table names produced by generateTableName (without a database prefix).

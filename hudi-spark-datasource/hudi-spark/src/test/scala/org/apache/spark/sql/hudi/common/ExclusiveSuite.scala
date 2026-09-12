@@ -23,8 +23,9 @@ import org.scalatest.{Args, Status}
  * Marks a suite that must not run at the same time as any other suite in the JVM because it
  * mutates JVM-wide state (the shared Hadoop conf, persisted RDDs of the shared context, a
  * static metrics registry). Takes the write side of [[HoodieSparkSqlTestBase.suiteLock]] for
- * its whole run; every other suite holds the read side while a test runs. No effect until
- * suites run concurrently.
+ * its whole run; every other suite holds the read side for its whole run. An exclusive suite
+ * therefore waits for the suites already running to finish, not just for their current test. No
+ * effect until suites run concurrently.
  */
 trait ExclusiveSuite extends HoodieSparkSqlTestBase {
 
