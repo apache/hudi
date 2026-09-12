@@ -726,6 +726,7 @@ jobs:
   # numbers are one run of one branch and they drift as suites are added.
   test-spark-java17-ut-functional:
     runs-on: ubuntu-latest
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -787,6 +788,7 @@ jobs:
 
   test-spark-java17-ut-other:
     runs-on: ubuntu-latest
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -854,6 +856,7 @@ jobs:
 
   test-spark-java17-ut-fat-and-ftc:
     runs-on: ubuntu-latest
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -918,6 +921,7 @@ jobs:
 
   test-spark-java17-fta:
     runs-on: ubuntu-latest
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -975,6 +979,7 @@ jobs:
 
   test-spark-java17-ftb:
     runs-on: ubuntu-latest
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -1042,6 +1047,7 @@ jobs:
   # sharedSession + parallel: this shard holds only HoodieSparkSqlTestBase suites, which share one SparkContext and run two at a time
   test-spark-java17-scala-dml-1:
     runs-on: ubuntu-latest
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -1107,6 +1113,7 @@ jobs:
   # sharedSession + parallel: this shard holds only HoodieSparkSqlTestBase suites, which share one SparkContext and run two at a time
   test-spark-java17-scala-dml-2:
     runs-on: ubuntu-latest
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -1172,6 +1179,7 @@ jobs:
   # sharedSession + parallel: this shard holds only HoodieSparkSqlTestBase suites, which share one SparkContext and run two at a time
   test-spark-java17-scala-other-1:
     runs-on: ubuntu-latest
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -1237,6 +1245,7 @@ jobs:
   # sharedSession + parallel: the HoodieSparkSqlTestBase suites of these packages (tag SharedSessionSuite) share one SparkContext and run two at a time; the other suites of the same packages run in test-spark-java17-ftb
   test-spark-java17-scala-other-2:
     runs-on: ubuntu-latest
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
