@@ -23,14 +23,17 @@ import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.MarkerUtils;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRemoteException;
 import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.timeline.service.TimelineService;
 import org.apache.hudi.timeline.service.TimelineServiceTestHarness;
@@ -40,6 +43,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -49,6 +53,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.view.FileSystemViewStorageType.SPILLABLE_DISK;
@@ -56,6 +61,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 @Slf4j
 public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
@@ -159,6 +165,54 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
           false);
     } catch (Exception ex) {
       throw new RuntimeException(ex);
+    }
+  }
+
+  @Test
+  public void testMarkerCreationFailure() throws IOException {
+    FileSystemViewStorageConfig.Builder builder = FileSystemViewStorageConfig.newBuilder().withRemoteServerHost("localhost")
+        .withRemoteServerPort(timelineService.getServerPort())
+        .withRemoteTimelineClientTimeoutSecs(DEFAULT_READ_TIMEOUT_SECS);
+    MockTimelineServerBasedWriteMarkers timelineServerBasedWriteMarkers = new MockTimelineServerBasedWriteMarkers(basePath, markerFolderPath.toString(), "000", builder.build());
+    // this should succeed.
+    timelineServerBasedWriteMarkers.create("2020/06/01", "file1", IOType.MERGE);
+
+    assertTrue(storage.exists(markerFolderPath));
+    assertTrue(writeMarkers.doesMarkerDirExist());
+
+    // lets fail the marker creation
+    timelineServerBasedWriteMarkers.failMarkerCreation = true;
+    try {
+      timelineServerBasedWriteMarkers.create("2020/06/01", "file2", IOType.MERGE);
+      fail("Should not have reached here");
+    } catch (HoodieIOException ioe) {
+      assertTrue(ioe.getMessage().contains("[timeline-server-based] Failed to create marker for partition"));
+    } finally {
+      if (timelineService != null) {
+        timelineService.close();
+      }
+    }
+  }
+
+  static class MockTimelineServerBasedWriteMarkers extends TimelineServerBasedWriteMarkers {
+
+    boolean failMarkerCreation = false;
+
+    public MockTimelineServerBasedWriteMarkers(HoodieTable table, String instantTime) {
+      super(table, instantTime);
+    }
+
+    MockTimelineServerBasedWriteMarkers(String basePath, String markerFolderPath, String instantTime, FileSystemViewStorageConfig fileSystemViewStorageConfig) {
+      super(basePath, markerFolderPath, instantTime, fileSystemViewStorageConfig);
+    }
+
+    @Override
+    boolean executeCreateMarkerRequest(Map<String, String> paramsMap, String partitionPath, String markerFileName) {
+      if (!failMarkerCreation) {
+        return super.executeCreateMarkerRequest(paramsMap, partitionPath, markerFileName);
+      } else {
+        return false;
+      }
     }
   }
 
