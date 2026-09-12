@@ -24,13 +24,14 @@ import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{Option => HOption}
 
 import org.apache.spark.SparkConf
+import org.apache.spark.sql.hudi.common.ExclusiveSuite
 
 import java.math.BigDecimal
 import java.sql.Date
 import java.sql.Timestamp
 import java.time.LocalDate
 
-class TestClusteringBinaryCopyStrategy extends HoodieSparkProcedureTestBase {
+class TestClusteringBinaryCopyStrategy extends HoodieSparkProcedureTestBase with ExclusiveSuite {
 
   override def sparkConf(): SparkConf = {
     super.sparkConf()

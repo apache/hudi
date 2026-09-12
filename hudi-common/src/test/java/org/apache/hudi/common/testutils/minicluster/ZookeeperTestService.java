@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.testutils.minicluster;
 
+import org.apache.hudi.common.testutils.NetworkTestUtils;
+
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
@@ -58,6 +60,9 @@ public class ZookeeperTestService {
 
   private static final int TICK_TIME = 2000;
   private static final int CONNECTION_TIMEOUT = 30000;
+  // Chosen once per JVM rather than fixed at 2828 so that surefire forks running this module concurrently
+  // each get their own Zookeeper port; within one JVM every ZookeeperTestService instance still shares the port, as before.
+  private static final int CLIENT_PORT = NetworkTestUtils.nextFreePort();
 
   /**
    * Configuration settings.
@@ -65,7 +70,7 @@ public class ZookeeperTestService {
   @Getter
   private Configuration hadoopConf;
   private String workDir;
-  private Integer clientPort = 2828;
+  private Integer clientPort = CLIENT_PORT;
   private String bindIP = "127.0.0.1";
   private Boolean clean = false;
   private int tickTime = 0;
@@ -234,5 +239,12 @@ public class ZookeeperTestService {
 
   public String connectString() {
     return bindIP + ":" + clientPort;
+  }
+
+  /**
+   * The per-JVM Zookeeper client port every instance of this service binds to.
+   */
+  public static int clientPort() {
+    return CLIENT_PORT;
   }
 }

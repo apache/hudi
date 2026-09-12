@@ -39,7 +39,7 @@ class TestSparkCatalogSync extends HoodieSparkSqlTestBase {
       import spark.implicits._
 
       val tableName = generateTableName
-      val databaseName = "testdb"
+      val databaseName = generateTableName
       val basePath = s"${tmp.getCanonicalPath}/$tableName"
 
       val syncProps = buildSyncProps(databaseName, tableName, basePath)
@@ -81,7 +81,7 @@ class TestSparkCatalogSync extends HoodieSparkSqlTestBase {
       import spark.implicits._
 
       val tableName = generateTableName
-      val databaseName = "testdb"
+      val databaseName = generateTableName
       val basePath = s"${tmp.getCanonicalPath}/$tableName"
 
       val syncProps = buildSyncProps(databaseName, tableName, basePath)
@@ -119,7 +119,7 @@ class TestSparkCatalogSync extends HoodieSparkSqlTestBase {
       import spark.implicits._
 
       val tableName = generateTableName
-      val databaseName = "testdb"
+      val databaseName = generateTableName
       val basePath = s"${tmp.getCanonicalPath}/$tableName"
       val syncProps = buildSyncProps(databaseName, tableName, basePath)
 
