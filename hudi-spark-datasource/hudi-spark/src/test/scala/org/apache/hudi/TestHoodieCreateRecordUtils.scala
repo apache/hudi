@@ -18,16 +18,23 @@
 
 package org.apache.hudi
 
+import org.apache.hudi.HoodieSchemaConversionUtils
 import org.apache.hudi.common.config.RecordMergeMode
-import org.apache.hudi.common.model.WriteOperationType
+import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.util.OrderingValues
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.io.HoodieWriteMergeHandle
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 
 import org.apache.spark.SparkException
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.{AfterAll, BeforeAll, Test}
-import org.junit.jupiter.api.Assertions.{assertNotNull, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertInstanceOf, assertNotNull, assertTrue}
+
+import java.util.Properties
 
 /**
  * Test cases for {@link HoodieCreateRecordUtils}.
@@ -50,6 +57,15 @@ class TestHoodieCreateRecordUtils {
   private val RECORD_KEY_FIELD = "uuid"
   private val PARTITION_FIELD = "partition"
   private val PRECOMBINE_FIELD = "ts"
+
+  private val ORDERING_TEST_SCHEMA = StructType(Seq(
+    StructField("uuid", StringType, nullable = false),
+    StructField("ts", LongType, nullable = false),
+    StructField("partition", StringType, nullable = false),
+    StructField("_hoodie_is_deleted", BooleanType, nullable = false)
+  ))
+  private val TS = 1757000000000L
+  private val ORDERING_FIELDS = Array("ts")
 
   /**
    * Helper method to create DataFrame from Row data
@@ -258,6 +274,97 @@ class TestHoodieCreateRecordUtils {
       .format("hudi")
       .load(TestHoodieCreateRecordUtils.tempDir + "/test_null_precombine_commit_time")
     assertTrue(result.count() > 0, "Data should have been written successfully with null precombine using COMMIT_TIME_ORDERING")
+  }
+  @Test
+  def testOrderingValueIsSetWhenCombineBeforeUpsertIsOff(): Unit = {
+    val orderingValue = buildRecordOrderingValue(RecordMergeMode.EVENT_TIME_ORDERING, isDelete = false)
+    assertInstanceOf(classOf[java.lang.Long], orderingValue,
+      "the record must carry the ordering field's value, not the payload's Integer default")
+    assertEquals(TS, orderingValue)
+  }
+
+  /** Commit time ordered tables must keep serving the default, whatever the ordering fields say. */
+  @Test
+  def testCommitTimeOrderingKeepsTheDefaultOrderingValue(): Unit = {
+    assertEquals(OrderingValues.getDefault(),
+      buildRecordOrderingValue(RecordMergeMode.COMMIT_TIME_ORDERING, isDelete = false))
+  }
+
+  /**
+   * Deletes keep the default. BufferedRecordMergerFactory#deltaMergeDeleteRecord treats a delete
+   * carrying the default as commit time ordered, so giving it a real value would make a delete lose
+   * to a stored record with a higher ordering value.
+   */
+  @Test
+  def testDeleteKeepsTheDefaultOrderingValue(): Unit = {
+    assertEquals(OrderingValues.getDefault(),
+      buildRecordOrderingValue(RecordMergeMode.EVENT_TIME_ORDERING, isDelete = true))
+  }
+
+  private def buildRecordOrderingValue(mergeMode: RecordMergeMode, isDelete: Boolean): Comparable[_] = {
+    val spark = TestHoodieCreateRecordUtils.spark
+    val basePath = TestHoodieCreateRecordUtils.tempDir + s"/ordering_value_${mergeMode.name}_delete_$isDelete"
+
+    val parameters = Map(
+      KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key() -> "uuid",
+      KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key() -> "partition",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key() -> "uuid",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key() -> "partition",
+      // The trigger: no de-duplication of the incoming batch.
+      HoodieWriteConfig.COMBINE_BEFORE_UPSERT.key() -> "false",
+      DataSourceWriteOptions.INSERT_DROP_DUPS.key() -> "false"
+    )
+
+    val metaClient = HoodieTableMetaClient.newTableBuilder()
+      .setTableType(HoodieTableType.COPY_ON_WRITE)
+      .setTableName(s"test_ordering_value_${mergeMode.name}")
+      .setRecordKeyFields("uuid")
+      .setPartitionFields("partition")
+      .setOrderingFields("ts")
+      .setRecordMergeMode(mergeMode)
+      .initTable(HadoopFSUtils.getStorageConfWithCopy(spark.sparkContext.hadoopConfiguration), basePath)
+
+    val hoodieSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(
+      ORDERING_TEST_SCHEMA, "record", "org.apache.hudi.test")
+
+    val writeConfig = HoodieWriteConfig.newBuilder()
+      .withPath(basePath)
+      .withSchema(hoodieSchema.toString)
+      // The key generator is built from the write config's props, not from `parameters`.
+      .withProps(writeProps(mergeMode))
+      .build()
+
+    val df = spark.createDataFrame(
+      spark.sparkContext.parallelize(Seq(Row("id1", TS, "par1", isDelete))), ORDERING_TEST_SCHEMA)
+
+    val records = HoodieCreateRecordUtils.createHoodieRecordRdd(
+      HoodieCreateRecordUtils.createHoodieRecordRddArgs(
+        df, writeConfig, parameters, "record", "org.apache.hudi.test",
+        hoodieSchema, hoodieSchema, WriteOperationType.UPSERT, "20260910000000",
+        preppedSparkSqlWrites = false, preppedSparkSqlMergeInto = false,
+        preppedWriteOperation = false, metaClient.getTableConfig)).collect()
+
+    assertEquals(1, records.size())
+    records.get(0).getOrderingValue(hoodieSchema, new Properties(), ORDERING_FIELDS)
+  }
+
+  private def writeProps(mergeMode: RecordMergeMode): Properties = {
+    val props = new Properties()
+    // Any handle that is not a FileGroupReaderBasedMergeHandle makes requiresPayload true, which
+    // routes the record through HoodieAvroRecord rather than HoodieAvroIndexedRecord.
+    props.setProperty(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(),
+      classOf[HoodieWriteMergeHandle[_, _, _, _]].getName)
+    // HoodieSparkSqlWriter copies this from the table config; this test bypasses it, so without
+    // setting it the merge mode would be null and the branch would be taken for the wrong reason.
+    props.setProperty(HoodieWriteConfig.RECORD_MERGE_MODE.key(), mergeMode.name)
+    // Without this a writer migrates the table to the current write version, so the version the
+    // test asked for would not be the version under test.
+    props.setProperty(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key(), "false")
+    props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD.key(), "uuid")
+    props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), "partition")
+    props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid")
+    props.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition")
+    props
   }
 }
 
