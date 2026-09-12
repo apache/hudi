@@ -40,6 +40,17 @@ public class SparkBucketIndexBucketInfoGetter extends BaseSparkBucketIndexBucket
     this.partitionPaths = partitionPaths;
   }
 
+  public SparkBucketIndexBucketInfoGetter(int numBucketsPerPartition,
+                                          List<String> partitionPaths,
+                                          Map<String, Set<String>> updatePartitionPathFileIds,
+                                          boolean isOverwrite,
+                                          boolean isNonBlockingConcurrencyControl,
+                                          Map<String, Set<String>> replacedPartitionFileIds) {
+    super(updatePartitionPathFileIds, isOverwrite, isNonBlockingConcurrencyControl, replacedPartitionFileIds);
+    this.numBucketsPerPartition = numBucketsPerPartition;
+    this.partitionPaths = partitionPaths;
+  }
+
   @Override
   public BucketInfo getBucketInfo(int bucketNumber) {
     return getBucketInfo(bucketNumber % numBucketsPerPartition, partitionPaths.get(bucketNumber / numBucketsPerPartition));
