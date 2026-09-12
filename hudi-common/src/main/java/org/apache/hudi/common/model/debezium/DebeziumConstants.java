@@ -68,6 +68,12 @@ public class DebeziumConstants {
 
   // Other Constants
   public static final String DELETE_OP = "d";
+  // Snapshot ("read") operation emitted by Debezium for rows captured during an initial or
+  // incremental snapshot rather than from the transaction log.
+  public static final String SNAPSHOT_OP = "r";
+
+  // Struct column under which the Debezium metadata columns are grouped when nested fields are enabled.
+  public static final String DEBEZIUM_METADATA_FIELD = "_debezium_metadata";
 
   // List of meta data columns
   public static List<String> META_COLUMNS = Collections.unmodifiableList(Arrays.asList(
