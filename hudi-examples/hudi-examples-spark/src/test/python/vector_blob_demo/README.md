@@ -25,18 +25,20 @@ the Oxford-IIIT Pet dataset:
 2. **BLOB type (INLINE)** — image bytes are written as a Hudi BLOB struct
    tagged with `hudi_type = "BLOB"`.
 3. **Vector search** — cosine similarity top-K via the
-   `hudi_vector_search` SQL table-valued function, backed by Lance files.
+   `hudi_vector_search` and `hudi_vector_search_batch` SQL table-valued
+   functions, backed by Lance files.
 
-## Three variants
+## Four variants
 
-The folder ships three scripts — each focused on a specific Hudi feature.
+The folder ships four scripts — each focused on a specific Hudi feature.
 Run them independently or in sequence for a full walkthrough.
 
 | File | Feature focus | Surface | Best for |
 |---|---|---|---|
 | [`hudi_blob_reader_demo.py`](hudi_blob_reader_demo.py) | **OUT_OF_LINE BLOBs + `read_blob()`** — Hudi table stores references to bytes living in a separate container file; `read_blob()` resolves them on demand | Spark SQL | Showing the "lakehouse that references unstructured data without copying" story — tiny Hudi table, bytes elsewhere |
-| [`hudi_sql_vector_blob_demo.py`](hudi_sql_vector_blob_demo.py) | **INLINE BLOBs + VECTOR + `hudi_vector_search`** — bytes embedded in the Hudi base files, cosine similarity search via the TVF | Spark SQL — `CREATE TABLE ... (embedding VECTOR(N), image_bytes BLOB, ...) USING hudi`, `named_struct('type','INLINE', ...)`, `hudi_vector_search(...)` | Live demos; SQL-first users; showing the Hudi 1.2.0 DDL/DML surface the way it's documented |
+| [`hudi_sql_vector_blob_demo.py`](hudi_sql_vector_blob_demo.py) | **INLINE BLOBs + VECTOR + `hudi_vector_search`** — bytes embedded in the Hudi base files, single-query cosine similarity search via the TVF | Spark SQL — `CREATE TABLE ... (embedding VECTOR(N), image_bytes BLOB, ...) USING hudi`, `named_struct('type','INLINE', ...)`, `hudi_vector_search(...)` | Live demos; SQL-first users; showing the Hudi 1.2.0 DDL/DML surface the way it's documented |
 | [`hudi_dataframe_vector_blob_demo.py`](hudi_dataframe_vector_blob_demo.py) | Same as the SQL demo, but via DataFrame | Python DataFrame API — `spark.createDataFrame(rows, explicit_schema)` with `containsNull=False` and `hudi_type` metadata declared upfront, then `df.write.format("hudi").save(path)` | Library-style integration; seeing how the Python DataFrame API composes the VECTOR/BLOB logical types under the hood |
+| [`hudi_vector_search_batch_demo.py`](hudi_vector_search_batch_demo.py) | **`hudi_vector_search_batch` certification** — table-to-table batch KNN (RFC-102), 1000-row corpus × 20-row query table, with a **numpy ground-truth oracle** that fails the run if the TVF disagrees | Spark SQL — `hudi_vector_search_batch('<corpus>', 'embedding', '<queries>', 'embedding', k, 'cosine')` | Certifying batch-mode correctness at non-trivial scale; broadcast + window-rank machinery under load |
 
 All three share the same venv, jars, and env vars. They write to different
 table paths (`/tmp/hudi_blob_reader_{format}_pets` vs `/tmp/hudi_sql_{format}_pets`
@@ -64,6 +66,7 @@ on Parquet, flip one config flag in the DDL.
 | [`notebooks/01_blob_reader.ipynb`](notebooks/01_blob_reader.ipynb) | supplemental: OUT_OF_LINE deep-dive | [`hudi_blob_reader_demo.py`](hudi_blob_reader_demo.py) | `BASE_FILE_FORMAT`, `BLOB_MODE`, `INLINE_READ_MODE`, `N_SAMPLES` |
 | [`notebooks/02_sql_vector_search.ipynb`](notebooks/02_sql_vector_search.ipynb) | supplemental: SQL DDL deep-dive | [`hudi_sql_vector_blob_demo.py`](hudi_sql_vector_blob_demo.py) | `BASE_FILE_FORMAT`, `N_SAMPLES` |
 | [`notebooks/03_dataframe_vector_search.ipynb`](notebooks/03_dataframe_vector_search.ipynb) | supplemental: DataFrame API | [`hudi_dataframe_vector_blob_demo.py`](hudi_dataframe_vector_blob_demo.py) | `BASE_FILE_FORMAT`, `N_SAMPLES` |
+| [`notebooks/04_vector_search_batch.ipynb`](notebooks/04_vector_search_batch.ipynb) | supplemental: batch TVF certification (numpy oracle) | [`hudi_vector_search_batch_demo.py`](hudi_vector_search_batch_demo.py) | `BASE_FILE_FORMAT`, `N_CORPUS`, `N_QUERIES`, `TOP_K` |
 
 See [`notebooks/README.md`](notebooks/README.md) for setup details.
 
@@ -154,6 +157,24 @@ export HUDI_LANCE_DEMO_N=1000
 python hudi_dataframe_vector_blob_demo.py        # or hudi_sql_vector_blob_demo.py
 ```
 
+### Run the batch vector search certification
+
+```bash
+# Defaults: 1000-row corpus × 20-row queries × top-k=5, against the corpus.
+HUDI_BASE_FILE_FORMAT=parquet python hudi_vector_search_batch_demo.py
+```
+
+The run ends with a numpy ground-truth oracle that compares the TVF's
+top-K per query against a locally computed cosine distance matrix. A
+successful run ends with `CERTIFIED ✓` and writes
+`outputs/hudi_vector_search_batch_<format>_results.png` (one row per query,
+showing its top-K matches).
+
+Knobs:
+- `HUDI_BATCH_N_CORPUS` (default `1000`)
+- `HUDI_BATCH_N_QUERIES` (default `20`)
+- `HUDI_BATCH_TOP_K` (default `5`)
+
 ### Run the same demo against Parquet base files
 
 The Hudi VECTOR + BLOB + vector search path is format-agnostic — flip the
@@ -191,6 +212,9 @@ etc.) with similarity scores in the 0.3–0.5 range at N=100, tighter at N=1000.
 | `HUDI_BLOB_MODE` | `out_of_line` | Blob reader demo only. Set to `inline` to embed PNG bytes directly in the Hudi table (no external container file) |
 | `HUDI_INLINE_READ_MODE` | `content` | Blob reader demo only, and only meaningful when `HUDI_BLOB_MODE=inline`. Set to `descriptor` to make `image_bytes.data` come back null and force `read_blob()` to materialize bytes lazily. |
 | `HUDI_LANCE_DEMO_N` | `1000` (`100` for blob reader) | Number of images to sample |
+| `HUDI_BATCH_N_CORPUS` | `1000` | Batch demo only — corpus row count |
+| `HUDI_BATCH_N_QUERIES` | `20` | Batch demo only — query table row count |
+| `HUDI_BATCH_TOP_K` | `5` | Batch demo only — top-K per query |
 | `PYSPARK_DRIVER_MEMORY` | `4g` | Driver JVM heap — bump to `8g`+ for N≥2000 |
 | `HUDI_LANCE_DEMO_OUTDIR` | `./outputs` | Where query/top-K PNGs land |
 
