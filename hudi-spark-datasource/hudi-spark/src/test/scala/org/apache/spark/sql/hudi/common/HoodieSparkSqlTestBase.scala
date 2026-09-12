@@ -55,10 +55,11 @@ import org.scalatest.Assertions.assertResult
 import org.slf4j.LoggerFactory
 
 import java.io.File
-import java.util.{Collections, Optional, TimeZone}
+import java.util.{Optional, TimeZone}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.regex.Pattern
+import java.util.stream.Collectors
 
 import scala.util.Try
 
@@ -659,8 +660,12 @@ object HoodieSparkSqlTestBase {
     val (metaClient, fsView) = getMetaClientAndFileSystemView(basePath)
     val fileSlice: Optional[FileSlice] = fsView.getAllFileSlices("").findFirst()
     assertTrue(fileSlice.isPresent)
-    val logFilePathList: java.util.List[String] = HoodieTestUtils.getLogFileListFromFileSlice(fileSlice.get)
-    Collections.sort(logFilePathList)
+    // Oldest first. A string sort of the paths orders by the Spark write token, which precedes the
+    // instant in the file name and compares stage ids as text.
+    val logFilePathList: java.util.List[String] = fileSlice.get.getLogFiles
+      .sorted(HoodieLogFile.getLogFileComparator)
+      .map[String](logFile => logFile.getPath.toString)
+      .collect(Collectors.toList[String])
     var deleteLogBlockFound = false
     val schema = new TableSchemaResolver(metaClient).getTableSchema
     for (i <- 0 until logFilePathList.size()) {
