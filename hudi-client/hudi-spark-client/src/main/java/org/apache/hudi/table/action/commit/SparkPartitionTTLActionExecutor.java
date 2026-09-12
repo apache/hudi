@@ -40,7 +40,7 @@ import java.util.List;
 public class SparkPartitionTTLActionExecutor<T>
     extends BaseSparkCommitActionExecutor<T> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(ConsistentBucketBulkInsertDataInternalWriterHelper.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SparkPartitionTTLActionExecutor.class);
 
   public SparkPartitionTTLActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable table,
                                          String instantTime) {
