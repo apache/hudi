@@ -92,6 +92,7 @@ public abstract class HFileBlock {
   @Getter
   private final HFileBlockType blockType;
   protected final int onDiskSizeWithoutHeader;
+  protected final int onDiskDataSizeWithHeader;
   protected final int uncompressedSizeWithoutHeader;
   protected final int bytesPerChecksum;
   private boolean isUnpacked = false;
@@ -115,6 +116,8 @@ public abstract class HFileBlock {
     this.blockType = blockType;
     this.onDiskSizeWithoutHeader = readInt(
         byteBuff, startOffsetInBuff + Header.ON_DISK_SIZE_WITHOUT_HEADER_INDEX);
+    this.onDiskDataSizeWithHeader = readInt(
+        byteBuff, startOffsetInBuff + Header.ON_DISK_DATA_SIZE_WITH_HEADER_INDEX);
     this.uncompressedSizeWithoutHeader = readInt(
         byteBuff, startOffsetInBuff + Header.UNCOMPRESSED_SIZE_WITHOUT_HEADER_INDEX);
     this.bytesPerChecksum = readInt(
@@ -149,6 +152,7 @@ public abstract class HFileBlock {
     this.sizeCheckSum = -1;
     this.uncompressedEndOffset = -1;
     this.onDiskSizeWithoutHeader = -1;
+    this.onDiskDataSizeWithHeader = -1;
     this.uncompressedSizeWithoutHeader = -1;
     this.bytesPerChecksum = -1;
   }
@@ -232,13 +236,19 @@ public abstract class HFileBlock {
         // Copy the block header which is not compressed
         System.arraycopy(
             compressedByteBuff, startOffsetInCompressedBuff, byteBuff, 0, HFILEBLOCK_HEADER_SIZE);
+        // onDiskSizeWithoutHeader includes the trailing checksum bytes, while
+        // onDiskDataSizeWithHeader ends immediately after the compressed payload.
+        // Passing the former to GZIPInputStream lets it interpret checksum bytes as
+        // another gzip member and can result in ZipException (for example, during
+        // metadata table compaction).
+        int compressedDataSize = onDiskDataSizeWithHeader - HFILEBLOCK_HEADER_SIZE;
         try (InputStream byteBuffInputStream = new ByteArrayInputStream(
-            compressedByteBuff, startOffsetInCompressedBuff + HFILEBLOCK_HEADER_SIZE, onDiskSizeWithoutHeader)) {
+            compressedByteBuff, startOffsetInCompressedBuff + HFILEBLOCK_HEADER_SIZE, compressedDataSize)) {
           context.getCompressor().decompress(
               byteBuffInputStream,
               byteBuff,
               HFILEBLOCK_HEADER_SIZE,
-              byteBuff.length - HFILEBLOCK_HEADER_SIZE);
+              uncompressedSizeWithoutHeader);
         }
       }
       isUnpacked = true;
