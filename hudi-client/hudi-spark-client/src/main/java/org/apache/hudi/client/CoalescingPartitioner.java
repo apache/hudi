@@ -41,7 +41,9 @@ public class CoalescingPartitioner extends Partitioner {
     if (numPartitions == 1) {
       return 0;
     } else {
-      return Math.abs(key.hashCode()) % numPartitions;
+      // Math.abs leaves Integer.MIN_VALUE negative, and a Partitioner must answer in
+      // [0, numPartitions). floorMod is non-negative for every input.
+      return Math.floorMod(key.hashCode(), numPartitions);
     }
   }
 }
