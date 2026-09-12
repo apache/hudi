@@ -431,6 +431,11 @@ jobs:
           - sparkProfile: 'spark3.5'
             flinkProfile: 'flink2.2'
             sparkArchive: 'spark-3.5.9/spark-3.5.9-bin-hadoop3.tgz'
+    env:
+      # The only modules with integration-test classes besides hudi-flink, whose ITs run in the
+      # flink jobs. The build below builds these and what they depend on (-am, 30 modules) and
+      # the IT step verifies just these, instead of building and re-packaging all 66 modules.
+      IT_MODULES: hudi-cli,hudi-integ-test,hudi-aws,hudi-azure
     steps:
       - uses: actions/checkout@v5
       - name: Set up JDK 11
@@ -457,7 +462,7 @@ jobs:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SCALA_PROFILE: '-Dscala-2.12 -Dscala.binary.version=2.12'
         run:
-          mvn clean install -T 2 $SCALA_PROFILE -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -Pintegration-tests -DskipTests=true $MVN_ARGS -Ddocker.compose.skip=true
+          mvn clean install -T 2 $SCALA_PROFILE -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -Pintegration-tests -DskipTests=true $MVN_ARGS -Ddocker.compose.skip=true -pl "$IT_MODULES" -am
       - name: 'UT integ-test'
         env:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -499,7 +504,7 @@ jobs:
           SPARK_ARCHIVE_BASENAME=$(basename $SPARK_ARCHIVE)
           export SPARK_HOME=$GITHUB_WORKSPACE/${SPARK_ARCHIVE_BASENAME%.*}
           rm -f $GITHUB_WORKSPACE/$SPARK_ARCHIVE
-          mvn verify $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -pl !hudi-flink-datasource/hudi-flink $MVN_ARGS -Djacoco.skip=false
+          mvn verify $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -pl "$IT_MODULES" $MVN_ARGS -Djacoco.skip=false
       - name: Test timing summary
         if: always()
         run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
