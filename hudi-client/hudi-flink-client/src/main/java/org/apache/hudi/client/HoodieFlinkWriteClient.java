@@ -169,6 +169,10 @@ public class HoodieFlinkWriteClient<T>
     return this.streamingMetadataWriteHandler.streamWriteToMetadataPartitions(table, indexRecords, dataPartitions, instantTime);
   }
 
+  public void markMetadataPartitionsWereStreamed(String instantTime) {
+    this.streamingMetadataWriteHandler.markMetadataPartitionsWereStreamed(instantTime);
+  }
+
   @Override
   public boolean commit(String instantTime, List<WriteStatus> writeStatuses, Option<Map<String, String>> extraMetadata,
                         String commitActionType, Map<String, List<String>> partitionToReplacedFileIds,

@@ -106,6 +106,10 @@ public class FlinkStreamingMetadataWriteHandler extends StreamingMetadataWriteHa
     }
   }
 
+  void markMetadataPartitionsWereStreamed(String instantTime) {
+    markStreamingMetadataWrite(instantTime);
+  }
+
   /**
    * Clean resources after streaming write to the metadata table in index write function or stop
    * heartbeat for instant in the coordinator. This method removes the metadata writer associated
@@ -114,6 +118,7 @@ public class FlinkStreamingMetadataWriteHandler extends StreamingMetadataWriteHa
    * @param instantTime Instant Time
    */
   public void cleanResources(String instantTime) {
+    clearStreamingMetadataWrite(instantTime);
     Option<HoodieTableMetadataWriter> metadataWriterOpt = this.metadataWriterMap.remove(instantTime);
     if (metadataWriterOpt == null || metadataWriterOpt.isEmpty()) {
       log.debug("Metadata writer for {} has already been closed, skip closing.", instantTime);
