@@ -462,6 +462,30 @@ class TestBatchedBlobReader extends HoodieClientTestBase {
     assertTrue(thrown.getCause.getMessage.contains("Overlapping blob ranges detected"))
   }
 
+  @Test
+  def testIdenticalRangesAreServedFromOneRead(): Unit = {
+    // A join fan-out or a duplicate record puts the same descriptor in one task twice. That is one
+    // blob referenced by two rows, not two blobs sharing bytes, so the reader must serve both from
+    // the single read of that range.
+    val filePath = createTestFile(tempDir, "identical.bin", 1000)
+    val inputDF = sparkSession.createDataFrame(Seq(
+      (filePath, 0L, 100L),
+      (filePath, 0L, 100L)
+    )).toDF("external_path", "offset", "length")
+      .withColumn("data", blobStructCol("data", col("external_path"), col("offset"), col("length")))
+      .select("offset", "data")
+      .coalesce(1)
+
+    val results = BatchedBlobReader.readBatched(inputDF, storageConf).collect()
+
+    assertEquals(2, results.length)
+    results.foreach { row =>
+      val data = row.getAs[Array[Byte]]("data")
+      assertEquals(100, data.length)
+      assertBytesContent(data, expectedOffset = 0)
+    }
+  }
+
   /**
    * Blob references are absolute paths carried in row data, so the filesystem a partition must read
    * is not known until the rows arrive. These tests put the referenced files behind an object-store
