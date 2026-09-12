@@ -1026,6 +1026,16 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Parallelism of tasks that do actual compaction, default same as the write task parallelism");
 
   @AdvancedConfig
+  public static final ConfigOption<String> COMPACTION_PLAN_GENERATE_SLOT_SHARING_GROUP = ConfigOptions
+      .key("compaction.plan_generate.slot_sharing_group")
+      .stringType()
+      .noDefaultValue()
+      .withDescription("Slot sharing group for the compact_plan_generate operator, "
+          + "default not set so it shares the default slot sharing group with other operators. "
+          + "Configure this to isolate the plan generation operator onto a dedicated slot, "
+          + "see Flink's fine-grained resource management docs for slot sharing groups.");
+
+  @AdvancedConfig
   public static final ConfigOption<Boolean> COMPACTION_OPERATION_EXECUTE_ASYNC_ENABLED = ConfigOptions
       .key("compaction.operation.execute.async.enabled")
       .booleanType()
