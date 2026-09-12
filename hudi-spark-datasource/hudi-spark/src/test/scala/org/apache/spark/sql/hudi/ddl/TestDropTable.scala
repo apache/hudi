@@ -29,6 +29,10 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestDropTable extends HoodieSparkSqlTestBase {
 
+  // The catalog is shared with suites running at the same time, so listings are scoped to
+  // this suite's tables. Spark's LIKE pattern: '*' matches any characters, '_' is literal.
+  private val showSuiteTables = s"show tables like '$tableNamePrefix*'"
+
   test("Test Drop Table") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
@@ -138,7 +142,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
         Map("hoodie.query.as.ro.table" -> "false"))
 
       spark.sql(s"drop table ${tableName} purge")
-      checkAnswer("show tables")()
+      checkAnswer(showSuiteTables)()
     }
   }
 
@@ -187,14 +191,14 @@ class TestDropTable extends HoodieSparkSqlTestBase {
         Map("hoodie.query.as.ro.table" -> "false"))
 
       spark.sql(s"drop table ${tableName}_ro")
-      checkAnswer("show tables")(
+      checkAnswer(showSuiteTables)(
         Seq("default", tableName, false), Seq("default", s"${tableName}_rt", false))
 
       spark.sql(s"drop table ${tableName}_rt")
-      checkAnswer("show tables")(Seq("default", tableName, false))
+      checkAnswer(showSuiteTables)(Seq("default", tableName, false))
 
       spark.sql(s"drop table ${tableName}")
-      checkAnswer("show tables")()
+      checkAnswer(showSuiteTables)()
     }
   }
 
@@ -243,7 +247,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
         Map("hoodie.query.as.ro.table" -> "false"))
 
       spark.sql(s"drop table ${tableName}_ro purge")
-      checkAnswer("show tables")()
+      checkAnswer(showSuiteTables)()
     }
   }
 
@@ -270,7 +274,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
 
       filesystem.delete(new Path(tablePath), true)
       spark.sql(s"drop table ${tableName}")
-      checkAnswer("show tables")()
+      checkAnswer(showSuiteTables)()
     }
   }
 
@@ -325,7 +329,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
       spark.sql(s"drop table ${tableName}")
       spark.sql(s"drop table ${tableName}_ro")
       spark.sql(s"drop table ${tableName}_rt")
-      checkAnswer("show tables")()
+      checkAnswer(showSuiteTables)()
     }
   }
 
@@ -354,7 +358,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
 
           filesystem.delete(tablePath, true)
           spark.sql(s"drop table $tableName")
-          checkAnswer("show tables")()
+          checkAnswer(showSuiteTables)()
         }
       }
     }
