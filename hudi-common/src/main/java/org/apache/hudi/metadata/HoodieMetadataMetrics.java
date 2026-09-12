@@ -84,6 +84,26 @@ public class HoodieMetadataMetrics implements Serializable {
   public static final String LOG_COMPACTION_FAILURES = "logcompaction_failures";
   public static final String PENDING_COMPACTIONS_FAILURES = "pending_compactions_failures";
 
+  // Metadata table compaction health. The existing per-partition baseFileCount/logFileCount gauges show
+  // the current shape of the metadata table, but not whether compaction is keeping up with it. This is
+  // the count of completed delta commits since the last completed compaction, counting the same instants
+  // that ScheduleCompactionActionExecutor compares against hoodie.metadata.compact.max.delta.commits.
+  //
+  // It is sampled after table services have run, so a healthy table reports close to zero once a
+  // compaction lands, and a table whose compaction is failing or is never scheduled keeps reporting a
+  // backlog at or above the threshold. Alert on it staying at or above the threshold across consecutive
+  // cycles rather than on a fixed multiple of it: the value does not grow without bound. Once the backlog
+  // reaches the threshold the archiver stops pinning the last compaction
+  // (CompactionUtils#getEarliestInstantToRetainForCompaction), MDT archival eventually removes it, and the
+  // count then plateaus near hoodie.keep.min.commits, which depends on the archival config as well.
+  //
+  // It is emitted from HoodieBackedTableMetadataWriter#performTableServices, so it covers table services
+  // driven through that path. Under hoodie.metadata.streaming.write.enabled, Flink runs MDT compaction in
+  // a separate pipeline that does not call it, and this gauge is not emitted there. Read it alongside
+  // TABLE_SERVICE_EXECUTION_STATUS and COMPACTION_FAILURES, which distinguish a failing compaction from
+  // table services having stopped running at all.
+  public static final String DELTA_COMMITS_SINCE_LAST_COMPACTION = "delta_commits_since_last_compaction";
+
   private final transient MetricRegistry metricsRegistry;
   private final transient Metrics metrics;
   private final boolean detailedMetricsEnabled;
