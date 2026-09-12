@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
+import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
@@ -207,6 +208,70 @@ class TestInsertWithLSMLayout extends HoodieSparkSqlTestBase {
           HoodieTableConfig.TableStorageLayout.LSM_TREE,
           createMetaClient(spark, tablePath).getTableConfig.getTableStorageLayout)
         assertBaseFilesSorted(tablePath, WriteOperationType.BULK_INSERT)
+      }
+    }
+  }
+
+  test("Test partition bucket rescale with LSM layout") {
+    withSQLConf(
+      SPARK_SQL_INSERT_INTO_OPERATION.key -> WriteOperationType.BULK_INSERT.value(),
+      HoodieWriteConfig.BULKINSERT_PARALLELISM_VALUE.key -> "2") {
+      withTempDir { tmp =>
+        withTable(generateTableName) { tableName =>
+          val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  ts long,
+               |  dt string
+               |) using hudi
+               |location '$tablePath'
+               |partitioned by (dt)
+               |tblproperties (
+               |  type = 'cow',
+               |  primaryKey = 'id,name',
+               |  preCombineField = 'ts',
+               |  hoodie.index.type = 'BUCKET',
+               |  hoodie.bucket.index.hash.field = 'id,name',
+               |  hoodie.bucket.index.num.buckets = '1',
+               |  '${ENABLE_ROW_WRITER.key}' = 'true',
+               |  '${HoodieTableConfig.TABLE_STORAGE_LAYOUT.key}' =
+               |    '${HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue}'
+               |)
+               |""".stripMargin)
+
+          spark.sql(
+            s"""
+               |insert into $tableName values
+               |  (11, 'Ａ-full-width', 1, '2021-01-05'),
+               |  (1, 'ascii', 1, '2021-01-05'),
+               |  (22, '😀-emoji', 1, '2021-01-05'),
+               |  (2, 'middle', 1, '2021-01-05')
+               |""".stripMargin)
+
+          val expression = "dt=2021\\-01\\-05,2"
+          spark.sql(
+            s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expression', "
+              + "rule => 'regex', bucket_number => 1, dry_run => false)")
+
+          checkAnswer(s"select id, name, ts, dt from $tableName")(
+            Seq(11, "Ａ-full-width", 1, "2021-01-05"),
+            Seq(1, "ascii", 1, "2021-01-05"),
+            Seq(22, "😀-emoji", 1, "2021-01-05"),
+            Seq(2, "middle", 1, "2021-01-05"))
+
+          val metaClient = createMetaClient(spark, tablePath)
+          assertEquals(
+            HoodieTableConfig.TableStorageLayout.LSM_TREE,
+            metaClient.getTableConfig.getTableStorageLayout)
+          val fileGroups = PartitionBucketIndexUtils.getAllFileIDWithPartition(metaClient).asScala.toSet
+          assertEquals(
+            Set("dt=2021-01-05" + "00000000", "dt=2021-01-05" + "00000001"),
+            fileGroups)
+          assertBaseFilesSorted(tablePath, WriteOperationType.BUCKET_RESCALE)
+        }
       }
     }
   }
