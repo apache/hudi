@@ -511,14 +511,13 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
     } else if (operationType == WriteOperationType.DELETE_PARTITION) {
       // all records from the target partition(s) to be deleted from RLI
       return getRecordIndexReplacedRecords((HoodieReplaceCommitMetadata) commitMetadata, fsView);
-    } else if (commitMetadata instanceof HoodieReplaceCommitMetadata && WriteOperationType.isUnknown(operationType)) {
+    } else if (commitMetadata instanceof HoodieReplaceCommitMetadata && WriteOperationType.isUnknown(operationType)
+        && !dataTableMetaClient.getTableConfig().hasRecordKey()) {
       // a replace commit without a known operation type registers files written outside Hudi. The replaced file groups
       // are dropped without their records being rewritten under the same key, so the records of the replaced base files
       // are deleted from RLI unless this commit wrote the same key again.
       HoodieReplaceCommitMetadata replaceCommitMetadata = (HoodieReplaceCommitMetadata) commitMetadata;
-      if (!dataTableMetaClient.getTableConfig().hasRecordKey()) {
-        checkReplacedFileGroupsAreNotWritten(replaceCommitMetadata);
-      }
+      checkReplacedFileGroupsAreNotWritten(replaceCommitMetadata);
       HoodiePairData<HoodieKey, HoodieRecord> replacedRecordsByKey = getRecordIndexReplacedFileGroupRecords(replaceCommitMetadata, fsView)
           .mapToPair(record -> Pair.of(record.getKey(), record));
       HoodiePairData<HoodieKey, HoodieRecord> writtenRecordsByKey = updatesFromWriteStatuses

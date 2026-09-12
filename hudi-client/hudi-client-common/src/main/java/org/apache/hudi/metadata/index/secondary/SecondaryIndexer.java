@@ -145,10 +145,11 @@ public class SecondaryIndexer extends BaseIndexer {
     List<HoodieWriteStat> allWriteStats = commitMetadata.getPartitionToWriteStats().values().stream()
         .flatMap(Collection::stream).collect(Collectors.toList());
     // Return early if there are no write stats, or if this helper is reached for a table-service operation.
-    // A replace commit without a known operation type, e.g. one that only drops files written outside Hudi,
-    // has no write stats but still removes the records of the replaced file groups from the index.
+    // A replace commit without a known operation type on a table without a record key, e.g. one that only drops files
+    // written outside Hudi, has no write stats but still removes the records of the replaced file groups from the index.
     boolean dropsReplacedFileGroups = commitMetadata instanceof HoodieReplaceCommitMetadata
         && WriteOperationType.isUnknown(commitMetadata.getOperationType())
+        && !dataTableMetaClient.getTableConfig().hasRecordKey()
         && !((HoodieReplaceCommitMetadata) commitMetadata).getPartitionToReplaceFileIds().isEmpty();
     if ((allWriteStats.isEmpty() && !dropsReplacedFileGroups) || WriteOperationType.isCompactionOrClustering(commitMetadata.getOperationType())) {
       return engineContext.emptyHoodieData();

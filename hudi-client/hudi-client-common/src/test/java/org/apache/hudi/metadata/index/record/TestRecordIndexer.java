@@ -75,6 +75,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class TestRecordIndexer {
@@ -327,6 +328,34 @@ class TestRecordIndexer {
     expected.put("p1/file_1.parquet_1", false);
     expected.put("p1/file_1.parquet_0", true);
     assertEquals(expected, recordKeyToIsDeleted);
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void testBuildUpdateKeepsReplacedFileGroupsOfTableWithRecordKeys() {
+    // a table that carries a record key keeps the behaviour it had before external files were supported: a replace
+    // commit without a known operation type leaves the records of the replaced file groups in the index
+    HoodieEngineContext engineContext = new HoodieLocalEngineContext(getDefaultStorageConf());
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    HoodieTableMetaClient metaClient = mockMetaClientForUpdate(writeConfig, tableConfig);
+    when(tableConfig.hasRecordKey()).thenReturn(true);
+
+    HoodieReplaceCommitMetadata commitMetadata = new HoodieReplaceCommitMetadata();
+    commitMetadata.setOperationType(null);
+    commitMetadata.addReplaceFileId("p1", "file_1.parquet");
+
+    HoodieData<HoodieRecord> records = (HoodieData<HoodieRecord>) (HoodieData<?>) engineContext.emptyHoodieData();
+    ExposedRecordIndexer indexer = new ExposedRecordIndexer(
+        engineContext, writeConfig, metaClient, new DataPartitionAndRecords(1, Option.empty(), records));
+
+    HoodieTableFileSystemView fsView = mock(HoodieTableFileSystemView.class);
+    List<IndexPartitionAndRecords> result = indexer.buildUpdate(IndexUpdateContext.of(
+        "20240101010102", mock(HoodieBackedTableMetadata.class), Lazy.lazily(() -> fsView), commitMetadata));
+
+    assertEquals(1, result.size());
+    assertTrue(result.get(0).indexRecords().collectAsList().isEmpty());
+    verifyNoInteractions(fsView);
   }
 
   @Test

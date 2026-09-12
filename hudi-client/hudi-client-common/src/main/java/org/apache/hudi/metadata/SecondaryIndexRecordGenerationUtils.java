@@ -204,7 +204,8 @@ public class SecondaryIndexRecordGenerationUtils {
       return records.iterator();
     });
 
-    if (commitMetadata instanceof HoodieReplaceCommitMetadata && WriteOperationType.isUnknown(commitMetadata.getOperationType())) {
+    if (commitMetadata instanceof HoodieReplaceCommitMetadata && WriteOperationType.isUnknown(commitMetadata.getOperationType())
+        && !dataMetaClient.getTableConfig().hasRecordKey()) {
       // a replace commit without a known operation type registers files written outside Hudi and drops the replaced
       // file groups without rewriting their records under the same key
       secondaryIndexRecords = secondaryIndexRecords.union(convertReplacedFileGroupsToSecondaryIndexRecords(

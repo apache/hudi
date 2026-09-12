@@ -36,7 +36,7 @@ import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.MockedStatic;
 
 import java.io.IOException;
@@ -197,17 +197,18 @@ class TestSecondaryIndexer {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  void testBuildUpdateForReplaceCommitFromExternalWriterWithoutWriteStats(boolean dropsFileGroups) {
-    // files written outside Hudi are registered through replace commits without a known operation type. A fresh
-    // HoodieCommitMetadata carries UNKNOWN; a writer may also leave the type null. A commit that only drops files has
-    // no write stats but still removes the records of the replaced file groups from the index; one that drops nothing
-    // and writes nothing leaves the index alone.
+  @CsvSource({"true,false", "false,false", "true,true"})
+  void testBuildUpdateForReplaceCommitFromExternalWriterWithoutWriteStats(boolean dropsFileGroups, boolean hasRecordKey) {
+    // files written outside Hudi are registered through replace commits without a known operation type on a table
+    // without a record key. A fresh HoodieCommitMetadata carries UNKNOWN; a writer may also leave the type null. A
+    // commit that only drops files has no write stats but still removes the records of the replaced file groups from
+    // the index; one that drops nothing and writes nothing, and one on a table with a record key, leave the index alone.
     HoodieEngineContext engineContext = new HoodieLocalEngineContext(getDefaultStorageConf());
     HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
     HoodieMetadataConfig metadataConfig = mock(HoodieMetadataConfig.class);
     HoodieIndexDefinition indexDefinition = mock(HoodieIndexDefinition.class);
     HoodieTableMetaClient metaClient = mockMetaClientWithSecondaryIndex(writeConfig, metadataConfig, indexDefinition);
+    when(metaClient.getTableConfig().hasRecordKey()).thenReturn(hasRecordKey);
 
     HoodieReplaceCommitMetadata commitMetadata = new HoodieReplaceCommitMetadata();
     commitMetadata.setOperationType(null);
@@ -231,7 +232,8 @@ class TestSecondaryIndexer {
 
       assertEquals(1, result.size());
       assertEquals("secondary_index_idx", result.get(0).indexPartitionName());
-      assertEquals(dropsFileGroups ? deletes.collectAsList() : Collections.emptyList(), result.get(0).indexRecords().collectAsList());
+      assertEquals(dropsFileGroups && !hasRecordKey ? deletes.collectAsList() : Collections.emptyList(),
+          result.get(0).indexRecords().collectAsList());
     }
   }
 
