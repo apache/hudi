@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -72,6 +73,7 @@ import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.types.Row;
 import org.apache.flink.util.CollectionUtil;
+import org.apache.flink.util.ExceptionUtils;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.junit.jupiter.api.BeforeEach;
@@ -1466,6 +1468,40 @@ public class ITTestHoodieDataSource {
     List<Row> result5 = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from t1").execute().collect());
     assertRowsEquals(result5, expected);
+  }
+
+  @Test
+  void testInsertOverwriteWithNonBlockingConcurrencyControlThrows() {
+    TableEnvironment tableEnv = batchTableEnv;
+    // MOR + simple bucket index + non-blocking concurrency control.
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .options(getDefaultKeys())
+        .option(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ)
+        .option(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name())
+        .option(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 1)
+        .option(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(),
+            WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL.name())
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    // Whole-table overwrite resolves to INSERT_OVERWRITE_TABLE
+    final String overwriteTable = "insert overwrite t1 values\n"
+        + "('id1','Danny',24,TIMESTAMP '1970-01-01 00:00:01', 'par1')\n";
+    // static-partition overwrite resolves to INSERT_OVERWRITE
+    final String overwriteStaticPartition = "insert overwrite t1 partition(`partition`='par1') values\n"
+        + "('id1','Danny',24,TIMESTAMP '1970-01-01 00:00:01')\n";
+    // dynamic-partition overwrite resolves to INSERT_OVERWRITE
+    final String overwriteDynamicPartition = "insert overwrite t1 /*+ OPTIONS('write.partition.overwrite.mode'='dynamic') */ values\n"
+        + "('id1','Danny',24,TIMESTAMP '1970-01-01 00:00:01', 'par1')\n";
+
+    for (String overwriteSql : new String[] {overwriteTable, overwriteStaticPartition, overwriteDynamicPartition}) {
+      Throwable thrown = assertThrows(Throwable.class, () -> tableEnv.executeSql(overwriteSql));
+      assertTrue(
+          ExceptionUtils.findThrowableWithMessage(
+              thrown, WriteConcurrencyMode.INSERT_OVERWRITE_NOT_SUPPORTED_ERROR).isPresent(),
+          "Unexpected exception: " + thrown);
+    }
   }
 
   @ParameterizedTest

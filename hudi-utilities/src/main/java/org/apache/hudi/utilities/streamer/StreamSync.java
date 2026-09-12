@@ -45,6 +45,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.model.debezium.DebeziumConstants;
 import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
@@ -1334,6 +1335,11 @@ public class StreamSync implements Serializable, Closeable {
     }
 
     HoodieWriteConfig config = builder.build();
+
+    // Reject insert overwrite + non-blocking concurrency control before the write client is constructed.
+    WriteConcurrencyMode.checkInsertOverwriteSupported(
+        config.getWriteConcurrencyMode().isNonBlockingConcurrencyControl(),
+        WriteOperationType.isOverwrite(cfg.operation));
 
     if (config.writeCommitCallbackOn()) {
       // set default value for {@link HoodieWriteCommitKafkaCallbackConfig} if needed.

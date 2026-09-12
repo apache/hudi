@@ -251,6 +251,7 @@ class HoodieSparkSqlWriterInternal {
     }
     val tableType = HoodieTableType.valueOf(hoodieConfig.getString(TABLE_TYPE))
     val operation = deduceOperation(hoodieConfig, paramsWithoutDefaults, sourceDf)
+    validateNonBlockingConcurrencyControl(hoodieConfig, operation)
 
     val preppedSparkSqlMergeInto = parameters.getOrElse(SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false").toBoolean
     val preppedSparkSqlWrites = parameters.getOrElse(SPARK_SQL_WRITES_PREPPED_KEY, "false").toBoolean
@@ -614,6 +615,25 @@ class HoodieSparkSqlWriterInternal {
       }
       operation
     }
+  }
+
+  /**
+   * Reject insert overwrite combined with non-blocking concurrency control.
+   *
+   * Insert overwrite reuses the deterministic bucket file id under non-blocking concurrency
+   * control, but the replace commit records that same file id as replaced. The file system view
+   * hides a replaced file group by file id (ignoring the replace instant), so the freshly
+   * overwritten data would become invisible. Reject the combination to avoid data loss.
+   */
+  private def validateNonBlockingConcurrencyControl(hoodieConfig: HoodieConfig, operation: WriteOperationType): Unit = {
+    val isNonBlockingConcurrencyControl = WriteConcurrencyMode.isNonBlockingConcurrencyControl(
+      hoodieConfig.getStringOrDefault(HoodieWriteConfig.WRITE_CONCURRENCY_MODE))
+    val rowWriterOverwriteType = Option(hoodieConfig.getString(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE))
+      .map(WriteOperationType.fromValue)
+      .orNull
+    val isInsertOverwrite = WriteOperationType.isOverwrite(operation) ||
+      WriteOperationType.isOverwrite(rowWriterOverwriteType)
+    WriteConcurrencyMode.checkInsertOverwriteSupported(isNonBlockingConcurrencyControl, isInsertOverwrite)
   }
 
   /**

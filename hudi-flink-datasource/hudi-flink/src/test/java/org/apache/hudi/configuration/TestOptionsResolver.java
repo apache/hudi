@@ -49,6 +49,7 @@ import java.io.File;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -396,6 +397,33 @@ public class TestOptionsResolver {
     conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(),
         WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name().toLowerCase());
     assertTrue(OptionsResolver.isOptimisticConcurrencyControl(conf));
+  }
+
+  @Test
+  void testCheckInsertOverwriteSupported() {
+    Configuration conf = new Configuration();
+    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(),
+        WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL.name());
+
+    // A non-overwrite operation under NB-CC is allowed.
+    conf.set(FlinkOptions.OPERATION, WriteOperationType.UPSERT.value());
+    assertDoesNotThrow(() -> OptionsResolver.checkInsertOverwriteSupported(conf));
+
+    // Both insert overwrite variants must be rejected under NB-CC.
+    for (WriteOperationType operation : new WriteOperationType[] {
+        WriteOperationType.INSERT_OVERWRITE, WriteOperationType.INSERT_OVERWRITE_TABLE}) {
+      conf.set(FlinkOptions.OPERATION, operation.value());
+      HoodieException exception = assertThrows(HoodieException.class,
+          () -> OptionsResolver.checkInsertOverwriteSupported(conf));
+      assertTrue(exception.getMessage()
+          .contains(WriteConcurrencyMode.INSERT_OVERWRITE_NOT_SUPPORTED_ERROR));
+    }
+
+    // Insert overwrite without NB-CC is allowed.
+    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(),
+        WriteConcurrencyMode.SINGLE_WRITER.name());
+    conf.set(FlinkOptions.OPERATION, WriteOperationType.INSERT_OVERWRITE.value());
+    assertDoesNotThrow(() -> OptionsResolver.checkInsertOverwriteSupported(conf));
   }
 
   @Test

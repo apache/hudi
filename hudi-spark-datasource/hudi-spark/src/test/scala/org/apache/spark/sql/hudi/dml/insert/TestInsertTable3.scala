@@ -21,8 +21,9 @@ package org.apache.spark.sql.hudi.dml.insert
 
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION
-import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
+import org.apache.hudi.common.model.{HoodieRecord, WriteConcurrencyMode, WriteOperationType}
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
+import org.apache.hudi.testutils.HoodieClientTestUtils
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMetadata
@@ -403,56 +404,61 @@ class TestInsertTable3 extends HoodieSparkSqlTestBase {
   }
 
   test("Test Insert Overwrite Bucket Index Table") {
-    withSQLConf(
-      "hoodie.datasource.write.operation" -> "bulk_insert",
-      "hoodie.bulkinsert.shuffle.parallelism" -> "1") {
-      withTempDir { tmp =>
-        val tableName = generateTableName
-        // Create a partitioned table
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  dt string,
-             |  name string,
-             |  price double,
-             |  ts long
-             |) using hudi
-             | tblproperties (
-             | primaryKey = 'id,name',
-             | type = 'cow',
-             | preCombineField = 'ts',
-             | hoodie.index.type = 'BUCKET',
-             | hoodie.bucket.index.hash.field = 'id,name',
-             | hoodie.datasource.write.row.writer.enable = 'true')
-             | partitioned by (dt)
-             | location '${tmp.getCanonicalPath}'
-       """.stripMargin)
+    // Exercise both lower and upper case operation values to guard the case-insensitive routing:
+    // an uppercase operation must still route insert overwrite to a replace instead of silently
+    // dropping the overwrite (a regression before the Locale.ROOT normalization in deduceOverwriteConfig).
+    Seq("bulk_insert", "BULK_INSERT").foreach { operation =>
+      withSQLConf(
+        "hoodie.datasource.write.operation" -> operation,
+        "hoodie.bulkinsert.shuffle.parallelism" -> "1") {
+        withTempDir { tmp =>
+          val tableName = generateTableName
+          // Create a partitioned table
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  dt string,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               | tblproperties (
+               | primaryKey = 'id,name',
+               | type = 'cow',
+               | preCombineField = 'ts',
+               | hoodie.index.type = 'BUCKET',
+               | hoodie.bucket.index.hash.field = 'id,name',
+               | hoodie.datasource.write.row.writer.enable = 'true')
+               | partitioned by (dt)
+               | location '${tmp.getCanonicalPath}'
+         """.stripMargin)
 
-        // Note: Do not write the field alias, the partition field must be placed last.
-        spark.sql(
-          s"""
-             | insert into $tableName values
-             | (1, 'a1,1', 10, 1000, "2021-01-05"),
-             | (2, 'a2', 20, 2000, "2021-01-06"),
-             | (3, 'a3,3', 30, 3000, "2021-01-07")
-       """.stripMargin)
+          // Note: Do not write the field alias, the partition field must be placed last.
+          spark.sql(
+            s"""
+               | insert into $tableName values
+               | (1, 'a1,1', 10, 1000, "2021-01-05"),
+               | (2, 'a2', 20, 2000, "2021-01-06"),
+               | (3, 'a3,3', 30, 3000, "2021-01-07")
+         """.stripMargin)
 
-        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
-          Seq(1, "a1,1", 10.0, 1000, "2021-01-05"),
-          Seq(2, "a2", 20.0, 2000, "2021-01-06"),
-          Seq(3, "a3,3", 30.0, 3000, "2021-01-07")
-        )
+          checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+            Seq(1, "a1,1", 10.0, 1000, "2021-01-05"),
+            Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+            Seq(3, "a3,3", 30.0, 3000, "2021-01-07")
+          )
 
-        spark.sql(
-          s"""
-             | insert overwrite $tableName values
-             | (1, 'a1,1', 100, 1000, "2021-01-05")
-       """.stripMargin)
+          spark.sql(
+            s"""
+               | insert overwrite $tableName values
+               | (1, 'a1,1', 100, 1000, "2021-01-05")
+         """.stripMargin)
 
-        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
-          Seq(1, "a1,1", 100.0, 1000, "2021-01-05")
-        )
+          checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+            Seq(1, "a1,1", 100.0, 1000, "2021-01-05")
+          )
+        }
       }
     }
   }
@@ -792,6 +798,54 @@ class TestInsertTable3 extends HoodieSparkSqlTestBase {
           Seq(2, "a2", 20.0, 2000, "2021-01-06"),
           Seq(3, "a3", 30.0, 3000, "2021-01-07")
         )
+      }
+    }
+  }
+
+  test("Test Insert Overwrite With Non Blocking Concurrency Control Is Rejected") {
+    // Explicitly pins hoodie.datasource.write.operation to each overwrite variant, and toggles the
+    // row-writer bulk_insert overwrite path, so all four rejection routes are covered.
+    val combinations = for {
+      operation <- Seq("insert_overwrite", "insert_overwrite_table")
+      bulkInsertEnabled <- Seq("false", "true")
+    } yield (operation, bulkInsertEnabled)
+    combinations.foreach { case (operation, bulkInsertEnabled) =>
+      withSQLConf(
+        "hoodie.write.concurrency.mode" -> "NON_BLOCKING_CONCURRENCY_CONTROL",
+        "hoodie.datasource.write.operation" -> operation,
+        "hoodie.sql.bulk.insert.enable" -> bulkInsertEnabled) {
+        withTempDir { tmp =>
+          val tableName = generateTableName
+          val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               | tblproperties (
+               |   primaryKey = 'id',
+               |   type = 'mor',
+               |   preCombineField = 'ts',
+               |   hoodie.index.type = 'BUCKET',
+               |   hoodie.index.bucket.engine = 'SIMPLE',
+               |   hoodie.bucket.index.hash.field = 'id',
+               |   hoodie.bucket.index.num.buckets = 1)
+               | location '$tablePath'
+               | """.stripMargin)
+
+          checkExceptionContain(
+            s"insert overwrite $tableName values (1, 'a1', 10, 1000)")(
+            WriteConcurrencyMode.INSERT_OVERWRITE_NOT_SUPPORTED_ERROR)
+
+          // The guard fails before any instant is created. The pre-existing late partitioner
+          // check only fails after a replacecommit has been started, so an empty timeline
+          // proves the write is rejected early.
+          val metaClient = HoodieClientTestUtils.createMetaClient(spark, tablePath)
+          assertResult(0)(metaClient.getActiveTimeline.getInstants.size())
+        }
       }
     }
   }
