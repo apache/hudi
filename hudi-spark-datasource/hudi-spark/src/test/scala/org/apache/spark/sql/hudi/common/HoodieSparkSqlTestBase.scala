@@ -44,6 +44,7 @@ import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.connector.catalog.CatalogManager
 import org.apache.spark.sql.hudi.catalog.HoodieCatalog
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.{checkMessageContains, sharedSessionEnabled}
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructField
 import org.apache.spark.util.Utils
 import org.joda.time.DateTimeZone
@@ -106,22 +107,28 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
    * Shared mode: the context-level SparkConf is fixed, so the deltas a suite adds through extraConf or a
    * sparkConf() override go to its session conf (hoodie.* and spark.sql.* keys), except spark.hadoop.*
    * keys, which the write client reads from sparkContext.hadoopConfiguration and which are restored in
-   * afterAll. Any other spark.* key is a SparkContext setting that a child session cannot change, so it
-   * is rejected here rather than accepted into the session conf with no effect.
+   * afterAll. Any other spark.* key, and any static SQL conf, is a setting a child session cannot change,
+   * so it is rejected before anything is mutated: a partial apply would leave the shared Hadoop conf
+   * changed for every later suite in the JVM.
    */
   private def applySuiteConfToSharedSession(session: SparkSession): Unit = {
     val defaults = getSparkConfForTest("Hoodie SQL Test").getAll.toMap
-    val hadoopConf = session.sparkContext.hadoopConfiguration
-    sparkConf().getAll.filterNot { case (k, v) => defaults.get(k).contains(v) }.foreach {
-      case (k, v) if k.startsWith("spark.hadoop.") =>
-        val key = k.stripPrefix("spark.hadoop.")
-        hadoopConfOverrides :+= (key -> hadoopConf.get(key))
-        hadoopConf.set(key, v)
-      case (k, _) if k.startsWith("spark.") && !k.startsWith("spark.sql.") =>
-        throw new IllegalArgumentException(
-          s"$k is a SparkContext-level setting; shared session mode cannot apply it per suite")
-      case (k, v) => session.conf.set(k, v)
+    val deltas = sparkConf().getAll.filterNot { case (k, v) => defaults.get(k).contains(v) }
+    val (hadoopKeys, sessionKeys) = deltas.partition { case (k, _) => k.startsWith("spark.hadoop.") }
+    val rejected = sessionKeys.collect {
+      case (k, _) if (k.startsWith("spark.") && !k.startsWith("spark.sql.")) || SQLConf.isStaticConfigKey(k) => k
     }
+    if (rejected.nonEmpty) {
+      throw new IllegalArgumentException(
+        s"${rejected.mkString(", ")}: SparkContext-level or static settings; shared session mode cannot apply them per suite")
+    }
+    val hadoopConf = session.sparkContext.hadoopConfiguration
+    hadoopKeys.foreach { case (k, v) =>
+      val key = k.stripPrefix("spark.hadoop.")
+      hadoopConfOverrides :+= (key -> hadoopConf.get(key))
+      hadoopConf.set(key, v)
+    }
+    sessionKeys.foreach { case (k, v) => session.conf.set(k, v) }
   }
 
   protected def initQueryIndexConf(): Unit = {
@@ -195,8 +202,6 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     }
   }
 
-  private lazy val tableNamePrefix: String = s"h${getClass.getSimpleName.toLowerCase}_"
-
   /**
    * Drops the tables a test left behind. Per-suite mode owns the whole catalog. Shared mode shares the
    * external catalog with every other suite in the JVM and those suites may be mid-test, so it drops
@@ -227,15 +232,17 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     catalog.isTempView(table) || table.table.startsWith(tableNamePrefix)
   }
 
+  private lazy val tableNamePrefix: String = s"h${getClass.getSimpleName.toLowerCase}_"
+
   protected def generateTableName: String = {
-    s"h${getClass.getSimpleName.toLowerCase}_${tableId.incrementAndGet()}"
+    s"$tableNamePrefix${tableId.incrementAndGet()}"
   }
 
   override protected def afterAll(): Unit = {
     if (sharedSessionEnabled) {
       // The context and warehouse outlive the suite; only undo this suite's Hadoop conf overrides.
       if (hadoopConfOverrides.nonEmpty) {
-        val hadoopConf = spark.sparkContext.hadoopConfiguration
+        val hadoopConf = HoodieSparkSqlTestBase.sharedBaseSession().sparkContext.hadoopConfiguration
         hadoopConfOverrides.reverse.foreach {
           case (key, null) => hadoopConf.unset(key)
           case (key, previous) => hadoopConf.set(key, previous)
