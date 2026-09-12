@@ -253,6 +253,57 @@ class TestReadBlobSQL extends HoodieClientTestBase {
     assertBytesContent(data1)
   }
 
+  /**
+   * One blob row matching several rows on the other side of a join puts the same descriptor
+   * into one task several times, and there is no shuffle between the join and the batched
+   * read to collapse them. The reader must serve every row, not just the first.
+   */
+  @Test
+  def testReadBlobWithJoinFanOut(): Unit = {
+    val filePath = createTestFile(tempDir, "join_fanout.bin", 10000)
+
+    // Blob side: one descriptor per id
+    val blobDF = sparkSession.createDataFrame(Seq(
+      (1, filePath, 0L, 100L),
+      (2, filePath, 100L, 100L)
+    )).toDF("id", "external_path", "offset", "length")
+      .withColumn("file_info",
+        blobStructCol("file_info", col("external_path"), col("offset"), col("length")))
+      .select("id", "file_info")
+
+    blobDF.createOrReplaceTempView("blob_table_fanout")
+
+    // Event side: several rows per id, so each descriptor fans out across the join
+    val eventsDF = sparkSession.createDataFrame(Seq(
+      (1, "e1"),
+      (1, "e2"),
+      (1, "e3"),
+      (2, "e4"),
+      (2, "e5")
+    )).toDF("id", "name")
+
+    eventsDF.createOrReplaceTempView("events_fanout")
+
+    val result = sparkSession.sql("""
+      SELECT e.id, e.name, read_blob(b.file_info) AS data
+      FROM events_fanout e
+      JOIN blob_table_fanout b ON e.id = b.id
+      ORDER BY e.id, e.name
+    """)
+
+    val rows = result.collect()
+    assertEquals(5, rows.length)
+
+    val expectedNames = Seq("e1", "e2", "e3", "e4", "e5")
+    rows.zipWithIndex.foreach { case (row, idx) =>
+      assertEquals(expectedNames(idx), row.getAs[String]("name"))
+      val data = row.getAs[Array[Byte]]("data")
+      assertEquals(100, data.length)
+      val expectedOffset = if (row.getAs[Int]("id") == 1) 0 else 100
+      assertBytesContent(data, expectedOffset = expectedOffset)
+    }
+  }
+
   @Test
   def testReadBlobInSubquery(): Unit = {
     val filePath = createTestFile(tempDir, "subquery.bin", 10000)
