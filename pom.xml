@@ -220,6 +220,12 @@
     <skipUTs>${skipTests}</skipUTs>
     <skipFTs>${skipTests}</skipFTs>
     <skipITs>${skipTests}</skipITs>
+    <!-- Surefire forks per module, expressed per CPU core the way Maven -T is, so a 4-core GitHub
+         runner gets two forks and a 2-core Azure agent gets one; each fork gets the full argLine
+         heap; override with -Dhudi.surefire.forkCount=1 to serialise a module (for example when
+         bisecting a test that depends on shared state), and pass an explicit integer on machines
+         with a single core. -->
+    <hudi.surefire.forkCount>0.5C</hudi.surefire.forkCount>
     <skip.hudi-spark3.unit.tests>${skipTests}</skip.hudi-spark3.unit.tests>
     <skip.hudi-spark4.unit.tests>${skipTests}</skip.hudi-spark4.unit.tests>
     <skipDocker>${skipTests}</skipDocker>
@@ -556,12 +562,16 @@
           <version>${maven-surefire-plugin.version}</version>
           <configuration>
             <rerunFailingTestsCount>3</rerunFailingTestsCount>
+            <forkCount>${hudi.surefire.forkCount}</forkCount>
+            <reuseForks>true</reuseForks>
             <argLine>@{argLine}</argLine>
             <trimStackTrace>false</trimStackTrace>
             <systemPropertyVariables>
               <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
               <lance.skip.tests>${lance.skip.tests}</lance.skip.tests>
               <vortex.skip.tests>${vortex.skip.tests}</vortex.skip.tests>
+              <!-- ZooKeeper 3.5+ starts a Jetty admin server on the fixed port 8080 when a test boots a Curator TestingServer; two surefire forks would collide on it, and TestHoodieClientMultiWriter already sets this per class. -->
+              <zookeeper.admin.enableServer>false</zookeeper.admin.enableServer>
             </systemPropertyVariables>
             <useSystemClassLoader>false</useSystemClassLoader>
             <forkedProcessExitTimeoutInSeconds>30</forkedProcessExitTimeoutInSeconds>
@@ -2167,7 +2177,7 @@
             <configuration combine.self="append">
               <skip>${skipUTs}</skip>
               <forkedProcessExitTimeoutInSeconds>120</forkedProcessExitTimeoutInSeconds>
-              <excludedGroups>functional,functional-b,functional-c</excludedGroups>
+              <excludedGroups>functional,functional-b,functional-c,benchmark</excludedGroups>
               <excludes>
                 <exclude>**/IT*.java</exclude>
                 <exclude>**/testsuite/**/Test*.java</exclude>
@@ -2217,8 +2227,6 @@
             <version>${maven-surefire-plugin.version}</version>
             <configuration combine.self="append">
               <skip>${skipFTs}</skip>
-              <forkCount>1</forkCount>
-              <reuseForks>true</reuseForks>
               <groups>functional</groups>
             </configuration>
           </plugin>
@@ -2265,8 +2273,6 @@
             <version>${maven-surefire-plugin.version}</version>
             <configuration combine.self="append">
               <skip>${skipFTs}</skip>
-              <forkCount>1</forkCount>
-              <reuseForks>true</reuseForks>
               <groups>functional-b</groups>
             </configuration>
           </plugin>
@@ -2313,8 +2319,6 @@
             <version>${maven-surefire-plugin.version}</version>
             <configuration combine.self="append">
               <skip>${skipFTs}</skip>
-              <forkCount>1</forkCount>
-              <reuseForks>true</reuseForks>
               <groups>functional-c</groups>
             </configuration>
           </plugin>
