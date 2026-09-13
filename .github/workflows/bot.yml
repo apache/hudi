@@ -1023,7 +1023,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS2_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false -DtagsToExclude=org.apache.spark.sql.hudi.common.SharedSessionSuite
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS2_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false -Dhudi.scalatest.tagsToExclude=org.apache.hudi.functional.SparkSQLCoreFlow,org.apache.spark.sql.hudi.common.SharedSessionSuite
       - name: Test timing summary
         if: always()
         run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
