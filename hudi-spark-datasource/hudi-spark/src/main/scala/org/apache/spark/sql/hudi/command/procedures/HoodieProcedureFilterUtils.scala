@@ -510,26 +510,24 @@ object HoodieProcedureFilterUtils {
     applyHudiWideningRules(unwrapReplacements(expression))
   }
 
-  // With/CommonExpressionDef/CommonExpressionRef don't exist before Spark 4.0, so these go by
-  // reflection rather than a direct import to keep this file compiling across the same 3.3-4.2
-  // range as the rest of it - the single place to update if the class name or shape ever changes.
+  // Reflection here for the same reason finalizeRegistryResolution's comment above gives.
   private def isWithNode(expression: Expression): Boolean = expression.getClass.getSimpleName == "With"
 
   private def inlineCommonExpressions(withExpr: Expression): Expression = {
-    val defsById = reflectField(withExpr, "defs").asInstanceOf[Seq[Expression]]
+    val defsById = invokeAccessor(withExpr, "defs").asInstanceOf[Seq[Expression]]
       .map { commonExprDef =>
-        reflectField(commonExprDef, "id") -> reflectField(commonExprDef, "child").asInstanceOf[Expression]
+        invokeAccessor(commonExprDef, "id") -> invokeAccessor(commonExprDef, "child").asInstanceOf[Expression]
       }.toMap
-    val child = reflectField(withExpr, "child").asInstanceOf[Expression]
+    val child = invokeAccessor(withExpr, "child").asInstanceOf[Expression]
     child.transformUp {
-      case ref if isCommonExpressionRef(ref) => defsById(reflectField(ref, "id"))
+      case ref if isCommonExpressionRef(ref) => defsById(invokeAccessor(ref, "id"))
     }
   }
 
   private def isCommonExpressionRef(expression: Expression): Boolean =
     expression.getClass.getSimpleName == "CommonExpressionRef"
 
-  private def reflectField(target: AnyRef, name: String): AnyRef = target.getClass.getMethod(name).invoke(target)
+  private def invokeAccessor(target: AnyRef, name: String): AnyRef = target.getClass.getMethod(name).invoke(target)
 
   // A resolved expression still isn't usable one row at a time if it's an aggregate (percentile,
   // collect_list - only make sense across real aggregation), a generator (explode, inline - only
