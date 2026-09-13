@@ -159,15 +159,16 @@ object HoodieCreateRecordUtils {
             // same question as whether this record needs an ordering value. Prepped Spark SQL writes
             // emit one row per key and so set it false, which used to leave the record with no
             // ordering value on tables that order by event time.
-            // Deletes are excluded from the widened branch so their semantics do not change: a
-            // delete carrying the default ordering value is treated as commit time ordered by
-            // BufferedRecordMergerFactory#deltaMergeDeleteRecord, and giving it a real value would
-            // make a delete lose to a stored record with a higher ordering value. Deletes still get
-            // an ordering value when `shouldCombine` is true, exactly as before.
-            val computeOrderingValue = shouldCombine || (requiresOrderingValue && !isDelete)
+            // Deletes take the ordering value too. A delete left on the default is treated as commit
+            // time ordered by BufferedRecordMergerFactory#shouldKeepNewerRecord, so excluding them
+            // here would let a stale delete remove a record with a higher ordering value, while the
+            // same delete written through a path where `shouldCombine` is true would correctly lose.
+            // A null ordering field stays tolerated for a delete, which may carry only its key: the
+            // value falls back to the default rather than failing the write.
+            val computeOrderingValue = shouldCombine || requiresOrderingValue
             val hoodieRecord = if (computeOrderingValue && !orderingFields.isEmpty) {
               val orderingVal = getOrderingValue(orderingFields, avroRec, hoodieKey.getRecordKey,
-                consistentLogicalTimestampEnabled, requiresOrderingValue)
+                consistentLogicalTimestampEnabled, requiresOrderingValue && !isDelete)
               HoodieRecordUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
                 config.getPayloadClass, null, recordLocation, requiresPayload, isDelete)
             } else {

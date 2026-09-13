@@ -20,8 +20,8 @@ package org.apache.hudi
 
 import org.apache.hudi.HoodieSchemaConversionUtils
 import org.apache.hudi.common.config.RecordMergeMode
-import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieAvroRecordMerger, HoodieTableType, WriteOperationType}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.OrderingValues
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
@@ -29,7 +29,7 @@ import org.apache.hudi.io.HoodieWriteMergeHandle
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 
 import org.apache.spark.SparkException
-import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.{Row, SaveMode, SparkSession}
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.{AfterAll, BeforeAll, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertInstanceOf, assertNotNull, assertTrue}
@@ -60,7 +60,7 @@ class TestHoodieCreateRecordUtils {
 
   private val ORDERING_TEST_SCHEMA = StructType(Seq(
     StructField("uuid", StringType, nullable = false),
-    StructField("ts", LongType, nullable = false),
+    StructField("ts", LongType, nullable = true),
     StructField("partition", StringType, nullable = false),
     StructField("_hoodie_is_deleted", BooleanType, nullable = false)
   ))
@@ -291,19 +291,81 @@ class TestHoodieCreateRecordUtils {
   }
 
   /**
-   * Deletes keep the default. BufferedRecordMergerFactory#deltaMergeDeleteRecord treats a delete
-   * carrying the default as commit time ordered, so giving it a real value would make a delete lose
-   * to a stored record with a higher ordering value.
+   * Deletes carry the ordering field's value as well. A delete left on the default is treated as
+   * commit time ordered by BufferedRecordMergerFactory#deltaMergeDeleteRecord, which would let a
+   * stale delete remove a record with a higher ordering value.
    */
   @Test
-  def testDeleteKeepsTheDefaultOrderingValue(): Unit = {
-    assertEquals(OrderingValues.getDefault(),
-      buildRecordOrderingValue(RecordMergeMode.EVENT_TIME_ORDERING, isDelete = true))
+  def testDeleteAlsoGetsTheOrderingValue(): Unit = {
+    val orderingValue = buildRecordOrderingValue(RecordMergeMode.EVENT_TIME_ORDERING, isDelete = true)
+    assertInstanceOf(classOf[java.lang.Long], orderingValue,
+      "the delete must carry the ordering field's value, not the payload's Integer default")
+    assertEquals(TS, orderingValue)
   }
 
-  private def buildRecordOrderingValue(mergeMode: RecordMergeMode, isDelete: Boolean): Comparable[_] = {
+  /** Commit time ordered tables keep serving the default for deletes too. */
+  @Test
+  def testCommitTimeOrderingDeleteKeepsTheDefaultOrderingValue(): Unit = {
+    assertEquals(OrderingValues.getDefault(),
+      buildRecordOrderingValue(RecordMergeMode.COMMIT_TIME_ORDERING, isDelete = true))
+  }
+
+  /**
+   * A delete row may carry only its key, with the ordering field left null. Such a row must fall
+   * back to the default ordering value rather than failing the write. Every other record
+   * representation already tolerates this: HoodieSparkRecord#doGetOrderingValue,
+   * HoodieFlinkRecord#doGetOrderingValue and HoodieAvroIndexedRecord#doGetOrderingValue.
+   */
+  @Test
+  def testDeleteWithNullOrderingFieldKeepsTheDefault(): Unit = {
+    assertEquals(OrderingValues.getDefault(),
+      buildRecordOrderingValue(RecordMergeMode.EVENT_TIME_ORDERING, isDelete = true, ts = null))
+  }
+
+  /**
+   * End to end on the path this change widens. With de-duplication off, a delete whose ordering
+   * value is older than the stored record must lose. While deletes were left on the default the
+   * delete was treated as commit time ordered and removed the row regardless of its ordering value.
+   */
+  @Test
+  def testStaleDeleteLosesWhenCombineBeforeUpsertIsOff(): Unit = {
     val spark = TestHoodieCreateRecordUtils.spark
-    val basePath = TestHoodieCreateRecordUtils.tempDir + s"/ordering_value_${mergeMode.name}_delete_$isDelete"
+    val basePath = TestHoodieCreateRecordUtils.tempDir + "/stale_delete_no_combine"
+    val opts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "1",
+      "hoodie.upsert.shuffle.parallelism" -> "1",
+      DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "uuid",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "ts",
+      HoodieTableConfig.RECORD_MERGE_MODE.key -> RecordMergeMode.EVENT_TIME_ORDERING.name,
+      HoodieTableConfig.PAYLOAD_CLASS_NAME.key -> classOf[DefaultHoodieRecordPayload].getName,
+      HoodieWriteConfig.TBL_NAME.key -> "test_stale_delete_no_combine",
+      // The trigger: no de-duplication of the incoming batch.
+      HoodieWriteConfig.COMBINE_BEFORE_UPSERT.key -> "false",
+      // Route the record through HoodieAvroRecord, whose payload defaults the ordering value when
+      // none is set, rather than HoodieAvroIndexedRecord which derives it lazily from the row.
+      HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key -> classOf[HoodieAvroRecordMerger].getName,
+      HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key -> classOf[HoodieWriteMergeHandle[_, _, _, _]].getName)
+
+    def write(row: Row, mode: SaveMode): Unit =
+      spark.createDataFrame(spark.sparkContext.parallelize(Seq(row)), ORDERING_TEST_SCHEMA)
+        .write.format("hudi").options(opts).mode(mode).save(basePath)
+
+    write(Row("id1", TS, "par1", false), SaveMode.Overwrite)
+    // A delete one tick older than the stored record.
+    write(Row("id1", TS - 1, "par1", true), SaveMode.Append)
+
+    assertEquals(1L, spark.read.format("hudi").load(basePath).where("uuid = 'id1'").count(),
+      "a delete older than the stored record must not remove it")
+  }
+
+  private def buildRecordOrderingValue(mergeMode: RecordMergeMode,
+                                      isDelete: Boolean,
+                                      ts: java.lang.Long = TS): Comparable[_] = {
+    val spark = TestHoodieCreateRecordUtils.spark
+    val basePath =
+      TestHoodieCreateRecordUtils.tempDir + s"/ordering_value_${mergeMode.name}_delete_${isDelete}_ts_$ts"
 
     val parameters = Map(
       KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key() -> "uuid",
@@ -335,7 +397,7 @@ class TestHoodieCreateRecordUtils {
       .build()
 
     val df = spark.createDataFrame(
-      spark.sparkContext.parallelize(Seq(Row("id1", TS, "par1", isDelete))), ORDERING_TEST_SCHEMA)
+      spark.sparkContext.parallelize(Seq(Row("id1", ts, "par1", isDelete))), ORDERING_TEST_SCHEMA)
 
     val records = HoodieCreateRecordUtils.createHoodieRecordRdd(
       HoodieCreateRecordUtils.createHoodieRecordRddArgs(
