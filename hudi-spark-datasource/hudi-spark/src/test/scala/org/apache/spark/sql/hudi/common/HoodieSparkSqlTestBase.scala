@@ -64,6 +64,7 @@ import java.util.regex.Pattern
 
 import scala.util.Try
 
+@SharedSessionSuite
 class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   org.apache.log4j.Logger.getRootLogger.setLevel(org.apache.log4j.Level.WARN)
   private val LOG = LoggerFactory.getLogger(getClass)
