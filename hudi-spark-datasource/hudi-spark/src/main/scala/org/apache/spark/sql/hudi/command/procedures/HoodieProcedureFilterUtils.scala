@@ -433,10 +433,7 @@ object HoodieProcedureFilterUtils {
         val finalized = finalizeRegistryResolution(castedResolved)
         if (isUsableOutsideQueryPlan(finalized)) finalized else unresolvedFunc
       }
-    } match {
-      case Success(resolved) => resolved
-      case Failure(_) => unresolvedFunc
-    }
+    }.getOrElse(unresolvedFunc)
   }
 
   // Runs a handful of the analyzer's own coercion rules on a single expression, the same rules
