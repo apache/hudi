@@ -921,11 +921,13 @@ public class StreamSync implements Serializable, Closeable {
         // or writeClient.commit), the error table will have a committed instant for a data-table
         // instant that never lands. Downstream consumers of the error table should tolerate this
         // divergence.
+        Option<List<WriteStatus>> errorTableWriteStatuses = Option.empty();
         if (errorTableWriter.isPresent()) {
-          boolean errorTableSuccess = ErrorTableCommitter.commit(errorTableWriter.get(),
-              errorTableWriteStatusRDDOpt, isErrorTableWriteUnificationEnabled, instantTime,
+          ErrorTableCommitter.ErrorTableCommitResult errorTableCommitResult = ErrorTableCommitter.collectAndCommit(
+              errorTableWriter.get(), errorTableWriteStatusRDDOpt, isErrorTableWriteUnificationEnabled, instantTime,
               latestCommittedInstant);
-          if (!errorTableSuccess) {
+          errorTableWriteStatuses = errorTableCommitResult.getWriteStatuses();
+          if (!errorTableCommitResult.isSuccess()) {
             switch (errorWriteFailureStrategy) {
               case ROLLBACK_COMMIT:
                 // Roll back the inflight data-table instant so it doesn't leak under LAZY
@@ -961,7 +963,7 @@ public class StreamSync implements Serializable, Closeable {
 
         // Step 3: Count records. Drives the runMetaSync() decision below the try/finally.
         SuccessfulRecordCounter.Counts counts = SuccessfulRecordCounter.compute(
-            writeStatuses, errorTableWriteStatusRDDOpt, isErrorTableWriteUnificationEnabled);
+            writeStatuses, errorTableWriteStatuses, isErrorTableWriteUnificationEnabled);
         totalSuccessfulRecords.set(counts.getTotalSuccessfulRecords());
         log.info("instantTime={}, totalRecords={}, totalErrorRecords={}, totalSuccessfulRecords={}",
             instantTime, counts.getTotalRecords(), counts.getTotalErrorRecords(),

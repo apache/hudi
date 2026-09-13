@@ -22,8 +22,6 @@ package org.apache.hudi.utilities.streamer;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.util.Option;
 
-import org.apache.spark.api.java.JavaRDD;
-
 import java.util.List;
 import java.util.Objects;
 
@@ -45,32 +43,29 @@ public final class SuccessfulRecordCounter {
    * Compute total / errored / successful record counts from a pre-collected list of write statuses.
    *
    * @param dataTableWriteStatuses           Pre-collected data-table write statuses. Must not be null.
-   * @param errorTableWriteStatusRDDOpt      Optional error-table write status RDD; only consulted
+   * @param errorTableWriteStatuses            Error-table write statuses collected before the error table
+   *                                           commit, or empty when none were written
    *                                         when unification is enabled. Must not be null
    *                                         ({@link Option#empty()} when no error table).
    * @param isErrorTableWriteUnificationEnabled Whether error-table records contribute to the totals.
    * @return immutable {@link Counts} snapshot.
    */
   public static Counts compute(List<WriteStatus> dataTableWriteStatuses,
-                               Option<JavaRDD<WriteStatus>> errorTableWriteStatusRDDOpt,
+                               Option<List<WriteStatus>> errorTableWriteStatuses,
                                boolean isErrorTableWriteUnificationEnabled) {
     Objects.requireNonNull(dataTableWriteStatuses, "dataTableWriteStatuses");
-    Objects.requireNonNull(errorTableWriteStatusRDDOpt, "errorTableWriteStatusRDDOpt");
-
+    Objects.requireNonNull(errorTableWriteStatuses, "errorTableWriteStatuses");
     long totalRecords = 0L;
     long totalErrorRecords = 0L;
     for (WriteStatus ws : dataTableWriteStatuses) {
       totalRecords += ws.getTotalRecords();
       totalErrorRecords += ws.getTotalErrorRecords();
     }
-    if (isErrorTableWriteUnificationEnabled && errorTableWriteStatusRDDOpt.isPresent()) {
-      JavaRDD<WriteStatus> errorRdd = errorTableWriteStatusRDDOpt.get();
-      long[] sums = errorRdd.aggregate(
-          new long[]{0L, 0L},
-          (acc, ws) -> new long[]{acc[0] + ws.getTotalRecords(), acc[1] + ws.getTotalErrorRecords()},
-          (a, b) -> new long[]{a[0] + b[0], a[1] + b[1]});
-      totalRecords += sums[0];
-      totalErrorRecords += sums[1];
+    if (isErrorTableWriteUnificationEnabled && errorTableWriteStatuses.isPresent()) {
+      for (WriteStatus ws : errorTableWriteStatuses.get()) {
+        totalRecords += ws.getTotalRecords();
+        totalErrorRecords += ws.getTotalErrorRecords();
+      }
     }
     return new Counts(totalRecords, totalErrorRecords);
   }
