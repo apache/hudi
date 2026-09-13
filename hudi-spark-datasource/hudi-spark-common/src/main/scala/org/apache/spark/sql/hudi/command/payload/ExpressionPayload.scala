@@ -150,7 +150,7 @@ class ExpressionPayload(@transient record: GenericRecord,
           .get(0, BooleanType)
           .asInstanceOf[Boolean]
         if (deleteConditionEvalResult) {
-          resultRecordOpt = HOption.empty()
+          resultRecordOpt = HOption.empty() // TEMP
         }
       }
     }
@@ -160,6 +160,37 @@ class ExpressionPayload(@transient record: GenericRecord,
       HOption.of(HoodieRecord.SENTINEL)
     } else {
       resultRecordOpt
+    }
+  }
+
+  /**
+   * Weighs a matched delete against the record already in storage.
+   *
+   * A matched delete carries the source row's ordering value, so on a table that orders by event
+   * time it has to lose to a stored record with a higher ordering value, exactly as the update
+   * branch does through [[doRecordMerge]]. Returning the stored record leaves it untouched.
+   *
+   * The comparison needs the stored record, which only `combineAndGetUpdateValue` supplies. The
+   * `getInsertValue` entry point passes none and the delete is written into a delete block with
+   * its ordering value, so the reader weighs it there instead.
+   *
+   * No incoming record is handed to `needUpdatingPersistedRecord`: it would look the ordering
+   * fields up by name on the joined record, whose fields are all renamed by [[mergeSchema]], so
+   * every lookup misses. Passing none makes it fall back to this payload's own ordering value,
+   * which was read from the source row when the record was created.
+   */
+  private def processDelete(targetRecord: Option[IndexedRecord],
+                            properties: Properties): HOption[IndexedRecord] = {
+    val originalPayload = properties.getProperty(PAYLOAD_ORIGINAL_AVRO_PAYLOAD)
+    // Commit time ordering resolves to OverwriteWithLatestAvroPayload, where the delete always
+    // wins. A custom payload keeps its existing semantics rather than having one guessed for it.
+    // TODO(HUDI-8915): EventTimeAvroPayload also infers EVENT_TIME_ORDERING and is not covered.
+    if (targetRecord.isEmpty || !classOf[DefaultHoodieRecordPayload].getName.equals(originalPayload)) {
+      HOption.empty()
+    } else if (needUpdatingPersistedRecord(targetRecord.get, HOption.empty(), properties)) {
+      HOption.empty()
+    } else {
+      HOption.of(targetRecord.get)
     }
   }
 
