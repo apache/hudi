@@ -31,6 +31,8 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.spark.serializer.KryoSerializer;
+import org.apache.spark.serializer.SerializerInstance;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -39,8 +41,12 @@ import org.objenesis.strategy.StdInstantiatorStrategy;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
+
+import scala.reflect.ClassTag;
+import scala.reflect.ClassTag$;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -87,6 +93,31 @@ public class TestHoodieSparkKryoRegistrar {
         assertEquals("updated", projected.get(0).toString());
         assertEquals("key", projected.get(1).toString());
         assertEquals(42L, payload.getInsertValue(writerSchema).get().get(1));
+      }
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testSparkKryoWithoutHudiRegistrarRetainsWriterSchema(boolean deleted) throws IOException {
+    Schema writerSchema = SchemaBuilder.record("payload").fields()
+        .requiredString("id").requiredLong("ts").requiredString("value").endRecord();
+    Schema projection = SchemaBuilder.record("payload").fields().requiredString("value").endRecord();
+    GenericRecord record = deleted ? null : new GenericRecordBuilder(writerSchema)
+        .set("id", "key").set("ts", 42L).set("value", "updated").build();
+    OverwriteWithLatestAvroPayload payload = new OverwriteWithLatestAvroPayload(record, 42L);
+    ClassTag<OverwriteWithLatestAvroPayload> tag = ClassTag$.MODULE$.apply(OverwriteWithLatestAvroPayload.class);
+    SerializerInstance writer = new KryoSerializer(new SparkConf(false)).newInstance();
+    for (int round = 0; round < 3; round++) {
+      ByteBuffer bytes = writer.serialize(payload, tag);
+      SerializerInstance reader = new KryoSerializer(new SparkConf(false)).newInstance();
+      OverwriteWithLatestAvroPayload restored = reader.deserialize(bytes, tag);
+      assertEquals(42L, restored.getOrderingVal());
+      if (deleted) {
+        assertFalse(restored.getInsertValue(projection).isPresent());
+      } else {
+        assertEquals("updated", restored.getInsertValue(projection).get().get(0).toString());
+        assertEquals("key", restored.getInsertValue(writerSchema).get().get(0).toString());
       }
     }
   }

@@ -18,7 +18,9 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
@@ -30,7 +32,9 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.ByteArrayInputStream;
@@ -38,14 +42,19 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.nio.file.Path;
 import java.util.Base64;
 import java.util.Properties;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit tests for {@link BaseAvroPayload#getRecord(Schema)}, exercised through the concrete
@@ -251,6 +260,170 @@ class TestBaseAvroPayload {
     assertEquals("text2", String.valueOf(decoded.get(readerSchema.getField("col2_new").pos())));
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void incompatibleReplacementUsesDefault(boolean serialized) throws Exception {
+    Schema writer = SchemaBuilder.record("replacement").fields()
+        .requiredString("id").requiredString("removed").endRecord();
+    Schema reader = SchemaBuilder.record("replacement").fields()
+        .requiredString("id").optionalLong("added").endRecord();
+    OverwriteWithLatestAvroPayload payload = new OverwriteWithLatestAvroPayload(
+        new GenericRecordBuilder(writer).set("id", "key").set("removed", "not-a-number").build(), 1L);
+    if (serialized) {
+      payload = kryoRoundTrip(payload, false);
+    }
+    IndexedRecord result = payload.getInsertValue(reader).get();
+    assertEquals("key", result.get(0).toString());
+    assertNull(result.get(1));
+    assertEquals("not-a-number", payload.getInsertValue(writer).get().get(1).toString());
+  }
+
+  @Test
+  void positionalFallbackDoesNotReuseAliasedField() throws Exception {
+    Schema writer = SchemaBuilder.record("aliasReplacement").fields()
+        .requiredString("removed").requiredString("kept").endRecord();
+    Schema reader = SchemaBuilder.record("aliasReplacement").fields()
+        .optionalString("added")
+        .name("renamed").aliases("removed").type().stringType().noDefault().endRecord();
+    GenericRecord original = new GenericRecordBuilder(writer).set("removed", "value").set("kept", "other").build();
+    IndexedRecord result = new OverwriteWithLatestAvroPayload(original, 1L).getInsertValue(reader).get();
+    assertNull(result.get(0));
+    assertEquals("value", result.get(1).toString());
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void legacyPrefixReadDoesNotDiscardTrailingValue(boolean serializeAfterPrefix) throws Exception {
+    Schema writer = SchemaBuilder.record("legacyPrefix").fields()
+        .requiredString("id").optionalString("trailing").endRecord();
+    Schema prefix = SchemaBuilder.record("legacyPrefix").fields().requiredString("id").endRecord();
+    OverwriteWithLatestAvroPayload payload = kryoRoundTrip(new OverwriteWithLatestAvroPayload(
+        new GenericRecordBuilder(writer).set("id", "key").set("trailing", "retained").build(), 1L), true);
+    assertEquals("key", payload.getInsertValue(prefix).get().get(0).toString());
+    if (serializeAfterPrefix) {
+      payload = kryoRoundTrip(payload, false);
+    }
+    assertEquals("retained", payload.getInsertValue(writer).get().get(1).toString());
+    Schema reordered = SchemaBuilder.record("legacyPrefix").fields()
+        .optionalString("trailing").requiredString("id").endRecord();
+    assertEquals("retained", payload.getInsertValue(reordered).get().get(0).toString());
+  }
+
+  @Test
+  void compatiblePositionalRenameAllowsNumericPromotion() throws IOException {
+    Schema writer = SchemaBuilder.record("promotion").fields().requiredInt("old_value").endRecord();
+    Schema reader = SchemaBuilder.record("promotion").fields().optionalLong("new_value").endRecord();
+    GenericRecord original = new GenericRecordBuilder(writer).set("old_value", 42).build();
+    assertEquals(42L, new OverwriteWithLatestAvroPayload(original, 1L).getInsertValue(reader).get().get(0));
+  }
+
+  @Test
+  void defaultSpillSerializerRetainsSchemaAcrossIndependentThreads() throws Exception {
+    // DefaultSerializer is also used for random-access disk spills. A later record must
+    // remain readable independently of earlier records or the serializer's thread-local cache.
+    DefaultSerializer<OverwriteWithLatestAvroPayload> serializer = new DefaultSerializer<>();
+    serializer.serialize(new OverwriteWithLatestAvroPayload(newFullRecord(), 1L));
+    OverwriteWithLatestAvroPayload payload = new OverwriteWithLatestAvroPayload(newFullRecord(), 100L);
+    payload.getInsertValue(dataOnlySchema);
+    byte[] bytes = serializer.serialize(payload);
+    ExecutorService executor = Executors.newSingleThreadExecutor();
+    try {
+      executor.submit(() -> {
+        OverwriteWithLatestAvroPayload restored = new DefaultSerializer<OverwriteWithLatestAvroPayload>().deserialize(bytes);
+        assertEquals("alice", restored.getInsertValue(dataOnlySchema).get().get(dataOnlySchema.getField("name").pos()).toString());
+        assertEquals("20260807120000000", restored.getInsertValue(fullSchema).get().get(0).toString());
+        return null;
+      }).get(30, TimeUnit.SECONDS);
+    } finally {
+      executor.shutdownNow();
+    }
+  }
+
+  @ParameterizedTest
+  @CsvSource({"BITCASK,false", "BITCASK,true", "ROCKS_DB,false"})
+  void spilledPayloadsRetainIndependentWriterSchemas(ExternalSpillableMap.DiskMapType diskType,
+                                                    boolean compression, @TempDir Path directory) throws IOException {
+    try (ExternalSpillableMap<String, OverwriteWithLatestAvroPayload> records = new ExternalSpillableMap<>(
+        1L, directory.toString(), key -> 64L, value -> 1024L, diskType, new DefaultSerializer<>(), compression, "payload-test")) {
+      records.put("full", new OverwriteWithLatestAvroPayload(newFullRecord(), 100L));
+      GenericRecord dataOnly = new GenericRecordBuilder(dataOnlySchema).set("id", "second")
+          .set("ts", 200L).set("name", "bob").set("price", "1.00").build();
+      records.put("data", new OverwriteWithLatestAvroPayload(dataOnly, 200L));
+      assertEquals(2, records.getDiskBasedMapNumEntries());
+      // Read out of insertion order, with different writer schemas and projections first.
+      assertEquals("bob", records.get("data").getInsertValue(fullSchema).get().get(fullSchema.getField("name").pos()).toString());
+      OverwriteWithLatestAvroPayload restored = records.get("full");
+      assertEquals("alice", restored.getInsertValue(dataOnlySchema).get().get(dataOnlySchema.getField("name").pos()).toString());
+      assertEquals("20260807120000000", restored.getInsertValue(fullSchema).get().get(0).toString());
+    }
+  }
+
+  @Test
+  void wideSchemaIsCompressedWithoutDependingOnEarlierRecords() throws Exception {
+    SchemaBuilder.FieldAssembler<Schema> fields = SchemaBuilder.record("wide").fields();
+    for (int i = 0; i < 128; i++) {
+      fields.optionalString("column_" + i);
+    }
+    Schema writer = fields.endRecord();
+    OverwriteWithLatestAvroPayload payload = new OverwriteWithLatestAvroPayload(
+        new GenericRecordBuilder(writer).set("column_127", "last-value").build(), 1L);
+    try (Output output = new Output(256, -1)) {
+      payload.write(new Kryo(), output);
+      assertTrue(output.position() < writer.toString().length() / 2,
+          "A sparse wide record must not pay the full schema JSON cost on every spill or shuffle");
+      try (Input input = new Input(output.toBytes())) {
+        assertEquals(-payload.getRecordBytes().length - 1, input.readInt());
+        assertTrue(input.readString().startsWith("gzip:"));
+      }
+    }
+    Schema projection = SchemaBuilder.record("wide").fields().optionalString("column_127").endRecord();
+    OverwriteWithLatestAvroPayload restored = kryoRoundTrip(payload, false);
+    assertEquals("last-value", restored.getInsertValue(projection).get().get(0).toString());
+    assertEquals("last-value", restored.getInsertValue(writer).get().get(127).toString());
+    assertNull(restored.getInsertValue(writer).get().get(0));
+  }
+
+  @Test
+  void readsUncompressedSchemaBearingKryoPayload() throws IOException {
+    OverwriteWithLatestAvroPayload payload = new OverwriteWithLatestAvroPayload(newFullRecord(), 100L);
+    try (Output output = new Output(256, -1)) {
+      // Preserve the uncompressed schema-bearing representation as well as legacy bytes.
+      output.writeInt(-payload.getRecordBytes().length - 1);
+      output.writeString(fullSchema.toString());
+      output.writeBytes(payload.getRecordBytes());
+      new Kryo().writeClassAndObject(output, 100L);
+      output.writeBoolean(false);
+      OverwriteWithLatestAvroPayload restored = new OverwriteWithLatestAvroPayload(Option.empty());
+      try (Input input = new Input(output.toBytes())) {
+        restored.read(new Kryo(), input);
+      }
+      assertEquals("alice", restored.getInsertValue(dataOnlySchema).get().get(dataOnlySchema.getField("name").pos()).toString());
+    }
+  }
+
+  @Test
+  void kryoRoundTripPreservesTombstone() throws IOException {
+    OverwriteWithLatestAvroPayload restored = kryoRoundTrip(new OverwriteWithLatestAvroPayload(null, 100L), false);
+    assertFalse(restored.getInsertValue(fullSchema).isPresent());
+    assertEquals(100L, restored.getOrderingVal());
+    assertTrue(restored.isDeleted(fullSchema, new Properties()));
+  }
+
+  private OverwriteWithLatestAvroPayload kryoRoundTrip(OverwriteWithLatestAvroPayload payload, boolean legacy) {
+    Kryo writer = new Kryo();
+    if (legacy) {
+      BaseAvroPayload.useLegacyKryoFormat(writer);
+    }
+    try (Output output = new Output(256, -1)) {
+      payload.write(writer, output);
+      OverwriteWithLatestAvroPayload restored = new OverwriteWithLatestAvroPayload(Option.empty());
+      try (Input input = new Input(output.toBytes())) {
+        restored.read(new Kryo(), input);
+      }
+      return restored;
+    }
+  }
+
   @Test
   void resolvesOnlyMatchingNamedUnionBranchesDuringEvolution() throws Exception {
     Schema writer = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"unionRoot\",\"fields\":["
@@ -337,6 +510,8 @@ class TestBaseAvroPayload {
     if (deleted) {
       assertFalse(restored.getInsertValue(writerSchema).isPresent());
     } else {
+      Schema prefix = SchemaBuilder.record("payload").fields().requiredString("id").endRecord();
+      assertEquals("key", restored.getInsertValue(prefix).get().get(0).toString());
       assertEquals("key", restored.getInsertValue(writerSchema).get().get(0).toString());
       Schema projection = SchemaBuilder.record("payload").fields().requiredString("value").requiredString("id").endRecord();
       IndexedRecord record = restored.getInsertValue(projection).get();
