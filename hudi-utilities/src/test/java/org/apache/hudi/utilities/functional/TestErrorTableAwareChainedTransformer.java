@@ -21,7 +21,6 @@ package org.apache.hudi.utilities.functional;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.exception.HoodieTransformException;
 import org.apache.hudi.utilities.transform.ErrorTableAwareChainedTransformer;
@@ -41,6 +40,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static junit.framework.Assert.assertEquals;
@@ -76,7 +76,9 @@ public class TestErrorTableAwareChainedTransformer extends SparkClientFunctional
   }
 
   @Test
-  public void testForErrorRecordColumn() {
+  public void testCorruptRecordReInjectedAfterTransformerDropsIt() {
+    // A custom transformer (e.g. a column filter configured with an include list) that does
+    // dataset.select(userColumns) drops _corrupt_record. The chain re-injects it.
     Dataset<Row> original = getTestDataset();
 
     Transformer t1 = getErrorEventHandlerTransformer();
@@ -86,7 +88,45 @@ public class TestErrorTableAwareChainedTransformer extends SparkClientFunctional
     TypedProperties properties = new TypedProperties();
     properties.setProperty(ERROR_TABLE_ENABLED.key(), "true");
     ErrorTableAwareChainedTransformer transformer = new ErrorTableAwareChainedTransformer(Arrays.asList(t1, t2, t3));
-    assertThrows(HoodieValidationException.class, () -> transformer.apply(jsc(), spark(), original, properties));
+    Dataset<Row> transformed = transformer.apply(jsc(), spark(), original, properties);
+
+    assertArrayEquals(new String[]{"foo", ERROR_TABLE_CURRUPT_RECORD_COL_NAME}, transformed.columns());
+    assertEquals(2, transformed.count());
+  }
+
+  @Test
+  public void testCustomColumnProjectionPreservesCorruptRecord() {
+    // Single custom transformer doing column projection, which drops _corrupt_record.
+    Dataset<Row> original = getTestDataset();
+
+    Transformer columnFilter = (jsc, sparkSession, dataset, props) -> dataset.select("foo");
+    TypedProperties properties = new TypedProperties();
+    properties.setProperty(ERROR_TABLE_ENABLED.key(), "true");
+    ErrorTableAwareChainedTransformer transformer =
+        new ErrorTableAwareChainedTransformer(Collections.singletonList(columnFilter));
+    Dataset<Row> transformed = transformer.apply(jsc(), spark(), original, properties);
+
+    assertArrayEquals(new String[]{"foo", ERROR_TABLE_CURRUPT_RECORD_COL_NAME}, transformed.columns());
+    assertEquals(2, transformed.count());
+    assertEquals(2, transformed.filter(new Column(ERROR_TABLE_CURRUPT_RECORD_COL_NAME).isNull()).count());
+  }
+
+  @Test
+  public void testTransformerPreservingCorruptRecordIsNoOp() {
+    // Transformer that keeps all columns, so re-injection is a no-op.
+    Dataset<Row> original = getTestDataset();
+
+    Transformer keepAll = (jsc, sparkSession, dataset, properties) -> dataset.withColumn("foo",
+        dataset.col("foo").cast(IntegerType));
+    TypedProperties properties = new TypedProperties();
+    properties.setProperty(ERROR_TABLE_ENABLED.key(), "true");
+    ErrorTableAwareChainedTransformer transformer =
+        new ErrorTableAwareChainedTransformer(Collections.singletonList(keepAll));
+    Dataset<Row> transformed = transformer.apply(jsc(), spark(), original, properties);
+
+    assertArrayEquals(new String[]{"foo", ERROR_TABLE_CURRUPT_RECORD_COL_NAME}, transformed.columns());
+    assertEquals(2, transformed.count());
+    assertEquals(2, transformed.filter(new Column(ERROR_TABLE_CURRUPT_RECORD_COL_NAME).isNull()).count());
   }
 
   private Dataset<Row> getTestDataset() {

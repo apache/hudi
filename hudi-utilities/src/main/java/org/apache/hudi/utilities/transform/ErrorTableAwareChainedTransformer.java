@@ -35,8 +35,8 @@ import java.util.function.Supplier;
 
 /**
  * A {@link Transformer} to chain other {@link Transformer}s and apply sequentially.
- * Adds errorTableCorruptRecordColumn at the beginning of transformations and validates
- * if that column is not dropped in any of the transformations.
+ * Adds errorTableCorruptRecordColumn at the beginning of transformations and re-injects
+ * it after each transformer if dropped (e.g. by custom column-projecting transformers).
  */
 public class ErrorTableAwareChainedTransformer extends ChainedTransformer {
   public ErrorTableAwareChainedTransformer(List<String> configuredTransformers, Supplier<Option<HoodieSchema>> sourceSchemaSupplier) {
@@ -55,8 +55,9 @@ public class ErrorTableAwareChainedTransformer extends ChainedTransformer {
     for (TransformerInfo transformerInfo : transformers) {
       Transformer transformer = transformerInfo.getTransformer();
       dataset = transformer.apply(jsc, sparkSession, dataset, transformerInfo.getProperties(properties, transformers));
-      // validate in every stage to ensure ErrorRecordColumn not dropped by one of the transformer and added by next transformer.
-      ErrorTableUtils.validate(dataset);
+      // Re-inject _corrupt_record if the transformer dropped it (e.g. custom JAR transformers
+      // that do column projection like ColumnFilter with mode=include).
+      dataset = ErrorTableUtils.addNullValueErrorTableCorruptRecordColumn(dataset);
     }
     return dataset;
   }
