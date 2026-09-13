@@ -150,7 +150,7 @@ class ExpressionPayload(@transient record: GenericRecord,
           .get(0, BooleanType)
           .asInstanceOf[Boolean]
         if (deleteConditionEvalResult) {
-          resultRecordOpt = HOption.empty() // TEMP
+          resultRecordOpt = processDelete(targetRecord, properties)
         }
       }
     }
