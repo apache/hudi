@@ -66,6 +66,7 @@ env:
 jobs:
   test-flink-1:
     runs-on: ubuntu-latest
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -137,6 +138,7 @@ jobs:
 
   test-flink-2:
     runs-on: ubuntu-latest
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -236,6 +238,7 @@ jobs:
 
   validate-bundles:
     runs-on: ubuntu-latest
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -313,6 +316,7 @@ jobs:
 
   validate-bundle-spark4:
     runs-on: ubuntu-latest
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -425,6 +429,7 @@ jobs:
 
   integration-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
