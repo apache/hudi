@@ -912,22 +912,33 @@ public class StreamSync implements Serializable, Closeable {
             HoodiePreCommitValidatorConfig.VALIDATOR_CLASS_NAMES.key(),
             HoodiePreCommitValidatorConfig.VALIDATOR_CLASS_NAMES.defaultValue()));
 
-        // Step 1: Commit the error table BEFORE running validators or the write-error gate.
+        // Step 1: Count records. Must stay ahead of the error-table commit: the error-table write
+        // statuses are held only by the cache that commit releases, so reading them afterwards
+        // re-runs the write and lands every error record twice.
+        SuccessfulRecordCounter.Counts counts = SuccessfulRecordCounter.compute(
+            writeStatuses, errorTableWriteStatusRDDOpt, isErrorTableWriteUnificationEnabled);
+        totalSuccessfulRecords.set(counts.getTotalSuccessfulRecords());
+        log.info("instantTime={}, totalRecords={}, totalErrorRecords={}, totalSuccessfulRecords={}",
+            instantTime, counts.getTotalRecords(), counts.getTotalErrorRecords(),
+            counts.getTotalSuccessfulRecords());
+        if (counts.getTotalRecords() == 0) {
+          log.info("No new data, perform empty commit.");
+        }
+
+        // Step 2: Commit the error table BEFORE running validators or the write-error gate.
         // Error records captured here are a genuine artifact of the write attempt and should
         // survive even when a validator later blocks the data-table commit (otherwise the
         // operator loses the captured errors and the next run has nothing to triage against).
         // Latent design quirk (preserved from HSWSV): if error-table commit succeeds and any
-        // subsequent step fails (Step 2 validator including the offset validator, Step 4 gate,
+        // subsequent step fails (Step 3 validator including the offset validator, Step 4 gate,
         // or writeClient.commit), the error table will have a committed instant for a data-table
         // instant that never lands. Downstream consumers of the error table should tolerate this
         // divergence.
-        Option<List<WriteStatus>> errorTableWriteStatuses = Option.empty();
         if (errorTableWriter.isPresent()) {
-          ErrorTableCommitter.ErrorTableCommitResult errorTableCommitResult = ErrorTableCommitter.collectAndCommit(
-              errorTableWriter.get(), errorTableWriteStatusRDDOpt, isErrorTableWriteUnificationEnabled, instantTime,
+          boolean errorTableSuccess = ErrorTableCommitter.commit(errorTableWriter.get(),
+              errorTableWriteStatusRDDOpt, isErrorTableWriteUnificationEnabled, instantTime,
               latestCommittedInstant);
-          errorTableWriteStatuses = errorTableCommitResult.getWriteStatuses();
-          if (!errorTableCommitResult.isSuccess()) {
+          if (!errorTableSuccess) {
             switch (errorWriteFailureStrategy) {
               case ROLLBACK_COMMIT:
                 // Roll back the inflight data-table instant so it doesn't leak under LAZY
@@ -943,13 +954,13 @@ public class StreamSync implements Serializable, Closeable {
           }
         }
 
-        // Step 2: Run user-configured pre-commit validators (offset, custom, and the opt-in
+        // Step 3: Run user-configured pre-commit validators (offset, custom, and the opt-in
         // SparkWriteErrorValidator). Validators are intentionally stronger than commitOnErrors
         // — a failure here aborts the data-table commit regardless of the gate in Step 4.
         // Roll back the inflight data-table instant on validation failure so it doesn't leak
-        // under LAZY failed-writes cleanup policy (consistent with Step 1 ROLLBACK_COMMIT and
-        // the Step 4 gate below). Error-table records already committed in Step 1 are preserved
-        // by design — see Step 1's latent-quirk note.
+        // under LAZY failed-writes cleanup policy (consistent with Step 2 ROLLBACK_COMMIT and
+        // the Step 4 gate below). Error-table records already committed in Step 2 are preserved
+        // by design — see Step 2's latent-quirk note.
         if (validatorsConfigured) {
           try {
             SparkStreamerValidatorUtils.runValidators(props, instantTime, writeStatuses,
@@ -959,17 +970,6 @@ public class StreamSync implements Serializable, Closeable {
             writeClient.rollback(instantTime);
             throw new HoodieStreamerWriteException("Pre-commit validators failed for instant " + instantTime, e);
           }
-        }
-
-        // Step 3: Count records. Drives the runMetaSync() decision below the try/finally.
-        SuccessfulRecordCounter.Counts counts = SuccessfulRecordCounter.compute(
-            writeStatuses, errorTableWriteStatuses, isErrorTableWriteUnificationEnabled);
-        totalSuccessfulRecords.set(counts.getTotalSuccessfulRecords());
-        log.info("instantTime={}, totalRecords={}, totalErrorRecords={}, totalSuccessfulRecords={}",
-            instantTime, counts.getTotalRecords(), counts.getTotalErrorRecords(),
-            counts.getTotalSuccessfulRecords());
-        if (counts.getTotalRecords() == 0) {
-          log.info("No new data, perform empty commit.");
         }
 
         // Step 4: Apply the legacy HSWSV write-error gate.

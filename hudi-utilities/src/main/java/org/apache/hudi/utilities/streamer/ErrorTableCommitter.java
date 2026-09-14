@@ -23,9 +23,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.storage.StorageLevel;
 
-import java.util.List;
 import java.util.Objects;
 
 /**
@@ -47,41 +45,6 @@ import java.util.Objects;
 public final class ErrorTableCommitter {
 
   private ErrorTableCommitter() {
-  }
-
-  /**
-   * Materializes the error-table write statuses, then commits the error table like {@link #commit}
-   * and returns both. The error table's commit releases the RDD it was given, so a later evaluation
-   * of that RDD re-runs the write itself and lands the same records a second time under the
-   * committed instant; anything that needs the statuses after the commit must read them from here.
-   * An RDD the writer did not persist is cached for the duration of the call so the collect and the
-   * commit share one evaluation.
-   */
-  public static ErrorTableCommitResult collectAndCommit(BaseErrorTableWriter<?> errorTableWriter,
-                                                        Option<JavaRDD<WriteStatus>> errorTableWriteStatusRDDOpt,
-                                                        boolean isErrorTableWriteUnificationEnabled,
-                                                        String instantTime,
-                                                        Option<String> latestCommittedInstant) {
-    Objects.requireNonNull(errorTableWriteStatusRDDOpt, "errorTableWriteStatusRDDOpt");
-    if (!isErrorTableWriteUnificationEnabled || !errorTableWriteStatusRDDOpt.isPresent()) {
-      boolean success = commit(errorTableWriter, errorTableWriteStatusRDDOpt, isErrorTableWriteUnificationEnabled,
-          instantTime, latestCommittedInstant);
-      return new ErrorTableCommitResult(success, Option.empty());
-    }
-    JavaRDD<WriteStatus> writeStatusRDD = errorTableWriteStatusRDDOpt.get();
-    boolean cacheHere = writeStatusRDD.getStorageLevel().equals(StorageLevel.NONE());
-    if (cacheHere) {
-      writeStatusRDD.cache();
-    }
-    try {
-      List<WriteStatus> writeStatuses = writeStatusRDD.collect();
-      boolean success = commit(errorTableWriter, errorTableWriteStatusRDDOpt, true, instantTime, latestCommittedInstant);
-      return new ErrorTableCommitResult(success, Option.of(writeStatuses));
-    } finally {
-      if (cacheHere) {
-        writeStatusRDD.unpersist();
-      }
-    }
   }
 
   /**
@@ -119,27 +82,5 @@ public final class ErrorTableCommitter {
     }
     // Legacy path: writer performs both upsert and commit internally.
     return errorTableWriter.upsertAndCommit(instantTime, latestCommittedInstant);
-  }
-
-  /**
-   * Outcome of {@link #collectAndCommit}: whether the error table committed, and the error-table
-   * write statuses collected before that commit (empty when unification is off or nothing was written).
-   */
-  public static final class ErrorTableCommitResult {
-    private final boolean success;
-    private final Option<List<WriteStatus>> writeStatuses;
-
-    ErrorTableCommitResult(boolean success, Option<List<WriteStatus>> writeStatuses) {
-      this.success = success;
-      this.writeStatuses = writeStatuses;
-    }
-
-    public boolean isSuccess() {
-      return success;
-    }
-
-    public Option<List<WriteStatus>> getWriteStatuses() {
-      return writeStatuses;
-    }
   }
 }

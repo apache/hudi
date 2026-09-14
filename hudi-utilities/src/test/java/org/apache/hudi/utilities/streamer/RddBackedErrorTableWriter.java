@@ -34,31 +34,14 @@ import org.apache.spark.sql.SparkSession;
 import org.apache.spark.storage.StorageLevel;
 
 /**
- * An error-table writer backed by a real {@link SparkRDDWriteClient} writing a real Hudi table,
- * mirroring the RDD lifecycle of the production writer used with
- * {@code hoodie.errortable.write.unification.enabled=true}:
- *
- * <ul>
- *   <li>{@link #upsert} persists the error events, starts an error-table instant and returns the
- *       <i>lazy</i> write-status RDD of a bulk insert. Nothing has been written yet.</li>
- *   <li>{@link #commit} hands those statuses to the write client. With
- *       {@code hoodie.release.resource.on.completion.enable=true} that commit calls
- *       {@code releaseResources}, which unpersists the write statuses cached under the instant's
- *       cache key, and the writer then drops its own cache of the upstream error events.</li>
- * </ul>
- *
- * <p>Both caches are therefore gone once {@link #commit} returns, so any later action on the
- * write-status RDD re-runs the bulk insert and lands every error record a second time under an
- * instant that is already complete. The stub error-table writers elsewhere in the test tree keep a
- * reference to the RDD and release nothing, which makes that ordering hazard invisible; this writer
- * exists so a test can observe it.
- *
- * @see TestErrorTableWriteOnce
+ * Error-table writer backed by a real {@link SparkRDDWriteClient} over a real Hudi table. Unlike
+ * the stub writers elsewhere in the tree, its {@link #commit} releases the write statuses it is
+ * given (and the upstream error events), which is what makes a later read of that RDD re-run the
+ * write.
  */
 class RddBackedErrorTableWriter extends BaseErrorTableWriter<ErrorEvent<HoodieRecord>> implements AutoCloseable {
 
-  // Raw on purpose: a parameterized SparkRDDWriteClient<T> would reject the raw-element
-  // JavaRDD<HoodieRecord> that addErrorEvents accumulates.
+  // Raw: a parameterized client would reject the raw-element JavaRDD<HoodieRecord>.
   private final transient SparkRDDWriteClient writeClient;
   private transient JavaRDD<HoodieRecord> errorEventsRdd;
   private Option<String> errorTableInstantTime = Option.empty();

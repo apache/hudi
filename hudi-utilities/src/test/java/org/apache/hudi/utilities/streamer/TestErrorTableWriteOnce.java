@@ -31,6 +31,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.storage.StorageLevel;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -39,77 +40,56 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Regression coverage for the error-table write landing exactly once under
- * {@code hoodie.errortable.write.unification.enabled=true}.
- *
- * <p>The error-table write-status RDD is only ever kept alive by a Spark cache: the bulk insert
- * persists the statuses under the instant's cache key, and the error table's commit releases that
- * cache (and, in the writer, the upstream error events too). Reading the RDD after the commit
- * therefore re-runs the bulk insert and lands every error record a second time under an instant
- * that is already complete.
- *
- * <p>Both tests drive a real {@link RddBackedErrorTableWriter} over a real Hudi table and assert on
- * the record keys the error table actually holds, not on counts alone. The second test pins the
- * broken ordering so the guard in {@link ErrorTableCommitter#collectAndCommit} cannot be quietly
- * removed: it is red on the fixed ordering and green only on the ordering that caused the
- * duplication.
+ * Covers the error-table write landing exactly once under
+ * {@code hoodie.errortable.write.unification.enabled=true}, over a real error table so the commit
+ * really does release the write statuses it was given.
  */
 class TestErrorTableWriteOnce extends SparkClientFunctionalTestHarness {
 
   private static final int ERROR_RECORD_COUNT = 20;
   private static final String BASE_TABLE_INSTANT = "20260913120000000";
 
-  /**
-   * The ordering {@code StreamSync} uses: collect the statuses while the write is still cached,
-   * then commit, then count off the collected list.
-   */
+  /** Counting before the commit, the order {@code StreamSync} uses. */
   @Test
-  void collectBeforeCommitWritesEachErrorRecordOnce() throws Exception {
+  void countingBeforeCommitWritesEachErrorRecordOnce() throws Exception {
     Fixture fixture = newFixture();
     try (RddBackedErrorTableWriter writer = fixture.writer) {
       JavaRDD<WriteStatus> writeStatusRDD = writer.upsert(BASE_TABLE_INSTANT, Option.empty());
+      assertNotEquals(StorageLevel.NONE(), writeStatusRDD.getStorageLevel(),
+          "the write persists its statuses; counting before the commit relies on that cache");
 
-      ErrorTableCommitter.ErrorTableCommitResult result = ErrorTableCommitter.collectAndCommit(
-          writer, Option.of(writeStatusRDD), true, BASE_TABLE_INSTANT, Option.empty());
-      assertTrue(result.isSuccess(), "error table commit should succeed");
-
-      List<WriteStatus> statuses = result.getWriteStatuses().get();
       SuccessfulRecordCounter.Counts counts = SuccessfulRecordCounter.compute(
-          new ArrayList<>(), Option.of(statuses), true);
+          new ArrayList<>(), Option.of(writeStatusRDD), true);
+      assertTrue(ErrorTableCommitter.commit(writer, Option.of(writeStatusRDD), true,
+          BASE_TABLE_INSTANT, Option.empty()), "error table commit should succeed");
 
       assertEquals(fixture.expectedKeys, readErrorTableKeys(fixture.errorTablePath),
           "the error table must hold each error record exactly once");
-      assertEquals(ERROR_RECORD_COUNT, counts.getTotalRecords(),
-          "counts must come from the collected statuses");
+      assertEquals(ERROR_RECORD_COUNT, counts.getTotalRecords());
       assertEquals(0L, counts.getTotalErrorRecords());
     }
   }
 
   /**
-   * The ordering that shipped before {@link ErrorTableCommitter#collectAndCommit}: commit first,
-   * then aggregate over the same RDD. The commit has released both caches by then, so the
-   * aggregate re-runs the bulk insert and the error table ends up with two rows per record. The
-   * re-run allocates fresh file ids, so the duplicates land in new file groups stamped with the
-   * already-completed instant and a snapshot read returns both.
-   *
-   * <p>If this test goes red, the release-and-recompute mechanism itself changed. Confirm that
-   * before treating it as a regression in this test.
+   * Counting after the commit duplicates the write. Pins why the order matters; if this goes red,
+   * the release-and-recompute mechanism changed rather than this test.
    */
   @Test
-  void readingTheRddAfterTheCommitWritesEveryErrorRecordTwice() throws Exception {
+  void countingAfterCommitWritesEveryErrorRecordTwice() throws Exception {
     Fixture fixture = newFixture();
     try (RddBackedErrorTableWriter writer = fixture.writer) {
       JavaRDD<WriteStatus> writeStatusRDD = writer.upsert(BASE_TABLE_INSTANT, Option.empty());
 
       assertTrue(ErrorTableCommitter.commit(writer, Option.of(writeStatusRDD), true,
           BASE_TABLE_INSTANT, Option.empty()), "error table commit should succeed");
-      long totalRecords = writeStatusRDD.aggregate(
-          0L, (acc, ws) -> acc + ws.getTotalRecords(), Long::sum);
+      SuccessfulRecordCounter.Counts counts = SuccessfulRecordCounter.compute(
+          new ArrayList<>(), Option.of(writeStatusRDD), true);
 
-      assertEquals(ERROR_RECORD_COUNT, totalRecords,
+      assertEquals(ERROR_RECORD_COUNT, counts.getTotalRecords(),
           "the recomputed statuses still report one write's worth of records, which is why the "
               + "duplication was invisible to the counts");
       List<String> expectedTwice = fixture.expectedKeys.stream()
