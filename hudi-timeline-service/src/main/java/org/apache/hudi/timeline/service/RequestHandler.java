@@ -750,9 +750,15 @@ public class RequestHandler {
       }
 
       String localTimelineHash = localTimeline.getTimelineHash();
-      // refresh if timeline hash mismatches
       if (!localTimelineHash.equals(timelineHashFromClient)) {
-        return true;
+        if (HoodieTimeline.INVALID_INSTANT_TS.equals(lastKnownInstantFromClient)
+            || !localTimeline.containsInstant(lastKnownInstantFromClient)) {
+          return true;
+        }
+        // A newer last instant alone is insufficient: all actions and states through the
+        // client boundary must match before the server can be treated as an exact extension.
+        return !localTimeline.findInstantsBeforeOrEquals(lastKnownInstantFromClient)
+            .getTimelineHash().equals(timelineHashFromClient);
       }
 
       // As a safety check, even if hash is same, ensure instant is present
