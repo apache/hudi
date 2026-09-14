@@ -35,6 +35,7 @@ import org.apache.hudi.core.index.record.HoodieRecordIndex;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
@@ -194,9 +195,11 @@ public abstract class BaseRecordLevelIndex implements FlinkMetadataIndex {
       String[] keyFields,
       RowType rowType,
       boolean consistentLogicalTimestampEnabled) {
-    String[] partitionFields = metaClient.getTableConfig().getPartitionFields().orElse(new String[0]);
-    // align with the check logic in RowDataKeyGen
-    boolean isComplexRecordKey = keyFields.length > 1 || partitionFields.length > 1 && !OptionsResolver.useComplexKeygenNewEncoding(conf);
+    // align with the check logic in RowDataKeyGen: a single record key carries the `<field>:` prefix iff the
+    // table's (persisted or version-9 default) complex keygen encoding says so.
+    boolean prefixedSingleFieldKey = KeyGenUtils.resolveComplexKeyGenEncoding(metaClient.getTableConfig())
+        .map(ComplexKeyGenEncoding::encodesFieldName).orElse(false);
+    boolean isComplexRecordKey = keyFields.length > 1 || prefixedSingleFieldKey;
     List<String> hoodieKeys = new ArrayList<>();
     List<String> fieldNames = rowType.getFieldNames();
     for (String keyField: keyFields) {

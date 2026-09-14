@@ -42,14 +42,18 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils;
+import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.KeyGenUtils;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.sink.buffer.BufferMemoryType;
 import org.apache.hudi.sink.overwrite.PartitionOverwriteMode;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.HoodieFlinkIOFactory;
+import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.api.common.functions.Partitioner;
 import org.apache.flink.configuration.ConfigOption;
@@ -726,11 +730,52 @@ public class OptionsResolver {
   }
 
   /**
-   * Returns whether complex keygen encodes single record key with field name.
+   * Returns whether the configured key generator is the complex key generator (Avro or Spark flavour).
    */
-  public static boolean useComplexKeygenNewEncoding(Configuration conf) {
-    return Boolean.parseBoolean(conf.getString(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(),
-        HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.defaultValue().toString()));
+  public static boolean isComplexKeyGenerator(Configuration conf) {
+    if (!FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.KEYGEN_CLASS_NAME)) {
+      String keyGenClass = conf.get(FlinkOptions.KEYGEN_CLASS_NAME);
+      return ComplexAvroKeyGenerator.class.getName().equals(keyGenClass)
+          || KeyGeneratorType.COMPLEX.getClassName().equals(keyGenClass);
+    }
+    if (!FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.KEYGEN_TYPE)) {
+      // no class, but a type: mirror KeyGeneratorType#isComplexKeyGenerator, which reads the type first
+      return KeyGeneratorType.COMPLEX.name().equalsIgnoreCase(conf.get(FlinkOptions.KEYGEN_TYPE));
+    }
+    // neither configured explicitly: mirror StreamerUtil#checkKeygenGenerator, which selects the complex key
+    // generator whenever the record key or the partition path has two or more fields
+    return conf.getOptional(FlinkOptions.RECORD_KEY_FIELD).orElse("").split(",").length > 1
+        || conf.getOptional(FlinkOptions.PARTITION_PATH_FIELD).orElse("").split(",").length > 1;
+  }
+
+  /**
+   * Returns whether a complex key generator with a single record key field must prefix the key with the
+   * field name, i.e. the record key is `<field>:<value>` rather than the bare `<value>`.
+   *
+   * <p>Delegates to the engine-agnostic rule in {@link KeyGenUtils} so Flink and Spark cannot drift: the
+   * table property {@code hoodie.table.complex.keygen.encoding} (copied into the job configuration from
+   * {@code hoodie.properties}) wins when present; otherwise the write table version and
+   * {@code hoodie.write.complex.keygen.new.encoding} decide, exactly as for Spark.
+   */
+  public static boolean encodeSingleKeyFieldNameForComplexKeygen(Configuration conf) {
+    return KeyGenUtils.encodeSingleKeyFieldNameForComplexKeyGen(StreamerUtil.flinkConf2TypedProperties(conf));
+  }
+
+  /**
+   * Returns whether a single record key produced by the Flink row key generator must carry the
+   * {@code <field>:} prefix: only for the complex key generator, and only when its encoding says so.
+   */
+  public static boolean prefixSingleRecordKey(Configuration conf) {
+    String persisted = conf.toMap().get(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key());
+    if (!StringUtils.isNullOrEmpty(persisted)) {
+      // An encoding is only ever resolved for a single-field complex key generator table, so its presence both
+      // identifies the key generator and settles the encoding. It must win over the job configuration, whose
+      // key generator options are not a reliable signal here - HoodieTableFactory#setupHoodieKeyOptions resets
+      // them to the non-partitioned key generator for a non-partitioned table - and it is what the reader side
+      // (BaseRecordLevelIndex) resolves from, so deciding it differently here would silently prune every file.
+      return ComplexKeyGenEncoding.fromString(persisted).encodesFieldName();
+    }
+    return isComplexKeyGenerator(conf) && encodeSingleKeyFieldNameForComplexKeygen(conf);
   }
 
   // -------------------------------------------------------------------------

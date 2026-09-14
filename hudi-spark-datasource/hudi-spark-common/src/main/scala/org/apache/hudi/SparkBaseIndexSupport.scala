@@ -179,8 +179,12 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
       var compositeRecordKeys: List[String] = List.empty
       val recordKeyOpt = getRecordKeyConfig
 
-      val isComplexRecordKey = recordKeyOpt.map(recordKeys => recordKeys.length).getOrElse(0) > 1 ||
-        KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField(metaClient.getTableConfig)
+      // For a single-field complex key generator the table is at version 9+ here (the guard above bails
+      // out below that), so the persisted encoding (or the version-9 default) tells us whether the stored
+      // key carries the `<field>:` prefix. A VALUE_ONLY table must be looked up with the bare literal.
+      val encodingOpt = KeyGenUtils.resolveComplexKeyGenEncoding(metaClient.getTableConfig)
+      val prefixedSingleFieldKey = encodingOpt.isPresent && encodingOpt.get.encodesFieldName()
+      val isComplexRecordKey = recordKeyOpt.map(recordKeys => recordKeys.length).getOrElse(0) > 1 || prefixedSingleFieldKey
       recordKeyOpt.foreach { recordKeysArray =>
         // Handle composite record keys
         breakable {

@@ -1186,6 +1186,9 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
         val properties = metaClient.getTableConfig.getProps.asScala.toMap
         assertResult("day,hh")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
         assertResult("ts")(properties(HoodieTableConfig.ORDERING_FIELDS.key))
+        // The encoding property is only stamped by the 8 -> 9 upgrade, never on a table created at a pinned version.
+        assert(!properties.contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key),
+          s"hoodie.table.complex.keygen.encoding must not be set on a table created at version $tableVersion")
 
         val query = s"select _hoodie_record_key, _hoodie_partition_path, id, name, value, ts, day, hh from $tableName order by id"
 
@@ -2047,12 +2050,14 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
                                               query: String)(
                                                expectedRowsBefore: Seq[Any]*)(expectedRowsAfter: Seq[Any]*): Unit = {
     if (tableVersion < 9) {
-      // By default, the complex key generator validation is enabled and should throw exception on DML
+      // Below version 9 the encoding is recorded nowhere, so the HUDI-7001 guard rejects the DML by design.
       Assertions.assertComplexKeyGeneratorValidationThrows(() => spark.sql(dmlToWrite), "ingestion")
       // Query should still succeed
       checkAnswer(query)(expectedRowsBefore: _*)
       // Disabling the complex key generator validation should let write succeed
       HoodieSparkSqlTestBase.disableComplexKeygenValidation(spark, tableName)
+    } else {
+      checkAnswer(query)(expectedRowsBefore: _*)
     }
     spark.sql(dmlToWrite)
     HoodieSparkSqlTestBase.enableComplexKeygenValidation(spark, tableName)

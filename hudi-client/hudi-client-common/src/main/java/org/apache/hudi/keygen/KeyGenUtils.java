@@ -19,29 +19,47 @@
 package org.apache.hudi.keygen;
 
 import org.apache.hudi.common.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieKeyException;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.keygen.parser.BaseHoodieDateTimeParser;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.generic.GenericRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.config.HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
@@ -52,6 +70,8 @@ import static org.apache.hudi.keygen.KeyGenerator.NULL_RECORDKEY_PLACEHOLDER;
 import static org.apache.hudi.keygen.KeyGenerator.constructRecordKey;
 
 public class KeyGenUtils {
+  private static final Logger LOG = LoggerFactory.getLogger(KeyGenUtils.class);
+
   protected static final String HUDI_DEFAULT_PARTITION_PATH = PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
   public static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
   public static final String RECORD_KEY_GEN_PARTITION_ID_CONFIG = "_hoodie.record.key.gen.partition.id";
@@ -436,15 +456,154 @@ public class KeyGenUtils {
         + "`hoodie.write.complex.keygen.validation.enable=false` to skip this validation.";
   }
 
+  /**
+   * Whether a complex key generator with a single record key field prepends the field name to the key.
+   *
+   * <p>The encoding persisted on the table ({@link HoodieTableConfig#COMPLEX_KEYGEN_ENCODING}, stamped by the
+   * table version 8 to 9 upgrade from the table's existing data) is authoritative whenever it is present in
+   * the properties, because it describes what the data actually carries. Otherwise the write table version
+   * decides: 9 and above always prefix, 8 and below follow {@code hoodie.write.complex.keygen.new.encoding}.
+   */
   public static boolean encodeSingleKeyFieldNameForComplexKeyGen(TypedProperties props) {
+    String tableEncoding = props.getProperty(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key());
+    if (!StringUtils.isNullOrEmpty(tableEncoding)) {
+      return ComplexKeyGenEncoding.fromString(tableEncoding).encodesFieldName();
+    }
     int tableVersionCode = ConfigUtils.getIntWithAltKeys(props, WRITE_TABLE_VERSION);
     HoodieTableVersion tableVersion = HoodieTableVersion.fromVersionCode(tableVersionCode);
     return tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)
         || !ConfigUtils.getBooleanWithAltKeys(props, COMPLEX_KEYGEN_NEW_ENCODING);
   }
 
+  /**
+   * Whether the record key encoding of a single-field complex key generator table is unknown to readers,
+   * i.e. the table is below version 9, where the encoding is a per-write decision that is never recorded.
+   */
   public static boolean mayUseNewEncodingForComplexKeyGen(HoodieTableConfig tableConfig) {
     return tableConfig.getTableVersion().lesserThan(HoodieTableVersion.NINE)
         && isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig);
+  }
+
+  /**
+   * The record key encoding a single-field complex key generator table is known to carry.
+   *
+   * @return the persisted encoding, or {@link ComplexKeyGenEncoding#FIELD_PREFIXED} for a table at version 9
+   * and above without the property (created there, never migrated); empty when the table does not use a
+   * single-field complex key generator or is below version 9 (encoding not recorded, see
+   * {@link #mayUseNewEncodingForComplexKeyGen}).
+   */
+  public static Option<ComplexKeyGenEncoding> resolveComplexKeyGenEncoding(HoodieTableConfig tableConfig) {
+    if (!isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig)
+        || tableConfig.getTableVersion().lesserThan(HoodieTableVersion.NINE)) {
+      return Option.empty();
+    }
+    Option<ComplexKeyGenEncoding> persisted = tableConfig.getComplexKeyGenEncoding();
+    return Option.of(persisted.isPresent() ? persisted.get() : ComplexKeyGenEncoding.FIELD_PREFIXED);
+  }
+
+  /**
+   * Resolves whether an existing single-field complex key generator table stores bare record key values,
+   * by inspecting the record keys its data actually carries.
+   *
+   * <p>Called once, by the table version 8 to 9 upgrade, whose answer is then persisted as
+   * {@link HoodieTableConfig#COMPLEX_KEYGEN_ENCODING}; there is no separate cache to keep in sync.
+   *
+   * @return the value of {@code hoodie.write.complex.keygen.new.encoding} the data implies, or empty when it
+   * cannot be determined (no completed commits, or no readable base file).
+   */
+  public static Option<Boolean> resolveUseNewEncodingFromStorage(HoodieTableMetaClient metaClient) {
+    String recordKeyField = metaClient.getTableConfig().getRecordKeyFields().get()[0];
+    return deduceComplexKeyEncodingFromData(metaClient, recordKeyField);
+  }
+
+  /**
+   * Copies the resolved complex keygen encoding (the table property and the legacy boolean) from a write
+   * config onto another config bag, for components that build their key generator from a separate config.
+   */
+  public static void copyResolvedComplexKeyEncoding(HoodieConfig from, HoodieConfig to) {
+    if (from.contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING)) {
+      to.setValue(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING, from.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING));
+    }
+    if (from.contains(COMPLEX_KEYGEN_NEW_ENCODING)) {
+      to.setValue(COMPLEX_KEYGEN_NEW_ENCODING, from.getString(COMPLEX_KEYGEN_NEW_ENCODING));
+    }
+  }
+
+  public static void copyResolvedComplexKeyEncoding(HoodieConfig from, TypedProperties to) {
+    if (from.contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING)) {
+      to.setProperty(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), from.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING));
+    }
+    if (from.contains(COMPLEX_KEYGEN_NEW_ENCODING)) {
+      to.setProperty(COMPLEX_KEYGEN_NEW_ENCODING.key(), from.getString(COMPLEX_KEYGEN_NEW_ENCODING));
+    }
+  }
+
+  /**
+   * Deduces the complex-key encoding actually used by an existing table by inspecting a stored
+   * {@code _hoodie_record_key} from one of its base files.
+   *
+   * @return the deduced encoding ({@code Option.of(true)} for the new bare-value encoding,
+   *         {@code Option.of(false)} for the legacy {@code field:value} encoding), or
+   *         {@code Option.empty()} when the encoding cannot be determined from data (a new/empty
+   *         table, or a table with no readable base file yet, e.g. a MoR table with only log files).
+   *         Callers must not override the configured encoding on an empty (undetermined) result.
+   */
+  public static Option<Boolean> deduceComplexKeyEncodingFromData(HoodieTableMetaClient metaClient, String recordKeyFieldName) {
+    HoodieTimeline completedTimeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+    if (completedTimeline.empty()) {
+      LOG.info("No completed commits found in table {}; cannot deduce complex key encoding (new/empty table).",
+          metaClient.getBasePath());
+      return Option.empty();
+    }
+
+    try {
+      HoodieStorage storage = metaClient.getStorage();
+      // Use the table's actual base file format instead of assuming parquet, so ORC/HFILE tables
+      // are inspected correctly rather than being skipped and mis-deduced.
+      HoodieFileFormat baseFileFormat = metaClient.getTableConfig().getBaseFileFormat();
+      FileFormatUtils fileFormatUtils = HoodieIOFactory.getIOFactory(storage)
+          .getFileFormatUtils(baseFileFormat);
+      String baseFileExtension = baseFileFormat.getFileExtension();
+
+      List<HoodieInstant> instants = completedTimeline.getReverseOrderedInstants().collect(Collectors.toList());
+      for (HoodieInstant instant : instants) {
+        HoodieCommitMetadata commitMetadata = TimelineUtils.getCommitMetadata(instant, completedTimeline);
+        for (HoodieWriteStat writeStat : commitMetadata.getWriteStats()) {
+          String filePath = writeStat.getPath();
+          if (filePath == null || filePath.isEmpty() || !filePath.endsWith(baseFileExtension)) {
+            continue;
+          }
+          StoragePath baseFilePath = new StoragePath(metaClient.getBasePath(), filePath);
+          if (!storage.exists(baseFilePath)) {
+            continue;
+          }
+          try (ClosableIterator<HoodieKey> keyIterator = fileFormatUtils.getHoodieKeyIterator(storage, baseFilePath)) {
+            if (keyIterator.hasNext()) {
+              HoodieKey hoodieKey = keyIterator.next();
+              String hoodieRecordKey = hoodieKey.getRecordKey();
+              String expectedPrefix = recordKeyFieldName + DEFAULT_COLUMN_VALUE_SEPARATOR;
+              boolean usesNewEncoding = !hoodieRecordKey.startsWith(expectedPrefix);
+              LOG.info("Deduced complex key encoding from base file {} (commit {}): useNewEncoding={}",
+                  baseFilePath, instant.requestedTime(), usesNewEncoding);
+              return Option.of(usesNewEncoding);
+            }
+          }
+        }
+      }
+
+      // Non-empty timeline but no readable base file (e.g. a MoR table whose latest slices are
+      // log-only). We cannot determine the encoding from data here; signal "undetermined".
+      LOG.info("No readable {} base file with records found in table {}; cannot deduce complex key encoding.",
+          baseFileExtension, metaClient.getBasePath());
+      return Option.empty();
+    } catch (Exception e) {
+      // The javadoc promises "undetermined" when no base file can be read, and callers handle that (the upgrade
+      // then falls back to the configured encoding or throws the guidance message). Reading can fail with more
+      // than IOException - getHoodieKeyIterator raises the unchecked HoodieIOException and is unimplemented for
+      // some formats - and failing the whole upgrade with an unrelated-looking error is worse than saying so.
+      LOG.warn("Could not read a base file to deduce the complex key encoding of table {}; treating it as "
+          + "undetermined.", metaClient.getBasePath(), e);
+      return Option.empty();
+    }
   }
 }

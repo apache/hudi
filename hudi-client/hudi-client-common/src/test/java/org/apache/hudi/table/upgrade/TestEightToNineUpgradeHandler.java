@@ -40,6 +40,9 @@ import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -51,6 +54,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.MockedStatic;
 
 import java.io.ByteArrayOutputStream;
@@ -81,16 +85,19 @@ import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
 import static org.apache.hudi.common.table.PartialUpdateMode.FILL_UNAVAILABLE;
+import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -709,5 +716,82 @@ class TestEightToNineUpgradeHandler {
     assertEquals("identity", secIdxDef.getIndexFunction());
     assertEquals(Collections.singletonList("price"), secIdxDef.getSourceFields());
     assertEquals(Collections.emptyMap(), secIdxDef.getIndexOptions());
+  }
+
+  private void mockSingleFieldComplexKeygenTable() {
+    when(tableConfig.contains(HoodieTableConfig.KEY_GENERATOR_TYPE)).thenReturn(true);
+    when(tableConfig.getString(HoodieTableConfig.KEY_GENERATOR_TYPE)).thenReturn(KeyGeneratorType.COMPLEX.name());
+    when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"id"}));
+    when(tableConfig.getTableType()).thenReturn(HoodieTableType.COPY_ON_WRITE);
+    when(tableConfig.getRecordMergeStrategyId()).thenReturn(HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID);
+    when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
+  }
+
+  private UpgradeDowngrade.TableConfigChangeSet upgradeWithMockedUtils() {
+    try (MockedStatic<UpgradeDowngradeUtils> utilities = mockStatic(UpgradeDowngradeUtils.class)) {
+      utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
+              any(), any(), any(), any(), anyBoolean(), any()))
+          .thenAnswer(invocation -> null);
+      return handler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
+    }
+  }
+
+  /**
+   * The encoding is resolved before the hops run ({@code UpgradeDowngrade#resolveComplexKeygenEncodingBeforeUpgrade})
+   * and handed to this handler on the write config; the handler persists it as the table property.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = {"VALUE_ONLY", "FIELD_PREFIXED"})
+  void testUpgradeStampsResolvedComplexKeygenEncoding(String resolvedEncoding) {
+    mockSingleFieldComplexKeygenTable();
+    when(config.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING)).thenReturn(resolvedEncoding);
+    when(config.enableComplexKeygenValidation()).thenReturn(true);
+
+    UpgradeDowngrade.TableConfigChangeSet changeSet = upgradeWithMockedUtils();
+
+    assertEquals(resolvedEncoding, changeSet.propertiesToUpdate().get(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING),
+        "The resolved encoding must be persisted on the table");
+  }
+
+  @Test
+  void testUpgradeFailsWhenEncodingUndeterminedAndValidationEnabled() {
+    mockSingleFieldComplexKeygenTable();
+    when(config.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING)).thenReturn(null);
+    when(config.enableComplexKeygenValidation()).thenReturn(true);
+
+    HoodieUpgradeDowngradeException exception =
+        assertThrows(HoodieUpgradeDowngradeException.class, this::upgradeWithMockedUtils);
+    assertEquals(getComplexKeygenErrorMessage("upgrade"), exception.getMessage());
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testUpgradeFallsBackToConfiguredEncodingWhenValidationDisabled(boolean useNewEncoding) {
+    mockSingleFieldComplexKeygenTable();
+    when(config.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING)).thenReturn(null);
+    when(config.enableComplexKeygenValidation()).thenReturn(false);
+    when(config.getBooleanOrDefault(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING)).thenReturn(useNewEncoding);
+
+    UpgradeDowngrade.TableConfigChangeSet changeSet = upgradeWithMockedUtils();
+
+    String expected = ComplexKeyGenEncoding.fromUseNewEncoding(useNewEncoding).name();
+    assertEquals(expected, changeSet.propertiesToUpdate().get(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING));
+    // the fallback is also pinned on the write config so the keygens of the triggering write agree with the table
+    verify(config).setValue(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING, expected);
+  }
+
+  @Test
+  void testUpgradeDoesNotStampEncodingForMultiFieldOrOtherKeyGenerators() {
+    // two record key fields under the complex key generator: never affected by the single-field encoding change
+    mockSingleFieldComplexKeygenTable();
+    when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"id", "name"}));
+    when(config.enableComplexKeygenValidation()).thenReturn(true);
+    assertFalse(upgradeWithMockedUtils().propertiesToUpdate().containsKey(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING));
+
+    // simple key generator with a single field: not a complex keygen table
+    when(tableConfig.getString(HoodieTableConfig.KEY_GENERATOR_TYPE)).thenReturn(KeyGeneratorType.SIMPLE.name());
+    when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"id"}));
+    assertFalse(upgradeWithMockedUtils().propertiesToUpdate().containsKey(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING));
+    verify(config, never()).getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING);
   }
 }

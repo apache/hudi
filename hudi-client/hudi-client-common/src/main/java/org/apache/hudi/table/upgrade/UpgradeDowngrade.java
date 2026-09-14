@@ -33,6 +33,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
+import org.apache.hudi.keygen.KeyGenUtils;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
@@ -214,6 +216,7 @@ public class UpgradeDowngrade {
     Set<ConfigProperty> tablePropsToRemove = new HashSet<>();
     if (isUpgrade) {
       // upgrade
+      resolveComplexKeygenEncodingBeforeUpgrade(fromVersion, toVersion);
       while (fromVersion.versionCode() < toVersion.versionCode()) {
         HoodieTableVersion nextVersion = HoodieTableVersion.fromVersionCode(fromVersion.versionCode() + 1);
         UpgradeDowngrade.TableConfigChangeSet tableConfigChangeSet =
@@ -409,6 +412,37 @@ public class UpgradeDowngrade {
           upgradeDowngradeHelper, 
           HoodieTableType.MERGE_ON_READ.equals(metaClient.getTableType()),
           tableVersion);
+    }
+  }
+
+  /**
+   * Resolves, before any hop runs, the record key encoding a single-field complex key generator table carries,
+   * so that the 8 to 9 hop can persist it as {@link HoodieTableConfig#COMPLEX_KEYGEN_ENCODING}.
+   *
+   * <p>This has to happen up-front, on the pristine table: the 7 to 8 hop rewrites the timeline to the V2
+   * layout on storage while {@code hoodie.properties} still reports the old version, so reading the data from
+   * inside a later hop is not reliable. The result is set on the writer's own config, which also makes it
+   * visible to the key generators of the write that triggered this upgrade.
+   */
+  private void resolveComplexKeygenEncodingBeforeUpgrade(HoodieTableVersion fromVersion, HoodieTableVersion toVersion) {
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    if (!fromVersion.lesserThan(HoodieTableVersion.NINE)
+        || !toVersion.greaterThanOrEquals(HoodieTableVersion.NINE)
+        || !KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig)
+        || config.contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING)) {
+      return;
+    }
+    if (!tableConfig.populateMetaFields()) {
+      // virtual keys: there is no stored _hoodie_record_key to learn the encoding from
+      return;
+    }
+    Option<Boolean> useNewEncoding = KeyGenUtils.resolveUseNewEncodingFromStorage(metaClient);
+    if (useNewEncoding.isPresent()) {
+      ComplexKeyGenEncoding encoding = ComplexKeyGenEncoding.fromUseNewEncoding(useNewEncoding.get());
+      config.setValue(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING, encoding.name());
+      config.setValue(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING, String.valueOf(useNewEncoding.get()));
+      log.info("Resolved complex keygen record key encoding {} for table {} ahead of upgrading from version {} to {}",
+          encoding, metaClient.getBasePath(), fromVersion, toVersion);
     }
   }
 }

@@ -47,10 +47,10 @@ public class AutoRowDataKeyGen extends RowDataKeyGen {
       RowType rowType,
       boolean hiveStylePartitioning,
       boolean encodePartitionPath,
-      boolean useComplexKeygenNewEncoding,
+      boolean prefixSingleRecordKey,
       Option<TimestampBasedAvroKeyGenerator> keyGenOpt) {
     super(Option.empty(), partitionFields, rowType, hiveStylePartitioning, encodePartitionPath, false, keyGenOpt,
-            useComplexKeygenNewEncoding);
+            prefixSingleRecordKey);
     this.taskId = taskId;
     this.instantTime = instantTime;
   }
@@ -66,7 +66,7 @@ public class AutoRowDataKeyGen extends RowDataKeyGen {
     }
     return new AutoRowDataKeyGen(taskId, instantTime, conf.get(FlinkOptions.PARTITION_PATH_FIELD),
         rowType, conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING), conf.get(FlinkOptions.URL_ENCODE_PARTITIONING),
-        OptionsResolver.useComplexKeygenNewEncoding(conf), keyGeneratorOpt);
+        OptionsResolver.prefixSingleRecordKey(conf), keyGeneratorOpt);
   }
 
   @Override

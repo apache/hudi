@@ -18,10 +18,13 @@
 
 package org.apache.hudi.keygen;
 
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieKeyException;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 
@@ -30,6 +33,8 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -289,5 +294,103 @@ public class TestKeyGenUtils {
     tableConfig.setValue(KEY_GENERATOR_TYPE, KeyGeneratorType.COMPLEX.name());
     tableConfig.setValue(RECORDKEY_FIELDS, "");
     assertFalse(KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig));
+  }
+
+  /**
+   * The persisted table encoding, when present in the key generator props, wins over both the write table version
+   * and hoodie.write.complex.keygen.new.encoding; otherwise version 9+ always prefixes and version 8 follows the config.
+   * "-" stands for "not set".
+   */
+  @ParameterizedTest
+  @CsvSource(value = {
+      "8,-,-,true", "8,true,-,false", "8,false,-,true",
+      "9,-,-,true", "9,true,-,true", "10,-,-,true", "10,true,-,true",
+      "8,true,FIELD_PREFIXED,true", "8,false,VALUE_ONLY,false",
+      "9,-,VALUE_ONLY,false", "9,false,VALUE_ONLY,false", "9,-,FIELD_PREFIXED,true",
+      "10,-,VALUE_ONLY,false", "10,true,FIELD_PREFIXED,true", "10,-,value_only,false"})
+  void testEncodeSingleKeyFieldNameForComplexKeyGen(String tableVersion, String newEncoding, String persistedEncoding,
+                                                    boolean expectedFieldNameEncoded) {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersion);
+    if (!"-".equals(newEncoding)) {
+      props.setProperty(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(), newEncoding);
+    }
+    if (!"-".equals(persistedEncoding)) {
+      props.setProperty(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), persistedEncoding);
+    }
+    assertEquals(expectedFieldNameEncoded, KeyGenUtils.encodeSingleKeyFieldNameForComplexKeyGen(props));
+  }
+
+  @Test
+  void testEncodeSingleKeyFieldNameForComplexKeyGenRejectsUnknownPersistedEncoding() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), "BOGUS");
+    assertThrows(IllegalArgumentException.class, () -> KeyGenUtils.encodeSingleKeyFieldNameForComplexKeyGen(props));
+  }
+
+  private static HoodieTableConfig complexKeygenTableConfig(int tableVersion, String recordKeyFields, String persistedEncoding) {
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    tableConfig.setValue(HoodieTableConfig.VERSION, String.valueOf(tableVersion));
+    tableConfig.setValue(KEY_GENERATOR_TYPE, KeyGeneratorType.COMPLEX.name());
+    tableConfig.setValue(RECORDKEY_FIELDS, recordKeyFields);
+    if (persistedEncoding != null) {
+      tableConfig.setValue(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING, persistedEncoding);
+    }
+    return tableConfig;
+  }
+
+  @Test
+  void testResolveComplexKeyGenEncoding() {
+    // below version 9 the encoding is a per-write decision that is never recorded: unknown to readers
+    HoodieTableConfig v8 = complexKeygenTableConfig(8, "id", null);
+    assertTrue(KeyGenUtils.mayUseNewEncodingForComplexKeyGen(v8));
+    assertFalse(KeyGenUtils.resolveComplexKeyGenEncoding(v8).isPresent());
+    assertFalse(v8.getComplexKeyGenEncoding().isPresent());
+
+    // version 9+ without the property: created there, field-prefixed by convention
+    HoodieTableConfig v9 = complexKeygenTableConfig(9, "id", null);
+    assertFalse(KeyGenUtils.mayUseNewEncodingForComplexKeyGen(v9));
+    assertEquals(ComplexKeyGenEncoding.FIELD_PREFIXED, KeyGenUtils.resolveComplexKeyGenEncoding(v9).get());
+    assertFalse(v9.getComplexKeyGenEncoding().isPresent());
+
+    // version 9+ with the property stamped by the upgrade: the property is the answer
+    HoodieTableConfig migrated = complexKeygenTableConfig(9, "id", "VALUE_ONLY");
+    assertEquals(ComplexKeyGenEncoding.VALUE_ONLY, KeyGenUtils.resolveComplexKeyGenEncoding(migrated).get());
+    assertEquals(ComplexKeyGenEncoding.VALUE_ONLY, migrated.getComplexKeyGenEncoding().get());
+    HoodieTableConfig migratedPrefixed = complexKeygenTableConfig(10, "id", "field_prefixed");
+    assertEquals(ComplexKeyGenEncoding.FIELD_PREFIXED, KeyGenUtils.resolveComplexKeyGenEncoding(migratedPrefixed).get());
+
+    // the property is only meaningful at version 9+; a stray value on a version 8 table is ignored by the getter
+    HoodieTableConfig strayV8 = complexKeygenTableConfig(8, "id", "VALUE_ONLY");
+    assertFalse(strayV8.getComplexKeyGenEncoding().isPresent());
+    assertFalse(KeyGenUtils.resolveComplexKeyGenEncoding(strayV8).isPresent());
+
+    // not a single-field complex key generator: nothing to resolve
+    assertFalse(KeyGenUtils.resolveComplexKeyGenEncoding(complexKeygenTableConfig(9, "id,name", "VALUE_ONLY")).isPresent());
+    HoodieTableConfig simple = new HoodieTableConfig();
+    simple.setValue(HoodieTableConfig.VERSION, "9");
+    simple.setValue(KEY_GENERATOR_TYPE, KeyGeneratorType.SIMPLE.name());
+    simple.setValue(RECORDKEY_FIELDS, "id");
+    assertFalse(KeyGenUtils.resolveComplexKeyGenEncoding(simple).isPresent());
+  }
+
+  @Test
+  void testCopyResolvedComplexKeyEncoding() {
+    HoodieConfig from = new HoodieConfig();
+    HoodieConfig to = new HoodieConfig();
+    KeyGenUtils.copyResolvedComplexKeyEncoding(from, to);
+    assertFalse(to.contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING));
+    assertFalse(to.contains(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING));
+
+    from.setValue(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING, "VALUE_ONLY");
+    from.setValue(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING, "true");
+    KeyGenUtils.copyResolvedComplexKeyEncoding(from, to);
+    assertEquals("VALUE_ONLY", to.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING));
+    assertEquals("true", to.getString(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING));
+
+    TypedProperties props = new TypedProperties();
+    KeyGenUtils.copyResolvedComplexKeyEncoding(from, props);
+    assertEquals("VALUE_ONLY", props.getProperty(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()));
+    assertEquals("true", props.getProperty(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key()));
   }
 }

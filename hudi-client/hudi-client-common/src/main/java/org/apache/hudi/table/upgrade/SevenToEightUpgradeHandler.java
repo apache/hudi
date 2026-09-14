@@ -91,7 +91,12 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     HoodieTableMetaClient metaClient = table.getMetaClient();
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    // When the upgrade is headed for version 9 or above, UpgradeDowngrade#run has already resolved the record
+    // key encoding from the table's data and put it on the config, and the 8 to 9 hop persists it as a table
+    // property -- the table is protected, so do not block here. Only fail when the encoding stayed unknown
+    // (an upgrade stopping at version 8, or one where the data could not be read).
     if (config.enableComplexKeygenValidation()
+        && !config.contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING)
         && isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig)) {
       throw new HoodieUpgradeDowngradeException(getComplexKeygenErrorMessage("upgrade"));
     }
