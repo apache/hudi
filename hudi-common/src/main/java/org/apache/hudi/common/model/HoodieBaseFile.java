@@ -41,11 +41,11 @@ public class HoodieBaseFile extends BaseFile {
 
   private Option<BaseFile> bootstrapBaseFile;
 
-  public HoodieBaseFile(HoodieBaseFile dataFile) {
-    super(dataFile);
-    this.bootstrapBaseFile = dataFile.bootstrapBaseFile;
-    this.fileId = dataFile.getFileId();
-    this.commitTime = dataFile.getCommitTime();
+  public HoodieBaseFile(HoodieBaseFile baseFile) {
+    super(baseFile);
+    this.bootstrapBaseFile = baseFile.bootstrapBaseFile;
+    this.fileId = baseFile.getFileId();
+    this.commitTime = baseFile.getCommitTime();
   }
 
   public HoodieBaseFile(StoragePathInfo pathInfo) {

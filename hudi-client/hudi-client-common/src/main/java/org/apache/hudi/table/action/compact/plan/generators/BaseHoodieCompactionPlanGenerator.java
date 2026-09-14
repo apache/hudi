@@ -153,8 +153,8 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
           // Avro generated classes are not inheriting Serializable. Using CompactionOperation POJO
           // for Map operations and collecting them finally in Avro generated classes for storing
           // into meta files.
-          Option<HoodieBaseFile> dataFile = s.getBaseFile();
-          return new CompactionOperation(dataFile, partitionPath, logFiles,
+          Option<HoodieBaseFile> baseFile = s.getBaseFile();
+          return new CompactionOperation(baseFile, partitionPath, logFiles,
               writeConfig.getCompactionStrategy().captureMetrics(writeConfig, s));
         }), partitionPaths.size()).stream()
         .map(CompactionUtils::buildHoodieCompactionOperation).collect(toList());

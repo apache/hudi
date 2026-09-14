@@ -213,25 +213,25 @@ public class TestCleanerInsertAndCleanByVersions extends SparkClientFunctionalTe
           for (HoodieFileGroup fileGroup : fileGroups) {
             if (compactionFileIdToLatestFileSlice.containsKey(fileGroup.getFileGroupId())) {
               // Ensure latest file-slice selected for compaction is retained
-              Option<HoodieBaseFile> dataFileForCompactionPresent =
-                  Option.fromJavaOptional(fileGroup.getAllBaseFiles().filter(df -> {
+              Option<HoodieBaseFile> baseFileForCompactionPresent =
+                  Option.fromJavaOptional(fileGroup.getAllBaseFiles().filter(bf -> {
                     return compactionFileIdToLatestFileSlice.get(fileGroup.getFileGroupId()).getBaseInstantTime()
-                        .equals(df.getCommitTime());
+                        .equals(bf.getCommitTime());
                   }).findAny());
-              assertTrue(dataFileForCompactionPresent.isPresent(),
+              assertTrue(baseFileForCompactionPresent.isPresent(),
                   "Data File selected for compaction is retained");
             } else {
               // file has no more than max versions
               String fileId = fileGroup.getFileGroupId().getFileId();
-              List<HoodieBaseFile> dataFiles = fileGroup.getAllBaseFiles().collect(Collectors.toList());
+              List<HoodieBaseFile> baseFiles = fileGroup.getAllBaseFiles().collect(Collectors.toList());
 
-              assertTrue(dataFiles.size() <= maxVersions,
+              assertTrue(baseFiles.size() <= maxVersions,
                   "fileId " + fileId + " has more than " + maxVersions + " versions");
 
               // Each file, has the latest N versions (i.e cleaning gets rid of older versions)
               List<String> commitedVersions = new ArrayList<>(fileIdToVersions.get(fileId));
-              for (int i = 0; i < dataFiles.size(); i++) {
-                assertEquals((dataFiles.get(i)).getCommitTime(),
+              for (int i = 0; i < baseFiles.size(); i++) {
+                assertEquals((baseFiles.get(i)).getCommitTime(),
                     commitedVersions.get(commitedVersions.size() - 1 - i),
                     "File " + fileId + " does not have latest versions on commits" + commitedVersions);
               }

@@ -224,12 +224,12 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
       HoodieTableFileSystemView tableView = getHoodieTableFileSystemView(metaClient,
           metaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
-      Stream<HoodieBaseFile> dataFilesToRead = tableView.getLatestBaseFiles();
-      assertFalse(dataFilesToRead.findAny().isPresent());
+      Stream<HoodieBaseFile> baseFilesToRead = tableView.getLatestBaseFiles();
+      assertFalse(baseFilesToRead.findAny().isPresent());
 
       tableView = getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
-      dataFilesToRead = tableView.getLatestBaseFiles();
-      assertTrue(dataFilesToRead.findAny().isPresent(),
+      baseFilesToRead = tableView.getLatestBaseFiles();
+      assertTrue(baseFilesToRead.findAny().isPresent(),
           "should list the base files we wrote in the delta commit");
 
       HoodieWriteConfig secondCfg = getHoodieWriteConfigWithSmallFileHandlingOff(true);
@@ -424,12 +424,12 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
 
       List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
       HoodieTableFileSystemView tableView = getHoodieTableFileSystemView(metaClient, metaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
-      Stream<HoodieBaseFile> dataFilesToRead = tableView.getLatestBaseFiles();
-      assertFalse(dataFilesToRead.findAny().isPresent());
+      Stream<HoodieBaseFile> baseFilesToRead = tableView.getLatestBaseFiles();
+      assertFalse(baseFilesToRead.findAny().isPresent());
 
       tableView = getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
-      dataFilesToRead = tableView.getLatestBaseFiles();
-      assertTrue(dataFilesToRead.findAny().isPresent(),
+      baseFilesToRead = tableView.getLatestBaseFiles();
+      assertTrue(baseFilesToRead.findAny().isPresent(),
           "should list the base files we wrote in the delta commit");
 
       /*
@@ -541,14 +541,14 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
       HoodieTableFileSystemView tableView = getHoodieTableFileSystemView(metaClient,
           metaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
-      Stream<HoodieBaseFile> dataFilesToRead = tableView.getLatestBaseFiles();
-      assertFalse(dataFilesToRead.findAny().isPresent());
+      Stream<HoodieBaseFile> baseFilesToRead = tableView.getLatestBaseFiles();
+      assertFalse(baseFilesToRead.findAny().isPresent());
 
       tableView =
           getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(),
               allFiles);
-      dataFilesToRead = tableView.getLatestBaseFiles();
-      assertTrue(dataFilesToRead.findAny().isPresent(),
+      baseFilesToRead = tableView.getLatestBaseFiles();
+      assertTrue(baseFilesToRead.findAny().isPresent(),
           "Should list the base files we wrote in the delta commit");
 
       /*
@@ -663,8 +663,8 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       metaClient.reloadActiveTimeline();
       allFiles = listAllBaseFilesInPath(hoodieTable);
       tableView = getHoodieTableFileSystemView(metaClient, metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants(), allFiles);
-      dataFilesToRead = tableView.getLatestBaseFiles();
-      assertFalse(dataFilesToRead.filter(hoodieBaseFile -> hoodieBaseFile.getCommitTime().compareTo("003") > 0).findAny().isPresent());
+      baseFilesToRead = tableView.getLatestBaseFiles();
+      assertFalse(baseFilesToRead.filter(hoodieBaseFile -> hoodieBaseFile.getCommitTime().compareTo("003") > 0).findAny().isPresent());
       TableFileSystemView.SliceView rtView = getHoodieTableFileSystemView(metaClient, metaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
       List<HoodieFileGroup> fileGroups =
           ((HoodieTableFileSystemView) rtView).getAllFileGroups().collect(Collectors.toList());
@@ -749,8 +749,8 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
       HoodieTableFileSystemView tableView = getHoodieTableFileSystemView(metaClient,
           metaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
-      Stream<HoodieBaseFile> dataFilesToRead = tableView.getLatestBaseFiles();
-      assertFalse(dataFilesToRead.anyMatch(
+      Stream<HoodieBaseFile> baseFilesToRead = tableView.getLatestBaseFiles();
+      assertFalse(baseFilesToRead.anyMatch(
           file -> compareTimestamps(commit2, GREATER_THAN,
               file.getCommitTime())));
 
