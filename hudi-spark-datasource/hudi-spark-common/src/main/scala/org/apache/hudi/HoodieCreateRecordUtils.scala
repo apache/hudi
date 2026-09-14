@@ -165,8 +165,8 @@ object HoodieCreateRecordUtils {
             // same delete written through a path where `shouldCombine` is true would correctly lose.
             // A null ordering field stays tolerated for a delete, which may carry only its key: the
             // value falls back to the default rather than failing the write.
-            val computeOrderingValue = shouldCombine || requiresOrderingValue
-            val hoodieRecord = if (computeOrderingValue && !orderingFields.isEmpty) {
+            val shouldComputeOrderingValue = shouldCombine || requiresOrderingValue
+            val hoodieRecord = if (shouldComputeOrderingValue && !orderingFields.isEmpty) {
               val orderingVal = getOrderingValue(orderingFields, avroRec, hoodieKey.getRecordKey,
                 consistentLogicalTimestampEnabled, requiresOrderingValue && !isDelete)
               HoodieRecordUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,

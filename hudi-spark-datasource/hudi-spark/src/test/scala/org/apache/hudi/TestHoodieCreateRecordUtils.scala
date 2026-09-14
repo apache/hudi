@@ -292,7 +292,7 @@ class TestHoodieCreateRecordUtils {
 
   /**
    * Deletes carry the ordering field's value as well. A delete left on the default is treated as
-   * commit time ordered by BufferedRecordMergerFactory#deltaMergeDeleteRecord, which would let a
+   * commit time ordered by BufferedRecordMergerFactory#shouldKeepNewerRecord, which would let a
    * stale delete remove a record with a higher ordering value.
    */
   @Test
