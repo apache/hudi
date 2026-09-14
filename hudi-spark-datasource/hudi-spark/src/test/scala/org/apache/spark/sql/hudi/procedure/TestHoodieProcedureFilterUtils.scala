@@ -672,6 +672,16 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     assertResult(Seq(scalarRows.head))(keep(scalarRows, "nullif(name, 'a1') IS NULL", scalarSchema))
   }
 
+  test("evaluateFilter unwraps a RuntimeReplaceable the parser emits directly, not through a function name") {
+    // ILIKE parses straight to ILike (RuntimeReplaceable, replacement Like(Lower(l), Lower(r))) -
+    // never through an UnresolvedFunction, so the registry path never sees it. Left unwrapped,
+    // RuntimeReplaceable's own eval() throws a bare SparkException, which the per-row rethrow guard
+    // now surfaces as a crash instead of a silent no-match - matching the case-insensitive 'A%'
+    // pattern against the lowercased "a1" proves the real Like replacement is what actually runs,
+    // not just that evaluation stopped throwing.
+    assertKeeps(scalarRows, "name ILIKE 'A%'", Seq(scalarRows.head))
+  }
+
   test("evaluateFilter widens nvl the same way as the equivalent hardcoded coalesce") {
     // ts is LongType, 0 is an Int literal. nvl(ts, 0) unwraps to the same Coalesce shape as the
     // hardcoded coalesce(ts, 0) case, so both need the same widening to resolve.

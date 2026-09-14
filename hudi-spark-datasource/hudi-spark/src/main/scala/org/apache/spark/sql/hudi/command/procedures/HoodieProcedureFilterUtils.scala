@@ -369,8 +369,11 @@ object HoodieProcedureFilterUtils {
           resolveOrFallback(hardcodedResolved, unresolvedFunc, sparkSession)
     }
 
-    // Third pass: handle type coercion for numeric comparisons
-    applyHudiWideningRules(functionResolved)
+    // Third pass: unwrap any RuntimeReplaceable the parser emitted directly (ILIKE parses straight
+    // to ILike, never through an UnresolvedFunction the second pass would route through the
+    // registry) to its real, evaluable replacement, then handle type coercion for numeric
+    // comparisons.
+    applyHudiWideningRules(unwrapRuntimeReplaceable(functionResolved))
   }
 
   // Whatever the hardcoded table produced - a real expression, or nothing at all (wrong arity, or
@@ -486,32 +489,38 @@ object HoodieProcedureFilterUtils {
       FunctionIdentifier(funcName)
     }
 
-  // RuntimeReplaceable placeholders (nvl, ifnull, left, right, ...) need substitution the analyzer
-  // normally performs but lookupFunction skips, and can themselves unwrap to another
-  // RuntimeReplaceable (regexp_substr -> NullIf), so the unwrap runs to a fixed point. Then widens
-  // numeric operands the same way pass three would - nvl(ts, 0) unwraps to Coalesce(ts, 0), which
-  // needs the same widening the hardcoded coalesce(ts, 0) case gets - so a registry function and
-  // its hardcoded-table equivalent agree on what counts as resolved.
+  // Widens the unwrapped result the same way pass three in bindAndResolveExpression would -
+  // nvl(ts, 0) unwraps to Coalesce(ts, 0), which needs the same widening the hardcoded
+  // coalesce(ts, 0) case gets - so a registry function and its hardcoded-table equivalent agree
+  // on what counts as resolved.
+  private def finalizeRegistryResolution(expression: Expression): Expression =
+    applyHudiWideningRules(unwrapRuntimeReplaceable(expression))
+
+  // RuntimeReplaceable placeholders (nvl, ifnull, ILIKE, ...) need substitution the analyzer
+  // normally performs but a plain lookupFunction call or the parser's own output skips, and can
+  // themselves unwrap to another RuntimeReplaceable (regexp_substr -> NullIf) or a With(child,
+  // defs) common-subexpression wrapper from 4.0 onward (NullIf's, for instance) - Unevaluable like
+  // any other holder, so both need unwrapping to a fixed point or RuntimeReplaceable's own final
+  // eval() throws a bare SparkException instead of evaluating via the replacement.
   //
-  // A replacement can itself be a With(child, defs) common-subexpression wrapper from 4.0 onward
-  // (NullIf's, for instance) - Unevaluable like any other holder, so it needs inlining here too or
-  // isUsableOutsideQueryPlan rejects it outright. With/CommonExpressionDef/CommonExpressionRef
-  // don't exist before 4.0, so this goes by reflection rather than a direct import; evaluating a
-  // filter once per row rather than once per query makes the dedup With exists for irrelevant, so
-  // inlining each reference in place of its definition is exactly equivalent to keeping it.
-  private def finalizeRegistryResolution(expression: Expression): Expression = {
-    def unwrapReplacements(expr: Expression): Expression = {
-      val next = expr.transformUp {
-        case r: RuntimeReplaceable => r.replacement
-        case withExpr if isWithNode(withExpr) => inlineCommonExpressions(withExpr)
-      }
-      if (next.fastEquals(expr)) next else unwrapReplacements(next)
+  // Shared with bindAndResolveExpression's third pass above: some RuntimeReplaceable nodes never
+  // reach this registry-specific path at all - ILIKE parses straight to ILike rather than through
+  // an UnresolvedFunction, so the whole tree needs this same unwrap, not just a registry-resolved
+  // subtree of it.
+  private def unwrapRuntimeReplaceable(expression: Expression): Expression = {
+    val next = expression.transformUp {
+      case r: RuntimeReplaceable => r.replacement
+      case withExpr if isWithNode(withExpr) => inlineCommonExpressions(withExpr)
     }
-    applyHudiWideningRules(unwrapReplacements(expression))
+    if (next.fastEquals(expression)) next else unwrapRuntimeReplaceable(next)
   }
 
-  // Reflection here for the same reason finalizeRegistryResolution's comment above gives.
-  private def isWithNode(expression: Expression): Boolean = expression.getClass.getSimpleName == "With"
+  // With/CommonExpressionDef/CommonExpressionRef don't exist before Spark 4.0, so these go by
+  // reflection rather than a direct import to keep this file compiling across the same 3.3-4.2
+  // range as the rest of it - the fully qualified name avoids matching an unrelated same-named
+  // class elsewhere on the classpath.
+  private def isWithNode(expression: Expression): Boolean =
+    isCatalystClass(expression, "org.apache.spark.sql.catalyst.expressions.With")
 
   private def inlineCommonExpressions(withExpr: Expression): Expression = {
     val defsById = invokeAccessor(withExpr, "defs").asInstanceOf[Seq[Expression]]
@@ -525,7 +534,10 @@ object HoodieProcedureFilterUtils {
   }
 
   private def isCommonExpressionRef(expression: Expression): Boolean =
-    expression.getClass.getSimpleName == "CommonExpressionRef"
+    isCatalystClass(expression, "org.apache.spark.sql.catalyst.expressions.CommonExpressionRef")
+
+  private def isCatalystClass(expression: Expression, fullyQualifiedName: String): Boolean =
+    expression.getClass.getName == fullyQualifiedName
 
   private def invokeAccessor(target: AnyRef, name: String): AnyRef = target.getClass.getMethod(name).invoke(target)
 
