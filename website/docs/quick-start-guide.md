@@ -162,7 +162,13 @@ basePath = "file:///tmp/trips_table"
 
 The Spark support matrix at the top of this page is for Apache Spark. The Databricks Runtime (DBR) ships a
 modified Spark, and several of the internals Hudi's Spark datasource builds on differ there. Hudi detects those
-differences at runtime and adapts, so there is no Databricks-specific Hudi config to set.
+differences at runtime and adapts, so in the common case there is no Databricks-specific Hudi config to set.
+
+Two qualifications, both covered below. The adaptations landed in different releases, so whether a given Hudi
+version copes with a given DBR depends on the table in the next section rather than being true in general: on a
+DBR built on Spark 3.4, for instance, 1.0.2 and 1.1.1 lack the `PartitionDirectory` handling and fail rather than
+adapt. And one open issue does still need an option set, `hoodie.metadata.enable=false`, described in the caution
+further down.
 
 #### Cluster setup
 
