@@ -97,6 +97,7 @@ private[hudi] case class HoodieMergeOnReadBaseFileReaders(fullSchemaReader: Base
  * @param metaClient             table metadata client
  * @param options                datasource options
  * @param includedInstantTimeSet instant time set used to filter records
+ * @param instantRangeOpt        requested-time range applied before file-group record merging
  */
 class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
                              @transient config: Configuration,
@@ -110,7 +111,8 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
                              optionalFilters: Array[Filter],
                              metaClient: HoodieTableMetaClient,
                              options: Map[String, String] = Map.empty,
-                             includedInstantTimeSet: Option[Set[String]] = Option.empty)
+                             includedInstantTimeSet: Option[Set[String]] = Option.empty,
+                             instantRangeOpt: HOption[InstantRange] = HOption.empty())
   extends RDD[InternalRow](sc, Nil) with HoodieUnsafeRDD with SparkAdapterSupport {
 
   protected val maxCompactionMemoryInBytes: Long = getMaxCompactionMemoryInBytes(new JobConf(config))
@@ -224,7 +226,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
           convertAvroToRowIterator(fileGroupReader.getClosableIterator, requestedSchema)
         } else {
           val readerContext = new SparkFileFormatInternalRowReaderContext(fileGroupBaseFileReader.value, optionalFilters,
-            Seq.empty, storageConf, metaClient.getTableConfig)
+            Seq.empty, storageConf, metaClient.getTableConfig, instantRangeOpt = instantRangeOpt)
           val fileGroupReader: HoodieRecordReader[InternalRow] =
             if (LsmReaderUtils.shouldUseLsmReader(metaClient.getTableConfig, mergeType)) {
               HoodieLsmFileGroupReader.builder[InternalRow]()

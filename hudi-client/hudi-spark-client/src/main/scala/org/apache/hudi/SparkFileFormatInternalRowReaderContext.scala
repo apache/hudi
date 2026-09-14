@@ -27,8 +27,9 @@ import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.table.log.InstantRange
 import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
-import org.apache.hudi.common.util.HoodieVectorUtils
+import org.apache.hudi.common.util.{HoodieVectorUtils, Option => HOption}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator, CloseableMappingIterator, Pair => HPair}
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader, VectorConversionUtils}
@@ -69,14 +70,17 @@ import scala.collection.JavaConverters._
  *                            schema cannot be recovered from a HoodieSchema round-trip (#18739 sub-task 4).
  *                            Kept Spark-side so the engine-neutral schema model stays free of Spark 4.1
  *                            variant concepts.
+ * @param instantRangeOpt optional requested-time range applied to base and log records before merging
  */
 class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileReader,
                                               filters: Seq[Filter],
                                               requiredFilters: Seq[Filter],
                                               storageConfiguration: StorageConfiguration[_],
                                               tableConfig: HoodieTableConfig,
-                                              sparkRequiredSchema: Option[StructType] = None)
-  extends BaseSparkInternalRowReaderContext(storageConfiguration, tableConfig, SparkFileFormatInternalRecordContext.apply(tableConfig)) {
+                                              sparkRequiredSchema: Option[StructType] = None,
+                                              instantRangeOpt: HOption[InstantRange] = HOption.empty())
+  extends BaseSparkInternalRowReaderContext(storageConfiguration, tableConfig, instantRangeOpt,
+    SparkFileFormatInternalRecordContext.apply(tableConfig)) {
 
   // Java-friendly auxiliary constructor (Scala default args don't generate matching Java overloads).
   def this(baseFileReader: SparkColumnarFileReader,
@@ -84,7 +88,15 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
            requiredFilters: Seq[Filter],
            storageConfiguration: StorageConfiguration[_],
            tableConfig: HoodieTableConfig) =
-    this(baseFileReader, filters, requiredFilters, storageConfiguration, tableConfig, None)
+    this(baseFileReader, filters, requiredFilters, storageConfiguration, tableConfig, None, HOption.empty())
+
+  def this(baseFileReader: SparkColumnarFileReader,
+           filters: Seq[Filter],
+           requiredFilters: Seq[Filter],
+           storageConfiguration: StorageConfiguration[_],
+           tableConfig: HoodieTableConfig,
+           sparkRequiredSchema: Option[StructType]) =
+    this(baseFileReader, filters, requiredFilters, storageConfiguration, tableConfig, sparkRequiredSchema, HOption.empty())
 
   lazy val sparkAdapter: SparkAdapter = SparkAdapterSupport.sparkAdapter
   private lazy val recordKeyFields = Option(tableConfig.getRecordKeyFields.orElse(null)).map(_.map(_.toLowerCase).toSet).getOrElse(Set.empty)

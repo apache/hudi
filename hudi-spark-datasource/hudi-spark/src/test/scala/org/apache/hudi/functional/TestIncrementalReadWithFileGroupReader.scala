@@ -17,11 +17,12 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, MergeOnReadIncrementalRelationV2}
+import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.HoodieInstant
-import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieArchivalConfig, HoodieCleanConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
@@ -29,7 +30,7 @@ import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.{DataFrame, SaveMode}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.CsvSource
+import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
 import scala.collection.JavaConverters._
 
@@ -66,6 +67,7 @@ class TestIncrementalReadWithFileGroupReader extends SparkClientFunctionalTestHa
     "COPY_ON_WRITE,8,6",
     "COPY_ON_WRITE,8,8",
     "MERGE_ON_READ,6,6",
+    "MERGE_ON_READ,6,8",
     "MERGE_ON_READ,8,6",
     "MERGE_ON_READ,8,8"
   ))
@@ -123,6 +125,57 @@ class TestIncrementalReadWithFileGroupReader extends SparkClientFunctionalTestHa
     assertIncrementalRange(readVersion, instants, 6, 6, Set.empty)
   }
 
+  @ParameterizedTest(name = "V2 MOR full-table scan applies instant range, legacy RDD = {0}")
+  @ValueSource(booleans = Array(false, true))
+  def testV2MorFullTableScanAppliesInstantRange(useLegacyRdd: Boolean): Unit = {
+    val archivalOptions = Map(
+      HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key -> "2",
+      HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key -> "5",
+      HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key -> "1",
+      HoodieCleanConfig.AUTO_CLEAN.key -> "false",
+      HoodieMetadataConfig.ENABLE.key -> "false",
+      HoodieWriteConfig.AUTO_UPGRADE_VERSION.key -> "false")
+
+    batches.zipWithIndex.foreach { case ((data, operation), i) =>
+      write(data, "MERGE_ON_READ", 6, operation,
+        if (i == 0) SaveMode.Overwrite else SaveMode.Append, archivalOptions)
+    }
+
+    val metaClient = HoodieTableMetaClient.builder()
+      .setConf(storageConf().newInstance()).setBasePath(basePath()).build()
+    assertEquals(6, metaClient.getTableConfig.getTableVersion.versionCode())
+    val archivedInstants = metaClient.getArchivedTimeline.getCommitsTimeline.filterCompletedInstants
+      .getInstants.asScala.toList
+    val activeInstants = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants
+      .getInstants.asScala.toList
+    val instants = (archivedInstants ++ activeInstants)
+      .map(instant => instant.requestedTime -> instant).toMap.values.toList.sortBy(_.requestedTime)
+
+    assertTrue(archivedInstants.nonEmpty, "The query must include archived instants to force a full-table scan")
+    assertEquals(6, instants.size)
+    assertTrue(instants.last.requestedTime.compareTo(instants(4).requestedTime) > 0,
+      "c6 must be outside the requested range")
+    val (_, logFiles) = listDataFiles()
+    assertEquals(3, logFiles.size, "The out-of-range c6 log must exist physically")
+
+    val readOptions = Map(
+      DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
+      DataSourceReadOptions.START_COMMIT.key -> "000",
+      DataSourceReadOptions.END_COMMIT.key -> instants(4).requestedTime,
+      DataSourceReadOptions.INCREMENTAL_READ_TABLE_VERSION.key -> "8",
+      DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.key -> "true")
+    val result = if (useLegacyRdd) {
+      spark.baseRelationToDataFrame(
+        MergeOnReadIncrementalRelationV2(spark.sqlContext, readOptions + ("path" -> basePath), metaClient, None))
+    } else {
+      spark.read.format("hudi").options(readOptions).load(basePath)
+    }
+
+    val actual = result.select("key", "ts").collect()
+      .map(row => (row.getString(0), row.getInt(1))).toSet
+    assertEquals(Set(("k1", 5), ("k2", 4), ("k3", 5), ("k4", 5), ("k5", 3), ("k6", 3)), actual)
+  }
+
   private def assertIncrementalRange(readVersion: Int,
                                      instants: List[HoodieInstant],
                                      startIdx: Int, endIdx: Int,
@@ -152,7 +205,8 @@ class TestIncrementalReadWithFileGroupReader extends SparkClientFunctionalTestHa
   }
 
   private def write(data: Seq[(Int, String, String, Double, String)], tableType: String,
-                    sourceVersion: Int, operation: String, mode: SaveMode): Unit = {
+                    sourceVersion: Int, operation: String, mode: SaveMode,
+                    additionalOptions: Map[String, String] = Map.empty): Unit = {
     spark.createDataFrame(data).toDF(columns: _*).write.format("hudi")
       .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "key")
       .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "pt")
@@ -164,6 +218,7 @@ class TestIncrementalReadWithFileGroupReader extends SparkClientFunctionalTestHa
       .option(DataSourceWriteOptions.OPERATION.key, operation)
       .option("hoodie.insert.shuffle.parallelism", "2")
       .option("hoodie.upsert.shuffle.parallelism", "2")
+      .options(additionalOptions)
       .mode(mode)
       .save(basePath)
   }
@@ -173,13 +228,9 @@ class TestIncrementalReadWithFileGroupReader extends SparkClientFunctionalTestHa
       .option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.START_COMMIT.key(), start)
       .option(DataSourceReadOptions.END_COMMIT.key(), end)
-    val readerWithVersion = if (readVersion == 6) {
-      // same access pattern as the S3/GCS event incremental sources
-      reader.option(DataSourceReadOptions.INCREMENTAL_READ_TABLE_VERSION.key(), "6")
-    } else {
-      reader
-    }
-    readerWithVersion.load(basePath)
+      // Explicitly exercise the selected reader version, including V2 reads of V6 tables.
+      .option(DataSourceReadOptions.INCREMENTAL_READ_TABLE_VERSION.key(), readVersion.toString)
+    reader.load(basePath)
   }
 
   private def listDataFiles(): (Seq[String], Seq[String]) = {
