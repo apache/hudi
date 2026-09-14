@@ -28,7 +28,7 @@ import org.apache.parquet.hadoop.metadata.FileMetaData
 import org.apache.parquet.schema.{MessageType, Type, Types}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.spark.sql.execution.datasources.parquet.VariantParquetTestFixtures.{shreddedVariant, stringKeyMap, threeLevelList, twoLevelList, unshreddedVariant}
-import org.apache.spark.sql.sources.{AlwaysTrue, And, EqualTo, Filter, GreaterThan, GreaterThanOrEqual, IsNotNull, IsNull, Not, Or, StringStartsWith}
+import org.apache.spark.sql.sources.{AlwaysFalse, AlwaysTrue, And, EqualNullSafe, EqualTo, Filter, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Not, Or, StringContains, StringEndsWith, StringStartsWith}
 import org.apache.spark.sql.types.{ArrayType, BinaryType, IntegerType, MapType, MetadataBuilder, StringType, StructField, StructType}
 import org.junit.jupiter.api.{Assertions, Test}
 
@@ -353,6 +353,21 @@ class TestParquetSchemaEvolutionUtils {
     // A column added after the file was written has no field to filter on, and a filter that
     // cannot be evaluated must not skip any of the file's row groups.
     Assertions.assertEquals(AlwaysTrue, rebuild(IsNotNull("added")))
+
+    // Every leaf filter type takes both arms: re-spelled when the file holds the column under
+    // another name, AlwaysTrue when it does not hold it at all.
+    val leafFilters: Seq[String => Filter] = Seq(
+      EqualTo(_, "x"), EqualNullSafe(_, "x"), GreaterThan(_, "x"), GreaterThanOrEqual(_, "x"),
+      LessThan(_, "x"), LessThanOrEqual(_, "x"), In(_, Array[Any]("x", "y")), IsNull(_), IsNotNull(_),
+      StringStartsWith(_, "x"), StringEndsWith(_, "x"), StringContains(_, "x"))
+    leafFilters.foreach { leaf =>
+      Assertions.assertEquals(leaf("original"), rebuild(leaf("renamed")))
+      Assertions.assertEquals(AlwaysTrue, rebuild(leaf("added")), s"${leaf("added")} on an absent column")
+    }
+
+    // The constant filters reference no column and pass through as they are.
+    Assertions.assertEquals(AlwaysTrue, rebuild(AlwaysTrue))
+    Assertions.assertEquals(AlwaysFalse, rebuild(AlwaysFalse))
 
     // And/Or/Not rebuild their children.
     Assertions.assertEquals(
