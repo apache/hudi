@@ -371,9 +371,8 @@ object HoodieProcedureFilterUtils {
 
     // Third pass: unwrap any RuntimeReplaceable the parser emitted directly (ILIKE parses straight
     // to ILike, never through an UnresolvedFunction the second pass would route through the
-    // registry) to its real, evaluable replacement, then handle type coercion for numeric
-    // comparisons.
-    applyHudiWideningRules(unwrapRuntimeReplaceable(functionResolved))
+    // registry), then widen numeric comparison operands.
+    unwrapAndWiden(functionResolved)
   }
 
   // Whatever the hardcoded table produced - a real expression, or nothing at all (wrong arity, or
@@ -433,7 +432,7 @@ object HoodieProcedureFilterUtils {
       if (!castedResolved.checkInputDataTypes().isSuccess) {
         unresolvedFunc
       } else {
-        val finalized = finalizeRegistryResolution(castedResolved)
+        val finalized = unwrapAndWiden(castedResolved)
         if (isUsableOutsideQueryPlan(finalized)) finalized else unresolvedFunc
       }
     }.getOrElse(unresolvedFunc)
@@ -489,11 +488,11 @@ object HoodieProcedureFilterUtils {
       FunctionIdentifier(funcName)
     }
 
-  // Widens the unwrapped result the same way pass three in bindAndResolveExpression would -
-  // nvl(ts, 0) unwraps to Coalesce(ts, 0), which needs the same widening the hardcoded
-  // coalesce(ts, 0) case gets - so a registry function and its hardcoded-table equivalent agree
-  // on what counts as resolved.
-  private def finalizeRegistryResolution(expression: Expression): Expression =
+  // The single unwrap-then-widen step both callers need: the registry path below and the
+  // whole-tree third pass in bindAndResolveExpression. nvl(ts, 0) unwraps to Coalesce(ts, 0),
+  // which needs the same widening the hardcoded coalesce(ts, 0) case gets, so a registry function
+  // and its hardcoded-table equivalent agree on what counts as resolved.
+  private def unwrapAndWiden(expression: Expression): Expression =
     applyHudiWideningRules(unwrapRuntimeReplaceable(expression))
 
   // RuntimeReplaceable placeholders (nvl, ifnull, ILIKE, ...) need substitution the analyzer
@@ -503,10 +502,9 @@ object HoodieProcedureFilterUtils {
   // any other holder, so both need unwrapping to a fixed point or RuntimeReplaceable's own final
   // eval() throws a bare SparkException instead of evaluating via the replacement.
   //
-  // Shared with bindAndResolveExpression's third pass above: some RuntimeReplaceable nodes never
-  // reach this registry-specific path at all - ILIKE parses straight to ILike rather than through
-  // an UnresolvedFunction, so the whole tree needs this same unwrap, not just a registry-resolved
-  // subtree of it.
+  // Some of these never reach the registry path at all - ILIKE parses straight to ILike rather
+  // than through an UnresolvedFunction - which is why the third pass runs this over the whole
+  // tree, not just a registry-resolved subtree of it.
   private def unwrapRuntimeReplaceable(expression: Expression): Expression = {
     val next = expression.transformUp {
       case r: RuntimeReplaceable => r.replacement
@@ -743,14 +741,12 @@ object HoodieProcedureFilterUtils {
       // Spark can replace an integral/decimal-literal inequality with an integral comparison,
       // avoiding a lossy cast of the column. It also gives integral literals minimum decimal
       // precision before finding the common comparison type.
-      val promoted = DecimalPrecision.transform.applyOrElse(original, identity[Expression])
+      val promoted = applyDecimalPrecisionRule(original)
       // Mixed decimal/integral promotion creates two decimal operands. Apply the decimal-pair
       // rule next, just as a subsequent analyzer iteration would.
-      val comparison = DecimalPrecision.transform.applyOrElse(promoted, identity[Expression])
+      val comparison = applyDecimalPrecisionRule(promoted)
       comparison match {
-        case binary: BinaryComparison =>
-          widenOperands(Seq(binary.left, binary.right))
-            .map(binary.withNewChildren).getOrElse(binary)
+        case binary: BinaryComparison => widenChildrenOf(binary)
         case other => other
       }
     }
@@ -780,23 +776,17 @@ object HoodieProcedureFilterUtils {
       arith
     } else {
       val decimalOperands = operands.exists(_.dataType.isInstanceOf[DecimalType])
-      val promoted = if (decimalOperands) {
-        DecimalPrecision.transform.applyOrElse(arith, identity[Expression])
-      } else {
-        arith
-      }
+      val promoted = if (decimalOperands) applyDecimalPrecisionRule(arith) else arith
       promoted match {
         case binary: BinaryArithmetic =>
-          val children = Seq(binary.left, binary.right)
-          val widened = if (children.forall(_.dataType.isInstanceOf[DecimalType])) {
+          val widened = if (binary.children.forall(_.dataType.isInstanceOf[DecimalType])) {
             binary
           } else {
-            widenOperands(children)
-              .map(binary.withNewChildren).getOrElse(binary)
+            widenChildrenOf(binary)
           }
           // Spark 3.3 wraps decimal arithmetic in CheckOverflow after operand promotion.
           // Later versions calculate the result precision within BinaryArithmetic itself.
-          if (decimalOperands) DecimalPrecision.transform.applyOrElse(widened, identity[Expression]) else widened
+          if (decimalOperands) applyDecimalPrecisionRule(widened) else widened
         case other => other
       }
     }
@@ -852,6 +842,14 @@ object HoodieProcedureFilterUtils {
   /** Spark's own guard for the numeric coercion rules, which admit a null literal. */
   private def isNumericOrNull(dataType: DataType): Boolean =
     dataType.isInstanceOf[NumericType] || dataType.isInstanceOf[NullType]
+
+  /** Applies Spark's decimal precision rule to this node alone, leaving a non-matching one as is. */
+  private def applyDecimalPrecisionRule(expression: Expression): Expression =
+    DecimalPrecision.transform.applyOrElse(expression, identity[Expression])
+
+  /** Widens a binary node's two operands together, keeping the node untouched if they cannot be. */
+  private def widenChildrenOf(binary: Expression): Expression =
+    widenOperands(binary.children).map(binary.withNewChildren).getOrElse(binary)
 
   private def applyCoalesceTypeCoercion(coalesce: Coalesce): Expression = {
     widenOperands(coalesce.children) match {
