@@ -231,8 +231,21 @@ public class HadoopFSUtils {
     }
 
     if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {
+      // The buffered stream wraps the inner FSInputStream, not the FSDataInputStream the filesystem
+      // returned. Filesystems that track the streams they hand out (Spark's DebugFilesystem in tests)
+      // see a leak unless that outer object is closed too; the inner stream's close is idempotent.
+      final FSDataInputStream original = fsDataInputStream;
       return new TimedFSDataInputStream(convertToHadoopPath(filePath), new FSDataInputStream(
-          new BufferedFSInputStream((FSInputStream) fsDataInputStream.getWrappedStream(), bufferSize)));
+          new BufferedFSInputStream((FSInputStream) original.getWrappedStream(), bufferSize)) {
+        @Override
+        public void close() throws IOException {
+          try {
+            super.close();
+          } finally {
+            original.close();
+          }
+        }
+      });
     }
 
     // fsDataInputStream.getWrappedStream() maybe a BufferedFSInputStream
