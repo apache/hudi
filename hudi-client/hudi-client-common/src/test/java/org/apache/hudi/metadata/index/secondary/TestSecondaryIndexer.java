@@ -50,6 +50,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 class TestSecondaryIndexer {
@@ -149,6 +150,27 @@ class TestSecondaryIndexer {
       SecondaryIndexer indexer = new SecondaryIndexer(engineContext, writeConfig, metaClient);
       assertThrows(HoodieMetadataException.class, () -> indexer.buildInitialization(IndexInitializationContext.of(
           "001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList), Lazy.lazily(Option::empty), Option.of("sec_ghost"))));
+    }
+  }
+
+  @Test
+  void testSkippingAnInitializedPartitionDoesNotConsultTheDefinitionLookup() throws IOException {
+    HoodieEngineContext engineContext = mock(HoodieEngineContext.class);
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+
+    when(writeConfig.getMetadataConfig()).thenReturn(mock(HoodieMetadataConfig.class));
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    when(tableConfig.getMetadataPartitions()).thenReturn(Set.of("sec1"));
+
+    try (MockedStatic<HoodieTableMetadataUtil> mockedUtil = mockStatic(HoodieTableMetadataUtil.class)) {
+      SecondaryIndexer indexer = new SecondaryIndexer(engineContext, writeConfig, metaClient);
+      assertTrue(indexer.buildInitialization(IndexInitializationContext.of(
+          "001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList), Lazy.lazily(Option::empty), Option.of("sec1"))).isEmpty());
+      // The lookup registers a definition when it finds none uninitialized, so a run that builds nothing must
+      // not reach it, or it leaves behind the dangling definition that misdirects the next indexing action.
+      mockedUtil.verify(() -> HoodieTableMetadataUtil.getSecondaryIndexPartitionsToInit(any(), any(), any()), never());
     }
   }
 

@@ -200,10 +200,12 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
           .setVersion(LATEST_INDEX_COMMIT_METADATA_VERSION).setIndexPartitionInfos(finalIndexPartitionInfos).build();
       updateTableConfigAndTimeline(indexInstant, finalIndexPartitionInfos, indexCommitMetadata);
       return Option.of(indexCommitMetadata);
-    } catch (IOException e) {
-      // abort gracefully
+    } catch (IOException | HoodieMetadataException e) {
+      // abort gracefully. A failed initialization also surfaces as a HoodieMetadataException, and leaving it
+      // uncaught would strand the requested partition inflight in the table config with the index instant
+      // inflight on the timeline, which neither a re-run nor a re-schedule can get past.
       abort(indexInstant, indexPartitionInfos.stream().map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.toSet()));
-      throw new HoodieIndexException(String.format("Unable to index instant: %s", indexInstant));
+      throw new HoodieIndexException(String.format("Unable to index instant: %s", indexInstant), e);
     }
   }
 
@@ -270,6 +272,9 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
     try {
       // update the table config and timeline in a lock as there could be another indexer running
       txnManager.beginStateChange(Option.of(indexInstant), Option.empty());
+      // The metadata writer records the partitions it built through its own meta client, so re-read the table
+      // config before adding to it; writing back a copy loaded before initialization drops those entries.
+      table.getMetaClient().reloadTableConfig();
       updateMetadataPartitionsTableConfig(table.getMetaClient(),
           finalIndexPartitionInfos.stream().map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.toSet()));
       table.getActiveTimeline().saveAsComplete(false, instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, INDEXING_ACTION, indexInstant.requestedTime()),

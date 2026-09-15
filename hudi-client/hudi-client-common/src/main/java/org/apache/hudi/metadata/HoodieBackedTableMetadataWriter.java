@@ -554,12 +554,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     if (HoodieTableMetadataUtil.isIndexingCommit(dataIndexTimeline, initializationTime)) {
       return initializationTime;
     }
-    for (int offset = 0; ; ++offset) {
-      final String commitInstantTime = HoodieInstantTimeGenerator.instantTimePlusMillis(SOLO_COMMIT_TIMESTAMP, offset);
-      if (!metadataMetaClient.getCommitsTimeline().containsInstant(commitInstantTime)) {
-        return commitInstantTime;
-      }
-    }
+    return generateUniqueSoloInstantTime();
   }
 
   protected abstract EngineType getEngineType();

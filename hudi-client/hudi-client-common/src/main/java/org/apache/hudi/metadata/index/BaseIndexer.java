@@ -36,6 +36,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /**
  * Base implementation of {@link Indexer} that handles common metadata-partition bootstrap flow,
@@ -70,13 +71,15 @@ public abstract class BaseIndexer implements Indexer {
    * fails rather than building another index while the requested partition is marked complete.
    *
    * @param context                  the initialization context
-   * @param uninitializedPartitions  the uninitialized partitions of this type, as the definition
-   *                                 lookup reports them
+   * @param uninitializedPartitionsLookup the uninitialized partitions of this type, as the definition lookup reports
+   *                                 them. Evaluated only when the request does not already answer itself: the lookup
+   *                                 registers a new definition when it finds none uninitialized, and a run that
+   *                                 initializes nothing must not leave one behind
    * @param indexType                the index type, for the messages
    * @return the partitions to initialize: exactly one, or none
    */
   protected Set<String> resolvePartitionsToInit(IndexInitializationContext context,
-                                                Set<String> uninitializedPartitions,
+                                                Supplier<Set<String>> uninitializedPartitionsLookup,
                                                 MetadataPartitionType indexType) {
     Option<String> requested = context.requestedIndexPartition();
     if (requested.isPresent()
@@ -90,6 +93,7 @@ public abstract class BaseIndexer implements Indexer {
     if (requested.isPresent() && dataTableMetaClient.getIndexForMetadataPartition(requested.get()).isPresent()) {
       return Collections.singleton(requested.get());
     }
+    Set<String> uninitializedPartitions = uninitializedPartitionsLookup.get();
     // A single candidate answers for a request only when it is the requested partition itself, which is what a
     // first-time index looks like once the lookup has minted its definition. Any other single candidate is a
     // different index, and building it would leave the requested partition marked complete with nothing in it.
