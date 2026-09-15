@@ -25,17 +25,6 @@ on:
   schedule:
     - cron: '47 5 * * *'
   workflow_dispatch:
-  # PRs that touch the comparison or the version sources get the table in the job summary,
-  # so drift fixes can be checked before merging. Only scheduled and manual runs file issues.
-  pull_request:
-    branches:
-      - master
-    paths:
-      - '.github/workflows/hudi_trino_dependency_drift.yml'
-      - 'scripts/trino/check_dependency_drift.py'
-      - 'pom.xml'
-      - 'hudi-trino/pom.xml'
-      - 'docker/trino/shim/pom.xml'
 
 # Two jobs on purpose: the compare job executes mvnw from the pinned trinodb/trino
 # checkout, so it holds a read-only token; the report job holds issues: write but runs
@@ -155,7 +144,7 @@ jobs:
             *) echo "ERROR: check_dependency_drift.py exited $rc" >&2; exit "$rc" ;;
           esac
       - name: Upload drift report
-        if: github.event_name != 'pull_request' && steps.drift.outputs.drift == 'true'
+        if: steps.drift.outputs.drift == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: dependency-drift
@@ -166,8 +155,7 @@ jobs:
     name: File or update drift issue
     runs-on: ubuntu-latest
     needs: compare-dependencies
-    # PR runs from forks get a read-only token, and a PR should not file issues anyway.
-    if: github.event_name != 'pull_request' && needs.compare-dependencies.outputs.drift == 'true'
+    if: needs.compare-dependencies.outputs.drift == 'true'
     # Holds issues: write; checks out nothing and runs no Maven or third-party code.
     permissions:
       contents: read
