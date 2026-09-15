@@ -225,7 +225,7 @@ services:
       - ${HUDI_WS}:/var/hoodie/ws
 
   minio:
-    image: 'minio/minio:latest'
+    image: 'quay.io/minio/minio:latest'
     hostname: minio
     container_name: minio
     ports:
@@ -240,7 +240,7 @@ services:
     command: server --address ":9090" --console-address ":9091" /data
 
   mc:
-    image: minio/mc
+    image: quay.io/minio/mc
     container_name: mc
     entrypoint: >
       /bin/sh -c "
