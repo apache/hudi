@@ -20,6 +20,7 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.HoodieSparkUtils
 
 import org.apache.spark.{SparkException, SparkThrowable}
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.FunctionIdentifier
 import org.apache.spark.sql.catalyst.analysis.{AnsiTypeCoercion, DecimalPrecision, TypeCoercion, TypeCoercionBase, UnresolvedAttribute, UnresolvedFunction}
@@ -45,7 +46,7 @@ import scala.util.{Failure, Success, Try}
  * - Complex types: Array, Map, Struct (Row)
  * - Nested combinations of all above types
  */
-object HoodieProcedureFilterUtils {
+object HoodieProcedureFilterUtils extends Logging {
 
   /**
    * Evaluates a SQL filter expression against a sequence of rows.
@@ -384,10 +385,7 @@ object HoodieProcedureFilterUtils {
     }
 
   // Widens numeric comparison/arithmetic operands to a common type - see the coercion helpers
-  // below for the rules each case follows. Shared between the third pass here and
-  // resolveViaFunctionRegistry, so a RuntimeReplaceable unwrap (nvl -> Coalesce, for instance)
-  // gets the same widening its hardcoded-table equivalent (coalesce) gets, before either is
-  // checked for remaining type errors.
+  // below for the rules each case follows.
   private def applyHudiWideningRules(expression: Expression): Expression = {
     expression.transformUp {
       case eq: org.apache.spark.sql.catalyst.expressions.EqualTo =>
@@ -435,7 +433,14 @@ object HoodieProcedureFilterUtils {
         val finalized = unwrapAndWiden(castedResolved)
         if (isUsableOutsideQueryPlan(finalized)) finalized else unresolvedFunc
       }
-    }.getOrElse(unresolvedFunc)
+    } match {
+      case Success(resolved) => resolved
+      // Catch-all on purpose - what a version throws for an unknown name isn't a stable contract,
+      // and an unsupported name still has to reach the rejection path. Logged to stay diagnosable.
+      case Failure(exception) =>
+        logDebug(s"Falling back to the rejection path for ${unresolvedFunc.nameParts.mkString(".")}", exception)
+        unresolvedFunc
+    }
   }
 
   // Runs a handful of the analyzer's own coercion rules on a single expression, the same rules
@@ -451,16 +456,10 @@ object HoodieProcedureFilterUtils {
       .foldLeft(expression) { (expr, rule) => rule.transform.applyOrElse(expr, identity[Expression]) }
   }
 
-  // Filter expressions only ever call plain builtins. A db-qualified or 3+ part name (db.func,
-  // catalog.db.func) can only be resolved by guessing which part is the real function name - that
-  // risks matching an unrelated same-named function, so those are left unresolved instead.
-  //
-  // Each argument gets widened before the lookup, not just the call's own result afterward: an
-  // argument like ts + 1 (Long + Int) is still an unresolved Add at this point, and the wrapper's
-  // checkInputDataTypes right after runs before pass three ever gets a chance to widen it -
-  // sqrt(ts + 1) would fail that check for the same reason nvl(ts, 0) needed pre-lookup widening,
-  // while the hardcoded abs(ts + 1) already works because pass three widens its argument too, just
-  // later in the pipeline.
+  // Only plain builtins: a qualified name would mean guessing which part is the function, risking
+  // an unrelated match, so those stay unresolved. Arguments are widened before the lookup, not
+  // just the result after - in sqrt(ts + 1) the argument is still an unresolved Add here, and the
+  // wrapper's checkInputDataTypes runs before pass three would have widened it.
   private def lookupBuiltin(unresolvedFunc: UnresolvedFunction, sparkSession: SparkSession): Expression =
     unresolvedFunc.nameParts match {
       case Seq(funcName) =>
@@ -476,10 +475,8 @@ object HoodieProcedureFilterUtils {
   // singleton itself) stops auto-qualifying a bare name it's given and asserts instead.
   private def builtinFunctionIdentifier(funcName: String): FunctionIdentifier =
     if (HoodieSparkUtils.gteqSpark4_2) {
-      // FunctionIdentifier only gained the catalog parameter from Spark 3.4 onward - this file
-      // still compiles against 3.3 too, where the case class has just funcName/database, so a
-      // direct 3-arg call wouldn't compile there. Reached through reflection instead, the same way
-      // the With handling below reaches classes that don't exist on every targeted version.
+      // FunctionIdentifier only gained the catalog parameter in 3.4 and this file still compiles
+      // against 3.3, so the 3-arg constructor is reached reflectively rather than called directly.
       classOf[FunctionIdentifier]
         .getConstructor(classOf[String], classOf[Option[_]], classOf[Option[_]])
         .newInstance(funcName, Some("builtin"), Some("system"))
@@ -488,23 +485,15 @@ object HoodieProcedureFilterUtils {
       FunctionIdentifier(funcName)
     }
 
-  // The single unwrap-then-widen step both callers need: the registry path below and the
-  // whole-tree third pass in bindAndResolveExpression. nvl(ts, 0) unwraps to Coalesce(ts, 0),
-  // which needs the same widening the hardcoded coalesce(ts, 0) case gets, so a registry function
-  // and its hardcoded-table equivalent agree on what counts as resolved.
+  // Shared by the registry path and the whole-tree third pass: nvl(ts, 0) unwraps to
+  // Coalesce(ts, 0), which needs the same widening the hardcoded coalesce(ts, 0) already gets.
   private def unwrapAndWiden(expression: Expression): Expression =
     applyHudiWideningRules(unwrapRuntimeReplaceable(expression))
 
-  // RuntimeReplaceable placeholders (nvl, ifnull, ILIKE, ...) need substitution the analyzer
-  // normally performs but a plain lookupFunction call or the parser's own output skips, and can
-  // themselves unwrap to another RuntimeReplaceable (regexp_substr -> NullIf) or a With(child,
-  // defs) common-subexpression wrapper from 4.0 onward (NullIf's, for instance) - Unevaluable like
-  // any other holder, so both need unwrapping to a fixed point or RuntimeReplaceable's own final
-  // eval() throws a bare SparkException instead of evaluating via the replacement.
-  //
-  // Some of these never reach the registry path at all - ILIKE parses straight to ILike rather
-  // than through an UnresolvedFunction - which is why the third pass runs this over the whole
-  // tree, not just a registry-resolved subtree of it.
+  // Substitution the analyzer normally performs, which both lookupFunction and the parser skip -
+  // left unwrapped, RuntimeReplaceable's final eval() throws. A replacement can be another
+  // RuntimeReplaceable (regexp_substr -> NullIf) or a 4.0+ With wrapper, so this runs to a fixed
+  // point, over the whole tree rather than registry results alone: ILIKE parses straight to ILike.
   private def unwrapRuntimeReplaceable(expression: Expression): Expression = {
     val next = expression.transformUp {
       case r: RuntimeReplaceable => r.replacement
