@@ -1762,13 +1762,11 @@ public class HoodieAvroUtils {
   }
 
   /**
-   * Resolves the generated class for a nested RECORD schema without Avro's name-based lookup.
+   * Loads the generated class for a nested RECORD schema with {@code Class.forName}, bypassing the
+   * {@code ClassSecurityValidator} check that Avro 1.12.2+ runs in {@code ClassUtils.forName} (reached from
+   * {@link SpecificData#getClass(Schema)}), which rejects Hudi's generated classes.
    *
-   * <p>Avro 1.12.2+ routes {@link SpecificData#getClass(Schema)} through a class security validator
-   * that rejects Hudi's generated classes (e.g. when bundled in the Trino connector on Trino 484+).
-   * Loading the class directly is safe: the schema comes from the target generated class's compiled
-   * SCHEMA$ (via {@code SpecificData.getForClass(clazz).getSchema(clazz)}), never from data read off
-   * storage, so this does not reopen the class-injection vector the validator closes.
+   * <p>Only pass schemas taken from a compiled SCHEMA$, never a schema read from storage, which is what the validation guards against.
    */
   private static Class<? extends SpecificRecordBase> getSpecificRecordClass(Schema recordSchema, SpecificData specificData) {
     String className = SpecificData.getClassName(recordSchema);
