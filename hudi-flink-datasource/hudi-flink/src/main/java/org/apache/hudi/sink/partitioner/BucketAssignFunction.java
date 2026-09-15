@@ -171,7 +171,7 @@ public class BucketAssignFunction
 
   @Override
   public void initializeState(FunctionInitializationContext context) throws Exception {
-    this.indexBackend = IndexBackendFactory.create(conf, context, getRuntimeContext());
+    this.indexBackend = IndexBackendFactory.create(conf, context);
     this.indexBackend.registerMetrics(getRuntimeContext().getMetricGroup());
   }
 

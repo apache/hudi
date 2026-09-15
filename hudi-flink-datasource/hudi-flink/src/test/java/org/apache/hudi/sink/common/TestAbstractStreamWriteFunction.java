@@ -93,12 +93,12 @@ class TestAbstractStreamWriteFunction {
   }
 
   @ParameterizedTest
-  @CsvSource({"0, same", "0, different", "0, missing", "1, same", "1, different", "1, missing"})
-  void testRestoredCheckpointId(int attempt, String savedJob) throws Exception {
+  @CsvSource({"0, SAME", "0, DIFFERENT", "0, MISSING", "1, SAME", "1, DIFFERENT", "1, MISSING"})
+  void testRestoredCheckpointId(int attempt, SavedJobState savedJob) throws Exception {
     // Old savepoints may contain this state; new scale-up subtasks may have no operator state at all.
-    if (!savedJob.equals("missing")) {
+    if (savedJob != SavedJobState.MISSING) {
       stateStore.getListState(new ListStateDescriptor<>("job-id-state", TypeInformation.of(JobID.class)))
-          .add(savedJob.equals("same") ? jobId : new JobID());
+          .add(savedJob == SavedJobState.SAME ? jobId : new JobID());
     }
     initialize(42L, attempt);
 
@@ -180,6 +180,10 @@ class TestAbstractStreamWriteFunction {
 
   private ListState<WriteMetadataEvent> writeMetadataState() throws Exception {
     return stateStore.getListState(new ListStateDescriptor<>("write-metadata-state", TypeInformation.of(WriteMetadataEvent.class)));
+  }
+
+  private enum SavedJobState {
+    SAME, DIFFERENT, MISSING
   }
 
   private static class TestWriteFunction extends AbstractStreamWriteFunction<RowData> {
