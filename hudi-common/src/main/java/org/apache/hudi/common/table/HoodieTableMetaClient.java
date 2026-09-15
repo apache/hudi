@@ -628,6 +628,22 @@ public class HoodieTableMetaClient implements Serializable {
     return instantiateArchivedTimeline(startTs);
   }
 
+  /**
+   * Returns a fresh archived timeline covering [startTs, endTs], both bounds inclusive.
+   * <p>
+   * The range is pushed down into the load, so the cost is proportional to the range rather than
+   * to the whole archive. Unlike the other accessors this one is never cached: {@code archivedTimelineMap}
+   * is keyed by start instant alone, so a range-bounded timeline stored there would be handed out
+   * to callers asking for an open-ended one.
+   *
+   * @param startTs The start instant time (inclusive) of the archived timeline.
+   * @param endTs   The end instant time (inclusive) of the archived timeline.
+   * @return the archived timeline restricted to the given range.
+   */
+  public HoodieArchivedTimeline getArchivedTimeline(String startTs, String endTs) {
+    return tableFormat.getTimelineFactory().createArchivedTimeline(this, startTs, endTs);
+  }
+
   private HoodieArchivedTimeline instantiateArchivedTimeline(String startTs) {
     return StringUtils.isNullOrEmpty(startTs)
         ? tableFormat.getTimelineFactory().createArchivedTimeline(this)
