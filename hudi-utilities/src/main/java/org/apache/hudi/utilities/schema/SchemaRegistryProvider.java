@@ -219,8 +219,10 @@ public class SchemaRegistryProvider extends SchemaProvider {
         connection = getConnection(registryUrl);
       }
       ObjectMapper mapper = new ObjectMapper();
-      JsonNode node = mapper.readTree(getStream(connection));
-      return node.get("schema").asText();
+      try (InputStream stream = getStream(connection)) {
+        JsonNode node = mapper.readTree(stream);
+        return node.get("schema").asText();
+      }
     } catch (Exception e) {
       throw new HoodieSchemaFetchException("Failed to fetch schema from registry (legacy method)", e);
     }
