@@ -30,6 +30,7 @@ from hudi_agent_gateway.api.models import (
     ReadyResponse,
 )
 from hudi_agent_gateway.llm import list_models
+from hudi_agent_gateway.tools import get_connector
 
 router = APIRouter()
 
@@ -44,13 +45,14 @@ async def health() -> dict[str, str]:
 async def ready(request: Request, response: Response) -> ReadyResponse:
     """Readiness: configuration is valid AND dependencies are reachable."""
     state = request.app.state
+    s = state.settings
+    connector = get_connector(s.engine)
     checks: dict[str, DependencyStatus] = {}
 
-    trino_ok = await state.trino_client.ping()
-    checks["trino"] = DependencyStatus(
-        ok=trino_ok,
-        detail="reachable" if trino_ok else
-        f"cannot reach trino at {state.settings.trino_host}:{state.settings.trino_port}",
+    engine_ok = await state.lakehouse_client.ping()
+    checks[s.engine] = DependencyStatus(
+        ok=engine_ok,
+        detail=connector.readiness_detail(s, state.lakehouse_client, engine_ok),
     )
 
     llm_ok, llm_detail = await state.llm_readiness.check()
@@ -86,14 +88,16 @@ async def models(request: Request) -> ModelsResponse:
 @router.get("/v1/info", response_model=InfoResponse, response_model_by_alias=True)
 async def info(request: Request) -> InfoResponse:
     s = request.app.state.settings
+    ei = get_connector(s.engine).engine_info(s)
     return InfoResponse(
         name="hudi-agent-gateway",
         version=__version__,
+        engine=ei.engine,
         provider=s.llm_provider,
         model=s.llm_model,
-        catalog=s.trino_catalog,
-        schema=s.trino_schema,
-        trino_url=f"http://{s.trino_host}:{s.trino_port}",
-        trino_ui_url=f"http://{s.trino_host}:{s.trino_port}/ui/",
+        catalog=ei.catalog,
+        schema=ei.schema,
+        sql_url=ei.sql_url,
+        web_ui_url=ei.web_ui_url,
         mcp_enabled=s.mcp_enabled,
     )
