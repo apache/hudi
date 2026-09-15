@@ -27,12 +27,15 @@ import org.apache.hudi.common.table.timeline.dto.BaseFileDTO;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.table.view.PriorityBasedFileSystemView;
 import org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -256,6 +259,92 @@ class TestTimelineViewRefresh extends HoodieCommonTestHarness {
     HoodieTimeline updated = metaClient.reloadActiveTimeline();
     assertEquals(Arrays.asList("002"), request(updated, "002", "partition"));
     verify(view).sync();
+  }
+
+  @Test
+  void testExactExtensionServesCurrentFilesWithoutFallback() throws Exception {
+    FileCreateUtils.createCommit(metaClient, "001");
+    FileCreateUtils.createBaseFile(metaClient, "partition", "001", "file");
+    HoodieTimeline initial = metaClient.reloadActiveTimeline();
+    HoodieLocalEngineContext context = new HoodieLocalEngineContext(metaClient.getStorageConf());
+    RemoteHoodieTableFileSystemView remoteView = new RemoteHoodieTableFileSystemView("localhost", server.getServerPort(), metaClient);
+    HoodieTableFileSystemView secondary = HoodieTableFileSystemView.fileListingBasedFileSystemView(context, metaClient, initial);
+    FileCreateUtils.createCommit(metaClient, "002");
+    FileCreateUtils.createBaseFile(metaClient, "partition", "002", "file");
+    view = spy(HoodieTableFileSystemView.fileListingBasedFileSystemView(context, metaClient, metaClient.reloadActiveTimeline()));
+    PriorityBasedFileSystemView priorityView = new PriorityBasedFileSystemView(remoteView, ignored -> {
+      throw new AssertionError("An exact extension must not cause fallback");
+    }, context);
+    try {
+      assertEquals("001", secondary.getLatestBaseFile("partition", "file").get().getCommitTime());
+      assertEquals("002", priorityView.getLatestBaseFile("partition", "file").get().getCommitTime());
+      assertEquals(Arrays.asList("002"), priorityView.getLatestBaseFiles("partition")
+          .map(HoodieBaseFile::getCommitTime).collect(Collectors.toList()));
+      assertEquals("002", priorityView.getLatestFileSlice("partition", "file").get().getBaseInstantTime());
+      assertEquals(Arrays.asList("002"), priorityView.getLatestFileSlices("partition")
+          .map(slice -> slice.getBaseInstantTime()).collect(Collectors.toList()));
+      assertEquals(Arrays.asList("001"), priorityView.getLatestBaseFilesBeforeOrOn("partition", "001")
+          .map(HoodieBaseFile::getCommitTime).collect(Collectors.toList()));
+      assertEquals(Arrays.asList("001"), priorityView.getLatestFileSlicesBeforeOrOn("partition", "001", false)
+          .map(slice -> slice.getBaseInstantTime()).collect(Collectors.toList()));
+      verify(view, never()).sync();
+    } finally {
+      priorityView.close();
+      secondary.close();
+    }
+  }
+
+  @Test
+  void testBoundedSelectionUsesServerPendingCompaction() throws Exception {
+    FileCreateUtils.createCommit(metaClient, "001");
+    FileCreateUtils.createBaseFile(metaClient, "partition", "001", "file");
+    HoodieTimeline initial = metaClient.reloadActiveTimeline();
+    HoodieLocalEngineContext context = new HoodieLocalEngineContext(metaClient.getStorageConf());
+    RemoteHoodieTableFileSystemView remoteView = new RemoteHoodieTableFileSystemView("localhost", server.getServerPort(), metaClient);
+    HoodieTableFileSystemView secondary = HoodieTableFileSystemView.fileListingBasedFileSystemView(context, metaClient, initial);
+    metaClient.getActiveTimeline().saveToCompactionRequested(instant(REQUESTED, COMPACTION_ACTION, "002"),
+        CompactionUtils.buildFromFileSlices(Arrays.asList(Pair.of("partition", secondary.getLatestFileSlice("partition", "file").get())),
+            Option.empty(), Option.empty()));
+    view = spy(HoodieTableFileSystemView.fileListingBasedFileSystemView(context, metaClient, metaClient.reloadActiveTimeline()));
+    PriorityBasedFileSystemView priorityView = new PriorityBasedFileSystemView(remoteView, ignored -> {
+      throw new AssertionError("An exact extension must not cause fallback");
+    }, context);
+    try {
+      assertEquals(1, secondary.getLatestFileSlicesBeforeOrOn("partition", "001", false).count());
+      assertEquals(0, priorityView.getLatestFileSlicesBeforeOrOn("partition", "001", false).count());
+      assertEquals(Arrays.asList("001"), priorityView.getLatestFileSlicesBeforeOrOn("partition", "001", true)
+          .map(slice -> slice.getBaseInstantTime()).collect(Collectors.toList()));
+      verify(view, never()).sync();
+    } finally {
+      priorityView.close();
+      secondary.close();
+    }
+  }
+
+  @Test
+  void testDivergentTimelineRetainsStickyFallback() throws Exception {
+    FileCreateUtils.createCommit(metaClient, "001");
+    FileCreateUtils.createBaseFile(metaClient, "partition", "001", "file");
+    HoodieTimeline initial = metaClient.reloadActiveTimeline();
+    HoodieLocalEngineContext context = new HoodieLocalEngineContext(metaClient.getStorageConf());
+    RemoteHoodieTableFileSystemView remoteView = new RemoteHoodieTableFileSystemView("localhost", server.getServerPort(), metaClient);
+    HoodieTableFileSystemView secondary = spy(HoodieTableFileSystemView.fileListingBasedFileSystemView(context, metaClient, initial));
+    when(view.getTimeline()).thenReturn(timeline(instant(COMPLETED, REPLACE_COMMIT_ACTION, "001"), instant(COMPLETED, COMMIT_ACTION, "002")));
+    PriorityBasedFileSystemView priorityView = new PriorityBasedFileSystemView(remoteView, ignored -> secondary, context);
+    try {
+      assertEquals(Arrays.asList("001"), priorityView.getLatestBaseFiles("partition")
+          .map(HoodieBaseFile::getCommitTime).collect(Collectors.toList()));
+      // Even if the server subsequently matches, the previous rejection keeps routing locally.
+      when(view.getTimeline()).thenReturn(initial);
+      assertEquals(Arrays.asList("001"), priorityView.getLatestBaseFiles("partition")
+          .map(HoodieBaseFile::getCommitTime).collect(Collectors.toList()));
+      verify(view).sync();
+      verify(view).getLatestBaseFiles("partition");
+      verify(secondary, times(2)).getLatestBaseFiles("partition");
+    } finally {
+      priorityView.close();
+      secondary.close();
+    }
   }
 
   @Test
