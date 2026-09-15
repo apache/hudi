@@ -25,9 +25,12 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -329,6 +332,25 @@ public class TestRecordLevelIndex {
     List<String> result = BaseRecordLevelIndex.computeHoodieKeyFromFilters(
         conf, metaClient, evaluators, recordKeyFields, TestConfigurations.ROW_TYPE, false);
     assertEquals(Collections.singletonList("id1"), result, "Should return the simple record key value");
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"VALUE_ONLY", "FIELD_PREFIXED"})
+  public void testComputeHoodieKeyFromFiltersHonorsPersistedComplexKeygenEncoding(String persistedEncoding) {
+    // a single-field complex keygen table at version 9+ carrying the encoding persisted by the 8 -> 9 upgrade
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[]{"uuid"}));
+    when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.NINE);
+    when(tableConfig.contains(HoodieTableConfig.KEY_GENERATOR_TYPE)).thenReturn(true);
+    when(tableConfig.getString(HoodieTableConfig.KEY_GENERATOR_TYPE)).thenReturn(KeyGeneratorType.COMPLEX.name());
+    when(tableConfig.getComplexKeyGenEncoding()).thenReturn(Option.of(ComplexKeyGenEncoding.valueOf(persistedEncoding)));
+
+    List<ExpressionEvaluators.Evaluator> evaluators = createColumnStatsProbe(
+        BuiltInFunctionDefinitions.EQUALS, "uuid", Collections.singletonList("id1"));
+    List<String> result = BaseRecordLevelIndex.computeHoodieKeyFromFilters(
+        new Configuration(), metaClient, evaluators, new String[]{"uuid"}, TestConfigurations.ROW_TYPE, false);
+    String expected = "FIELD_PREFIXED".equals(persistedEncoding) ? "uuid:id1" : "id1";
+    assertEquals(Collections.singletonList(expected), result, "The lookup key must match the stored encoding");
   }
 
   @Test

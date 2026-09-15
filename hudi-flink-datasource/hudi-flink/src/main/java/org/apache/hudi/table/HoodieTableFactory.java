@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.index.HoodieIndex;
@@ -131,6 +132,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
           }
           conf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
               tableConfig.getTableStorageLayout().configValue());
+          OptionsInference.setupComplexKeygenEncoding(conf, tableConfig);
           if (tableConfig.contains(HoodieTableConfig.TYPE) && conf.contains(FlinkOptions.TABLE_TYPE)) {
             if (!tableConfig.getString(HoodieTableConfig.TYPE).equals(conf.get(FlinkOptions.TABLE_TYPE))) {
               log.error("Table type conflict : {} in {} and {} in table options. Update your config to match the table type in hoodie.properties.",

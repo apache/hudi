@@ -40,6 +40,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.keygen.KeyGenUtils;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieTable;
@@ -49,6 +51,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
@@ -78,8 +81,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -106,9 +111,9 @@ class TestNineToEightDowngradeHandler {
         // AWSDmsAvroPayload - requires RECORD_MERGE_MODE and RECORD_MERGE_STRATEGY_ID
         Arguments.of(
             AWSDmsAvroPayload.class.getName(),
-            4, // propertiesToRemove size
+            5, // propertiesToRemove size
             LEGACY_PAYLOAD_CLASS_NAME.key() + "," + PARTIAL_UPDATE_MODE.key() + "," + RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY + ","
-                + RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER,
+                + RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER + "," + HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(),
             3, // propertiesToAdd size
             true, // hasRecordMergeMode
             true, // hasRecordMergeStrategyId
@@ -117,8 +122,8 @@ class TestNineToEightDowngradeHandler {
         // OverwriteNonDefaultsWithLatestAvroPayload - requires RECORD_MERGE_MODE and RECORD_MERGE_STRATEGY_ID
         Arguments.of(
             OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
-            2,
-            LEGACY_PAYLOAD_CLASS_NAME.key() + "," + PARTIAL_UPDATE_MODE.key(),
+            3,
+            LEGACY_PAYLOAD_CLASS_NAME.key() + "," + PARTIAL_UPDATE_MODE.key() + "," + HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(),
             3,
             true,
             true,
@@ -127,8 +132,8 @@ class TestNineToEightDowngradeHandler {
         // PartialUpdateAvroPayload - requires RECORD_MERGE_MODE and RECORD_MERGE_STRATEGY_ID
         Arguments.of(
             PartialUpdateAvroPayload.class.getName(),
-            2,
-            LEGACY_PAYLOAD_CLASS_NAME.key() + "," + PARTIAL_UPDATE_MODE.key(),
+            3,
+            LEGACY_PAYLOAD_CLASS_NAME.key() + "," + PARTIAL_UPDATE_MODE.key() + "," + HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(),
             3,
             true,
             true,
@@ -137,9 +142,9 @@ class TestNineToEightDowngradeHandler {
         // MySqlDebeziumAvroPayload - requires RECORD_MERGE_MODE and RECORD_MERGE_STRATEGY_ID
         Arguments.of(
             MySqlDebeziumAvroPayload.class.getName(),
-            5,
+            6,
             LEGACY_PAYLOAD_CLASS_NAME.key() + "," + ORDERING_FIELDS.key() + "," + PARTIAL_UPDATE_MODE.key() + "," + RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY + ","
-                + RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER,
+                + RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER + "," + HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(),
             4,
             true,
             true,
@@ -148,9 +153,9 @@ class TestNineToEightDowngradeHandler {
         // PostgresDebeziumAvroPayload - requires RECORD_MERGE_MODE and RECORD_MERGE_STRATEGY_ID
         Arguments.of(
             PostgresDebeziumAvroPayload.class.getName(),
-            5,
+            6,
             LEGACY_PAYLOAD_CLASS_NAME.key() + "," + PARTIAL_UPDATE_MODE.key() + "," + RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_UNAVAILABLE_VALUE + ","
-                + RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY + "," + RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER,
+                + RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY + "," + RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER + "," + HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(),
             3,
             true,
             true,
@@ -159,8 +164,8 @@ class TestNineToEightDowngradeHandler {
         // OverwriteWithLatestAvroPayload - only requires PAYLOAD_CLASS_NAME
         Arguments.of(
             OverwriteWithLatestAvroPayload.class.getName(),
-            2,
-            LEGACY_PAYLOAD_CLASS_NAME.key() + "," + PARTIAL_UPDATE_MODE.key(),
+            3,
+            LEGACY_PAYLOAD_CLASS_NAME.key() + "," + PARTIAL_UPDATE_MODE.key() + "," + HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(),
             1,
             false,
             false,
@@ -169,8 +174,8 @@ class TestNineToEightDowngradeHandler {
         // DefaultHoodieRecordPayload - only requires PAYLOAD_CLASS_NAME
         Arguments.of(
             DefaultHoodieRecordPayload.class.getName(),
-            2,
-            LEGACY_PAYLOAD_CLASS_NAME.key() + "," + PARTIAL_UPDATE_MODE.key(),
+            3,
+            LEGACY_PAYLOAD_CLASS_NAME.key() + "," + PARTIAL_UPDATE_MODE.key() + "," + HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(),
             1,
             false,
             false,
@@ -179,8 +184,8 @@ class TestNineToEightDowngradeHandler {
         // EventTimeAvroPayload - only requires PAYLOAD_CLASS_NAME
         Arguments.of(
             EventTimeAvroPayload.class.getName(),
-            2,
-            LEGACY_PAYLOAD_CLASS_NAME.key() + "," + PARTIAL_UPDATE_MODE.key(),
+            3,
+            LEGACY_PAYLOAD_CLASS_NAME.key() + "," + PARTIAL_UPDATE_MODE.key() + "," + HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(),
             1,
             false,
             false,
@@ -245,7 +250,8 @@ class TestNineToEightDowngradeHandler {
       when(tableConfig.getTableType()).thenReturn(HoodieTableType.MERGE_ON_READ);
       UpgradeDowngrade.TableConfigChangeSet propertiesToChange =
           handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
-      assertEquals(1, propertiesToChange.propertiesToDelete().size());
+      assertEquals(2, propertiesToChange.propertiesToDelete().size());
+      assertTrue(propertiesToChange.propertiesToDelete().contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING));
       assertTrue(propertiesToChange.propertiesToDelete().contains(PARTIAL_UPDATE_MODE));
       assertEquals(0, propertiesToChange.propertiesToUpdate().size());
     }
@@ -443,6 +449,50 @@ class TestNineToEightDowngradeHandler {
 
       // Verify that dropIndex is not called at all since there are no V2 indexes to drop
       verify(writeClient, times(0)).dropIndex(any());
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"VALUE_ONLY", "FIELD_PREFIXED"})
+  void testDowngradeCarriesPersistedComplexKeygenEncodingToWriteConfig(String persistedEncoding) {
+    try (MockedStatic<UpgradeDowngradeUtils> utilities = org.mockito.Mockito.mockStatic(UpgradeDowngradeUtils.class);
+         MockedStatic<KeyGenUtils> keyGenUtils = org.mockito.Mockito.mockStatic(KeyGenUtils.class)) {
+      utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
+          any(), any(), any(), any(), anyBoolean(), any()))
+          .thenAnswer(invocation -> null);
+      ComplexKeyGenEncoding encoding = ComplexKeyGenEncoding.valueOf(persistedEncoding);
+      keyGenUtils.when(() -> KeyGenUtils.resolveComplexKeyGenEncoding(tableConfig)).thenReturn(Option.of(encoding));
+      when(tableConfig.getLegacyPayloadClass()).thenReturn(DefaultHoodieRecordPayload.class.getName());
+      when(tableConfig.getTableType()).thenReturn(HoodieTableType.MERGE_ON_READ);
+
+      UpgradeDowngrade.TableConfigChangeSet propertiesToChange =
+          handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
+
+      assertTrue(propertiesToChange.propertiesToDelete().contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING),
+          "The version 9 encoding property must be removed on downgrade");
+      // the known encoding is handed to the version 8 mechanism: the legacy boolean on the write config
+      verify(config).setValue(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING, String.valueOf(encoding.useNewEncoding()));
+      verify(config).clearValue(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING);
+    }
+  }
+
+  @Test
+  void testDowngradeWithoutComplexKeygenStillRemovesProperty() {
+    try (MockedStatic<UpgradeDowngradeUtils> utilities = org.mockito.Mockito.mockStatic(UpgradeDowngradeUtils.class);
+         MockedStatic<KeyGenUtils> keyGenUtils = org.mockito.Mockito.mockStatic(KeyGenUtils.class)) {
+      utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
+          any(), any(), any(), any(), anyBoolean(), any()))
+          .thenAnswer(invocation -> null);
+      keyGenUtils.when(() -> KeyGenUtils.resolveComplexKeyGenEncoding(tableConfig)).thenReturn(Option.empty());
+      when(tableConfig.getLegacyPayloadClass()).thenReturn(DefaultHoodieRecordPayload.class.getName());
+      when(tableConfig.getTableType()).thenReturn(HoodieTableType.MERGE_ON_READ);
+
+      UpgradeDowngrade.TableConfigChangeSet propertiesToChange =
+          handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
+
+      // removal is unconditional (idempotent); carrying the encoding to the write config is not
+      assertTrue(propertiesToChange.propertiesToDelete().contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING));
+      verify(config, never()).setValue(eq(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING), anyString());
     }
   }
 }

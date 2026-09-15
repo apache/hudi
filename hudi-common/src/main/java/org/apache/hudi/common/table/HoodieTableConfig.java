@@ -62,6 +62,7 @@ import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -412,6 +413,17 @@ public class HoodieTableConfig extends HoodieConfig {
       .noDefaultValue()
       .sinceVersion("1.1.0")
       .withDocumentation("This property when set, will define how two versions of the record will be merged together when records are partially formed");
+
+  public static final ConfigProperty<String> COMPLEX_KEYGEN_ENCODING = ConfigProperty
+      .key("hoodie.table.complex.keygen.encoding")
+      .noDefaultValue()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Encoding of the _hoodie_record_key meta field for a ComplexKeyGenerator configured with a "
+          + "single record key field: FIELD_PREFIXED (`<field_name>:<field_value>`) or VALUE_ONLY (bare `<field_value>`). "
+          + "This property is stamped once by the table version 8 to 9 upgrade, from the encoding found in the table's "
+          + "existing data (HUDI-7001), and is not set on tables created at table version 9 and above, which always use "
+          + "FIELD_PREFIXED. When present it is authoritative for writers and readers. The upgrade inspects the most recent "
+          + "base file only, so a table that already contains both encodings is not repaired by it.");
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
@@ -1395,6 +1407,19 @@ public class HoodieTableConfig extends HoodieConfig {
       // For table version <= 8, partial update is not supported.
       return Option.empty();
     }
+  }
+
+  /**
+   * @return the persisted record key encoding of a single-field complex key generator table, if the
+   * table was upgraded from version 8 or below and the encoding was stamped. Empty for tables created at
+   * version 9 and above (which always use {@link ComplexKeyGenEncoding#FIELD_PREFIXED}) and for tables
+   * below version 9, where the property is never persisted.
+   */
+  public Option<ComplexKeyGenEncoding> getComplexKeyGenEncoding() {
+    if (getTableVersion().greaterThanOrEquals(HoodieTableVersion.NINE) && contains(COMPLEX_KEYGEN_ENCODING)) {
+      return Option.of(ComplexKeyGenEncoding.fromString(getString(COMPLEX_KEYGEN_ENCODING)));
+    }
+    return Option.empty();
   }
 
   /**

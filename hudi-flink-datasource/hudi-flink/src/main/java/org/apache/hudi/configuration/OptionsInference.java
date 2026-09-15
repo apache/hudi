@@ -20,9 +20,12 @@ package org.apache.hudi.configuration;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.util.ClientIds;
 import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.util.StreamerUtil;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.FlinkVersion;
@@ -152,5 +155,33 @@ public class OptionsInference {
         log.info("Loaded Latest Hashing Config {}. Reset hoodie.bucket.index.num.buckets to {}", hashingConfig, hashingConfig.getDefaultBucketNumber());
       }
     }
+  }
+
+  /**
+   * Resolves the record key encoding of a single-field complex key generator table from its table config
+   * ({@code hoodie.table.complex.keygen.encoding} when the version 8 to 9 upgrade stamped one, otherwise the
+   * version-9 default) into the job configuration, unless the user set it explicitly. Flink does not merge the table
+   * config into the job configuration wholesale, so without this the row key generator would fall back to
+   * the version-derived default and key records with the wrong encoding.
+   */
+  public static void setupComplexKeygenEncoding(Configuration conf, HoodieTableConfig tableConfig) {
+    if (conf.containsKey(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key())) {
+      return;
+    }
+    // Resolve rather than copy the raw property: a table created at version 9 or above carries no property and
+    // is FIELD_PREFIXED by convention, and Flink has to learn that from the table as well, because its own key
+    // generator options are not a reliable signal (HoodieTableFactory#setupHoodieKeyOptions rewrites them to the
+    // non-partitioned key generator for a non-partitioned table). This is the same call the reader side makes.
+    KeyGenUtils.resolveComplexKeyGenEncoding(tableConfig).ifPresent(encoding ->
+        conf.setString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), encoding.name()));
+  }
+
+  /**
+   * Same as {@link #setupComplexKeygenEncoding(Configuration, HoodieTableConfig)}, loading the table config
+   * from the table path in the configuration; a no-op when the table does not exist yet.
+   */
+  public static void setupComplexKeygenEncoding(Configuration conf) {
+    StreamerUtil.getTableConfig(conf.get(FlinkOptions.PATH), HadoopConfigurations.getHadoopConf(conf))
+        .ifPresent(tableConfig -> setupComplexKeygenEncoding(conf, tableConfig));
   }
 }

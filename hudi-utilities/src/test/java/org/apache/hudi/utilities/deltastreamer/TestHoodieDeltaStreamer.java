@@ -95,6 +95,7 @@ import org.apache.hudi.keygen.ComplexKeyGenerator;
 import org.apache.hudi.keygen.CustomKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -151,6 +152,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.AnalysisException;
 import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.api.java.UDF4;
@@ -495,6 +497,61 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     Map<String, String> extraMetadata = metadata.get().getExtraMetadata();
     assertTrue(extraMetadata.containsKey(STREAMER_CHECKPOINT_KEY_V1));
     assertFalse(extraMetadata.containsKey(STREAMER_CHECKPOINT_KEY_V2));
+  }
+
+  /**
+   * The streamer keys its records before the write client's initTable() runs, so it has to resolve the single-field
+   * ComplexKeyGenerator encoding itself: a version 8 table with bare record keys (0.14.1 style) upserted by a streamer at
+   * the current version must be upgraded, get the encoding persisted, and keep writing bare keys, with the row writer too.
+   */
+  @Test
+  public void testComplexKeyGenSingleFieldUpgradeKeepsBareKeys() throws Exception {
+    String tablePath = basePath + "/complex_keygen_single_field_upgrade";
+    // 1. legacy table at version 8, written the 0.14.1 way (bare record keys)
+    HoodieDeltaStreamer.Config legacyCfg = TestHelpers.makeConfig(tablePath, WriteOperationType.INSERT, TestDataSource.class.getName(),
+        Collections.singletonList(TripsWithDistanceTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, false, true, 1000, true,
+        OverwriteWithLatestAvroPayload.class.getName(), null, "timestamp", null, false, HoodieTableVersion.EIGHT);
+    legacyCfg.configs.add(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key() + "=" + ComplexKeyGenerator.class.getName());
+    // makeConfig's tableVersion argument only drives merge-config inference; the write itself still has to be
+    // pinned, or the "legacy" table is created at the current version and there is no upgrade left to test.
+    legacyCfg.configs.add(HoodieWriteConfig.WRITE_TABLE_VERSION.key() + "=" + HoodieTableVersion.EIGHT.versionCode());
+    legacyCfg.configs.add(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key() + "=true");
+    legacyCfg.configs.add(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key() + "=false");
+    syncOnce(legacyCfg);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(context, tablePath);
+    assertEquals(HoodieTableVersion.EIGHT, metaClient.getTableConfig().getTableVersion());
+    String recordKeyPrefix = metaClient.getTableConfig().getRecordKeyFields().get()[0] + ":";
+    assertComplexKeygenTableState(tablePath, recordKeyPrefix, true);
+
+    // 2. the upgraded streamer with defaults: upserts, upgrades to the current version, persists the encoding
+    HoodieDeltaStreamer.Config upgradedCfg = TestHelpers.makeConfig(tablePath, WriteOperationType.UPSERT);
+    upgradedCfg.configs.add(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key() + "=" + ComplexKeyGenerator.class.getName());
+    syncOnce(upgradedCfg);
+    metaClient = HoodieTestUtils.createMetaClient(context, tablePath);
+    assertEquals(HoodieTableVersion.current(), metaClient.getTableConfig().getTableVersion());
+    assertEquals(Option.of(ComplexKeyGenEncoding.VALUE_ONLY), metaClient.getTableConfig().getComplexKeyGenEncoding());
+    assertComplexKeygenTableState(tablePath, recordKeyPrefix, true);
+
+    // 3. the row writer path builds its key generator from a separate config: it must see the encoding as well
+    HoodieDeltaStreamer.Config rowWriterCfg = TestHelpers.makeConfig(tablePath, WriteOperationType.BULK_INSERT);
+    rowWriterCfg.configs.add(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key() + "=" + ComplexKeyGenerator.class.getName());
+    rowWriterCfg.configs.add(DataSourceWriteOptions.ENABLE_ROW_WRITER().key() + "=true");
+    syncOnce(rowWriterCfg);
+    // Bulk insert neither looks up the index nor combines, so a key the table already holds legitimately lands
+    // as another row; only the encoding it wrote is of interest here.
+    assertComplexKeygenTableState(tablePath, recordKeyPrefix, false);
+  }
+
+  /** Every stored record key is bare (no `<field>:` prefix); for operations that key off the index, also unique. */
+  private void assertComplexKeygenTableState(String tablePath, String recordKeyPrefix, boolean expectNoDuplicates) {
+    List<String> recordKeys = sqlContext.read().format("org.apache.hudi").load(tablePath)
+        .select("_hoodie_record_key").as(Encoders.STRING()).collectAsList();
+    assertFalse(recordKeys.isEmpty());
+    assertTrue(recordKeys.stream().noneMatch(k -> k.startsWith(recordKeyPrefix)),
+        "Record keys must stay bare after the upgrade, got e.g. " + recordKeys.get(0));
+    if (expectNoDuplicates) {
+      assertEquals(recordKeys.size(), new HashSet<>(recordKeys).size(), "No duplicated record keys");
+    }
   }
 
   @Test

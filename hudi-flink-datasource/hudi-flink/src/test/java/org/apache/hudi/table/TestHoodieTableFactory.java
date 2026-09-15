@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
@@ -60,6 +61,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Properties;
 
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT;
@@ -354,6 +356,46 @@ public class TestHoodieTableFactory {
     this.conf.set(FlinkOptions.TABLE_TYPE, "COPY_ON_WRITE");
     final MockContext sourceContext5 = MockContext.getInstance(this.conf, schema, "f2");
     assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext5));
+  }
+
+  @Test
+  void testSupplementComplexKeygenEncodingFromTableConfig() throws Exception {
+    String tablePath = new File(tempFile.getAbsolutePath(), "ckg").getAbsolutePath();
+    Configuration tableConf = new Configuration();
+    tableConf.set(FlinkOptions.PATH, tablePath);
+    tableConf.set(FlinkOptions.TABLE_NAME, "t_ckg");
+    tableConf.set(FlinkOptions.RECORD_KEY_FIELD, "f0");
+    tableConf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition");
+    tableConf.set(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
+    StreamerUtil.initTableIfNotExists(tableConf);
+    // the property is only ever written by the 8 -> 9 upgrade; stamp it the way the upgrade would
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tableConf);
+    Properties props = new Properties();
+    props.put(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), "VALUE_ONLY");
+    HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), props);
+
+    Configuration writeConf = new Configuration();
+    writeConf.set(FlinkOptions.PATH, tablePath);
+    writeConf.set(FlinkOptions.TABLE_NAME, "t_ckg");
+    ResolvedSchema schema = SchemaBuilder.instance()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1", DataTypes.VARCHAR(20))
+        .field("f2", DataTypes.TIMESTAMP(3))
+        .field("partition", DataTypes.VARCHAR(10))
+        .build();
+    final MockContext context1 = MockContext.getInstance(writeConf, schema, "partition");
+    HoodieTableSource source1 = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(context1);
+    HoodieTableSink sink1 = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(context1);
+    assertThat("encoding not provided, fallback to table config",
+        source1.getConf().getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null), is("VALUE_ONLY"));
+    assertThat("encoding not provided, fallback to table config",
+        sink1.getConf().getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null), is("VALUE_ONLY"));
+
+    // an explicit value in the write config is kept (and later rejected by the writer if it conflicts)
+    writeConf.setString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), "FIELD_PREFIXED");
+    final MockContext context2 = MockContext.getInstance(writeConf, schema, "partition");
+    HoodieTableSink sink2 = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(context2);
+    assertThat(sink2.getConf().getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null), is("FIELD_PREFIXED"));
   }
 
   @Test
