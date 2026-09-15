@@ -242,7 +242,7 @@ services:
     volumes:
       - ${HUDI_WS}:/var/hoodie/ws
   minio:
-    image: 'minio/minio:latest'
+    image: 'quay.io/minio/minio:latest'
     platform: linux/amd64
     hostname: minio
     container_name: minio
@@ -257,7 +257,7 @@ services:
       - MINIO_DOMAIN=minio
     command: server --address ":9090" --console-address ":9091" /data
   mc:
-    image: minio/mc
+    image: quay.io/minio/mc
     platform: linux/amd64
     container_name: mc
     entrypoint: >
