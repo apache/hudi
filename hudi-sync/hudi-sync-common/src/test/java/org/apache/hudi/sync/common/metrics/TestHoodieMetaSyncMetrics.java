@@ -77,6 +77,8 @@ public class TestHoodieMetaSyncMetrics {
   @Test
   void testUpdateRecreateAndSyncDurationInMs() throws InterruptedException {
     Timer.Context timerCtx = hoodieSyncMetrics.getRecreateAndSyncTimer();
+    assertTrue(metrics.getRegistry().getTimers()
+        .containsKey("test_prefix.timer.meta_sync.recreate_table.TestHiveSyncTool"));
     Thread.sleep(5);
     long durationInNs = timerCtx.stop();
     hoodieSyncMetrics.updateRecreateAndSyncDurationInMs(durationInNs);
@@ -88,7 +90,7 @@ public class TestHoodieMetaSyncMetrics {
   @Test
   void testIncrementRecreateAndSyncFailureCounter() {
     hoodieSyncMetrics.incrementRecreateAndSyncFailureCounter();
-    String metricsName = hoodieSyncMetrics.getMetricsName("meta_sync", "meta_sync.recreate_table.failure.counter");
+    String metricsName = "test_prefix.counter.meta_sync.recreate_table.failure.TestHiveSyncTool";
     long count = metrics.getRegistry().getCounters().get(metricsName).getCount();
     assertEquals(1, count, "recreate_table failure counter value should be 1");
   }
@@ -98,8 +100,10 @@ public class TestHoodieMetaSyncMetrics {
     when(metricsConfig.getMetricReporterMetricsNamePrefix()).thenReturn("");
     hoodieSyncMetrics = new HoodieMetaSyncMetrics(syncConfig, "TestHiveSyncTool");
     metrics = hoodieSyncMetrics.getMetrics();
+    hoodieSyncMetrics.getRecreateAndSyncTimer().stop();
     hoodieSyncMetrics.incrementRecreateAndSyncFailureCounter();
-    String metricsName = hoodieSyncMetrics.getMetricsName("meta_sync", "meta_sync.recreate_table.failure.counter");
+    assertTrue(metrics.getRegistry().getTimers().containsKey("timer.meta_sync.recreate_table.TestHiveSyncTool"));
+    String metricsName = "counter.meta_sync.recreate_table.failure.TestHiveSyncTool";
     long count = metrics.getRegistry().getCounters().get(metricsName).getCount();
     assertEquals(1, count, "recreate_table failure counter value should be 1");
   }
