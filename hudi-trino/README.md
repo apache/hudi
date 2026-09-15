@@ -54,6 +54,8 @@ mvn -Phudi-trino,hudi-trino-tests -pl hudi-trino test
 
 CI follows the same two steps: `.github/workflows/hudi_trino_ci.yml` runs `bootstrap_trino.sh` against the pinned commit (cached per `trino.sha`), then runs with both profiles enabled.
 
+The tests resolve dependency versions from Hudi's root pom, while the shipped plugin bundles Trino's. The nightly `.github/workflows/hudi_trino_dependency_drift.yml` compares the two classpaths with `scripts/trino/check_dependency_drift.py` and files or updates an issue when versions differ.
+
 ## End-to-end tests (docker)
 
 The testcontainers E2E suite (`hudi-integ-test`, classes `ITTestTrino*` under
