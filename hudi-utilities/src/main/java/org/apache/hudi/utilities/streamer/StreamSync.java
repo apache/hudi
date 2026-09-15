@@ -185,6 +185,8 @@ public class StreamSync implements Serializable, Closeable {
   private static final long serialVersionUID = 1L;
   private static final String NULL_PLACEHOLDER = "[null]";
   public static final String CHECKPOINT_IGNORE_KEY = "deltastreamer.checkpoint.ignore_key";
+  // Prefix for the per-write name tagged on the cached input records RDD; see inputRecordsCacheName.
+  private static final String INPUT_RECORDS_CACHE_NAME_PREFIX = "hoodie-input-records-";
 
   /**
    * Delta Sync Config.
@@ -1027,6 +1029,10 @@ public class StreamSync implements Serializable, Closeable {
       metrics.updateStreamerMetrics(overallTimeNanos);
       return Pair.of(scheduledCompactionInstant, writeStatusRDD);
     } finally {
+      // The write has consumed the input records (the index tag lookup and the write both materialize above), so
+      // release the RDD cached for this write. Looked up by its per-write tag; a no-op when nothing was cached. Runs
+      // on both the success and failure paths.
+      unpersistCachedInputRecords(hoodieSparkContext.jsc(), inputRecordsCacheName(cfg.targetBasePath, instantTime));
       if (!releaseResourcesInvoked) {
         releaseResources(instantTime);
       }
@@ -1104,6 +1110,20 @@ public class StreamSync implements Serializable, Closeable {
         records = DataSourceUtils.handleDuplicates(hoodieSparkContext, records, writeClient.getConfig(), false);
       }
 
+      // For index-based operations the input records RDD is read more than once inside the write (the index tag
+      // lookup and the write itself), so the whole upstream DAG is recomputed on each read. When a transformer chain
+      // such as EmbeddingTransformer - which calls a remote embedding service per record - is in play, that recompute
+      // re-embeds every record, doubling cost and latency. Cache the records once here (mirroring how writeStatusRDD
+      // is always cached) so both reads reuse the materialized records. instantTime is generated at startCommit above,
+      // before the first action, so the cache is in place before the first read. The RDD is named with a per-write
+      // tag (base path + instant) so it can be released by tag after the write without retaining a reference - see
+      // unpersistCachedInputRecords in the finally of writeToSinkAndDoMetaSync. Gated on a transformer being
+      // configured, since that is when the recompute is expensive.
+      if (transformer.isPresent()) {
+        records.rdd().setName(inputRecordsCacheName(cfg.targetBasePath, instantTime));
+        records.persist(StorageLevel.MEMORY_AND_DISK_SER());
+      }
+
       HoodieWriteResult writeResult = null;
       switch (cfg.operation) {
         case INSERT:
@@ -1140,6 +1160,30 @@ public class StreamSync implements Serializable, Closeable {
       }
     }
     return writeClientWriteResult;
+  }
+
+  /**
+   * Builds the unique-per-write name used to tag the cached input records RDD. Composed of the target table's
+   * base path and this write's instant time so it never collides with another table, or with a retried instant,
+   * that shares the same SparkContext (the persistent-RDD registry is context-wide).
+   */
+  @VisibleForTesting
+  static String inputRecordsCacheName(String basePath, String instantTime) {
+    return INPUT_RECORDS_CACHE_NAME_PREFIX + basePath + "-" + instantTime;
+  }
+
+  /**
+   * Releases the input records RDD cached under the given name, if present. The RDD is found by name through the
+   * context-wide persistent-RDD registry, so no reference to it needs to be retained across the write. A no-op
+   * when nothing is cached under that name.
+   */
+  @VisibleForTesting
+  static void unpersistCachedInputRecords(JavaSparkContext jsc, String cacheName) {
+    for (JavaRDD<?> rdd : jsc.getPersistentRDDs().values()) {
+      if (cacheName.equals(rdd.name())) {
+        rdd.unpersist(false);
+      }
+    }
   }
 
   private String getSyncClassShortName(String syncClassName) {
