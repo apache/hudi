@@ -93,7 +93,8 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
     "testBasicLookupFilterExpressionsSource",
     "testAdvancedLookupFilterExpressionsSource",
     "testCompositeFilterExpressionsSource",
-    "testSupportedAndUnsupportedDataSkippingColumnsSource"
+    "testSupportedAndUnsupportedDataSkippingColumnsSource",
+    "testNonOrderPreservingTransformationsSource"
   ))
   def testLookupFilterExpressions(sourceFilterExprStr: String, input: Seq[IndexRow], expectedOutput: Seq[String]): Unit = {
     // We have to fix the timezone to make sure all date-bound utilities output
@@ -716,6 +717,45 @@ object TestDataSkippingUtils {
         ),
         Seq("file_1"))
 
+    )
+  }
+
+  def testNonOrderPreservingTransformationsSource(): java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+      // Issue #19445 repro: cast(4294967297L as int) wraps around to 1 in non-ANSI mode, so
+      // re-applying the cast over min/max stats would wrongly prune both files; a narrowing
+      // cast must instead fall back to always-true, keeping every file
+      arguments(
+        "CAST(A AS INT) > 100",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = 100, A_nullCount = 0),
+          IndexRow("file_2", valueCount = 3, A_minValue = 1, A_maxValue = 4294967297L, A_nullCount = 0)
+        ),
+        Seq("file_1", "file_2")),
+      // A widening (up) cast still translates and prunes
+      arguments(
+        "CAST(A AS DOUBLE) > 100.0D",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = 100, A_nullCount = 0),
+          IndexRow("file_2", valueCount = 2, A_minValue = 101, A_maxValue = 200, A_nullCount = 0)
+        ),
+        Seq("file_2")),
+      // Multiplying by a negative constant reverses ordering: min/max swap places, so the
+      // translated bound would wrongly prune file_1; must fall back to always-true
+      arguments(
+        "A * -1 < 5",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = -10, A_maxValue = 0, A_nullCount = 0)
+        ),
+        Seq("file_1")),
+      // Multiplying by a positive constant still translates and prunes
+      arguments(
+        "A * 2L < 5",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = 2, A_nullCount = 0),
+          IndexRow("file_2", valueCount = 2, A_minValue = 3, A_maxValue = 4, A_nullCount = 0)
+        ),
+        Seq("file_1"))
     )
   }
 }
