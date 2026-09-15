@@ -430,7 +430,7 @@ public class HoodieMetadataWriteUtils {
       checkState(MetadataPartitionType.COLUMN_STATS.isMetadataPartitionAvailable(dataMetaClient),
           "Column stats partition must be enabled to generate partition stats. Please enable: " + HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key());
       // Generate Hoodie Pair data of partition name and list of column range metadata for all the files in that partition
-      boolean isDeletePartition = commitMetadata.getOperationType().equals(WriteOperationType.DELETE_PARTITION);
+      boolean isDeletePartition = WriteOperationType.DELETE_PARTITION.equals(commitMetadata.getOperationType());
       final HoodieData<HoodieRecord> partitionStatsRDD = convertMetadataToPartitionStatRecords(
           commitMetadata, instantTime, context, dataWriteConfig, dataMetaClient, tableMetadata, metadataConfig, recordTypeOpt, isDeletePartition);
       partitionToRecordsMap.put(MetadataPartitionType.PARTITION_STATS.getPartitionPath(), partitionStatsRDD);

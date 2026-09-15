@@ -95,6 +95,7 @@ import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineFactory;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
@@ -893,6 +894,8 @@ public class HoodieTableMetadataUtil {
       Map<String, List<HoodieWriteStat>> writeStatsByFileId = allWriteStats.stream().collect(Collectors.groupingBy(HoodieWriteStat::getFileId));
       int parallelism = Math.max(Math.min(writeStatsByFileId.size(), metadataConfig.getRecordIndexMaxParallelism()), 1);
       String basePath = dataTableMetaClient.getBasePath().toString();
+      // a table without record keys, e.g. one that registers files written outside Hudi, keys every row by file path and position
+      boolean generateRecordKeys = !dataTableMetaClient.getTableConfig().hasRecordKey();
       HoodieFileFormat baseFileFormat = dataTableMetaClient.getTableConfig().getBaseFileFormat();
       StorageConfiguration storageConfiguration = dataTableMetaClient.getStorageConf();
       Option<HoodieSchema> writerSchemaOpt = tryResolveSchemaForTable(dataTableMetaClient);
@@ -903,8 +906,10 @@ public class HoodieTableMetadataUtil {
             String fileId = writeStatsByFileIdEntry.getKey();
             List<HoodieWriteStat> writeStats = writeStatsByFileIdEntry.getValue();
             // Partition the write stats into base file and log file write stats
+            // a file written outside Hudi is recorded with the external file marker after its extension
             List<HoodieWriteStat> baseFileWriteStats = writeStats.stream()
-                .filter(writeStat -> writeStat.getPath().endsWith(baseFileFormat.getFileExtension()))
+                .filter(writeStat -> writeStat.getPath().endsWith(baseFileFormat.getFileExtension())
+                    || ExternalFilePathUtil.isExternallyCreatedFile(FSUtils.getFileNameFromPath(writeStat.getPath())))
                 .collect(Collectors.toList());
             List<HoodieWriteStat> logFileWriteStats = writeStats.stream()
                 .filter(writeStat -> FSUtils.isLogFile(new StoragePath(writeStats.get(0).getPath())))
@@ -918,7 +923,8 @@ public class HoodieTableMetadataUtil {
                   .flatMap(writeStat -> {
                     HoodieStorage storage = HoodieStorageUtils.getStorage(new StoragePath(writeStat.getPath()), storageConfiguration);
                     return CollectionUtils.toStream(BaseFileRecordParsingUtils
-                        .generateRLIMetadataHoodieRecordsForBaseFile(basePath, writeStat, writesFileIdEncoding, instantTime, storage, metadataConfig.isRecordLevelIndexEnabled()));
+                        .generateRLIMetadataHoodieRecordsForBaseFile(basePath, writeStat, writesFileIdEncoding, instantTime, storage,
+                            metadataConfig.isRecordLevelIndexEnabled(), generateRecordKeys));
                   })
                   .iterator();
             }

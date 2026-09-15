@@ -795,5 +795,21 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     });
     assertEquals("Unsupported flow for table versions less than 9", ioException.getMessage().toString());
   }
-}
 
+  @Test
+  void testHasRecordKeyWhenTheMetaColumnIsPopulatedOrKeyFieldsAreConfigured() {
+    // the default table populates _hoodie_record_key
+    assertTrue(new HoodieTableConfig().hasRecordKey());
+    // a table without meta fields still keys records through the configured fields
+    HoodieTableConfig withKeyFields = new HoodieTableConfig();
+    withKeyFields.setValue(HoodieTableConfig.POPULATE_META_FIELDS, "false");
+    withKeyFields.setValue(HoodieTableConfig.RECORDKEY_FIELDS, "id,name");
+    assertTrue(withKeyFields.hasRecordKey());
+    // a table that only registers files written by another system has neither
+    HoodieTableConfig withoutRecordKey = new HoodieTableConfig();
+    withoutRecordKey.setValue(HoodieTableConfig.POPULATE_META_FIELDS, "false");
+    assertFalse(withoutRecordKey.hasRecordKey());
+    withoutRecordKey.setValue(HoodieTableConfig.RECORDKEY_FIELDS, "");
+    assertFalse(withoutRecordKey.hasRecordKey());
+  }
+}

@@ -18,8 +18,11 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 /**
  * Utility methods for handling externally created files.
@@ -94,6 +97,32 @@ public class ExternalFilePathUtil {
   }
 
   /**
+   * Returns the path of a base file relative to its partition, as the file exists on storage.
+   * For an external file name, the commit time and the external file marker are stripped and the file group
+   * prefix, if any, is restored. For example, "data.parquet_123_fg%3Dbucket-0_hudiext" returns "bucket-0/data.parquet".
+   * A file name that was not created externally is returned as is.
+   *
+   * @param fileName The file name as recorded in the commit metadata
+   * @return The path of the file relative to its partition
+   */
+  public static String getFilePathInPartition(String fileName) {
+    return isExternallyCreatedFile(fileName) ? parseFileIdAndCommitTimeFromExternalFile(fileName)[0] : fileName;
+  }
+
+  /**
+   * Generates a record key for a row of an external base file that does not carry a record key of its own.
+   * The key is the path of the file relative to the table base path, followed by the position of the row in the file.
+   * Record index and secondary index use the same key so that a secondary key lookup resolves to the file and row.
+   *
+   * @param relativeFilePath The path of the file relative to the table base path
+   * @param rowPosition      The zero based position of the row in the file
+   * @return The record key for the row
+   */
+  public static String generateRecordKeyForRow(String relativeFilePath, long rowPosition) {
+    return relativeFilePath + "_" + rowPosition;
+  }
+
+  /**
    * Extracts the file group prefix from an external file name.
    * @param fileName The external file name
    * @return Option containing the decoded file group prefix, or empty if not present
@@ -128,6 +157,9 @@ public class ExternalFilePathUtil {
         ? prefixMarkerIndex
         : fileName.lastIndexOf(EXTERNAL_FILE_SUFFIX);
     int commitTimeStart = fileName.lastIndexOf('_', markerEnd - 1);
+    if (commitTimeStart == -1) {
+      throw new HoodieException("External file name " + fileName + " carries no commit time before its marker");
+    }
     return fileName.substring(0, commitTimeStart);
   }
 
@@ -143,7 +175,12 @@ public class ExternalFilePathUtil {
    */
   public static StoragePath getFullPathOfPartition(StoragePath parent, String fileName) {
     return getExternalFileGroupPrefix(fileName)
-        .map(prefix -> new StoragePath(parent.toString().substring(0, parent.toString().length() - prefix.length() - 1)))
+        .map(prefix -> {
+          String parentPath = parent.toString();
+          checkArgument(parentPath.endsWith(StoragePath.SEPARATOR + prefix),
+              () -> "External file " + fileName + " carries the file group prefix " + prefix + " but its parent " + parentPath + " does not end with it");
+          return new StoragePath(parentPath.substring(0, parentPath.length() - prefix.length() - 1));
+        })
         .orElse(parent);
   }
 

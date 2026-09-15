@@ -32,6 +32,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -47,6 +48,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -75,6 +77,7 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -989,11 +992,28 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
     engineContext.setJobStatus(activeModule, "Record Index: reading record keys from " + partitionFileSlicePairs.size() + " file slices");
     final int parallelism = Math.min(partitionFileSlicePairs.size(), recordIndexMaxParallelism);
+    // a table without record keys, e.g. one that registers files written outside Hudi, keys every row by the path of
+    // its base file relative to the table and the row position, the same way the record index update path does
+    final boolean generateRecordKeys = !metaClient.getTableConfig().hasRecordKey();
+    final int fileIdEncoding = getFileIdEncoding(metaClient, dataWriteConfig);
     ReaderContextFactory<T> readerContextFactory = engineContext.getReaderContextFactory(metaClient);
     return engineContext.parallelize(partitionFileSlicePairs, parallelism).flatMap(partitionAndFileSlice -> {
       final String partition = partitionAndFileSlice.getKey();
       final FileSlice fileSlice = partitionAndFileSlice.getValue();
       final String fileId = fileSlice.getFileId();
+      long baseFileInstantTimeMillis = HoodieMetadataPayload.parseRecordIndexInstantTime(fileSlice.getBaseInstantTime());
+      if (generateRecordKeys) {
+        ValidationUtils.checkState(fileSlice.getBaseFile().isPresent() && !fileSlice.hasLogFiles(),
+            "File group " + fileId + " in partition " + partition + " needs a base file and no log files to key its rows by "
+                + "position, because the table has no record key");
+        StoragePath dataFilePath = fileSlice.getBaseFile().get().getStoragePath();
+        HoodieStorage storage = metaClient.getStorage();
+        ClosableIterator<String> recordKeys = HoodieIOFactory.getIOFactory(storage)
+            .getFileFormatUtils(metaClient.getTableConfig().getBaseFileFormat())
+            .getRowKeyIterator(storage, dataFilePath, metaClient.getBasePath());
+        return new CloseableMappingIterator<>(recordKeys,
+            recordKey -> HoodieMetadataPayload.createRecordIndexUpdate(recordKey, partition, fileId, baseFileInstantTimeMillis, fileIdEncoding));
+      }
       HoodieReaderContext<T> readerContext = readerContextFactory.getContext();
       HoodieSchema dataSchema = resolveDataSchemaForRLIBootstrap(metaClient, dataWriteConfig);
       HoodieSchema requestedSchema = metaClient.getTableConfig().populateMetaFields() ? getRecordKeySchema()
@@ -1012,11 +1032,10 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
           .withShouldUseRecordPosition(false)
           .withProps(metaClient.getTableConfig().getProps())
           .build();
-      long baseFileInstantTimeMillis = HoodieMetadataPayload.parseRecordIndexInstantTime(fileSlice.getBaseInstantTime());
       return new CloseableMappingIterator<>(fileGroupReader.getClosableIterator(), record -> {
         String recordKey = readerContext.getRecordContext().getRecordKey(record, requestedSchema);
         return HoodieMetadataPayload.createRecordIndexUpdate(recordKey, partition, fileId,
-            baseFileInstantTimeMillis, 0);
+            baseFileInstantTimeMillis, fileIdEncoding);
       });
     });
   }
@@ -1480,6 +1499,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
   @Override
   public void completeStreamingCommit(String instantTime, HoodieEngineContext context, List<HoodieWriteStat> partialWriteStats, HoodieCommitMetadata metadata) {
+    checkClusteringKeepsRecordKeys(metadata);
     if (metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(instantTime)) {
       LOG.info("Skipping streaming metadata commit completion for already completed instant {}", instantTime);
       getWriteClient().postCommit(instantTime);
@@ -1567,10 +1587,26 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
    */
   @Override
   public void update(HoodieCommitMetadata commitMetadata, String instantTime) {
+    checkClusteringKeepsRecordKeys(commitMetadata);
     mayBeReinitMetadataReader();
     maybeInitializeNewFileGroupsForPartitionedRLI(commitMetadata, instantTime);
     processAndCommit(instantTime, new BatchMetadataConversionFunction(instantTime, commitMetadata, getMetadataPartitionsToUpdate()));
     closeInternal();
+  }
+
+  /**
+   * Fails when a clustering commit reaches a table without record keys that has a record index or a secondary index.
+   * Those indexes key the rows of such a table by file path and row position, and clustering rewrites the rows into
+   * new files, so neither index could follow them. The check runs ahead of both the streaming and the batch update
+   * path, because the streaming path never reaches the indexers for these two partitions.
+   */
+  private void checkClusteringKeepsRecordKeys(HoodieCommitMetadata commitMetadata) {
+    if (commitMetadata.getOperationType() != WriteOperationType.CLUSTER || getStreamingMetadataPartitionsToUpdate().getLeft().isEmpty()) {
+      return;
+    }
+    ValidationUtils.checkState(dataMetaClient.getTableConfig().hasRecordKey(),
+        "Table " + dataMetaClient.getBasePath() + " cannot be clustered because it has no record key: the record index and the "
+            + "secondary index key its rows by file path and row position, which clustering changes");
   }
 
   /**
@@ -1640,7 +1676,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
               engineContext, dataWriteConfig, commitMetadata, instantTime, dataMetaClient, getTableMetadata(),
               dataWriteConfig.getMetadataConfig(),
               partitionsToUpdate, dataWriteConfig.getBloomFilterType(),
-              dataWriteConfig.getBloomIndexParallelism(), dataWriteConfig.getWritesFileIdEncoding(), getEngineType(),
+              dataWriteConfig.getBloomIndexParallelism(), getFileIdEncoding(dataMetaClient, dataWriteConfig), getEngineType(),
               Option.of(dataWriteConfig.getRecordMerger().getRecordType()));
 
       // Updates for record index are created by parsing the WriteStatus which is a hudi-client object. Hence, we cannot yet move this code
@@ -1701,7 +1737,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     // If write operation type based on commit metadata is COMPACT or CLUSTER then no need to update,
     // because these operations do not change the secondary key - record key mapping.
     WriteOperationType operationType = commitMetadata.getOperationType();
-    if (operationType.isInsertOverwriteOrDeletePartition()) {
+    if (operationType != null && operationType.isInsertOverwriteOrDeletePartition()) {
       throw new HoodieIndexException(String.format("Can not perform operation %s on secondary index", operationType));
     } else if (operationType == WriteOperationType.COMPACT || operationType == WriteOperationType.CLUSTER) {
       return;
@@ -1724,12 +1760,19 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   private HoodieData<HoodieRecord> getSecondaryIndexUpdates(HoodieCommitMetadata commitMetadata, String indexPartition, String instantTime) {
     List<HoodieWriteStat> allWriteStats = commitMetadata.getPartitionToWriteStats().values().stream()
         .flatMap(Collection::stream).collect(Collectors.toList());
-    // Return early if there are no write stats.
-    if (allWriteStats.isEmpty() || WriteOperationType.isCompactionOrClustering(commitMetadata.getOperationType())) {
+    // Return early if there are no write stats, or if this helper is reached for a table-service operation.
+    // A replace commit without a known operation type on a table without a record key, e.g. one that only drops files
+    // written outside Hudi, has no write stats but still removes the records of the replaced file groups from the index.
+    boolean dropsReplacedFileGroups = commitMetadata instanceof HoodieReplaceCommitMetadata
+        && WriteOperationType.isUnknown(commitMetadata.getOperationType())
+        && !dataMetaClient.getTableConfig().hasRecordKey()
+        && !((HoodieReplaceCommitMetadata) commitMetadata).getPartitionToReplaceFileIds().isEmpty();
+    if ((allWriteStats.isEmpty() && !dropsReplacedFileGroups) || WriteOperationType.isCompactionOrClustering(commitMetadata.getOperationType())) {
       return engineContext.emptyHoodieData();
     }
     HoodieIndexDefinition indexDefinition = getIndexDefinition(indexPartition);
-    return convertWriteStatsToSecondaryIndexRecords(allWriteStats, instantTime, indexDefinition, dataWriteConfig.getMetadataConfig(), dataMetaClient, engineContext, dataWriteConfig);
+    return convertWriteStatsToSecondaryIndexRecords(allWriteStats, instantTime, indexDefinition, dataWriteConfig.getMetadataConfig(), dataMetaClient, engineContext, dataWriteConfig,
+        commitMetadata);
   }
 
   /**
@@ -2428,9 +2471,87 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     } else if (operationType == WriteOperationType.DELETE_PARTITION) {
       // all records from the target partition(s) to be deleted from RLI
       return getRecordIndexReplacedRecords((HoodieReplaceCommitMetadata) commitMetadata);
+    } else if (commitMetadata instanceof HoodieReplaceCommitMetadata && WriteOperationType.isUnknown(operationType)
+        && !dataMetaClient.getTableConfig().hasRecordKey()) {
+      // a replace commit without a known operation type registers files written outside Hudi. The replaced file groups
+      // are dropped without their records being rewritten under the same key, so the records of the replaced base files
+      // are deleted from RLI unless this commit wrote the same key again.
+      HoodieReplaceCommitMetadata replaceCommitMetadata = (HoodieReplaceCommitMetadata) commitMetadata;
+      checkReplacedFileGroupsAreNotWritten(replaceCommitMetadata);
+      HoodiePairData<HoodieKey, HoodieRecord> replacedRecordsByKey = getRecordIndexReplacedFileGroupRecords(replaceCommitMetadata)
+          .mapToPair(record -> Pair.of(record.getKey(), record));
+      HoodiePairData<HoodieKey, HoodieRecord> writtenRecordsByKey = updatesFromWriteStatuses
+          .mapToPair(record -> Pair.of(record.getKey(), record));
+      return replacedRecordsByKey.leftOuterJoin(writtenRecordsByKey)
+          .values()
+          .filter(replacedRecordAndRewrite -> !replacedRecordAndRewrite.getRight().isPresent())
+          .map(Pair::getLeft);
     } else {
       return engineContext.emptyHoodieData();
     }
+  }
+
+  /**
+   * Returns the encoding of the file ids stored in the record index. The file ids of a table without record keys are
+   * the names of its files, which were written by another system and are not UUIDs, so they are stored as raw strings
+   * whatever the write config says. The record index stores the encoding with every record.
+   */
+  static int getFileIdEncoding(HoodieTableMetaClient metaClient, HoodieWriteConfig dataWriteConfig) {
+    return metaClient.getTableConfig().hasRecordKey()
+        ? dataWriteConfig.getWritesFileIdEncoding()
+        : HoodieMetadataPayload.RECORD_INDEX_FIELD_FILEID_ENCODING_RAW_STRING;
+  }
+
+  /**
+   * Fails when the given commit writes a file group it replaces. For a table without record keys, the file id of a
+   * file is its path below the partition, so such a commit registers a file again under its own name: the previous
+   * content is gone, the keys to delete would be read from the new content, and the file system view hides a replaced
+   * file group even when the same commit writes it again. Only a commit that writes other file ids can be indexed.
+   */
+  private void checkReplacedFileGroupsAreNotWritten(HoodieReplaceCommitMetadata replaceCommitMetadata) {
+    replaceCommitMetadata.getPartitionToReplaceFileIds().forEach((partition, replacedFileIds) -> {
+      Set<String> writtenFileIds = replaceCommitMetadata.getPartitionToWriteStats().getOrDefault(partition, Collections.emptyList()).stream()
+          .map(HoodieWriteStat::getFileId).collect(Collectors.toSet());
+      List<String> rewrittenFileIds = replacedFileIds.stream().filter(writtenFileIds::contains).collect(Collectors.toList());
+      ValidationUtils.checkState(rewrittenFileIds.isEmpty(), "Table " + dataMetaClient.getBasePath() + " has no record key, so a commit cannot write the file "
+          + "groups it replaces in partition " + partition + ", because their rows are keyed by file path and position: " + rewrittenFileIds);
+    });
+  }
+
+  /**
+   * Reads the record keys of the latest base file of every file group replaced by the given commit and
+   * returns a delete record for each of them. The caller keeps the keys that the same commit writes again.
+   */
+  private HoodieData<HoodieRecord> getRecordIndexReplacedFileGroupRecords(HoodieReplaceCommitMetadata replaceCommitMetadata) {
+    HoodieTableFileSystemView fsView = getMetadataView();
+    List<Pair<String, HoodieBaseFile>> replacedBaseFiles = replaceCommitMetadata.getPartitionToReplaceFileIds().entrySet().stream()
+        .flatMap(partitionAndFileIds -> partitionAndFileIds.getValue().stream()
+            .map(fileId -> {
+              Option<HoodieBaseFile> baseFile = fsView.getLatestBaseFile(partitionAndFileIds.getKey(), fileId);
+              if (!baseFile.isPresent()) {
+                LOG.warn("Replaced file group {} in partition {} has no base file to read the record keys to delete from",
+                    fileId, partitionAndFileIds.getKey());
+              }
+              return baseFile.map(file -> Pair.of(partitionAndFileIds.getKey(), file));
+            })
+            .filter(Option::isPresent)
+            .map(Option::get))
+        .collect(Collectors.toList());
+    if (replacedBaseFiles.isEmpty()) {
+      return engineContext.emptyHoodieData();
+    }
+    String basePath = dataMetaClient.getBasePath().toString();
+    StorageConfiguration<?> storageConfiguration = dataMetaClient.getStorageConf();
+    boolean isPartitionedRLI = dataWriteConfig.getMetadataConfig().isRecordLevelIndexEnabled();
+    boolean generateRecordKeys = !dataMetaClient.getTableConfig().hasRecordKey();
+    int parallelism = Math.min(replacedBaseFiles.size(), dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism());
+    engineContext.setJobStatus(this.getClass().getSimpleName(), "Record Index: reading record keys from " + replacedBaseFiles.size() + " replaced base files");
+    return engineContext.parallelize(replacedBaseFiles, parallelism).flatMap(partitionAndBaseFile -> {
+      StoragePath dataFilePath = partitionAndBaseFile.getValue().getStoragePath();
+      HoodieStorage storage = HoodieStorageUtils.getStorage(dataFilePath, storageConfiguration);
+      return BaseFileRecordParsingUtils.generateRLIMetadataHoodieRecordsForReplacedBaseFile(
+          basePath, partitionAndBaseFile.getKey(), dataFilePath, storage, isPartitionedRLI, generateRecordKeys);
+    });
   }
 
   protected void closeInternal() {
