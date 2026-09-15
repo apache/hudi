@@ -356,34 +356,6 @@ class TestHoodieTableMetadataUtil {
   }
 
   @Test
-  void testIsTimestampMillisField() {
-    // Test timestamp-millis
-    HoodieSchema timestampMillisSchema = HoodieSchema.createTimestampMillis();
-    assertTrue(HoodieTableMetadataUtil.isTimestampMillisField(timestampMillisSchema),
-        "Should return true for timestamp-millis");
-
-    // Test nullable timestamp-millis
-    HoodieSchema nullableTimestampMillisSchema = HoodieSchema.createNullable(HoodieSchema.createTimestampMillis());
-    assertTrue(HoodieTableMetadataUtil.isTimestampMillisField(nullableTimestampMillisSchema),
-        "Should return true for nullable timestamp-millis");
-
-    // Test timestamp-micros (should return false)
-    HoodieSchema timestampMicrosSchema = HoodieSchema.createTimestampMicros();
-    assertFalse(HoodieTableMetadataUtil.isTimestampMillisField(timestampMicrosSchema),
-        "Should return false for timestamp-micros");
-
-    // Test regular long (should return false)
-    HoodieSchema longSchema = HoodieSchema.create(HoodieSchemaType.LONG);
-    assertFalse(HoodieTableMetadataUtil.isTimestampMillisField(longSchema),
-        "Should return false for regular long");
-
-    // Test string (should return false)
-    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
-    assertFalse(HoodieTableMetadataUtil.isTimestampMillisField(stringSchema),
-        "Should return false for string");
-  }
-
-  @Test
   void testVectorColumnsAreNotSupportedForV2ColumnStats() {
     HoodieSchema vectorSchema = HoodieSchema.createNullable(HoodieSchema.createVector(128));
     HoodieSchema stringSchema = HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.STRING));

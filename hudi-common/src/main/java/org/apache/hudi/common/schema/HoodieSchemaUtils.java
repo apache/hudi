@@ -521,6 +521,49 @@ public final class HoodieSchemaUtils {
   }
 
   /**
+   * Generate a reader schema off the provided writeSchema, to just project out the provided columns.
+   *
+   * <p>This overload is intended for callers that already have a name-to-field map,
+   * such as the realtime reader.</p>
+   *
+   * @param writeSchema      the source schema
+   * @param schemaFieldsMap  prebuilt case-insensitive field-name map
+   * @param fieldNames       the list of field names to include in the projection
+   * @return new HoodieSchema containing only the specified fields
+   */
+  public static HoodieSchema generateProjectionSchema(HoodieSchema writeSchema,
+                                                      Map<String, HoodieSchemaField> schemaFieldsMap,
+                                                      List<String> fieldNames) {
+    ValidationUtils.checkArgument(writeSchema != null, "Write schema cannot be null");
+    ValidationUtils.checkArgument(schemaFieldsMap != null, "Schema fields map cannot be null");
+    ValidationUtils.checkArgument(fieldNames != null, "Field names cannot be null");
+
+    /*
+     * Avro & Presto field names seems to be case sensitive (support fields differing only in case) whereas
+     * Hive/Impala/SparkSQL(default) are case-insensitive. Spark allows this to be configurable using
+     * spark.sql.caseSensitive=true
+     *
+     * For a RT table setup with no delta-files (for a latest file-slice) -> we translate parquet schema to Avro Here
+     * the field-name case is dependent on parquet schema. Hive (1.x/2.x/CDH) translate column projections to
+     * lower-cases
+     *
+     */
+    List<HoodieSchemaField> projectedFields = new ArrayList<>(fieldNames.size());
+    for (String fn : fieldNames) {
+      HoodieSchemaField field = schemaFieldsMap.get(fn.toLowerCase(Locale.ROOT));
+      if (field == null) {
+        throw new HoodieException("Field " + fn + " not found in log schema. Query cannot proceed! "
+                + "Derived Schema Fields: " + new ArrayList<>(schemaFieldsMap.keySet()));
+      } else {
+        projectedFields.add(createNewSchemaField(field));
+      }
+    }
+
+    return HoodieSchema.createRecord(writeSchema.getName(), writeSchema.getDoc().orElse(null),
+            writeSchema.getNamespace().orElse(null), writeSchema.isError(), projectedFields);
+  }
+
+  /**
    * Prunes the data schema to only include fields that are required by the required schema,
    * plus any mandatory fields specified.
    *
@@ -1019,5 +1062,20 @@ public final class HoodieSchemaUtils {
     }
 
     return createNewSchemaFromFieldsWithReference(schema, fields);
+  }
+
+  /**
+   * Checks if a schema field is of type timestamp_millis (timestamp-millis or local-timestamp-millis).
+   *
+   * @param fieldSchema The schema of the field to check
+   * @return true if the field is of type timestamp_millis, false otherwise
+   */
+  public static boolean isTimestampMillisField(HoodieSchema fieldSchema) {
+    HoodieSchema nonNullableSchema = fieldSchema.getNonNullType();
+    if (nonNullableSchema.getType() == HoodieSchemaType.TIMESTAMP) {
+      HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) nonNullableSchema;
+      return timestampSchema.getPrecision().equals(HoodieSchema.TimePrecision.MILLIS);
+    }
+    return false;
   }
 }
