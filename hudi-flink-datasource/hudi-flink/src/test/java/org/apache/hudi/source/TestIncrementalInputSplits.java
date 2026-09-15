@@ -80,6 +80,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
+import static org.apache.hudi.common.table.timeline.InstantComparison.maxInstant;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -488,11 +489,10 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
             .build();
     IncrementalInputSplits.Result result = iis.inputSplits(metaClient, null, false);
     result.getInputSplits().stream().filter(split -> fileIdToBaseInstant.containsKey(split.getFileId()))
-            .forEach(split -> assertEquals(fileIdToBaseInstant.get(split.getFileId()), split.getLatestCommit()));
-    assertTrue(result.getInputSplits().stream().anyMatch(split -> split.getLatestCommit().equals(lastInstant)),
-            "Some input splits' latest commit time should equal to the last instant");
-    assertTrue(result.getInputSplits().stream().anyMatch(split -> !split.getLatestCommit().equals(lastInstant)),
-            "The input split latest commit time does not always equal to last instant");
+            .forEach(split -> assertEquals(
+                maxInstant(fileIdToBaseInstant.get(split.getFileId()), lastInstant), split.getLatestCommit()));
+    assertTrue(result.getInputSplits().stream().allMatch(split -> split.getLatestCommit().equals(lastInstant)),
+            "All input splits' latest commit time should cover the query end instant");
   }
 
   // -------------------------------------------------------------------------
