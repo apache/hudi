@@ -20,10 +20,13 @@
 # docker/trino/shim/target/trino-hudi-<v>, see docker/trino/shim/pom.xml) is
 # staged into the build context at docker/trino/plugin/ (gitignored), then
 # baked into the image.
-# Usage: ./build_image.sh --plugin-dir <path> [--trino-version <v>] [--image-tag <t>]
-# Typical: ./build_image.sh --plugin-dir "$(dirname "$0")/shim/target/trino-hudi-<trino.version>"
-# Note: --trino-version is the released Trino server image to build on top of
-# (the root pom's trino.e2e.version), not the version the plugin was built at.
+# Usage: ./build_image.sh --plugin-dir <path> [--base-image <image>] [--trino-version <v>] [--image-tag <t>]
+# Typical: ./build_image.sh --plugin-dir "$(dirname "$0")/shim/target/trino-hudi-<trino.version>" \
+#            --base-image hudi-trino-server:<trino.sha>
+# Note: --base-image (e.g. the output of build_trino_server_image.sh, built from the pinned
+# trino.sha) takes precedence over --trino-version. --trino-version is the released-image
+# fallback, trinodb/trino:<v> (default: the root pom's trino.e2e.version), not the version
+# the plugin was built at; it only boots when the pin's SPI matches that release.
 
 set -e
 
@@ -33,6 +36,7 @@ SCRIPT_DIR=$(cd $(dirname "$0") && pwd)
 # Default values. The server version defaults to the root pom's trino.e2e.version (the
 # nightly pin-advance job keeps that current; a literal default here would rot).
 PLUGIN_DIR=""
+BASE_IMAGE=""
 TRINO_VERSION=$(sed -n 's|.*<trino.e2e.version>\(.*\)</trino.e2e.version>.*|\1|p' "$SCRIPT_DIR/../../pom.xml")
 IMAGE_TAG="latest"
 
@@ -40,6 +44,7 @@ IMAGE_TAG="latest"
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --plugin-dir) PLUGIN_DIR="$2"; shift ;;
+        --base-image) BASE_IMAGE="$2"; shift ;;
         --trino-version) TRINO_VERSION="$2"; shift ;;
         --image-tag) IMAGE_TAG="$2"; shift ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
@@ -73,8 +78,14 @@ rm -rf "$STAGE_DIR"
 cp -r "$PLUGIN_DIR" "$STAGE_DIR"
 
 IMAGE="apachehudi/hudi-trino-e2e:${IMAGE_TAG}"
-echo "Building $IMAGE (TRINO_VERSION=${TRINO_VERSION})"
-docker build --build-arg TRINO_VERSION="${TRINO_VERSION}" -t "$IMAGE" "$SCRIPT_DIR"
+BUILD_ARGS=(--build-arg TRINO_VERSION="${TRINO_VERSION}")
+if [ -n "$BASE_IMAGE" ]; then
+  echo "Building $IMAGE on base image ${BASE_IMAGE}"
+  BUILD_ARGS+=(--build-arg TRINO_BASE_IMAGE="${BASE_IMAGE}")
+else
+  echo "Building $IMAGE on released base image trinodb/trino:${TRINO_VERSION}"
+fi
+docker build "${BUILD_ARGS[@]}" -t "$IMAGE" "$SCRIPT_DIR"
 
 # Clean up the staged plugin dir
 echo "Cleaning up staged plugin dir '$STAGE_DIR'"
