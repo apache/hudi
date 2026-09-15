@@ -23,20 +23,13 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.utils.RuntimeContextUtils;
 import org.apache.hudi.utils.StateTtlConfigUtils;
 
-import org.apache.flink.api.common.JobID;
-import org.apache.flink.api.common.functions.RuntimeContext;
-import org.apache.flink.api.common.state.ListState;
-import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
-
-import java.util.stream.StreamSupport;
 
 /**
  * Factory to create a {@link GlobalIndexBackend} based on the configured index type.
@@ -50,13 +43,11 @@ public class IndexBackendFactory {
    *
    * @param conf Flink write configuration
    * @param context Flink function initialization context
-   * @param runtimeContext Flink runtime context for job and attempt metadata
    * @return global index backend for record-key lookups
    */
   public static GlobalIndexBackend create(
           Configuration conf,
-          FunctionInitializationContext context,
-          RuntimeContext runtimeContext) throws Exception {
+          FunctionInitializationContext context) throws Exception {
     HoodieIndex.IndexType indexType = OptionsResolver.getIndexType(conf);
     switch (indexType) {
       case FLINK_STATE:
@@ -75,38 +66,12 @@ public class IndexBackendFactory {
         if (conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
           return new RocksDBIndexBackend(conf.get(FlinkOptions.INDEX_BOOTSTRAP_ROCKSDB_PATH), OptionsResolver.isPartitionedTable(conf));
         } else {
-          ListState<JobID> jobIdState = context.getOperatorStateStore().getListState(
-              new ListStateDescriptor<>(
-                  "bucket-assign-job-id-state",
-                  TypeInformation.of(JobID.class)
-              ));
-          long initCheckpointId = -1;
-          if (context.isRestored()) {
-            int attemptId = RuntimeContextUtils.getAttemptNumber(runtimeContext);
-            initCheckpointId = initCheckpointId(attemptId, jobIdState, context.getRestoredCheckpointId().orElse(-1L), runtimeContext);
-          }
-          // set the jobId state with current job id.
-          jobIdState.clear();
-          jobIdState.add(RuntimeContextUtils.getJobId(runtimeContext));
+          // Match the writer's checkpoint ID so uncommitted index entries remain protected from eviction.
+          long initCheckpointId = context.isRestored() ? context.getRestoredCheckpointId().orElse(-1L) : -1L;
           return new GlobalRecordLevelIndexBackend(conf, initCheckpointId);
         }
       default:
         throw new UnsupportedOperationException("Index type " + indexType + " is not supported for bucket assigning yet.");
     }
-  }
-
-  private static long initCheckpointId(int attemptId, ListState<JobID> jobIdState, long restoredCheckpointId, RuntimeContext runtimeContext) throws Exception {
-    if (attemptId <= 0) {
-      // returns early if the job/task is initially started.
-      return -1;
-    }
-    JobID currentJobId = RuntimeContextUtils.getJobId(runtimeContext);
-    if (StreamSupport.stream(jobIdState.get().spliterator(), false)
-        .noneMatch(currentJobId::equals)) {
-      // do not set up the checkpoint id if the state comes from the old job.
-      return -1;
-    }
-    // sets up the known checkpoint id as the last successful checkpoint id for purposes of cache cleaning.
-    return restoredCheckpointId;
   }
 }
