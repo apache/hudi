@@ -33,7 +33,9 @@ import org.apache.flink.util.SerializedValue;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Correspondent between a write task with the coordinator.
@@ -101,6 +103,21 @@ public class Correspondent {
   }
 
   /**
+   * Requests the fileIds still pending (checkpointed but not yet committed) for {@code partition}.
+   * The simple bucket index bootstrap uses these to avoid minting a second fileId for a bucket that
+   * already owns an inflight one, which would collide once the coordinator recommits it.
+   */
+  public Set<String> requestPendingBucketFileIds(String partition) {
+    try {
+      PendingBucketFileIdsResponse response = CoordinationResponseSerDe.unwrap(this.gateway.sendRequestToCoordinator(this.operatorID,
+          new SerializedValue<>(PendingBucketFileIdsRequest.getInstance(partition))).get());
+      return response.getFileIds();
+    } catch (Exception e) {
+      throw new HoodieException("Error requesting the pending bucket fileIds from the coordinator", e);
+    }
+  }
+
+  /**
    * A request for instant time with a given checkpoint id.
    */
   @AllArgsConstructor(access = AccessLevel.PRIVATE)
@@ -151,6 +168,34 @@ public class Correspondent {
 
     public static InflightInstantsResponse getInstance(HashMap<Long, String> inflightInstants) {
       return new InflightInstantsResponse(inflightInstants);
+    }
+  }
+
+  /**
+   * A request for the fileIds pending (checkpointed but not yet committed) for a partition.
+   */
+  @AllArgsConstructor(access = AccessLevel.PRIVATE)
+  @Getter
+  public static class PendingBucketFileIdsRequest implements CoordinationRequest {
+
+    private final String partition;
+
+    public static PendingBucketFileIdsRequest getInstance(String partition) {
+      return new PendingBucketFileIdsRequest(partition);
+    }
+  }
+
+  /**
+   * A response with the fileIds pending for a partition.
+   */
+  @AllArgsConstructor(access = AccessLevel.PRIVATE)
+  @Getter
+  public static class PendingBucketFileIdsResponse implements CoordinationResponse {
+
+    private final HashSet<String> fileIds;
+
+    public static PendingBucketFileIdsResponse getInstance(HashSet<String> fileIds) {
+      return new PendingBucketFileIdsResponse(fileIds);
     }
   }
 }

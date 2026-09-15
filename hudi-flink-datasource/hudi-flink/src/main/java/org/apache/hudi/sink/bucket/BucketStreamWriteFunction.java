@@ -206,6 +206,26 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
         }
       }
     });
+    overlayPendingBucketFileIds(partition, bucketToFileIDMap);
     bucketIndex.put(partition, bucketToFileIDMap);
+  }
+
+  /**
+   * Overlay fileIds the coordinator still holds pending (flushed to an inflight instant but not yet
+   * committed): the committed view above cannot see them, so a restarted task would mint a second
+   * fileId for a bucket that already owns a pending one, corrupting it on the recommit.
+   */
+  private void overlayPendingBucketFileIds(String partition, Map<Integer, String> bucketToFileIDMap) {
+    if (this.correspondent == null) {
+      return; // not wired in some tests; nothing to overlay
+    }
+    Set<String> pendingFileIds = this.correspondent.requestPendingBucketFileIds(partition);
+    for (String fileId : pendingFileIds) {
+      int bucketNumber = BucketIdentifier.bucketIdFromFileId(fileId);
+      if (isBucketToLoad(bucketNumber, partition) && !bucketToFileIDMap.containsKey(bucketNumber)) {
+        log.info("Adopting pending fileId {} for bucket {} of partition {} from the coordinator.", fileId, bucketNumber, partition);
+        bucketToFileIDMap.put(bucketNumber, fileId);
+      }
+    }
   }
 }

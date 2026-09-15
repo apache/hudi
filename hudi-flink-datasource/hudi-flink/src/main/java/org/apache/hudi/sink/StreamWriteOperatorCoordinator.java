@@ -69,6 +69,7 @@ import javax.annotation.Nullable;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -408,6 +409,9 @@ public class StreamWriteOperatorCoordinator
     if (request instanceof Correspondent.InflightInstantsRequest) {
       return handleInFlightInstantsRequest((Correspondent.InflightInstantsRequest) request);
     }
+    if (request instanceof Correspondent.PendingBucketFileIdsRequest) {
+      return handlePendingBucketFileIdsRequest((Correspondent.PendingBucketFileIdsRequest) request);
+    }
     throw new HoodieException("Unexpected coordination request type: " + request.getClass().getSimpleName());
   }
 
@@ -433,6 +437,15 @@ public class StreamWriteOperatorCoordinator
   private CompletableFuture<CoordinationResponse> handleInFlightInstantsRequest(Correspondent.InflightInstantsRequest request) {
     CoordinationResponse coordinationResponse = Correspondent.InflightInstantsResponse.getInstance(eventBuffers.getAllCheckpointIdAndInstants());
     return CompletableFuture.completedFuture(CoordinationResponseSerDe.wrap(coordinationResponse));
+  }
+
+  private CompletableFuture<CoordinationResponse> handlePendingBucketFileIdsRequest(Correspondent.PendingBucketFileIdsRequest request) {
+    CompletableFuture<CoordinationResponse> response = new CompletableFuture<>();
+    executor.execute(() -> {
+      HashSet<String> fileIds = eventBuffers.getPendingWriteFileIds(request.getPartition());
+      response.complete(CoordinationResponseSerDe.wrap(Correspondent.PendingBucketFileIdsResponse.getInstance(fileIds)));
+    }, "request pending bucket fileIds for partition %s", request.getPartition());
+    return response;
   }
 
   // -------------------------------------------------------------------------

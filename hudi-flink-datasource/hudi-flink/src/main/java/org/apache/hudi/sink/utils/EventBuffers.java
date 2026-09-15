@@ -33,6 +33,7 @@ import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -173,6 +174,22 @@ public class EventBuffers implements Serializable {
     return this.eventBuffers.entrySet().stream()
         .filter(entry -> entry.getValue().getRight().allEventsReceived())
         .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+  }
+
+  /**
+   * Collects the fileIds carried by all pending (buffered but not yet committed) data write events for
+   * {@code partition}.
+   */
+  public HashSet<String> getPendingWriteFileIds(String partition) {
+    HashSet<String> fileIds = new HashSet<>();
+    this.eventBuffers.values().stream()
+        .map(Pair::getRight)
+        .flatMap(eventBuffer -> Arrays.stream(eventBuffer.getDataWriteEventBuffer()))
+        .filter(Objects::nonNull)
+        .flatMap(event -> event.getWriteStatuses().stream())
+        .filter(writeStatus -> partition.equals(writeStatus.getPartitionPath()))
+        .forEach(writeStatus -> fileIds.add(writeStatus.getFileId()));
+    return fileIds;
   }
 
   /**

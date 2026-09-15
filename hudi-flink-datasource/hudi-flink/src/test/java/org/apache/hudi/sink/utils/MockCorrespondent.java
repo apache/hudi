@@ -24,6 +24,7 @@ import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 
 import java.util.Map;
+import java.util.Set;
 
 /**
  * A mock {@link Correspondent} that always return the latest instant.
@@ -57,5 +58,16 @@ public class MockCorrespondent extends Correspondent {
   @Override
   public void sendWriteMetadataEvent(WriteMetadataEvent writeMetadataEvent) {
     this.coordinator.handleEventFromOperator(0, writeMetadataEvent);
+  }
+
+  @Override
+  public Set<String> requestPendingBucketFileIds(String partition) {
+    try {
+      PendingBucketFileIdsResponse response = CoordinationResponseSerDe.unwrap(
+          this.coordinator.handleCoordinationRequest(PendingBucketFileIdsRequest.getInstance(partition)).get());
+      return response.getFileIds();
+    } catch (Exception e) {
+      throw new HoodieException("Error requesting the pending bucket fileIds from the coordinator", e);
+    }
   }
 }
