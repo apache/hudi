@@ -1,0 +1,199 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+name: Hudi Trino Dependency Drift
+
+# hudi-trino's tests resolve dependency versions from Hudi's root pom, but the shipped
+# plugin is assembled under trino-root and bundles Trino's versions. This nightly job
+# reports the libraries whose versions differ between the two classpaths (#19958). It is
+# a report, not a gate: it files or updates an issue and is never a required check.
+on:
+  schedule:
+    - cron: '47 5 * * *'
+  workflow_dispatch:
+
+# Two jobs on purpose: the compare job executes mvnw from the pinned trinodb/trino
+# checkout, so it holds a read-only token; the report job holds issues: write but runs
+# no Maven or third-party code.
+permissions:
+  contents: read
+
+env:
+  MVN_ARGS: -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log
+  # The pom that assembles the shipped plugin. Becomes trinodb/trino's plugin/trino-hudi
+  # once the upstream shim lands.
+  REFERENCE_POM: docker/trino/shim/pom.xml
+
+jobs:
+  compare-dependencies:
+    name: Compare hudi-trino and plugin classpaths
+    if: github.repository == 'apache/hudi'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      drift: ${{ steps.drift.outputs.drift }}
+      trino_sha: ${{ steps.trino-pin.outputs.trino_sha }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+      - name: Read Trino pin
+        id: trino-pin
+        run: |
+          set -euo pipefail
+          TRINO_SHA=$(sed -n 's|.*<trino.sha>\(.*\)</trino.sha>.*|\1|p' pom.xml)
+          TRINO_VERSION=$(sed -n 's|.*<trino.version>\(.*\)</trino.version>.*|\1|p' pom.xml)
+          # sed -n ...p exits 0 on no match; an empty value would checkout/cache garbage.
+          if [ -z "$TRINO_SHA" ] || [ -z "$TRINO_VERSION" ]; then
+            echo "ERROR: could not read trino.sha/trino.version from pom.xml" >&2
+            exit 1
+          fi
+          echo "Pinned trinodb/trino $TRINO_VERSION at $TRINO_SHA"
+          echo "trino_sha=$TRINO_SHA" >> "$GITHUB_OUTPUT"
+          echo "trino_version=$TRINO_VERSION" >> "$GITHUB_OUTPUT"
+      # Hudi targets Java 11 and uses Lombok 1.18.36, which does not run on JDK 25.
+      # Build the upstream modules hudi-trino depends on under JDK 17 first,
+      # install them into the local m2, then build the connector itself under JDK 25.
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+      - name: Install upstream Hudi modules (JDK 17)
+        # hudi-client-common and hudi-java-client back the hudi-trino-tests profile, whose
+        # test classpath is listed below.
+        run: mvn $MVN_ARGS install -pl :hudi-common,:hudi-hive-sync,:hudi-io,:hudi-sync-common,:hudi-client-common,:hudi-java-client -am -Dmaven.test.skip=true -Drat.skip -Dcheckstyle.skip
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+      - name: Purge Trino artifacts from the local m2
+        # Artifacts an older pin left behind carry the same SNAPSHOT coordinates as the current ones.
+        run: rm -rf ~/.m2/repository/io/trino
+      # No actions/cache for io.trino: scheduled_workflow.yml deletes every cache every
+      # 5 minutes, so a nightly run would never hit it.
+      - name: Checkout trinodb/trino at the pinned commit
+        uses: actions/checkout@v5
+        with:
+          repository: trinodb/trino
+          ref: ${{ steps.trino-pin.outputs.trino_sha }}
+          path: trino-src
+      - name: Build Trino artifacts from source (JDK 25)
+        run: scripts/trino/bootstrap_trino.sh trino-src --skip-checkout
+      - name: Build connector (JDK 25)
+        # Installs org.apache.hudi:hudi-trino so the reference pom can resolve it.
+        run: mvn $MVN_ARGS -Phudi-trino -pl hudi-trino install -Dmaven.test.skip=true
+      - name: List hudi-trino test classpath (JDK 25)
+        # CI runs the tests with hudi-trino-tests enabled, so list that classpath.
+        run: |
+          mvn $MVN_ARGS -Phudi-trino,hudi-trino-tests -pl hudi-trino dependency:list \
+            -DincludeScope=test \
+            -DoutputFile="$RUNNER_TEMP/deps-hudi-trino.txt" -DappendOutput=false
+          test -s "$RUNNER_TEMP/deps-hudi-trino.txt" || { echo "ERROR: dependency:list wrote no hudi-trino classpath" >&2; exit 1; }
+      - name: List plugin classpath (JDK 25)
+        # runtime scope approximates what trino-plugin packaging bundles: it keeps compile
+        # and runtime deps and drops the provided SPI surface the server supplies. The
+        # shim's parent version is literal and advanced by the pin bot, same as the build
+        # steps above. The shim sets air.check.skip-all, which airbase also wires to the
+        # dependency plugin's skip flag, so re-enable just that plugin for this goal.
+        run: |
+          set -euo pipefail
+          HUDI_VERSION=$(mvn -q -ntp -N help:evaluate -Dexpression=project.version -DforceStdout)
+          echo "Listing $REFERENCE_POM against hudi-trino $HUDI_VERSION"
+          mvn $MVN_ARGS -f "$REFERENCE_POM" dependency:list \
+            -Dair.check.skip-dependency=false \
+            -DincludeScope=runtime -Ddep.hudi.version="$HUDI_VERSION" \
+            -DoutputFile="$RUNNER_TEMP/deps-plugin.txt" -DappendOutput=false
+          test -s "$RUNNER_TEMP/deps-plugin.txt" || { echo "ERROR: dependency:list wrote no plugin classpath" >&2; exit 1; }
+      - name: Compare classpaths
+        id: drift
+        run: |
+          set +e
+          python3 scripts/trino/check_dependency_drift.py \
+            --ours "$RUNNER_TEMP/deps-hudi-trino.txt" \
+            --reference "$RUNNER_TEMP/deps-plugin.txt" \
+            --markdown "$RUNNER_TEMP/drift.md"
+          rc=$?
+          set -e
+          if [ -f "$RUNNER_TEMP/drift.md" ]; then
+            cat "$RUNNER_TEMP/drift.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          case "$rc" in
+            0) echo "drift=false" >> "$GITHUB_OUTPUT" ;;
+            1) echo "drift=true" >> "$GITHUB_OUTPUT"
+               # Surface drift on a green run, PRs included.
+               echo "::warning title=Dependency drift::$(grep -m1 'version mismatch(es)' "$RUNNER_TEMP/drift.md")" ;;
+            # A broken comparison must fail loudly, never read as "no drift".
+            *) echo "ERROR: check_dependency_drift.py exited $rc" >&2; exit "$rc" ;;
+          esac
+      - name: Upload drift report
+        if: steps.drift.outputs.drift == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-drift
+          path: ${{ runner.temp }}/drift.md
+          if-no-files-found: error
+
+  report-drift:
+    name: File or update drift issue
+    runs-on: ubuntu-latest
+    needs: compare-dependencies
+    if: needs.compare-dependencies.outputs.drift == 'true'
+    # Holds issues: write; checks out nothing and runs no Maven or third-party code.
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Download drift report
+        uses: actions/download-artifact@v4
+        with:
+          name: dependency-drift
+          path: drift
+      - name: File or update drift issue
+        uses: actions/github-script@v7
+        env:
+          TRINO_SHA: ${{ needs.compare-dependencies.outputs.trino_sha }}
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- hudi-trino-dependency-drift -->';
+            const table = fs.readFileSync('drift/drift.md', 'utf8');
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const shortSha = process.env.TRINO_SHA.substring(0, 12);
+            // Drift persists until someone aligns the versions. Comment on the open report
+            // instead of filing a fresh issue every night.
+            const existing = await github.rest.search.issuesAndPullRequests({
+              q: `repo:${context.repo.owner}/${context.repo.repo} is:issue is:open in:body "${marker}"`,
+            });
+            if (existing.data.total_count > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.data.items[0].number,
+                body: `Drift against Trino at ${shortSha}. See ${runUrl}.\n\n${table}`,
+              });
+              return;
+            }
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `hudi-trino dependency drift against Trino at ${shortSha}`,
+              body: `${marker}\nhudi-trino's test classpath and the plugin's classpath resolve different versions of the libraries below (see #19958). See ${runUrl}.\n\n${table}`,
+            });

@@ -312,7 +312,27 @@ Source Release step) -- otherwise the voted tarball ships a `-SNAPSHOT` Trino pi
 5. Verify the released Trino resolves from Central against an empty local repository
    (scope the check to io.trino: the module's hudi siblings are not on Central until this release completes):
    `mvn dependency:get -Dartifact=io.trino:trino-hive:NNN -Dmaven.repo.local=$(mktemp -d)`
-6. CI and the E2E workflow then run with zero SPI drift; the staging deploy flow in "Build a release candidate"
+6. Check for dependency drift before cutting the RC: hudi-trino compiles and tests against Hudi's managed versions,
+   while the plugin bundles Trino's `NNN` versions. Dispatch the drift check on the release branch. The run stays
+   green either way: drift shows as a `Dependency drift` warning and a table in the run's job summary, and files or
+   updates the drift issue:
+   `gh workflow run hudi_trino_dependency_drift.yml -R apache/hudi --ref release-X.Y.Z`
+   Or run it locally from the release branch (JDK 17 for the first command, JDK 25 for the rest, with a
+   `trinodb/trino` checkout at `TAG_SHA`):
+   ```
+   mvn install -pl :hudi-common,:hudi-hive-sync,:hudi-io,:hudi-sync-common,:hudi-client-common,:hudi-java-client -am -Dmaven.test.skip=true -Drat.skip -Dcheckstyle.skip
+   scripts/trino/bootstrap_trino.sh /path/to/trino
+   mvn -Phudi-trino -pl hudi-trino install -Dmaven.test.skip=true
+   mvn -Phudi-trino,hudi-trino-tests -pl hudi-trino dependency:list -DincludeScope=test -DoutputFile=/tmp/deps-hudi-trino.txt -DappendOutput=false
+   mvn -f docker/trino/shim/pom.xml dependency:list -Dair.check.skip-dependency=false -DincludeScope=runtime \
+     -Ddep.hudi.version=$(mvn -q -N help:evaluate -Dexpression=project.version -DforceStdout) \
+     -DoutputFile=/tmp/deps-plugin.txt -DappendOutput=false
+   python3 scripts/trino/check_dependency_drift.py --ours /tmp/deps-hudi-trino.txt --reference /tmp/deps-plugin.txt
+   ```
+   Locally the script exits 1 on drift and prints the same table.
+   If it reports drift, bump the matching version properties in `hudi-trino/pom.xml` on the release branch and rerun
+   until it is clean.
+7. CI and the E2E workflow then run with zero SPI drift; the staging deploy flow in "Build a release candidate"
    is unchanged.
 
 ## Verify that a Release Build Works
