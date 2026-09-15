@@ -16,11 +16,17 @@ package io.trino.plugin.hudi;
 import com.google.common.collect.ImmutableList;
 import io.trino.metastore.HiveType;
 import org.apache.avro.Schema;
+import org.apache.hudi.avro.model.HoodieCommitMetadata;
+import org.apache.hudi.avro.model.HoodieWriteStat;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.List;
+import java.util.Map;
 
+import static com.google.common.collect.Iterables.getOnlyElement;
 import static io.trino.plugin.hudi.HudiUtil.constructSchema;
 import static io.trino.plugin.hudi.testing.TypeInfoHelper.INT_TYPE_INFO;
 import static io.trino.plugin.hudi.testing.TypeInfoHelper.LONG_TYPE_INFO;
@@ -29,7 +35,10 @@ import static io.trino.plugin.hudi.testing.TypeInfoHelper.listHiveType;
 import static io.trino.plugin.hudi.testing.TypeInfoHelper.mapHiveType;
 import static io.trino.plugin.hudi.testing.TypeInfoHelper.structHiveType;
 import static java.util.Collections.emptyList;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeAvroMetadata;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeAvroMetadata;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class HudiUtilTest
@@ -110,6 +119,40 @@ class HudiUtilTest
         assertThatThrownBy(() -> constructSchema(columnNames, columnTypes))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Number of column name and column type differs");
+    }
+
+    /**
+     * {@link HudiUtil#getLatestTableSchema} reads commit metadata, which converts nested generic records into
+     * Hudi's generated Avro classes. Avro 1.12.2+ rejects name-based lookups of those classes through its
+     * ClassSecurityValidator, so the round trip must keep working on the Avro version Trino pins.
+     */
+    @Test
+    void testCommitMetadataRoundTripWithNestedWriteStats()
+            throws IOException
+    {
+        assertThatCode(() -> Class.forName("org.apache.avro.util.ClassSecurityValidator"))
+                .as("This test exists to cover Avro 1.12.2+ trusted-class validation, but ClassSecurityValidator is not on the test classpath")
+                .doesNotThrowAnyException();
+
+        String partition = "2026/09/15";
+        HoodieWriteStat writeStat = HoodieWriteStat.newBuilder()
+                .setFileId("file-1")
+                .setPartitionPath(partition)
+                .setNumWrites(42L)
+                .build();
+        HoodieCommitMetadata metadata = HoodieCommitMetadata.newBuilder()
+                .setPartitionToWriteStats(Map.of(partition, List.of(writeStat)))
+                .setOperationType("upsert")
+                .build();
+
+        byte[] bytes = serializeAvroMetadata(metadata, HoodieCommitMetadata.class).get();
+        HoodieCommitMetadata deserialized = deserializeAvroMetadata(new ByteArrayInputStream(bytes), HoodieCommitMetadata.class);
+
+        assertThat(deserialized.getPartitionToWriteStats()).containsOnlyKeys(partition);
+        HoodieWriteStat deserializedWriteStat = getOnlyElement(deserialized.getPartitionToWriteStats().get(partition));
+        assertThat(deserializedWriteStat.getFileId()).isEqualTo("file-1");
+        assertThat(deserializedWriteStat.getPartitionPath()).isEqualTo(partition);
+        assertThat(deserializedWriteStat.getNumWrites()).isEqualTo(42L);
     }
 
     /**

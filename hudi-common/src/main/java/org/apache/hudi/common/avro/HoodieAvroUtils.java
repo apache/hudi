@@ -1761,11 +1761,29 @@ public class HoodieAvroUtils {
     }
   }
 
+  /**
+   * Resolves the generated class for a nested RECORD schema without Avro's name-based lookup.
+   *
+   * <p>Avro 1.12.2+ routes {@link SpecificData#getClass(Schema)} through a class security validator
+   * that rejects Hudi's generated classes (e.g. when bundled in the Trino connector on Trino 484+).
+   * Loading the class directly is safe: the schema comes from the target generated class's compiled
+   * SCHEMA$ (via {@code SpecificData.getForClass(clazz).getSchema(clazz)}), never from data read off
+   * storage, so this does not reopen the class-injection vector the validator closes.
+   */
+  private static Class<? extends SpecificRecordBase> getSpecificRecordClass(Schema recordSchema, SpecificData specificData) {
+    String className = SpecificData.getClassName(recordSchema);
+    try {
+      return Class.forName(className, false, specificData.getClassLoader()).asSubclass(SpecificRecordBase.class);
+    } catch (ClassNotFoundException e) {
+      throw new HoodieException("Failed to load SpecificRecord class " + className + " for Avro schema " + recordSchema.getFullName(), e);
+    }
+  }
+
   private static Object convertFieldToSpecificRecordValue(Schema fieldSchema, Object value, SpecificData specificData) {
     Schema resolvedFieldSchema = getActualSchemaFromUnion(fieldSchema, value);
     switch (resolvedFieldSchema.getType()) {
       case RECORD:
-        value = convertToSpecificRecord(specificData.getClass(resolvedFieldSchema), (GenericRecord) value, specificData);
+        value = convertToSpecificRecord(getSpecificRecordClass(resolvedFieldSchema, specificData), (GenericRecord) value, specificData);
         break;
       case ARRAY:
         value = ((List<?>) value).stream().map(element -> convertFieldToSpecificRecordValue(resolvedFieldSchema.getElementType(), element, specificData)).collect(Collectors.toList());
