@@ -733,6 +733,13 @@ public class RequestHandler {
 
     /**
      * Determines if local view of table's timeline is behind that of client's view.
+     *
+     * <p>An exact extension is accepted by both the refresh and final consistency checks.
+     * Requests are served from the server's current view, not a snapshot truncated to the
+     * client boundary: unbounded latest-file queries can observe newer instants, while
+     * explicitly bounded queries retain their supplied limit but use the server's current
+     * pending-compaction state. An extension alone therefore does not trigger the
+     * error-based fallback in {@code PriorityBasedFileSystemView}.
      */
     private boolean isLocalViewBehind(Context ctx) {
       String basePath = ctx.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM);
@@ -750,9 +757,15 @@ public class RequestHandler {
       }
 
       String localTimelineHash = localTimeline.getTimelineHash();
-      // refresh if timeline hash mismatches
       if (!localTimelineHash.equals(timelineHashFromClient)) {
-        return true;
+        if (HoodieTimeline.INVALID_INSTANT_TS.equals(lastKnownInstantFromClient)
+            || !localTimeline.containsInstant(lastKnownInstantFromClient)) {
+          return true;
+        }
+        // A newer last instant alone is insufficient: all actions and states through the
+        // client boundary must match before the server can be treated as an exact extension.
+        return !localTimeline.findInstantsBeforeOrEquals(lastKnownInstantFromClient)
+            .getTimelineHash().equals(timelineHashFromClient);
       }
 
       // As a safety check, even if hash is same, ensure instant is present
@@ -787,6 +800,8 @@ public class RequestHandler {
       Option<HoodieInstant> lastInstant = localTimeline.lastInstant();
       // When performing async clean, we may have one more .clean.completed after lastInstantTs.
       // In this case, we do not need to throw an exception.
+      // isLocalViewBehind already accepts exact extensions, including a trailing clean.
+      // Retain this existing exception for cases that do not establish an exact extension.
       return !lastInstant.isPresent() || !lastInstant.get().getAction().equals(HoodieTimeline.CLEAN_ACTION)
           || !localTimeline.findInstantsBefore(lastInstant.get().requestedTime()).getTimelineHash().equals(timelineHashFromClient);
     }
