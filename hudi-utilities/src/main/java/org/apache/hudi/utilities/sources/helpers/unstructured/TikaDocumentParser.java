@@ -19,16 +19,25 @@
 
 package org.apache.hudi.utilities.sources.helpers.unstructured;
 
+import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.exception.HoodieException;
+
 import org.apache.tika.exception.WriteLimitReachedException;
 import org.apache.tika.metadata.Metadata;
 import org.apache.tika.metadata.TikaCoreProperties;
 import org.apache.tika.parser.AutoDetectParser;
 import org.apache.tika.parser.ParseContext;
 import org.apache.tika.sax.BodyContentHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+
+import static org.apache.hudi.utilities.config.UnstructuredFileSourceConfig.PARSE_ENABLED;
 
 /**
  * Default {@link DocumentParser} backed by Apache Tika's {@link AutoDetectParser}:
@@ -40,8 +49,66 @@ import java.util.Map;
 public class TikaDocumentParser implements DocumentParser {
 
   private static final long serialVersionUID = 1L;
+  private static final Logger LOG = LoggerFactory.getLogger(TikaDocumentParser.class);
+
+  private static final String PROBE_TEXT = "hudi unstructured ingest parser probe.\n";
+
+  // Probe outcome, memoized per JVM. init() runs once per task, so latching on "have we
+  // probed" would let only the first task on an executor fail and every later one - including
+  // Spark's retry of that task - carry on with a parser that cannot extract anything.
+  @VisibleForTesting
+  static volatile Boolean parserModulesPresent;
 
   private transient AutoDetectParser parser;
+
+  @Override
+  public void init(org.apache.hudi.common.config.TypedProperties props) {
+    // Failing loudly beats the alternative: with no parser modules every row gets
+    // parse_status=EMPTY, no extracted_text, no chunks and a null vector, while the job still
+    // exits successfully. EMPTY is also the normal result for an image, so nothing downstream
+    // can tell an unparseable deployment from a corpus of pictures.
+    if (!hasParserModules()) {
+      throw new HoodieException("Apache Tika extracted no text from a plain-text probe, so no Tika "
+          + "parser modules are on the classpath and no file will yield any text. The parser modules "
+          + "ship in hudi-tika-bundle; pass it alongside hudi-utilities-bundle, or add "
+          + "org.apache.tika:tika-parsers-standard-package to a custom assembly. To ingest blobs "
+          + "without text extraction, set " + PARSE_ENABLED.key() + "=false.");
+    }
+  }
+
+  /** Probes at most once per JVM, then reuses the outcome for every subsequent task. */
+  private static boolean hasParserModules() {
+    Boolean present = parserModulesPresent;
+    if (present == null) {
+      synchronized (TikaDocumentParser.class) {
+        present = parserModulesPresent;
+        if (present == null) {
+          present = canExtractPlainText();
+          parserModulesPresent = present;
+        }
+      }
+    }
+    return present;
+  }
+
+  /**
+   * Parses a tiny in-memory plain-text document to find out whether any real parser is
+   * registered. A functional probe rather than an inspection of Tika's registry: what
+   * matters to the caller is whether text comes back, not which modules resolved.
+   */
+  @VisibleForTesting
+  static boolean canExtractPlainText() {
+    try {
+      BodyContentHandler handler = new BodyContentHandler(1024);
+      new AutoDetectParser().parse(
+          new ByteArrayInputStream(PROBE_TEXT.getBytes(StandardCharsets.UTF_8)),
+          handler, new Metadata(), new ParseContext());
+      return handler.toString().contains("probe");
+    } catch (Exception e) {
+      LOG.warn("Tika plain-text probe failed", e);
+      return false;
+    }
+  }
 
   @Override
   public ParseResult parse(InputStream in, String fileName, int maxTextChars) {
@@ -60,9 +127,11 @@ public class TikaDocumentParser implements DocumentParser {
         truncated = true;
       }
       return ParseResult.success(handler.toString().trim(), toMap(tikaMetadata), truncated);
-    } catch (Throwable t) {
-      // Never propagate: a corrupt file must not fail the ingestion job.
-      return ParseResult.failed(t.getClass().getSimpleName() + ": " + String.valueOf(t.getMessage()));
+    } catch (Exception e) {
+      // A corrupt file must not fail the ingestion job. Error is deliberately not caught:
+      // swallowing OutOfMemoryError would carry on with an undefined JVM state instead of
+      // failing the task and letting Spark retry it elsewhere.
+      return ParseResult.failed(e.getClass().getSimpleName() + ": " + String.valueOf(e.getMessage()));
     }
   }
 

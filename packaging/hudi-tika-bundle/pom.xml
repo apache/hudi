@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Licensed to the Apache Software Foundation (ASF) under one
+  ~ or more contributor license agreements.  See the NOTICE file
+  ~ distributed with this work for additional information
+  ~ regarding copyright ownership.  The ASF licenses this file
+  ~ to you under the Apache License, Version 2.0 (the
+  ~ "License"); you may not use this file except in compliance
+  ~ with the License.  You may obtain a copy of the License at
+  ~
+  ~   http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing,
+  ~ software distributed under the License is distributed on an
+  ~ "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  ~ KIND, either express or implied.  See the License for the
+  ~ specific language governing permissions and limitations
+  ~ under the License.
+  -->
+
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>hudi</artifactId>
+        <groupId>org.apache.hudi</groupId>
+        <version>1.3.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>hudi-tika-bundle</artifactId>
+    <packaging>jar</packaging>
+
+    <!--
+      Apache Tika's format parser modules, for unstructured file ingestion.
+
+      Kept out of hudi-utilities-bundle deliberately. tika-core ships there because
+      hudi-utilities compiles against it; the parser modules do not, and bundling them
+      would add ~50MB, roughly thirty third-party licenses, and a bundle-wide
+      commons-compress relocation to every hudi-utilities-bundle user for a feature
+      most do not use.
+
+      Pass it alongside the utilities bundle, via spark-submit's "jars" option, only when
+      ingesting unstructured files with text extraction enabled.
+
+      Supplying tika-parsers-standard-package through spark-submit's "packages" option
+      instead does not work: Spark ships commons-compress 1.23, POI needs 1.24 or newer,
+      and user jars do not outrank Spark's own on the classpath. The relocation below is
+      what makes this bundle self-sufficient.
+    -->
+
+    <properties>
+        <checkstyle.skip>true</checkstyle.skip>
+        <main.basedir>${project.parent.basedir}</main.basedir>
+        <skipTests>true</skipTests>
+    </properties>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.rat</groupId>
+                <artifactId>apache-rat-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>${maven-shade-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <createSourcesJar>${shadeSources}</createSourcesJar>
+                            <dependencyReducedPomLocation>${project.build.directory}/dependency-reduced-pom.xml
+                            </dependencyReducedPomLocation>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheLicenseResourceTransformer">
+                                </transformer>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheNoticeResourceTransformer">
+                                    <addHeader>true</addHeader>
+                                </transformer>
+                                <!-- Tika discovers parsers through META-INF/services/org.apache.tika.parser.Parser,
+                                     which every parser module ships its own copy of. Without merging them only one
+                                     module's parsers would register. -->
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                            </transformers>
+                            <artifactSet>
+                                <includes combine.children="append">
+                                    <include>org.apache.tika:*</include>
+                                    <include>com.adobe.xmp:*</include>
+                                    <include>com.drewnoakes:*</include>
+                                    <include>com.epam:*</include>
+                                    <include>com.github.albfernandez:*</include>
+                                    <include>com.github.jai-imageio:*</include>
+                                    <include>com.github.junrar:*</include>
+                                    <include>com.github.virtuald:*</include>
+                                    <include>com.googlecode.plist:*</include>
+                                    <include>com.healthmarketscience.jackcess:*</include>
+                                    <include>com.pff:*</include>
+                                    <include>com.rometools:*</include>
+                                    <include>com.sun.istack:*</include>
+                                    <include>com.zaxxer:*</include>
+                                    <include>info.picocli:*</include>
+                                    <include>jakarta.activation:*</include>
+                                    <include>jakarta.xml.bind:*</include>
+                                    <include>org.apache.james:*</include>
+                                    <include>org.apache.pdfbox:*</include>
+                                    <include>org.apache.poi:*</include>
+                                    <include>org.apache.xmlbeans:*</include>
+                                    <include>org.bouncycastle:*</include>
+                                    <include>org.brotli:*</include>
+                                    <include>org.codelibs:*</include>
+                                    <include>org.eclipse.angus:*</include>
+                                    <include>org.gagravarr:*</include>
+                                    <include>org.glassfish.jaxb:*</include>
+                                    <include>org.jdom:*</include>
+                                    <include>org.jsoup:*</include>
+                                    <include>org.netpreserve:*</include>
+                                    <include>org.ow2.asm:*</include>
+                                    <include>org.tallison:*</include>
+                                    <include>org.tukaani:*</include>
+                                    <include>org.apache.commons:commons-compress</include>
+                                    <include>org.apache.commons:commons-collections4</include>
+                                    <include>org.apache.commons:commons-csv</include>
+                                    <include>org.apache.commons:commons-exec</include>
+                                    <include>org.apache.commons:commons-math3</include>
+                                </includes>
+                                <excludes>
+                                    <!-- hudi-utilities compiles against tika-core, so it ships in
+                                         hudi-utilities-bundle. Shading it here too would put two copies
+                                         on the classpath when both bundles are passed. -->
+                                    <exclude>org.apache.tika:tika-core</exclude>
+                                </excludes>
+                            </artifactSet>
+                            <relocations combine.children="append">
+                                <relocation>
+                                    <!-- POI needs commons-compress 1.24+, but Spark ships an older copy that
+                                         wins on the classpath. Relocating rewrites the parser modules' own
+                                         references to the copy shaded in here, so the version they get no
+                                         longer depends on the runtime's. Confined to this bundle: tika-core
+                                         does not reference commons-compress, so nothing outside is rewritten. -->
+                                    <pattern>org.apache.commons.compress.</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.commons.compress.</shadedPattern>
+                                </relocation>
+                            </relocations>
+                            <createDependencyReducedPom>true</createDependencyReducedPom>
+                            <promoteTransitiveDependencies>true</promoteTransitiveDependencies>
+                            <filters>
+                                <filter>
+                                    <!-- bouncycastle ships multi-release classes built for newer JDKs than the
+                                         shade plugin can parse; the base classes are the ones we run on anyway -->
+                                    <artifact>org.bouncycastle:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/versions/**</exclude>
+                                    </excludes>
+                                </filter>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                        <exclude>META-INF/services/javax.*</exclude>
+                                        <exclude>**/*.proto</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                            <finalName>${project.artifactId}-${project.version}</finalName>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <dependencies>
+        <!-- Only for Main, which exists so the javadoc/sources plugins have a source file. -->
+        <dependency>
+            <groupId>org.apache.hudi</groupId>
+            <artifactId>hudi-common</artifactId>
+            <version>${project.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.tika</groupId>
+            <artifactId>tika-parsers-standard-package</artifactId>
+            <version>${tika.version}</version>
+        </dependency>
+        <!-- Pinned ahead of the older copy that wins transitively: Tika's zip container
+             detection calls ArchiveStreamFactory.detect(InputStream), added in 1.14. This is
+             the copy that gets relocated into the bundle, so it must be the version Tika
+             expects rather than whatever the dependency tree resolves. -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-compress</artifactId>
+            <version>1.27.1</version>
+        </dependency>
+    </dependencies>
+</project>
