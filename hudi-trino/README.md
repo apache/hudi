@@ -66,9 +66,9 @@ project mirroring the upstream `trinodb/trino` `plugin/trino-hudi` shim planned 
 RFC-105 (not yet released upstream). CI runs the same flow via
 `.github/workflows/hudi_trino_e2e.yml`.
 
-The plugin is built at the pinned `trino.version` while the server image is the released
-`trino.e2e.version`; CI auto-skips the suite during SPI drift windows (SPI or filesystem changes
-between the two).
+CI builds the Trino server image from the pinned `trino.sha`
+(`docker/trino/build_trino_server_image.sh`), so the plugin and the server always come from
+the same commit.
 
 Local flow (after bootstrap):
 
@@ -91,9 +91,16 @@ TRINO_VERSION=$(sed -n 's|.*<trino.version>\(.*\)</trino.version>.*|\1|p' pom.xm
 mvn -f docker/trino/shim/pom.xml clean package -DskipTests -Ddep.hudi.version="$HUDI_VERSION"
 unzip -o -q "docker/trino/shim/target/trino-hudi-$TRINO_VERSION.zip" -d docker/trino/shim/target  # trino-maven-plugin 24 emits only the zip
 
-# 4. Build the Trino image (locally tagged; never published). The base server defaults to
-#    trino.e2e.version; pass --trino-version to override it.
-docker/trino/build_image.sh --plugin-dir "docker/trino/shim/target/trino-hudi-$TRINO_VERSION"
+# 4a. Optional, JDK 25: build the server image from a trinodb/trino checkout at trino.sha
+#     (the same one bootstrap used). Builds the whole trino repo, so it takes a while.
+docker/trino/build_trino_server_image.sh /path/to/trino
+TRINO_SHA=$(sed -n 's|.*<trino.sha>\(.*\)</trino.sha>.*|\1|p' pom.xml)
+
+# 4. Build the Trino image (locally tagged; never published) on the server from 4a.
+#    Without --base-image it falls back to the released trinodb/trino:<trino.e2e.version>
+#    (or --trino-version), which only boots when the pin's SPI matches that release.
+docker/trino/build_image.sh --plugin-dir "docker/trino/shim/target/trino-hudi-$TRINO_VERSION" \
+    --base-image "hudi-trino-server:$TRINO_SHA"
 
 # 5. JDK 17: run the suite (only the spark402 compose pair has the trino service)
 mvn verify -pl hudi-integ-test -Dscala-2.13 -Dscala.binary.version=2.13 -Dspark4.0 \
