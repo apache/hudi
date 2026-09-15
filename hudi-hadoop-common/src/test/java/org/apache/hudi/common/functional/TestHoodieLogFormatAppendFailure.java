@@ -21,8 +21,8 @@ package org.apache.hudi.common.functional;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
+import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
@@ -120,9 +120,13 @@ public class TestHoodieLogFormatAppendFailure {
     HoodieAvroDataBlock dataBlock =
         new HoodieAvroDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
 
-    Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(testPath)
-        .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits")
-        .withInstantTime("").withStorage(storage).build();
+    Writer writer = HoodieLogFormatWriter.builder()
+        .withParentPath(testPath)
+        .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION)
+        .withLogFileId("commits")
+        .withInstantTime("")
+        .withStorage(storage)
+        .build();
 
     writer.appendBlock(dataBlock);
     // get the current log file version to compare later
@@ -152,9 +156,13 @@ public class TestHoodieLogFormatAppendFailure {
 
     // Opening a new Writer right now will throw IOException. The code should handle this, rollover the logfile and
     // return a new writer with a bumped up logVersion
-    writer = HoodieLogFormat.newWriterBuilder().onParentPath(testPath)
-        .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits")
-        .withInstantTime("").withStorage(storage).build();
+    writer = HoodieLogFormatWriter.builder()
+        .withParentPath(testPath)
+        .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION)
+        .withLogFileId("commits")
+        .withInstantTime("")
+        .withStorage(storage)
+        .build();
     header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
         String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK.ordinal()));

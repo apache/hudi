@@ -21,7 +21,6 @@ package org.apache.hudi.common.table.checkpoint;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -31,8 +30,6 @@ import org.apache.hudi.exception.HoodieException;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.stream.Stream;
 
@@ -56,7 +53,6 @@ public class TestCheckpointUtils {
   private HoodieActiveTimeline activeTimeline;
 
   private static final String CHECKPOINT_TO_RESUME = "20240101000000";
-  private static final String GENERAL_SOURCE = "org.apache.hudi.utilities.sources.GeneralSource";
 
   @BeforeEach
   public void setUp() {
@@ -197,64 +193,10 @@ public class TestCheckpointUtils {
     assertEquals(completionTime, translatedCheckpoint.getCheckpointKey());
   }
 
-  @ParameterizedTest
-  @CsvSource({
-      // version, sourceClassName, expectedResult
-      // Version >= 8 with allowed sources should return true
-      "8, org.apache.hudi.utilities.sources.TestSource, true",
-      "9, org.apache.hudi.utilities.sources.AnotherSource, true",
-      // Version < 8 should return false regardless of source
-      "7, org.apache.hudi.utilities.sources.TestSource, false",
-      "6, org.apache.hudi.utilities.sources.AnotherSource, false",
-      // Disallowed sources should return false even with version >= 8
-      "8, org.apache.hudi.utilities.sources.S3EventsHoodieIncrSource, false",
-      "8, org.apache.hudi.utilities.sources.GcsEventsHoodieIncrSource, false",
-      "8, org.apache.hudi.utilities.sources.MockS3EventsHoodieIncrSource, false",
-      "8, org.apache.hudi.utilities.sources.MockGcsEventsHoodieIncrSource, false"
-  })
-  public void testTargetCheckpointV2(int version, String sourceClassName, boolean isV2Checkpoint) {
-    assertEquals(isV2Checkpoint, CheckpointUtils.buildCheckpointFromGeneralSource(sourceClassName, version, "ignored") instanceof StreamerCheckpointV2);
-  }
-
   @Test
-  public void testBuildCheckpointFromGeneralSource() {
-    // Test V2 checkpoint creation (newer table version + general source)
-    Checkpoint checkpoint1 = CheckpointUtils.buildCheckpointFromGeneralSource(
-        GENERAL_SOURCE,
-        HoodieTableVersion.EIGHT.versionCode(),
-        CHECKPOINT_TO_RESUME
-    );
-    assertInstanceOf(StreamerCheckpointV2.class, checkpoint1);
-    assertEquals(CHECKPOINT_TO_RESUME, checkpoint1.getCheckpointKey());
-
-    // Test V1 checkpoint creation (older table version)
-    Checkpoint checkpoint2 = CheckpointUtils.buildCheckpointFromGeneralSource(
-        GENERAL_SOURCE,
-        HoodieTableVersion.SEVEN.versionCode(),
-        CHECKPOINT_TO_RESUME
-    );
-    assertInstanceOf(StreamerCheckpointV1.class, checkpoint2);
-    assertEquals(CHECKPOINT_TO_RESUME, checkpoint2.getCheckpointKey());
-  }
-
-  @Test
-  public void testBuildCheckpointFromConfigOverride() {
-    // Test checkpoint from config creation (newer table version + general source)
-    Checkpoint checkpoint1 = CheckpointUtils.buildCheckpointFromConfigOverride(
-        GENERAL_SOURCE,
-        HoodieTableVersion.EIGHT.versionCode(),
-        CHECKPOINT_TO_RESUME
-    );
-    assertInstanceOf(UnresolvedStreamerCheckpointBasedOnCfg.class, checkpoint1);
-    assertEquals(CHECKPOINT_TO_RESUME, checkpoint1.getCheckpointKey());
-
-    // Test V1 checkpoint creation (older table version)
-    Checkpoint checkpoint2 = CheckpointUtils.buildCheckpointFromConfigOverride(
-        GENERAL_SOURCE,
-        HoodieTableVersion.SEVEN.versionCode(),
-        CHECKPOINT_TO_RESUME
-    );
-    assertInstanceOf(StreamerCheckpointV1.class, checkpoint2);
-    assertEquals(CHECKPOINT_TO_RESUME, checkpoint2.getCheckpointKey());
+  void testCreateCheckpoint() {
+    Checkpoint checkpoint = CheckpointUtils.createCheckpoint(CHECKPOINT_TO_RESUME);
+    assertInstanceOf(StreamerCheckpointV1.class, checkpoint);
+    assertEquals(CHECKPOINT_TO_RESUME, checkpoint.getCheckpointKey());
   }
 }

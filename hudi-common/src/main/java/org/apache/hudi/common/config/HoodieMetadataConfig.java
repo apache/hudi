@@ -195,6 +195,16 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Directories matching this regex, will be filtered out when initializing metadata table from lake storage for the first time.");
 
+  public static final ConfigProperty<Boolean> SKIP_ZERO_SIZE_FILES_ON_INITIALIZE = ConfigProperty
+      .key(METADATA_PREFIX + ".skip.zero.size.files.on.initialize")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("When enabled, zero-size data files encountered while listing the data table during "
+          + "metadata table initialization and restore sync are skipped instead of being recorded in the metadata "
+          + "table. Skipped files remain on storage and are not tracked by the metadata table or the cleaner; "
+          + "remove them manually. The metadata validator will report them as inconsistencies.");
+
   public static final ConfigProperty<Integer> FILE_LISTING_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.file.listing.parallelism")
       .defaultValue(200)
@@ -235,6 +245,18 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "used for pruning files during the index lookups. "
           + "For the Spark engine, this config defaults to true (enabled), overriding the base default of false. "
           + "For Flink and Java engines, this remains false by default.");
+
+  public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_PARTITION_STATS = ConfigProperty
+      .key(METADATA_PREFIX + ".index.partition.stats.enable")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Enable aggregating the column stats index to the partition level in the metadata table, "
+          + "used to prune partitions during index lookups. Partition stats requires the column stats index "
+          + "(" + METADATA_PREFIX + ".index.column.stats.enable) to be enabled and has no effect when column stats "
+          + "is disabled. This is an advanced option that should generally be left enabled; disabling it while "
+          + "keeping column stats enabled is recommended only for tables composed of externally created files "
+          + "(e.g. file formats integrated through Apache XTable), where partition stats are not generated.");
 
   public static final ConfigProperty<Integer> METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT = ConfigProperty
       .key(METADATA_PREFIX + ".index.column.stats.file.group.count")
@@ -683,6 +705,15 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "with the actual record count stored in the metadata table. This validation runs in a distributed manner "
           + "using the compute engine. Disabled by default as it adds overhead to the initialization process.");
 
+  public static final ConfigProperty<Boolean> ENABLE_DETAILED_METRICS = ConfigProperty
+      .key(METADATA_PREFIX + ".enable.detailed.metrics")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Enables detailed metadata table metrics — per-metadata-partition file size and base/log "
+          + "file counts. Emitting these requires building a HoodieTableFileSystemView for the metadata table on "
+          + "the driver, which adds memory pressure at scale; leave disabled unless you need the breakdown.");
+
   public long getMaxLogFileSize() {
     return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
   }
@@ -789,6 +820,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public String getDirectoryFilterRegex() {
     return getString(DIR_FILTER_REGEX);
+  }
+
+  public boolean shouldSkipZeroSizeFilesOnInitialize() {
+    return getBoolean(SKIP_ZERO_SIZE_FILES_ON_INITIALIZE);
   }
 
   public boolean shouldIgnoreSpuriousDeletes() {
@@ -920,7 +955,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   }
 
   public boolean isPartitionStatsIndexEnabled() {
-    return getBooleanOrDefault(ENABLE_METADATA_INDEX_COLUMN_STATS);
+    // Partition stats are derived from the column stats index, so they can only be enabled when column
+    // stats is enabled. Within that constraint the partition stats flag is honoured: it defaults to true
+    // (mirroring column stats) but can be explicitly disabled, e.g. for tables of externally created files.
+    return getBooleanOrDefault(ENABLE_METADATA_INDEX_COLUMN_STATS)
+        && getBooleanOrDefault(ENABLE_METADATA_INDEX_PARTITION_STATS);
   }
 
   public int getPartitionStatsIndexFileGroupCount() {
@@ -1020,6 +1059,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return subIndexNameToDrop.contains(indexName);
   }
 
+  public boolean isDetailedMetricsEnabled() {
+    return getBoolean(ENABLE_DETAILED_METRICS);
+  }
+
   public static class Builder {
 
     private EngineType engineType = EngineType.SPARK;
@@ -1082,6 +1125,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withMetadataIndexColumnStats(boolean enable) {
       metadataConfig.setValue(ENABLE_METADATA_INDEX_COLUMN_STATS, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder withMetadataIndexPartitionStats(boolean enable) {
+      metadataConfig.setValue(ENABLE_METADATA_INDEX_PARTITION_STATS, String.valueOf(enable));
       return this;
     }
 
@@ -1157,6 +1205,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withDirectoryFilterRegex(String regex) {
       metadataConfig.setValue(DIR_FILTER_REGEX, regex);
+      return this;
+    }
+
+    public Builder withSkipZeroSizeFilesOnInitialize(boolean skipZeroSizeFiles) {
+      metadataConfig.setValue(SKIP_ZERO_SIZE_FILES_ON_INITIALIZE, String.valueOf(skipZeroSizeFiles));
       return this;
     }
 
@@ -1349,6 +1402,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder enableDetailedMetadataMetrics(boolean enable) {
+      metadataConfig.setValue(ENABLE_DETAILED_METRICS, String.valueOf(enable));
+      return this;
+    }
+
     public HoodieMetadataConfig build() {
       metadataConfig.setDefaultValue(ENABLE, getDefaultMetadataEnable(engineType));
       metadataConfig.setDefaultValue(ENABLE_METADATA_INDEX_COLUMN_STATS, getDefaultColStatsEnable(engineType));
@@ -1435,13 +1493,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       }
     }
   }
-
-  /**
-   * The config is now deprecated. Partition stats are configured using the column stats config itself.
-   */
-  @Deprecated
-  public static final String ENABLE_METADATA_INDEX_PARTITION_STATS =
-      METADATA_PREFIX + ".index.partition.stats.enable";
 
   /**
    * @deprecated Use {@link #ENABLE} and its methods.

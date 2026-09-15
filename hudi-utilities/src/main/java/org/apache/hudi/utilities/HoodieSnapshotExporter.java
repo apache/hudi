@@ -49,6 +49,7 @@ import com.beust.jcommander.IValueValidator;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParameterException;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -62,8 +63,6 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.SparkSession;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -79,6 +78,7 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
 /**
  * Export the latest records of Hudi dataset to a set of external files (e.g., plain parquet files).
  */
+@Slf4j
 public class HoodieSnapshotExporter {
 
   @FunctionalInterface
@@ -87,8 +87,6 @@ public class HoodieSnapshotExporter {
     DataFrameWriter<Row> partition(Dataset<Row> source);
 
   }
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieSnapshotExporter.class);
 
   public static class OutputFormatValidator implements IValueValidator<String> {
 
@@ -159,8 +157,7 @@ public class HoodieSnapshotExporter {
         .<HoodieSnapshotExporterException>orElseThrow(() -> {
           throw new HoodieSnapshotExporterException("No commits present. Nothing to snapshot.");
         });
-    LOG.info(String.format("Starting to snapshot latest version files which are also no-late-than %s.",
-        latestCommitTimestamp));
+    log.info("Starting to snapshot latest version files which are also no-late-than {}.", latestCommitTimestamp);
 
     final HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     final List<String> partitions = getPartitions(engineContext, cfg, HoodieStorageUtils.getStorage(
@@ -169,7 +166,7 @@ public class HoodieSnapshotExporter {
     if (partitions.isEmpty()) {
       throw new HoodieSnapshotExporterException("The source dataset has 0 partition to snapshot.");
     }
-    LOG.info(String.format("The job needs to export %d partitions.", partitions.size()));
+    log.info("The job needs to export {} partitions.", partitions.size());
 
     if (cfg.outputFormat.equals(OutputFormatValidator.HUDI)) {
       exportAsHudi(jsc, sourceFs, cfg, partitions, latestCommitTimestamp, tableMetadata);
@@ -194,7 +191,7 @@ public class HoodieSnapshotExporter {
   private void createSuccessTag(FileSystem fs, Config cfg) throws IOException {
     Path successTagPath = new Path(cfg.targetOutputPath + "/_SUCCESS");
     if (!fs.exists(successTagPath)) {
-      LOG.info(String.format("Creating _SUCCESS under target output path: %s", cfg.targetOutputPath));
+      log.info("Creating _SUCCESS under target output path: {}", cfg.targetOutputPath);
       fs.createNewFile(successTagPath);
     }
   }
@@ -285,7 +282,7 @@ public class HoodieSnapshotExporter {
     }, parallelism);
 
     // Also copy the .commit files
-    LOG.info(String.format("Copying .commit files which are no-late-than %s.", latestCommitTimestamp));
+    log.info("Copying .commit files which are no-late-than {}.", latestCommitTimestamp);
     List<FileStatus> commitFilesListToCopy =
         Arrays.stream(sourceFs.listStatus(new Path(cfg.sourceBasePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTableMetaClient.TIMELINEFOLDER_NAME)))
             .filter(fileStatus -> {
@@ -344,7 +341,7 @@ public class HoodieSnapshotExporter {
     }
 
     JavaSparkContext jsc = UtilHelpers.buildSparkContext("Hoodie-snapshot-exporter", "local[*]", cfg.enableHiveSupport);
-    LOG.info("Initializing spark job.");
+    log.info("Initializing spark job.");
 
     try {
       new HoodieSnapshotExporter().export(jsc, cfg);
@@ -359,13 +356,13 @@ public class HoodieSnapshotExporter {
       switch (config.transformerClassName) {
         case "org.apache.hudi.utilities.transform.SqlQueryBasedTransformer":
           if (StringUtils.isNullOrEmpty(config.transformerSql)) {
-            LOG.error("--transformer-sql is required when using SqlQueryBasedTransformer");
+            log.error("--transformer-sql is required when using SqlQueryBasedTransformer");
             valid = false;
           }
           break;
         case "org.apache.hudi.utilities.transform.SqlFileBasedTransformer":
           if (StringUtils.isNullOrEmpty(config.transformerSqlFile)) {
-            LOG.error("--transformer-sql-file is required when using SqlFileBasedTransformer");
+            log.error("--transformer-sql-file is required when using SqlFileBasedTransformer");
             valid = false;
           }
           break;

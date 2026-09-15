@@ -49,7 +49,6 @@ import org.apache.flink.client.deployment.application.ApplicationExecutionExcept
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.slf4j.Logger;
@@ -59,6 +58,8 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import static org.apache.hudi.sink.utils.FlinkTransformationUtils.setManagedMemoryWeight;
 
 /**
  * Flink hudi clustering program that can be executed manually.
@@ -338,7 +339,7 @@ public class HoodieFlinkClusteringJob {
       Option<HoodieInstant> inflightInstantOpt = ClusteringUtils.getInflightClusteringInstant(clusteringInstant.requestedTime(),
           table.getActiveTimeline(), table.getInstantGenerator());
       if (inflightInstantOpt.isPresent()) {
-        LOG.info("Rollback inflight clustering instant: [" + clusteringInstant + "]");
+        LOG.info("Rollback inflight clustering instant: [{}]", clusteringInstant);
         table.rollbackInflightClustering(inflightInstantOpt.get(),
             commitToRollback -> writeClient.getTableServiceClient().getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false),
             writeClient.getTransactionManager());
@@ -361,7 +362,7 @@ public class HoodieFlinkClusteringJob {
       if (clusteringPlan == null || (clusteringPlan.getInputGroups() == null)
           || (clusteringPlan.getInputGroups().isEmpty())) {
         // no clustering plan, do nothing and return.
-        LOG.info("No clustering plan for instant " + clusteringInstant.requestedTime());
+        LOG.info("No clustering plan for instant {}", clusteringInstant.requestedTime());
         return;
       }
 
@@ -398,7 +399,7 @@ public class HoodieFlinkClusteringJob {
           .setParallelism(clusteringParallelism);
 
       if (OptionsResolver.sortClusteringEnabled(conf)) {
-        ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(),
+        setManagedMemoryWeight(dataStream.getTransformation(),
             conf.get(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
       }
 
@@ -417,7 +418,7 @@ public class HoodieFlinkClusteringJob {
      * Shutdown async services like compaction/clustering as DeltaSync is shutdown.
      */
     public void shutdownAsyncService(boolean error) {
-      LOG.info("Gracefully shutting down clustering job. Error ?" + error);
+      LOG.info("Gracefully shutting down clustering job. Error: {}", error);
       executor.shutdown();
       writeClient.close();
     }

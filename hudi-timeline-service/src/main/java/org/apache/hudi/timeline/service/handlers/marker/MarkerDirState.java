@@ -40,7 +40,6 @@ import org.apache.hadoop.util.StringUtils;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
@@ -54,7 +53,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.util.MarkerUtils.MARKERS_FILENAME_PREFIX;
-import static org.apache.hudi.io.util.FileIOUtils.closeQuietly;
 import static org.apache.hudi.timeline.service.RequestHandler.jsonifyResult;
 
 /**
@@ -207,46 +205,62 @@ public class MarkerDirState implements Serializable {
     log.debug("timeMs={} markerDirPath={} numRequests={} fileIndex={}",
         System.currentTimeMillis(), markerDirPath, pendingMarkerCreationFutures.size(), fileIndex);
     boolean shouldFlushMarkers = false;
-    
-    synchronized (markerCreationProcessingLock) {
-      for (MarkerCreationFuture future : pendingMarkerCreationFutures) {
-        String markerName = future.getMarkerName();
-        boolean exists = allMarkers.contains(markerName);
-        if (!exists) {
-          if (conflictDetectionStrategy.isPresent()) {
-            try {
-              conflictDetectionStrategy.get().detectAndResolveConflictIfNecessary();
-            } catch (HoodieEarlyConflictDetectionException he) {
-              log.error("Detected the write conflict due to a concurrent writer, "
-                  + "failing the marker creation as the early conflict detection is enabled", he);
-              future.setIsSuccessful(false);
-              continue;
-            } catch (Exception e) {
-              log.warn("Failed to execute early conflict detection. Marker creation will continue.", e);
-              // When early conflict detection fails to execute, we still allow the marker creation
-              // to continue
-              addMarkerToMap(fileIndex, markerName);
-              future.setIsSuccessful(true);
-              shouldFlushMarkers = true;
-              continue;
-            }
-          }
-          addMarkerToMap(fileIndex, markerName);
-          shouldFlushMarkers = true;
-        }
-        future.setIsSuccessful(!exists);
-      }
+    int fileMarkersLengthBeforeBatch = 0;
 
-      if (!isMarkerTypeWritten) {
-        // Create marker directory and write marker type to MARKERS.type
-        writeMarkerTypeToFile();
-        isMarkerTypeWritten = true;
+    try {
+      synchronized (markerCreationProcessingLock) {
+        StringBuilder fileMarkers = fileMarkersMap.get(fileIndex);
+        fileMarkersLengthBeforeBatch = fileMarkers == null ? 0 : fileMarkers.length();
+        for (MarkerCreationFuture future : pendingMarkerCreationFutures) {
+          String markerName = future.getMarkerName();
+          boolean exists = allMarkers.contains(markerName);
+          if (!exists) {
+            if (conflictDetectionStrategy.isPresent()) {
+              try {
+                conflictDetectionStrategy.get().detectAndResolveConflictIfNecessary();
+              } catch (HoodieEarlyConflictDetectionException he) {
+                log.error("Detected the write conflict due to a concurrent writer, "
+                    + "failing the marker creation as the early conflict detection is enabled", he);
+                future.setIsSuccessful(false);
+                continue;
+              } catch (Exception e) {
+                log.warn("Failed to execute early conflict detection. Marker creation will continue.", e);
+                // When early conflict detection fails to execute, we still allow the marker creation
+                // to continue
+                addMarkerToMap(fileIndex, markerName);
+                future.setIsSuccessful(true);
+                shouldFlushMarkers = true;
+                continue;
+              }
+            }
+            addMarkerToMap(fileIndex, markerName);
+            shouldFlushMarkers = true;
+          }
+          future.setIsSuccessful(!exists);
+        }
+
+        if (!isMarkerTypeWritten) {
+          // Create marker directory and write marker type to MARKERS.type
+          writeMarkerTypeToFile();
+          isMarkerTypeWritten = true;
+        }
       }
+      if (shouldFlushMarkers) {
+        flushMarkersToFile(fileIndex);
+      }
+    } catch (Exception e) {
+      log.error("Failed to persist markers to file index {} in {}", fileIndex, markerDirPath, e);
+      // The markers added by this batch are not durably persisted, so they are removed from
+      // the in-memory state and all pending requests fail, so that no write operation
+      // proceeds without a durable marker and a retried request can recreate the marker
+      removeMarkersOfPendingFutures(pendingMarkerCreationFutures, fileIndex, fileMarkersLengthBeforeBatch);
+      for (MarkerCreationFuture future : pendingMarkerCreationFutures) {
+        future.completeExceptionally(e);
+      }
+      return;
+    } finally {
+      markFileAsAvailable(fileIndex);
     }
-    if (shouldFlushMarkers) {
-      flushMarkersToFile(fileIndex);
-    }
-    markFileAsAvailable(fileIndex);
 
     for (MarkerCreationFuture future : pendingMarkerCreationFutures) {
       try {
@@ -310,6 +324,29 @@ public class MarkerDirState implements Serializable {
   }
 
   /**
+   * Removes the markers added by the pending marker creation requests from the in-memory state,
+   * used when the markers cannot be persisted, so that a retried request can recreate the markers.
+   *
+   * @param pendingMarkerCreationFutures futures of pending marker creation requests
+   * @param fileIndex                    file index used by the batch of requests
+   * @param fileMarkersLengthBeforeBatch length of the buffered markers of the file index before the batch
+   */
+  private void removeMarkersOfPendingFutures(
+      List<MarkerCreationFuture> pendingMarkerCreationFutures, int fileIndex, int fileMarkersLengthBeforeBatch) {
+    synchronized (markerCreationProcessingLock) {
+      for (MarkerCreationFuture future : pendingMarkerCreationFutures) {
+        if (future.isSuccessful()) {
+          allMarkers.remove(future.getMarkerName());
+        }
+      }
+      StringBuilder fileMarkers = fileMarkersMap.get(fileIndex);
+      if (fileMarkers != null) {
+        fileMarkers.setLength(fileMarkersLengthBeforeBatch);
+      }
+    }
+  }
+
+  /**
    * Writes marker type, "TIMELINE_SERVER_BASED", to file.
    */
   private void writeMarkerTypeToFile() {
@@ -357,17 +394,14 @@ public class MarkerDirState implements Serializable {
     HoodieTimer timer = HoodieTimer.start();
     StoragePath markersFilePath = new StoragePath(
         markerDirPath, MARKERS_FILENAME_PREFIX + markerFileIndex);
-    OutputStream outputStream = null;
-    BufferedWriter bufferedWriter = null;
-    try {
-      outputStream = storage.create(markersFilePath);
-      bufferedWriter = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8));
+    // The writer must be closed within the try scope, so that a failure to persist the markers
+    // at close() time, e.g., when an object store uploads the file content in close(), is
+    // propagated to the caller instead of being swallowed
+    try (BufferedWriter bufferedWriter = new BufferedWriter(new OutputStreamWriter(
+        storage.create(markersFilePath), StandardCharsets.UTF_8))) {
       bufferedWriter.write(fileMarkersMap.get(markerFileIndex).toString());
     } catch (IOException e) {
       throw new HoodieIOException("Failed to overwrite marker file " + markersFilePath, e);
-    } finally {
-      closeQuietly(bufferedWriter);
-      closeQuietly(outputStream);
     }
     log.debug("{} written in {} ms", markersFilePath, timer.endTimer());
   }

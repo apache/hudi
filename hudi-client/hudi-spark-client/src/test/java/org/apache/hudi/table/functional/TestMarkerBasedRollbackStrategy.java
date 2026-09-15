@@ -30,6 +30,7 @@ import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.IOType;
@@ -43,6 +44,7 @@ import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.rollback.MarkerBasedRollbackStrategy;
@@ -399,12 +401,16 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     assertEquals(1, rollbackStats.size());
     HoodieRollbackStat rollbackStat = rollbackStats.get(0);
     if (!tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
-      StoragePath rollbackLogPath = new StoragePath(new StoragePath(basePath, partition),
-          FileCreateUtils.logFileName(instantTime1, fileId, numLogFiles + 2));
+      // The rollback log file's write token is determined by Spark's task context at runtime,
+      // so extract the actual path from the rollback stats rather than constructing it with a
+      // hardcoded write token. Verify the file exists and its version matches the expected bump.
+      StoragePathInfo rollbackLogPathInfo =
+          rollbackStat.getCommandBlocksCount().entrySet().stream().findFirst().get().getKey();
+      StoragePath rollbackLogPath = rollbackLogPathInfo.getPath();
       assertTrue(storage.exists(rollbackLogPath));
-      assertEquals(rollbackLogPath.getPathWithoutSchemeAndAuthority(),
-          rollbackStat.getCommandBlocksCount().entrySet().stream().findFirst().get()
-              .getKey().getPath().getPathWithoutSchemeAndAuthority());
+      HoodieLogFile rollbackLogFile = new HoodieLogFile(rollbackLogPathInfo);
+      assertEquals(fileId, rollbackLogFile.getFileId());
+      assertEquals(numLogFiles + 2, rollbackLogFile.getLogVersion());
     }
     assertEquals(partition, rollbackStat.getPartitionPath());
     assertEquals(

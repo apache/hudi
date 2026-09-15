@@ -215,7 +215,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
         return hoodieRollbackRequests.stream();
       }, numPartitions);
     } catch (Exception e) {
-      log.error("Generating rollback requests failed for " + instantToRollback.requestedTime(), e);
+      log.error("Generating rollback requests failed for {}", instantToRollback.requestedTime(), e);
       throw new HoodieRollbackException("Generating rollback requests failed for " + instantToRollback.requestedTime(), e);
     }
   }

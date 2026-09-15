@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -34,6 +33,14 @@ import org.lance.spark.vectorized.LanceArrowColumnVector;
 
 import java.util.HashSet;
 import java.util.Set;
+
+import static org.apache.hudi.io.storage.BlobStructLayout.DATA_IDX;
+import static org.apache.hudi.io.storage.BlobStructLayout.FIELD_COUNT;
+import static org.apache.hudi.io.storage.BlobStructLayout.INLINE_UTF8;
+import static org.apache.hudi.io.storage.BlobStructLayout.OUT_OF_LINE_UTF8;
+import static org.apache.hudi.io.storage.BlobStructLayout.REF_FIELD_COUNT;
+import static org.apache.hudi.io.storage.BlobStructLayout.REF_IDX;
+import static org.apache.hudi.io.storage.BlobStructLayout.TYPE_IDX;
 
 /**
  * Per-row transform that rewrites BLOB columns from Lance's DESCRIPTOR shape into the Hudi BLOB
@@ -51,16 +58,6 @@ import java.util.Set;
  * </ul>
  */
 public final class BlobDescriptorTransform {
-
-  private static final UTF8String OUT_OF_LINE_UTF8 =
-      UTF8String.fromString(HoodieSchema.Blob.OUT_OF_LINE);
-  private static final UTF8String INLINE_UTF8 =
-      UTF8String.fromString(HoodieSchema.Blob.INLINE);
-
-  // Child field indices within the Hudi BLOB struct: {type(0), data(1), reference(2)}.
-  private static final int TYPE_IDX = 0;
-  private static final int DATA_IDX = 1;
-  private static final int REF_IDX = 2;
 
   private final Set<String> blobFieldNames;
   private final UTF8String lanceFilePathUtf8;
@@ -105,7 +102,7 @@ public final class BlobDescriptorTransform {
     for (int i = 0; i < outputFields.length; i++) {
       if (blobColumnIndices.contains(i)) {
         rowBuffer[i] = row.isNullAt(i) ? null
-            : buildBlobOutputRow(row.getStruct(i, 3), columnVectors[i], rowId);
+            : buildBlobOutputRow(row.getStruct(i, FIELD_COUNT), columnVectors[i], rowId);
       } else {
         rowBuffer[i] = row.isNullAt(i) ? null : row.get(i, outputFields[i].dataType());
       }
@@ -131,7 +128,8 @@ public final class BlobDescriptorTransform {
     UTF8String type = blobStruct.getUTF8String(TYPE_IDX);
 
     if (type.equals(OUT_OF_LINE_UTF8)) {
-      InternalRow refRow = blobStruct.isNullAt(REF_IDX) ? null : blobStruct.getStruct(REF_IDX, 4);
+      InternalRow refRow = blobStruct.isNullAt(REF_IDX) ? null
+          : blobStruct.getStruct(REF_IDX, REF_FIELD_COUNT);
       return new GenericInternalRow(new Object[] { OUT_OF_LINE_UTF8, null, refRow });
     }
 

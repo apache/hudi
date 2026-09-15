@@ -138,7 +138,7 @@ public class ClientIds implements AutoCloseable, Serializable {
       }
     } catch (IOException e) {
       // if any exception happens, just return false.
-      log.error("Check heartbeat file existence error: " + path);
+      log.error("Check heartbeat file existence error: {}", path);
     }
     return false;
   }
@@ -186,7 +186,7 @@ public class ClientIds implements AutoCloseable, Serializable {
       }
       List<Path> sortedPaths = Arrays.stream(fs.listStatus(heartbeatFolderPath))
           .map(FileStatus::getPath)
-          .sorted(Comparator.comparing(Path::getName))
+          .sorted(Comparator.comparingInt(path -> getClientIdSortKey(getClientId(path))))
           .collect(Collectors.toList());
       if (sortedPaths.isEmpty()) {
         return INIT_CLIENT_ID;
@@ -217,6 +217,14 @@ public class ClientIds implements AutoCloseable, Serializable {
   private static String getClientId(Path path) {
     String[] splits = path.getName().split(HEARTBEAT_FILE_NAME_PREFIX);
     return splits.length > 1 ? splits[1] : INIT_CLIENT_ID;
+  }
+
+  /**
+   * Returns a sort key so heartbeat files order numerically instead of lexicographically.
+   * The base heartbeat file (empty client id) always sorts first.
+   */
+  private static int getClientIdSortKey(String clientId) {
+    return StringUtils.isNullOrEmpty(clientId) ? -1 : Integer.parseInt(clientId);
   }
 
   // -------------------------------------------------------------------------

@@ -33,6 +33,7 @@ import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -47,6 +48,7 @@ import lombok.extern.slf4j.Slf4j;
 import javax.annotation.Nullable;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
@@ -106,7 +108,7 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServi
     HoodieCompactionPlan plan = scheduleCompaction();
     Option<HoodieCompactionPlan> option = Option.empty();
     if (plan != null && nonEmpty(plan.getOperations())) {
-      extraMetadata.ifPresent(plan::setExtraMetadata);
+      mergeExtraMetadata(plan, extraMetadata);
       if (operationType.equals(WriteOperationType.COMPACT)) {
         HoodieInstant compactionInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED,
             HoodieTimeline.COMPACTION_ACTION, instantTime);
@@ -122,13 +124,30 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServi
     return option;
   }
 
+  /**
+   * Adds the caller-provided extra metadata to the plan without discarding what the plan
+   * generator already recorded there. Those entries carry state only the generator can
+   * reconstruct, so they take precedence on a key collision; every other caller entry is kept.
+   */
+  @VisibleForTesting
+  static void mergeExtraMetadata(HoodieCompactionPlan plan, Option<Map<String, String>> extraMetadata) {
+    if (!extraMetadata.isPresent()) {
+      return;
+    }
+    Map<String, String> merged = new HashMap<>(extraMetadata.get());
+    if (plan.getExtraMetadata() != null) {
+      merged.putAll(plan.getExtraMetadata());
+    }
+    plan.setExtraMetadata(merged);
+  }
+
   @Nullable
   private HoodieCompactionPlan scheduleCompaction() {
-    log.info("Checking if compaction needs to be run on " + config.getBasePath());
+    log.info("Checking if compaction needs to be run on {}", config.getBasePath());
     // judge if we need to compact according to num delta commits and time elapsed
     boolean compactable = needCompact(config.getInlineCompactTriggerStrategy());
     if (compactable) {
-      log.info("Generating compaction plan for merge on read table " + config.getBasePath());
+      log.info("Generating compaction plan for merge on read table {}", config.getBasePath());
       try {
         context.setJobStatus(this.getClass().getSimpleName(), "Compaction: generating compaction plan");
         return planGenerator.generateCompactionPlan(instantTime);

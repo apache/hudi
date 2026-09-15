@@ -599,7 +599,7 @@ public class SparkMain {
 
   private static int archive(JavaSparkContext jsc, int minCommits, int maxCommits, int commitsRetained, boolean enableMetadata, String basePath) {
     try {
-      return ArchiveExecutorUtils.archive(jsc, minCommits, maxCommits, commitsRetained, enableMetadata, basePath);
+      return ArchiveExecutorUtils.archive(jsc, minCommits, maxCommits, commitsRetained, enableMetadata, basePath, new HashMap<>());
     } catch (IOException ex) {
       return -1;
     }

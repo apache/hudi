@@ -37,12 +37,17 @@ import org.apache.kafka.clients.admin.DescribeConfigsResult;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.spark.streaming.kafka010.OffsetRange;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -184,6 +189,103 @@ public class TestKafkaOffsetGen {
     assertEquals(1, nextOffsetRanges.length);
     assertEquals(0, nextOffsetRanges[0].fromOffset());
     assertEquals(500, nextOffsetRanges[0].untilOffset());
+  }
+
+  /**
+   * When the requested timestamp is later than every record in the topic,
+   * {@link org.apache.kafka.clients.consumer.KafkaConsumer#offsetsForTimes} returns {@code null}
+   * for every partition. In that case we must fall back to the partition's end offset (its tip),
+   * not to offset 0 / earliest — otherwise the entire partition would be replayed even though the
+   * user asked for a strictly later checkpoint.
+   */
+  @Test
+  public void testGetNextOffsetRangesFromTimestampCheckpointTypeWithNoOffsetsAfterTimestamp() throws Exception {
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    testUtils.createTopic(testTopicName, 1);
+    testUtils.sendMessages(testTopicName, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
+    // Ensure the checkpoint we pass is strictly after every published record's timestamp.
+    Thread.sleep(10);
+    long checkpointAfterProduction = System.currentTimeMillis();
+
+    KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("latest", KAFKA_CHECKPOINT_TYPE_TIMESTAMP));
+
+    OffsetRange[] nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(
+        Option.of(new StreamerCheckpointV2(String.valueOf(checkpointAfterProduction))), 500, metrics);
+    assertEquals(1, nextOffsetRanges.length);
+    // Fallback to end offset (the tip): from == until == 1000, nothing to consume.
+    assertEquals(1000, nextOffsetRanges[0].fromOffset());
+    assertEquals(1000, nextOffsetRanges[0].untilOffset());
+  }
+
+  /**
+   * Mixed case: some partitions have records at/after the requested timestamp and some don't.
+   * Only the partitions with no matching record should fall back to their end offset; partitions
+   * that do have matching records should still resume at the offset returned by
+   * {@link org.apache.kafka.clients.consumer.KafkaConsumer#offsetsForTimes}. This is the user-visible
+   * bug the fallback change is targeting.
+   */
+  @Test
+  public void testGetNextOffsetRangesFromTimestampCheckpointTypeWithPartialOffsets() throws Exception {
+    testUtils.createTopic(testTopicName, 2);
+    int recordsPerPartition = 500;
+
+    // Publish `recordsPerPartition` records to partition 0 first, then take a checkpoint after
+    // them. Any record produced later goes to partition 1 and is guaranteed to have a timestamp
+    // strictly greater than the checkpoint.
+    sendMessagesToPartition(testTopicName, 0, recordsPerPartition);
+    Thread.sleep(10);
+    long checkpointBetweenBatches = System.currentTimeMillis();
+    Thread.sleep(10);
+    sendMessagesToPartition(testTopicName, 1, recordsPerPartition);
+
+    KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("latest", KAFKA_CHECKPOINT_TYPE_TIMESTAMP));
+
+    OffsetRange[] nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(
+        Option.of(new StreamerCheckpointV2(String.valueOf(checkpointBetweenBatches))), recordsPerPartition, metrics);
+
+    // computeOffsetRanges may split a single partition into multiple sub-ranges when
+    // eventsPerPartition < partition size, so group by partition and verify the aggregate.
+    Map<Integer, List<OffsetRange>> byPartition = Arrays.stream(nextOffsetRanges)
+        .collect(Collectors.groupingBy(OffsetRange::partition));
+    assertEquals(2, byPartition.size(), "expected ranges for exactly 2 partitions");
+
+    // Partition 0: all records predate the checkpoint => fromOffset == untilOffset == 500
+    List<OffsetRange> p0Ranges = byPartition.get(0);
+    assertEquals(recordsPerPartition, p0Ranges.get(0).fromOffset(),
+        "partition 0 should start at the end offset (tip)");
+    assertEquals(recordsPerPartition, p0Ranges.get(p0Ranges.size() - 1).untilOffset(),
+        "partition 0 should end at the end offset (nothing to consume)");
+
+    // Partition 1: records were produced after the checkpoint => consume from offset 0 to 500
+    List<OffsetRange> p1Ranges = byPartition.get(1);
+    assertEquals(0, p1Ranges.get(0).fromOffset(),
+        "partition 1 should start from offset 0");
+    assertEquals(recordsPerPartition, p1Ranges.get(p1Ranges.size() - 1).untilOffset(),
+        "partition 1 should consume all records");
+    assertEquals(recordsPerPartition, KafkaOffsetGen.CheckpointUtils.totalNewMessages(nextOffsetRanges),
+        "total new messages should equal recordsPerPartition");
+    for (int i = 0; i < p1Ranges.size() - 1; i++) {
+      assertEquals(p1Ranges.get(i).untilOffset(), p1Ranges.get(i + 1).fromOffset(),
+          "partition 1 sub-ranges should be contiguous");
+    }
+  }
+
+  /**
+   * Publish {@code count} simple string records to a specific partition of {@code topic}. Used to
+   * simulate a mixed "some partitions have records after ts, some don't" state that the default
+   * partitioner-based {@link KafkaTestUtils#sendMessages} cannot deterministically produce.
+   */
+  private void sendMessagesToPartition(String topic, int partition, int count) {
+    Properties producerProps = new Properties();
+    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, testUtils.brokerAddress());
+    producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+    producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+    try (KafkaProducer<String, String> producer = new KafkaProducer<>(producerProps)) {
+      for (int i = 0; i < count; i++) {
+        producer.send(new ProducerRecord<>(topic, partition, null, "msg-" + partition + "-" + i));
+      }
+      producer.flush();
+    }
   }
 
   @Test
@@ -588,6 +690,81 @@ public class TestKafkaOffsetGen {
       verify(mockClock, times(1)).currentEpoch();
       verify(mockConsumer, times(1)).offsetsForTimes(topicPartitionsTimestamp);
     }
+  }
+
+  static Stream<Arguments> getOffsetsByTimestampArgs() {
+    long ts = System.currentTimeMillis();
+    String topicName = "kafka-topic-" + UUID.randomUUID();
+    List<TopicPartition> topicPartitions =
+        Arrays.asList(new TopicPartition(topicName, 0), new TopicPartition(topicName, 1));
+
+    // end offsets used as fallback when offsetsForTimes returns null
+    Map<TopicPartition, Long> endOffsets = new HashMap<>();
+    endOffsets.put(topicPartitions.get(0), 50L);
+    endOffsets.put(topicPartitions.get(1), 80L);
+
+    // none-null: every partition resolves via offsetsForTimes
+    Map<TopicPartition, OffsetAndTimestamp> allResolved = new HashMap<>();
+    allResolved.put(topicPartitions.get(0), new OffsetAndTimestamp(20, ts));
+    allResolved.put(topicPartitions.get(1), new OffsetAndTimestamp(35, ts));
+    String expectedAllResolved = String.format("%s,0:20,1:35", topicName);
+
+    // some-null: one partition resolves, one falls back to end offset
+    Map<TopicPartition, OffsetAndTimestamp> someNull = new HashMap<>();
+    someNull.put(topicPartitions.get(0), new OffsetAndTimestamp(20, ts));
+    someNull.put(topicPartitions.get(1), null);
+    String expectedSomeNull = String.format("%s,0:20,1:80", topicName);
+
+    // all-null: every partition falls back to end offset (pre-0.10.0 format / empty partitions)
+    Map<TopicPartition, OffsetAndTimestamp> allNull = new HashMap<>();
+    allNull.put(topicPartitions.get(0), null);
+    allNull.put(topicPartitions.get(1), null);
+    String expectedAllNull = String.format("%s,0:50,1:80", topicName);
+
+    return Stream.of(
+        Arguments.of(topicName, topicPartitions, endOffsets, allResolved, expectedAllResolved),
+        Arguments.of(topicName, topicPartitions, endOffsets, someNull, expectedSomeNull),
+        Arguments.of(topicName, topicPartitions, endOffsets, allNull, expectedAllNull)
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource("getOffsetsByTimestampArgs")
+  void testGetOffsetsByTimestamp(
+      String topicName,
+      List<TopicPartition> topicPartitions,
+      Map<TopicPartition, Long> endOffsets,
+      Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestamp,
+      String expectedCheckpoint) {
+    long timestamp = System.currentTimeMillis();
+
+    KafkaConsumer mockConsumer = mock(KafkaConsumer.class);
+    List<PartitionInfo> partitionInfoList = topicPartitions.stream()
+        .map(tp -> new org.apache.kafka.common.PartitionInfo(tp.topic(), tp.partition(), null, null, null))
+        .collect(Collectors.toList());
+
+    Map<TopicPartition, Long> topicPartitionsTimestamp = new HashMap<>();
+    topicPartitions.forEach(tp -> topicPartitionsTimestamp.put(tp, timestamp));
+
+    when(mockConsumer.endOffsets(new HashSet<>(topicPartitions))).thenReturn(endOffsets);
+    when(mockConsumer.offsetsForTimes(topicPartitionsTimestamp)).thenReturn(offsetAndTimestamp);
+
+    TypedProperties consumerConfigs = getConsumerConfigs(topicName, "earliest", "string");
+    KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(consumerConfigs);
+
+    Option<String> result = kafkaOffsetGen.getOffsetsByTimestamp(
+        mockConsumer, partitionInfoList, new HashSet<>(topicPartitions), topicName, timestamp);
+
+    assertTrue(result.isPresent());
+    // Parse both strings into offset maps for order-independent comparison
+    assertEquals(
+        KafkaOffsetGen.CheckpointUtils.strToOffsets(expectedCheckpoint),
+        KafkaOffsetGen.CheckpointUtils.strToOffsets(result.get()));
+
+    // endOffsets must be called BEFORE offsetsForTimes (verified via call order)
+    org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(mockConsumer);
+    inOrder.verify(mockConsumer).endOffsets(new HashSet<>(topicPartitions));
+    inOrder.verify(mockConsumer).offsetsForTimes(topicPartitionsTimestamp);
   }
 
   void mockDescribeTopicConfigs(MockedStatic<AdminClient> staticMock, Map kafkaParams, Config topicConfig) {

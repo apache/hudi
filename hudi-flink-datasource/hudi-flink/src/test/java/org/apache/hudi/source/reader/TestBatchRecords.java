@@ -18,14 +18,11 @@
 
 package org.apache.hudi.source.reader;
 
-import org.apache.hudi.common.util.collection.ClosableIterator;
-
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
@@ -36,16 +33,15 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Test cases for {@link BatchRecords}.
+ * Test cases for {@link BatchRecords}, which now holds a materialized, bounded minibatch of records.
  */
 public class TestBatchRecords {
 
   @Test
-  public void testForRecordsWithEmptyIterator() {
+  public void testForRecordsWithEmptyList() {
     String splitId = "test-split-1";
-    ClosableIterator<String> emptyIterator = createClosableIterator(Collections.emptyList());
 
-    BatchRecords<String> batchRecords = BatchRecords.forRecords(splitId, emptyIterator, 0, 0L);
+    BatchRecords<String> batchRecords = BatchRecords.forRecords(splitId, Collections.emptyList(), 0, 0L);
 
     assertNotNull(batchRecords);
     assertEquals(splitId, batchRecords.nextSplit());
@@ -57,9 +53,8 @@ public class TestBatchRecords {
   public void testForRecordsWithMultipleRecords() {
     String splitId = "test-split-2";
     List<String> records = Arrays.asList("record1", "record2", "record3");
-    ClosableIterator<String> iterator = createClosableIterator(records);
 
-    BatchRecords<String> batchRecords = BatchRecords.forRecords(splitId, iterator, 0, 0L);
+    BatchRecords<String> batchRecords = BatchRecords.forRecords(splitId, records, 0, 0L);
 
     // Verify split ID
     assertEquals(splitId, batchRecords.nextSplit());
@@ -87,45 +82,12 @@ public class TestBatchRecords {
   }
 
   @Test
-  public void testSeekToStartingOffset() {
-    String splitId = "test-split-3";
-    List<String> records = Arrays.asList("record1", "record2", "record3", "record4", "record5");
-    ClosableIterator<String> iterator = createClosableIterator(records);
-
-    BatchRecords<String> batchRecords = BatchRecords.forRecords(splitId, iterator, 0, 2L);
-    batchRecords.seek(2L);
-
-    // After seeking to offset 2, we should start from record3
-    batchRecords.nextSplit();
-
-    HoodieRecordWithPosition<String> record = batchRecords.nextRecordFromSplit();
-    assertNotNull(record);
-    assertEquals("record3", record.record());
-  }
-
-  @Test
-  public void testSeekBeyondAvailableRecords() {
-    String splitId = "test-split-4";
-    List<String> records = Arrays.asList("record1", "record2");
-    ClosableIterator<String> iterator = createClosableIterator(records);
-
-    BatchRecords<String> batchRecords = BatchRecords.forRecords(splitId, iterator, 0, 0L);
-
-    IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
-      batchRecords.seek(10L);
-    });
-
-    assertTrue(exception.getMessage().contains("Invalid starting record offset"));
-  }
-
-  @Test
   public void testFileOffsetPersistence() {
     String splitId = "test-split-5";
     int fileOffset = 5;
     List<String> records = Arrays.asList("record1", "record2");
-    ClosableIterator<String> iterator = createClosableIterator(records);
 
-    BatchRecords<String> batchRecords = BatchRecords.forRecords(splitId, iterator, fileOffset, 0L);
+    BatchRecords<String> batchRecords = BatchRecords.forRecords(splitId, records, fileOffset, 0L);
     batchRecords.nextSplit();
 
     HoodieRecordWithPosition<String> record1 = batchRecords.nextRecordFromSplit();
@@ -140,12 +102,11 @@ public class TestBatchRecords {
   @Test
   public void testConstructorWithFinishedSplits() {
     String splitId = "test-split-7";
-    List<String> records = Arrays.asList("record1");
-    ClosableIterator<String> iterator = createClosableIterator(records);
+    List<String> records = Collections.singletonList("record1");
     Set<String> finishedSplits = new HashSet<>(Arrays.asList("split1", "split2"));
 
     BatchRecords<String> batchRecords = new BatchRecords<>(
-        splitId, iterator, 0, 0L, finishedSplits);
+        splitId, records, 0, 0L, finishedSplits);
 
     assertEquals(2, batchRecords.finishedSplits().size());
     assertTrue(batchRecords.finishedSplits().contains("split1"));
@@ -157,10 +118,9 @@ public class TestBatchRecords {
     String splitId = "test-split-8";
     long startingRecordOffset = 10L;
     List<String> records = Arrays.asList("A", "B", "C");
-    ClosableIterator<String> iterator = createClosableIterator(records);
 
     BatchRecords<String> batchRecords = BatchRecords.forRecords(
-        splitId, iterator, 0, startingRecordOffset);
+        splitId, records, 0, startingRecordOffset);
     batchRecords.nextSplit();
 
     // First record should be at startingRecordOffset + 1
@@ -177,12 +137,36 @@ public class TestBatchRecords {
   }
 
   @Test
+  public void testOffsetContinuityAcrossMinibatches() {
+    // Two consecutive minibatches of the same split: the reader function threads the running
+    // record offset so that offsets stay monotonic across batch boundaries (batch 2 starts where
+    // batch 1 left off). This mirrors AbstractSplitReaderFunction#readBatch.
+    String splitId = "test-split-continuity";
+
+    BatchRecords<String> batch1 = BatchRecords.forRecords(splitId, Arrays.asList("a", "b", "c"), 0, 0L);
+    batch1.nextSplit();
+    assertEquals(1L, batch1.nextRecordFromSplit().recordOffset());
+    assertEquals(2L, batch1.nextRecordFromSplit().recordOffset());
+    assertEquals(3L, batch1.nextRecordFromSplit().recordOffset());
+    assertNull(batch1.nextRecordFromSplit());
+
+    // batch 2 opens at startingRecordOffset = 3 (the count already consumed by batch 1)
+    BatchRecords<String> batch2 = BatchRecords.forRecords(splitId, Arrays.asList("d", "e"), 0, 3L);
+    batch2.nextSplit();
+    HoodieRecordWithPosition<String> d = batch2.nextRecordFromSplit();
+    assertEquals("d", d.record());
+    assertEquals(4L, d.recordOffset());
+    HoodieRecordWithPosition<String> e = batch2.nextRecordFromSplit();
+    assertEquals("e", e.record());
+    assertEquals(5L, e.recordOffset());
+  }
+
+  @Test
   public void testSplitIdReturnedOnlyOnce() {
     String splitId = "test-split-9";
-    List<String> records = Arrays.asList("record1");
-    ClosableIterator<String> iterator = createClosableIterator(records);
+    List<String> records = Collections.singletonList("record1");
 
-    BatchRecords<String> batchRecords = BatchRecords.forRecords(splitId, iterator, 0, 0L);
+    BatchRecords<String> batchRecords = BatchRecords.forRecords(splitId, records, 0, 0L);
 
     assertEquals(splitId, batchRecords.nextSplit());
     assertNull(batchRecords.nextSplit());
@@ -191,187 +175,64 @@ public class TestBatchRecords {
   }
 
   @Test
-  public void testRecycleClosesIterator() {
+  public void testRecycleIsNoOp() {
+    // The minibatch is fully materialized, so recycle() releases nothing and is a harmless no-op:
+    // it must not throw and must not affect the still-readable records.
     String splitId = "test-split-10";
     List<String> records = Arrays.asList("record1", "record2");
-    MockClosableIterator<String> mockIterator = new MockClosableIterator<>(records);
 
-    BatchRecords<String> batchRecords = BatchRecords.forRecords(splitId, mockIterator, 0, 0L);
+    BatchRecords<String> batchRecords = BatchRecords.forRecords(splitId, records, 0, 0L);
+    batchRecords.nextSplit();
 
     batchRecords.recycle();
 
-    assertTrue(mockIterator.isClosed(), "Iterator should be closed after recycle");
-  }
-
-  @Test
-  public void testRecycleWithNullIterator() {
-    // Test that recycle handles null iterator gracefully (though in practice this shouldn't happen)
-    // This tests the null check in recycle() method
-    String splitId = "test-split-11";
-    ClosableIterator<String> emptyIterator = createClosableIterator(Collections.emptyList());
-
-    BatchRecords<String> batchRecords = BatchRecords.forRecords(splitId, emptyIterator, 0, 0L);
-
-    // Should not throw exception
-    batchRecords.recycle();
+    assertNotNull(batchRecords.nextRecordFromSplit(), "records remain readable after recycle");
+    assertNotNull(batchRecords.nextRecordFromSplit());
+    assertNull(batchRecords.nextRecordFromSplit());
   }
 
   @Test
   public void testNextRecordFromSplitAfterExhaustion() {
     String splitId = "test-split-12";
-    List<String> records = Arrays.asList("record1");
-    ClosableIterator<String> iterator = createClosableIterator(records);
+    List<String> records = Collections.singletonList("record1");
 
-    BatchRecords<String> batchRecords = BatchRecords.forRecords(splitId, iterator, 0, 0L);
+    BatchRecords<String> batchRecords = BatchRecords.forRecords(splitId, records, 0, 0L);
     batchRecords.nextSplit();
 
     // Read the only record
     assertNotNull(batchRecords.nextRecordFromSplit());
 
-    // After exhaustion, should return null
+    // After exhaustion, should return null (and stay null)
     assertNull(batchRecords.nextRecordFromSplit());
     assertNull(batchRecords.nextRecordFromSplit());
-  }
-
-  @Test
-  public void testSeekWithZeroOffset() {
-    String splitId = "test-split-13";
-    List<String> records = Arrays.asList("record1", "record2", "record3");
-    ClosableIterator<String> iterator = createClosableIterator(records);
-
-    BatchRecords<String> batchRecords = BatchRecords.forRecords(splitId, iterator, 0, 0L);
-
-    // Seeking to 0 should not skip any records
-    batchRecords.seek(0L);
-    batchRecords.nextSplit();
-
-    HoodieRecordWithPosition<String> record = batchRecords.nextRecordFromSplit();
-    assertNotNull(record);
-    assertEquals("record1", record.record());
   }
 
   @Test
   public void testConstructorNullValidation() {
     String splitId = "test-split-14";
-    List<String> records = Arrays.asList("record1");
-    ClosableIterator<String> iterator = createClosableIterator(records);
+    List<String> records = Collections.singletonList("record1");
 
     // Test null finishedSplits
-    assertThrows(IllegalArgumentException.class, () -> {
-      new BatchRecords<>(splitId, iterator, 0, 0L, null);
-    });
+    assertThrows(IllegalArgumentException.class, () ->
+        new BatchRecords<>(splitId, records, 0, 0L, null));
 
-    // Test null recordIterator
-    assertThrows(IllegalArgumentException.class, () -> {
-      new BatchRecords<>(splitId, null, 0, 0L, new HashSet<>());
-    });
+    // Test null records
+    assertThrows(IllegalArgumentException.class, () ->
+        new BatchRecords<>(splitId, null, 0, 0L, new HashSet<>()));
   }
 
   @Test
   public void testRecordPositionReusability() {
     String splitId = "test-split-15";
     List<String> records = Arrays.asList("A", "B", "C");
-    ClosableIterator<String> iterator = createClosableIterator(records);
 
-    BatchRecords<String> batchRecords = BatchRecords.forRecords(splitId, iterator, 0, 0L);
+    BatchRecords<String> batchRecords = BatchRecords.forRecords(splitId, records, 0, 0L);
     batchRecords.nextSplit();
 
     HoodieRecordWithPosition<String> pos1 = batchRecords.nextRecordFromSplit();
     HoodieRecordWithPosition<String> pos2 = batchRecords.nextRecordFromSplit();
 
-    // Should reuse the same object
+    // Should reuse the same object (safe because SourceReaderBase emits each record before the next)
     assertTrue(pos1 == pos2, "Should reuse the same HoodieRecordWithPosition object");
-  }
-
-  @Test
-  public void testSeekUpdatesPosition() {
-    String splitId = "test-split-16";
-    List<String> records = Arrays.asList("r1", "r2", "r3", "r4", "r5");
-    ClosableIterator<String> iterator = createClosableIterator(records);
-
-    BatchRecords<String> batchRecords = BatchRecords.forRecords(splitId, iterator, 5, 10L);
-
-    // Seek to offset 3
-    batchRecords.seek(3L);
-
-    batchRecords.nextSplit();
-
-    // After seeking 3, next record should be r4 (4th record)
-    HoodieRecordWithPosition<String> record = batchRecords.nextRecordFromSplit();
-    assertNotNull(record);
-    assertEquals("r4", record.record());
-  }
-
-  @Test
-  public void testIteratorClosedAfterExhaustion() {
-    String splitId = "test-split-17";
-    List<String> records = Arrays.asList("record1");
-    MockClosableIterator<String> mockIterator = new MockClosableIterator<>(records);
-
-    BatchRecords<String> batchRecords = BatchRecords.forRecords(splitId, mockIterator, 0, 0L);
-    batchRecords.nextSplit();
-
-    // Read records
-    batchRecords.nextRecordFromSplit();
-
-    // Trigger close operation
-    batchRecords.nextRecordFromSplit();
-
-    // After exhaustion, nextRecordFromSplit should close the iterator
-    assertTrue(mockIterator.isClosed(), "Iterator should be closed after exhaustion");
-  }
-
-  /**
-   * Helper method to create a ClosableIterator from a list of items.
-   */
-  private <T> ClosableIterator<T> createClosableIterator(List<T> items) {
-    Iterator<T> iterator = items.iterator();
-    return new ClosableIterator<T>() {
-      @Override
-      public void close() {
-        // No-op for test
-      }
-
-      @Override
-      public boolean hasNext() {
-        return iterator.hasNext();
-      }
-
-      @Override
-      public T next() {
-        return iterator.next();
-      }
-    };
-  }
-
-  /**
-   * Mock closable iterator for testing close behavior.
-   */
-  private static class MockClosableIterator<T> implements ClosableIterator<T> {
-    private final Iterator<T> iterator;
-    private boolean closed = false;
-
-    public MockClosableIterator(List<T> items) {
-      this.iterator = items.iterator();
-    }
-
-    @Override
-    public void close() {
-      closed = true;
-    }
-
-    @Override
-    public boolean hasNext() {
-      return iterator.hasNext();
-    }
-
-    @Override
-    public T next() {
-      return iterator.next();
-    }
-
-    public boolean isClosed() {
-      return closed;
-    }
   }
 }

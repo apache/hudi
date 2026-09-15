@@ -28,11 +28,21 @@ import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
-import org.junit.jupiter.api.{Assertions, Test}
+import org.junit.jupiter.api.{AfterEach, Assertions, BeforeEach, Test}
 
 import scala.collection.JavaConverters._
 
 class TestSparkFilterHelper extends HoodieSparkClientTestHarness with SparkAdapterSupport  {
+
+  @BeforeEach
+  def setUp(): Unit = {
+    initSparkContexts()
+  }
+
+  @AfterEach
+  def tearDown(): Unit = {
+    cleanupSparkContexts()
+  }
 
   @Test
   def testConvertInExpression(): Unit = {

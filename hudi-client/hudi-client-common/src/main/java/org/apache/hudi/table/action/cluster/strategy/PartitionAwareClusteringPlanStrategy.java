@@ -24,7 +24,6 @@ import org.apache.hudi.avro.model.HoodieClusteringStrategy;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -41,6 +40,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -82,15 +82,15 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
       // check if max size is reached and create new group, if needed.
       if (totalSizeSoFar + currentSize > writeConfig.getClusteringMaxBytesInGroup() && !currentGroup.isEmpty()) {
         int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
-        log.info("Adding one clustering group " + totalSizeSoFar + " max bytes: "
-            + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
+        log.info("Adding one clustering group {} max bytes: {} num input slices: {} output groups: {}",
+            totalSizeSoFar, writeConfig.getClusteringMaxBytesInGroup(), currentGroup.size(), numOutputGroups);
         fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
         currentGroup = new ArrayList<>();
         totalSizeSoFar = 0;
 
         // if fileSliceGroups's size reach the max group, stop loop
         if (fileSliceGroups.size() >= writeConfig.getClusteringMaxNumGroups()) {
-          log.info("Having generated the maximum number of groups : " + writeConfig.getClusteringMaxNumGroups());
+          log.info("Having generated the maximum number of groups : {}", writeConfig.getClusteringMaxNumGroups());
           partialScheduled = true;
           break;
         }
@@ -104,8 +104,8 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
 
     if (!currentGroup.isEmpty()) {
       int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
-      log.info("Adding final clustering group " + totalSizeSoFar + " max bytes: "
-          + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
+      log.info("Adding final clustering group {} max bytes: {} num input slices: {} output groups: {}",
+          totalSizeSoFar, writeConfig.getClusteringMaxBytesInGroup(), currentGroup.size(), numOutputGroups);
       fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
     }
 
@@ -169,13 +169,15 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
 
     if (StringUtils.isNullOrEmpty(partitionSelected)) {
       // get matched partitions if set
-      partitionPaths = getRegexPatternMatchedPartitions(config, partitions.get());
+      // partitionsInCurrentWindow = incremental partitions + missing partitions in last plan
+      List<String> partitionsInCurrentWindow = partitions.get();
+      partitionPaths = getRegexPatternMatchedPartitions(config, partitionsInCurrentWindow);
+      missingPartitions = getMissingPartitionsFromCurrentWindow(partitionPaths, partitionsInCurrentWindow);
       // filter the partition paths if needed to reduce list status
     } else {
       partitionPaths = Arrays.asList(partitionSelected.split(","));
-      // Users may temporarily set specific partitions for clustering.
-      // Ensure the coherence of the missing partitions.
-      missingPartitions = (List<String>)executor.fetchMissingPartitions(TableServiceType.CLUSTER).getRight();
+      missingPartitions = getMissingPartitionsFromCurrentWindow(partitionPaths,
+          config.isIncrementalTableServiceEnabled() ? partitions.get() : Collections.emptyList());
     }
 
     Pair<List<String>, List<String>> partitionsPair = filterPartitionPaths(getWriteConfig(), partitionPaths);

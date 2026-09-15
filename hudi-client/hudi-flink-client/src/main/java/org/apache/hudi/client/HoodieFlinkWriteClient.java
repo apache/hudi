@@ -35,6 +35,7 @@ import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.FlinkHoodieIndexFactory;
@@ -135,6 +136,20 @@ public class HoodieFlinkWriteClient<T>
     getHeartbeatClient().stop(instantTime);
     if (isStreamingWriteMetadataTable) {
       this.streamingMetadataWriteHandler.cleanResources(instantTime);
+    }
+  }
+
+  /**
+   * Restart the heartbeat for a recommitted instant.
+   *
+   * @param instantTime The instant time
+   */
+  public void restartHeartbeat(String instantTime) {
+    if (getConfig().getFailedWritesCleanPolicy().isLazy()) {
+      getHeartbeatClient().start(instantTime);
+    }
+    if (isStreamingWriteMetadataTable) {
+      this.streamingMetadataWriteHandler.startHeartbeat(instantTime, getHoodieTable());
     }
   }
 
@@ -323,7 +338,9 @@ public class HoodieFlinkWriteClient<T>
     Map<String, List<HoodieRecord<T>>> preppedRecordsByFileId = preppedRecords.stream().parallel()
         .collect(Collectors.groupingBy(r -> r.getCurrentLocation().getFileId()));
     return preppedRecordsByFileId.values().stream().parallel().map(records -> {
-      records.sort(Comparator.comparing(HoodieRecord::getRecordKey));
+      // Only used for the metadata table, whose base files are HFiles ordered by raw UTF-8 bytes,
+      // so sort by UTF-8 bytes rather than String (UTF-16) order for non-ASCII / binary keys.
+      records.sort(Comparator.comparing(HoodieRecord::getRecordKey, StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR));
       HoodieWriteMetadata<List<WriteStatus>> result;
       BucketInfo bucketInfo = new BucketInfo(BucketType.INSERT, records.get(0).getCurrentLocation().getFileId(), records.get(0).getPartitionPath());
       try (AutoCloseableWriteHandle closeableHandle = new AutoCloseableWriteHandle(bucketInfo, records.iterator(), instantTime, table, true)) {
@@ -628,5 +645,16 @@ public class HoodieFlinkWriteClient<T>
     public void close() {
       ((MiniBatchHandle) writeHandle).closeGracefully();
     }
+  }
+
+  /**
+   * Flink keeps the heartbeat active when a commit attempt fails because the coordinator may need to
+   * recommit the instant after failover. Successful commits stop the heartbeat from {@code postCommit},
+   * while {@link #cleanResources(String)} cleans up data-table and metadata-table resources for
+   * instants discarded or resolved by the coordinator. Therefore this generic hook is intentionally
+   * a no-op.
+   */
+  @Override
+  public void releaseResources(String instantTime) {
   }
 }

@@ -122,7 +122,7 @@ public class IOUtils {
 
     // TODO(vc): This needs to be revisited
     if (mergeHandle.getPartitionPath() == null) {
-      log.info("Upsert Handle has partition path as null " + mergeHandle.getOldFilePath() + ", " + mergeHandle.getWriteStatuses());
+      log.info("Upsert Handle has partition path as null {}, {}", mergeHandle.getOldFilePath(), mergeHandle.getWriteStatuses());
     }
 
     return Collections.singletonList(mergeHandle.close()).iterator();

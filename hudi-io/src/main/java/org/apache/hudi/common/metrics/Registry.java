@@ -98,13 +98,12 @@ public interface Registry extends Serializable {
     Registry registry = REGISTRY_MAP.computeIfAbsent(key, k -> {
       String registryFullName = tableName.isEmpty() ? registryName : tableName + "." + registryName;
       Registry r = (Registry) ReflectionUtils.loadClass(clazz, registryFullName);
-      LOG.info("Created a new registry " + r);
+      LOG.info("Created a new registry {}", r);
       return r;
     });
 
     if (!registry.getClass().getName().equals(clazz)) {
-      LOG.error("Registry with name " + registryName + " already exists with a different class " + registry.getClass().getName()
-          + " than the requested class " + clazz);
+      LOG.error("Registry with name {} already exists with a different class {} than the requested class {}", registryName, registry.getClass().getName(), clazz);
     }
     return registry;
   }

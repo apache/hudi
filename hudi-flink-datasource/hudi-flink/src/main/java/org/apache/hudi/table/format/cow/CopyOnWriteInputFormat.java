@@ -18,12 +18,19 @@
 
 package org.apache.hudi.table.format.cow;
 
+import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.source.ExpressionPredicates.Predicate;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.format.FilePathUtils;
+import org.apache.hudi.table.format.HoodieRowDataLanceReader;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.RecordIterators;
+import org.apache.hudi.util.HoodieSchemaConverter;
+import org.apache.hudi.util.StreamerUtil;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.api.common.io.FileInputFormat;
@@ -33,6 +40,7 @@ import org.apache.flink.api.common.io.compression.InflaterInputStreamFactory;
 import org.apache.flink.core.fs.FileInputSplit;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.formats.parquet.utils.SerializableConfiguration;
+import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
 import org.apache.hadoop.conf.Configuration;
@@ -116,30 +124,48 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
 
   @Override
   public void open(FileInputSplit fileSplit) throws IOException {
-    LinkedHashMap<String, Object> partObjects = FilePathUtils.generatePartitionSpecs(
-        fileSplit.getPath().getPath(),
-        Arrays.asList(fullFieldNames),
-        Arrays.asList(fullFieldTypes),
-        this.partDefaultName,
-        this.partPathField,
-        this.hiveStylePartitioning
-    );
-
-    this.itr = RecordIterators.getParquetRecordIterator(
-        internalSchemaManager,
-        utcTimestamp,
-        true,
-        conf.conf(),
-        fullFieldNames,
-        fullFieldTypes,
-        partObjects,
-        selectedFields,
-        2048,
-        fileSplit.getPath(),
-        fileSplit.getStart(),
-        fileSplit.getLength(),
-        predicates);
+    if (fileSplit.getPath().getName().endsWith(HoodieFileFormat.LANCE.getFileExtension())) {
+      this.itr = getLanceRecordIterator(fileSplit.getPath());
+    } else {
+      LinkedHashMap<String, Object> partObjects = FilePathUtils.generatePartitionSpecs(
+          fileSplit.getPath().getPath(),
+          Arrays.asList(fullFieldNames),
+          Arrays.asList(fullFieldTypes),
+          this.partDefaultName,
+          this.partPathField,
+          this.hiveStylePartitioning
+      );
+      this.itr = RecordIterators.getParquetRecordIterator(
+          internalSchemaManager,
+          utcTimestamp,
+          true,
+          conf.conf(),
+          fullFieldNames,
+          fullFieldTypes,
+          partObjects,
+          selectedFields,
+          2048,
+          fileSplit.getPath(),
+          fileSplit.getStart(),
+          fileSplit.getLength(),
+          predicates);
+    }
     this.currentReadCount = 0L;
+  }
+
+  private ClosableIterator<RowData> getLanceRecordIterator(Path path) {
+    DataType selectedDataType = DataTypes.ROW(Arrays.stream(selectedFields)
+            .mapToObj(i -> DataTypes.FIELD(fullFieldNames[i], fullFieldTypes[i]))
+            .toArray(DataTypes.Field[]::new))
+        .bridgedTo(RowData.class);
+    HoodieSchema requestedSchema = HoodieSchemaConverter.convertToSchema(selectedDataType.getLogicalType());
+    HoodieRowDataLanceReader reader = new HoodieRowDataLanceReader(new StoragePath(path.toString()), StreamerUtil.getLanceReadConfig(conf.conf()));
+    try {
+      return reader.getRowDataIterator(selectedDataType, requestedSchema);
+    } catch (RuntimeException e) {
+      reader.close();
+      throw new HoodieException("Failed to get iterator from lance reader", e);
+    }
   }
 
   @Override
@@ -379,6 +405,10 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
   }
 
   private boolean testForUnsplittable(FileStatus pathFile) {
+    if (pathFile.getPath().getName().endsWith(HoodieFileFormat.LANCE.getFileExtension())) {
+      unsplittable = true;
+      return true;
+    }
     if (getInflaterInputStreamFactory(pathFile.getPath()) != null) {
       unsplittable = true;
       return true;

@@ -31,7 +31,6 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -57,6 +56,7 @@ import org.apache.hudi.utilities.streamer.HoodieStreamer;
 import org.apache.hudi.utilities.testutils.KafkaTestUtils;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -67,8 +67,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -84,16 +82,17 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 
+import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_KEY_V2;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Slf4j
 public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieDeltaStreamerTestBase.class);
 
   static final Random RANDOM = new Random();
   static final String PROPS_FILENAME_TEST_SOURCE = "test-source.properties";
@@ -706,7 +705,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     static void assertAtleastNCompactionCommits(int minExpected, String tablePath) {
       HoodieTableMetaClient meta = createMetaClient(storage, tablePath);
       HoodieTimeline timeline = meta.getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants();
-      LOG.info("Timeline Instants={}", meta.getActiveTimeline().getInstants());
+      log.info("Timeline Instants={}", meta.getActiveTimeline().getInstants());
       int numCompactionCommits = timeline.countInstants();
       assertTrue(minExpected <= numCompactionCommits, "Got=" + numCompactionCommits + ", exp >=" + minExpected);
     }
@@ -714,7 +713,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     static void assertAtleastNDeltaCommits(int minExpected, String tablePath) {
       HoodieTableMetaClient meta = createMetaClient(storage.getConf(), tablePath);
       HoodieTimeline timeline = meta.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants();
-      LOG.info("Timeline Instants={}", meta.getActiveTimeline().getInstants());
+      log.info("Timeline Instants={}", meta.getActiveTimeline().getInstants());
       int numDeltaCommits = timeline.countInstants();
       assertTrue(minExpected <= numDeltaCommits, "Got=" + numDeltaCommits + ", exp >=" + minExpected);
     }
@@ -722,7 +721,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     static void assertAtleastNCompactionCommitsAfterCommit(int minExpected, String lastSuccessfulCommit, String tablePath) {
       HoodieTableMetaClient meta = createMetaClient(storage.getConf(), tablePath);
       HoodieTimeline timeline = meta.getActiveTimeline().getCommitAndReplaceTimeline().findInstantsAfter(lastSuccessfulCommit).filterCompletedInstants();
-      LOG.info("Timeline Instants={}", meta.getActiveTimeline().getInstants());
+      log.info("Timeline Instants={}", meta.getActiveTimeline().getInstants());
       int numCompactionCommits = timeline.countInstants();
       assertTrue(minExpected <= numCompactionCommits, "Got=" + numCompactionCommits + ", exp >=" + minExpected);
     }
@@ -730,7 +729,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     static void assertAtleastNDeltaCommitsAfterCommit(int minExpected, String lastSuccessfulCommit, String tablePath) {
       HoodieTableMetaClient meta = createMetaClient(storage.getConf(), tablePath);
       HoodieTimeline timeline = meta.reloadActiveTimeline().getDeltaCommitTimeline().findInstantsAfter(lastSuccessfulCommit).filterCompletedInstants();
-      LOG.info("Timeline Instants={}", meta.getActiveTimeline().getInstants());
+      log.info("Timeline Instants={}", meta.getActiveTimeline().getInstants());
       int numDeltaCommits = timeline.countInstants();
       assertTrue(minExpected <= numDeltaCommits, "Got=" + numDeltaCommits + ", exp >=" + minExpected);
     }
@@ -742,10 +741,24 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
       HoodieInstant lastInstant = timeline.lastInstant().get();
       HoodieCommitMetadata commitMetadata = timeline.readCommitMetadata(lastInstant);
       assertEquals(totalCommits, timeline.countInstants());
+      assertEquals(expected, commitMetadata.getMetadata(HoodieStreamer.CHECKPOINT_KEY));
+      assertNull(commitMetadata.getMetadata(STREAMER_CHECKPOINT_KEY_V2));
+      return lastInstant;
+    }
+
+    static HoodieInstant assertCommitMetadataForIncrSource(String expected, String tablePath, int totalCommits)
+        throws IOException {
+      HoodieTableMetaClient meta = createMetaClient(storage.getConf(), tablePath);
+      HoodieTimeline timeline = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+      HoodieInstant lastInstant = timeline.lastInstant().get();
+      HoodieCommitMetadata commitMetadata = timeline.readCommitMetadata(lastInstant);
+      assertEquals(totalCommits, timeline.countInstants());
       if (meta.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
-        assertEquals(expected, commitMetadata.getMetadata(StreamerCheckpointV2.STREAMER_CHECKPOINT_KEY_V2));
+        assertEquals(expected, commitMetadata.getMetadata(STREAMER_CHECKPOINT_KEY_V2));
+        assertNull(commitMetadata.getMetadata(HoodieStreamer.CHECKPOINT_KEY));
       } else {
         assertEquals(expected, commitMetadata.getMetadata(HoodieStreamer.CHECKPOINT_KEY));
+        assertNull(commitMetadata.getMetadata(STREAMER_CHECKPOINT_KEY_V2));
       }
       return lastInstant;
     }
@@ -757,9 +770,9 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
           try {
             Thread.sleep(2000);
             ret = condition.apply(true);
-            LOG.info("Condition completed successfully");
+            log.info("Condition completed successfully");
           } catch (Throwable error) {
-            LOG.debug("Got error waiting for condition", error);
+            log.debug("Got error waiting for condition", error);
             ret = false;
           }
         }
@@ -777,7 +790,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
         try {
           Thread.sleep(5);
         } catch (Throwable error) {
-          LOG.debug("Got error waiting for condition", error);
+          log.debug("Got error waiting for condition", error);
         }
       }
     }
@@ -785,7 +798,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     static void assertAtLeastNCommits(int minExpected, String tablePath) {
       HoodieTableMetaClient meta = createMetaClient(storage.getConf(), tablePath);
       HoodieTimeline timeline = meta.getActiveTimeline().filterCompletedInstants();
-      LOG.info("Timeline Instants={}", meta.getActiveTimeline().getInstants());
+      log.info("Timeline Instants={}", meta.getActiveTimeline().getInstants());
       int numDeltaCommits = timeline.countInstants();
       assertTrue(minExpected <= numDeltaCommits, "Got=" + numDeltaCommits + ", exp >=" + minExpected);
     }
@@ -793,7 +806,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     static void assertAtLeastNReplaceCommits(int minExpected, String tablePath) {
       HoodieTableMetaClient meta = createMetaClient(storage.getConf(), tablePath);
       HoodieTimeline timeline = meta.getActiveTimeline().getCompletedReplaceTimeline();
-      LOG.info("Timeline Instants={}", meta.getActiveTimeline().getInstants());
+      log.info("Timeline Instants={}", meta.getActiveTimeline().getInstants());
       int numDeltaCommits = timeline.countInstants();
       assertTrue(minExpected <= numDeltaCommits, "Got=" + numDeltaCommits + ", exp >=" + minExpected);
     }
@@ -801,7 +814,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     static void assertPendingIndexCommit(String tablePath) {
       HoodieTableMetaClient meta = createMetaClient(storage.getConf(), tablePath);
       HoodieTimeline timeline = meta.reloadActiveTimeline().getAllCommitsTimeline().filterPendingIndexTimeline();
-      LOG.info("Timeline Instants={}", meta.getActiveTimeline().getInstants());
+      log.info("Timeline Instants={}", meta.getActiveTimeline().getInstants());
       int numIndexCommits = timeline.countInstants();
       assertEquals(1, numIndexCommits, "Got=" + numIndexCommits + ", exp=1");
     }
@@ -809,7 +822,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     static void assertCompletedIndexCommit(String tablePath) {
       HoodieTableMetaClient meta = createMetaClient(storage.getConf(), tablePath);
       HoodieTimeline timeline = meta.reloadActiveTimeline().getAllCommitsTimeline().filterCompletedIndexTimeline();
-      LOG.info("Timeline Instants={}", meta.getActiveTimeline().getInstants());
+      log.info("Timeline Instants={}", meta.getActiveTimeline().getInstants());
       int numIndexCommits = timeline.countInstants();
       assertEquals(1, numIndexCommits, "Got=" + numIndexCommits + ", exp=1");
     }
@@ -817,7 +830,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     static void assertNoReplaceCommits(String tablePath) {
       HoodieTableMetaClient meta = createMetaClient(storage.getConf(), tablePath);
       HoodieTimeline timeline = meta.getActiveTimeline().getCompletedReplaceTimeline();
-      LOG.info("Timeline Instants={}", meta.getActiveTimeline().getInstants());
+      log.info("Timeline Instants={}", meta.getActiveTimeline().getInstants());
       int numDeltaCommits = timeline.countInstants();
       assertEquals(0, numDeltaCommits, "Got=" + numDeltaCommits + ", exp =" + 0);
     }
@@ -825,7 +838,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     static void assertAtLeastNClusterRequests(int minExpected, String tablePath) {
       HoodieTableMetaClient meta = createMetaClient(storage.getConf(), tablePath);
       HoodieTimeline timeline = meta.getActiveTimeline().filterPendingClusteringTimeline();
-      LOG.info("Timeline Instants={}", meta.getActiveTimeline().getInstants());
+      log.info("Timeline Instants={}", meta.getActiveTimeline().getInstants());
       int numDeltaCommits = timeline.countInstants();
       assertTrue(minExpected <= numDeltaCommits, "Got=" + numDeltaCommits + ", exp >=" + minExpected);
     }
@@ -833,7 +846,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     static void assertAtLeastNCommitsAfterRollback(int minExpectedRollback, int minExpectedCommits, String tablePath) {
       HoodieTableMetaClient meta = createMetaClient(storage.getConf(), tablePath);
       HoodieTimeline timeline = meta.getActiveTimeline().getRollbackTimeline().filterCompletedInstants();
-      LOG.info("Rollback Timeline Instants={}", meta.getActiveTimeline().getInstants());
+      log.info("Rollback Timeline Instants={}", meta.getActiveTimeline().getInstants());
       int numRollbackCommits = timeline.countInstants();
       assertTrue(minExpectedRollback <= numRollbackCommits, "Got=" + numRollbackCommits + ", exp >=" + minExpectedRollback);
       HoodieInstant firstRollback = timeline.getInstants().get(0);

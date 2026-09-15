@@ -18,6 +18,7 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.adapter.DataTypeAdapter;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
@@ -147,6 +148,14 @@ public class RowDataToAvroConverters {
 
               @Override
               public Object convert(HoodieSchema schema, Object object) {
+                // The BLOB `type` discriminator is a STRING in Flink but an ENUM in Avro.
+                // Detect that at call time from the HoodieSchema so the converter stays
+                // reusable across any row shape — not hard-wired by Flink row structure alone.
+                HoodieSchema nonNullSchema = schema.getNonNullType();
+                if (nonNullSchema.getType() == HoodieSchemaType.ENUM) {
+                  return new GenericData.EnumSymbol(
+                      nonNullSchema.toAvroSchema(), object.toString());
+                }
                 return new Utf8(((BinaryStringData) object).toBytes());
               }
             };
@@ -239,6 +248,10 @@ public class RowDataToAvroConverters {
         break;
       case RAW:
       default:
+        if (DataTypeAdapter.isVariantType(type)) {
+          converter = createVariantConverter();
+          break;
+        }
         throw new UnsupportedOperationException("Unsupported type: " + type);
     }
 
@@ -354,6 +367,29 @@ public class RowDataToAvroConverters {
           map.put(key, value);
         }
         return map;
+      }
+    };
+  }
+
+  /**
+   * Creates a converter for Flink 2.1+ VARIANT LogicalType. The converter receives a Flink
+   * {@code Variant} object at runtime and extracts the raw metadata/value byte arrays,
+   * then packs them into an Avro GenericRecord with the Variant schema.
+   *
+   * <p>No shredded-variant check is needed here: {@code HoodieSchemaConverter.convertVariant()}
+   * already rejects shredded variants before a Flink type or converter is ever constructed,
+   * and Flink 2.1 itself only supports unshredded variants (FLIP-521).
+   */
+  private static RowDataToAvroConverter createVariantConverter() {
+    return new RowDataToAvroConverter() {
+      private static final long serialVersionUID = 1L;
+
+      @Override
+      public Object convert(HoodieSchema schema, Object object) {
+        final GenericRecord record = new GenericData.Record(schema.toAvroSchema());
+        record.put(HoodieSchema.Variant.VARIANT_METADATA_FIELD, ByteBuffer.wrap(DataTypeAdapter.getVariantMetadata(object)));
+        record.put(HoodieSchema.Variant.VARIANT_VALUE_FIELD, ByteBuffer.wrap(DataTypeAdapter.getVariantValue(object)));
+        return record;
       }
     };
   }

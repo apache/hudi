@@ -18,10 +18,13 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -254,6 +257,39 @@ public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
     for (String p : fullPartitionPaths) {
       Assertions.assertEquals(0, partitionToFilesMap.get(p).size());
     }
+  }
+
+  @Test
+  public void testMetadataIndexOperationsAreUnsupported() {
+    HoodieLocalEngineContext localEngineContext =
+        new HoodieLocalEngineContext(metaClient.getStorageConf());
+    FileSystemBackedTableMetadata metadata = new FileSystemBackedTableMetadata(
+        localEngineContext, metaClient.getTableConfig(), metaClient.getStorage(), basePath);
+
+    Assertions.assertThrows(UnsupportedOperationException.class, metadata::getSyncedInstantTime);
+    Assertions.assertThrows(UnsupportedOperationException.class, metadata::getLatestCompactionTime);
+    Assertions.assertThrows(HoodieMetadataException.class,
+        () -> metadata.getBloomFilter("", "file.parquet", MetadataPartitionType.BLOOM_FILTERS.getPartitionPath()));
+    Assertions.assertThrows(HoodieMetadataException.class,
+        () -> metadata.getBloomFilters(Collections.emptyList(), MetadataPartitionType.BLOOM_FILTERS.getPartitionPath()));
+    Assertions.assertThrows(HoodieMetadataException.class,
+        () -> metadata.getColumnStats(Collections.emptyList(), "column"));
+    Assertions.assertThrows(HoodieMetadataException.class,
+        () -> metadata.getColumnStats(Collections.emptyList(), Collections.singletonList("column")));
+    Assertions.assertThrows(HoodieMetadataException.class,
+        () -> metadata.getRecordsByKeyPrefixes(
+            HoodieListData.eager(Collections.emptyList()), MetadataPartitionType.FILES.getPartitionPath(), false));
+    Assertions.assertThrows(HoodieMetadataException.class,
+        () -> metadata.readRecordIndexLocationsWithKeys(HoodieListData.eager(Collections.emptyList())));
+    Assertions.assertThrows(HoodieMetadataException.class,
+        () -> metadata.readRecordIndexLocationsWithKeys(HoodieListData.eager(Collections.emptyList()), Option.empty()));
+    Assertions.assertThrows(HoodieMetadataException.class,
+        () -> metadata.readSecondaryIndexLocationsWithKeys(
+            HoodieListData.eager(Collections.emptyList()), MetadataPartitionType.SECONDARY_INDEX.getPartitionPath()));
+    Assertions.assertThrows(HoodieMetadataException.class,
+        () -> metadata.getNumFileGroupsForPartition(MetadataPartitionType.FILES));
+    Assertions.assertThrows(HoodieMetadataException.class,
+        () -> metadata.getBucketizedFileGroupsForPartitionedRLI(MetadataPartitionType.RECORD_INDEX));
   }
 
 }

@@ -20,6 +20,7 @@ package org.apache.spark.sql.hudi.command
 import org.apache.hudi.{HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.hudi.DataSourceWriteOptions.{SPARK_SQL_OPTIMIZED_WRITES, SPARK_SQL_WRITES_PREPPED_KEY}
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.keygen.KeyGenUtils
 
 import org.apache.spark.sql
 import org.apache.spark.sql._
@@ -34,6 +35,8 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.command.HoodieCommandMetrics.updateCommitMetrics
 import org.apache.spark.sql.hudi.command.HoodieLeafRunnableCommand.stripMetaFieldAttributes
+
+import scala.collection.JavaConverters._
 
 case class DeleteHoodieTableCommand(catalogTable: HoodieCatalogTable, query: LogicalPlan, config: Map[String, String]) extends DataWritingCommand
   with SparkAdapterSupport
@@ -81,7 +84,7 @@ object DeleteHoodieTableCommand extends SparkAdapterSupport with ProvidesHoodieC
     }
 
     val recordKeysStr = config.getOrElse(HoodieTableConfig.RECORDKEY_FIELDS.key(), "")
-    val recordKeys = recordKeysStr.split(",").filter(_.nonEmpty)
+    val recordKeys = KeyGenUtils.getRecordKeyFields(recordKeysStr).asScala.toSeq
 
     // get all columns which are used in condition
     val conditionColumns = if (condition == null) {

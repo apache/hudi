@@ -36,6 +36,7 @@ import org.apache.hadoop.hive.conf.HiveConf;
 
 import java.util.Properties;
 
+import static org.apache.hudi.common.config.HoodieCommonConfig.BASE_PATH;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_AUTO_CREATE_DATABASE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_IGNORE_EXCEPTIONS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
@@ -101,6 +102,7 @@ public class HiveSyncContext {
   @VisibleForTesting
   public static Properties buildSyncConfig(Configuration conf) {
     TypedProperties props = StreamerUtil.flinkConf2TypedProperties(conf);
+    props.setPropertyIfNonNull(BASE_PATH.key(), conf.get(FlinkOptions.PATH));
     props.setPropertyIfNonNull(META_SYNC_BASE_PATH.key(), conf.get(FlinkOptions.PATH));
     props.setPropertyIfNonNull(META_SYNC_BASE_FILE_FORMAT.key(), conf.get(FlinkOptions.HIVE_SYNC_FILE_FORMAT));
     props.setPropertyIfNonNull(META_SYNC_DATABASE_NAME.key(), conf.get(FlinkOptions.HIVE_SYNC_DB));

@@ -23,6 +23,8 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
@@ -33,12 +35,14 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 
 import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 public class DatasetBulkInsertOverwriteCommitActionExecutor extends BaseDatasetBulkInsertCommitActionExecutor {
@@ -54,6 +58,46 @@ public class DatasetBulkInsertOverwriteCommitActionExecutor extends BaseDatasetB
         getCommitActionType(), instantTime), Option.empty());
     return Option.of(HoodieDatasetBulkInsertHelper
         .bulkInsert(records, instantTime, table, writeConfig, arePartitionRecordsSorted, false));
+  }
+
+  /**
+   * For INSERT_OVERWRITE: enumerate latest file groups in the targeted partitions so the caller
+   * can reject overlap with pending clustering before the bulk-insert materializes. Mirrors
+   * {@code SparkInsertOverwriteCommitActionExecutor#getFileGroupsBeingReplaced}; called by the
+   * base class on the prepared dataset (after {@code prepareForBulkInsert} populates the
+   * {@code _hoodie_partition_path} meta field), so dynamic partition resolution can read it.
+   */
+  @Override
+  protected Set<HoodieFileGroupId> getFileGroupsBeingReplaced(Dataset<Row> preparedRecords) {
+    List<String> partitionPaths = resolveTargetPartitions(preparedRecords);
+    if (partitionPaths.isEmpty()) {
+      return Collections.emptySet();
+    }
+    return partitionPaths.stream()
+        .flatMap(partitionPath -> table.getSliceView().getLatestFileSlices(partitionPath)
+            .map(FileSlice::getFileGroupId))
+        .collect(Collectors.toSet());
+  }
+
+  /**
+   * Resolves the partition paths this overwrite will replace. Subclasses override for the
+   * table-wide variant (enumerate every partition).
+   */
+  protected List<String> resolveTargetPartitions(Dataset<Row> preparedRecords) {
+    if (!table.isPartitioned()) {
+      return Collections.singletonList(StringUtils.EMPTY_STRING);
+    }
+    String staticOverwritePartitionPaths = writeConfig.getStringOrDefault(HoodieInternalConfig.STATIC_OVERWRITE_PARTITION_PATHS);
+    if (StringUtils.nonEmpty(staticOverwritePartitionPaths)) {
+      return Arrays.asList(staticOverwritePartitionPaths.split(","));
+    }
+    // Dynamic partition path: read the populated _hoodie_partition_path meta field. The base
+    // class invokes this hook after HoodieDatasetBulkInsertHelper.prepareForBulkInsert, so the
+    // field is guaranteed to be present and populated by the configured key generator.
+    return preparedRecords.select(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
+        .distinct()
+        .as(Encoders.STRING())
+        .collectAsList();
   }
 
   @Override

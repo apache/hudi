@@ -117,7 +117,7 @@ public class ClusteringPlanOperator extends AbstractStreamOperator<ClusteringPla
       scheduleClustering(table, checkpointId);
     } catch (Throwable throwable) {
       // make it fail-safe
-      log.error("Error while scheduling clustering plan for checkpoint: " + checkpointId, throwable);
+      log.error("Error while scheduling clustering plan for checkpoint: {}", checkpointId, throwable);
     }
   }
 
@@ -135,7 +135,7 @@ public class ClusteringPlanOperator extends AbstractStreamOperator<ClusteringPla
 
     if (!firstRequested.isPresent()) {
       // do nothing.
-      log.info("No clustering plan for checkpoint " + checkpointId);
+      log.info("No clustering plan for checkpoint {}", checkpointId);
       return;
     }
 
@@ -158,7 +158,7 @@ public class ClusteringPlanOperator extends AbstractStreamOperator<ClusteringPla
     if (clusteringPlan == null || (clusteringPlan.getInputGroups() == null)
         || (clusteringPlan.getInputGroups().isEmpty())) {
       // do nothing.
-      log.info("Empty clustering plan for instant " + clusteringInstantTime);
+      log.info("Empty clustering plan for instant {}", clusteringInstantTime);
     } else {
       // Mark instant as clustering inflight
       ClusteringUtils.transitionClusteringOrReplaceRequestedToInflight(clusteringInstant, Option.empty(), table.getActiveTimeline());

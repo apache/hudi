@@ -28,6 +28,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.index.bucket.HoodieBucketIndex;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
@@ -52,7 +53,9 @@ public class SparkBucketIndexPartitioner<T> extends
     SparkHoodiePartitioner<T> {
 
   private final int numBuckets;
-  private final String indexKeyField;
+  // parsed once; the per-record getPartition path uses the List overload of getBucketId so the
+  // comma-separated config string is not re-split per record
+  private final List<String> indexKeyFieldList;
   private final int totalPartitionPaths;
   private final List<String> partitionPaths;
   /**
@@ -80,7 +83,7 @@ public class SparkBucketIndexPartitioner<T> extends
               + table.getIndex().getClass().getSimpleName());
     }
     this.numBuckets = ((HoodieBucketIndex) table.getIndex()).getNumBuckets();
-    this.indexKeyField = config.getBucketIndexHashField();
+    this.indexKeyFieldList = KeyGenUtils.getIndexKeyFields(config.getBucketIndexHashField());
     this.totalPartitionPaths = profile.getPartitionPaths().size();
     partitionPaths = new ArrayList<>(profile.getPartitionPaths());
     partitionPathOffset = new HashMap<>();
@@ -129,7 +132,7 @@ public class SparkBucketIndexPartitioner<T> extends
     Option<HoodieRecordLocation> location = keyLocation._2;
     int bucketId = location.isPresent()
         ? BucketIdentifier.bucketIdFromFileId(location.get().getFileId())
-        : BucketIdentifier.getBucketId(keyLocation._1.getRecordKey(), indexKeyField, numBuckets);
+        : BucketIdentifier.getBucketId(keyLocation._1.getRecordKey(), indexKeyFieldList, numBuckets);
     return partitionPathOffset.get(partitionPath) + bucketId;
   }
 }

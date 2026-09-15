@@ -175,7 +175,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
       doCommit(instant, clusteringPlan, events);
     } catch (Throwable throwable) {
       // make it fail-safe
-      log.error("Error while committing clustering instant: " + instant, throwable);
+      log.error("Error while committing clustering instant: {}", instant, throwable);
     } finally {
       // reset the status
       reset(instant);

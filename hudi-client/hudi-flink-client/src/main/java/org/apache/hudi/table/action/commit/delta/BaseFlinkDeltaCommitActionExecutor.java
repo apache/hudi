@@ -51,7 +51,7 @@ public abstract class BaseFlinkDeltaCommitActionExecutor<T>
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
+  public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId, long numUpdates, Iterator<HoodieRecord<T>> recordItr) {
     FlinkAppendHandle appendHandle = (FlinkAppendHandle) writeHandle;
     appendHandle.doAppend();
     List<WriteStatus> writeStatuses = appendHandle.close();

@@ -58,6 +58,10 @@ public class KafkaSourceConfig extends HoodieConfig {
           + ". Default type is " + KAFKA_CHECKPOINT_TYPE_STRING + ". "
           + "For type " + KAFKA_CHECKPOINT_TYPE_STRING + ", checkpoint should be provided as: topicName,0:offset0,1:offset1,2:offset2. "
           + "For type " + KAFKA_CHECKPOINT_TYPE_TIMESTAMP + ", checkpoint should be provided as long value of desired timestamp. "
+          + "If a partition has no record with a timestamp at or after the checkpoint (either the partition is empty, "
+          + "all records predate the checkpoint, or messages use a pre-0.10.0 format that has no timestamp), that "
+          + "partition resumes from its end offset (the tip) rather than from the beginning; records already in "
+          + "that partition that predate the checkpoint are skipped and will not be ingested. "
           + "For type " + KAFKA_CHECKPOINT_TYPE_SINGLE_OFFSET + ", we assume that topic consists of a single partition, "
           + "so checkpoint should be provided as long value of desired offset.");
 

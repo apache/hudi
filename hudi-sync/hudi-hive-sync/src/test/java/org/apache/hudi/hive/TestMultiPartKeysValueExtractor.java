@@ -21,6 +21,8 @@ package org.apache.hudi.hive;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -39,5 +41,18 @@ public class TestMultiPartKeysValueExtractor {
     assertEquals(expected, valueExtractor.extractPartitionValuesInPath("2021-04-25/04"));
     // Test extract hive style partition path
     assertEquals(expected, valueExtractor.extractPartitionValuesInPath("ds=2021-04-25/hh=04"));
+  }
+
+  @Test
+  public void testValuesContainingEquals() {
+    MultiPartKeysValueExtractor valueExtractor = new MultiPartKeysValueExtractor();
+    // Only the first '=' separates key from value, so a value containing '=' is kept intact.
+    assertEquals(Collections.singletonList("a=b"), valueExtractor.extractPartitionValuesInPath("k=a=b"));
+    // base64-encoded value with '=' padding must not be truncated
+    assertEquals(Collections.singletonList("YWJjZA=="), valueExtractor.extractPartitionValuesInPath("col=YWJjZA=="));
+    // empty value
+    assertEquals(Collections.singletonList(""), valueExtractor.extractPartitionValuesInPath("dt="));
+    // multiple hive-style parts whose values contain '='
+    assertEquals(Arrays.asList("a=b", "YWJj=="), valueExtractor.extractPartitionValuesInPath("k1=a=b/k2=YWJj=="));
   }
 }

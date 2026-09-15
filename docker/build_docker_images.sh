@@ -54,6 +54,7 @@ done
 if [ "$MULTI_ARCH" = true ]; then
   DOCKER_PLATFORM='linux/amd64,linux/arm64'
   echo "Building multi-arch images (amd64 + arm64)"
+  export BUILDX_EXPERIMENTAL=1
 else
   ARCHITECTURE=$(uname -m)
   case "$ARCHITECTURE" in
@@ -70,9 +71,8 @@ else
   esac
   export DOCKER_DEFAULT_PLATFORM="$DOCKER_PLATFORM"
 fi
-export BUILDX_EXPERIMENTAL=1
 # Get the directory of this script for relative paths
-SCRIPT_DIR=$(cd $(dirname "$0") && pwd)
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 
 # Determine VERSION_TAG (command line arg or Maven project version)
 if [ -n "$VERSION_TAG_ARG" ]; then
@@ -93,7 +93,11 @@ DOCKER_CONTEXT_DIR="hoodie/hadoop"
 
 # Select Java base image based on Spark version (Spark 4.0+ requires Java 17)
 SPARK_MAJOR=$(echo "$SPARK_VERSION" | cut -d. -f1)
-if [ "$SPARK_MAJOR" -ge 4 ] 2>/dev/null; then
+if ! [[ "$SPARK_MAJOR" =~ ^[0-9]+$ ]]; then
+  echo "Error: invalid SPARK_VERSION='$SPARK_VERSION'" >&2
+  exit 1
+fi
+if [ "$SPARK_MAJOR" -ge 4 ]; then
   BASE_IMAGE_DIR="base_java17"
   BASE_JAVA_TAG="java17"
   echo "Using Java 17 base image for Spark ${SPARK_VERSION}"
@@ -103,8 +107,51 @@ else
   echo "Using Java 11 base image for Spark ${SPARK_VERSION}"
 fi
 
+# Select hadoop-aws/aws-sdk versions from the Hadoop line each Spark distribution bundles:
+# the jars land on Spark's classpath next to its own hadoop-client, not the cluster Hadoop.
+# hadoop-aws 3.4+ is built against AWS SDK v2 (software.amazon.awssdk:bundle); 3.3.x uses
+# SDK v1 (com.amazonaws:aws-java-sdk-bundle). spark_base picks the artifact from the SDK major.
+# hadoop-aws 3.4.2+ also compiles against analyticsaccelerator-s3 for its analytics input
+# stream: opt-in via fs.s3a.input.stream.type in 3.4.2, the default from 3.5.0 on, so S3A
+# init fails there without the jar. Each arm pins the version its hadoop-project pom declares.
+SPARK_MAJOR_MINOR=$(echo "$SPARK_VERSION" | cut -d. -f1,2)
+case "$SPARK_MAJOR_MINOR" in
+  4.0)
+    # Spark 4.0.x bundles Hadoop 3.4.1
+    HADOOP_AWS_VERSION="3.4.1"
+    AWS_SDK_VERSION="2.24.6"
+    ANALYTICS_ACCELERATOR_VERSION="" # no analytics stream type before hadoop-aws 3.4.2
+    ;;
+  4.1)
+    # Spark 4.1.x bundles Hadoop 3.4.2
+    HADOOP_AWS_VERSION="3.4.2"
+    AWS_SDK_VERSION="2.29.52"
+    ANALYTICS_ACCELERATOR_VERSION="1.2.1"
+    ;;
+  4.2)
+    # Spark 4.2.x bundles Hadoop 3.5.0
+    HADOOP_AWS_VERSION="3.5.0"
+    AWS_SDK_VERSION="2.35.4"
+    ANALYTICS_ACCELERATOR_VERSION="1.3.1"
+    ;;
+  *)
+    if [ "$SPARK_MAJOR" -ge 4 ]; then
+      # Unmapped 4+ line (4.3, 5.x, ...): fall back to the newest mapped pairing and say so,
+      # rather than silently shipping hadoop-aws from an older Hadoop line than Spark bundles.
+      echo "Warning: no hadoop-aws mapping for Spark ${SPARK_VERSION}; using the Spark 4.2 pairing" >&2
+      HADOOP_AWS_VERSION="3.5.0"
+      AWS_SDK_VERSION="2.35.4"
+      ANALYTICS_ACCELERATOR_VERSION="1.3.1"
+    else
+      # Spark 3.x bundles Hadoop 3.3.x
+      HADOOP_AWS_VERSION="3.3.4"
+      AWS_SDK_VERSION="1.12.734"
+      ANALYTICS_ACCELERATOR_VERSION=""
+    fi
+    ;;
+esac
+
 # List of images to build: "subdir|image_base_name"
-# Each entry: <subdir>|<image_base_name>
 DOCKER_IMAGES=(
   "${BASE_IMAGE_DIR}|apachehudi/hudi-hadoop_${HADOOP_VERSION}-base-${BASE_JAVA_TAG}"
   "datanode|apachehudi/hudi-hadoop_${HADOOP_VERSION}-datanode"
@@ -116,6 +163,13 @@ DOCKER_IMAGES=(
   "sparkmaster|apachehudi/hudi-hadoop_${HADOOP_VERSION}-hive_${HIVE_VERSION}-sparkmaster_${SPARK_VERSION}"
   "sparkworker|apachehudi/hudi-hadoop_${HADOOP_VERSION}-hive_${HIVE_VERSION}-sparkworker_${SPARK_VERSION}"
 )
+# Select docker build command once (MULTI_ARCH doesn't change per image).
+if [ "$MULTI_ARCH" = true ]; then
+  DOCKER_BUILD_CMD=(docker buildx build --platform "$DOCKER_PLATFORM" --push)
+else
+  DOCKER_BUILD_CMD=(docker build)
+fi
+
 # Build each Docker image in the list
 for IMAGE_CONFIG in "${DOCKER_IMAGES[@]}"; do
   # Split config into subdir and image base name
@@ -125,26 +179,17 @@ for IMAGE_CONFIG in "${DOCKER_IMAGES[@]}"; do
   TAG_VERSIONED="$IMAGE_BASE:$VERSION_TAG"
   echo "Building $IMAGE_CONTEXT as $TAG_LATEST and $TAG_VERSIONED"
   # Build the Docker image with both latest and versioned tags
-  if [ "$MULTI_ARCH" = true ]; then
-    if ! docker buildx build --platform "$DOCKER_PLATFORM" --push \
-      --build-arg HADOOP_VERSION=${HADOOP_VERSION} \
-      --build-arg SPARK_VERSION=${SPARK_VERSION} \
-      --build-arg HIVE_VERSION=${HIVE_VERSION} \
-      --build-arg BASE_IMAGE_TAG=${BASE_JAVA_TAG} \
-      "$IMAGE_CONTEXT" -t "$TAG_LATEST" -t "$TAG_VERSIONED"; then
-      echo "Error: Failed to build docker image for $IMAGE_CONTEXT"
-      exit 1
-    fi
-  else
-    if ! docker build \
-      --build-arg HADOOP_VERSION=${HADOOP_VERSION} \
-      --build-arg SPARK_VERSION=${SPARK_VERSION} \
-      --build-arg HIVE_VERSION=${HIVE_VERSION} \
-      --build-arg BASE_IMAGE_TAG=${BASE_JAVA_TAG} \
-      "$IMAGE_CONTEXT" -t "$TAG_LATEST" -t "$TAG_VERSIONED"; then
-      echo "Error: Failed to build docker image for $IMAGE_CONTEXT"
-      exit 1
-    fi
+  if ! "${DOCKER_BUILD_CMD[@]}" \
+    --build-arg HADOOP_VERSION=${HADOOP_VERSION} \
+    --build-arg SPARK_VERSION=${SPARK_VERSION} \
+    --build-arg HIVE_VERSION=${HIVE_VERSION} \
+    --build-arg BASE_IMAGE_TAG=${BASE_JAVA_TAG} \
+    --build-arg HADOOP_AWS_VERSION=${HADOOP_AWS_VERSION} \
+    --build-arg AWS_SDK_VERSION=${AWS_SDK_VERSION} \
+    --build-arg ANALYTICS_ACCELERATOR_VERSION=${ANALYTICS_ACCELERATOR_VERSION} \
+    "$IMAGE_CONTEXT" -t "$TAG_LATEST" -t "$TAG_VERSIONED"; then
+    echo "Error: Failed to build docker image for $IMAGE_CONTEXT"
+    exit 1
   fi
 done
 

@@ -25,9 +25,11 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
@@ -52,7 +54,9 @@ import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.BaseTableServicePlanActionExecutor;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.compact.plan.generators.HoodieCompactionPlanGenerator;
 import org.apache.hudi.table.action.compact.strategy.PartitionRegexBasedCompactionStrategy;
 import org.apache.hudi.table.action.compact.strategy.SmallBoundedIOCompactionStrategy;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
@@ -70,6 +74,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.SortedMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -255,6 +260,49 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
       // Verify compaction.requested, compaction.completed metrics counts.
       assertEquals(1, getCompactionMetricCount(HoodieTimeline.REQUESTED_COMPACTION_SUFFIX));
       assertEquals(1, getCompactionMetricCount(HoodieTimeline.COMPLETED_COMPACTION_SUFFIX));
+    }
+  }
+
+  @Test
+  public void testScheduleCompactionKeepsPlanGeneratorExtraMetadata() throws Exception {
+    HoodieWriteConfig config = getConfigBuilder()
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .withProps(Collections.singletonMap(
+            HoodieCompactionConfig.COMPACTION_PLAN_GENERATOR.key(), ExtraMetadataCompactionPlanGenerator.class.getName()))
+        .build();
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
+      String newCommitTime = "100";
+      WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
+      writeClient.commit(newCommitTime, writeClient.insert(jsc.parallelize(records, 1), newCommitTime));
+      updateRecords(config, "101", records);
+
+      Option<String> compactionInstant = writeClient.scheduleCompaction(Option.of(Collections.singletonMap("caller.marker", "true")));
+      assertTrue(compactionInstant.isPresent());
+      metaClient.reloadActiveTimeline();
+      Map<String, String> extraMetadata = CompactionUtils.getCompactionPlan(metaClient, compactionInstant.get()).getExtraMetadata();
+      // The generator's entry and the caller's entry must both be on the persisted plan.
+      assertEquals("true", extraMetadata.get(ExtraMetadataCompactionPlanGenerator.MARKER_KEY));
+      assertEquals("true", extraMetadata.get("caller.marker"));
+    }
+  }
+
+  /**
+   * Plan generator that records its own state in the plan's extra metadata.
+   */
+  public static class ExtraMetadataCompactionPlanGenerator<T extends HoodieRecordPayload, I, K, O>
+      extends HoodieCompactionPlanGenerator<T, I, K, O> {
+    static final String MARKER_KEY = "generator.marker";
+
+    public ExtraMetadataCompactionPlanGenerator(HoodieTable table, HoodieEngineContext engineContext,
+                                                HoodieWriteConfig writeConfig, BaseTableServicePlanActionExecutor executor) {
+      super(table, engineContext, writeConfig, executor);
+    }
+
+    @Override
+    protected Map<String, String> getExtraMetadata(List<HoodieCompactionOperation> operationsBeforeApplyingStrategy,
+                                                   HoodieCompactionPlan compactionPlan) {
+      return Collections.singletonMap(MARKER_KEY, "true");
     }
   }
 

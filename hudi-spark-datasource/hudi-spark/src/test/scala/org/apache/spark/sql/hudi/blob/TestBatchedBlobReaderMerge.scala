@@ -27,7 +27,7 @@ import org.junit.jupiter.api.Test
  * Direct unit tests for the merge algorithm in {@link BatchedBlobReader}.
  *
  * These tests bypass Spark and storage entirely: they construct a reader with
- * a null storage (the merge methods do not touch I/O) and call mergeRanges /
+ * a null storage resolver (the merge methods do not touch I/O) and call mergeRanges /
  * identifyConsecutiveRanges with crafted RowInfo inputs to assert the
  * structure of the merged output (counts, boundaries, ordering, grouping).
  *
@@ -38,7 +38,7 @@ import org.junit.jupiter.api.Test
 class TestBatchedBlobReaderMerge {
 
   private def reader(maxGapBytes: Int = 4096) =
-    new BatchedBlobReader(storage = null, maxGapBytes = maxGapBytes, lookaheadRows = 50)
+    new BatchedBlobReader(resolveStorage = null, maxGapBytes = maxGapBytes, lookaheadRows = 50)
 
   private def row(filePath: String, offset: Long, length: Long, index: Long = 0L): RowInfo[Row] =
     RowInfo[Row](
@@ -175,6 +175,47 @@ class TestBatchedBlobReaderMerge {
     val rows = Seq(
       row("/f", 0, 100, index = 0),
       row("/f", 50, 100, index = 1))
+    val ex = assertThrows(
+      classOf[IllegalArgumentException],
+      () => reader().mergeRanges(rows, maxGap = 4096))
+    assertTrue(ex.getMessage.contains("Overlapping blob ranges detected"))
+  }
+
+  @Test
+  def testIdenticalRangesMergeIntoOne(): Unit = {
+    // One blob referenced by two rows (join fan-out, duplicate records): a single read serves both
+    // and the range does not grow.
+    val rows = Seq(
+      row("/f", 0, 100, index = 0),
+      row("/f", 0, 100, index = 1))
+    val merged = reader().mergeRanges(rows, maxGap = 4096)
+    assertEquals(1, merged.size)
+    assertEquals(0L, merged.head.startOffset)
+    assertEquals(100L, merged.head.endOffset)
+    assertEquals(Seq(0L, 1L), merged.head.rows.map(_.index))
+  }
+
+  @Test
+  def testNestedRangeThrows(): Unit = {
+    // Containment is still an overlap: [0,512) then [0,1024) are two different blobs sharing
+    // bytes. This is the shape that failed in TestLanceDataSource. Rows are given in the order
+    // mergeRanges expects, sorted by (offset, length).
+    val rows = Seq(
+      row("/f", 0, 512, index = 0),
+      row("/f", 0, 1024, index = 1))
+    val ex = assertThrows(
+      classOf[IllegalArgumentException],
+      () => reader().mergeRanges(rows, maxGap = 4096))
+    assertTrue(ex.getMessage.contains("Overlapping blob ranges detected"))
+  }
+
+  @Test
+  def testIdenticalRangesDoNotWeakenOverlapCheck(): Unit = {
+    // A duplicate descriptor followed by a genuinely overlapping row still throws
+    val rows = Seq(
+      row("/f", 0, 100, 0),
+      row("/f", 0, 100, 1),
+      row("/f", 50, 100, 2))
     val ex = assertThrows(
       classOf[IllegalArgumentException],
       () => reader().mergeRanges(rows, maxGap = 4096))

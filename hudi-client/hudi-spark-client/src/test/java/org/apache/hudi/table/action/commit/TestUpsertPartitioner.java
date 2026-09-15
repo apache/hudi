@@ -36,6 +36,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.io.MergeContext;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.WorkloadProfile;
@@ -197,10 +198,16 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     SparkBucketInfoGetter bucketInfoGetter = partitioner.getSparkBucketInfoGetter();
     assertEquals(BucketType.UPDATE, bucketInfoGetter.getBucketInfo(0).bucketType,
         "Bucket 0 is UPDATE");
+    assertEquals(100, bucketInfoGetter.getBucketInfo(0).getNumUpdates(),
+        "Bucket 0 should have 100 numUpdates");
     assertEquals(BucketType.INSERT, bucketInfoGetter.getBucketInfo(1).bucketType,
         "Bucket 1 is INSERT");
+    assertEquals(0, bucketInfoGetter.getBucketInfo(1).getNumUpdates(),
+        "INSERT bucket 1 should have 0 numUpdates");
     assertEquals(BucketType.INSERT, bucketInfoGetter.getBucketInfo(2).bucketType,
         "Bucket 2 is INSERT");
+    assertEquals(0, bucketInfoGetter.getBucketInfo(2).getNumUpdates(),
+        "INSERT bucket 2 should have 0 numUpdates");
     assertEquals(3, insertBuckets.size(), "Total of 3 insert buckets");
 
     Double[] weights = { 0.5, 0.25, 0.25};
@@ -215,6 +222,8 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     bucketInfoGetter = partitioner.getSparkBucketInfoGetter();
     assertEquals(BucketType.UPDATE, bucketInfoGetter.getBucketInfo(0).bucketType,
         "Bucket 0 is UPDATE");
+    assertEquals(100, bucketInfoGetter.getBucketInfo(0).getNumUpdates(),
+        "Bucket 0 should have 100 numUpdates");
     assertEquals(BucketType.INSERT, bucketInfoGetter.getBucketInfo(1).bucketType,
         "Bucket 1 is INSERT");
     assertEquals(BucketType.INSERT, bucketInfoGetter.getBucketInfo(2).bucketType,
@@ -262,6 +271,8 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
             "Bucket 0 is UPDATE");
     assertEquals("2", bucketInfoGetter.getBucketInfo(0).fileIdPrefix,
             "Should be assigned to only file id not pending compaction which is 2");
+    assertEquals(0, bucketInfoGetter.getBucketInfo(0).getNumUpdates(),
+        "Small file UPDATE bucket with only inserts should have 0 numUpdates");
   }
 
   @Test
@@ -340,6 +351,8 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
             "Bucket 0 should be UPDATE");
     assertEquals("fg1", bucketInfoGetter.getBucketInfo(0).fileIdPrefix,
             "Insert should be assigned to fg1");
+    assertEquals(0, bucketInfoGetter.getBucketInfo(0).getNumUpdates(),
+        "Small file UPDATE bucket with only inserts should have 0 numUpdates");
   }
 
   @Test
@@ -392,8 +405,8 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
 
   @Test
   void testMapAndListBasedSparkBucketInfoGetter() {
-    List<BucketInfo> bucketInfos = Arrays.asList(new BucketInfo(BucketType.UPDATE, "bucket1", "partition1"),
-        new BucketInfo(BucketType.UPDATE, "bucket2", "partition2"));
+    List<BucketInfo> bucketInfos = Arrays.asList(new BucketInfo(BucketType.UPDATE, "bucket1", "partition1", 42),
+        new BucketInfo(BucketType.UPDATE, "bucket2", "partition2", 99));
     Map<Integer, BucketInfo> bucketInfoMap = new HashMap<>();
     bucketInfoMap.put(0, bucketInfos.get(0));
     bucketInfoMap.put(1, bucketInfos.get(1));
@@ -401,14 +414,18 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     ListBasedSparkBucketInfoGetter listGetter = new ListBasedSparkBucketInfoGetter(bucketInfos);
     assertEquals(bucketInfos.get(0), getter.getBucketInfo(0));
     assertEquals(bucketInfos.get(0), listGetter.getBucketInfo(0));
+    assertEquals(42, getter.getBucketInfo(0).getNumUpdates());
+    assertEquals(42, listGetter.getBucketInfo(0).getNumUpdates());
     assertEquals(bucketInfos.get(1), getter.getBucketInfo(1));
     assertEquals(bucketInfos.get(1), listGetter.getBucketInfo(1));
+    assertEquals(99, getter.getBucketInfo(1).getNumUpdates());
+    assertEquals(99, listGetter.getBucketInfo(1).getNumUpdates());
   }
 
   @Test
   void testInsertOverwriteBucketInfoGetter() {
     BucketInfo insertInfo = new BucketInfo(BucketType.INSERT, "bucket1", "partition1");
-    BucketInfo updateInfo = new BucketInfo(BucketType.UPDATE, "bucket2", "partition2");
+    BucketInfo updateInfo = new BucketInfo(BucketType.UPDATE, "bucket2", "partition2", 75);
     Map<Integer, BucketInfo> map = new HashMap<>();
     map.put(0, insertInfo);
     map.put(1, updateInfo);
@@ -420,5 +437,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     assertEquals(BucketType.INSERT, result.getBucketType());
     assertEquals(updateInfo.getPartitionPath(), result.getPartitionPath());
     assertNotEquals(updateInfo.getFileIdPrefix(), result.getFileIdPrefix());
+    assertEquals(MergeContext.UNKNOWN_NUM_UPDATES, result.getNumUpdates(),
+        "insert-overwrite rebuilds the bucket as INSERT and drops the profiled count");
   }
 }

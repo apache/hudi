@@ -210,7 +210,7 @@ public class TestHoodieSparkEngineDynamicRepartition {
     } catch (AssertionError e) {
       logRDDContent("Original RDD", originalRdd);
       logRDDContent("Repartitioned RDD", repartitionedRdd);
-      LOG.error("Validation failed: " + e.getMessage(), e);
+      LOG.error("Validation failed: {}", e.getMessage(), e);
       throw e; // rethrow to fail the test
     }
   }

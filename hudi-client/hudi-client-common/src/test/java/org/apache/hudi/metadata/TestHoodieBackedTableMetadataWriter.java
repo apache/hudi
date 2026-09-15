@@ -18,33 +18,52 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieTableServiceManagerConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.v2.ActiveTimelineV2;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.MockedStatic;
 
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,21 +71,29 @@ import java.util.Properties;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.doCallRealMethod;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 class TestHoodieBackedTableMetadataWriter {
@@ -83,6 +110,122 @@ class TestHoodieBackedTableMetadataWriter {
     storageConf = mock(StorageConfiguration.class);
 
     when(metadataConfig.getMaxReaderBufferSize()).thenReturn(1024);
+  }
+
+  @Test
+  void completeStreamingCommitSkipsAlreadyCompletedMetadataInstant() {
+    String instantTime = "20260709120000000";
+    HoodieBackedTableMetadataWriter<List<HoodieRecord>, List<?>> metadataWriter =
+        mock(HoodieBackedTableMetadataWriter.class, CALLS_REAL_METHODS);
+    HoodieEngineContext engineContext = mock(HoodieEngineContext.class);
+    HoodieTableMetaClient metadataMetaClient = mock(HoodieTableMetaClient.class);
+    HoodieActiveTimeline activeTimeline = mock(HoodieActiveTimeline.class);
+    HoodieTimeline completedTimeline = mock(HoodieTimeline.class);
+    BaseHoodieWriteClient writeClient = mock(BaseHoodieWriteClient.class);
+
+    metadataWriter.metadataMetaClient = metadataMetaClient;
+    when(metadataMetaClient.getActiveTimeline()).thenReturn(activeTimeline);
+    when(activeTimeline.filterCompletedInstants()).thenReturn(completedTimeline);
+    when(completedTimeline.containsInstant(instantTime)).thenReturn(true);
+    when(metadataWriter.initializeWriteClient()).thenReturn(writeClient);
+
+    metadataWriter.completeStreamingCommit(instantTime, engineContext, Collections.emptyList(), mock(HoodieCommitMetadata.class));
+
+    verify(writeClient).postCommit(instantTime);
+    verifyNoMoreInteractions(writeClient);
+  }
+
+  @ParameterizedTest
+  @CsvSource({"true", "false"})
+  void rejectsClusteringOfTableWithoutRecordKeysOnBothUpdatePaths(boolean streamingWrite) throws Exception {
+    // the record index and the secondary index key the rows of such a table by file path and position, which
+    // clustering changes, so the check must sit ahead of the streaming and the batch path alike
+    HoodieBackedTableMetadataWriter<List<HoodieRecord>, List<?>> writer = writerForClustering(false, true);
+    HoodieCommitMetadata clusteringMetadata = new HoodieCommitMetadata();
+    clusteringMetadata.setOperationType(WriteOperationType.CLUSTER);
+
+    IllegalStateException clustering = assertThrows(IllegalStateException.class, () -> {
+      if (streamingWrite) {
+        writer.completeStreamingCommit("001", mock(HoodieEngineContext.class), Collections.emptyList(), clusteringMetadata);
+      } else {
+        writer.update(clusteringMetadata, "001");
+      }
+    });
+    assertTrue(clustering.getMessage().contains("cannot be clustered because it has no record key"), clustering.getMessage());
+  }
+
+  @ParameterizedTest
+  @CsvSource({"true,true", "false,false"})
+  void allowsClusteringWhenRecordKeysOrPositionalIndexesAreAbsent(boolean hasRecordKey, boolean recordIndexEnabled) throws Exception {
+    // a table with record keys keeps them through clustering, and a table without a record index or a secondary
+    // index has nothing keyed by position
+    HoodieBackedTableMetadataWriter<List<HoodieRecord>, List<?>> writer = writerForClustering(hasRecordKey, recordIndexEnabled);
+    HoodieCommitMetadata clusteringMetadata = new HoodieCommitMetadata();
+    clusteringMetadata.setOperationType(WriteOperationType.CLUSTER);
+    HoodieTableMetaClient metadataMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
+    BaseHoodieWriteClient writeClient = mock(BaseHoodieWriteClient.class);
+    when(metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant("001")).thenReturn(true);
+    when(writer.initializeWriteClient()).thenReturn(writeClient);
+    writer.metadataMetaClient = metadataMetaClient;
+
+    writer.completeStreamingCommit("001", mock(HoodieEngineContext.class), Collections.emptyList(), clusteringMetadata);
+
+    verify(writeClient).postCommit("001");
+  }
+
+  @ParameterizedTest
+  @CsvSource({"true", "false"})
+  void dropsReplacedFileGroupsFromTheSecondaryIndexOnlyForKeylessTables(boolean hasRecordKey) throws Exception {
+    // a replace commit without a known operation type registers files written outside Hudi, and only a table without
+    // a record key holds such files. A table that carries a record key keeps the behaviour it had before, so the
+    // records of its replaced file groups stay in the index.
+    HoodieBackedTableMetadataWriter<List<HoodieRecord>, List<?>> writer = writerForClustering(hasRecordKey, true);
+    HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(getDefaultStorageConf());
+    Field engineContextField = HoodieBackedTableMetadataWriter.class.getDeclaredField("engineContext");
+    engineContextField.setAccessible(true);
+    engineContextField.set(writer, localEngineContext);
+    HoodieData<HoodieRecord> noRecords = localEngineContext.emptyHoodieData();
+    writer.dataWriteConfig = mock(HoodieWriteConfig.class, RETURNS_DEEP_STUBS);
+    doReturn(mock(HoodieIndexDefinition.class)).when(writer).getIndexDefinition("secondary_index_idx_name");
+
+    // the commit only drops the file groups it replaces, so it carries no write stats
+    HoodieReplaceCommitMetadata replaceCommitMetadata = new HoodieReplaceCommitMetadata();
+    replaceCommitMetadata.setOperationType(null);
+    replaceCommitMetadata.addReplaceFileId("p1", "file_1");
+
+    Method getSecondaryIndexUpdates = HoodieBackedTableMetadataWriter.class.getDeclaredMethod(
+        "getSecondaryIndexUpdates", HoodieCommitMetadata.class, String.class, String.class);
+    getSecondaryIndexUpdates.setAccessible(true);
+
+    try (MockedStatic<SecondaryIndexRecordGenerationUtils> generation = mockStatic(SecondaryIndexRecordGenerationUtils.class)) {
+      generation.when(() -> SecondaryIndexRecordGenerationUtils.convertWriteStatsToSecondaryIndexRecords(
+          any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(noRecords);
+
+      HoodieData<HoodieRecord> updates = (HoodieData<HoodieRecord>) getSecondaryIndexUpdates.invoke(
+          writer, replaceCommitMetadata, "secondary_index_idx_name", "001");
+
+      assertTrue(updates.isEmpty());
+      generation.verify(() -> SecondaryIndexRecordGenerationUtils.convertWriteStatsToSecondaryIndexRecords(
+          any(), any(), any(), any(), any(), any(), any(), any()), hasRecordKey ? never() : times(1));
+    }
+  }
+
+  private static HoodieBackedTableMetadataWriter<List<HoodieRecord>, List<?>> writerForClustering(boolean hasRecordKey, boolean recordIndexEnabled)
+      throws Exception {
+    HoodieBackedTableMetadataWriter<List<HoodieRecord>, List<?>> writer = mock(HoodieBackedTableMetadataWriter.class, CALLS_REAL_METHODS);
+    HoodieTableMetaClient dataMetaClient = mock(HoodieTableMetaClient.class);
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    when(dataMetaClient.getTableConfig()).thenReturn(tableConfig);
+    when(dataMetaClient.getBasePath()).thenReturn(new StoragePath("/tmp/table"));
+    when(tableConfig.hasRecordKey()).thenReturn(hasRecordKey);
+    when(tableConfig.getMetadataPartitions()).thenReturn(Collections.emptySet());
+    writer.dataMetaClient = dataMetaClient;
+    List<MetadataPartitionType> enabledPartitionTypes = recordIndexEnabled
+        ? Collections.singletonList(MetadataPartitionType.RECORD_INDEX) : Collections.emptyList();
+    Field enabledPartitionTypesField = HoodieBackedTableMetadataWriter.class.getDeclaredField("enabledPartitionTypes");
+    enabledPartitionTypesField.setAccessible(true);
+    enabledPartitionTypesField.set(writer, enabledPartitionTypes);
+    return writer;
   }
 
   @ParameterizedTest
@@ -377,6 +520,47 @@ class TestHoodieBackedTableMetadataWriter {
     assertDoesNotThrow(() -> validateRollbackMethod.invoke(writer, instantToRollback));
   }
 
+  // ---- resolveDataSchemaForRLIBootstrap tests ----
+
+  private static final String SIMPLE_SCHEMA_JSON =
+      "{\"type\":\"record\",\"name\":\"Test\",\"namespace\":\"test\","
+          + "\"fields\":[{\"name\":\"id\",\"type\":\"string\"}]}";
+
+  @Test
+  void resolveDataSchemaForRLIBootstrap_usesConfigSchemaWhenPresent() {
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    when(writeConfig.getWriteSchema()).thenReturn(SIMPLE_SCHEMA_JSON);
+    when(writeConfig.allowOperationMetadataField()).thenReturn(false);
+
+    HoodieSchema result = HoodieBackedTableMetadataWriter.resolveDataSchemaForRLIBootstrap(metaClient, writeConfig);
+
+    assertNotNull(result);
+    // metadata fields (_hoodie_*) should have been prepended
+    assertTrue(result.getFields().stream().anyMatch(f -> f.name().startsWith("_hoodie_")));
+  }
+
+  @Test
+  void resolveDataSchemaForRLIBootstrap_fallsBackToTableSchemaResolverWhenNull() {
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    when(writeConfig.getWriteSchema()).thenReturn(null);
+    when(writeConfig.allowOperationMetadataField()).thenReturn(false);
+
+    HoodieSchema tableSchema = HoodieSchema.parse(SIMPLE_SCHEMA_JSON);
+    try (org.mockito.MockedConstruction<TableSchemaResolver> mockedResolver =
+        mockConstruction(TableSchemaResolver.class,
+            (resolver, ctx) -> when(resolver.getTableSchema(false)).thenReturn(tableSchema))) {
+
+      HoodieSchema result = HoodieBackedTableMetadataWriter.resolveDataSchemaForRLIBootstrap(metaClient, writeConfig);
+
+      assertNotNull(result);
+      assertTrue(result.getFields().stream().anyMatch(f -> f.name().startsWith("_hoodie_")));
+      // exactly one TableSchemaResolver was constructed (with metaClient)
+      assertEquals(1, mockedResolver.constructed().size());
+    }
+  }
+
   @SuppressWarnings("deprecation")
   private HoodieActiveTimeline createMockTimeline(List<HoodieInstant> instants) {
     ActiveTimelineV2 timeline = new ActiveTimelineV2();
@@ -506,4 +690,172 @@ class TestHoodieBackedTableMetadataWriter {
     // Verify metrics are incremented when there's a failure
     verify(metrics, times(1)).incrementMetric(HoodieMetadataMetrics.PENDING_COMPACTIONS_FAILURES, 1);
   }
+
+  @Test
+  void wrapsMetadataReaderFailures() throws Exception {
+    // Reader setup must preserve the public exception contract.
+    // The lazy file listing half of this test is dropped on this branch: it reflects on
+    // getLazyMergedFileSlices, which master added in 2baa29b14d37 (#18372) as part of the
+    // index-abstraction refactor of the metadata table update path, and that refactor is not
+    // backported here.
+    HoodieBackedTableMetadataWriter<List<HoodieRecord>, List<?>> writer =
+        mock(HoodieBackedTableMetadataWriter.class, CALLS_REAL_METHODS);
+    writer.dataWriteConfig = HoodieWriteConfig.newBuilder().withPath("/tmp/missing-table").build();
+    writer.dataMetaClient = mock(HoodieTableMetaClient.class);
+    Method maybeReinitializeReader =
+        HoodieBackedTableMetadataWriter.class.getDeclaredMethod("mayBeReinitMetadataReader");
+    maybeReinitializeReader.setAccessible(true);
+    InvocationTargetException readerFailure = assertThrows(
+        InvocationTargetException.class, () -> maybeReinitializeReader.invoke(writer));
+    assertTrue(readerFailure.getCause() instanceof HoodieException);
+  }
+
+  @Test
+  void detectsEmptyMetadataTimelineAndHandlesMissingMetadataTable(@TempDir Path tempDir) throws Exception {
+    // Missing MDT state requires bootstrap without trusting stale table config.
+    HoodieBackedTableMetadataWriter<List<HoodieRecord>, List<?>> writer =
+        mock(HoodieBackedTableMetadataWriter.class, CALLS_REAL_METHODS);
+    Method isBootstrapNeeded = HoodieBackedTableMetadataWriter.class
+        .getDeclaredMethod("isBootstrapNeeded", Option.class);
+    isBootstrapNeeded.setAccessible(true);
+    assertTrue((boolean) isBootstrapNeeded.invoke(writer, Option.empty()));
+
+    HoodieTableMetaClient dataMetaClient = mock(HoodieTableMetaClient.class);
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    when(dataMetaClient.getTableConfig()).thenReturn(tableConfig);
+    when(tableConfig.isMetadataTableAvailable()).thenReturn(true);
+    writer.storageConf = org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf();
+    writer.dataWriteConfig = HoodieWriteConfig.newBuilder()
+        .withPath(tempDir.resolve("data-table").toString())
+        .build();
+    writer.metadataWriteConfig = HoodieWriteConfig.newBuilder()
+        .withPath(tempDir.resolve("missing-metadata-table").toString())
+        .build();
+    Method metadataTableExists = HoodieBackedTableMetadataWriter.class
+        .getDeclaredMethod("metadataTableExists", HoodieTableMetaClient.class);
+    metadataTableExists.setAccessible(true);
+    assertFalse((boolean) metadataTableExists.invoke(writer, dataMetaClient));
+  }
+
+  @Test
+  void ignoresIOExceptionWhileRemovingPendingIndexInstant() throws Exception {
+    // A corrupt pending index plan must not block partition cleanup.
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    HoodieActiveTimeline timeline = mock(HoodieActiveTimeline.class);
+    HoodieInstant pendingIndex = INSTANT_GENERATOR.createNewInstant(
+        HoodieInstant.State.REQUESTED, HoodieTimeline.INDEXING_ACTION, "001");
+    when(metaClient.getInstantGenerator()).thenReturn(INSTANT_GENERATOR);
+    when(metaClient.reloadActiveTimeline()).thenReturn(timeline);
+    when(metaClient.getActiveTimeline()).thenReturn(timeline);
+    when(timeline.filterPendingIndexTimeline()).thenReturn(timeline);
+    when(timeline.getInstantsAsStream()).thenReturn(Stream.of(pendingIndex));
+    when(timeline.readIndexPlan(pendingIndex)).thenThrow(new IOException("cannot read plan"));
+    Method deletePendingIndexingInstant = HoodieBackedTableMetadataWriter.class
+        .getDeclaredMethod("deletePendingIndexingInstant", HoodieTableMetaClient.class, String.class);
+    deletePendingIndexingInstant.setAccessible(true);
+
+    assertDoesNotThrow(() -> deletePendingIndexingInstant.invoke(null, metaClient, "column_stats"));
+  }
+
+  @Test
+  void wrapsRestorePlanReadFailure() throws Exception {
+    // Restore-plan I/O failures must surface as HoodieIOException.
+    HoodieBackedTableMetadataWriter<List<HoodieRecord>, List<?>> writer =
+        mock(HoodieBackedTableMetadataWriter.class, CALLS_REAL_METHODS);
+    HoodieBackedTableMetadata metadata = mock(HoodieBackedTableMetadata.class);
+    HoodieTableFileSystemView metadataView = mock(HoodieTableFileSystemView.class);
+    HoodieTableMetaClient metadataMetaClient = mock(HoodieTableMetaClient.class);
+    HoodieTableMetaClient dataMetaClient = mock(HoodieTableMetaClient.class);
+    HoodieActiveTimeline timeline = mock(HoodieActiveTimeline.class);
+    when(metadata.getMetadataFileSystemView()).thenReturn(metadataView);
+    when(dataMetaClient.getInstantGenerator()).thenReturn(INSTANT_GENERATOR);
+    when(dataMetaClient.getActiveTimeline()).thenReturn(timeline);
+    when(timeline.readRestorePlan(any())).thenThrow(new IOException("cannot read restore plan"));
+    writer.metadata = metadata;
+    writer.metadataMetaClient = metadataMetaClient;
+    writer.dataMetaClient = dataMetaClient;
+
+    assertThrows(HoodieIOException.class,
+        () -> writer.update(mock(HoodieRestoreMetadata.class), "001"));
+  }
+
+  @Test
+  void rejectsPendingMetadataCompactionAndWrapsCloseFailures() {
+    // Pending compaction blocks scheduling, while close errors remain visible.
+    HoodieBackedTableMetadataWriter<List<HoodieRecord>, List<?>> writer =
+        mock(HoodieBackedTableMetadataWriter.class, CALLS_REAL_METHODS);
+    HoodieWriteConfig metadataWriteConfig = mock(HoodieWriteConfig.class);
+    when(metadataWriteConfig.isLogCompactionEnabled()).thenReturn(true);
+    writer.metadataWriteConfig = metadataWriteConfig;
+    HoodieTableMetaClient metadataMetaClient = mock(HoodieTableMetaClient.class);
+    HoodieActiveTimeline metadataTimeline = mock(HoodieActiveTimeline.class, RETURNS_DEEP_STUBS);
+    HoodieInstant pendingCompaction = INSTANT_GENERATOR.createNewInstant(
+        HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "001");
+    when(metadataMetaClient.getActiveTimeline()).thenReturn(metadataTimeline);
+    when(metadataTimeline.filterPendingLogCompactionTimeline().firstInstant()).thenReturn(Option.empty());
+    when(metadataTimeline.filterPendingCompactionTimeline().firstInstant()).thenReturn(Option.of(pendingCompaction));
+    writer.metadataMetaClient = metadataMetaClient;
+
+    assertThrows(HoodieException.class, () -> {
+      doThrow(new HoodieException("close failed")).when(writer).close();
+      writer.closeInternal();
+    });
+    assertFalse(writer.validateCompactionScheduling(Option.empty(), "002"));
+  }
+
+  @Test
+  void compactIfNecessaryHandlesSkipDelegationAndFailures() {
+    // Exercise skip, delegation, and failure propagation for both compaction types.
+    Properties tableServiceManagerProperties = new Properties();
+    tableServiceManagerProperties.put(
+        HoodieTableServiceManagerConfig.TABLE_SERVICE_MANAGER_ENABLED.key(), "true");
+    tableServiceManagerProperties.put(
+        HoodieTableServiceManagerConfig.TABLE_SERVICE_MANAGER_ACTIONS.key(), "compaction,logcompaction");
+    HoodieTableServiceManagerConfig tableServiceManagerConfig =
+        HoodieTableServiceManagerConfig.newBuilder().fromProperties(tableServiceManagerProperties).build();
+    HoodieWriteConfig metadataWriteConfig = mock(HoodieWriteConfig.class);
+    when(metadataWriteConfig.getTableServiceManagerConfig()).thenReturn(tableServiceManagerConfig);
+    when(metadataWriteConfig.isLogCompactionEnabled()).thenReturn(true);
+
+    HoodieTableMetaClient dataMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
+    when(dataMetaClient.reloadActiveTimeline().filterInflightsAndRequested()
+        .filter(any()).firstInstant()).thenReturn(Option.empty());
+    HoodieTableMetaClient metadataMetaClient = mock(HoodieTableMetaClient.class);
+    HoodieActiveTimeline metadataTimeline = mock(HoodieActiveTimeline.class);
+    HoodieTimeline completedTimeline = mock(HoodieTimeline.class);
+    when(metadataMetaClient.getActiveTimeline()).thenReturn(metadataTimeline);
+    when(metadataTimeline.filterCompletedInstants()).thenReturn(completedTimeline);
+    when(completedTimeline.containsInstant(any(String.class)))
+        .thenAnswer(invocation -> "100".equals(invocation.getArgument(0)));
+
+    HoodieBackedTableMetadataWriter<List<HoodieRecord>, List<?>> writer =
+        mock(HoodieBackedTableMetadataWriter.class, CALLS_REAL_METHODS);
+    writer.dataMetaClient = dataMetaClient;
+    writer.metadataMetaClient = metadataMetaClient;
+    writer.metadataWriteConfig = metadataWriteConfig;
+    writer.metrics = Option.empty();
+
+    BaseHoodieWriteClient writeClient = mock(BaseHoodieWriteClient.class);
+    when(writeClient.createNewInstantTime(false)).thenReturn("100", "200", "300", "400");
+    when(writeClient.scheduleCompactionAtInstant("200", Option.empty())).thenReturn(true);
+    when(writeClient.scheduleCompactionAtInstant("300", Option.empty()))
+        .thenThrow(new HoodieException("compaction failed"));
+    when(writeClient.scheduleCompactionAtInstant("400", Option.empty())).thenReturn(false);
+    when(writeClient.scheduleLogCompaction(Option.empty()))
+        .thenReturn(Option.of("201"))
+        .thenThrow(new HoodieException("log compaction failed"));
+
+    writer.compactIfNecessary(writeClient, Option.empty());
+    writer.compactIfNecessary(writeClient, Option.empty());
+    assertThrows(HoodieException.class, () -> writer.compactIfNecessary(writeClient, Option.empty()));
+    assertThrows(HoodieException.class, () -> writer.compactIfNecessary(writeClient, Option.empty()));
+  }
+
+  private static void setField(Object target, String name, Object value) throws Exception {
+    // Exercise private failure paths without changing production visibility.
+    java.lang.reflect.Field field = HoodieBackedTableMetadataWriter.class.getDeclaredField(name);
+    field.setAccessible(true);
+    field.set(target, value);
+  }
+
 }

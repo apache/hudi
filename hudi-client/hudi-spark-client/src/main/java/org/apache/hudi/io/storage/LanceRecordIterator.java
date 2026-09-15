@@ -32,39 +32,58 @@ import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.vectorized.ColumnVector;
 import org.apache.spark.sql.vectorized.ColumnarBatch;
+import org.lance.file.FileReadOptions;
 import org.lance.file.LanceFileReader;
 import org.lance.spark.vectorized.LanceArrowColumnVector;
+import org.lance.util.Range;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Iterator for reading Lance files and converting Arrow batches to Spark {@link UnsafeRow}s.
- * Used by both Hudi's internal Lance reader and Spark datasource integration.
+ * Iterator over a Lance file that converts Arrow batches to Spark {@link UnsafeRow}s, owning the
+ * {@link BufferAllocator}, {@link LanceFileReader}, {@link ArrowReader}(s) and current
+ * {@link ColumnarBatch}. Used by both Hudi's internal Lance reader and the Spark datasource. An
+ * optional {@link BlobDescriptorTransform} rewrites BLOB columns for DESCRIPTOR-mode reads.
  *
- * <p>The iterator manages the lifecycle of:
- * <ul>
- *   <li>BufferAllocator - Arrow memory management</li>
- *   <li>LanceFileReader - Lance file handle</li>
- *   <li>ArrowReader - Arrow batch reader</li>
- *   <li>ColumnarBatch - Current batch being iterated</li>
- * </ul>
- *
- * <p>An optional {@link BlobDescriptorTransform} can be composed in to rewrite BLOB columns
- * in DESCRIPTOR mode.
+ * <p>BLOB chunked reading: lance-core 4.0.0 aborts the JVM in its Arrow C-stream export whenever a
+ * single {@code readAll} stream crosses Lance's internal BLOB page boundary (512 rows), and the
+ * requested {@code batchSize} does not change that. So BLOB reads issue one {@code readAll} per
+ * row-range chunk of {@link #BLOB_READ_CHUNK_ROWS} rows; non-BLOB reads use one streamed reader.
  */
 public final class LanceRecordIterator implements ClosableIterator<UnsafeRow> {
+
+  /**
+   * Rows per {@code readAll} for BLOB reads. Must not exceed Lance's internal BLOB page size,
+   * which is 512 rows in lance-core 4.0.0 but is NOT exposed through any lance API; revalidate
+   * this constant against the batch-scale BLOB tests whenever {@code lance.version} is bumped.
+   */
+  public static final int BLOB_READ_CHUNK_ROWS = 512;
+
+  /**
+   * The sequence of {@link ArrowReader}s to drain, one after another. Single-reader
+   * mode yields one reader; BLOB chunked mode yields one fresh reader per row-range chunk. Each
+   * returned reader is owned (and closed) by {@link LanceRecordIterator}.
+   */
+  private interface ArrowReaderSequence {
+    /** @return the next reader to drain, or {@code null} when the sequence is exhausted. */
+    ArrowReader next() throws IOException;
+  }
+
   private final BufferAllocator allocator;
   private final LanceFileReader lanceReader;
-  private final ArrowReader arrowReader;
+  private final ArrowReaderSequence readerSequence;
   private final StructType sparkSchema;
   private final UnsafeProjection projection;
   private final String path;
   private final BlobDescriptorTransform blobTransform;
 
+  /** The reader currently being drained; replaced as chunks are exhausted. */
+  private ArrowReader currentReader;
   private ColumnarBatch currentBatch;
   private Iterator<InternalRow> rowIterator;
   private ColumnVector[] columnVectors;
@@ -84,7 +103,8 @@ public final class LanceRecordIterator implements ClosableIterator<UnsafeRow> {
   }
 
   /**
-   * Creates a new Lance record iterator.
+   * Creates a new Lance record iterator that drains a single pre-built {@link ArrowReader}.
+   * Suitable for non-BLOB reads, where Lance's multi-batch FFI export is well-behaved.
    *
    * @param allocator      Arrow buffer allocator for memory management
    * @param lanceReader    Lance file reader
@@ -100,13 +120,76 @@ public final class LanceRecordIterator implements ClosableIterator<UnsafeRow> {
                              StructType schema,
                              String path,
                              BlobDescriptorTransform blobTransform) {
+    this(allocator, lanceReader, singleReaderSequence(arrowReader), schema, path, blobTransform);
+  }
+
+  private LanceRecordIterator(BufferAllocator allocator,
+                              LanceFileReader lanceReader,
+                              ArrowReaderSequence readerSequence,
+                              StructType schema,
+                              String path,
+                              BlobDescriptorTransform blobTransform) {
     this.allocator = allocator;
     this.lanceReader = lanceReader;
-    this.arrowReader = arrowReader;
+    this.readerSequence = readerSequence;
     this.sparkSchema = schema;
     this.projection = UnsafeProjection.create(schema);
     this.path = path;
     this.blobTransform = blobTransform;
+  }
+
+  /**
+   * Creates a Lance record iterator that reads a BLOB-containing file in fixed-size row-range
+   * chunks, issuing a fresh {@code readAll} per chunk to dodge the lance-core multi-page BLOB
+   * FFI-export panic (see class javadoc).
+   *
+   * @param allocator     Arrow buffer allocator for memory management
+   * @param lanceReader   open Lance file reader (the iterator takes ownership and closes it)
+   * @param columnNames   columns to project, or {@code null} for all columns
+   * @param readOpts      Lance read options (e.g. blob read mode)
+   * @param totalRows     total rows in the file ({@code lanceReader.numRows()})
+   * @param schema        Spark schema for the records
+   * @param path          File path (for error messages)
+   * @param blobTransform optional blob descriptor transform for DESCRIPTOR-mode reads
+   */
+  public static LanceRecordIterator chunkedBlobReader(BufferAllocator allocator,
+                                                      LanceFileReader lanceReader,
+                                                      List<String> columnNames,
+                                                      FileReadOptions readOpts,
+                                                      long totalRows,
+                                                      StructType schema,
+                                                      String path,
+                                                      BlobDescriptorTransform blobTransform) {
+    ArrowReaderSequence sequence = new ArrowReaderSequence() {
+      private long nextStart = 0;
+
+      @Override
+      public ArrowReader next() throws IOException {
+        if (nextStart >= totalRows) {
+          return null;
+        }
+        int start = Math.toIntExact(nextStart);
+        int end = Math.toIntExact(Math.min(nextStart + BLOB_READ_CHUNK_ROWS, totalRows));
+        nextStart = end;
+        // A single range per readAll keeps the FFI stream within one BLOB page (<= 512 rows).
+        List<Range> ranges = Collections.singletonList(new Range(start, end));
+        return lanceReader.readAll(columnNames, ranges, BLOB_READ_CHUNK_ROWS, readOpts);
+      }
+    };
+    return new LanceRecordIterator(allocator, lanceReader, sequence, schema, path, blobTransform);
+  }
+
+  private static ArrowReaderSequence singleReaderSequence(ArrowReader arrowReader) {
+    return new ArrowReaderSequence() {
+      private ArrowReader remaining = arrowReader;
+
+      @Override
+      public ArrowReader next() {
+        ArrowReader r = remaining;
+        remaining = null;
+        return r;
+      }
+    };
   }
 
   @Override
@@ -120,33 +203,50 @@ public final class LanceRecordIterator implements ClosableIterator<UnsafeRow> {
       currentBatch = null;
     }
 
-    // Try to load next batch. Loop so zero-row batches (legitimately returned e.g. after
-    // filter pushdown) don't silently terminate iteration and drop subsequent non-empty batches.
     try {
-      while (arrowReader.loadNextBatch()) {
-        VectorSchemaRoot root = arrowReader.getVectorSchemaRoot();
-
-        // Build ColumnVector[] in Spark-schema order by looking each field up by name;
-        // lance-spark 0.4.0's VectorSchemaRoot may return the file's on-disk order, which
-        // would misalign the UnsafeProjection. Cached on the first batch and reused thereafter.
-        if (columnVectors == null) {
-          buildColumnVectors(root);
+      while (true) {
+        if (currentReader == null) {
+          currentReader = readerSequence.next();
+          if (currentReader == null) {
+            return false;
+          }
+          // Each reader (range chunk) returns a distinct VectorSchemaRoot, so the cached
+          // column vectors must be rebuilt against the new reader's vectors.
+          columnVectors = null;
         }
 
-        currentBatch = new ColumnarBatch(columnVectors, root.getRowCount());
-        rowIterator = currentBatch.rowIterator();
-        rowIdInBatch = 0;
-        if (rowIterator.hasNext()) {
-          return true;
+        // Try to load next batch from the current reader. Loop so zero-row batches
+        // (legitimately returned e.g. after filter pushdown) don't silently terminate.
+        while (currentReader.loadNextBatch()) {
+          VectorSchemaRoot root = currentReader.getVectorSchemaRoot();
+
+          // Build ColumnVector[] in Spark-schema order by looking each field up by name;
+          // lance-spark 0.4.0's VectorSchemaRoot may return the file's on-disk order, which
+          // would misalign the UnsafeProjection. Cached per reader and reused thereafter.
+          if (columnVectors == null) {
+            buildColumnVectors(root);
+          }
+
+          currentBatch = new ColumnarBatch(columnVectors, root.getRowCount());
+          rowIterator = currentBatch.rowIterator();
+          rowIdInBatch = 0;
+          if (rowIterator.hasNext()) {
+            return true;
+          }
+          currentBatch.close();
+          currentBatch = null;
         }
-        currentBatch.close();
-        currentBatch = null;
+
+        // Current reader exhausted; close it and advance to the next chunk (if any).
+        currentReader.close();
+        currentReader = null;
+        columnVectors = null;
       }
     } catch (IOException e) {
       throw new HoodieException("Failed to read next batch from Lance file: " + path, e);
+    } catch (Exception e) {
+      throw new HoodieException("Failed to advance Lance reader for file: " + path, e);
     }
-
-    return false;
   }
 
   @Override
@@ -197,6 +297,8 @@ public final class LanceRecordIterator implements ClosableIterator<UnsafeRow> {
     closed = true;
     ColumnarBatch batch = currentBatch;
     currentBatch = null;
-    LanceResourceCloser.closeAll(batch, arrowReader, lanceReader, allocator);
+    ArrowReader reader = currentReader;
+    currentReader = null;
+    LanceResourceCloser.closeAll(batch, reader, lanceReader, allocator);
   }
 }

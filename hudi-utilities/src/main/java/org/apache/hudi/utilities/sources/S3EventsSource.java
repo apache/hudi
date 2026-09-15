@@ -35,6 +35,8 @@ import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.types.StructType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.sqs.SqsClient;
 
 import java.io.Closeable;
@@ -51,6 +53,8 @@ import static org.apache.hudi.utilities.config.CloudSourceConfig.META_EVENTS_PER
  * {@link S3EventsHoodieIncrSource} to apply changes to the hudi table corresponding to user data.
  */
 public class S3EventsSource extends RowSource implements Closeable {
+
+  private static final Logger LOG = LoggerFactory.getLogger(S3EventsSource.class);
 
   private final S3EventsMetaSelector pathSelector;
   private final SchemaProvider schemaProvider;
@@ -109,6 +113,8 @@ public class S3EventsSource extends RowSource implements Closeable {
 
   @Override
   public void onCommit(String lastCkptStr) {
+    LOG.info("Deleting {} processed messages from SQS queue, checkpoint={}.",
+        processedMessages.size(), lastCkptStr);
     pathSelector.deleteProcessedMessages(sqs, pathSelector.queueUrl, processedMessages);
     processedMessages.clear();
   }

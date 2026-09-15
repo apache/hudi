@@ -197,12 +197,12 @@ public class RepairsCommand {
       try {
         CleanerUtils.getCleanerPlan(client, instant);
       } catch (AvroRuntimeException e) {
-        log.warn("Corruption found. Trying to remove corrupted clean instant file: " + instant);
+        log.warn("Corruption found. Trying to remove corrupted clean instant file: {}", instant);
         TimelineUtils.deleteInstantFile(client.getStorage(), client.getTimelinePath(),
             instant, client.getInstantFileNameGenerator());
       } catch (IOException ioe) {
         if (ioe.getMessage().contains("Not an Avro data file")) {
-          log.warn("Corruption found. Trying to remove corrupted clean instant file: " + instant);
+          log.warn("Corruption found. Trying to remove corrupted clean instant file: {}", instant);
           TimelineUtils.deleteInstantFile(client.getStorage(), client.getTimelinePath(),
               instant, client.getInstantFileNameGenerator());
         } else {
@@ -216,7 +216,7 @@ public class RepairsCommand {
   public void showFailedCommits() {
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     HoodieActiveTimeline activeTimeline =  metaClient.getActiveTimeline();
-    activeTimeline.filterCompletedInstants().getInstantsAsStream().filter(activeTimeline::isEmpty).forEach(hoodieInstant -> log.warn("Empty Commit: " + hoodieInstant.toString()));
+    activeTimeline.filterCompletedInstants().getInstantsAsStream().filter(activeTimeline::isEmpty).forEach(hoodieInstant -> log.warn("Empty Commit: {}", hoodieInstant));
   }
 
   @ShellMethod(key = "repair migrate-partition-meta", value = "Migrate all partition meta file currently stored in text format "

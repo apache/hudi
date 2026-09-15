@@ -31,6 +31,8 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -40,6 +42,8 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class TestPartitionAwareClusteringPlanStrategy {
 
@@ -84,6 +88,29 @@ public class TestPartitionAwareClusteringPlanStrategy {
   }
 
   @Test
+  public void testResolveMissingPartitionsFromCurrentWindow() {
+    HoodieWriteConfig incrementalConfig = mock(HoodieWriteConfig.class);
+    when(incrementalConfig.isIncrementalTableServiceEnabled()).thenReturn(true);
+    DummyPartitionAwareClusteringPlanStrategy incrementalStrategy =
+        new DummyPartitionAwareClusteringPlanStrategy(table, context, incrementalConfig);
+
+    assertEquals(Arrays.asList("p2", "p4"),
+        incrementalStrategy.resolveMissingPartitionsFromCurrentWindow(
+            Arrays.asList("p1", "p3"), Arrays.asList("p1", "p2", "p3", "p4")));
+
+    HoodieWriteConfig nonIncrementalConfig = mock(HoodieWriteConfig.class);
+    when(nonIncrementalConfig.isIncrementalTableServiceEnabled()).thenReturn(false);
+    DummyPartitionAwareClusteringPlanStrategy nonIncrementalStrategy =
+        new DummyPartitionAwareClusteringPlanStrategy(table, context, nonIncrementalConfig);
+
+    List<String> nonIncrementalMissingPartitions = nonIncrementalStrategy.resolveMissingPartitionsFromCurrentWindow(
+        Arrays.asList("p1", "p3"), Arrays.asList("p1", "p2", "p3", "p4"));
+    assertTrue(nonIncrementalMissingPartitions.isEmpty());
+    nonIncrementalMissingPartitions.addAll(Collections.singletonList("p5"));
+    assertEquals(Collections.singletonList("p5"), nonIncrementalMissingPartitions);
+  }
+
+  @Test
   public void testResolveEngineContextUsesLocalWhenEnabled() {
     HoodieEngineContext engineContext = new HoodieLocalEngineContext(new HadoopStorageConfiguration(false));
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
@@ -125,6 +152,11 @@ public class TestPartitionAwareClusteringPlanStrategy {
 
     public DummyPartitionAwareClusteringPlanStrategy(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
       super(table, engineContext, writeConfig);
+    }
+
+    List<String> resolveMissingPartitionsFromCurrentWindow(List<String> partitionsToSchedule,
+                                                           List<String> partitionsInCurrentWindow) {
+      return getMissingPartitionsFromCurrentWindow(partitionsToSchedule, partitionsInCurrentWindow);
     }
 
     @Override

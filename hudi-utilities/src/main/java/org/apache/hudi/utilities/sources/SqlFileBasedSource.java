@@ -20,11 +20,11 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
-import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +39,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.Scanner;
 
+import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.createCheckpoint;
 import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
@@ -65,16 +66,19 @@ public class SqlFileBasedSource extends RowSource {
 
   private final String sourceSqlFile;
   private final boolean shouldEmitCheckPoint;
+  private HoodieIngestionMetrics metrics;
 
   public SqlFileBasedSource(
       TypedProperties props,
       JavaSparkContext sparkContext,
       SparkSession sparkSession,
-      SchemaProvider schemaProvider) {
+      SchemaProvider schemaProvider,
+      HoodieIngestionMetrics metrics) {
     super(props, sparkContext, sparkSession, schemaProvider);
     checkRequiredConfigProperties(props, Collections.singletonList(SOURCE_SQL_FILE));
     sourceSqlFile = getStringWithAltKeys(props, SOURCE_SQL_FILE);
     shouldEmitCheckPoint = getBooleanWithAltKeys(props, EMIT_EPOCH_CHECKPOINT);
+    this.metrics = metrics;
   }
 
   @Override
@@ -92,7 +96,7 @@ public class SqlFileBasedSource extends RowSource {
           rows = sparkSession.sql(sqlStr);
         }
       }
-      return Pair.of(Option.of(rows), shouldEmitCheckPoint ? new StreamerCheckpointV2(String.valueOf(System.currentTimeMillis())) : null);
+      return Pair.of(Option.of(rows), shouldEmitCheckPoint ? createCheckpoint(String.valueOf(System.currentTimeMillis())) : null);
     } catch (IOException ioe) {
       throw new HoodieIOException("Error reading source SQL file.", ioe);
     }

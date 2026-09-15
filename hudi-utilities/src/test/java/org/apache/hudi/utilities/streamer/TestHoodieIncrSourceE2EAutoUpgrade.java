@@ -37,6 +37,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerTestBase;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionException;
 import org.apache.hudi.utilities.sources.MockGeneralHoodieIncrSource;
 import org.apache.hudi.utilities.sources.S3EventsHoodieIncrSourceHarness;
 
@@ -136,7 +137,11 @@ public class TestHoodieIncrSourceE2EAutoUpgrade extends S3EventsHoodieIncrSource
     Option<HoodieCommitMetadata> metadata = HoodieClientTestUtils.getCommitMetadataForInstant(
         metaClient, metaClient.getActiveTimeline().lastInstant().get());
     assertFalse(metadata.isEmpty());
-    assertEquals(expectedMetadata, metadata.get().getExtraMetadata());
+    // Assert expected entries are a subset of the actual extra metadata. CommitMetadataProperties
+    // also enriches commit metadata with hudi.version, engine, and config.* entries on every write,
+    // so the actual map is a superset.
+    Map<String, String> actual = metadata.get().getExtraMetadata();
+    expectedMetadata.forEach((k, v) -> assertEquals(v, actual.get(k), "extraMetadata[" + k + "]"));
   }
 
   /**
@@ -191,8 +196,10 @@ public class TestHoodieIncrSourceE2EAutoUpgrade extends S3EventsHoodieIncrSource
     HoodieDeltaStreamer.Config cfg = createConfig(basePath(), null, sourceClass);
     cfg.checkpoint = "overrideWhenAutoUpgradingWouldFail";
     ds = new HoodieDeltaStreamer(cfg, jsc, Option.of(props));
-    Exception ex = assertThrows(HoodieUpgradeDowngradeException.class, ds::sync);
-    assertTrue(ex.getMessage().contains("When upgrade/downgrade is happening, please avoid setting --checkpoint option and --ignore-checkpoint for your delta streamers."));
+    Exception ex = assertThrows(HoodieIngestionException.class, ds::sync);
+    Throwable cause = ex.getCause();
+    assertTrue(cause instanceof HoodieUpgradeDowngradeException, "Expected cause to be HoodieUpgradeDowngradeException but was: " + cause.getClass());
+    assertTrue(cause.getMessage().contains("When upgrade/downgrade is happening, please avoid setting --checkpoint option and --ignore-checkpoint for your delta streamers."));
     // No changes to the timeline / table config.
     metaClient.reloadActiveTimeline();
     assertEquals(metaClient.getActiveTimeline().lastInstant().get(), instantAfterFirstRound);

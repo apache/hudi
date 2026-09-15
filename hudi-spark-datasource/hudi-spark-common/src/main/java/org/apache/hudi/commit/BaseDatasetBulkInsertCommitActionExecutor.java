@@ -24,12 +24,18 @@ import org.apache.hudi.HoodieDatasetBulkInsertHelper;
 import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
@@ -41,8 +47,10 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.cluster.strategy.UpdateStrategy;
 
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -51,9 +59,12 @@ import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE;
 
+@Slf4j
 public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Serializable {
 
   protected final transient HoodieWriteConfig writeConfig;
@@ -109,6 +120,11 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
     BulkInsertPartitioner<Dataset<Row>> bulkInsertPartitionerRows = getPartitioner(populateMetaFields, isTablePartitioned);
     Dataset<Row> hoodieDF = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(records, writeConfig, table.getMetaClient().getTableConfig(), bulkInsertPartitionerRows, instantTime);
 
+    // Reject INSERT_OVERWRITE / INSERT_OVERWRITE_TABLE against partitions with pending
+    // clustering before any writes materialize. Subclasses override getFileGroupsBeingReplaced;
+    // default is a no-op (empty set) which preserves the non-overwrite paths.
+    rejectIfOverlappingPendingClustering(hoodieDF);
+
     HoodieWriteMetadata<JavaRDD<WriteStatus>> result = buildHoodieWriteMetadata(doExecute(hoodieDF, bulkInsertPartitionerRows.arePartitionRecordsSorted()));
     afterExecute(result);
 
@@ -141,4 +157,77 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
   }
 
   protected abstract Map<String, List<String>> getPartitionToReplacedFileIds(HoodieData<WriteStatus> writeStatuses);
+
+  /**
+   * Returns the file groups this operation will replace. Default is empty (non-overwrite paths).
+   * Bulk-insert overwrite executors override this so the overlap-with-pending-clustering check
+   * can fire before any writes materialize.
+   *
+   * @param preparedRecords the dataset after {@code HoodieDatasetBulkInsertHelper.prepareForBulkInsert}
+   *                        has populated the {@code _hoodie_partition_path} meta field, so dynamic
+   *                        partition resolution can read it.
+   */
+  protected Set<HoodieFileGroupId> getFileGroupsBeingReplaced(Dataset<Row> preparedRecords) {
+    return Collections.emptySet();
+  }
+
+  /**
+   * Mirrors {@code BaseSparkCommitActionExecutor#clusteringHandleUpdate} for the bulk-insert row
+   * path: if any of the file groups this operation will replace are in pending clustering, route
+   * through the configured {@code hoodie.clustering.updates.strategy}. With the default
+   * {@code SparkRejectUpdateStrategy} this throws {@code HoodieClusteringUpdateException}; with
+   * {@code SparkAllowUpdateStrategy} (and {@code !isRollbackPendingClustering()}) the overlap is
+   * deferred to the conflict-resolution strategy, matching the existing Spark-side behavior.
+   */
+  protected void rejectIfOverlappingPendingClustering(Dataset<Row> preparedRecords) {
+    Set<HoodieFileGroupId> fileGroupsInPendingClustering = table.getFileSystemView()
+        .getFileGroupsInPendingClustering().map(Pair::getKey).collect(Collectors.toSet());
+    if (fileGroupsInPendingClustering.isEmpty()) {
+      return;
+    }
+    Set<HoodieFileGroupId> fileGroupsToBeReplaced = getFileGroupsBeingReplaced(preparedRecords);
+    if (fileGroupsToBeReplaced.isEmpty()) {
+      return;
+    }
+
+    HoodieEngineContext engineContext = writeClient.getEngineContext();
+    UpdateStrategy<HoodieRecord, HoodieData<HoodieRecord>> updateStrategy = loadClusteringUpdateStrategy(
+        engineContext, fileGroupsInPendingClustering, fileGroupsToBeReplaced);
+    if (updateStrategy instanceof SparkAllowUpdateStrategy && !writeConfig.isRollbackPendingClustering()) {
+      return;
+    }
+    // handleUpdate consumes only fileGroupsToBeReplaced on this path (no tagged records to
+    // inspect for the bulk-insert overwrite case), so pass an empty HoodieData.
+    updateStrategy.handleUpdate(engineContext.emptyHoodieData());
+  }
+
+  /**
+   * Loads {@code hoodie.clustering.updates.strategy} via reflection, preferring the 4-arg
+   * constructor (with {@code fileGroupsToBeReplaced}) and falling back to the legacy 3-arg
+   * constructor for custom strategies that pre-date this PR.
+   */
+  @SuppressWarnings("unchecked")
+  private UpdateStrategy<HoodieRecord, HoodieData<HoodieRecord>> loadClusteringUpdateStrategy(
+      HoodieEngineContext engineContext,
+      Set<HoodieFileGroupId> fileGroupsInPendingClustering,
+      Set<HoodieFileGroupId> fileGroupsToBeReplaced) {
+    String strategyClass = writeConfig.getClusteringUpdatesStrategyClass();
+    try {
+      return (UpdateStrategy<HoodieRecord, HoodieData<HoodieRecord>>) ReflectionUtils.loadClass(
+          strategyClass,
+          new Class<?>[] {HoodieEngineContext.class, HoodieTable.class, Set.class, Set.class},
+          engineContext, table, fileGroupsInPendingClustering, fileGroupsToBeReplaced);
+    } catch (HoodieException ex) {
+      if (!(ex.getCause() instanceof NoSuchMethodException)) {
+        throw ex;
+      }
+      log.warn("Clustering update strategy {} is missing the 4-arg constructor with "
+          + "fileGroupsToBeReplaced; falling back to the 3-arg constructor. INSERT_OVERWRITE "
+          + "overlap with pending clustering will not be detected for this strategy.", strategyClass);
+      return (UpdateStrategy<HoodieRecord, HoodieData<HoodieRecord>>) ReflectionUtils.loadClass(
+          strategyClass,
+          new Class<?>[] {HoodieEngineContext.class, HoodieTable.class, Set.class},
+          engineContext, table, fileGroupsInPendingClustering);
+    }
+  }
 }

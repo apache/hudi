@@ -175,7 +175,7 @@ public class CompactionCommitSinkV2 extends CleanFunctionV2<CompactionCommitEven
       doCommit(instant, events);
     } catch (Throwable throwable) {
       // make it fail-safe
-      log.error("Error while committing compaction instant: " + instant, throwable);
+      log.error("Error while committing compaction instant: {}", instant, throwable);
       this.compactionMetrics.markCompactionRolledBack();
     } finally {
       // reset the status

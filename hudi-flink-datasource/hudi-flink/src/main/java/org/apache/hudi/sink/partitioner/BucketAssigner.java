@@ -177,7 +177,7 @@ public class BucketAssigner implements AutoCloseable {
     }
     List<SmallFile> smallFiles = smallFilesOfThisTask(writeProfile.getSmallFiles(partitionPath));
     if (smallFiles.size() > 0) {
-      log.info("For partitionPath : " + partitionPath + " Small Files => " + smallFiles);
+      log.info("For partitionPath : {} Small Files => {}", partitionPath, smallFiles);
       SmallFileAssignState[] states = smallFiles.stream()
           .map(smallFile -> new SmallFileAssignState(config.getParquetMaxFileSize(), smallFile, writeProfile.getAvgSize()))
           .toArray(SmallFileAssignState[]::new);

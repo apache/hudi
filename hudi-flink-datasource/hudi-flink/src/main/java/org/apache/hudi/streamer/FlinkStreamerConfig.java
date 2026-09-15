@@ -42,6 +42,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
 import static org.apache.hudi.configuration.FlinkOptions.PARTITION_FORMAT_DAY;
@@ -433,7 +434,8 @@ public class FlinkStreamerConfig extends Configuration {
     conf.set(FlinkOptions.RECORD_MERGER_STRATEGY_ID, config.recordMergerStrategy);
     conf.set(FlinkOptions.PRE_COMBINE, config.preCombine);
     conf.set(FlinkOptions.RETRY_TIMES, Integer.parseInt(config.instantRetryTimes));
-    conf.set(FlinkOptions.RETRY_INTERVAL_MS, Long.parseLong(config.instantRetryInterval));
+    conf.set(FlinkOptions.RETRY_INTERVAL_MS,
+        TimeUnit.SECONDS.toMillis(Long.parseLong(config.instantRetryInterval)));
     conf.set(FlinkOptions.IGNORE_FAILED, config.commitOnErrors);
     conf.set(FlinkOptions.RECORD_KEY_FIELD, config.recordKeyField);
     conf.set(FlinkOptions.PARTITION_PATH_FIELD, config.partitionPathField);

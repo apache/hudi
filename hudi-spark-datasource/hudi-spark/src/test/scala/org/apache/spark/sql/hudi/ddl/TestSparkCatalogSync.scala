@@ -26,8 +26,11 @@ import org.apache.hudi.sync.common.HoodieSyncConfig.{META_SYNC_BASE_PATH, META_S
 
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.spark.sql.{DataFrame, SaveMode}
+import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
-import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+
+import java.io.File
 
 class TestSparkCatalogSync extends HoodieSparkSqlTestBase {
 
@@ -107,6 +110,55 @@ class TestSparkCatalogSync extends HoodieSparkSqlTestBase {
 
         syncOnce(syncProps)
         assertTrue(hasColumn(databaseName, tableName, "age"), "Catalog schema should be updated with new column age")
+      } finally {
+        spark.sql(s"drop table if exists $databaseName.$tableName")
+      }
+    }
+  }
+
+  test("Test Spark catalog sync with table recreation on location drift") {
+    withTempDir { tmp =>
+      import spark.implicits._
+
+      val tableName = generateTableName
+      val databaseName = "testdb"
+      val basePath = s"${tmp.getCanonicalPath}/$tableName"
+      val syncProps = buildSyncProps(databaseName, tableName, basePath)
+
+      try {
+        spark.sql(s"create database if not exists $databaseName")
+        writeToHudi(
+          Seq((1, "a1", 1000L, "2024-01-01")).toDF("id", "name", "ts", "dt"),
+          tableName,
+          basePath,
+          SaveMode.Overwrite)
+        syncOnce(syncProps)
+        assertTrue(spark.catalog.tableExists(databaseName, tableName), "Table should exist after the first sync")
+
+        // A property set between the syncs must not survive, which proves the table was really
+        // recreated rather than left as it was. On release-1.2.1 there is no
+        // hoodie.meta.sync.force.recreate.table (#19426 is master-only), so the metastore location
+        // is moved off the Hudi base path instead: HiveSyncTool recreates a table whose location
+        // drifted, through the same temp-table path a forced recreation takes on master.
+        val identifier = TableIdentifier(tableName, Some(databaseName))
+        val before = spark.sessionState.catalog.getTableMetadata(identifier)
+        val driftedLocation = new File(tmp, s"${tableName}_drifted").toURI
+        spark.sessionState.catalog.alterTable(before.copy(
+          storage = before.storage.copy(locationUri = Some(driftedLocation)),
+          properties = before.properties + ("drift_marker" -> "true")))
+        val drifted = spark.sessionState.catalog.getTableMetadata(identifier)
+        assertTrue(drifted.properties.contains("drift_marker"))
+        assertEquals(Some(driftedLocation.getPath), drifted.storage.locationUri.map(_.getPath))
+
+        // Recreation syncs into a temp table, drops the real one and renames the temp table over
+        // it through alter_table, which needs SparkCatalogMetaStoreClient to honor the new name.
+        syncOnce(syncProps)
+        val remaining = spark.catalog.listTables(databaseName).collect()
+          .map(_.name.toLowerCase).filter(_.startsWith(tableName.toLowerCase)).toSeq
+        assertEquals(Seq(tableName.toLowerCase), remaining, "Only the recreated table should remain after a forced recreation")
+        assertFalse(spark.sessionState.catalog.getTableMetadata(identifier).properties.contains("drift_marker"),
+          "The recreated table must not carry the pre-recreation property")
+        assertEquals(1L, spark.table(s"$databaseName.$tableName").count())
       } finally {
         spark.sql(s"drop table if exists $databaseName.$tableName")
       }

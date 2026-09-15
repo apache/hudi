@@ -34,9 +34,8 @@ import org.apache.hudi.utilities.sources.TestDataSource;
 import org.apache.hudi.utilities.streamer.TableExecutionContext;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -49,9 +48,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Slf4j
 public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBase {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieMultiTableDeltaStreamer.class);
 
   static class TestHelpers {
 
@@ -104,7 +102,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     Exception e = assertThrows(HoodieException.class, () -> {
       new HoodieMultiTableDeltaStreamer(cfg, jsc);
     }, "Should fail when hive sync table not provided with enableHiveSync flag");
-    LOG.debug("Expected error when creating table execution objects", e);
+    log.debug("Expected error when creating table execution objects", e);
     assertTrue(e.getMessage().contains("Meta sync table field not provided!"));
   }
 
@@ -114,7 +112,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     Exception e = assertThrows(IllegalArgumentException.class, () -> {
       new HoodieMultiTableDeltaStreamer(cfg, jsc);
     }, "Should fail when invalid props file is provided");
-    LOG.debug("Expected error when creating table execution objects", e);
+    log.debug("Expected error when creating table execution objects", e);
     assertTrue(e.getMessage().contains("Please provide valid common config file path!"));
   }
 
@@ -124,7 +122,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     Exception e = assertThrows(IllegalArgumentException.class, () -> {
       new HoodieMultiTableDeltaStreamer(cfg, jsc);
     }, "Should fail when invalid table config props file path is provided");
-    LOG.debug("Expected error when creating table execution objects", e);
+    log.debug("Expected error when creating table execution objects", e);
     assertTrue(e.getMessage().contains("Please provide valid table config file path!"));
   }
 

@@ -24,8 +24,6 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-import static org.apache.hudi.io.util.IOUtils.writeVarInt;
-
 public class HFileMetaIndexBlock extends HFileIndexBlock {
 
   private HFileMetaIndexBlock(HFileContext context) {
@@ -43,12 +41,8 @@ public class HFileMetaIndexBlock extends HFileIndexBlock {
       for (BlockIndexEntry entry : entries) {
         outputStream.writeLong(entry.getOffset());
         outputStream.writeInt(entry.getSize());
-        // Key length.
-        // Use Hadoop WritableUtils VarInt encoding to match HBase's HFile format.
-        byte[] keyLength = writeVarInt(entry.getFirstKey().getLength());
-        outputStream.write(keyLength);
-        // Note that: NO two-bytes for encoding key length.
-        // Key.
+        outputStream.write(getVarIntBytes(entry.getFirstKey().getLength()));
+        // Unlike the data index, the meta key is stored as-is with no 2-byte row-length prefix.
         outputStream.write(entry.getFirstKey().getBytes());
       }
     }

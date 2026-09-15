@@ -186,7 +186,7 @@ public abstract class HoodieAsyncService implements Serializable {
    * @param instantTime {@link String} to enqueue.
    */
   public void enqueuePendingAsyncServiceInstant(String instantTime) {
-    log.info("Enqueuing new pending table service instant: " + instantTime);
+    log.info("Enqueuing new pending table service instant: {}", instantTime);
     pendingInstants.add(instantTime);
   }
 

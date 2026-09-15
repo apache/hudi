@@ -25,6 +25,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.utilities.config.HiveSchemaProviderConfig;
 import org.apache.hudi.utilities.exception.HoodieSchemaFetchException;
 
+import lombok.Getter;
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
@@ -42,10 +43,11 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 /**
  * A schema provider to get data schema through user specified hive table.
  */
+@Getter
 public class HiveSchemaProvider extends SchemaProvider {
 
-  private final HoodieSchema sourceSchema;
-  private HoodieSchema targetSchema;
+  private final HoodieSchema sourceHoodieSchema;
+  private HoodieSchema targetHoodieSchema;
 
   public HiveSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
@@ -58,7 +60,7 @@ public class HiveSchemaProvider extends SchemaProvider {
     try {
       TableIdentifier sourceSchemaTable = new TableIdentifier(sourceSchemaTableName, scala.Option.apply(sourceSchemaDatabaseName));
       StructType sourceSchema = spark.sessionState().catalog().getTableMetadata(sourceSchemaTable).schema();
-      this.sourceSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(
+      this.sourceHoodieSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(
           sourceSchema,
           sourceSchemaTableName,
           "hoodie." + sourceSchemaDatabaseName);
@@ -73,7 +75,7 @@ public class HiveSchemaProvider extends SchemaProvider {
       try {
         TableIdentifier targetSchemaTable = new TableIdentifier(targetSchemaTableName, scala.Option.apply(targetSchemaDatabaseName));
         StructType targetSchema = spark.sessionState().catalog().getTableMetadata(targetSchemaTable).schema();
-        this.targetSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(
+        this.targetHoodieSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(
             targetSchema,
             targetSchemaTableName,
             "hoodie." + targetSchemaDatabaseName);
@@ -84,14 +86,16 @@ public class HiveSchemaProvider extends SchemaProvider {
   }
 
   @Override
+  @Deprecated
   public Schema getSourceSchema() {
-    return sourceSchema.toAvroSchema();
+    return getSourceHoodieSchema().toAvroSchema();
   }
 
   @Override
+  @Deprecated
   public Schema getTargetSchema() {
-    if (targetSchema != null) {
-      return targetSchema.toAvroSchema();
+    if (getTargetHoodieSchema() != null) {
+      return getTargetHoodieSchema().toAvroSchema();
     } else {
       return super.getTargetSchema();
     }

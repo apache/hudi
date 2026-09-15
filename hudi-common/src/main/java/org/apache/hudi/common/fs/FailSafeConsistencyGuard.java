@@ -23,8 +23,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -36,9 +35,8 @@ import java.util.stream.Collectors;
 /**
  * A consistency checker that fails if it is unable to meet the required condition within a specified timeout.
  */
+@Slf4j
 public class FailSafeConsistencyGuard implements ConsistencyGuard {
-
-  private static final Logger LOG = LoggerFactory.getLogger(FailSafeConsistencyGuard.class);
 
   protected final HoodieStorage storage;
   protected final ConsistencyGuardConfig consistencyGuardConfig;
@@ -129,7 +127,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
           return;
         }
       } catch (IOException ioe) {
-        LOG.warn("Got IOException waiting for file visibility. Retrying", ioe);
+        log.warn("Got IOException waiting for file visibility. Retrying", ioe);
       }
 
       sleepSafe(waitMs);
@@ -152,7 +150,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
       throws TimeoutException {
     long waitMs = consistencyGuardConfig.getInitialConsistencyCheckIntervalMs();
     int attempt = 0;
-    LOG.info("Max Attempts=" + consistencyGuardConfig.getMaxConsistencyChecks());
+    log.info("Max Attempts={}", consistencyGuardConfig.getMaxConsistencyChecks());
     while (attempt < consistencyGuardConfig.getMaxConsistencyChecks()) {
       boolean success = checkFilesVisibility(attempt, dir, files, event);
       if (success) {
@@ -178,7 +176,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
   protected boolean checkFilesVisibility(int retryNum, StoragePath dir, List<String> files,
                                          FileVisibility event) {
     try {
-      LOG.info("Trying " + retryNum);
+      log.info("Trying {}", retryNum);
       List<StoragePathInfo> entries = storage.listDirectEntries(dir);
       List<String> gotFiles = entries.stream()
           .map(e -> e.getPath().getPathWithoutSchemeAndAuthority())
@@ -188,7 +186,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
 
       switch (event) {
         case DISAPPEAR:
-          LOG.info("Following files are visible" + candidateFiles);
+          log.info("Following files are visible{}", candidateFiles);
           // If no candidate files gets removed, it means all of them have disappeared
           return !altered;
         case APPEAR:
@@ -197,7 +195,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
           return candidateFiles.isEmpty();
       }
     } catch (IOException ioe) {
-      LOG.warn("Got IOException waiting for file event. Have tried {} time(s)", retryNum, ioe);
+      log.warn("Got IOException waiting for file event. Have tried {} time(s)", retryNum, ioe);
     }
     return false;
   }

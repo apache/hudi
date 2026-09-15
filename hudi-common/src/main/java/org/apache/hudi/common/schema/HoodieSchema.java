@@ -89,6 +89,7 @@ import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
  *
  * @since 1.2.0
  */
+@Getter
 public class HoodieSchema implements Serializable {
   private static final long serialVersionUID = 1L;
 
@@ -312,8 +313,11 @@ public class HoodieSchema implements Serializable {
 
   private Schema avroSchema;
   private HoodieSchemaType type;
-  private transient List<HoodieSchemaField> fields;
-  private transient Map<String, HoodieSchemaField> fieldMap;
+  // interned instances are shared across threads, so the lazily built caches use a benign racy
+  // single-check (see getFields()/getFieldMap()): lock-free volatile reads, and volatile gives
+  // safe publication of the immutable, deterministic result
+  private transient volatile List<HoodieSchemaField> fields;
+  private transient volatile Map<String, HoodieSchemaField> fieldMap;
 
   // Register the Variant logical type with Avro
   static {
@@ -1151,6 +1155,8 @@ public class HoodieSchema implements Serializable {
     if (!hasFields()) {
       throw new IllegalStateException("Cannot get fields from schema type: " + type);
     }
+    // Benign race: the result is an immutable, deterministic view of avroSchema's fields, so concurrent
+    // callers may each build it once but converge on equal lists; the volatile field makes publication safe.
     if (fields == null) {
       fields = Collections.unmodifiableList(avroSchema.getFields().stream().map(HoodieSchemaField::new).collect(Collectors.toList()));
     }
@@ -1194,9 +1200,10 @@ public class HoodieSchema implements Serializable {
   }
 
   private Map<String, HoodieSchemaField> getFieldMap() {
+    // Benign race, same rationale as getFields(): deterministic immutable result, volatile for safe publication.
     if (fieldMap == null) {
-      fieldMap = getFields().stream()
-          .collect(Collectors.toMap(HoodieSchemaField::name, field -> field));
+      fieldMap = Collections.unmodifiableMap(getFields().stream()
+          .collect(Collectors.toMap(HoodieSchemaField::name, field -> field)));
     }
     return fieldMap;
   }
@@ -1383,7 +1390,12 @@ public class HoodieSchema implements Serializable {
     return HoodieSchema.createUnion(nonNullTypes);
   }
 
-  boolean containsBlobType() {
+  /**
+   * Recursively checks whether this schema is or contains a BLOB type at any nesting depth,
+   * descending through arrays, maps, unions and record fields. Unlike {@link #isBlobField()},
+   * this also finds BLOBs nested inside records.
+   */
+  public boolean containsBlobType() {
     if (getType() == HoodieSchemaType.BLOB) {
       return true;
     } else if (getType() == HoodieSchemaType.ARRAY) {
@@ -1565,18 +1577,6 @@ public class HoodieSchema implements Serializable {
       return next;
     }
     return (path.charAt(next) == '.') ? next + 1 : -1;
-  }
-
-  /**
-   * Returns the underlying Avro schema for compatibility purposes.
-   *
-   * <p>This method is provided for gradual migration and should be used
-   * sparingly. New code should prefer the HoodieSchema API.</p>
-   *
-   * @return the wrapped Avro Schema
-   */
-  public Schema getAvroSchema() {
-    return avroSchema;
   }
 
   /**
@@ -1909,7 +1909,9 @@ public class HoodieSchema implements Serializable {
   }
 
   public static class Decimal extends HoodieSchema {
+    @Getter
     private final int precision;
+    @Getter
     private final int scale;
     private final Option<Integer> fixedSize;
 
@@ -1932,14 +1934,6 @@ public class HoodieSchema implements Serializable {
       } else {
         this.fixedSize = Option.empty();
       }
-    }
-
-    public int getPrecision() {
-      return precision;
-    }
-
-    public int getScale() {
-      return scale;
     }
 
     @Override
@@ -2224,7 +2218,9 @@ public class HoodieSchema implements Serializable {
   }
 
   public static class Timestamp extends HoodieSchema {
+    @Getter
     private final boolean isUtcAdjusted;
+    @Getter
     private final TimePrecision precision;
 
     /**
@@ -2253,14 +2249,6 @@ public class HoodieSchema implements Serializable {
       } else {
         throw new IllegalArgumentException("Unsupported timestamp logical type: " + logicalType);
       }
-    }
-
-    public TimePrecision getPrecision() {
-      return precision;
-    }
-
-    public boolean isUtcAdjusted() {
-      return isUtcAdjusted;
     }
 
     @Override
@@ -2299,6 +2287,7 @@ public class HoodieSchema implements Serializable {
   }
 
   public static class Time extends HoodieSchema {
+    @Getter
     private final TimePrecision precision;
 
     /**
@@ -2319,10 +2308,6 @@ public class HoodieSchema implements Serializable {
       } else {
         throw new IllegalArgumentException("Unsupported time logical type: " + logicalType);
       }
-    }
-
-    public TimePrecision getPrecision() {
-      return precision;
     }
 
     @Override

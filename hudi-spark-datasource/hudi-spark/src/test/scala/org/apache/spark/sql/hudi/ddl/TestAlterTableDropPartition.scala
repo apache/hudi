@@ -692,4 +692,45 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Drop partition for a slash separated date partitioned table") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      // create table
+      spark.sql(
+        s"""
+           | create table $tableName (
+           |  id bigint,
+           |  name string,
+           |  ts string,
+           |  dt string
+           | )
+           | using hudi
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  orderingFields = 'ts',
+           |  hoodie.datasource.write.slash.separated.date.partitioning = 'true'
+           | )
+           | partitioned by (dt)
+           | location '$tablePath'
+           |""".stripMargin)
+      // insert data
+      spark.sql(s"""insert into $tableName values (1, "z3", "v1", "2026-01-05"), (2, "l4", "v1", "2026-01-06")""")
+
+      // the writer laid these out as 2026/01/05 and 2026/01/06, so DROP PARTITION has to name the
+      // same directory -- naming the dashed value drops nothing while still reporting success
+      spark.sql(s"alter table $tableName drop partition (dt='2026-01-05')")
+
+      // trigger clean so that partition deletion kicks in.
+      withSQLConf(HoodieCleanConfig.CLEANER_POLICY.key() -> HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name()) {
+        spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
+          .collect()
+      }
+
+      checkAnswer(s"select id, name, ts, dt from $tableName")(
+        Seq(2, "l4", "v1", "2026-01-06")
+      )
+    }
+  }
 }

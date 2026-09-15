@@ -80,6 +80,30 @@ public class TestPartitionFilterGenerator {
   }
 
   @Test
+  public void testMinMaxFilterNoNumericOverflow() {
+    Properties props = new Properties();
+    // force the min/max branch so the values are sorted by ValueComparator
+    props.put(HIVE_SYNC_FILTER_PUSHDOWN_MAX_SIZE.key(), "0");
+    HiveSyncConfig config = new HiveSyncConfig(props);
+    List<FieldSchema> partitionFieldSchemas = new ArrayList<>(2);
+    partitionFieldSchemas.add(new FieldSchema("intcol", "int"));
+    partitionFieldSchemas.add(new FieldSchema("bigcol", "bigint"));
+
+    List<String> writtenPartitions = new ArrayList<>();
+    // extreme values whose pairwise difference overflows int/long subtraction
+    writtenPartitions.add("2147483647/9223372036854775807");
+    writtenPartitions.add("-2147483648/-9223372036854775808");
+    writtenPartitions.add("0/0");
+
+    // bounds must reflect the true numeric order; a subtraction-based comparator overflows and
+    // would pick wrong min/max (or throw a comparator-contract violation).
+    assertEquals(
+        "((intcol >= -2147483648 AND intcol <= 2147483647) "
+            + "AND (bigcol >= -9223372036854775808 AND bigcol <= 9223372036854775807))",
+        partitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config));
+  }
+
+  @Test
   public void testPushDownFilterIfExceedLimit() {
     Properties props = new Properties();
     props.put(HIVE_SYNC_FILTER_PUSHDOWN_MAX_SIZE.key(), "0");

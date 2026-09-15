@@ -95,7 +95,7 @@ public class HoodieTableServiceManagerConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> TABLE_SERVICE_MANAGER_DEPLOY_EXTRA_PARAMS = ConfigProperty
       .key(TABLE_SERVICE_MANAGER_PREFIX + ".deploy.extra.params")
-      .noDefaultValue()
+      .defaultValue("")
       .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("The extra params to deploy for table service of this table, split by ';'");

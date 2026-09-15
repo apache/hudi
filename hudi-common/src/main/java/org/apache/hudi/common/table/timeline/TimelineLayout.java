@@ -34,6 +34,8 @@ import org.apache.hudi.common.table.timeline.versioning.v2.TimelinePathProviderV
 import org.apache.hudi.common.table.timeline.versioning.v2.TimelineV2Factory;
 import org.apache.hudi.common.util.collection.Pair;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
@@ -81,42 +83,18 @@ public abstract class TimelineLayout implements Serializable {
   /**
    * Table Layout where state transitions are managed by renaming files.
    */
+  @Getter
   private static class TimelineLayoutV0 extends TimelineLayout {
 
     private final InstantGenerator instantGenerator = new InstantGeneratorV1();
     private final InstantFileNameGenerator instantFileNameGenerator = new InstantFileNameGeneratorV1();
     private final TimelineFactory timelineFactory = new TimelineV1Factory(this);
     private final InstantComparator instantComparator = new InstantComparatorV1();
-    private final InstantFileNameParser fileNameParser = new InstantFileNameParserV2();
+    private final InstantFileNameParser instantFileNameParser = new InstantFileNameParserV2();
 
     @Override
     public Stream<HoodieInstant> filterHoodieInstants(Stream<HoodieInstant> instantStream) {
       return instantStream;
-    }
-
-    @Override
-    public InstantGenerator getInstantGenerator() {
-      return instantGenerator;
-    }
-
-    @Override
-    public InstantFileNameGenerator getInstantFileNameGenerator() {
-      return instantFileNameGenerator;
-    }
-
-    @Override
-    public TimelineFactory getTimelineFactory() {
-      return timelineFactory;
-    }
-
-    @Override
-    public InstantComparator getInstantComparator() {
-      return instantComparator;
-    }
-
-    @Override
-    public InstantFileNameParser getInstantFileNameParser() {
-      return fileNameParser;
     }
 
     @Override
@@ -157,42 +135,18 @@ public abstract class TimelineLayout implements Serializable {
   /**
    * Timeline corresponding to Hudi 1.x
    */
+  @Getter
   private static class TimelineLayoutV2 extends TimelineLayout {
 
     private final InstantGenerator instantGenerator = new InstantGeneratorV2();
     private final InstantFileNameGenerator instantFileNameGenerator = new InstantFileNameGeneratorV2();
     private final TimelineFactory timelineFactory = new TimelineV2Factory(this);
     private final InstantComparator instantComparator = new InstantComparatorV2();
-    private final InstantFileNameParser fileNameParser = new InstantFileNameParserV2();
+    private final InstantFileNameParser instantFileNameParser = new InstantFileNameParserV2();
 
     @Override
     public Stream<HoodieInstant> filterHoodieInstants(Stream<HoodieInstant> instantStream) {
       return TimelineLayout.filterHoodieInstantsByLatestState(instantStream, InstantComparatorV2::getComparableAction);
-    }
-
-    @Override
-    public InstantGenerator getInstantGenerator() {
-      return instantGenerator;
-    }
-
-    @Override
-    public InstantFileNameGenerator getInstantFileNameGenerator() {
-      return instantFileNameGenerator;
-    }
-
-    @Override
-    public TimelineFactory getTimelineFactory() {
-      return timelineFactory;
-    }
-
-    @Override
-    public InstantComparator getInstantComparator() {
-      return instantComparator;
-    }
-
-    @Override
-    public InstantFileNameParser getInstantFileNameParser() {
-      return fileNameParser;
     }
 
     @Override

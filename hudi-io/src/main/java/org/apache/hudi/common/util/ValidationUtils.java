@@ -80,11 +80,16 @@ public class ValidationUtils {
   }
 
   /**
-   * Ensures the truth of an expression, throwing the custom errorMessage otherwise.
+   * Ensures the truth of an expression involving the state of the calling instance, but not
+   * involving any parameters to the calling method.
+   *
+   * @param expression a boolean expression
+   * @param errorMessageSupplier supplies the error message, evaluated only when the check fails
+   * @throws IllegalStateException if {@code expression} is false
    */
   public static void checkState(final boolean expression, final Supplier<String> errorMessageSupplier) {
     if (!expression) {
-      throw new IllegalArgumentException(errorMessageSupplier.get());
+      throw new IllegalStateException(errorMessageSupplier.get());
     }
   }
 }

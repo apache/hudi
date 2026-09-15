@@ -991,7 +991,7 @@ class HoodieSparkSqlWriterInternal {
                                              extraPreCommitFn: Option[BiConsumer[HoodieTableMetaClient, HoodieCommitMetadata]]
                                             ): (Boolean, HOption[java.lang.String], HOption[java.lang.String]) = {
     val hasErrors = new AtomicBoolean(false)
-    log.info("Proceeding to commit the write.")
+    log.debug("Proceeding to commit the write.")
     // get extra metadata from props
     // 1. properties starting with commit metadata key prefix
     // 2. properties related to checkpoint in spark streaming
@@ -1020,7 +1020,7 @@ class HoodieSparkSqlWriterInternal {
           common.util.Option.empty()
         }
 
-      log.info(s"Compaction Scheduled is $compactionInstant")
+      log.debug(s"Compaction Scheduled is $compactionInstant")
 
       val asyncClusteringEnabled = isAsyncClusteringEnabled(client, parameters)
       val clusteringInstant: common.util.Option[java.lang.String] =
@@ -1030,12 +1030,12 @@ class HoodieSparkSqlWriterInternal {
           common.util.Option.empty()
         }
 
-      log.info(s"Clustering Scheduled is $clusteringInstant")
+      log.debug(s"Clustering Scheduled is $clusteringInstant")
 
       val metaSyncSuccess = metaSync(spark, HoodieWriterUtils.convertMapToHoodieConfig(parameters),
         tableInstantInfo.basePath, schema)
 
-      log.info(s"Is Async Compaction Enabled ? $asyncCompactionEnabled")
+      log.debug(s"Is Async Compaction Enabled ? $asyncCompactionEnabled")
       (commitSuccess && metaSyncSuccess, compactionInstant, clusteringInstant)
     } else {
       (false, common.util.Option.empty(), common.util.Option.empty())
@@ -1045,7 +1045,7 @@ class HoodieSparkSqlWriterInternal {
   private def isAsyncCompactionEnabled(client: SparkRDDWriteClient[_],
                                        tableConfig: HoodieTableConfig,
                                        parameters: Map[String, String], configuration: Configuration): Boolean = {
-    log.info(s"Config.inlineCompactionEnabled ? ${client.getConfig.inlineCompactionEnabled}")
+    log.debug(s"Config.inlineCompactionEnabled ? ${client.getConfig.inlineCompactionEnabled}")
     (asyncCompactionTriggerFnDefined && !client.getConfig.inlineCompactionEnabled
       && parameters.get(ASYNC_COMPACT_ENABLE.key).exists(r => r.toBoolean)
       && tableConfig.getTableType == MERGE_ON_READ)
@@ -1053,7 +1053,7 @@ class HoodieSparkSqlWriterInternal {
 
   private def isAsyncClusteringEnabled(client: SparkRDDWriteClient[_],
                                        parameters: Map[String, String]): Boolean = {
-    log.info(s"Config.asyncClusteringEnabled ? ${client.getConfig.isAsyncClusteringEnabled}")
+    log.debug(s"Config.asyncClusteringEnabled ? ${client.getConfig.isAsyncClusteringEnabled}")
     (asyncClusteringTriggerFnDefined && !client.getConfig.inlineClusteringEnabled
       && client.getConfig.isAsyncClusteringEnabled)
   }
@@ -1099,6 +1099,9 @@ class HoodieSparkSqlWriterInternal {
         }
     }
     val mergedParams = mutable.Map.empty ++ HoodieWriterUtils.parametersWithWriteDefaults(translatedOptsWithMappedTableConfig.toMap)
+    if (!mergedParams.contains(HoodieTableConfig.TYPE.key) && mergedParams.contains(TABLE_TYPE.key)) {
+      mergedParams(HoodieTableConfig.TYPE.key) = mergedParams(TABLE_TYPE.key)
+    }
     if (mergedParams.contains(KEYGENERATOR_CLASS_NAME.key) && !mergedParams.contains(HoodieTableConfig.KEY_GENERATOR_TYPE.key)) {
       mergedParams(HoodieTableConfig.KEY_GENERATOR_TYPE.key) = KeyGeneratorType.fromClassName(mergedParams(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key)).name
     }

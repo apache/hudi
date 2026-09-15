@@ -21,6 +21,8 @@ package org.apache.hudi.io.hfile;
 
 import java.nio.charset.StandardCharsets;
 
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
+
 /**
  * Represent a UTF8 String key only, with no length information encoded.
  */
@@ -46,7 +48,7 @@ public class UTF8StringKey extends Key {
   @Override
   public String toString() {
     return "UTF8StringKey{"
-        + new String(getBytes())
+        + fromUTF8Bytes(getBytes())
         + "}";
   }
 }

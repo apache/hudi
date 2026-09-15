@@ -62,9 +62,7 @@ public class HoodieHFileRealtimeInputFormat extends HoodieMergeOnReadTableInputF
     // actual heavy lifting of reading the parquet files happen.
     if (jobConf.get(HoodieInputFormatUtils.HOODIE_READ_COLUMNS_PROP) == null) {
       synchronized (jobConf) {
-        LOG.info(
-            "Before adding Hoodie columns, Projections :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR)
-                + ", Ids :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
+        LOG.info("Before adding Hoodie columns, Projections :{}, Ids :{}", jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR), jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
         if (jobConf.get(HoodieInputFormatUtils.HOODIE_READ_COLUMNS_PROP) == null) {
           // Hive (across all versions) fails for queries like select count(`_hoodie_commit_time`) from table;
           // In this case, the projection fields gets removed. Looking at HiveInputFormat implementation, in some cases
@@ -82,8 +80,7 @@ public class HoodieHFileRealtimeInputFormat extends HoodieMergeOnReadTableInputF
     }
     HoodieRealtimeInputFormatUtils.cleanProjectionColumnIds(jobConf);
 
-    LOG.info("Creating record reader with readCols :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR)
-        + ", Ids :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
+    LOG.info("Creating record reader with readCols :{}, Ids :{}", jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR), jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
     // sanity check
     ValidationUtils.checkArgument(split instanceof HoodieRealtimeFileSplit,
         "HoodieRealtimeRecordReader can only work on HoodieRealtimeFileSplit and not with " + split);

@@ -358,12 +358,14 @@ public class HoodieCommonTestHarness {
                                                      String commitTime,
                                                      String logBlockInstantTime)
       throws IOException, InterruptedException {
-    HoodieLogFormat.Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-            .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withSizeThreshold(1024).withFileId(fileId)
-            .withInstantTime(commitTime)
-            .withStorage(storage).build();
+    HoodieLogFormat.Writer writer = HoodieLogFormatWriter.builder()
+        .withParentPath(partitionPath)
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+        .withSizeThreshold(1024L)
+        .withLogFileId(fileId)
+        .withInstantTime(commitTime)
+        .withStorage(storage)
+        .build();
     if (storage.exists(writer.getLogFile().getPath())) {
       // enable append for reader test.
       ((HoodieLogFormatWriter) writer).withOutputStream(

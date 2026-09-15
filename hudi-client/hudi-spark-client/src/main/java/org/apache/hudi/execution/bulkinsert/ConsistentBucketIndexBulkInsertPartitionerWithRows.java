@@ -29,6 +29,7 @@ import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
 import org.apache.hudi.index.bucket.ConsistentBucketIndexUtils;
 import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.BucketSortBulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
@@ -54,7 +55,9 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_C
  */
 public class ConsistentBucketIndexBulkInsertPartitionerWithRows extends BucketSortBulkInsertPartitioner<Dataset<Row>> {
 
-  private final String indexKeyFields;
+  // parsed once; the per-record getBucketId path uses the List overload of getBucket so the
+  // comma-separated config string is not re-split per record
+  private final List<String> indexKeyFieldList;
 
   private final List<String> fileIdPfxList = new ArrayList<>();
 
@@ -83,7 +86,7 @@ public class ConsistentBucketIndexBulkInsertPartitionerWithRows extends BucketSo
                                                             Map<String, String> strategyParams,
                                                             boolean populateMetaFields, Map<String, List<ConsistentHashingNode>> hashingChildrenNodes) {
     super(table, strategyParams.getOrDefault(PLAN_STRATEGY_SORT_COLUMNS.key(), ""));
-    this.indexKeyFields = table.getConfig().getBucketIndexHashField();
+    this.indexKeyFieldList = KeyGenUtils.getIndexKeyFields(table.getConfig().getBucketIndexHashField());
     this.populateMetaFields = populateMetaFields;
     if (!populateMetaFields) {
       this.keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.getKeyGenerator(table.getConfig().getProps());
@@ -179,7 +182,7 @@ public class ConsistentBucketIndexBulkInsertPartitionerWithRows extends BucketSo
   private int getBucketId(Row row) {
     String recordKey = extractor.getRecordKey(row);
     String partitionPath = extractor.getPartitionPath(row);
-    ConsistentHashingNode node = partitionToIdentifier.get(partitionPath).getBucket(recordKey, indexKeyFields);
+    ConsistentHashingNode node = partitionToIdentifier.get(partitionPath).getBucket(recordKey, indexKeyFieldList);
     return partitionToFileIdPfxIdxMap.get(partitionPath).get(node.getFileIdPrefix());
   }
 }

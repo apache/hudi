@@ -20,7 +20,7 @@ package org.apache.spark.sql.hive
 import org.apache.hudi.hive.HiveSyncConfig
 
 import org.apache.hadoop.hive.metastore.IMetaStoreClient
-import org.apache.hadoop.hive.metastore.api.{Database, EnvironmentContext, FieldSchema, Partition, SerDeInfo, StorageDescriptor, Table}
+import org.apache.hadoop.hive.metastore.api.{Database, EnvironmentContext, FieldSchema, MetaException, NoSuchObjectException, Partition, SerDeInfo, StorageDescriptor, Table}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogDatabase, CatalogStorageFormat, CatalogTable, CatalogTablePartition, CatalogTableType}
@@ -65,8 +65,48 @@ class SparkCatalogMetaStoreClient(syncConfig: HiveSyncConfig)
 
   // scalastyle:off method.name
   override def alter_table(dbName: String, tableName: String, table: Table): Unit = {
-    val updated = toCatalogTable(table).copy(identifier = TableIdentifier(tableName, Some(dbName)))
-    externalCatalog.alterTable(updated)
+    val current = externalCatalog.getTable(dbName, tableName)
+    // HoodieHiveSyncClient.createOrReplaceTable renames its temp table by altering it under the
+    // final name, after it has already dropped the real table; Spark's ExternalCatalog only does
+    // that through renameTable. It runs first so a failed alter still leaves a usable table under
+    // the final name. Hive lower-cases table names, so a differently-cased configured name is not
+    // a rename.
+    val targetName = Option(table.getTableName).filter(_.nonEmpty).getOrElse(tableName)
+    if (!targetName.equalsIgnoreCase(tableName)) {
+      externalCatalog.renameTable(dbName, tableName, targetName)
+    }
+    // HiveExternalCatalog.alterTable deliberately keeps the existing schema (Spark routes schema
+    // changes through alterTableDataSchema) while InMemoryCatalog replaces it wholesale, so the
+    // merged schema is handed to both calls. The merge is deliberately conservative: the catalog
+    // holds the logical Spark schema (nullability, field metadata such as the VECTOR/BLOB type
+    // markers, the original VariantType) while the sync only speaks Hive type strings, so an
+    // existing column keeps its type, nullability and metadata and is never dropped; only new
+    // columns are appended and non-empty comments applied. Property-only alters therefore leave
+    // the schema untouched.
+    val converted = toCatalogTable(table)
+    val merged = mergeDataSchema(current.dataSchema, converted.dataSchema)
+    val incoming = converted.copy(
+      identifier = TableIdentifier(targetName, Some(dbName)),
+      schema = StructType(merged ++ current.partitionSchema),
+      partitionColumnNames = current.partitionColumnNames)
+    externalCatalog.alterTable(incoming)
+    if (merged != current.dataSchema) {
+      externalCatalog.alterTableDataSchema(dbName, targetName, merged)
+    }
+  }
+
+  private def mergeDataSchema(current: StructType, incoming: StructType): StructType = {
+    def key(name: String): String = name.toLowerCase(util.Locale.ROOT)
+    val incomingByName = incoming.fields.map(f => key(f.name) -> f).toMap
+    val kept = current.fields.map { existing =>
+      incomingByName.get(key(existing.name))
+        .flatMap(_.getComment().filter(_.nonEmpty))
+        .map(existing.withComment)
+        .getOrElse(existing)
+    }
+    val currentNames = current.fields.map(f => key(f.name)).toSet
+    val added = incoming.fields.filterNot(f => currentNames.contains(key(f.name)))
+    StructType(kept ++ added)
   }
 
   override def alter_table_with_environmentContext(dbName: String,
@@ -88,6 +128,25 @@ class SparkCatalogMetaStoreClient(syncConfig: HiveSyncConfig)
                                       max: Short): util.List[Partition] = {
     // Spark external catalog does not expose Hive filter-string API; fall back to listing all.
     listPartitions(dbName, tableName, max)
+  }
+
+  /**
+   * Looks up a single partition by its ordered values. HivePartitionUtil.partitionExists relies on
+   * the Hive contract here: a missing partition surfaces as NoSuchObjectException, not as null.
+   */
+  override def getPartition(dbName: String, tableName: String, values: util.List[String]): Partition = {
+    val catalogTable = externalCatalog.getTable(dbName, tableName)
+    val partitionKeys = catalogTable.partitionColumnNames.toList
+    val partitionValues = Option(values).map(_.asScala.toList).getOrElse(Nil)
+    if (partitionValues.size != partitionKeys.size) {
+      val keys = partitionKeys.mkString(",")
+      throw new MetaException(
+        s"Expected ${partitionKeys.size} partition value(s) [$keys] for $dbName.$tableName but got ${partitionValues.size}")
+    }
+    val spec = partitionKeys.zip(partitionValues).toMap
+    externalCatalog.getPartitionOption(dbName, tableName, spec)
+      .map(fromCatalogPartition(_, dbName, tableName, partitionKeys))
+      .getOrElse(throw new NoSuchObjectException(s"Partition $spec of $dbName.$tableName does not exist"))
   }
 
   override def add_partitions(parts: util.List[Partition], ifNotExists: Boolean, needResults: Boolean): util.List[Partition] = {
@@ -128,8 +187,11 @@ class SparkCatalogMetaStoreClient(syncConfig: HiveSyncConfig)
 
   override def getSchema(dbName: String, tableName: String): util.List[FieldSchema] = {
     val table = externalCatalog.getTable(dbName, tableName)
-    val cols = table.schema.fields.map { f =>
-      new FieldSchema(f.name, f.dataType.catalogString, Option(f.getComment()).map(_.toString).getOrElse(""))
+    // CatalogTable.schema already carries the partition columns, so they have to be filtered out
+    // here or every partition column would be reported twice. Hive's getSchema returns the data
+    // columns first and the partition columns last, which is the order reproduced below.
+    val cols = table.schema.fields.filterNot(f => table.partitionColumnNames.contains(f.name)).map { f =>
+      new FieldSchema(f.name, f.dataType.catalogString, f.getComment().getOrElse(""))
     }
     val partitionCols = table.partitionColumnNames.map { name =>
       val dt = table.partitionSchema.fields.find(_.name == name).map(_.dataType.catalogString).getOrElse("string")
@@ -151,7 +213,9 @@ class SparkCatalogMetaStoreClient(syncConfig: HiveSyncConfig)
   override def setHiveAddedJars(arg0: String): Unit = unsupported[Unit]()
   override def isLocalMetaStore(): Boolean = unsupported[Boolean]()
   override def reconnect(): Unit = unsupported[Unit]()
-  override def close(): Unit = unsupported[Unit]()
+  // close is a no-op: HoodieHiveSyncClient.close() calls it on every sync and there is no
+  // connection to release, the Spark session outlives this client.
+  override def close(): Unit = {}
   // setMetaConf is no-op: HoodieHiveSyncClient.setMetaConf forwards
   // hive.metastore.callerContext.* values to the metastore for audit/tracing. With Spark's
   // external catalog there is no remote HMS to forward to, so accept the call silently
@@ -176,7 +240,6 @@ class SparkCatalogMetaStoreClient(syncConfig: HiveSyncConfig)
   override def add_partition(arg0: org.apache.hadoop.hive.metastore.api.Partition): org.apache.hadoop.hive.metastore.api.Partition = unsupported[org.apache.hadoop.hive.metastore.api.Partition]()
   override def add_partitions(arg0: java.util.List[org.apache.hadoop.hive.metastore.api.Partition]): Int = unsupported[Int]()
   override def add_partitions_pspec(arg0: org.apache.hadoop.hive.metastore.partition.spec.PartitionSpecProxy): Int = unsupported[Int]()
-  override def getPartition(arg0: String, arg1: String, arg2: java.util.List[String]): org.apache.hadoop.hive.metastore.api.Partition = unsupported[org.apache.hadoop.hive.metastore.api.Partition]()
   override def exchange_partition(arg0: java.util.Map[String, String], arg1: String, arg2: String, arg3: String, arg4: String): org.apache.hadoop.hive.metastore.api.Partition = unsupported[org.apache.hadoop.hive.metastore.api.Partition]()
   override def exchange_partitions(arg0: java.util.Map[String, String], arg1: String, arg2: String, arg3: String, arg4: String): java.util.List[org.apache.hadoop.hive.metastore.api.Partition] = unsupported[java.util.List[org.apache.hadoop.hive.metastore.api.Partition]]()
   override def getPartition(arg0: String, arg1: String, arg2: String): org.apache.hadoop.hive.metastore.api.Partition = unsupported[org.apache.hadoop.hive.metastore.api.Partition]()
@@ -303,8 +366,14 @@ class SparkCatalogMetaStoreClient(syncConfig: HiveSyncConfig)
     val cols = Option(table.getSd).map(_.getCols).map(_.asScala.toList).getOrElse(Nil)
     val partCols = Option(table.getPartitionKeys).map(_.asScala.toList).getOrElse(Nil)
 
-    val dataFields = cols.map(fs => StructField(fs.getName, CatalystSqlParser.parseDataType(fs.getType), nullable = true, Metadata.empty))
-    val partitionFields = partCols.map(fs => StructField(fs.getName, CatalystSqlParser.parseDataType(fs.getType), nullable = true, Metadata.empty))
+    // Carry the Hive column comment across; fromCatalogTable emits it, and since alter_table now
+    // writes the data schema back, dropping it here would erase comments on every sync round trip.
+    def toField(fs: FieldSchema): StructField = {
+      val field = StructField(fs.getName, CatalystSqlParser.parseDataType(fs.getType), nullable = true, Metadata.empty)
+      Option(fs.getComment).filter(_.nonEmpty).map(field.withComment).getOrElse(field)
+    }
+    val dataFields = cols.map(toField)
+    val partitionFields = partCols.map(toField)
 
     // Strip "spark.sql.*" properties before handing off to Spark's external catalog.
     // HiveExternalCatalog.alterTable / createTable rejects such keys ("Cannot persist ...
@@ -343,6 +412,10 @@ class SparkCatalogMetaStoreClient(syncConfig: HiveSyncConfig)
     t.setTableName(table.identifier.table)
     t.setTableType(if (table.tableType == CatalogTableType.EXTERNAL) "EXTERNAL_TABLE" else "MANAGED_TABLE")
     t.setParameters(new util.HashMap[String, String](table.properties.asJava))
+    // Spark moves the "comment" table property into the dedicated CatalogTable.comment field when it
+    // reads a table back (HiveClientImpl excludes it from CatalogTable.properties), so it has to be
+    // put back here or a comment written through createTable/alter_table would be lost on getTable.
+    table.comment.foreach(c => t.putToParameters("comment", c))
 
     val nonPartitionFields = table.schema.fields.filterNot(f => table.partitionColumnNames.contains(f.name))
     val cols = nonPartitionFields.map(f => new FieldSchema(f.name, f.dataType.catalogString, f.getComment().orNull)).toList.asJava

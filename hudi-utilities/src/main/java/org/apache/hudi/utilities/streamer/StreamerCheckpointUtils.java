@@ -26,8 +26,11 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.table.checkpoint.CheckpointUtils;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
+import org.apache.hudi.common.table.checkpoint.UnresolvedStreamerCheckpointBasedOnCfg;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -39,13 +42,12 @@ import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.exception.HoodieStreamerException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 
+import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.DATASOURCES_NOT_SUPPORTED_WITH_CKPT_V2;
 import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.HOODIE_INCREMENTAL_SOURCES;
-import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.buildCheckpointFromConfigOverride;
 import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_KEY_V2;
 import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_RESET_KEY_V2;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
@@ -53,8 +55,30 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
 import static org.apache.hudi.common.util.ConfigUtils.removeConfigFromProps;
 import static org.apache.hudi.table.upgrade.UpgradeDowngrade.needsUpgradeOrDowngrade;
 
+@Slf4j
 public class StreamerCheckpointUtils {
-  private static final Logger LOG = LoggerFactory.getLogger(StreamerCheckpointUtils.class);
+
+  /**
+   * Wraps a user-supplied checkpoint override string. For HoodieIncrSource family on table version
+   * 8+, returns {@link UnresolvedStreamerCheckpointBasedOnCfg} so the source can resolve V1/V2
+   * cursor semantics from the override's prefix; for everything else returns V1.
+   */
+  public static Checkpoint buildCheckpointFromConfigOverride(
+      String sourceClassName, int writeTableVersion, String checkpointToResume) {
+    return shouldTargetCheckpointV2(writeTableVersion, sourceClassName)
+        ? new UnresolvedStreamerCheckpointBasedOnCfg(checkpointToResume)
+        : new StreamerCheckpointV1(checkpointToResume);
+  }
+
+  /**
+   * True only for the HoodieIncrSource family on table version 8+, where V2 (completion-time)
+   * cursor semantics differ from V1 (requested-time). Every other source operates on V1 only.
+   */
+  public static boolean shouldTargetCheckpointV2(int writeTableVersion, String sourceClassName) {
+    return writeTableVersion >= HoodieTableVersion.EIGHT.versionCode()
+        && HOODIE_INCREMENTAL_SOURCES.contains(sourceClassName)
+        && !DATASOURCES_NOT_SUPPORTED_WITH_CKPT_V2.contains(sourceClassName);
+  }
 
   /**
    * The first phase of checkpoint resolution - read the checkpoint configs from 2 sources and resolve
@@ -115,7 +139,7 @@ public class StreamerCheckpointUtils {
 
   private static Option<Checkpoint> useCkpFromOverrideConfigIfAny(
       HoodieStreamer.Config streamerConfig, TypedProperties props, Option<Checkpoint> checkpoint) {
-    LOG.debug("Checkpoint from config: {}", streamerConfig.checkpoint);
+    log.debug("Checkpoint from config: {}", streamerConfig.checkpoint);
     if (!checkpoint.isPresent() && streamerConfig.checkpoint != null) {
       int writeTableVersion = ConfigUtils.getIntWithAltKeys(props, HoodieWriteConfig.WRITE_TABLE_VERSION);
       checkpoint = Option.of(buildCheckpointFromConfigOverride(streamerConfig.sourceClassName, writeTableVersion, streamerConfig.checkpoint));
@@ -156,7 +180,7 @@ public class StreamerCheckpointUtils {
       if (commitMetadataOption.isPresent()) {
         HoodieCommitMetadata commitMetadata = commitMetadataOption.get();
         Checkpoint checkpointFromCommit = CheckpointUtils.getCheckpoint(commitMetadata);
-        LOG.debug("Checkpoint reset from metadata: {}", checkpointFromCommit.getCheckpointResetKey());
+        log.debug("Checkpoint reset from metadata: {}", checkpointFromCommit.getCheckpointResetKey());
         if (ignoreCkpCfgPrevailsOverCkpFromPrevCommit(streamerConfig, checkpointFromCommit)) {
           // we ignore any existing checkpoint and start ingesting afresh
           resumeCheckpoint = Option.empty();
@@ -201,21 +225,12 @@ public class StreamerCheckpointUtils {
 
   public static Option<Pair<String, HoodieCommitMetadata>> getLatestInstantAndCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline)
       throws IOException {
-    return (Option<Pair<String, HoodieCommitMetadata>>) timeline.getReverseOrderedInstants().map(instant -> {
-      try {
-        HoodieCommitMetadata commitMetadata = timeline.readCommitMetadata(instant);
-        if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(HoodieStreamer.CHECKPOINT_KEY))
-            || !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(HoodieStreamer.CHECKPOINT_RESET_KEY))
-            || !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(STREAMER_CHECKPOINT_KEY_V2))
-            || !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(STREAMER_CHECKPOINT_RESET_KEY_V2))) {
-          return Option.of(Pair.of(instant.toString(), commitMetadata));
-        } else {
-          return Option.empty();
-        }
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to parse HoodieCommitMetadata for " + instant.toString(), e);
-      }
-    }).filter(Option::isPresent).findFirst().orElse(Option.empty());
+    return TimelineUtils.getLatestInstantAndCommitMetadataWithValidCheckpointInfo(
+        timeline,
+        HoodieStreamer.CHECKPOINT_KEY,
+        HoodieStreamer.CHECKPOINT_RESET_KEY,
+        STREAMER_CHECKPOINT_KEY_V2,
+        STREAMER_CHECKPOINT_RESET_KEY_V2);
   }
 
   public static Option<HoodieCommitMetadata> getLatestCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline) throws IOException {

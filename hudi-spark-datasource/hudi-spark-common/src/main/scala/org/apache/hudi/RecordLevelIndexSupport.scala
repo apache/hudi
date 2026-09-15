@@ -18,11 +18,9 @@
 package org.apache.hudi
 
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, TIME_TRAVEL_AS_OF_INSTANT}
-import org.apache.hudi.RecordLevelIndexSupport.getPrunedStoragePaths
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.data.HoodieListData
-import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.FileSlice
+import org.apache.hudi.common.data.{HoodieListData, HoodiePairData}
+import org.apache.hudi.common.model.{FileSlice, HoodieRecordGlobalLocation}
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField
 import org.apache.hudi.common.model.HoodieTableQueryType.SNAPSHOT
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -31,7 +29,6 @@ import org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps
 import org.apache.hudi.common.util.HoodieDataUtils
 import org.apache.hudi.keygen.KeyGenerator
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
-import org.apache.hudi.storage.StoragePath
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Cast, EqualTo, Expression, In, Literal}
@@ -55,9 +52,8 @@ class RecordLevelIndexSupport(spark: SparkSession,
                                          shouldPushDownFilesFilter: Boolean
                                         ): Option[Set[String]] = {
     lazy val (_, recordKeys) = filterQueriesWithRecordKey(queryFilters)
-    val prunedStoragePaths = getPrunedStoragePaths(prunedPartitionsAndFileSlices, fileIndex)
     if (recordKeys.nonEmpty) {
-      Option.apply(getCandidateFilesForRecordKeys(prunedStoragePaths, recordKeys))
+      Option.apply(getCandidateFilesForRecordKeys(fileIndex, prunedPartitionsAndFileSlices, recordKeys))
     } else {
       Option.empty
     }
@@ -70,33 +66,46 @@ class RecordLevelIndexSupport(spark: SparkSession,
   /**
    * Returns the list of candidate files which store the provided record keys based on Metadata Table Record Index.
    *
-   * @param allFiles   - List of all files which needs to be considered for the query
-   * @param recordKeys - List of record keys.
+   * @param fileIndex                     - File index of the query
+   * @param prunedPartitionsAndFileSlices - Partitions and file slices left after partition pruning
+   * @param recordKeys                    - List of record keys.
    * @return Sequence of file names which need to be queried
    */
-  private def getCandidateFilesForRecordKeys(allFiles: Seq[StoragePath], recordKeys: List[String]): Set[String] = {
+  private def getCandidateFilesForRecordKeys(fileIndex: HoodieFileIndex,
+                                             prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
+                                             recordKeys: List[String]): Set[String] = {
     val recordIndexData = metadataTable.readRecordIndexLocationsWithKeys(
         HoodieListData.eager(JavaConverters.seqAsJavaListConverter(recordKeys).asJava))
     try {
-      val recordKeyLocationsList = HoodieDataUtils.dedupeAndCollectAsList(recordIndexData)
-      val fileIdToPartitionMap: mutable.Map[String, String] = mutable.Map.empty
-      val candidateFiles: mutable.Set[String] = mutable.Set.empty
-      for (recordKeyLocation <- recordKeyLocationsList.asScala) {
-        val location = recordKeyLocation.getValue
-        fileIdToPartitionMap.put(location.getFileId, location.getPartitionPath)
-      }
-      for (file <- allFiles) {
-        val fileId = FSUtils.getFileIdFromFilePath(file)
-        val partitionOpt = fileIdToPartitionMap.get(fileId)
-        if (partitionOpt.isDefined) {
-          candidateFiles += file.getName
-        }
-      }
-      candidateFiles.toSet
+      filterCandidateFiles(prunedPartitionsAndFileSlices, fileIndex, collectFileIdToPartitionMap(recordIndexData))
     } finally {
       // Clean up the RDD to avoid memory leaks
       recordIndexData.unpersistWithDependencies()
     }
+  }
+
+  protected def collectFileIdToPartitionMap(recordIndexData: HoodiePairData[String, HoodieRecordGlobalLocation]): mutable.Map[String, String] = {
+    val recordKeyLocationsList = HoodieDataUtils.dedupeAndCollectAsList(recordIndexData)
+    val fileIdToPartitionMap: mutable.Map[String, String] = mutable.Map.empty
+    for (recordKeyLocation <- recordKeyLocationsList.asScala) {
+      val location = recordKeyLocation.getValue
+      fileIdToPartitionMap.put(location.getFileId, location.getPartitionPath)
+    }
+    fileIdToPartitionMap
+  }
+
+  /**
+   * Returns the names of the files of the pruned file slices whose file id is present in the record index lookup
+   * results. The file id is taken from the file slice rather than parsed from the file name, because a file written
+   * outside Hudi keeps its own name, which does not follow Hudi's naming convention.
+   */
+  protected def filterCandidateFiles(prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
+                                     fileIndex: HoodieFileIndex,
+                                     fileIdToPartitionMap: mutable.Map[String, String]): Set[String] = {
+    RecordLevelIndexSupport.getPrunedFileSlices(prunedPartitionsAndFileSlices, fileIndex)
+      .filter(fileSlice => fileIdToPartitionMap.contains(fileSlice.getFileId))
+      .flatMap(fileSlice => RecordLevelIndexSupport.getFileNames(fileSlice, fileIndex))
+      .toSet
   }
 
   /**
@@ -239,33 +248,33 @@ object RecordLevelIndexSupport {
   }
 
   /**
-   * Returns the list of storage paths from the pruned partitions and file slices.
+   * Returns the pruned file slices, or every file slice of the table when nothing was pruned.
    *
    * @param prunedPartitionsAndFileSlices - List of pruned partitions and file slices
-   * @return List of storage paths
+   * @return List of file slices
    */
-  def getPrunedStoragePaths(prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
-                            fileIndex: HoodieFileIndex): Seq[StoragePath] = {
-    if (prunedPartitionsAndFileSlices.isEmpty) {
-      fileIndex.inputFiles.map(strPath => new StoragePath(strPath)).toSeq
+  def getPrunedFileSlices(prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
+                          fileIndex: HoodieFileIndex): Seq[FileSlice] = {
+    val partitionsAndFileSlices = if (prunedPartitionsAndFileSlices.isEmpty) {
+      fileIndex.prunePartitionsAndGetFileSlices(Seq.empty, Seq.empty)._2
     } else {
       prunedPartitionsAndFileSlices
-        .flatMap { case (_, fileSlices) =>
-          fileSlices
-        }
-        .flatMap { fileSlice =>
-          val baseFileOption = Option(fileSlice.getBaseFile.orElse(null))
-          val logFiles = if (fileIndex.includeLogFiles) {
-            fileSlice.getLogFiles.iterator().asScala
-          } else {
-            Iterator.empty
-          }
-          val baseFilePaths = baseFileOption.map(baseFile => baseFile.getStoragePath).toSeq
-          val logFilePaths = logFiles.map(logFile => logFile.getPath).toSeq
-
-          baseFilePaths ++ logFilePaths
-        }
     }
+    partitionsAndFileSlices.flatMap { case (_, fileSlices) => fileSlices }
+  }
+
+  /**
+   * Returns the names of the files of the file slice as they exist on storage: the base file, and the log files
+   * when the file index reads them.
+   */
+  def getFileNames(fileSlice: FileSlice, fileIndex: HoodieFileIndex): Seq[String] = {
+    val baseFileNames = Option(fileSlice.getBaseFile.orElse(null)).map(_.getFileName).toSeq
+    val logFileNames = if (fileIndex.includeLogFiles) {
+      fileSlice.getLogFiles.iterator().asScala.map(_.getFileName).toSeq
+    } else {
+      Seq.empty
+    }
+    baseFileNames ++ logFileNames
   }
 
   /**

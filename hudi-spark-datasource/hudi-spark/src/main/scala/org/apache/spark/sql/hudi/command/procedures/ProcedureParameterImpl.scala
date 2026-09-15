@@ -25,15 +25,14 @@ case class ProcedureParameterImpl(index: Int, name: String, dataType: DataType, 
   extends ProcedureParameter {
 
   override def equals(other: Any): Boolean = {
-    val that = other.asInstanceOf[ProcedureParameterImpl]
-    val rtn = if (this == other) {
+    if (this eq other.asInstanceOf[AnyRef]) {
       true
     } else if (other == null || (getClass ne other.getClass)) {
       false
     } else {
+      val that = other.asInstanceOf[ProcedureParameterImpl]
       index == that.index && required == that.required && default == that.default && Objects.equals(name, that.name) && Objects.equals(dataType, that.dataType)
     }
-    rtn
   }
 
   override def hashCode: Int = Seq(index, name, dataType, required, default).hashCode()

@@ -107,7 +107,7 @@ public class TestHoodieSparkTable extends HoodieCommonTestHarness {
         // lets create the data file. so that we can validate later.
         localStorage.create(storagePath);
       } catch (IOException e) {
-        throw new HoodieException("Failed to check data file existance " + fileName);
+        throw new HoodieException("Failed to check data file existence " + fileName);
       }
     });
     HoodieTable hoodieTable = HoodieSparkTable.create(writeConfig, getEngineContext(), metaClient);

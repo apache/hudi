@@ -228,12 +228,7 @@ public abstract class BaseVectorizedColumnReader implements ColumnReader<Writabl
     this.definitionLevelColumn =
         newRLEIterator(descriptor.getMaxDefinitionLevel(), page.getDefinitionLevels());
     try {
-      LOG.debug(
-          "page data size "
-              + page.getData().size()
-              + " bytes and "
-              + pageValueCount
-              + " records");
+      LOG.debug("page data size {} bytes and {} records", page.getData().size(), pageValueCount);
       initDataReader(
           page.getDataEncoding(), page.getData().toInputStream(), page.getValueCount());
     } catch (IOException e) {

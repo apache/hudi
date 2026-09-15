@@ -21,66 +21,22 @@ package org.apache.hudi.utilities.streamer;
 
 import org.apache.hudi.common.config.TypedProperties;
 
-import java.util.Objects;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.Setter;
 
 /**
  * Wrapper over TableConfig objects.
  * Useful for incrementally syncing multiple tables one by one via HoodieMultiTableStreamer.java class.
  */
+@Getter
+@Setter
+@EqualsAndHashCode
 public class TableExecutionContext {
 
   private TypedProperties properties;
+  @EqualsAndHashCode.Exclude
   private HoodieStreamer.Config config;
   private String database;
   private String tableName;
-
-  public HoodieStreamer.Config getConfig() {
-    return config;
-  }
-
-  public void setConfig(HoodieStreamer.Config config) {
-    this.config = config;
-  }
-
-  public String getDatabase() {
-    return database;
-  }
-
-  public void setDatabase(String database) {
-    this.database = database;
-  }
-
-  public String getTableName() {
-    return tableName;
-  }
-
-  public void setTableName(String tableName) {
-    this.tableName = tableName;
-  }
-
-  public TypedProperties getProperties() {
-    return properties;
-  }
-
-  public void setProperties(TypedProperties properties) {
-    this.properties = properties;
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (o == null || getClass() != o.getClass()) {
-      return false;
-    }
-
-    TableExecutionContext that = (TableExecutionContext) o;
-    return Objects.equals(properties, that.properties) && Objects.equals(database, that.database) && Objects.equals(tableName, that.tableName);
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(properties, database, tableName);
-  }
 }

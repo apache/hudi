@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
@@ -273,7 +274,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
       InputBatch<Dataset<Row>> batch = runSource(Option.empty(), 100);
       Dataset<Row> rowDataset = batch.getBatch().get();
       assertEquals(100, rowDataset.count());
-      assertEquals(new StreamerCheckpointV2("100"), batch.getCheckpointForNextBatch());
+      assertEquals(new StreamerCheckpointV1("100"), batch.getCheckpointForNextBatch());
 
       // Add 100 records with commit time "001"
       insert("001", 100, connection, DATA_GENERATOR, PROPS);
@@ -361,7 +362,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
       InputBatch<Dataset<Row>> batch = runSource(Option.empty(), 10);
       Dataset<Row> rowDataset = batch.getBatch().get();
       assertEquals(10, rowDataset.count());
-      assertEquals(new StreamerCheckpointV2(""), batch.getCheckpointForNextBatch());
+      assertEquals(new StreamerCheckpointV1(""), batch.getCheckpointForNextBatch());
 
       // Get max of incremental column
       Column incrementalColumn = rowDataset

@@ -52,6 +52,7 @@ import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapred.FileInputFormat;
+import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
@@ -62,10 +63,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
@@ -77,6 +82,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
@@ -86,6 +92,7 @@ import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResou
 import static org.apache.hudi.hadoop.HoodieColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -837,4 +844,124 @@ public class TestHoodieParquetInputFormat {
       jobConf.set(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true");
     }
   }
+
+  /**
+   * A bootstrap split carries two files: the split's own path is the skeleton, inside the table root, and
+   * {@code getBootstrapFileSplit()} is the external source file, which is not. A query projecting no columns
+   * at all - {@code SELECT COUNT(*)} - satisfies both "only one file is needed" conditions at once, so the
+   * order they are tested in decides which file Hive is handed.
+   *
+   * <p>Handing Hive a path outside the table root breaks its vectorized reader, which derives partition
+   * values by looking the split path up in {@code pathToPartitionInfo} (HUDI-5526, #15676). Hive 2.3 ships
+   * the same reader but defaults {@code hive.vectorized.execution.enabled} to false where Hive 3 defaults it
+   * to true, so this is gated by that config rather than by the Hive version.
+   *
+   * <p>Only the no-projection case is new behaviour: TestBootstrap and TestOrcBootstrap drive the other
+   * three branches end to end, they have just been disabled (HUDI-7353) since #10551.
+   */
+  @Test
+  public void testCountStarReadsSkeletonSoSplitPathStaysInsideTable() throws IOException {
+    BootstrapBaseFileSplit split = bootstrapSplit();
+
+    Option<FileSplit> resolved = HoodieParquetInputFormat.resolveSingleFileSplit(split, false, false);
+
+    assertTrue(resolved.isPresent(), "a query projecting no columns must resolve to a single file");
+    assertSame(split, resolved.get(),
+        "it must be the skeleton, whose path is inside the table root");
+  }
+
+  /**
+   * The remaining three combinations, which behave the same before and after the reorder: only meta columns
+   * needs the skeleton, only data columns needs the external file, and both needs them stitched.
+   */
+  @ParameterizedTest
+  @MethodSource("singleFileSplitCases")
+  public void testSingleFileSplitSelection(boolean anyHoodieCol, boolean anyExternalCol,
+                                           String expected) throws IOException {
+    BootstrapBaseFileSplit split = bootstrapSplit();
+
+    Option<FileSplit> resolved =
+        HoodieParquetInputFormat.resolveSingleFileSplit(split, anyHoodieCol, anyExternalCol);
+
+    if ("stitch".equals(expected)) {
+      assertFalse(resolved.isPresent(), "both files are needed, so the caller must stitch them");
+    } else {
+      assertTrue(resolved.isPresent(), "a single file should have been resolved");
+      assertSame("skeleton".equals(expected) ? split : split.getBootstrapFileSplit(), resolved.get(),
+          "wrong file chosen for (anyHoodieCol=" + anyHoodieCol + ", anyExternalCol=" + anyExternalCol + ")");
+    }
+  }
+
+  private static Stream<Arguments> singleFileSplitCases() {
+    return Stream.of(
+        Arguments.of(true, false, "skeleton"),
+        Arguments.of(false, true, "external"),
+        Arguments.of(true, true, "stitch"));
+  }
+
+  private static BootstrapBaseFileSplit bootstrapSplit() throws IOException {
+    return new BootstrapBaseFileSplit(
+        new FileSplit(new Path("/tbl/event_type=two/skeleton.parquet"), 0, 100, (String[]) null),
+        new FileSplit(new Path("/src/event_type=two/part-0.parquet"), 0, 100, (String[]) null));
+  }
+
+  /**
+   * The end-to-end shape of HUDI-5526: a bootstrap split whose skeleton and external file hold a different
+   * number of rows, read through {@link HoodieParquetInputFormat#getRecordReader} with nothing projected.
+   * The reader must yield the skeleton's row count. On master it yields the external file's.
+   *
+   * <p>No Hudi table is needed: {@code shouldUseFilegroupReader} excludes {@code BootstrapBaseFileSplit}, so
+   * this falls straight through to {@code createBootstrappingRecordReader}.
+   */
+  @Test
+  public void testNoProjectionReaderReadsSkeletonRowCount() throws Exception {
+    HoodieSchema schema = SchemaTestUtil.getSchemaFromResource(getClass(), "/test_timetype.avsc");
+    java.nio.file.Path skeletonFile = basePath.resolve("skeleton.parquet");
+    java.nio.file.Path externalFile = basePath.resolve("external.parquet");
+    int skeletonRows = 3;
+    int externalRows = 7;
+    writeParquet(skeletonFile, schema, skeletonRows);
+    writeParquet(externalFile, schema, externalRows);
+
+    jobConf.set(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false");
+    jobConf.set(IOConstants.COLUMNS, "test_timestamp,test_long,test_date,_hoodie_commit_time,_hoodie_commit_seqno");
+    jobConf.set(IOConstants.COLUMNS_TYPES, "timestamp,bigint,date,string,string");
+    // SELECT COUNT(*): Hive projects no columns at all.
+    jobConf.set(READ_COLUMN_NAMES_CONF_STR, "");
+    jobConf.set(HoodieColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, "");
+
+    BootstrapBaseFileSplit split = new BootstrapBaseFileSplit(
+        new FileSplit(new Path(skeletonFile.toString()), 0, Files.size(skeletonFile), (String[]) null),
+        new FileSplit(new Path(externalFile.toString()), 0, Files.size(externalFile), (String[]) null));
+
+    RecordReader<NullWritable, ArrayWritable> reader = inputFormat.getRecordReader(split, jobConf, null);
+    try {
+      NullWritable key = reader.createKey();
+      ArrayWritable value = reader.createValue();
+      int rows = 0;
+      while (reader.next(key, value)) {
+        rows++;
+      }
+      assertEquals(skeletonRows, rows,
+          "a no-projection read must come from the skeleton file, whose path is inside the table root");
+    } finally {
+      reader.close();
+    }
+  }
+
+  private static void writeParquet(java.nio.file.Path file, HoodieSchema schema, int numRows) throws IOException {
+    try (AvroParquetWriter parquetWriter =
+             new AvroParquetWriter(new Path(file.toString()), schema.toAvroSchema())) {
+      for (int i = 0; i < numRows; i++) {
+        GenericData.Record record = new GenericData.Record(schema.toAvroSchema());
+        record.put("test_timestamp", (long) i);
+        record.put("test_long", (long) i);
+        record.put("test_date", i);
+        record.put("_hoodie_commit_time", "20160628071126");
+        record.put("_hoodie_commit_seqno", "20160628071126_" + i);
+        parquetWriter.write(record);
+      }
+    }
+  }
+
 }

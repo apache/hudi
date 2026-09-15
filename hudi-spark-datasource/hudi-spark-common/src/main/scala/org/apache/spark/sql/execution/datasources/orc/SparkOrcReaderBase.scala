@@ -19,6 +19,7 @@
 
 package org.apache.spark.sql.execution.datasources.orc
 
+import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.util
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.storage.StorageConfiguration
@@ -32,19 +33,25 @@ import org.apache.orc.{OrcConf, OrcFile, TypeDescription}
 import org.apache.orc.mapred.OrcStruct
 import org.apache.orc.mapreduce.OrcInputFormat
 import org.apache.spark.TaskContext
+import org.apache.spark.memory.MemoryMode
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{Attribute, JoinedRow}
+import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
-import org.apache.spark.sql.execution.datasources.{PartitionedFile, RecordReaderIterator, SparkColumnarFileReader}
+import org.apache.spark.sql.execution.datasources.{FileFormat, PartitionedFile, RecordReaderIterator, SparkColumnarFileReader}
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.Utils
 
 
-abstract class SparkOrcReaderBase(enableVectorizedReader: Boolean,
-                                  dataSchema: StructType,
-                                  orcFilterPushDown: Boolean,
-                                  isCaseSensitive: Boolean) extends SparkColumnarFileReader  {
+class SparkOrcReaderBase(enableVectorizedReader: Boolean,
+                         dataSchema: StructType,
+                         orcFilterPushDown: Boolean,
+                         isCaseSensitive: Boolean,
+                         capacity: Int,
+                         memoryMode: MemoryMode,
+                         batchReaderFactory: (Int, MemoryMode) => OrcColumnarBatchReader)
+  extends SparkColumnarFileReader with SparkAdapterSupport {
   /**
    * Read an individual ORC file
    *
@@ -62,7 +69,7 @@ abstract class SparkOrcReaderBase(enableVectorizedReader: Boolean,
     val resultSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
     val conf = storageConf.unwrap()
 
-    val filePath = partitionedFileToPath(file)
+    val filePath = new Path(sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(file).toUri)
 
     val fs = filePath.getFileSystem(conf)
     val readerOptions = OrcFile.readerOptions(conf).filesystem(fs)
@@ -96,7 +103,7 @@ abstract class SparkOrcReaderBase(enableVectorizedReader: Boolean,
       val taskAttemptContext = new TaskAttemptContextImpl(taskConf, attemptId)
 
       if (enableVectorizedReader) {
-        val batchReader = buildReader()
+        val batchReader = batchReaderFactory(capacity, memoryMode)
         // SPARK-23399 Register a task completion listener first to call `close()` in all cases.
         // There is a possibility that `initialize` and `initBatch` hit some errors (like OOM)
         // after opening a file.
@@ -120,7 +127,8 @@ abstract class SparkOrcReaderBase(enableVectorizedReader: Boolean,
         val iter = new RecordReaderIterator[OrcStruct](orcRecordReader)
         Option(TaskContext.get()).foreach(_.addTaskCompletionListener[Unit](_ => iter.close()))
 
-        val fullSchema = structTypeToAttributes(requiredSchema) ++ structTypeToAttributes(partitionSchema)
+        val schemaUtils = sparkAdapter.getSchemaUtils
+        val fullSchema = schemaUtils.toAttributes(requiredSchema) ++ schemaUtils.toAttributes(partitionSchema)
         val unsafeProjection = GenerateUnsafeProjection.generate(fullSchema, fullSchema)
         val deserializer = new OrcDeserializer(requiredSchema, requestedColIds)
 
@@ -134,10 +142,52 @@ abstract class SparkOrcReaderBase(enableVectorizedReader: Boolean,
       }
     }
   }
+}
 
-  def partitionedFileToPath(file: PartitionedFile): Path
+object SparkOrcReaderBase {
+  /**
+   * Get ORC file reader
+   *
+   * @param vectorized         true if vectorized reading is not prohibited due to schema, reading mode, etc
+   * @param sqlConf            the [[SQLConf]] used for the read
+   * @param options            passed as a param to the file format
+   * @param hadoopConf         some configs will be set for the hadoopConf
+   * @param dataSchema         schema of the data
+   * @param batchReaderFactory creates the [[OrcColumnarBatchReader]] from the batch size and memory
+   *                           mode; the reader constructor differs across Spark versions
+   * @return ORC file reader
+   */
+  def build(vectorized: Boolean,
+            sqlConf: SQLConf,
+            options: Map[String, String],
+            hadoopConf: Configuration,
+            dataSchema: StructType,
+            batchReaderFactory: (Int, MemoryMode) => OrcColumnarBatchReader): SparkOrcReaderBase = {
+    //set hadoopconf
+    hadoopConf.set(SQLConf.SESSION_LOCAL_TIMEZONE.key, sqlConf.sessionLocalTimeZone)
+    hadoopConf.setBoolean(SQLConf.NESTED_SCHEMA_PRUNING_ENABLED.key, sqlConf.nestedSchemaPruningEnabled)
+    hadoopConf.setBoolean(SQLConf.CASE_SENSITIVE.key, sqlConf.caseSensitiveAnalysis)
 
-  def buildReader(): OrcColumnarBatchReader
+    val memoryMode = if (sqlConf.offHeapColumnVectorEnabled) {
+      MemoryMode.OFF_HEAP
+    } else {
+      MemoryMode.ON_HEAP
+    }
 
-  def structTypeToAttributes(schema: StructType): Seq[Attribute]
+    val enableVectorizedReader = sqlConf.orcVectorizedReaderEnabled &&
+      options.getOrElse(FileFormat.OPTION_RETURNING_BATCH,
+          throw new IllegalArgumentException(
+            "OPTION_RETURNING_BATCH should always be set for OrcFileFormat. " +
+              "To workaround this issue, set spark.sql.orc.enableVectorizedReader=false."))
+        .equals("true")
+
+    new SparkOrcReaderBase(
+      enableVectorizedReader = enableVectorizedReader && vectorized,
+      dataSchema = dataSchema,
+      orcFilterPushDown = sqlConf.orcFilterPushDown,
+      isCaseSensitive = sqlConf.caseSensitiveAnalysis,
+      capacity = sqlConf.orcVectorizedReaderBatchSize,
+      memoryMode = memoryMode,
+      batchReaderFactory = batchReaderFactory)
+  }
 }

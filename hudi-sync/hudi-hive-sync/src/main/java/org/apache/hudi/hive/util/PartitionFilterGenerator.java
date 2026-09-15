@@ -140,13 +140,12 @@ public class PartitionFilterGenerator {
     public int compare(String s1, String s2) {
       switch (valueType.toLowerCase(Locale.ROOT)) {
         case HiveSchemaUtil.INT_TYPE_NAME:
-          int i1 = Integer.parseInt(s1);
-          int i2 = Integer.parseInt(s2);
-          return i1 - i2;
+          // Use Integer.compare rather than subtraction, which overflows for values whose
+          // difference exceeds the int range and yields a wrong ordering.
+          return Integer.compare(Integer.parseInt(s1), Integer.parseInt(s2));
         case HiveSchemaUtil.BIGINT_TYPE_NAME:
-          long l1 = Long.parseLong(s1);
-          long l2 = Long.parseLong(s2);
-          return Long.signum(l1 - l2);
+          // Use Long.compare rather than subtraction, which overflows the long arithmetic.
+          return Long.compare(Long.parseLong(s1), Long.parseLong(s2));
         case HiveSchemaUtil.DATE_TYPE_NAME:
         case HiveSchemaUtil.STRING_TYPE_NAME:
           return s1.compareTo(s2);

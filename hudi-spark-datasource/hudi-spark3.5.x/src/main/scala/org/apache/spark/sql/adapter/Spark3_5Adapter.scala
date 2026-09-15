@@ -17,7 +17,6 @@
 
 package org.apache.spark.sql.adapter
 
-import org.apache.hudi.Spark35HoodieFileScanRDD
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.storage.StorageConfiguration
 
@@ -30,7 +29,7 @@ import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, ResolvedTable}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression}
+import org.apache.spark.sql.catalyst.expressions.{Expression}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical._
@@ -38,7 +37,7 @@ import org.apache.spark.sql.catalyst.util.{METADATA_COL_ATTR_KEY, RebaseDateTime
 import org.apache.spark.sql.connector.catalog.{V1Table, V2TableWithV1Fallback}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.lance.SparkLanceReaderBase
-import org.apache.spark.sql.execution.datasources.orc.Spark35OrcReader
+import org.apache.spark.sql.execution.datasources.orc.{OrcColumnarBatchReader, SparkOrcReaderBase}
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, ParquetFilters, Spark35LegacyHoodieParquetFileFormat, Spark35ParquetReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
@@ -101,14 +100,6 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
 
   override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
     Some(new Spark35LegacyHoodieParquetFileFormat(appendPartitionValues))
-  }
-
-  override def createHoodieFileScanRDD(sparkSession: SparkSession,
-                                       readFunction: PartitionedFile => Iterator[InternalRow],
-                                       filePartitions: Seq[FilePartition],
-                                       readDataSchema: StructType,
-                                       metadataColumns: Seq[AttributeReference] = Seq.empty): FileScanRDD = {
-    new Spark35HoodieFileScanRDD(sparkSession, readFunction, filePartitions, readDataSchema, metadataColumns)
   }
 
   override def extractDeleteCondition(deleteFromTable: Command): Expression = {
@@ -179,7 +170,8 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
                                    options: Map[String, String],
                                    hadoopConf: Configuration,
                                    dataSchema: StructType): SparkColumnarFileReader = {
-    Spark35OrcReader.build(vectorized, sqlConf, options, hadoopConf, dataSchema)
+    SparkOrcReaderBase.build(vectorized, sqlConf, options, hadoopConf, dataSchema,
+      (capacity, memoryMode) => new OrcColumnarBatchReader(capacity, memoryMode))
   }
 
   override def createLanceFileReader(vectorized: Boolean,

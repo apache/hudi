@@ -62,11 +62,7 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
 
   public CustomAvroKeyGenerator(TypedProperties props) {
     super(props);
-    this.recordKeyFields = Option.ofNullable(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), null))
-        .map(recordKeyConfigValue ->
-            Arrays.stream(recordKeyConfigValue.split(FIELD_SEPARATOR))
-                .map(String::trim).collect(Collectors.toList())
-        ).orElse(Collections.emptyList());
+    this.recordKeyFields = KeyGenUtils.getRecordKeyFields(props);
     this.partitionPathFields = Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(FIELD_SEPARATOR)).map(String::trim).collect(Collectors.toList());
     this.recordKeyGenerator = getRecordKeyFieldNames().size() == 1 ? new SimpleAvroKeyGenerator(config) : new ComplexAvroKeyGenerator(config);
     this.partitionKeyGenerators = getPartitionKeyGenerators(this.partitionPathFields, config);

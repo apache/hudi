@@ -19,18 +19,13 @@
 package org.apache.hudi.client.model
 
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.unsafe.types.{GeographyVal, GeometryVal, UTF8String, VariantVal}
+import org.apache.spark.unsafe.types.{GeographyVal, GeometryVal, UTF8String}
 
 class Spark41HoodieInternalRow(
     metaFields: Array[UTF8String],
     sourceRow: InternalRow,
     sourceContainsMetaFields: Boolean)
-  extends HoodieInternalRow(metaFields, sourceRow, sourceContainsMetaFields) {
-
-  override def getVariant(ordinal: Int): VariantVal = {
-    ruleOutMetaFieldsAccess(ordinal, classOf[VariantVal])
-    sourceRow.getVariant(rebaseOrdinal(ordinal))
-  }
+  extends Spark4HoodieInternalRow(metaFields, sourceRow, sourceContainsMetaFields) {
 
   override def getGeography(ordinal: Int): GeographyVal = {
     ruleOutMetaFieldsAccess(ordinal, classOf[GeographyVal])
@@ -42,11 +37,9 @@ class Spark41HoodieInternalRow(
     sourceRow.getGeometry(rebaseOrdinal(ordinal))
   }
 
-  override def copy(): InternalRow = {
-    val copyMetaFields = metaFields.map(f => if (f != null) f.copy() else null)
-    new Spark41HoodieInternalRow(
-      copyMetaFields,
-      if (sourceRow == null) null else sourceRow.copy(),
-      sourceContainsMetaFields)
+  override protected def newInternalRow(metaFields: Array[UTF8String],
+                                        sourceRow: InternalRow,
+                                        sourceContainsMetaFields: Boolean): Spark4HoodieInternalRow = {
+    new Spark41HoodieInternalRow(metaFields, sourceRow, sourceContainsMetaFields)
   }
 }

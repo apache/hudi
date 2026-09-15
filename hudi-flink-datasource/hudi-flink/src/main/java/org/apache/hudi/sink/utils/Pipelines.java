@@ -28,6 +28,7 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.sink.StreamWriteOperator;
 import org.apache.hudi.sink.append.AppendWriteFunctions;
@@ -79,12 +80,12 @@ import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
 import org.apache.flink.streaming.api.operators.ProcessOperator;
 import org.apache.flink.streaming.api.transformations.OneInputTransformation;
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
@@ -139,8 +140,12 @@ public class Pipelines {
         throw new HoodieException(
             "Consistent hashing bucket index does not work with bulk insert using FLINK engine. Use simple bucket index or Spark engine.");
       }
-      String indexKeys = OptionsResolver.getIndexKeyField(conf);
-      BucketIndexPartitioner<HoodieKey> partitioner = new BucketIndexPartitioner<>(conf, indexKeys);
+      List<String> indexKeyFieldList = OptionsResolver.getIndexKeyFields(conf);
+      // built once and captured by the per-record map closure (NumBucketsFunction is Serializable),
+      // avoiding a per-record rebuild from conf inside BucketBulkInsertWriterHelper
+      NumBucketsFunction numBucketsFunction = new NumBucketsFunction(conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS),
+          conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_RULE), conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS));
+      BucketIndexPartitioner<HoodieKey> partitioner = new BucketIndexPartitioner<>(conf, indexKeyFieldList);
       RowDataKeyGen keyGen = RowDataKeyGens.instance(conf, rowType);
       RowType rowTypeWithFileId = BucketBulkInsertWriterHelper.rowTypeWithFileId(rowType);
       InternalTypeInfo<RowData> typeInfo = InternalTypeInfo.of(rowTypeWithFileId);
@@ -148,13 +153,13 @@ public class Pipelines {
 
       Map<String, String> bucketIdToFileId = new HashMap<>();
       dataStream = dataStream.partitionCustom(partitioner, keyGen::getHoodieKey)
-          .map(record -> BucketBulkInsertWriterHelper.rowWithFileId(bucketIdToFileId, keyGen, record, indexKeys, conf, needFixedFileIdSuffix), typeInfo)
+          .map(record -> BucketBulkInsertWriterHelper.rowWithFileId(bucketIdToFileId, keyGen, record, indexKeyFieldList, numBucketsFunction, needFixedFileIdSuffix), typeInfo)
           .setParallelism(PARALLELISM_VALUE);
       if (conf.get(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT)) {
         SortOperatorGen sortOperatorGen = BucketBulkInsertWriterHelper.getFileIdSorterGen(rowTypeWithFileId);
         dataStream = dataStream.transform("file_sorter", typeInfo, sortOperatorGen.createSortOperator(conf))
             .setParallelism(PARALLELISM_VALUE);
-        ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(),
+        FlinkTransformationUtils.setManagedMemoryWeight(dataStream.getTransformation(),
             conf.get(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
       }
     } else if (!FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.PARTITION_PATH_FIELD)) {
@@ -184,7 +189,7 @@ public class Pipelines {
             .transform(isNeededSortInput ? "sorter:(partition_key, record_key)" : "sorter:(partition_key)",
                 InternalTypeInfo.of(rowType), sortOperatorGen.createSortOperator(conf))
             .setParallelism(PARALLELISM_VALUE);
-        ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(),
+        FlinkTransformationUtils.setManagedMemoryWeight(dataStream.getTransformation(),
             conf.get(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
       }
     }
@@ -291,13 +296,13 @@ public class Pipelines {
       boolean bounded) {
     DataStream<HoodieFlinkInternalRow> dataStream1 = rowDataToHoodieRecord(conf, rowType, dataStream);
 
-    if (conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED) || bounded) {
-      boolean isRliBootstrap = OptionsResolver.isGlobalRecordLevelIndex(conf);
+    boolean isGlobalRLI = OptionsResolver.isGlobalRecordLevelIndex(conf);
+    if (conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED) || (bounded && !isGlobalRLI)) {
       dataStream1 = dataStream1
           .transform(
               "index_bootstrap",
               new HoodieFlinkInternalRowTypeInfo(rowType),
-              isRliBootstrap ? new RLIBootstrapOperator(conf) : new BootstrapOperator(conf))
+              isGlobalRLI ? new RLIBootstrapOperator(conf) : new BootstrapOperator(conf))
           .setParallelism(conf.getOptional(FlinkOptions.INDEX_BOOTSTRAP_TASKS).orElse(dataStream1.getParallelism()))
           .uid(opUID("index_bootstrap", conf));
       ((OneInputTransformation<?, ?>) dataStream1.getTransformation()).setChainingStrategy(ChainingStrategy.ALWAYS);
@@ -370,7 +375,7 @@ public class Pipelines {
       HoodieIndex.BucketIndexEngineType bucketIndexEngineType = OptionsResolver.getBucketEngineType(conf);
       switch (bucketIndexEngineType) {
         case SIMPLE:
-          String indexKeyFields = OptionsResolver.getIndexKeyField(conf);
+          List<String> indexKeyFields = OptionsResolver.getIndexKeyFields(conf);
           // [HUDI-9036] BucketIndexPartitioner is also used in bulk insert mode,
           // keep use of HoodieKey here in partitionCustom for now
           BucketIndexPartitioner<HoodieKey> partitioner = new BucketIndexPartitioner<>(conf, indexKeyFields);
@@ -563,7 +568,7 @@ public class Pipelines {
             new ClusteringOperator(conf, rowType))
         .setParallelism(conf.get(FlinkOptions.CLUSTERING_TASKS));
     if (OptionsResolver.sortClusteringEnabled(conf)) {
-      ExecNodeUtil.setManagedMemoryWeight(clusteringStream.getTransformation(),
+      FlinkTransformationUtils.setManagedMemoryWeight(clusteringStream.getTransformation(),
           conf.get(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
     }
     DataStreamSink<ClusteringCommitEvent> clusteringCommitEventDataStream = clusteringStream.addSink(new ClusteringCommitSink(conf))
@@ -606,7 +611,7 @@ public class Pipelines {
 
   public static void declareManagedMemoryIfNecessary(Configuration conf, DataStream<?> dataStream, Supplier<Long> bufferSizeSupplier) {
     if (OptionsResolver.isManagedMemoryBufferEnabled(conf)) {
-      ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(), bufferSizeSupplier.get());
+      FlinkTransformationUtils.setManagedMemoryWeight(dataStream.getTransformation(), bufferSizeSupplier.get());
     }
   }
 

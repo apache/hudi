@@ -25,7 +25,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.TimelineLayout;
+import org.apache.hudi.common.table.timeline.InstantComparator;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -60,6 +60,8 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
 
   private final Lazy<ConcurrentHashMap<HoodieInstant, HoodieSchema>> tableSchemaCache;
 
+  private final InstantComparator instantComparator;
+
   private Option<HoodieInstant> latestCommitWithValidSchema = Option.empty();
 
   @VisibleForTesting
@@ -69,8 +71,16 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
 
   public ConcurrentSchemaEvolutionTableSchemaGetter(HoodieTableMetaClient metaClient) {
     this.metaClient = metaClient;
+    this.instantComparator = metaClient.getTimelineLayout().getInstantComparator();
     // Unbounded sized map. Should replace with some caching library.
     this.tableSchemaCache = Lazy.lazily(ConcurrentHashMap::new);
+  }
+
+  /**
+   * Returns the timestamp ordering the instant in the schema evolution timeline.
+   */
+  String getOrderingTime(HoodieInstant instant) {
+    return instantComparator.getOrderingTime(instant);
   }
 
   /**
@@ -160,9 +170,11 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
     // the timeline finding a completed instant containing a valid schema.
     ConcurrentHashMap<HoodieInstant, HoodieSchema> tableSchemaAtInstant = new ConcurrentHashMap<>();
     Option<HoodieInstant> instantWithTableSchema = Option.fromJavaOptional(reversedTimelineStream
-        // If a completion time is specified, find the first eligible instant in the schema evolution timeline.
-        // Should switch to completion time based.
-        .filter(s -> instant.isEmpty() || compareTimestamps(s.getCompletionTime(), LESSER_THAN_OR_EQUALS, instant.get().getCompletionTime()))
+        // Find the first eligible instant whose ordering time is no later than the target instant's;
+        // a target instant without an ordering time (not completed yet, on table version 8 and above)
+        // does not bound the lookup.
+        .filter(s -> instant.isEmpty() || StringUtils.isNullOrEmpty(getOrderingTime(instant.get()))
+            || compareTimestamps(getOrderingTime(s), LESSER_THAN_OR_EQUALS, getOrderingTime(instant.get())))
         // Make sure the commit metadata has a valid schema inside. Same caching the result for expensive operation.
         .filter(s -> {
           try {
@@ -193,6 +205,8 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
 
   /**
    * Get timeline in REVERSE order that only contains completed instants which POTENTIALLY evolve the table schema.
+   * The stream follows the timeline layout's instant ordering, newest first (completion time for
+   * layout v2, requested time for v1).
    * For types of instants that are included and not reflecting table schema at their instant completion time please refer
    * comments inside the code.
    */
@@ -214,9 +228,7 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
     }
 
     // We only care committed instant when it comes to table schema.
-    TimelineLayout timelineLayout = metaClient.getTimelineLayout();
-    // Table schema getter is completion time based ordering.
-    Comparator<HoodieInstant> reversedComparator = timelineLayout.getInstantComparator().completionTimeOrderedComparator().reversed();
+    Comparator<HoodieInstant> reversedComparator = instantComparator.orderingComparator().reversed();
 
     // The timeline still contains DELTA_COMMIT_ACTION/COMMIT_ACTION which might not contain a valid schema
     // field in their commit metadata.

@@ -35,6 +35,7 @@ import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.{getKeyGene
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.{JFunction, SparkConfigUtils}
 
+import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.slf4j.LoggerFactory
@@ -1033,8 +1034,86 @@ object DataSourceOptionsHelper {
   private val log = LoggerFactory.getLogger(DataSourceOptionsHelper.getClass)
 
   // Prefix constants for config normalization
+  private val HOODIE_PREFIX = "hoodie."
   private val SPARK_HOODIE_PREFIX = "spark.hoodie."
   private val SPARK_PREFIX = "spark."
+
+  /**
+   * Collects `hoodie.*` and `spark.hoodie.*` configs from the SparkConf, normalizes the
+   * `spark.hoodie.*` keys to canonical `hoodie.*`, and merges with explicit DataFrame
+   * options. Explicit options win over SparkConf.
+   *
+   * This is the read-path entry point: reads have always picked up session-level `hoodie.*`
+   * confs (e.g. `hoodie.datasource.query.type`), so both prefixes are forwarded here.
+   * Do NOT use this for writes — see `collectSparkHoodieConfs` for why ambient `hoodie.*`
+   * confs must not be forwarded to the write path.
+   *
+   * Example (SparkConf has both prefixes set; explicit options override):
+   * {{{
+   *   SparkConf:  spark.hoodie.X = "a", hoodie.Y = "b"
+   *   optParams:  hoodie.X = "c"
+   *   result:     hoodie.X = "c"   // explicit wins over both prefixes
+   *               hoodie.Y = "b"
+   * }}}
+   */
+  def collectHoodieAndSparkHoodieConfs(sqlContext: SQLContext,
+                                       optParams: Map[String, String]): Map[String, String] =
+    collectConfsByPrefix(sqlContext, optParams, includeHoodiePrefix = true)
+
+  /**
+   * Collects only `spark.hoodie.*` configs from the SparkConf, normalizes them to canonical
+   * `hoodie.*`, and merges with explicit DataFrame options. Explicit options win over SparkConf.
+   *
+   * This is the write-path entry point. It deliberately does NOT forward bare `hoodie.*`
+   * session confs: unlike reads, the DataFrame write path historically honored only the
+   * explicit `.option(...)` map, so injecting ambient `hoodie.*` session state (e.g. a
+   * session-level `hoodie.datasource.write.operation` or `hoodie.logfile.data.block.format`)
+   * would silently change every `df.write`. The bug this addresses (HUDI-#18649) is about
+   * `--conf spark.hoodie.X=Y` being dropped on writes, which only requires forwarding the
+   * `spark.hoodie.*` form.
+   *
+   * Example:
+   * {{{
+   *   SparkConf:  spark.hoodie.X = "a", hoodie.Y = "b"   // bare hoodie.Y is NOT forwarded
+   *   optParams:  hoodie.Z = "c"
+   *   result:     hoodie.X = "a"
+   *               hoodie.Z = "c"
+   * }}}
+   */
+  def collectSparkHoodieConfs(sqlContext: SQLContext,
+                              optParams: Map[String, String]): Map[String, String] =
+    collectConfsByPrefix(sqlContext, optParams, includeHoodiePrefix = false)
+
+  private def collectConfsByPrefix(sqlContext: SQLContext,
+                                   optParams: Map[String, String],
+                                   includeHoodiePrefix: Boolean): Map[String, String] = {
+    val sparkConfs = sqlContext.getAllConfs.filter {
+      case (key, _) =>
+        key.startsWith(SPARK_HOODIE_PREFIX) || (includeHoodiePrefix && key.startsWith(HOODIE_PREFIX))
+    }
+    normalizeSparkHoodiePrefix(sparkConfs) ++ optParams
+  }
+
+  /**
+   * Strips the `spark.` prefix from `spark.hoodie.*` keys so downstream code only sees
+   * canonical `hoodie.*` keys. If both `spark.hoodie.X` and `hoodie.X` are present, the
+   * latter wins (explicit options/configs override the SparkConf-prefixed form).
+   *
+   * The function is idempotent: running it on an already-normalized map is a no-op.
+   * Both `collectHoodieAndSparkHoodieConfs` (the entry-point helper) and
+   * `parametersWithReadDefaults` / `parametersWithWriteDefaults` (the per-path defaulting
+   * helpers) call it; this defense-in-depth ensures callers that bypass
+   * `collectHoodieAndSparkHoodieConfs` (e.g., SQL `ALTER TABLE` paths) still get
+   * normalized configs.
+   */
+  def normalizeSparkHoodiePrefix(parameters: Map[String, String]): Map[String, String] = {
+    val rekeyedSparkHoodie = parameters.collect {
+      case (key, value) if key.startsWith(SPARK_HOODIE_PREFIX) =>
+        (key.stripPrefix(SPARK_PREFIX), value)
+    }
+    val nonSparkHoodie = parameters.filterNot(_._1.startsWith(SPARK_HOODIE_PREFIX))
+    rekeyedSparkHoodie ++ nonSparkHoodie
+  }
 
   // put all the configs with alternatives here
   private val allConfigsWithAlternatives = List(
@@ -1132,13 +1211,8 @@ object DataSourceOptionsHelper {
     // 2) spark.hoodie.* (normalized to hoodie.*)
     // 3) hoodie.* / explicit data source options
     // NOTE: If both spark.hoodie.X and hoodie.X are set, hoodie.X wins.
-    val normalizedSparkHoodieConfigs = parameters.collect {
-      case (key, value) if key.startsWith(SPARK_HOODIE_PREFIX) => (key.stripPrefix(SPARK_PREFIX), value)
-    }
-    val paramsWithoutSparkHoodie = parameters.filterNot(_._1.startsWith(SPARK_HOODIE_PREFIX))
-    val paramsWithGlobalProps = DFSPropertiesConfiguration.getGlobalProps.asScala.toMap ++
-      normalizedSparkHoodieConfigs ++
-      paramsWithoutSparkHoodie
+    val normalized = normalizeSparkHoodiePrefix(parameters)
+    val paramsWithGlobalProps = DFSPropertiesConfiguration.getGlobalProps.asScala.toMap ++ normalized
     val queryType = paramsWithGlobalProps.get(IS_QUERY_AS_RO_TABLE)
       .map(is => if (is.toBoolean) QUERY_TYPE_READ_OPTIMIZED_OPT_VAL else QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .getOrElse(paramsWithGlobalProps.getOrElse(QUERY_TYPE.key, QUERY_TYPE.defaultValue()))

@@ -363,7 +363,7 @@ public class CommitsCommand {
         limit, headerOnly, rows, exportTableName);
   }
 
-  @ShellMethod(key = "commits show_infights", value = "Show inflight instants that are left longer than a certain duration")
+  @ShellMethod(key = "commits show_inflights", value = "Show inflight instants that are left longer than a certain duration")
   public String showInflightCommits(
       @ShellOption(value = {"--lookbackInMins"}, help = "Only show inflight commits that started before the specified lookback duration (in minutes).", defaultValue = "0") final Long durationInMins) {
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();

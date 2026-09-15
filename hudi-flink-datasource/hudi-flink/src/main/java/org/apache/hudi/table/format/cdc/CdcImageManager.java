@@ -44,6 +44,7 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.function.Function;
 
+import static org.apache.hudi.common.util.CloseableUtils.closeSuppressing;
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS;
 
 /**
@@ -104,13 +105,16 @@ public class CdcImageManager implements AutoCloseable {
         serializer.serialize(row, new BytesArrayOutputView(baos));
         imageRecordsMap.put(recordKey, baos.toByteArray());
       }
+    } catch (IOException | RuntimeException | Error e) {
+      closeSuppressing(imageRecordsMap, e);
+      throw e;
     }
     return imageRecordsMap;
   }
 
   public RowData getImageRecord(
       String recordKey,
-      ExternalSpillableMap<String, byte[]> imageCache,
+      Map<String, byte[]> imageCache,
       RowKind rowKind) {
     byte[] bytes = imageCache.get(recordKey);
     ValidationUtils.checkState(bytes != null,
@@ -126,7 +130,7 @@ public class CdcImageManager implements AutoCloseable {
 
   public void updateImageRecord(
       String recordKey,
-      ExternalSpillableMap<String, byte[]> imageCache,
+      Map<String, byte[]> imageCache,
       RowData row) {
     ByteArrayOutputStream baos = new ByteArrayOutputStream(4096);
     try {
@@ -139,7 +143,7 @@ public class CdcImageManager implements AutoCloseable {
 
   public RowData removeImageRecord(
       String recordKey,
-      ExternalSpillableMap<String, byte[]> imageCache) {
+      Map<String, byte[]> imageCache) {
     byte[] bytes = imageCache.remove(recordKey);
     if (bytes == null) {
       return null;
@@ -153,8 +157,25 @@ public class CdcImageManager implements AutoCloseable {
 
   @Override
   public void close() {
-    cache.values().forEach(ExternalSpillableMap::close);
-    cache.clear();
+    RuntimeException failure = null;
+    try {
+      for (ExternalSpillableMap<String, byte[]> spillableMap : cache.values()) {
+        try {
+          spillableMap.close();
+        } catch (RuntimeException e) {
+          if (failure == null) {
+            failure = e;
+          } else {
+            failure.addSuppressed(e);
+          }
+        }
+      }
+    } finally {
+      cache.clear();
+    }
+    if (failure != null) {
+      throw failure;
+    }
   }
 
   // -------------------------------------------------------------------------

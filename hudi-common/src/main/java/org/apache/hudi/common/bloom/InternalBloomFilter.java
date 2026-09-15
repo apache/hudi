@@ -82,21 +82,15 @@ import java.util.BitSet;
  * @see <a href="http://portal.acm.org/citation.cfm?id=362692&dl=ACM&coll=portal">Space/Time Trade-Offs in Hash Coding with Allowable Errors</a>
  */
 public class InternalBloomFilter extends InternalFilter {
-  private static final byte[] BIT_VALUES = new byte[] {
-      (byte) 0x01,
-      (byte) 0x02,
-      (byte) 0x04,
-      (byte) 0x08,
-      (byte) 0x10,
-      (byte) 0x20,
-      (byte) 0x40,
-      (byte) 0x80
-  };
-
   /**
-   * The bit vector.
+   * The bit vector, as little-endian 64-bit words: bit {@code i} lives at
+   * {@code words[i >> 6]} under mask {@code 1L << (i & 63)}.  The serialized layout
+   * (bit {@code i} at byte {@code i >> 3} under mask {@code 1 << (i & 7)}) is the
+   * little-endian byte view of this array, so {@link #write} and {@link #readFields}
+   * translate between the two by byte position alone.  Bits at positions greater than
+   * or equal to {@code vectorSize} are always zero.
    */
-  BitSet bits;
+  long[] words;
 
   /**
    * Default constructor - use with readFields
@@ -116,7 +110,7 @@ public class InternalBloomFilter extends InternalFilter {
   public InternalBloomFilter(int vectorSize, int nbHash, int hashType) {
     super(vectorSize, nbHash, hashType);
 
-    bits = new BitSet(this.vectorSize);
+    words = new long[wordCount(this.vectorSize)];
   }
 
   /**
@@ -134,7 +128,7 @@ public class InternalBloomFilter extends InternalFilter {
     hash.clear();
 
     for (int i = 0; i < nbHash; i++) {
-      bits.set(h[i]);
+      words[h[i] >>> 6] |= 1L << (h[i] & 63);
     }
   }
 
@@ -147,7 +141,10 @@ public class InternalBloomFilter extends InternalFilter {
       throw new IllegalArgumentException("filters cannot be and-ed");
     }
 
-    this.bits.and(((InternalBloomFilter) filter).bits);
+    long[] other = ((InternalBloomFilter) filter).words;
+    for (int i = 0; i < words.length; i++) {
+      words[i] &= other[i];
+    }
   }
 
   @Override
@@ -159,7 +156,7 @@ public class InternalBloomFilter extends InternalFilter {
     int[] h = hash.hash(key);
     hash.clear();
     for (int i = 0; i < nbHash; i++) {
-      if (!bits.get(h[i])) {
+      if ((words[h[i] >>> 6] & (1L << (h[i] & 63))) == 0) {
         return false;
       }
     }
@@ -168,7 +165,10 @@ public class InternalBloomFilter extends InternalFilter {
 
   @Override
   public void not() {
-    bits.flip(0, vectorSize);
+    for (int i = 0; i < words.length; i++) {
+      words[i] = ~words[i];
+    }
+    clearUnusedBits();
   }
 
   @Override
@@ -179,7 +179,10 @@ public class InternalBloomFilter extends InternalFilter {
         || filter.nbHash != this.nbHash) {
       throw new IllegalArgumentException("filters cannot be or-ed");
     }
-    bits.or(((InternalBloomFilter) filter).bits);
+    long[] other = ((InternalBloomFilter) filter).words;
+    for (int i = 0; i < words.length; i++) {
+      words[i] |= other[i];
+    }
   }
 
   @Override
@@ -190,12 +193,15 @@ public class InternalBloomFilter extends InternalFilter {
         || filter.nbHash != this.nbHash) {
       throw new IllegalArgumentException("filters cannot be xor-ed");
     }
-    bits.xor(((InternalBloomFilter) filter).bits);
+    long[] other = ((InternalBloomFilter) filter).words;
+    for (int i = 0; i < words.length; i++) {
+      words[i] ^= other[i];
+    }
   }
 
   @Override
   public String toString() {
-    return bits.toString();
+    return BitSet.valueOf(words).toString();
   }
 
   /**
@@ -209,17 +215,8 @@ public class InternalBloomFilter extends InternalFilter {
   public void write(DataOutput out) throws IOException {
     super.write(out);
     byte[] bytes = new byte[getNBytes()];
-    for (int i = 0, byteIndex = 0, bitIndex = 0; i < vectorSize; i++, bitIndex++) {
-      if (bitIndex == 8) {
-        bitIndex = 0;
-        byteIndex++;
-      }
-      if (bitIndex == 0) {
-        bytes[byteIndex] = 0;
-      }
-      if (bits.get(i)) {
-        bytes[byteIndex] |= BIT_VALUES[bitIndex];
-      }
+    for (int byteIndex = 0; byteIndex < bytes.length; byteIndex++) {
+      bytes[byteIndex] = (byte) (words[byteIndex >>> 3] >>> ((byteIndex & 7) << 3));
     }
     out.write(bytes);
   }
@@ -227,22 +224,32 @@ public class InternalBloomFilter extends InternalFilter {
   @Override
   public void readFields(DataInput in) throws IOException {
     super.readFields(in);
-    bits = new BitSet(this.vectorSize);
+    words = new long[wordCount(vectorSize)];
     byte[] bytes = new byte[getNBytes()];
     in.readFully(bytes);
-    for (int i = 0, byteIndex = 0, bitIndex = 0; i < vectorSize; i++, bitIndex++) {
-      if (bitIndex == 8) {
-        bitIndex = 0;
-        byteIndex++;
-      }
-      if ((bytes[byteIndex] & BIT_VALUES[bitIndex]) != 0) {
-        bits.set(i);
-      }
+    for (int byteIndex = 0; byteIndex < bytes.length; byteIndex++) {
+      words[byteIndex >>> 3] |= (bytes[byteIndex] & 0xFFL) << ((byteIndex & 7) << 3);
     }
+    clearUnusedBits();
   }
 
   /* @return number of bytes needed to hold bit vector */
   private int getNBytes() {
     return (int) (((long) vectorSize + 7) / 8);
+  }
+
+  private static int wordCount(int vectorSize) {
+    return (vectorSize + 63) >>> 6;
+  }
+
+  /**
+   * Clears bits at positions greater than or equal to {@code vectorSize}, such as the unused
+   * trailing bits of the last serialized byte, so bitwise ops and serialization stay exact.
+   */
+  private void clearUnusedBits() {
+    int usedBitsInLastWord = vectorSize & 63;
+    if (usedBitsInLastWord != 0) {
+      words[words.length - 1] &= (1L << usedBitsInLastWord) - 1;
+    }
   }
 }

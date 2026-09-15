@@ -36,7 +36,6 @@ import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -66,7 +65,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorage;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -132,7 +131,7 @@ class TestEightToSevenDowngradeHandler {
   @Test
   void testDowngradeMetadataPartitions() {
     String baseTablePath = baseDir.toString();
-    HoodieStorage hoodieStorage = HoodieStorageUtils.getStorage(getDefaultStorageConf());
+    HoodieStorage hoodieStorage = getDefaultStorage();
     StoragePath basePath = new StoragePath(baseTablePath);
 
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);

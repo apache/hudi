@@ -57,6 +57,37 @@ public class HeapArrayVector extends AbstractHeapVector
     return this.isNull.length;
   }
 
+  // ---------------------------------------------------------------------------------------------
+  // Flink 2.1-compatible accessors. Backed by the existing public {@code offsets}, {@code lengths}
+  // and {@code child} fields so legacy callers continue to work; the new {@link
+  // org.apache.hudi.table.format.cow.vector.reader.NestedColumnReader} (FLINK-35702 port) and any
+  // future Flink-2.1-style caller use these accessors.
+  // ---------------------------------------------------------------------------------------------
+
+  public long[] getOffsets() {
+    return offsets;
+  }
+
+  public void setOffsets(long[] offsets) {
+    this.offsets = offsets;
+  }
+
+  public long[] getLengths() {
+    return lengths;
+  }
+
+  public void setLengths(long[] lengths) {
+    this.lengths = lengths;
+  }
+
+  public ColumnVector getChild() {
+    return child;
+  }
+
+  public void setChild(ColumnVector child) {
+    this.child = child;
+  }
+
   @Override
   public ArrayData getArray(int i) {
     long offset = offsets[i];

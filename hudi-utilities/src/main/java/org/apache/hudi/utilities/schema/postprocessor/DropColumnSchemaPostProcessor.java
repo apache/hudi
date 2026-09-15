@@ -27,10 +27,9 @@ import org.apache.hudi.utilities.config.SchemaProviderPostProcessorConfig;
 import org.apache.hudi.utilities.exception.HoodieSchemaPostProcessException;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.LinkedList;
@@ -49,9 +48,8 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
  * <p>
  * properties.put("hoodie.streamer.schemaprovider.schema_post_processor.delete.columns", "column1,column2").
  */
+@Slf4j
 public class DropColumnSchemaPostProcessor extends SchemaPostProcessor {
-
-  private static final Logger LOG = LoggerFactory.getLogger(DropColumnSchemaPostProcessor.class);
 
   public DropColumnSchemaPostProcessor(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
@@ -77,7 +75,7 @@ public class DropColumnSchemaPostProcessor extends SchemaPostProcessor {
         this.config, SchemaProviderPostProcessorConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN);
 
     if (StringUtils.isNullOrEmpty(columnToDeleteStr)) {
-      LOG.warn("Param {} is null or empty, return original schema",
+      log.warn("Param {} is null or empty, return original schema",
           SchemaProviderPostProcessorConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN.key());
     }
 

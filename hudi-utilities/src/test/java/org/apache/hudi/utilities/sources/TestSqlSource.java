@@ -22,6 +22,7 @@ import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
@@ -43,6 +44,7 @@ import java.io.IOException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
 
 /**
  * Test against {@link SqlSource}.
@@ -57,6 +59,7 @@ public class TestSqlSource extends UtilitiesTestBase {
   private TypedProperties props;
   private SqlSource sqlSource;
   private SourceFormatAdapter sourceFormatAdapter;
+  private final HoodieIngestionMetrics metrics = mock(HoodieIngestionMetrics.class);
 
   @BeforeAll
   public static void initClass() throws Exception {
@@ -105,7 +108,7 @@ public class TestSqlSource extends UtilitiesTestBase {
   @Test
   public void testSqlSourceAvroFormat() throws IOException {
     props.setProperty(sqlSourceConfig, "select * from test_sql_table");
-    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);
+    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider, metrics);
     sourceFormatAdapter = new SourceFormatAdapter(sqlSource);
 
     // Test fetching Avro format
@@ -128,7 +131,7 @@ public class TestSqlSource extends UtilitiesTestBase {
   @Test
   public void testSqlSourceRowFormat() throws IOException {
     props.setProperty(sqlSourceConfig, "select * from test_sql_table");
-    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);
+    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider, metrics);
     sourceFormatAdapter = new SourceFormatAdapter(sqlSource);
 
     // Test fetching Row format
@@ -146,7 +149,7 @@ public class TestSqlSource extends UtilitiesTestBase {
   @Test
   public void testSqlSourceCheckpoint() throws IOException {
     props.setProperty(sqlSourceConfig, "select * from test_sql_table where 1=0");
-    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);
+    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider, metrics);
     sourceFormatAdapter = new SourceFormatAdapter(sqlSource);
 
     InputBatch<Dataset<Row>> fetch1AsRows =
@@ -163,7 +166,7 @@ public class TestSqlSource extends UtilitiesTestBase {
   @Test
   public void testSqlSourceMoreRecordsThanSourceLimit() throws IOException {
     props.setProperty(sqlSourceConfig, "select * from test_sql_table");
-    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);
+    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider, metrics);
     sourceFormatAdapter = new SourceFormatAdapter(sqlSource);
 
     InputBatch<Dataset<Row>> fetch1AsRows =
@@ -180,7 +183,7 @@ public class TestSqlSource extends UtilitiesTestBase {
   @Test
   public void testSqlSourceZeroRecord() throws IOException {
     props.setProperty(sqlSourceConfig, "select * from test_sql_table where 1=0");
-    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);
+    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider, metrics);
     sourceFormatAdapter = new SourceFormatAdapter(sqlSource);
 
     InputBatch<Dataset<Row>> fetch1AsRows =
@@ -197,7 +200,7 @@ public class TestSqlSource extends UtilitiesTestBase {
   @Test
   public void testSqlSourceInvalidTable() throws IOException {
     props.setProperty(sqlSourceConfig, "select * from not_exist_sql_table");
-    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);
+    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider, metrics);
     sourceFormatAdapter = new SourceFormatAdapter(sqlSource);
 
     assertThrows(

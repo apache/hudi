@@ -18,6 +18,10 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.client.BaseHoodieWriteClient;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieTableServiceManagerConfig;
+import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -26,19 +30,28 @@ import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.versioning.v1.ActiveTimelineV1;
 import org.apache.hudi.common.table.timeline.versioning.v1.InstantGeneratorV1;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieMetadataException;
 
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Properties;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -223,6 +236,146 @@ class TestHoodieBackedTableMetadataWriterTableVersionSix {
 
     boolean result = invokeShouldInitializeFromFilesystem(writer, pendingDataInstants, inflightInstantTimestamp);
     assertFalse(result, "Should block initialization when rollbacks are completed, not pending");
+  }
+
+  @Test
+  void testGenerateUniqueInstantTimePreservesIndexingInstant() throws Exception {
+    // An indexing instant is already globally unique and must be reused.
+    String indexingInstant = "20250101120000000";
+    HoodieTableMetaClient dataMetaClient = mock(HoodieTableMetaClient.class);
+    HoodieActiveTimeline timeline = createMockTimeline(Collections.singletonList(
+        INSTANT_GENERATOR.createNewInstant(
+            HoodieInstant.State.REQUESTED, HoodieTimeline.INDEXING_ACTION, indexingInstant)));
+    when(dataMetaClient.getActiveTimeline()).thenReturn(timeline);
+    HoodieBackedTableMetadataWriterTableVersionSix<?, ?> writer = createMockWriter(dataMetaClient);
+
+    assertTrue(indexingInstant.equals(writer.generateUniqueInstantTime(indexingInstant)));
+  }
+
+  @Test
+  void testValidateCompactionSchedulingRejectsPendingMetadataTableService() throws Exception {
+    // Do not schedule compaction while another metadata table service is pending.
+    HoodieTableMetaClient dataMetaClient = mock(HoodieTableMetaClient.class);
+    HoodieActiveTimeline dataTimeline = createMockTimeline(Collections.emptyList());
+    when(dataMetaClient.reloadActiveTimeline()).thenReturn(dataTimeline);
+    HoodieBackedTableMetadataWriterTableVersionSix<?, ?> writer = createMockWriter(dataMetaClient);
+
+    HoodieTableMetaClient metadataMetaClient = mock(HoodieTableMetaClient.class);
+    HoodieActiveTimeline metadataTimeline = mock(HoodieActiveTimeline.class, RETURNS_DEEP_STUBS);
+    HoodieInstant pendingCompaction = INSTANT_GENERATOR.createNewInstant(
+        HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "20250101120000001");
+    when(metadataMetaClient.getActiveTimeline()).thenReturn(metadataTimeline);
+    when(metadataTimeline.filterPendingLogCompactionTimeline().firstInstant()).thenReturn(Option.empty());
+    when(metadataTimeline.filterPendingCompactionTimeline().firstInstant()).thenReturn(Option.of(pendingCompaction));
+    writer.metadataMetaClient = metadataMetaClient;
+
+    assertFalse(writer.validateCompactionScheduling(Option.empty(), "20250101120000002"));
+  }
+
+  @Test
+  void testValidateCompactionSchedulingRejectsExcessiveDeltaCommits() throws Exception {
+    // Protect pending data commits from unbounded metadata delta commits.
+    HoodieTableMetaClient dataMetaClient = mock(HoodieTableMetaClient.class);
+    HoodieInstant pendingCommit = INSTANT_GENERATOR.createNewInstant(
+        HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "20250101120000000");
+    HoodieActiveTimeline dataTimeline = createMockTimeline(Collections.singletonList(pendingCommit));
+    when(dataMetaClient.reloadActiveTimeline()).thenReturn(dataTimeline);
+    HoodieBackedTableMetadataWriterTableVersionSix<?, ?> writer = createMockWriter(dataMetaClient);
+
+    HoodieTableMetaClient metadataMetaClient = mock(HoodieTableMetaClient.class);
+    HoodieActiveTimeline metadataTimeline = mock(HoodieActiveTimeline.class, RETURNS_DEEP_STUBS);
+    when(metadataMetaClient.reloadActiveTimeline()).thenReturn(metadataTimeline);
+    when(metadataTimeline.filterCompletedInstants().filter(any()).lastInstant()).thenReturn(Option.empty());
+    when(metadataTimeline.getDeltaCommitTimeline().countInstants()).thenReturn(2);
+    writer.metadataMetaClient = metadataMetaClient;
+    writer.dataWriteConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp/table")
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .withMaxNumDeltacommitsWhenPending(1)
+            .build())
+        .build();
+
+    assertThrows(HoodieMetadataException.class,
+        () -> writer.validateCompactionScheduling(Option.empty(), "20250101120000001"));
+  }
+
+  @Test
+  void testCompactIfNecessaryCoversExistingDelegatedAndLogCompactionPaths() {
+    // Exercise completed, delegated, and log-compaction fallback paths.
+    Properties tableServiceManagerProperties = new Properties();
+    tableServiceManagerProperties.put(
+        HoodieTableServiceManagerConfig.TABLE_SERVICE_MANAGER_ENABLED.key(), "true");
+    tableServiceManagerProperties.put(
+        HoodieTableServiceManagerConfig.TABLE_SERVICE_MANAGER_ACTIONS.key(), ActionType.compaction.name());
+    HoodieTableServiceManagerConfig tableServiceManagerConfig =
+        HoodieTableServiceManagerConfig.newBuilder()
+            .fromProperties(tableServiceManagerProperties)
+            .build();
+    HoodieWriteConfig metadataWriteConfig = mock(HoodieWriteConfig.class);
+    when(metadataWriteConfig.getTableServiceManagerConfig()).thenReturn(tableServiceManagerConfig);
+    when(metadataWriteConfig.isLogCompactionEnabled()).thenReturn(true);
+
+    HoodieTableMetaClient metadataMetaClient = mock(HoodieTableMetaClient.class);
+    HoodieActiveTimeline timeline = mock(HoodieActiveTimeline.class, RETURNS_DEEP_STUBS);
+    when(metadataMetaClient.getActiveTimeline()).thenReturn(timeline);
+    when(timeline.filterCompletedInstants().containsInstant("100001")).thenReturn(true);
+    when(timeline.filterCompletedInstants().containsInstant("200001")).thenReturn(false);
+    when(timeline.filterCompletedInstants().containsInstant("300001")).thenReturn(false);
+    when(timeline.filterCompletedInstants().containsInstant("300005")).thenReturn(false);
+    when(timeline.filterCompletedInstants().containsInstant("400001")).thenReturn(false);
+    when(timeline.filterCompletedInstants().containsInstant("400005")).thenReturn(false);
+
+    HoodieBackedTableMetadataWriterTableVersionSix<?, ?> writer =
+        mock(HoodieBackedTableMetadataWriterTableVersionSix.class, CALLS_REAL_METHODS);
+    writer.metadataMetaClient = metadataMetaClient;
+    writer.metadataWriteConfig = metadataWriteConfig;
+    BaseHoodieWriteClient writeClient = mock(BaseHoodieWriteClient.class);
+    when(writeClient.scheduleCompactionAtInstant("200001", Option.empty())).thenReturn(true);
+    when(writeClient.scheduleCompactionAtInstant("300001", Option.empty())).thenReturn(false);
+    when(writeClient.scheduleLogCompactionAtInstant("300005", Option.empty())).thenReturn(true);
+
+    // Version 6 derives compaction and log-compaction instants with fixed suffixes.
+    writer.compactIfNecessary(writeClient, Option.of("100"));
+    writer.compactIfNecessary(writeClient, Option.of("200"));
+    writer.compactIfNecessary(writeClient, Option.of("300"));
+
+    Properties allTableServicesProperties = new Properties();
+    allTableServicesProperties.put(
+        HoodieTableServiceManagerConfig.TABLE_SERVICE_MANAGER_ENABLED.key(), "true");
+    allTableServicesProperties.put(
+        HoodieTableServiceManagerConfig.TABLE_SERVICE_MANAGER_ACTIONS.key(), "compaction,logcompaction");
+    when(metadataWriteConfig.getTableServiceManagerConfig()).thenReturn(
+        HoodieTableServiceManagerConfig.newBuilder()
+            .fromProperties(allTableServicesProperties)
+            .build());
+    when(writeClient.scheduleCompactionAtInstant("400001", Option.empty())).thenReturn(false);
+    when(writeClient.scheduleLogCompactionAtInstant("400005", Option.empty())).thenReturn(true);
+    writer.compactIfNecessary(writeClient, Option.of("400"));
+
+    verify(writeClient).scheduleCompactionAtInstant("200001", Option.empty());
+    verify(writeClient).scheduleLogCompactionAtInstant("300005", Option.empty());
+    verify(writeClient).logCompact("300005", true);
+  }
+
+  @Test
+  void testValidateRollbackRejectsCommitBeforeLatestCompaction() throws Exception {
+    // Version 6 cannot roll back beyond the latest compaction boundary.
+    HoodieBackedTableMetadataWriterTableVersionSix<?, ?> writer =
+        mock(HoodieBackedTableMetadataWriterTableVersionSix.class, CALLS_REAL_METHODS);
+    HoodieInstant compactionInstant = INSTANT_GENERATOR.createNewInstant(
+        HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "200", "201");
+    HoodieTimeline deltaCommits = mock(HoodieTimeline.class);
+    when(deltaCommits.countInstants()).thenReturn(2);
+    when(deltaCommits.getInstants()).thenReturn(Collections.emptyList());
+    Method validateRollback = HoodieBackedTableMetadataWriterTableVersionSix.class
+        .getDeclaredMethod(
+            "validateRollbackVersionSix", String.class, HoodieInstant.class, HoodieTimeline.class);
+    validateRollback.setAccessible(true);
+
+    InvocationTargetException exception = assertThrows(
+        InvocationTargetException.class,
+        () -> validateRollback.invoke(writer, "100", compactionInstant, deltaCommits));
+    assertTrue(exception.getCause() instanceof HoodieMetadataException);
   }
 
   private HoodieBackedTableMetadataWriterTableVersionSix<?, ?> createMockWriter(HoodieTableMetaClient dataMetaClient) throws Exception {

@@ -27,6 +27,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
+import lombok.Getter;
+import lombok.experimental.Accessors;
+
 import java.io.Serializable;
 import java.util.Properties;
 
@@ -37,10 +40,13 @@ import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
 /**
  * Schema context for deletes.
  */
+@Getter
 public class DeleteContext implements Serializable {
+
   private static final long serialVersionUID = 1L;
 
   private final Option<Pair<String, String>> customDeleteMarkerKeyValue;
+  @Accessors(fluent = true)
   private final boolean hasBuiltInDeleteField;
   private int hoodieOperationPos;
   private HoodieSchema readerSchema;
@@ -108,25 +114,9 @@ public class DeleteContext implements Serializable {
         .orElseGet(() -> -1);
   }
 
-  public Option<Pair<String, String>> getCustomDeleteMarkerKeyValue() {
-    return customDeleteMarkerKeyValue;
-  }
-
-  public boolean hasBuiltInDeleteField() {
-    return hasBuiltInDeleteField;
-  }
-
-  public int getHoodieOperationPos() {
-    return hoodieOperationPos;
-  }
-
   public DeleteContext withReaderSchema(HoodieSchema readerSchema) {
     this.readerSchema = readerSchema;
     this.hoodieOperationPos = getHoodieOperationPos(readerSchema);
     return this;
-  }
-
-  public HoodieSchema getReaderSchema() {
-    return readerSchema;
   }
 }

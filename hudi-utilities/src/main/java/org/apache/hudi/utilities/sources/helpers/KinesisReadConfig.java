@@ -40,6 +40,9 @@ public class KinesisReadConfig implements Serializable {
   private final String endpointUrl; // null if not set
   private final String accessKey; // null if not set
   private final String secretKey; // null if not set
+  private final String roleArn; // null if not set; cross-account stream reads via STS assume-role
+  private final String roleExternalId; // null if not set; sts:ExternalId for the assumed role
+  private final String roleSessionName; // STS session name for the assumed role
   private final KinesisSourceConfig.KinesisStartingPositionStrategy startingPosition;
   private final boolean metaFieldsEnabled;
   private final boolean deaggregationEnabled;

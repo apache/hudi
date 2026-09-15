@@ -29,9 +29,8 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -103,15 +102,14 @@ import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
  * <p><h3>Instants TTL</h3></p>
  * The timeline reader only reads instants of last limited days. We will by default skip the instants from LSM timeline that are generated long time ago.
  */
+@Slf4j
 public class LSMTimeline {
-  private static final Logger LOG = LoggerFactory.getLogger(LSMTimeline.class);
 
   public static final int LSM_TIMELINE_INSTANT_VERSION_1 = 1;
 
   private static final String VERSION_FILE_NAME = "_version_";    // _version_
   private static final String MANIFEST_FILE_PREFIX = "manifest_"; // manifest_[N]
-
-  private static final String TEMP_FILE_SUFFIX = ".tmp";
+  private static final Pattern MANIFEST_FILE_PATTERN = Pattern.compile("^" + MANIFEST_FILE_PREFIX + "(\\d+)$");
 
   private static final Pattern ARCHIVE_FILE_PATTERN =
       Pattern.compile("^(\\d+)_(\\d+)_(\\d)\\.parquet");
@@ -158,7 +156,7 @@ public class LSMTimeline {
       }
     } catch (Exception e) {
       // fallback to manifest file listing.
-      LOG.warn("Error reading version file {}", versionFilePath, e);
+      log.warn("Error reading version file {}", versionFilePath, e);
     }
 
     return allSnapshotVersions(metaClient, archivePath).stream().max(Integer::compareTo).orElse(-1);
@@ -176,7 +174,7 @@ public class LSMTimeline {
           .map(LSMTimeline::getManifestVersion)
           .collect(Collectors.toList());
     } catch (FileNotFoundException ex) {
-      LOG.debug("Archive path {} does not exist", archivePath);
+      log.debug("Archive path {} does not exist", archivePath);
       return Collections.emptyList();
     }
   }
@@ -242,7 +240,11 @@ public class LSMTimeline {
    * Parse the snapshot version from the manifest file name.
    */
   public static int getManifestVersion(String fileName) {
-    return Integer.parseInt(fileName.split("_")[1]);
+    Matcher fileMatcher = MANIFEST_FILE_PATTERN.matcher(fileName);
+    if (fileMatcher.matches()) {
+      return Integer.parseInt(fileMatcher.group(1));
+    }
+    throw new HoodieException("Unexpected manifest file name: " + fileName);
   }
 
   /**
@@ -256,7 +258,7 @@ public class LSMTimeline {
       }
     } catch (NumberFormatException e) {
       // log and ignore any format warnings
-      LOG.warn("error getting file layout for archived file: {}", fileName, e);
+      log.warn("error getting file layout for archived file: {}", fileName, e);
     }
 
     // return default value in case of any errors
@@ -298,6 +300,6 @@ public class LSMTimeline {
    * Returns a path filter for the manifest files.
    */
   public static StoragePathFilter getManifestFilePathFilter() {
-    return path -> path.getName().startsWith(MANIFEST_FILE_PREFIX) && !path.getName().endsWith(TEMP_FILE_SUFFIX);
+    return path -> MANIFEST_FILE_PATTERN.matcher(path.getName()).matches();
   }
 }

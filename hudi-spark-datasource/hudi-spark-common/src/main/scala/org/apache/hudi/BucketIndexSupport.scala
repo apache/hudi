@@ -27,6 +27,7 @@ import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.index.bucket.BucketIdentifier
 import org.apache.hudi.keygen.KeyGenerator
+import org.apache.hudi.keygen.KeyGenUtils
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 
 import org.apache.avro.generic.GenericData
@@ -212,7 +213,7 @@ class BucketIndexSupport(spark: SparkSession,
     if (bucketHashFields == null || bucketHashFields.isEmpty) {
       Option.apply(null)
     } else {
-      Option.apply(JavaConverters.seqAsJavaListConverter(bucketHashFields.split(",")).asJava)
+      Option.apply(KeyGenUtils.getIndexKeyFields(bucketHashFields))
     }
   }
 
@@ -224,4 +225,3 @@ class BucketIndexSupport(spark: SparkSession,
 object BucketIndexSupport {
   val INDEX_NAME = "BUCKET"
 }
-

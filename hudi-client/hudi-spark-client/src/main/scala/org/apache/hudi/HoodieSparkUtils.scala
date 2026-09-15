@@ -246,7 +246,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
       Array.fill(partitionColumns.length)(UTF8String.fromString(partitionPath))
     } else if(usePartitionValueExtractorOnRead && !StringUtils.isNullOrEmpty(partitionValueExtractorClass)) {
       parsePartitionValuesBasedOnPartitionValueExtractor(partitionValueExtractorClass, partitionPath,
-        partitionColumns, tableSchema)
+        partitionColumns, tableSchema, timeZoneId)
     } else {
       doParsePartitionColumnValues(partitionColumns, partitionPath, tableBasePath, tableSchema, timeZoneId,
         shouldValidatePartitionColumns, tableConfig.getSlashSeparatedDatePartitioning)
@@ -266,7 +266,8 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
       partitionValueExtractorClass: String,
       partitionPath: String,
       partitionColumns: Array[String],
-      tableSchema: StructType): Array[Object] = {
+      tableSchema: StructType,
+      timeZoneId: String): Array[Object] = {
     try {
       val partitionValueExtractor = Class.forName(partitionValueExtractorClass)
         .getDeclaredConstructor()
@@ -275,7 +276,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
       val partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partitionPath).asScala.toArray
       val partitionSchema = buildPartitionSchemaForNestedFields(tableSchema, partitionColumns)
       val typedValues = partitionValues.zip(partitionSchema.fields).map { case (stringValue, field) =>
-        castStringToType(stringValue, field.dataType)
+        castStringToType(stringValue, field.dataType, timeZoneId)
       }
       typedValues.map(_.asInstanceOf[Object])
     } catch {
@@ -312,7 +313,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
           }
           val partitionSchema = buildPartitionSchemaForNestedFields(schema, partitionColumns)
           val typedValue = if (partitionSchema.fields.nonEmpty) {
-            castStringToType(partitionValue, partitionSchema.fields.head.dataType)
+            castStringToType(partitionValue, partitionSchema.fields.head.dataType, timeZoneId)
           } else {
             UTF8String.fromString(partitionValue)
           }
@@ -323,7 +324,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
             val partitionValues = splitHiveSlashPartitions(partitionFragments, partitionColumns.length)
             val partitionSchema = buildPartitionSchemaForNestedFields(schema, partitionColumns)
             val typedValues = partitionValues.zip(partitionSchema.fields).map { case (stringValue, field) =>
-              castStringToType(stringValue, field.dataType)
+              castStringToType(stringValue, field.dataType, timeZoneId)
             }
             typedValues.map(_.asInstanceOf[Object])
           } else {
@@ -403,38 +404,30 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
     traverseSchema(schema, pathParts.toList, fieldPath)
   }
 
-  def castStringToType(value: String, dataType: org.apache.spark.sql.types.DataType): Any = {
-    import org.apache.spark.sql.types._
+  /**
+   * Converts a raw partition-path value into the Catalyst-internal representation of
+   * {@code dataType}, so that it can be held in the [[InternalRow]] of partition values.
+   *
+   * NOTE: This delegates to the very same [[SparkParsePartitionUtil#castPartValueToDesiredType]]
+   *       backing [[parsePartitionPath]], so that a partition value parsed through this (fallback)
+   *       flow is identical to the one parsed when the partition fragments line up with the
+   *       partition columns. Rolling our own conversion here previously handed back values in the
+   *       external representation ([[UTF8String]] for date/timestamp, [[java.math.BigDecimal]] for
+   *       decimal), which blows up with a [[ClassCastException]] as soon as Spark reads the
+   *       partition row.
+   */
+  def castStringToType(value: String, dataType: org.apache.spark.sql.types.DataType): Any =
+    castStringToType(value, dataType, SQLConf.get.sessionLocalTimeZone)
 
-    // handling cases where the value contains path separators or is complex
-    if (value.contains("/") || value.contains("=")) {
-      // For complex paths, falling back to string representation
-      logWarning(s"Cannot convert complex partition path '$value' to $dataType, keeping as string")
-      return UTF8String.fromString(value)
-    }
-
+  def castStringToType(value: String,
+                       dataType: org.apache.spark.sql.types.DataType,
+                       timeZoneId: String): Any = {
     try {
-      dataType match {
-        case LongType => value.toLong
-        case IntegerType => value.toInt
-        case ShortType => value.toShort
-        case ByteType => value.toByte
-        case FloatType => value.toFloat
-        case DoubleType => value.toDouble
-        case BooleanType => value.toBoolean
-        case _: DecimalType => new java.math.BigDecimal(value)
-        case StringType => UTF8String.fromString(value)
-        case _: TimestampType =>
-          UTF8String.fromString(value)
-        case _: DateType =>
-          UTF8String.fromString(value)
-        case _ => UTF8String.fromString(value)
-      }
+      SparkParsePartitionUtil.castPartValueToDesiredType(dataType, value, getTimeZone(timeZoneId).toZoneId)
     } catch {
-      case _: NumberFormatException =>
-        logWarning(s"Failed to convert '$value' to $dataType, keeping as string")
-        UTF8String.fromString(value)
       case _: Exception =>
+        // NOTE: A partition path that cannot be converted is left in its string representation,
+        //       preserving the long-standing lenient behavior for malformed paths
         logWarning(s"Error converting '$value' to $dataType, keeping as string")
         UTF8String.fromString(value)
     }

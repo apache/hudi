@@ -20,6 +20,7 @@
 package org.apache.hudi.common.util.hash;
 
 import org.apache.hudi.common.util.Base64CodecUtil;
+import org.apache.hudi.common.util.StringUtils;
 
 /**
  * A stateful Hoodie object ID representing any table column.
@@ -58,7 +59,7 @@ public class ColumnIndexID extends HoodieIndexID {
 
   @Override
   public String toString() {
-    return new String(this.hash);
+    return StringUtils.fromUTF8Bytes(this.hash);
   }
 
   @Override

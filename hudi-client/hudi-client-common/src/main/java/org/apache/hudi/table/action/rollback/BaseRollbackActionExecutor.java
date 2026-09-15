@@ -210,7 +210,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
     if (!table.getIndex().rollbackCommit(instantToRollback.requestedTime())) {
       throw new HoodieRollbackException("Rollback index changes failed, for time :" + instantToRollback);
     }
-    log.info("Index rolled back for commits " + instantToRollback);
+    log.info("Index rolled back for commits {}", instantToRollback);
   }
 
   public List<HoodieRollbackStat> doRollbackAndGetStats(HoodieRollbackPlan hoodieRollbackPlan) {
@@ -235,7 +235,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
 
     try {
       List<HoodieRollbackStat> stats = executeRollback(hoodieRollbackPlan);
-      log.info("Rolled back inflight instant " + instantTimeToRollback);
+      log.info("Rolled back inflight instant {}", instantTimeToRollback);
       if (!isPendingCompaction) {
         rollBackIndex();
       }
@@ -289,7 +289,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
         // when skipLocking is true, the caller should have already held the lock.
         table.getActiveTimeline().transitionRollbackInflightToComplete(false, inflightInstant, rollbackMetadata,
             completedInstant -> table.getMetaClient().getTableFormat().completedRollback(completedInstant, table.getContext(), table.getMetaClient(), table.getViewManager()));
-        log.info("Rollback of Commits " + rollbackMetadata.getCommitsRollback() + " is complete");
+        log.info("Rollback of Commits {} is complete", rollbackMetadata.getCommitsRollback());
       }
     } finally {
       if (enableLocking) {

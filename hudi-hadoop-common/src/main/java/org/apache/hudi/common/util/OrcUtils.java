@@ -67,6 +67,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.BinaryUtil.toBytes;
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToHadoopPath;
 
@@ -248,7 +249,8 @@ public class OrcUtils extends FileFormatUtils {
       if (reader.hasMetadataValue("orc.avro.schema")) {
         ByteBuffer metadataValue = reader.getMetadataValue("orc.avro.schema");
         byte[] bytes = toBytes(metadataValue);
-        return HoodieSchema.parse(new String(bytes));
+        // Must match HoodieAvroOrcWriter, which writes this value as UTF-8.
+        return HoodieSchema.parse(fromUTF8Bytes(bytes));
       } else {
         TypeDescription orcSchema = reader.getSchema();
         return AvroOrcUtils.createSchema(orcSchema);

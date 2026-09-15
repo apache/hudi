@@ -47,7 +47,7 @@ public class HoodieCompactionPlanGenerator<T extends HoodieRecordPayload, I, K, 
                                        BaseTableServicePlanActionExecutor executor) {
     super(table, engineContext, writeConfig, executor);
     this.compactionStrategy = writeConfig.getCompactionStrategy();
-    log.info("Compaction Strategy used is: " + compactionStrategy.toString());
+    log.info("Compaction Strategy used is: {}", compactionStrategy);
   }
 
   @Override

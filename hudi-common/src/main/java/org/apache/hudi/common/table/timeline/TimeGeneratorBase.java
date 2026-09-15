@@ -26,8 +26,7 @@ import org.apache.hudi.common.util.RetryHelper;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.storage.StorageConfiguration;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.Serializable;
 import java.util.Arrays;
@@ -42,9 +41,8 @@ import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_WAIT_
 /**
  * Base time generator facility that maintains lock-related utilities.
  */
+@Slf4j
 public abstract class TimeGeneratorBase implements TimeGenerator, Serializable {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TimeGeneratorBase.class);
 
   /**
    * The lock provider.
@@ -87,7 +85,7 @@ public abstract class TimeGeneratorBase implements TimeGenerator, Serializable {
       synchronized (this) {
         if (lockProvider == null) {
           String lockProviderClass = lockConfiguration.getConfig().getString("hoodie.write.lock.provider");
-          LOG.info("LockProvider for TimeGenerator: {}", lockProviderClass);
+          log.info("LockProvider for TimeGenerator: {}", lockProviderClass);
           lockProvider = (LockProvider<?>) ReflectionUtils.loadClass(lockProviderClass,
               new Class<?>[] {LockConfiguration.class, StorageConfiguration.class},
               lockConfiguration, storageConf);
@@ -121,10 +119,10 @@ public abstract class TimeGeneratorBase implements TimeGenerator, Serializable {
       if (lockProvider != null) {
         lockProvider.close();
         lockProvider = null;
-        LOG.info("Released the connection of the timeGenerator lock");
+        log.info("Released the connection of the timeGenerator lock");
       }
     } catch (Exception e) {
-      LOG.info("Unable to release the connection of the timeGenerator lock");
+      log.info("Unable to release the connection of the timeGenerator lock");
     }
   }
 }

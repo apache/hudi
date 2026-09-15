@@ -20,6 +20,7 @@
 package org.apache.hudi.common.bloom;
 
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -33,6 +34,7 @@ import java.io.IOException;
  * @see InternalBloomFilter The general behavior of a bloom filter and how the key is used.
  */
 @Getter
+@NoArgsConstructor
 public class Key implements Comparable<Key> {
   /**
    * Byte value of key
@@ -46,12 +48,6 @@ public class Key implements Comparable<Key> {
    * <code>Key</code> will have a default weight of 1.0
    */
   double weight;
-
-  /**
-   * default constructor - use with readFields
-   */
-  public Key() {
-  }
 
   /**
    * Constructor.

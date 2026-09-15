@@ -67,9 +67,9 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
     readerContext.getSchemaHandler().setSchemaForUpdates(recordSchema);
     HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
     Option<PartialUpdateMode> partialUpdateModeOpt = tableConfig.getPartialUpdateMode();
-    UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.emitDeletes(), fileGroupUpdateCallback, props);
+    UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.isEmitDeletes(), fileGroupUpdateCallback, props);
     FileGroupRecordBuffer<T> recordBuffer;
-    if (readerParameters.sortOutputs()) {
+    if (readerParameters.isSortOutputs()) {
       recordBuffer = new SortedKeyBasedFileGroupRecordBuffer<>(
           readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateModeOpt, props, orderingFieldNames, updateProcessor);
     } else {

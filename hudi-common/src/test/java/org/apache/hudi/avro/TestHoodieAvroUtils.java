@@ -122,6 +122,7 @@ import static org.apache.hudi.common.schema.HoodieSchemaUtils.sanitizeName;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -1150,5 +1151,15 @@ public class TestHoodieAvroUtils {
         Arguments.of(HoodieDeleteRecordList.class),
         Arguments.of(HoodieCommitMetadata.class)
     );
+  }
+
+  /**
+   * Verifies whether loaded avro version from pom.properties matches with implementation version from manifest
+   */
+  @Test
+  void testAvroVersionMatchesLoadedAvroJar() {
+    assertNotNull(HoodieAvroUtils.AVRO_VERSION);
+    // the pom.properties lookup must agree with the jar that actually defines Schema
+    assertEquals(Schema.class.getPackage().getImplementationVersion(), HoodieAvroUtils.AVRO_VERSION);
   }
 }

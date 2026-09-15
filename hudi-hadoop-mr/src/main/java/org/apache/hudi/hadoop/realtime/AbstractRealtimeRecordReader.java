@@ -94,9 +94,9 @@ public abstract class AbstractRealtimeRecordReader {
   public AbstractRealtimeRecordReader(RealtimeSplit split, JobConf job) {
     this.split = split;
     this.jobConf = job;
-    LOG.info("cfg ==> " + job.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR));
-    LOG.info("columnIds ==> " + job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
-    LOG.info("partitioningColumns ==> " + job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, ""));
+    LOG.info("cfg ==> {}", job.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR));
+    LOG.info("columnIds ==> {}", job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
+    LOG.info("partitioningColumns ==> {}", job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, ""));
     this.supportPayload = Boolean.parseBoolean(job.get("hoodie.support.payload", "true"));
     try {
       metaClient = HoodieTableMetaClient.builder()
@@ -106,7 +106,7 @@ public abstract class AbstractRealtimeRecordReader {
         this.payloadProps.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, metaClient.getTableConfig().getOrderingFieldsStr().orElse(null));
       }
       this.usesCustomPayload = usesCustomPayload(metaClient);
-      LOG.info("usesCustomPayload ==> " + this.usesCustomPayload);
+      LOG.info("usesCustomPayload ==> {}", this.usesCustomPayload);
 
       // get timestamp columns
       supportTimestamp = HoodieColumnProjectionUtils.supportTimestamp(jobConf);
@@ -190,7 +190,7 @@ public abstract class AbstractRealtimeRecordReader {
 
   public HoodieSchema constructHiveOrderedSchema(HoodieSchema writerSchema, Map<String, HoodieSchemaField> schemaFieldsMap, String hiveColumnString) {
     String[] hiveColumns = hiveColumnString.isEmpty() ? new String[0] : hiveColumnString.split(",");
-    LOG.info("Hive Columns : " + hiveColumnString);
+    LOG.info("Hive Columns : {}", hiveColumnString);
     List<HoodieSchemaField> hiveSchemaFields = new ArrayList<>();
 
     for (String columnName : hiveColumns) {

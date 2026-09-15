@@ -23,7 +23,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.MappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.buffer.RowDataBucket;
 import org.apache.hudi.sink.clustering.update.strategy.ConsistentBucketUpdateStrategy;
@@ -65,7 +65,7 @@ public class ConsistentBucketStreamWriteFunction extends StreamWriteFunction {
   @Override
   public void open(Configuration parameters) throws IOException {
     super.open(parameters);
-    List<String> indexKeyFields = Arrays.asList(config.get(FlinkOptions.INDEX_KEY_FIELD).split(","));
+    List<String> indexKeyFields = Arrays.asList(OptionsResolver.getBucketIndexKeys(config));
     this.updateStrategy = new ConsistentBucketUpdateStrategy(this.writeClient, indexKeyFields);
     log.info("Create update strategy with index key fields: {}", indexKeyFields);
   }

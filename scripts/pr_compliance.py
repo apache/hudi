@@ -46,7 +46,7 @@ class Outcomes:
     #parsing the next section
     NEXTSECTION = 2
 
-    #parsing has concluded succesfully, exit with no error
+    #parsing has concluded successfully, exit with no error
     SUCCESS = 3
 
 

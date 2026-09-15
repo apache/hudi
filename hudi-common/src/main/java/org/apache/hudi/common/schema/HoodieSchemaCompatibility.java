@@ -24,6 +24,9 @@ import org.apache.hudi.exception.MissingSchemaFieldException;
 import org.apache.hudi.exception.SchemaBackwardsCompatibilityException;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -45,11 +48,8 @@ import java.util.stream.Collectors;
  *   <li>Metadata field handling during schema checks</li>
  * </ul>
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class HoodieSchemaCompatibility {
-
-  // Prevent instantiation
-  private HoodieSchemaCompatibility() {
-  }
 
   public static boolean areSchemasCompatible(HoodieSchema tableSchema, HoodieSchema writerSchema) {
     return HoodieSchemaCompatibilityChecker.checkReaderWriterCompatibility(tableSchema, writerSchema, false).getType() == HoodieSchemaCompatibilityChecker.SchemaCompatibilityType.COMPATIBLE;

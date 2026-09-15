@@ -159,12 +159,8 @@ public class HoodieWrapperFileSystem extends FileSystem {
   }
 
   public static Path convertToHoodiePath(StoragePath file, Configuration conf) {
-    try {
-      String scheme = HadoopFSUtils.getFs(file.toString(), conf).getScheme();
-      return convertPathWithScheme(convertToHadoopPath(file), getHoodieScheme(scheme));
-    } catch (HoodieIOException e) {
-      throw e;
-    }
+    String scheme = HadoopFSUtils.getScheme(HadoopFSUtils.getFs(file.toString(), conf));
+    return convertPathWithScheme(convertToHadoopPath(file), getHoodieScheme(scheme));
   }
 
   public static Path convertPathWithScheme(Path oldPath, String newScheme) {

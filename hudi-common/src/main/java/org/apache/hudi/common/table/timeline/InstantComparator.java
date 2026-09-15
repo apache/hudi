@@ -37,4 +37,20 @@ public interface InstantComparator extends Serializable {
    * @return {@link Comparator<HoodieInstant>} that orders primarily based on completion time and secondary ordering based on {@link #requestedTimeOrderedComparator()}.
    */
   Comparator<HoodieInstant> completionTimeOrderedComparator();
+
+  /**
+   * Returns the comparator implementing the instant ordering of this timeline version:
+   * completion-time based for v2, requested-time based for v1.
+   *
+   * <p>Implementations must keep this consistent with {@link #getOrderingTime(HoodieInstant)},
+   * which returns the primary timestamp this comparator orders by: a timeline walk that sorts by
+   * this comparator and then bounds instants by {@code getOrderingTime} relies on the two agreeing.
+   */
+  Comparator<HoodieInstant> orderingComparator();
+
+  /**
+   * Returns the timestamp ordering the given instant in this timeline version: completion time
+   * for v2 (null if the instant is not completed yet), requested time for v1.
+   */
+  String getOrderingTime(HoodieInstant instant);
 }

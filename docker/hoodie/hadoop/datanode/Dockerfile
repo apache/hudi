@@ -20,7 +20,8 @@ ARG HADOOP_DN_PORT=50075
 ARG BASE_IMAGE_TAG=java11
 FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base-${BASE_IMAGE_TAG}:latest
 
-ENV HADOOP_DN_PORT ${HADOOP_DN_PORT}
+ARG HADOOP_DN_PORT
+ENV HADOOP_DN_PORT=${HADOOP_DN_PORT}
 
 ENV HDFS_CONF_dfs_datanode_data_dir=file:///hadoop/dfs/data
 RUN mkdir -p /hadoop/dfs/data

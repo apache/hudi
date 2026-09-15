@@ -38,6 +38,7 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -65,16 +66,16 @@ public class FlinkDeleteHelper<R> extends
   public List<HoodieKey> deduplicateKeys(List<HoodieKey> keys, HoodieTable<EmptyHoodieRecordPayload, List<HoodieRecord<EmptyHoodieRecordPayload>>, List<HoodieKey>, List<WriteStatus>> table, int parallelism) {
     boolean isIndexingGlobal = table.getIndex().isGlobal();
     if (isIndexingGlobal) {
-      HashSet<String> recordKeys = keys.stream().map(HoodieKey::getRecordKey).collect(Collectors.toCollection(HashSet::new));
+      HashSet<String> recordKeys = new HashSet<>();
       List<HoodieKey> deduplicatedKeys = new LinkedList<>();
       keys.forEach(x -> {
-        if (recordKeys.contains(x.getRecordKey())) {
+        if (recordKeys.add(x.getRecordKey())) {
           deduplicatedKeys.add(x);
         }
       });
       return deduplicatedKeys;
     } else {
-      HashSet<HoodieKey> set = new HashSet<>(keys);
+      LinkedHashSet<HoodieKey> set = new LinkedHashSet<>(keys);
       keys.clear();
       keys.addAll(set);
       return keys;

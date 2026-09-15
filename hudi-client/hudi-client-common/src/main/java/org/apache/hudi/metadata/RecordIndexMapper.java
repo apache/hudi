@@ -30,7 +30,9 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Mapper for Record Level Index (RLI).
@@ -45,6 +47,8 @@ public class RecordIndexMapper extends MetadataIndexMapper {
   @Override
   protected List<HoodieRecord> generateRecords(WriteStatus writeStatus) {
     List<HoodieRecord> allRecords = new ArrayList<>();
+    // delegates of one write status share at most a few distinct instants, so memoize the parse
+    Map<String, Long> instantTimeMillisCache = new HashMap<>();
     for (HoodieRecordDelegate recordDelegate : writeStatus.getIndexStats().getWrittenRecordDelegates()) {
       if (!writeStatus.isErrored(recordDelegate.getHoodieKey())) {
         if (recordDelegate.isIgnoreIndexUpdate()) {
@@ -68,7 +72,10 @@ public class RecordIndexMapper extends MetadataIndexMapper {
             // Insert new record case
             hoodieRecord = HoodieMetadataPayload.createRecordIndexUpdate(
                 recordDelegate.getRecordKey(), recordDelegate.getPartitionPath(),
-                newLocation.get().getFileId(), newLocation.get().getInstantTime(), dataWriteConfig.getWritesFileIdEncoding());
+                newLocation.get().getFileId(),
+                instantTimeMillisCache.computeIfAbsent(
+                    newLocation.get().getInstantTime(), HoodieMetadataPayload::parseRecordIndexInstantTime),
+                dataWriteConfig.getWritesFileIdEncoding());
             allRecords.add(hoodieRecord);
           }
         } else {

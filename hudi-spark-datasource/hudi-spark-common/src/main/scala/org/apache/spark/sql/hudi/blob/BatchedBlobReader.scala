@@ -24,7 +24,6 @@ import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
 import org.apache.hudi.io.SeekableDataInputStream
 import org.apache.hudi.storage.{HoodieStorage, HoodieStorageUtils, StorageConfiguration, StoragePath}
 
-import org.apache.spark.TaskContext
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{Dataset, Row}
@@ -88,12 +87,14 @@ import scala.collection.mutable.ArrayBuffer
  *   <li>Tune maxGapBytes based on your data access patterns</li>
  * </ul>
  *
- * @param storage        HoodieStorage instance for file I/O
+ * @param resolveStorage Supplies the HoodieStorage for a blob reference. A HoodieStorage is bound
+ *                       to the filesystem of the path it is built with, and a reference is only
+ *                       known once its row arrives, so this is called per read rather than once.
  * @param maxGapBytes    Maximum gap between ranges to consider for batching (default: 4KB)
  * @param lookaheadRows  Number of rows to buffer for batch detection (default: 50)
  */
 class BatchedBlobReader(
-                         storage: HoodieStorage,
+                         resolveStorage: StoragePath => HoodieStorage,
                          maxGapBytes: Int = 4096,
                          lookaheadRows: Int = 50) {
 
@@ -283,8 +284,10 @@ class BatchedBlobReader(
   /**
    * Identify consecutive ranges that can be batched together.
    *
-   * This method groups rows by file path, sorts by offset, and merges
-   * ranges that are consecutive or within maxGapBytes of each other.
+   * This method groups rows by file path, sorts them by (offset, length), and merges
+   * ranges that are adjacent or within maxGapBytes of each other. Rows carrying the identical
+   * descriptor (same file path, offset and length) share one read. Overlapping ranges throw,
+   * because a blob is a distinct entity and two blobs never share bytes.
    *
    * @param rows Sequence of row information
    * @return Sequence of merged ranges
@@ -296,8 +299,8 @@ class BatchedBlobReader(
     val allRanges = ArrayBuffer[MergedRange[R]]()
 
     byFile.foreach { case (filePath, fileRows) =>
-      // Sort by offset
-      val sorted = fileRows.sortBy(_.offset)
+      // Sort by offset, then by length, so rows carrying the identical descriptor are adjacent
+      val sorted = fileRows.sortBy(r => (r.offset, r.length))
 
       // Merge consecutive ranges
       val merged = mergeRanges(sorted, maxGapBytes)
@@ -310,7 +313,13 @@ class BatchedBlobReader(
   /**
    * Merge consecutive ranges within the gap threshold.
    *
-   * @param rows   Sorted rows from the same file
+   * Rows are grouped by file and sorted by (offset, length) before they reach this method.
+   * Adjacent ranges and ranges within the gap threshold are merged into a single read, and rows
+   * carrying the identical descriptor (same file path, offset and length) share one read: that
+   * is one blob referenced by more than one row. Overlapping ranges throw, because a blob is a
+   * distinct entity and two blobs never share bytes.
+   *
+   * @param rows   Rows from the same file, sorted by (offset, length)
    * @param maxGap Maximum gap to consider for merging
    * @return Sequence of merged ranges
    */
@@ -329,9 +338,16 @@ class BatchedBlobReader(
         currentStartOffset = row.offset
         currentEndOffset = row.offset + row.length
         currentRows = ArrayBuffer(row)
+      } else if (row.offset == currentRows.last.offset && row.length == currentRows.last.length) {
+        // Same descriptor as the previous row: one blob referenced by more than one row (join
+        // fan-out, duplicate records). It is served from the current read and the range does
+        // not grow.
+        currentRows += row
       } else {
         val gap = row.offset - currentEndOffset
-        // Check for overlap
+        // A blob is a distinct entity, so two blobs never share bytes. Rows are sorted by
+        // (offset, length) and identical descriptors were handled above, so a start inside the
+        // current range means two different blobs overlap, which indicates corruption.
         if (row.offset < currentEndOffset) {
           throw new IllegalArgumentException(
             s"Overlapping blob ranges detected: previous range [${currentStartOffset}, ${currentEndOffset}) and current row [${row.offset}, ${row.offset + row.length}) in file ${row.filePath}"
@@ -386,9 +402,11 @@ class BatchedBlobReader(
       outputSchema: StructType)
       (implicit builder: RowBuilder[R]): RowResult[R] = {
 
+    var storage: HoodieStorage = null
     var inputStream: InputStream = null
     try {
       val path = new StoragePath(rowInfo.filePath)
+      storage = resolveStorage(path)
       inputStream = storage.open(path)
       val buffer = inputStream.readAllBytes()
 
@@ -404,6 +422,7 @@ class BatchedBlobReader(
             logger.warn(s"Error closing stream for ${rowInfo.filePath}", e)
         }
       }
+      closeStorage(storage, rowInfo.filePath)
     }
   }
 
@@ -425,10 +444,13 @@ class BatchedBlobReader(
       outputSchema: StructType)
       (implicit builder: RowBuilder[R]): Seq[RowResult[R]] = {
 
+    var storage: HoodieStorage = null
     var inputStream: SeekableDataInputStream = null
     try {
       // Get or open file handle
-      inputStream = storage.openSeekable(new StoragePath(range.filePath), false)
+      val path = new StoragePath(range.filePath)
+      storage = resolveStorage(path)
+      inputStream = storage.openSeekable(path, false)
 
       // Seek to start offset
       inputStream.seek(range.startOffset)
@@ -475,6 +497,23 @@ class BatchedBlobReader(
           case e: Exception =>
             logger.warn(s"Error closing input stream for ${range.filePath}", e)
         }
+      }
+      closeStorage(storage, range.filePath)
+    }
+  }
+
+  /**
+   * Storage is resolved per read, so the read that resolved it closes it. HoodieHadoopStorage
+   * treats this as a no-op because it does not own the cached Hadoop filesystem, but another
+   * hoodie.storage.class implementation may hold resources of its own.
+   */
+  private def closeStorage(storage: HoodieStorage, filePath: String): Unit = {
+    if (storage != null) {
+      try {
+        storage.close()
+      } catch {
+        case e: Exception =>
+          logger.warn(s"Error closing storage for $filePath", e)
       }
     }
   }
@@ -690,9 +729,9 @@ object BatchedBlobReader {
 
     // Apply mapPartitions
     val result = df.mapPartitions { partition =>
-      // Create storage and reader for this partition
-      val storage = HoodieStorageUtils.getStorage(broadcastConf.value)
-      val reader = new BatchedBlobReader(storage, maxGapBytes, lookaheadSize)
+      // Create reader for this partition
+      val reader = new BatchedBlobReader(
+        HoodieStorageUtils.getStorage(_, broadcastConf.value), maxGapBytes, lookaheadSize)
 
       // Import implicit instances for Row
       import RowAccessor.rowAccessor
@@ -700,7 +739,6 @@ object BatchedBlobReader {
 
       // Process partition
       val iter = reader.processPartition[Row](partition, structColIdx, outputSchema)
-      TaskContext.get().addTaskCompletionListener[Unit](_ => storage.close())
       iter
     } (sparkAdapter.getCatalystExpressionUtils.getEncoder(outputSchema))
 
@@ -750,16 +788,14 @@ object BatchedBlobReader {
 
     // Process partitions using InternalRow type classes
     rdd.mapPartitions { partition =>
-      val storage = HoodieStorageUtils.getStorage(broadcastConf.value)
-
-      val reader = new BatchedBlobReader(storage, maxGapBytes, lookaheadSize)
+      val reader = new BatchedBlobReader(
+        HoodieStorageUtils.getStorage(_, broadcastConf.value), maxGapBytes, lookaheadSize)
 
       // Import implicit instances for InternalRow
       import RowAccessor.internalRowAccessor
       import RowBuilder.internalRowBuilder
 
       val iter = reader.processPartition[InternalRow](partition, structColIdx, outputSchema)
-      TaskContext.get().addTaskCompletionListener[Unit](_ => storage.close())
       iter
     }
   }

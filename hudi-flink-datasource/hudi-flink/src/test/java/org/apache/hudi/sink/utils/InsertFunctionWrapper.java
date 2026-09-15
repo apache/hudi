@@ -49,6 +49,8 @@ import org.apache.flink.streaming.util.MockStreamTaskBuilder;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -70,6 +72,7 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
   private final boolean asyncClustering;
   private ClusteringFunctionWrapper clusteringFunctionWrapper;
+  private final TreeMap<Long, byte[]> coordinatorStateStore;
 
   /**
    * Append write function.
@@ -97,6 +100,7 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     this.coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), 1);
     this.coordinator = new StreamWriteOperatorCoordinator(conf, this.coordinatorContext);
     this.stateInitializationContext = new MockStateInitializationContext();
+    this.coordinatorStateStore = new TreeMap<>();
 
     this.asyncClustering = OptionsResolver.needsAsyncClustering(conf);
     StreamConfig streamConfig = new StreamConfig(conf);
@@ -142,8 +146,10 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   }
 
   public void checkpointFunction(long checkpointId) throws Exception {
+    CompletableFuture<byte[]> completableFuture = new CompletableFuture<>();
     // checkpoint the coordinator first
-    this.coordinator.checkpointCoordinator(checkpointId, new CompletableFuture<>());
+    this.coordinator.checkpointCoordinator(checkpointId, completableFuture);
+    this.coordinatorStateStore.put(checkpointId, completableFuture.get());
 
     writeFunction.snapshotState(new MockFunctionSnapshotContext(checkpointId));
     stateInitializationContext.checkpointBegin(checkpointId);
@@ -167,9 +173,15 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   }
 
   public void coordinatorFails() throws Exception {
-    this.coordinator.close();
-    this.coordinator.start();
-    this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
+    resetCoordinatorToCheckpoint();
+  }
+
+  private void resetCoordinatorToCheckpoint() {
+    if (coordinatorStateStore.isEmpty()) {
+      return;
+    }
+    Map.Entry<Long, byte[]> latestState = this.coordinatorStateStore.lastEntry();
+    this.coordinator.resetToCheckpoint(latestState.getKey(), latestState.getValue());
   }
 
   public void restartCoordinator() throws Exception {

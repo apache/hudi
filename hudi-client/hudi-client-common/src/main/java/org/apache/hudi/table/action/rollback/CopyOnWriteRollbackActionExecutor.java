@@ -66,7 +66,7 @@ public class CopyOnWriteRollbackActionExecutor<T, I, K, O> extends BaseRollbackA
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
 
     if (instantToRollback.isCompleted()) {
-      log.info("Unpublishing instant " + instantToRollback);
+      log.info("Unpublishing instant {}", instantToRollback);
       table.getMetaClient().getTableFormat().rollback(instantToRollback, table.getContext(), table.getMetaClient(), table.getViewManager());
       // Revert the completed instant to inflight in native format.
       resolvedInstant = activeTimeline.revertToInflight(instantToRollback);
@@ -88,13 +88,13 @@ public class CopyOnWriteRollbackActionExecutor<T, I, K, O> extends BaseRollbackA
     // deleting the timeline file
     if (!resolvedInstant.isRequested()) {
       // delete all the data files for this commit
-      log.info("Clean out all base files generated for commit: " + resolvedInstant);
+      log.info("Clean out all base files generated for commit: {}", resolvedInstant);
       stats = executeRollback(resolvedInstant, hoodieRollbackPlan);
     }
 
     dropBootstrapIndexIfNeeded(instantToRollback);
 
-    log.info("Time(in ms) taken to finish rollback " + rollbackTimer.endTimer());
+    log.info("Time(in ms) taken to finish rollback {}", rollbackTimer.endTimer());
     return stats;
   }
 }

@@ -245,11 +245,18 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
                                                                                             boolean preservesPartitioning) {
     // Group values by key and apply the function to each group in parallel
     List<Iterable<V>> groupedValues = data.groupByKey().values().collectAsList();
+    if (groupedValues.isEmpty()) {
+      return HoodieListData.eager(Collections.emptyList());
+    }
+
     // Process each group in parallel using parallel stream
     List<R> results = executeParallelStream(
         groupedValues.parallelStream(),
-        stream -> stream.map(values -> throwingMapWrapper(processFunc).apply(new ClosableSortingIterator<>(values.iterator()))),
-        groupedValues.size()).flatMap(CollectionUtils::toStream).collect(Collectors.toList());
+        stream -> stream
+            .map(values -> throwingMapWrapper(processFunc).apply(new ClosableSortingIterator<>(values.iterator())))
+            .flatMap(CollectionUtils::toStream)
+            .collect(Collectors.toList()),
+        groupedValues.size());
     return HoodieListData.eager(results);
   }
 

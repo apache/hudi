@@ -98,7 +98,7 @@ public class TestFileDeltaInputWriter extends UtilitiesTestBase {
     DeltaWriteStats deltaWriteStats = fileSinkWriter.getDeltaWriteStats();
     FileSystem fs = HadoopFSUtils.getFs(basePath, jsc.hadoopConfiguration());
     FileStatus[] fileStatuses = fs.listStatus(new Path(deltaWriteStats.getFilePath()));
-    // Atleast 1 file was written
+    // At least 1 file was written
     assertEquals(1, fileStatuses.length);
     // File length should be greater than 0
     assertTrue(fileStatuses[0].getLen() > 0);

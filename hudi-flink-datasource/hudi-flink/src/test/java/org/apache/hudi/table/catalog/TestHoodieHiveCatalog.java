@@ -43,7 +43,6 @@ import org.apache.hudi.utils.CatalogUtils;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.flink.calcite.shaded.com.google.common.collect.Lists;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.Schema;
 import org.apache.flink.table.catalog.AbstractCatalog;
@@ -71,6 +70,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -126,7 +126,7 @@ public class TestHoodieHiveCatalog extends BaseTestHoodieCatalog {
           .column("par2", DataTypes.STRING())
           .primaryKey("uuid")
           .build();
-  List<String> multiPartitions = Lists.newArrayList("par1", "par2");
+  List<String> multiPartitions = Arrays.asList("par1", "par2");
 
   private static HoodieHiveCatalog hoodieCatalog;
   private final ObjectPath tablePath = new ObjectPath(TEST_DEFAULT_DATABASE, "test");
@@ -276,7 +276,7 @@ public class TestHoodieHiveCatalog extends BaseTestHoodieCatalog {
     assertEquals(keyGeneratorClassName, NonpartitionedAvroKeyGenerator.class.getName());
 
     // validate the order of partition fields in the multi-partition table
-    List<String> multiPartitions =  Lists.newArrayList("par2", "par1");
+    List<String> multiPartitions = Arrays.asList("par2", "par1");
     ObjectPath multiPartitionsTablePath = new ObjectPath("default", "tb_mp_" + System.currentTimeMillis());
     CatalogTable multiPartitionsTable =
         CatalogUtils.createCatalogTable(singleKeyMultiPartitionTableSchema, multiPartitions, options, "multi-partition hudi table");

@@ -149,6 +149,25 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
   }
 
   /**
+   * Test case to validate that on a partitioned table, partition stats can be disabled independently while column
+   * stats remains enabled: the column stats index is still built but the partition stats index is not.
+   */
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieTableType])
+  def testColumnStatsEnabledWithPartitionStatsDisabled(tableType: HoodieTableType): Unit = {
+    val hudiOpts = commonOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "false")
+    doWriteAndValidateDataAndPartitionStats(hudiOpts, operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL, saveMode = SaveMode.Overwrite, validate = false)
+    doWriteAndValidateDataAndPartitionStats(hudiOpts, operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL, saveMode = SaveMode.Append, validate = false)
+    // column stats should be built, but partition stats should not be present in the MDT
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    val metadataPartitions = metaClient.getTableConfig.getMetadataPartitions
+    assertTrue(metadataPartitions.contains(MetadataPartitionType.COLUMN_STATS.getPartitionPath))
+    assertFalse(metadataPartitions.contains(MetadataPartitionType.PARTITION_STATS.getPartitionPath))
+  }
+
+  /**
    * Test case to do a write with updates and rollback the last instant and validate the partition stats index.
    */
   @ParameterizedTest
