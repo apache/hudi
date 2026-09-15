@@ -25,6 +25,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.collection.FlatLists;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -43,6 +44,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -54,6 +56,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase implements Serializable {
   private static final Comparator<HoodieRecord<? extends HoodieRecordPayload>> KEY_COMPARATOR =
@@ -239,6 +242,65 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
         records1, true, true, true, generateExpectedPartitionNumRecords(records1), Option.of(columnComparator), true);
     testBulkInsertInternalPartitioner(new RDDCustomColumnsSortPartitioner(config),
         records2, true, true, true, generateExpectedPartitionNumRecords(records2), Option.of(columnComparator), true);
+  }
+
+  /**
+   * On the Spark clustering / bulk-insert record path a binary sort column arrives as a
+   * raw byte[], which is not {@link Comparable}. {@code FlatLists.ofComparableArray} casts every
+   * element to Comparable, so this threw "ClassCastException: [B cannot be cast to
+   * java.lang.Comparable" and wedged every clustering attempt. {@code wrapArrayOfObjects} must wrap
+   * byte[] into a Comparable that preserves the Avro path's byte-lexicographic (ByteBuffer) ordering:
+   * signed bytes, shorter-prefix-first.
+   */
+  @Test
+  public void testSortColumnsWithBinaryValueAreComparable() {
+    // Before the fix each sortKeyOf(...) threw ClassCastException: [B cannot be cast to java.lang.Comparable.
+    assertTrue(sortKeyOf(new byte[] {0x01, 0x02}).compareTo(sortKeyOf(new byte[] {0x01, 0x03})) < 0,
+        "byte[] sort key must order like the Avro ByteBuffer path");
+    assertTrue(sortKeyOf(new byte[] {0x01, 0x03}).compareTo(sortKeyOf(new byte[] {0x01, 0x02})) > 0);
+    assertEquals(0, sortKeyOf(new byte[] {0x01, 0x02}).compareTo(sortKeyOf(new byte[] {0x01, 0x02})));
+    // ByteBuffer.compareTo is signed, so 0x80 (-128) sorts before 0x7F (127); lock in the sign.
+    assertTrue(sortKeyOf(new byte[] {(byte) 0x80}).compareTo(sortKeyOf(new byte[] {0x7F})) < 0,
+        "0x80 must sort before 0x7F under the Avro path's signed byte ordering");
+    // A shorter value that is a prefix of a longer one sorts first.
+    assertTrue(sortKeyOf(new byte[] {0x01, 0x02}).compareTo(sortKeyOf(new byte[] {0x01, 0x02, 0x00})) < 0);
+    // Empty binary sorts first.
+    assertTrue(sortKeyOf(new byte[] {}).compareTo(sortKeyOf(new byte[] {0x00})) < 0);
+  }
+
+  private static FlatLists.ComparableList sortKeyOf(byte[] value) {
+    return FlatLists.ofComparableArray(UTF8STRING_FACTORY.wrapArrayOfObjects(new Object[] {value}));
+  }
+
+  /**
+   * The wrapped binary sort key must also survive the {@code sortBy} shuffle, not merely be
+   * {@link Comparable} in-JVM. The shuffle key ({@link FlatLists.ComparableList}) is Kryo-serializable
+   * and Hudi always runs the write path with Kryo ({@code HoodieSparkSqlWriter} rejects any other
+   * {@code spark.serializer}), so this round-trips the key through Hudi's Kryo ({@link SerializationUtils})
+   * and asserts the element stays a {@link ByteBuffer} with its ordering intact. Without the
+   * {@code ByteBuffer.wrap} the key holds a raw byte[]: the deserialized element is not a ByteBuffer
+   * (and comparison throws the same ClassCastException the shuffle would), so this test fails.
+   */
+  @Test
+  public void testBinarySortKeySurvivesKryoRoundTrip() throws IOException {
+    FlatLists.ComparableList lo = kryoRoundTrip(sortKeyOf(new byte[] {0x01, 0x02}));
+    FlatLists.ComparableList hi = kryoRoundTrip(sortKeyOf(new byte[] {0x01, 0x03}));
+    FlatLists.ComparableList neg = kryoRoundTrip(sortKeyOf(new byte[] {(byte) 0x80}));
+    FlatLists.ComparableList pos = kryoRoundTrip(sortKeyOf(new byte[] {0x7F}));
+    // Element type must survive Kryo serde — a raw byte[] (no fix) fails this assertion.
+    assertTrue(lo.get(0) instanceof ByteBuffer,
+        "binary sort key element must remain a ByteBuffer after the Kryo round-trip");
+    // Ordering identity and relative order must survive the round-trip (position/limit preserved).
+    assertEquals(0, lo.compareTo(kryoRoundTrip(sortKeyOf(new byte[] {0x01, 0x02}))),
+        "equal keys must stay equal after the Kryo round-trip");
+    assertTrue(lo.compareTo(hi) < 0, "relative ordering must survive the Kryo round-trip");
+    assertTrue(neg.compareTo(pos) < 0,
+        "signed byte ordering (0x80 < 0x7F) must survive the Kryo round-trip");
+  }
+
+  @SuppressWarnings("unchecked")
+  private static FlatLists.ComparableList kryoRoundTrip(FlatLists.ComparableList key) throws IOException {
+    return (FlatLists.ComparableList) SerializationUtils.deserialize(SerializationUtils.serialize(key));
   }
 
   private Comparator<HoodieRecord<? extends HoodieRecordPayload>> getCustomColumnComparator(HoodieSchema schema, boolean prependPartitionPath, String[] sortColumns) {
