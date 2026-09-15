@@ -38,7 +38,6 @@ import static java.util.Collections.emptyList;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeAvroMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeAvroMetadata;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class HudiUtilTest
@@ -123,17 +122,13 @@ class HudiUtilTest
 
     /**
      * {@link HudiUtil#getLatestTableSchema} reads commit metadata, which converts nested generic records into
-     * Hudi's generated Avro classes. Avro 1.12.2+ rejects name-based lookups of those classes through its
-     * ClassSecurityValidator, so the round trip must keep working on the Avro version Trino pins.
+     * Hudi's generated Avro classes. This module's tests resolve Hudi's managed Avro, not the Avro 1.12.2+ that
+     * Trino bundles and whose ClassSecurityValidator rejected those classes; the Trino E2E suite covers that.
      */
     @Test
     void testCommitMetadataRoundTripWithNestedWriteStats()
             throws IOException
     {
-        assertThatCode(() -> Class.forName("org.apache.avro.util.ClassSecurityValidator"))
-                .as("This test exists to cover Avro 1.12.2+ trusted-class validation, but ClassSecurityValidator is not on the test classpath")
-                .doesNotThrowAnyException();
-
         String partition = "2026/09/15";
         HoodieWriteStat writeStat = HoodieWriteStat.newBuilder()
                 .setFileId("file-1")
