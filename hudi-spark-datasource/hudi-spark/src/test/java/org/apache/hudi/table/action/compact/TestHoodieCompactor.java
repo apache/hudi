@@ -288,8 +288,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
   }
 
   /**
-   * Plan generator that records its own state in the plan's extra metadata, the way an
-   * incremental strategy tracks the partitions it skipped.
+   * Plan generator that records its own state in the plan's extra metadata.
    */
   public static class ExtraMetadataCompactionPlanGenerator<T extends HoodieRecordPayload, I, K, O>
       extends HoodieCompactionPlanGenerator<T, I, K, O> {

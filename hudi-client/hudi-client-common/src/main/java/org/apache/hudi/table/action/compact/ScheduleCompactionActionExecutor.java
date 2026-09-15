@@ -127,8 +127,7 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServi
   /**
    * Adds the caller-provided extra metadata to the plan without discarding what the plan
    * generator already recorded there. Those entries carry state only the generator can
-   * reconstruct, such as whether it planned incrementally, so they take precedence on a key
-   * collision; every other caller entry is kept.
+   * reconstruct, so they take precedence on a key collision; every other caller entry is kept.
    */
   @VisibleForTesting
   static void mergeExtraMetadata(HoodieCompactionPlan plan, Option<Map<String, String>> extraMetadata) {

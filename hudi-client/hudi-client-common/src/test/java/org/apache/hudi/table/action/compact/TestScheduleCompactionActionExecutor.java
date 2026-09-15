@@ -83,7 +83,7 @@ class TestScheduleCompactionActionExecutor extends HoodieCommonTestHarness {
   @Test
   void testMergeExtraMetadataGeneratorWinsOnCollision() {
     HoodieCompactionPlan plan = planWithExtraMetadata(generatorMetadata());
-    ScheduleCompactionActionExecutor.mergeExtraMetadata(plan, Option.of(Collections.singletonMap("isIncremental", "false")));
+    ScheduleCompactionActionExecutor.mergeExtraMetadata(plan, Option.of(Collections.singletonMap("generator.mode", "other")));
     Assertions.assertEquals(generatorMetadata(), plan.getExtraMetadata());
   }
 
@@ -104,8 +104,8 @@ class TestScheduleCompactionActionExecutor extends HoodieCommonTestHarness {
 
   private static Map<String, String> generatorMetadata() {
     Map<String, String> metadata = new HashMap<>();
-    metadata.put("isIncremental", "true");
-    metadata.put("missedPartitions", "[\"p1\",\"p4\"]");
+    metadata.put("generator.mode", "planned");
+    metadata.put("generator.state", "[\"a\",\"b\"]");
     return metadata;
   }
 
