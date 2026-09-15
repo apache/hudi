@@ -37,6 +37,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -180,7 +181,7 @@ public class EventBuffers implements Serializable {
    * Collects the fileIds carried by all pending (buffered but not yet committed) data write events for
    * {@code partition}.
    */
-  public HashSet<String> getPendingWriteFileIds(String partition) {
+  public Set<String> getPendingWriteFileIds(String partition) {
     HashSet<String> fileIds = new HashSet<>();
     this.eventBuffers.values().stream()
         .map(Pair::getRight)

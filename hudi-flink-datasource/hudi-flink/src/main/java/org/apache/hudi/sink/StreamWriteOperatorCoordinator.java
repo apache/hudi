@@ -69,10 +69,10 @@ import javax.annotation.Nullable;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ThreadFactory;
@@ -442,7 +442,7 @@ public class StreamWriteOperatorCoordinator
   private CompletableFuture<CoordinationResponse> handlePendingBucketFileIdsRequest(Correspondent.PendingBucketFileIdsRequest request) {
     CompletableFuture<CoordinationResponse> response = new CompletableFuture<>();
     executor.execute(() -> {
-      HashSet<String> fileIds = eventBuffers.getPendingWriteFileIds(request.getPartition());
+      Set<String> fileIds = eventBuffers.getPendingWriteFileIds(request.getPartition());
       response.complete(CoordinationResponseSerDe.wrap(Correspondent.PendingBucketFileIdsResponse.getInstance(fileIds)));
     }, "request pending bucket fileIds for partition %s", request.getPartition());
     return response;

@@ -61,22 +61,17 @@ public class TestBucketStreamWriteRecommitRace extends TestWriteBase {
 
   @Test
   public void testReusePendingFileIdAvoidsDuplicateAfterRecommitRace() throws Exception {
-    // records that all fall into partition "par1" (single bucket)
-    List<RowData> firstBatch = Collections.singletonList(
-        TestData.insertRow(
-            StringData.fromString("id1"), StringData.fromString("Danny"), 23,
-            TimestampData.fromEpochMillis(1), StringData.fromString("par1")));
-    List<RowData> secondBatch = Collections.singletonList(
-        TestData.insertRow(
-            StringData.fromString("id2"), StringData.fromString("Stephen"), 33,
-            TimestampData.fromEpochMillis(2), StringData.fromString("par1")));
+    // "Pending query wins" ordering (task-level failover): a single subtask restarts while the
+    // coordinator stays alive, so fileId-A is never recommitted and stays buffered as an inflight
+    // instant. The committed view is empty, so the pending query is the only source of fileId-A.
+    List<RowData> firstBatch = par1Row("id1", "Danny", 23, 1);
+    List<RowData> secondBatch = par1Row("id2", "Stephen", 33, 2);
 
     BucketStreamWriteFunctionWrapper<RowData> pipeline =
         new BucketStreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
     pipeline.openFunction();
 
-    // Step 1: first write to the empty partition; checkpoint(1) flushes fileId-A. Hand the flush
-    // event to the coordinator so it is buffered as an inflight instant, but never commit it.
+    // Step 1: first write; checkpoint(1) flushes fileId-A. Buffer the flush event without committing.
     for (RowData row : firstBatch) {
       pipeline.invoke(row);
     }
@@ -85,22 +80,20 @@ public class TestBucketStreamWriteRecommitRace extends TestWriteBase {
     String fileIdA = fileIdOf(flushEvent);
     pipeline.getCoordinator().handleEventFromOperator(0, flushEvent);
 
-    // Step 2: restart the write task. On restore it resends the bootstrap event carrying fileId-A,
-    // which we intercept and hold. A subtask failover does not reset the coordinator, so fileId-A
-    // stays buffered there.
+    // Step 2: task-level failover (attempt 1) resends only an empty bootstrap event; fileId-A stays
+    // buffered on the still-alive coordinator. We hold the event.
     pipeline.subTaskFails(0, 1);
-    OperatorEvent bootstrapEvent = pipeline.getNextEvent(); // fileId-A bootstrap event (held)
+    OperatorEvent bootstrapEvent = pipeline.getNextEvent();
 
-    // Step 3: a new record for the same bucket is processed before the coordinator recommits.
-    // bootstrapIndexIfNeed() reads the empty committed view and, thanks to the fix, adopts the
-    // pending fileId-A from the coordinator query instead of minting a fresh fileId.
+    // Step 3: a new record for the same bucket adopts pending fileId-A from the query (committed view
+    // is empty) instead of minting a fresh fileId.
     for (RowData row : secondBatch) {
       pipeline.invoke(row);
     }
 
-    // Step 4: the coordinator recommits fileId-A, then checkpoint(2) flushes the second record. Its
-    // flush event must reuse fileId-A rather than a freshly minted fileId-B.
-    pipeline.getCoordinator().handleEventFromOperator(0, bootstrapEvent); // commits fileId-A
+    // Step 4: handle the empty bootstrap (no-op), then checkpoint(2) must flush the second record
+    // reusing fileId-A.
+    pipeline.getCoordinator().handleEventFromOperator(0, bootstrapEvent);
     pipeline.checkpointFunction(2);
     OperatorEvent flushEvent2 = pipeline.getNextEvent();
     assertThat(fileIdOf(flushEvent2))
@@ -120,6 +113,55 @@ public class TestBucketStreamWriteRecommitRace extends TestWriteBase {
     });
 
     pipeline.close();
+  }
+
+  @Test
+  public void testAdoptCommittedFileIdWhenRecommitPrecedesBootstrap() throws Exception {
+    // "Committed view wins" ordering (full job restart) - the realistic runtime ordering. The write
+    // task resends the uncommitted fileId-A event from initializeState() before any record, so the
+    // coordinator recommits and commits fileId-A (resetting its buffer) first. The later pending query
+    // returns empty, so the fix must fall back to the freshly reloaded committed view that owns fileId-A.
+    List<RowData> firstBatch = par1Row("id1", "Danny", 23, 1);
+    List<RowData> secondBatch = par1Row("id2", "Stephen", 33, 2);
+
+    BucketStreamWriteFunctionWrapper<RowData> pipeline =
+        new BucketStreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
+    pipeline.openFunction();
+
+    // Step 1: first write; checkpoint(1) flushes fileId-A into an inflight instant.
+    for (RowData row : firstBatch) {
+      pipeline.invoke(row);
+    }
+    pipeline.checkpointFunction(1);
+    OperatorEvent flushEvent = pipeline.getNextEvent();
+    String fileIdA = fileIdOf(flushEvent);
+    pipeline.getCoordinator().handleEventFromOperator(0, flushEvent);
+
+    // Step 2: full job restart (attempt 0) resends the uncommitted fileId-A event; handing it to the
+    // coordinator triggers a genuine recommit that commits fileId-A and resets the buffer.
+    pipeline.subTaskFails(0, 0);
+    OperatorEvent bootstrapEvent = pipeline.getNextEvent();
+    pipeline.getCoordinator().handleEventFromOperator(0, bootstrapEvent);
+
+    // Step 3: a new record for the same bucket gets an empty pending query but reloads fileId-A from
+    // the now-committed view, so it reuses it instead of minting a duplicate.
+    for (RowData row : secondBatch) {
+      pipeline.invoke(row);
+    }
+    pipeline.checkpointFunction(2);
+    OperatorEvent flushEvent2 = pipeline.getNextEvent();
+    assertThat(fileIdOf(flushEvent2))
+        .as("the second record must reuse the committed fileId-A after the recommit")
+        .isEqualTo(fileIdA);
+
+    pipeline.close();
+  }
+
+  private static List<RowData> par1Row(String id, String name, int age, long ts) {
+    return Collections.singletonList(
+        TestData.insertRow(
+            StringData.fromString(id), StringData.fromString(name), age,
+            TimestampData.fromEpochMillis(ts), StringData.fromString("par1")));
   }
 
   private static String fileIdOf(OperatorEvent event) {

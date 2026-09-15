@@ -33,7 +33,6 @@ import org.apache.flink.util.SerializedValue;
 
 import java.io.IOException;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -103,9 +102,9 @@ public class Correspondent {
   }
 
   /**
-   * Requests the fileIds still pending (checkpointed but not yet committed) for {@code partition}.
-   * The simple bucket index bootstrap uses these to avoid minting a second fileId for a bucket that
-   * already owns an inflight one, which would collide once the coordinator recommits it.
+   * Requests the fileIds still pending (checkpointed but not yet committed) for {@code partition}, used
+   * by the simple bucket index bootstrap to avoid minting a second fileId that would collide once the
+   * coordinator recommits the inflight one.
    */
   public Set<String> requestPendingBucketFileIds(String partition) {
     try {
@@ -192,9 +191,9 @@ public class Correspondent {
   @Getter
   public static class PendingBucketFileIdsResponse implements CoordinationResponse {
 
-    private final HashSet<String> fileIds;
+    private final Set<String> fileIds;
 
-    public static PendingBucketFileIdsResponse getInstance(HashSet<String> fileIds) {
+    public static PendingBucketFileIdsResponse getInstance(Set<String> fileIds) {
       return new PendingBucketFileIdsResponse(fileIds);
     }
   }
