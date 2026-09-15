@@ -30,6 +30,9 @@ from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 LLMProvider = Literal["anthropic", "openai", "ollama", "openai-compatible"]
+LakehouseEngine = Literal["trino", "spark"]
+SparkAuth = Literal["none", "nosasl", "ldap"]
+SchemaHints = Literal["off", "errors", "prompt", "both"]
 
 
 class GatewaySettings(BaseSettings):
@@ -58,17 +61,51 @@ class GatewaySettings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     openai_base_url: str = ""  # required for provider=openai-compatible (vLLM etc.)
 
-    # --- Trino / lakehouse ---
+    # --- lakehouse engine ---
+    # Which SQL engine serves the lakehouse tools. "trino" (default) queries a
+    # Trino coordinator with the Hudi connector; "spark" queries a Spark
+    # Thrift Server (HiveServer2 protocol), which additionally reads MOR
+    # snapshots and Hudi 1.x tables that carry unstructured columns.
+    engine: LakehouseEngine = "trino"
+
+    # --- Trino backend ---
     trino_host: str = "hudi-trino.hudi-lakehouse.svc"
     trino_port: int = 8080
     trino_user: str = "hudi-agent-gateway"
     trino_catalog: str = "hudi"
     trino_schema: str = "default"
 
+    # --- Spark Thrift Server backend ---
+    spark_host: str = "localhost"
+    spark_port: int = 10000
+    spark_user: str = "hudi-agent-gateway"
+    spark_database: str = "default"
+    # HiveServer2 auth mode: "none" (SASL PLAIN, the Spark Thrift default),
+    # "nosasl" (hive.server2.authentication=NOSASL), or "ldap" (user/password).
+    spark_auth: SparkAuth = "none"
+    spark_password: str = ""
+    # Connection pooling: HiveServer2 sessions are expensive to open, so the
+    # client keeps up to `spark_max_connections` live sessions (also the query
+    # concurrency bound) and recycles them past the idle/lifetime limits.
+    spark_max_connections: int = Field(default=8, ge=1, le=64)
+    spark_pool_max_idle_seconds: float = Field(default=300.0, gt=0)
+    spark_pool_max_lifetime_seconds: float = Field(default=1800.0, gt=0)
+
     # --- guardrails / shaping ---
     sql_row_cap: int = 200
     sql_timeout_seconds: float = 120.0
     tool_result_max_bytes: int = 50_000
+
+    # --- schema hints ---
+    # Live schema context for the model, auto-derived from the engine (never
+    # hand-written): "errors" enriches column/table-not-found errors with the
+    # real names ("did you mean `beds`?"), "prompt" injects a compact schema
+    # snapshot into the system prompt so small models stop guessing names,
+    # "both" (default) does both, "off" restores pure tool-based discovery.
+    schema_hints: SchemaHints = "both"
+    schema_cache_ttl_seconds: float = Field(default=300.0, gt=0)
+    schema_max_tables: int = Field(default=20, ge=1, le=200)
+    schema_max_columns: int = Field(default=40, ge=1, le=500)
 
     # --- agent / sessions ---
     agent_max_iterations: int = 25
@@ -90,4 +127,6 @@ class GatewaySettings(BaseSettings):
             raise ValueError(
                 "GATEWAY_LLM_PROVIDER=openai-compatible requires GATEWAY_OPENAI_BASE_URL"
             )
+        if self.engine == "spark" and self.spark_auth == "ldap" and not self.spark_password:
+            raise ValueError("GATEWAY_SPARK_AUTH=ldap requires GATEWAY_SPARK_PASSWORD")
         return self
