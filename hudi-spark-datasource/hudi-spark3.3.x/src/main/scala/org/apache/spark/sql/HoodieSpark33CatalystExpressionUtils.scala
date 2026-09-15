@@ -18,7 +18,7 @@
 package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.encoders.{ExpressionEncoder, RowEncoder}
-import org.apache.spark.sql.catalyst.expressions.{AnsiCast, Cast, Expression, ParseToDate, ParseToTimestamp}
+import org.apache.spark.sql.catalyst.expressions.{AnsiCast, Cast, Expression}
 import org.apache.spark.sql.types.{DataType, StructType}
 
 object HoodieSpark33CatalystExpressionUtils extends BaseHoodieCatalystExpressionUtils {
@@ -40,13 +40,6 @@ object HoodieSpark33CatalystExpressionUtils extends BaseHoodieCatalystExpression
         Some((castedExpr, dataType, timeZoneId, ansiEnabled))
       case AnsiCast(castedExpr, dataType, timeZoneId) =>
         Some((castedExpr, dataType, timeZoneId, true))
-      case _ => None
-    }
-
-  override protected def unapplyOrderPreservingDateParsing(expr: Expression): Option[Expression] =
-    expr match {
-      case ParseToDate(child, _, _) => Some(child)
-      case ParseToTimestamp(child, _, _, _) => Some(child)
       case _ => None
     }
 }
