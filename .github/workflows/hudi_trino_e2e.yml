@@ -132,17 +132,7 @@ jobs:
           key: trino-m2-v2-${{ hashFiles('scripts/trino/bootstrap_trino.sh') }}-${{ steps.trino-pin.outputs.trino_sha }}
           # No restore-keys on purpose: a partial restore from another pin collides on the
           # same SNAPSHOT coordinates and poisons the build.
-      # One image per pin, built from the same commit as the connector.
-      - name: Restore Trino server image for the pinned commit
-        id: trino-image
-        uses: actions/cache/restore@v4
-        with:
-          path: ${{ runner.temp }}/trino-server-image.tar.zst
-          key: trino-server-image-v1-${{ hashFiles('docker/trino/build_trino_server_image.sh') }}-${{ steps.trino-pin.outputs.trino_sha }}
-          # No restore-keys on purpose: a server image from another pin is exactly the
-          # server/connector mismatch this job exists to rule out.
       - name: Checkout trinodb/trino at the pinned commit
-        if: steps.trino-m2.outputs.cache-hit != 'true' || steps.trino-image.outputs.cache-hit != 'true'
         uses: actions/checkout@v5
         with:
           repository: trinodb/trino
@@ -151,29 +141,16 @@ jobs:
       - name: Build Trino artifacts from source (JDK 25)
         if: steps.trino-m2.outputs.cache-hit != 'true'
         run: scripts/trino/bootstrap_trino.sh trino-src --skip-checkout
+      # Built on every run, from the same commit as the connector. Not cached: the scheduled
+      # workflow's delete-all-caches job removes Actions caches before a later run can restore them.
       - name: Build the Trino server image from the pinned commit (JDK 25)
-        if: steps.trino-image.outputs.cache-hit != 'true'
         env:
           TRINO_SHA: ${{ steps.trino-pin.outputs.trino_sha }}
-        run: |
-          set -euo pipefail
-          docker/trino/build_trino_server_image.sh trino-src --image "hudi-trino-server:${TRINO_SHA}" --arch amd64
-          docker save "hudi-trino-server:${TRINO_SHA}" | zstd -T0 -3 -o "$RUNNER_TEMP/trino-server-image.tar.zst"
-      - name: Save Trino server image for the pinned commit
-        if: steps.trino-image.outputs.cache-hit != 'true'
-        # Saved immediately rather than in a post step, so an IT failure later in the job does
-        # not discard a good image.
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ runner.temp }}/trino-server-image.tar.zst
-          key: trino-server-image-v1-${{ hashFiles('docker/trino/build_trino_server_image.sh') }}-${{ steps.trino-pin.outputs.trino_sha }}
-      - name: Load the cached Trino server image
-        if: steps.trino-image.outputs.cache-hit == 'true'
-        run: zstd -dc "$RUNNER_TEMP/trino-server-image.tar.zst" | docker load
+        run: docker/trino/build_trino_server_image.sh trino-src --image "hudi-trino-server:${TRINO_SHA}" --arch amd64
       - name: Free the Trino build tree
         # The server image is in the local docker store and io.trino is in the m2 by now;
         # reclaim the disk before the connector build and the compose stack.
-        run: rm -rf trino-src "$RUNNER_TEMP/trino-server-image.tar.zst"
+        run: rm -rf trino-src
       - name: Build hudi-trino connector (JDK 25)
         run:
           mvn $MVN_ARGS -Phudi-trino -pl hudi-trino install -Dmaven.test.skip=true
