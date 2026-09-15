@@ -23,6 +23,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
 import org.apache.hudi.sink.event.CommitAckEvent;
@@ -301,7 +302,8 @@ public abstract class AbstractStreamWriteFunction<I>
    * @return The instant time
    */
   protected String instantToWrite(boolean hasData) {
-    return Preconditions.checkNotNull(this.correspondent.requestInstantTime(this.checkpointId),
+    return Preconditions.checkNotNull(
+        this.correspondent.requestInstantTime(this.checkpointId, this.config.get(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT)),
         "No in-flight instant for checkpoint id: " + checkpointId);
   }
 

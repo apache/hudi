@@ -34,6 +34,8 @@ import org.apache.flink.util.SerializedValue;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Correspondent between a write task with the coordinator.
@@ -41,6 +43,34 @@ import java.util.Map;
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @Getter
 public class Correspondent {
+
+  /**
+   * Initial backoff between two instant-time polls.
+   */
+  private static final long POLL_BASE_MS = 50L;
+
+  /**
+   * Upper bound of the backoff between two instant-time polls.
+   */
+  private static final long POLL_CAP_MS = 1000L;
+
+  /**
+   * Status of an instant-time request served by the coordinator.
+   */
+  public enum Status {
+    /**
+     * The instant time is ready to use.
+     */
+    READY,
+    /**
+     * The instant is still being created, the requester should poll again.
+     */
+    PENDING,
+    /**
+     * The instant creation failed terminally, the requester should fail fast.
+     */
+    FAILED
+  }
 
   private final OperatorID operatorID;
   private final TaskOperatorEventGateway gateway;
@@ -64,16 +94,72 @@ public class Correspondent {
   }
 
   /**
-   * Sends a request to the coordinator to fetch the instant time.
+   * Requests the instant time for the given checkpoint from the coordinator.
+   *
+   * <p>The coordinator answers each request in O(1) with a {@link Status}: the requester polls with a
+   * capped exponential backoff (plus jitter) under a single {@code pollBudgetMs} deadline until the
+   * instant is {@code READY}, fails fast on {@code FAILED}, and retries transient transport errors
+   * within the same budget. A {@code PENDING} reply never extends the deadline.
+   *
+   * @param checkpointId The checkpoint id (or -1 for bulk insert)
+   * @param pollBudgetMs The overall budget to wait for an instant, in milliseconds
+   *
+   * @return the instant time to write with
    */
-  public String requestInstantTime(long checkpointId) {
-    try {
-      InstantTimeResponse response = CoordinationResponseSerDe.unwrap(this.gateway.sendRequestToCoordinator(this.operatorID,
-          new SerializedValue<>(InstantTimeRequest.getInstance(checkpointId))).get());
-      return response.getInstant();
-    } catch (Exception e) {
-      throw new HoodieException("Error requesting the instant time from the coordinator", e);
+  public String requestInstantTime(long checkpointId, long pollBudgetMs) {
+    final long deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(pollBudgetMs);
+    long backoffMs = POLL_BASE_MS;
+    while (true) {
+      InstantTimeResponse response;
+      try {
+        response = fetchInstantTimeResponse(checkpointId);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new HoodieException("Interrupted while requesting the instant time from the coordinator", e);
+      } catch (Exception e) {
+        // transient transport/coordinator error: retry within the budget, reusing the same checkpoint identity.
+        if (System.nanoTime() >= deadlineNanos) {
+          throw new HoodieException("Timeout requesting the instant time from the coordinator for checkpoint " + checkpointId, e);
+        }
+        backoffMs = sleepAndGrow(backoffMs);
+        continue;
+      }
+      switch (response.getStatus()) {
+        case READY:
+          return response.getInstant();
+        case FAILED:
+          throw new HoodieException("Instant creation failed for checkpoint " + checkpointId + ": " + response.getErrorMessage());
+        default:
+          // PENDING: keep polling, but never reset the deadline.
+          if (System.nanoTime() >= deadlineNanos) {
+            throw new HoodieException("Timeout waiting for the instant time from the coordinator for checkpoint " + checkpointId);
+          }
+          backoffMs = sleepAndGrow(backoffMs);
+      }
     }
+  }
+
+  /**
+   * Sends a single instant-time request to the coordinator and returns its response.
+   *
+   * <p>Isolated so tests can stub the transport while reusing the poll loop in {@link #requestInstantTime}.
+   */
+  protected InstantTimeResponse fetchInstantTimeResponse(long checkpointId) throws Exception {
+    return CoordinationResponseSerDe.unwrap(this.gateway.sendRequestToCoordinator(this.operatorID,
+        new SerializedValue<>(InstantTimeRequest.getInstance(checkpointId))).get());
+  }
+
+  private static long sleepAndGrow(long backoffMs) {
+    long capped = Math.min(backoffMs, POLL_CAP_MS);
+    // full jitter in [capped/2, capped] to avoid a thundering herd of polls landing together.
+    long sleepMs = capped / 2 + ThreadLocalRandom.current().nextLong(capped / 2 + 1);
+    try {
+      Thread.sleep(sleepMs);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new HoodieException("Interrupted while backing off between instant time polls", e);
+    }
+    return Math.min(backoffMs << 1, POLL_CAP_MS);
   }
 
   /**
@@ -121,10 +207,36 @@ public class Correspondent {
   @Getter
   public static class InstantTimeResponse implements CoordinationResponse {
 
+    private final Status status;
     private final String instant;
+    private final String errorMessage;
 
+    /**
+     * The instant is ready to use.
+     */
+    public static InstantTimeResponse ready(String instant) {
+      return new InstantTimeResponse(Status.READY, instant, null);
+    }
+
+    /**
+     * The instant is still being created, the requester should poll again.
+     */
+    public static InstantTimeResponse pending() {
+      return new InstantTimeResponse(Status.PENDING, null, null);
+    }
+
+    /**
+     * The instant creation failed terminally.
+     */
+    public static InstantTimeResponse failed(String errorMessage) {
+      return new InstantTimeResponse(Status.FAILED, null, errorMessage);
+    }
+
+    /**
+     * Kept for backward compatibility: a ready response carrying the instant.
+     */
     public static InstantTimeResponse getInstance(String instant) {
-      return new InstantTimeResponse(instant);
+      return ready(instant);
     }
   }
 
