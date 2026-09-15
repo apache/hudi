@@ -43,9 +43,8 @@
         <!-- Aligned with the plugin's versions (trino-root at the pinned trino.sha). These
              override the root pom properties that feed its inherited dependencyManagement,
              which beats the imported trino-root BOM. Bump when
-             .github/workflows/hudi_trino_dependency_drift.yml reports drift. Floors: jackson
-             >= 2.16 (airlift uses StreamReadConstraints.Builder.maxNameLength) and joda-time
-             >= 2.14.2 (Trino's DateTimeZoneIndex needs its time-zone names). -->
+             .github/workflows/hudi_trino_dependency_drift.yml reports drift. -->
+        <!-- Floor 2.16: airlift uses StreamReadConstraints.Builder.maxNameLength. -->
         <fasterxml.version>2.22.2</fasterxml.version>
         <fasterxml.jackson.databind.version>2.22.2</fasterxml.jackson.databind.version>
         <!-- Since Jackson 2.20 annotations drop the patch; jackson-bom 2.22.2 pins 2.22. -->
@@ -53,6 +52,7 @@
         <caffeine.version>3.2.4</caffeine.version>
         <proto.version>4.36.0</proto.version>
         <metrics.version>4.2.40</metrics.version>
+        <!-- Floor 2.14.2: Trino's DateTimeZoneIndex needs its time-zone names. -->
         <joda.version>2.14.3</joda.version>
         <avro.version>1.12.2</avro.version>
         <log4j2.version>2.26.1</log4j2.version>
