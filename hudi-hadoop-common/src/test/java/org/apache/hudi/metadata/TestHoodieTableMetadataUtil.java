@@ -608,13 +608,9 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
 
   /**
    * The schema-absent branch of {@code getColumnsToIndexWithoutRequiredMetaFields}, which
-   * {@link #testGetColumnsToIndex()} never reaches because every case there supplies a schema.
-   *
-   * <p>Two outcomes, and the difference matters: with no explicit column list the inner call returns an
-   * empty map, so the caller is left with just the always-indexed meta columns rather than failing. With
-   * an explicit list it
-   * throws instead, because the names cannot be resolved to field schemas without a schema to resolve
-   * them against, and silently indexing nothing would look like the config had been honoured.
+   * {@link #testGetColumnsToIndex()} never reaches because every case there supplies a schema. With no
+   * explicit column list it yields only the always-indexed meta columns; with one it throws, since those
+   * names cannot be resolved without a schema. While initializing it returns them unresolved instead.
    */
   @Test
   public void testGetColumnsToIndexWhenTableSchemaIsAbsent() {
