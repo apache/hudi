@@ -313,8 +313,9 @@ Source Release step) -- otherwise the voted tarball ships a `-SNAPSHOT` Trino pi
    (scope the check to io.trino: the module's hudi siblings are not on Central until this release completes):
    `mvn dependency:get -Dartifact=io.trino:trino-hive:NNN -Dmaven.repo.local=$(mktemp -d)`
 6. Check for dependency drift before cutting the RC: hudi-trino compiles and tests against Hudi's managed versions,
-   while the plugin bundles Trino's `NNN` versions. Dispatch the drift check on the release branch and read the
-   table in the run's job summary (exit 1 and a `Dependency drift` warning mean drift):
+   while the plugin bundles Trino's `NNN` versions. Dispatch the drift check on the release branch. The run stays
+   green either way: drift shows as a `Dependency drift` warning and a table in the run's job summary, and files or
+   updates the drift issue:
    `gh workflow run hudi_trino_dependency_drift.yml -R apache/hudi --ref release-X.Y.Z`
    Or run it locally from the release branch (JDK 17 for the first command, JDK 25 for the rest, with a
    `trinodb/trino` checkout at `TAG_SHA`):
@@ -328,6 +329,7 @@ Source Release step) -- otherwise the voted tarball ships a `-SNAPSHOT` Trino pi
      -DoutputFile=/tmp/deps-plugin.txt -DappendOutput=false
    python3 scripts/trino/check_dependency_drift.py --ours /tmp/deps-hudi-trino.txt --reference /tmp/deps-plugin.txt
    ```
+   Locally the script exits 1 on drift and prints the same table.
    If it reports drift, bump the matching version properties in `hudi-trino/pom.xml` on the release branch and rerun
    until it is clean.
 7. CI and the E2E workflow then run with zero SPI drift; the staging deploy flow in "Build a release candidate"
