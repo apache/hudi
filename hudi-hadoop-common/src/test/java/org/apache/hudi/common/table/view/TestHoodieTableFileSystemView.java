@@ -335,7 +335,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     String firstCommittedInstant = "3";
     String secondCommittedInstant = "4";
     for (String instant : Arrays.asList(failedInstant, firstCommittedInstant, secondCommittedInstant)) {
-      String fileName = FSUtils.makeInlineLogFileName(
+      String fileName = FSUtils.makeLogFileName(
           fileId, HoodieLogFile.DELTA_EXTENSION, instant, Integer.parseInt(instant), TEST_WRITE_TOKEN);
       Paths.get(basePath, partitionPath, fileName).toFile().createNewFile();
     }
