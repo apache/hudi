@@ -67,7 +67,6 @@ import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTE
 import static org.apache.hudi.config.HoodieWriteConfig.CLIENT_HEARTBEAT_INTERVAL_IN_MS;
 import static org.apache.hudi.config.HoodieWriteConfig.CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES;
 import static org.apache.hudi.core.index.expression.HoodieExpressionIndex.IDENTITY_TRANSFORM;
-import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileSystemViewForMetadataTable;
@@ -84,7 +83,6 @@ import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -243,96 +241,6 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
         .withSourceFields(Collections.singletonList(sourceField))
         .withVersion(HoodieIndexVersion.getCurrentVersion(metaClient.getTableConfig().getTableVersion(), SECONDARY_INDEX))
         .build();
-  }
-
-  /**
-   * A requested index partition bootstraps under a solo-family instant rather than the indexing action's own
-   * instant, so it no longer matches the isIndexingCommit exemption that keeps a concurrent writer from rolling
-   * an in-progress bootstrap back under the eager cleaning policy. Streaming writes to the metadata table are
-   * disabled here so the concurrent writer's metadata client is EAGER; the Spark default enables them, which
-   * makes that client LAZY and protects an in-progress bootstrap by heartbeat instead.
-   */
-  @Test
-  void testEagerWriterDoesNotRollBackAnInFlightRequestedIndexBootstrap() throws IOException {
-    String tableName = "indexer_solo_instant_rollback";
-    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
-        .enable(true).withAsyncIndex(false).withMetadataIndexColumnStats(false)
-        .withStreamingWriteEnabled(false).build();
-    upsertToTable(metadataConfig, tableName);
-
-    metaClient = reload(metaClient);
-    String riderSecondaryIndex = SECONDARY_INDEX.getPartitionPath() + "idx_rider";
-    metaClient.buildIndexDefinition(secondaryIndexDefinition(riderSecondaryIndex, "rider"));
-
-    HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(
-        context(), metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString());
-    HoodieTableMetaClient metadataMetaClient = metadata.getMetadataMetaClient();
-    Set<String> instantsBeforeIndexing = metadataMetaClient.getActiveTimeline().getInstantsAsStream()
-        .map(HoodieInstant::requestedTime).collect(java.util.stream.Collectors.toSet());
-
-    indexMetadataPartitionsAndAssert(riderSecondaryIndex, Collections.singletonList(FILES), Arrays.asList(COLUMN_STATS, BLOOM_FILTERS), tableName,
-        "streamer-config/indexer-secondary-index.properties");
-
-    // Precondition: the bootstrap committed under a fresh solo-family instant, not the indexing instant.
-    metadataMetaClient = reload(metadataMetaClient);
-    String bootstrapCommitTime = metadataMetaClient.getActiveTimeline().getInstantsAsStream()
-        .map(HoodieInstant::requestedTime)
-        .filter(time -> !instantsBeforeIndexing.contains(time) && time.startsWith(SOLO_COMMIT_TIMESTAMP))
-        .findFirst()
-        .orElseThrow(() -> new AssertionError("the requested index partition did not bootstrap under a solo instant"));
-    HoodieInstant indexingInstant = metaClient.reloadActiveTimeline()
-        .filter(instant -> HoodieTimeline.INDEXING_ACTION.equals(instant.getAction())).getInstants().get(0);
-    assertNotEquals(indexingInstant.requestedTime(), bootstrapCommitTime,
-        "precondition: the bootstrap must not share the indexing action's instant");
-    assertTrue(metadataPartitionExists(basePath(), context(), riderSecondaryIndex),
-        "precondition: the index partition must exist on storage before we simulate an in-progress bootstrap");
-
-    // Put the table back into the shape of a bootstrap still running under a pending indexing action.
-    metaClient.getActiveTimeline().revertToInflight(indexingInstant);
-    metaClient = reload(metaClient);
-    HoodieInstant bootstrapCommit = metadataMetaClient.getActiveTimeline()
-        .filter(instant -> instant.requestedTime().equals(bootstrapCommitTime)).getInstants().get(0);
-    metadataMetaClient.getActiveTimeline().revertToInflight(bootstrapCommit);
-    metadataMetaClient = reload(metadataMetaClient);
-    metaClient.getTableConfig().setMetadataPartitionState(metaClient, riderSecondaryIndex, false);
-    metaClient.getTableConfig().setMetadataPartitionsInflight(metaClient, Collections.singletonList(riderSecondaryIndex));
-    metaClient = reload(metaClient);
-
-    // Preconditions on the simulated state.
-    assertTrue(metaClient.getActiveTimeline()
-            .filter(instant -> HoodieTimeline.INDEXING_ACTION.equals(instant.getAction()) && !instant.isCompleted())
-            .getInstants().size() == 1,
-        "precondition: the indexing action must be pending on the data table");
-    assertTrue(metadataMetaClient.getActiveTimeline().filterInflightsAndRequested().containsInstant(bootstrapCommitTime),
-        "precondition: the bootstrap commit must be inflight on the metadata table");
-    assertTrue(metaClient.getTableConfig().getMetadataPartitionsInflight().contains(riderSecondaryIndex),
-        "precondition: the index partition must be inflight in the table config");
-    assertFalse(metaClient.getTableConfig().getMetadataPartitions().contains(riderSecondaryIndex),
-        "precondition: the index partition must not be marked complete while the bootstrap is in progress");
-
-    upsertToTable(metadataConfig, tableName);
-    metadataMetaClient = reload(metadataMetaClient);
-    assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(bootstrapCommitTime),
-        "a concurrent writer must not roll back a bootstrap running under a pending indexing action");
-    assertTrue(metadataMetaClient.getActiveTimeline().getRollbackTimeline().empty(),
-        "no rollback should have been issued on the metadata table");
-
-    // With no indexing action pending the same commit must become rollback-eligible again, so the exemption
-    // is scoped rather than a blanket pass for the solo family.
-    // revertToInflight leaves the requested file behind, so clear every state of the action.
-    while (!metaClient.reloadActiveTimeline()
-        .filter(instant -> HoodieTimeline.INDEXING_ACTION.equals(instant.getAction())).empty()) {
-      metaClient.getActiveTimeline().deleteInstantFileIfExists(metaClient.getActiveTimeline()
-          .filter(instant -> HoodieTimeline.INDEXING_ACTION.equals(instant.getAction())).getInstants().get(0));
-    }
-    metaClient = reload(metaClient);
-    assertTrue(metaClient.getActiveTimeline()
-            .filter(instant -> HoodieTimeline.INDEXING_ACTION.equals(instant.getAction())).empty(),
-        "precondition: no indexing action may remain on the data timeline");
-    upsertToTable(metadataConfig, tableName);
-    metadataMetaClient = reload(metadataMetaClient);
-    assertFalse(metadataMetaClient.getActiveTimeline().containsInstant(bootstrapCommitTime),
-        "with no indexing action pending the solo-family commit must not stay exempt");
   }
 
   /**

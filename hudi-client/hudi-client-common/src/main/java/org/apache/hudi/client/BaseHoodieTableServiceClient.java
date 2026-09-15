@@ -1145,16 +1145,11 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
             .setConf(metaClient.getStorageConf().newInstance())
             .build();
         HoodieTimeline dataIndexTimeline = dataMetaClient.getActiveTimeline().filter(instant -> instant.getAction().equals(HoodieTimeline.INDEXING_ACTION));
-        // An indexing action bootstraps a requested index partition under a solo-family instant rather than under its
-        // own instant, so while one is pending those commits need the same exemption the action instant itself gets.
-        // Without it a concurrent writer rolls the bootstrap back mid-flight, leaving the index short of records.
-        boolean indexingActionPending = !dataIndexTimeline.filterInflightsAndRequested().empty();
         return inflightInstantsStream.map(HoodieInstant::requestedTime).filter(entry -> {
           if (curInstantTime.isPresent()) {
             return !entry.equals(curInstantTime.get());
           } else {
-            return !isIndexingCommit(dataIndexTimeline, entry)
-                && !(indexingActionPending && entry.startsWith(HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP));
+            return !isIndexingCommit(dataIndexTimeline, entry);
           }
         }).collect(Collectors.toList());
       }

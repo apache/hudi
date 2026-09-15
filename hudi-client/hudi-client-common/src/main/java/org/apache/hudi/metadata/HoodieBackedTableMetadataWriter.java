@@ -455,14 +455,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       Map<String, List<FileInfo>> partitionToAllFilesMap,
       Lazy<List<FileSliceAndPartition>> lazyMergedFileSlices,
       Option<String> requestedIndexPartitionOpt) throws IOException {
-    // A requested partition initializes under a fresh solo-family instant, never the indexing
-    // action's own instant. The action's completion applies its data commit to the metadata table
-    // too, and finding that instant already completed there is treated as a partially applied
-    // earlier commit: it is rolled back and re-applied, destroying the initialization records
-    // while leaving the file groups. The solo family is the established shape for
-    // metadata-table-only bootstrap commits and survives that reconciliation.
-    String instantTimeForPartition = requestedIndexPartitionOpt.isPresent()
-        ? generateUniqueSoloInstantTime() : generateUniqueInstantTime(dataTableInstantTime);
+    String instantTimeForPartition = generateUniqueInstantTime(dataTableInstantTime);
     // initialize metadata partitions
     List<IndexInitializationPlan> initializationList;
     try {
@@ -523,20 +516,6 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   protected abstract void updateColumnsToIndexWithColStats(List<String> columnsToIndex);
 
   /**
-   * The next unused instant in the solo-commit family, regardless of whether the initialization
-   * time is an indexing commit — unlike {@link #generateUniqueInstantTime}, which reuses an
-   * indexing instant as-is.
-   */
-  private String generateUniqueSoloInstantTime() {
-    for (int offset = 0; ; ++offset) {
-      final String commitInstantTime = HoodieInstantTimeGenerator.instantTimePlusMillis(SOLO_COMMIT_TIMESTAMP, offset);
-      if (!metadataMetaClient.getCommitsTimeline().containsInstant(commitInstantTime)) {
-        return commitInstantTime;
-      }
-    }
-  }
-
-  /**
    * Returns a unique timestamp to use for initializing a MDT partition.
    * <p>
    * Since commits are immutable, we should use unique timestamps to initialize each partition. For this, we will add a suffix to the given initializationTime
@@ -554,7 +533,12 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     if (HoodieTableMetadataUtil.isIndexingCommit(dataIndexTimeline, initializationTime)) {
       return initializationTime;
     }
-    return generateUniqueSoloInstantTime();
+    for (int offset = 0; ; ++offset) {
+      final String commitInstantTime = HoodieInstantTimeGenerator.instantTimePlusMillis(SOLO_COMMIT_TIMESTAMP, offset);
+      if (!metadataMetaClient.getCommitsTimeline().containsInstant(commitInstantTime)) {
+        return commitInstantTime;
+      }
+    }
   }
 
   protected abstract EngineType getEngineType();
