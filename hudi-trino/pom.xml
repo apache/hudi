@@ -40,6 +40,25 @@
         <!-- Trino's BlockEncodingSimdSupport uses jdk.incubator.vector for SIMD; the
              incubator module must be added explicitly on the test JVM command line. -->
         <argLine>-Xmx4g -Xms128m -XX:-OmitStackTraceInFastThrow --add-modules jdk.incubator.vector</argLine>
+        <!-- Aligned with the plugin's versions (trino-root at the pinned trino.sha). These
+             override the root pom properties that feed its inherited dependencyManagement,
+             which beats the imported trino-root BOM. Bump when
+             .github/workflows/hudi_trino_dependency_drift.yml reports drift. Floors: jackson
+             >= 2.16 (airlift uses StreamReadConstraints.Builder.maxNameLength) and joda-time
+             >= 2.14.2 (Trino's DateTimeZoneIndex needs its time-zone names). -->
+        <fasterxml.version>2.22.2</fasterxml.version>
+        <fasterxml.jackson.databind.version>2.22.2</fasterxml.jackson.databind.version>
+        <!-- Since Jackson 2.20 annotations drop the patch; jackson-bom 2.22.2 pins 2.22. -->
+        <fasterxml.jackson.annotation.version>2.22</fasterxml.jackson.annotation.version>
+        <caffeine.version>3.2.4</caffeine.version>
+        <proto.version>4.36.0</proto.version>
+        <metrics.version>4.2.40</metrics.version>
+        <joda.version>2.14.3</joda.version>
+        <avro.version>1.12.2</avro.version>
+        <log4j2.version>2.26.1</log4j2.version>
+        <roaringbitmap.version>1.6.20</roaringbitmap.version>
+        <slf4j.version>2.0.18</slf4j.version>
+        <snappy.version>1.1.10.8</snappy.version>
     </properties>
 
     <dependencyManagement>
@@ -54,25 +73,6 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
-            <!-- Hudi parent pins jackson-* individually at 2.15.2, which predates
-                 StreamReadConstraints.Builder.maxNameLength (added in 2.16). Trino airlift needs it.
-                 Direct entries override parent pins; jackson-bom imports do not (parent direct entries win). -->
-            <dependency>
-                <groupId>com.fasterxml.jackson.core</groupId>
-                <artifactId>jackson-core</artifactId>
-                <version>2.21.3</version>
-            </dependency>
-            <dependency>
-                <groupId>com.fasterxml.jackson.core</groupId>
-                <artifactId>jackson-databind</artifactId>
-                <version>2.21.3</version>
-            </dependency>
-            <!-- jackson-annotations follows its own cadence; latest in the 2.21 line is 2.21 (no patch). -->
-            <dependency>
-                <groupId>com.fasterxml.jackson.core</groupId>
-                <artifactId>jackson-annotations</artifactId>
-                <version>2.21</version>
-            </dependency>
             <!-- Hudi parent pins jetty-server / jetty-servlet at 9.4.57; Trino runs on Jetty 12
                  (Request$Handler etc. exist only in 12.x). Pin jetty-server here to keep
                  trino-testing's classpath consistent. jetty-servlet does not exist in 12.x. -->
@@ -80,13 +80,6 @@
                 <groupId>org.eclipse.jetty</groupId>
                 <artifactId>jetty-server</artifactId>
                 <version>12.1.9</version>
-            </dependency>
-            <!-- Hudi parent pins joda-time at 2.9.9 (from 2016). Trino's DateTimeZoneIndex
-                 clinit needs the newer time-zone names in 2.14.2 (matches airbase). -->
-            <dependency>
-                <groupId>joda-time</groupId>
-                <artifactId>joda-time</artifactId>
-                <version>2.14.2</version>
             </dependency>
             <!-- Hudi parent pins jersey-server at 2.17 (legacy javax). Trino runs on Jersey 4.x
                  (jakarta). The mixed-version classpath crashes with NoSuchFieldError on

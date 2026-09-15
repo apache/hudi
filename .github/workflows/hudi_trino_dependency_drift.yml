@@ -148,7 +148,9 @@ jobs:
           fi
           case "$rc" in
             0) echo "drift=false" >> "$GITHUB_OUTPUT" ;;
-            1) echo "drift=true" >> "$GITHUB_OUTPUT" ;;
+            1) echo "drift=true" >> "$GITHUB_OUTPUT"
+               # Surface drift on a green run, PRs included.
+               echo "::warning title=Dependency drift::$(grep -m1 'version mismatch(es)' "$RUNNER_TEMP/drift.md")" ;;
             # A broken comparison must fail loudly, never read as "no drift".
             *) echo "ERROR: check_dependency_drift.py exited $rc" >&2; exit "$rc" ;;
           esac
