@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.bloom;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.util.Locale;
@@ -28,12 +29,14 @@ import java.util.function.Supplier;
  * Manual microbenchmark for bloom filter hot paths: key adds (the write-path cost paid per
  * record by the HFile writer), membership tests, and serialization round trips.
  * <p>
- * The class name intentionally does not match the surefire test patterns, so it never runs
- * in CI. Run it explicitly with:
+ * The class is tagged "benchmark", which the unit-tests profile excludes, so it never runs in CI.
+ * (The CI jobs pass -Dtest exclusion patterns, which widen surefire's includes to every class
+ * and would otherwise pick it up despite the name.) Run it explicitly with:
  * <pre>
  * mvn test -pl hudi-common -Dtest=InternalBloomFilterBenchmark -Dsurefire.failIfNoSpecifiedTests=false
  * </pre>
  */
+@Tag("benchmark")
 public class InternalBloomFilterBenchmark {
 
   private static final int WARMUP_ROUNDS = 1;
