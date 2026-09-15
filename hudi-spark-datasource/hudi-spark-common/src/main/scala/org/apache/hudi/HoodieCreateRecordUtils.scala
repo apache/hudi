@@ -155,9 +155,20 @@ object HoodieCreateRecordUtils {
             } else {
               avroRecWithoutMeta
             }
-            val hoodieRecord = if (shouldCombine && !orderingFields.isEmpty) {
+            // `shouldCombine` says whether the incoming batch needs de-duplicating, which is not the
+            // same question as whether this record needs an ordering value. Prepped Spark SQL writes
+            // emit one row per key and so set it false, which used to leave the record with no
+            // ordering value on tables that order by event time.
+            // Deletes take the ordering value too. A delete left on the default is treated as commit
+            // time ordered by BufferedRecordMergerFactory#shouldKeepNewerRecord, so excluding them
+            // here would let a stale delete remove a record with a higher ordering value, while the
+            // same delete written through a path where `shouldCombine` is true would correctly lose.
+            // A null ordering field stays tolerated for a delete, which may carry only its key: the
+            // value falls back to the default rather than failing the write.
+            val shouldComputeOrderingValue = shouldCombine || requiresOrderingValue
+            val hoodieRecord = if (shouldComputeOrderingValue && !orderingFields.isEmpty) {
               val orderingVal = getOrderingValue(orderingFields, avroRec, hoodieKey.getRecordKey,
-                consistentLogicalTimestampEnabled, requiresOrderingValue)
+                consistentLogicalTimestampEnabled, requiresOrderingValue && !isDelete)
               HoodieRecordUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
                 config.getPayloadClass, null, recordLocation, requiresPayload, isDelete)
             } else {
