@@ -360,9 +360,21 @@ class TestHFileReadCompatibility {
   // libhadoop's native Snappy support, HBase throws UnsatisfiedLinkError (surfaced by
   // HFile.createReader as a misleading CorruptHFileException) even though the bytes hudi-io
   // produced/reads are fine. Skip rather than fail when that native library isn't present.
+  // Native availability is probed by actually creating a compressor instead of calling
+  // SnappyCodec#isNativeCodeLoaded, which is not present across all Hadoop versions this
+  // module is built against.
   private static void assumeNativeSnappyAvailableIfNeeded(CompressionCodec codec) {
-    Assumptions.assumeTrue(codec != CompressionCodec.SNAPPY || SnappyCodec.isNativeCodeLoaded(),
+    Assumptions.assumeTrue(codec != CompressionCodec.SNAPPY || isNativeSnappyAvailable(),
         "Native Snappy library (libhadoop) is not available in this environment");
+  }
+
+  private static boolean isNativeSnappyAvailable() {
+    try {
+      new SnappyCodec().createCompressor();
+      return true;
+    } catch (Throwable t) {
+      return false;
+    }
   }
 
   static boolean isPrefix(byte[] prefix, byte[] array) {
