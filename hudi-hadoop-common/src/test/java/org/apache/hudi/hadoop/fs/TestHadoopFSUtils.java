@@ -41,6 +41,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToHadoopFileStatus;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToHadoopPath;
