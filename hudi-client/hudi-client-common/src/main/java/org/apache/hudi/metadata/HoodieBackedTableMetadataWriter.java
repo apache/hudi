@@ -1588,6 +1588,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       String executionStatusMetricName = tableNameExists
           ? String.format("%s.%s", metadataTableName, HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_STATUS)
           : HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_STATUS;
+      String deltaCommitsMetricName = tableNameExists
+          ? String.format("%s.%s", metadataTableName, HoodieMetadataMetrics.DELTA_COMMITS_SINCE_LAST_COMPACTION)
+          : HoodieMetadataMetrics.DELTA_COMMITS_SINCE_LAST_COMPACTION;
       long timeSpent = metadataTableServicesTimer.endTimer();
       metrics.ifPresent(m -> m.setMetric(executionDurationMetricName, timeSpent));
       if (allTableServicesExecutedSuccessfullyOrSkipped) {
@@ -1595,7 +1598,43 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       } else {
         metrics.ifPresent(m -> m.setMetric(executionStatusMetricName, -1));
       }
+      reportDeltaCommitsSinceLastCompaction(deltaCommitsMetricName);
     }
+  }
+
+  /**
+   * Reports the metadata table's compaction backlog, so that a stalled compaction is visible before the
+   * growing log to base file ratio shows up as slower metadata lookups.
+   *
+   * <p>Sampled here rather than alongside the compaction above so that the failure paths report too: a
+   * pending compaction that keeps failing throws out of
+   * {@link #runPendingTableServicesOperationsAndRefreshTimeline} before compaction is even reached, which
+   * is exactly the state this gauge exists to surface.
+   *
+   * <p>The timeline is reloaded rather than reused. Callers pass {@code requiresTimelineRefresh=false}
+   * ({@code HoodieTableMetadataWriter#performTableServices}), and neither {@code runAnyPendingCompactions}
+   * nor {@code writeClient.compact} refreshes this meta client - both go through their own - so the cached
+   * timeline can predate both the failure and the compaction being reported on. That reload is the cost of
+   * this gauge: one extra timeline listing per table service cycle.
+   *
+   * <p>Sampling is best effort. Any {@link Exception} raised while reporting is logged and swallowed, so a
+   * metrics problem can neither fail a table service run nor displace an exception already propagating out
+   * of the {@code finally} block this is called from. {@link Error} is deliberately left to propagate,
+   * rather than swallowed in order to publish a gauge.
+   */
+  private void reportDeltaCommitsSinceLastCompaction(String metricName) {
+    metrics.ifPresent(m -> {
+      try {
+        long deltaCommits = CompactionUtils
+            .getCompletedDeltaCommitsSinceLatestCompaction(metadataMetaClient.reloadActiveTimeline())
+            .map(deltaCommitsInfo -> (long) deltaCommitsInfo.getLeft().countInstants())
+            .orElse(0L);
+        m.setMetric(metricName, deltaCommits);
+      } catch (Exception e) {
+        // Matches Metrics#registerGauge: a metrics problem must not fail the write path.
+        LOG.warn("Failed to report {} on the metadata table", metricName, e);
+      }
+    });
   }
 
   static HoodieActiveTimeline runPendingTableServicesOperationsAndRefreshTimeline(HoodieTableMetaClient metadataMetaClient,
