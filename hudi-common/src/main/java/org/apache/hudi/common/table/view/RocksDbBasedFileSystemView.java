@@ -294,8 +294,8 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
         rocksDB.writeBatch(batch ->
             fg.getAllFileSlicesIncludingInflight().forEach(fs -> {
               rocksDB.putInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForSliceView(fg, fs), fs);
-              fs.getBaseFile().ifPresent(df ->
-                  rocksDB.putInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForDataFileView(fg, fs), df)
+              fs.getBaseFile().ifPresent(bf ->
+                  rocksDB.putInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForDataFileView(fg, fs), bf)
               );
             })
         )
@@ -368,8 +368,8 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
               }
             }).filter(Objects::nonNull).forEach(fs -> {
               rocksDB.putInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForSliceView(fg, fs), fs);
-              fs.getBaseFile().ifPresent(df ->
-                  rocksDB.putInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForDataFileView(fg, fs), df)
+              fs.getBaseFile().ifPresent(bf ->
+                  rocksDB.putInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForDataFileView(fg, fs), bf)
               );
             })
         )
