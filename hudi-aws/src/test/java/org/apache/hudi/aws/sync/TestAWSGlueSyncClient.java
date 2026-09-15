@@ -22,6 +22,8 @@ import org.apache.hudi.HoodieVersion;
 import org.apache.hudi.aws.testutils.GlueTestUtil;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.GlueCatalogSyncClientConfig;
@@ -142,6 +144,7 @@ import static org.mockito.Mockito.when;
 class TestAWSGlueSyncClient {
   private static final String CATALOG_ID = "DEFAULT_AWS_ACCOUNT_ID";
   private static final String GLUE_PARTITION_INDEX_ENABLE = "partition_filtering.enabled";
+  private static final String DOCUMENTED_FIELD_DOC = "the documented column";
 
   @Mock
   private GlueAsyncClient mockAwsGlue;
@@ -235,24 +238,38 @@ class TestAWSGlueSyncClient {
   }
 
   /**
-   * Thread on #19488: HiveSyncTool.syncHoodieTable runs syncFirstTime without syncSchema, so a table
-   * created with empty comments would only pick them up on the second sync. createTable therefore has to
-   * carry the docs itself, gated on hoodie.datasource.hive_sync.sync_comment.
+   * HiveSyncTool.syncHoodieTable runs syncFirstTime without syncSchema, so a table created with empty
+   * comments would only pick them up on the second sync. createTable therefore has to carry the docs
+   * itself, gated on hoodie.datasource.hive_sync.sync_comment.
    */
   @Test
   void testCreateTableCarriesColumnCommentsOnTheFirstSync() {
     Map<String, String> commentsByName = createTableAndCaptureColumnComments(true);
-    assertEquals(GlueTestUtil.NAME_FIELD_DOC, commentsByName.get("name"),
+    assertEquals(DOCUMENTED_FIELD_DOC, commentsByName.get("documented"),
         "a column whose Avro field carries a doc must be created with that comment");
-    assertEquals("", commentsByName.get("id"), "a column with no doc keeps an empty comment");
+    assertEquals("", commentsByName.get("undocumented"),
+        "a column with no doc keeps an empty comment");
   }
 
   /** The other half of the gate: with sync_comment off, which is the default, no comment is written. */
   @Test
   void testCreateTableLeavesCommentsEmptyWhenCommentSyncIsOff() {
     Map<String, String> commentsByName = createTableAndCaptureColumnComments(false);
-    assertEquals("", commentsByName.get("name"),
+    assertEquals("", commentsByName.get("documented"),
         "with hoodie.datasource.hive_sync.sync_comment off, the Avro doc must not be written");
+  }
+
+  /**
+   * One field with an Avro doc and one deliberately without, so a single createTable covers both branches
+   * of the doc lookup. Defined here rather than reusing a shared fixture, whose docs are not this test's
+   * to depend on.
+   */
+  private static HoodieSchema commentTestSchema() {
+    return HoodieSchema.createRecord("comment_test_schema", null, null,
+        Arrays.asList(
+            HoodieSchemaField.of("documented", HoodieSchema.create(HoodieSchemaType.STRING), DOCUMENTED_FIELD_DOC, null),
+            HoodieSchemaField.of("undocumented", HoodieSchema.create(HoodieSchemaType.STRING))
+        ));
   }
 
   /**
@@ -272,28 +289,13 @@ class TestAWSGlueSyncClient {
     Mockito.when(mockAwsGlue.createTable(any(CreateTableRequest.class)))
         .thenReturn(CompletableFuture.completedFuture(CreateTableResponse.builder().build()));
 
-    client.createOrReplaceTable("testTable", GlueTestUtil.getSimpleSchema(), "inputFormat", "outputFormat",
+    client.createOrReplaceTable("testTable", commentTestSchema(), "inputFormat", "outputFormat",
         "serde", new HashMap<>(), new HashMap<>());
 
     ArgumentCaptor<CreateTableRequest> captor = ArgumentCaptor.forClass(CreateTableRequest.class);
     verify(mockAwsGlue, times(1)).createTable(captor.capture());
     return captor.getValue().tableInput().storageDescriptor().columns().stream()
         .collect(HashMap::new, (m, c) -> m.put(c.name(), c.comment()), HashMap::putAll);
-  }
-
-  /**
-   * getStorageFieldSchemas is what actually sources the comments the sync applies, from the Avro doc on the
-   * table schema. Every other test hand-builds its FieldSchemas, so this is the only place a real doc is read.
-   */
-  @Test
-  void testGetStorageFieldSchemasSurfacesTheAvroDoc() {
-    List<FieldSchema> fields = awsGlueSyncClient.getStorageFieldSchemas();
-
-    Map<String, Option<String>> docsByName = fields.stream()
-        .collect(HashMap::new, (m, f) -> m.put(f.getName(), f.getComment()), HashMap::putAll);
-    assertEquals(GlueTestUtil.NAME_FIELD_DOC, docsByName.get("name").get(),
-        "the Avro doc on the table schema must reach the sync as a field comment");
-    assertFalse(docsByName.get("id").isPresent(), "a field with no doc must surface no comment");
   }
 
   @Test

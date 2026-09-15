@@ -510,18 +510,14 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   }
 
   /**
-   * Returns {@code columns} with the comment of every column the storage schema knows about replaced by the
-   * one the schema carries, clearing it when the schema has none.
+   * Returns a new list in which every column the storage schema knows about carries that schema's comment,
+   * cleared when the schema has none. Columns the schema says nothing about are left untouched, matching
+   * {@code HMSDDLExecutor.applyFieldComments} on the Hive side: storage field names keep the Avro schema's
+   * case while a catalog may hold them lowercased, so a name that failed to match would otherwise silently
+   * wipe a comment. A new list is returned because SDK v2 model classes are immutable.
    *
-   * <p>Columns the schema says nothing about are left untouched rather than cleared. The pre-SDK-v2 code
-   * cleared them, but only nominally: it built a {@code Column} and discarded it, so no comment was ever
-   * applied and nothing can depend on that behaviour. Clearing is also the more dangerous reading - the
-   * storage field names keep the Avro schema's case while a catalog may hold them lowercased, and a name
-   * that fails to match would silently wipe a comment. This matches
-   * {@code HMSDDLExecutor.applyFieldComments} on the Hive side, which only touches known columns.
-   *
-   * <p>SDK v2 model classes are immutable and their getters return unmodifiable lists, so the columns cannot
-   * be edited in place; a new list of rebuilt columns is returned instead.
+   * <p>{@code commentsMap} must be keyed by lower-cased field name, as {@code HiveSchemaUtil.getFieldDocs}
+   * returns it; column names are lower-cased before lookup.
    */
   @VisibleForTesting
   static List<Column> withComments(List<Column> columns, Map<String, Option<String>> commentsMap) {
@@ -545,6 +541,17 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   private static String emptyIfNull(String value) {
     return value == null ? "" : value;
+  }
+
+  /**
+   * The field name to doc map for {@code schema}, or an empty map when comment syncing is off.
+   * Mirrors {@code HiveSchemaUtil.generateCreateDDL} on the HMS side, which gates the same lookup
+   * on {@code HIVE_SYNC_COMMENT}.
+   */
+  private Map<String, String> getFieldDocsIfEnabled(HoodieSchema schema) {
+    return config.getBoolean(HIVE_SYNC_COMMENT)
+        ? HiveSchemaUtil.getFieldDocs(schema)
+        : Collections.emptyMap();
   }
 
   private String getTableDoc() {
@@ -576,7 +583,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
         .collect(Collectors.toMap(f -> f.getName().toLowerCase(Locale.ROOT), FieldSchema::getComment, (existing, duplicate) -> existing));
 
     StorageDescriptor storageDescriptor = table.storageDescriptor();
-    List<Column> partitionKeys = withComments(table.partitionKeys(), commentsMap);
+    List<Column> updatedPartitionKeys = withComments(table.partitionKeys(), commentsMap);
     List<Column> updatedColumns = withComments(storageDescriptor.columns(), commentsMap);
     // Only rebuild the descriptor when a column actually changed. Rebuilding unconditionally is not
     // equality-preserving: when columns was never set, storageDescriptor.columns() is an SDK
@@ -590,7 +597,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     String tableDescription = getTableDoc();
 
     // Compare against the table already fetched above rather than fetching it twice more.
-    if (storageDescriptor.equals(updatedStorageDescriptor) && table.partitionKeys().equals(partitionKeys)) {
+    if (storageDescriptor.equals(updatedStorageDescriptor) && table.partitionKeys().equals(updatedPartitionKeys)) {
       // no comments have been modified / added
       return false;
     } else {
@@ -600,7 +607,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
           .description(tableDescription)
           .tableType(table.tableType())
           .parameters(table.parameters())
-          .partitionKeys(partitionKeys)
+          .partitionKeys(updatedPartitionKeys)
           .storageDescriptor(updatedStorageDescriptor)
           .lastAccessTime(now)
           .lastAnalyzedTime(now)
@@ -644,9 +651,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       Map<String, String> newSchemaMap = hoodieSchemaToMapSchema(newSchema, config.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE), false);
       // Carry the docs through schema evolution too, so a newly added column does not arrive with an
       // empty comment and wait for the next updateTableComments pass.
-      Map<String, String> fieldDocs = config.getBoolean(HIVE_SYNC_COMMENT)
-          ? HiveSchemaUtil.getFieldDocs(newSchema)
-          : Collections.emptyMap();
+      Map<String, String> fieldDocs = getFieldDocsIfEnabled(newSchema);
       List<Column> newColumns = getColumnsFromSchema(newSchemaMap, fieldDocs);
       StorageDescriptor sd = table.storageDescriptor();
       StorageDescriptor partitionSD = sd.copy(copySd -> copySd.columns(newColumns));
@@ -749,11 +754,8 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
       // Populate comments at create time rather than leaving them to the next updateTableComments pass:
       // HiveSyncTool.syncHoodieTable runs syncFirstTime without syncSchema, so a table created with
-      // empty comments would only pick them up on the second sync. Mirrors HiveSchemaUtil.generateCreateDDL
-      // on the HMS side, which gates the same lookup on HIVE_SYNC_COMMENT (#19289).
-      Map<String, String> fieldDocs = config.getBoolean(HIVE_SYNC_COMMENT)
-          ? HiveSchemaUtil.getFieldDocs(storageSchema)
-          : Collections.emptyMap();
+      // empty comments would only pick them up on the second sync.
+      Map<String, String> fieldDocs = getFieldDocsIfEnabled(storageSchema);
 
       List<Column> schemaWithoutPartitionKeys = getColumnsFromSchema(mapSchema, fieldDocs);
 
