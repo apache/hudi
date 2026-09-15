@@ -243,6 +243,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
         .build();
   }
 
+  /** An expression index carries the type of the index it materializes, which is column stats by default. */
   private HoodieIndexDefinition expressionIndexDefinition(String fullIndexName, String sourceField) {
     return HoodieIndexDefinition.newBuilder()
         .withIndexName(fullIndexName)

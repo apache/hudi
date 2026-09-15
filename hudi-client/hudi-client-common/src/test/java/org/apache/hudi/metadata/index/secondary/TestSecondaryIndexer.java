@@ -26,6 +26,7 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils;
 import org.apache.hudi.metadata.index.model.IndexCleanContext;
 import org.apache.hudi.metadata.index.model.IndexInitializationContext;
 import org.apache.hudi.metadata.index.model.IndexInitializationPlan;
@@ -90,11 +91,11 @@ class TestSecondaryIndexer {
     when(metaClient.getIndexForMetadataPartition("sec1")).thenReturn(Option.of(definition));
 
     try (MockedStatic<HoodieTableMetadataUtil> mockedUtil = mockStatic(HoodieTableMetadataUtil.class);
-         MockedStatic<org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils> mockedSecondaryUtil = mockStatic(org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.class)) {
+         MockedStatic<SecondaryIndexRecordGenerationUtils> mockedSecondaryUtil = mockStatic(SecondaryIndexRecordGenerationUtils.class)) {
       mockedUtil.when(() -> HoodieTableMetadataUtil.getSecondaryIndexPartitionsToInit(any(), any(), any()))
           .thenReturn(Set.of("sec1", "sec2"));
       mockedUtil.when(() -> HoodieTableMetadataUtil.getHoodieIndexDefinition("sec1", metaClient)).thenReturn(definition);
-      mockedSecondaryUtil.when(() -> org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.readSecondaryKeysFromFileSlices(any(), any(), anyInt(), any(), any(), any(), any()))
+      mockedSecondaryUtil.when(() -> SecondaryIndexRecordGenerationUtils.readSecondaryKeysFromFileSlices(any(), any(), anyInt(), any(), any(), any(), any()))
           .thenReturn(engineContext.emptyHoodieData());
       mockedUtil.when(() -> HoodieTableMetadataUtil.estimateFileGroupCount(any(), any(), anyInt(), anyInt(), anyInt(), anyFloat(), anyLong()))
           .thenReturn(1);
@@ -151,6 +152,63 @@ class TestSecondaryIndexer {
     }
   }
 
+  @Test
+  void testFailsWhenTheOnlyUninitializedPartitionIsNotTheRequestedOne() {
+    HoodieEngineContext engineContext = mock(HoodieEngineContext.class);
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+
+    when(writeConfig.getMetadataConfig()).thenReturn(mock(HoodieMetadataConfig.class));
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    when(tableConfig.getMetadataPartitions()).thenReturn(Collections.emptySet());
+    when(metaClient.getIndexForMetadataPartition("sec_ghost")).thenReturn(Option.empty());
+
+    try (MockedStatic<HoodieTableMetadataUtil> mockedUtil = mockStatic(HoodieTableMetadataUtil.class)) {
+      mockedUtil.when(() -> HoodieTableMetadataUtil.getSecondaryIndexPartitionsToInit(any(), any(), any()))
+          .thenReturn(Collections.singleton("sec1"));
+
+      SecondaryIndexer indexer = new SecondaryIndexer(engineContext, writeConfig, metaClient);
+      assertThrows(HoodieMetadataException.class, () -> indexer.buildInitialization(IndexInitializationContext.of(
+          "001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList), Lazy.lazily(Option::empty), Option.of("sec_ghost"))));
+    }
+  }
+
+  @Test
+  void testInitializesTheRequestedPartitionWhoseDefinitionTheLookupMinted() throws IOException {
+    HoodieEngineContext engineContext = new HoodieLocalEngineContext(getDefaultStorageConf());
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    HoodieMetadataConfig metadataConfig = mock(HoodieMetadataConfig.class);
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    HoodieIndexDefinition definition = mock(HoodieIndexDefinition.class);
+
+    when(writeConfig.getMetadataConfig()).thenReturn(metadataConfig);
+    when(metadataConfig.getSecondaryIndexParallelism()).thenReturn(8);
+    when(writeConfig.getProps()).thenReturn(new TypedProperties());
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    when(tableConfig.getMetadataPartitions()).thenReturn(Collections.emptySet());
+    // A first-time index has no definition when the request is resolved; the lookup mints one and reports it back.
+    when(metaClient.getIndexForMetadataPartition("sec1")).thenReturn(Option.empty());
+
+    try (MockedStatic<HoodieTableMetadataUtil> mockedUtil = mockStatic(HoodieTableMetadataUtil.class);
+         MockedStatic<SecondaryIndexRecordGenerationUtils> mockedSecondaryUtil = mockStatic(SecondaryIndexRecordGenerationUtils.class)) {
+      mockedUtil.when(() -> HoodieTableMetadataUtil.getSecondaryIndexPartitionsToInit(any(), any(), any()))
+          .thenReturn(Collections.singleton("sec1"));
+      mockedUtil.when(() -> HoodieTableMetadataUtil.getHoodieIndexDefinition("sec1", metaClient)).thenReturn(definition);
+      mockedSecondaryUtil.when(() -> SecondaryIndexRecordGenerationUtils.readSecondaryKeysFromFileSlices(any(), any(), anyInt(), any(), any(), any(), any()))
+          .thenReturn(engineContext.emptyHoodieData());
+      mockedUtil.when(() -> HoodieTableMetadataUtil.estimateFileGroupCount(any(), any(), anyInt(), anyInt(), anyInt(), anyFloat(), anyLong()))
+          .thenReturn(1);
+
+      SecondaryIndexer indexer = new SecondaryIndexer(engineContext, writeConfig, metaClient);
+      List<IndexInitializationPlan> initializationList = indexer.buildInitialization(IndexInitializationContext.of(
+          "001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList), Lazy.lazily(Option::empty), Option.of("sec1")));
+      assertEquals(1, initializationList.size());
+      assertEquals("sec1", initializationList.get(0).indexPartitionName());
+    }
+  }
+
   @SuppressWarnings("unchecked")
   @Test
   void testInitializeWithRealEngineContextAndIndexDataContent() throws IOException {
@@ -170,11 +228,11 @@ class TestSecondaryIndexer {
         1);
 
     try (MockedStatic<HoodieTableMetadataUtil> mockedUtil = mockStatic(HoodieTableMetadataUtil.class);
-         MockedStatic<org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils> mockedSecondaryUtil = mockStatic(org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.class)) {
+         MockedStatic<SecondaryIndexRecordGenerationUtils> mockedSecondaryUtil = mockStatic(SecondaryIndexRecordGenerationUtils.class)) {
       mockedUtil.when(() -> HoodieTableMetadataUtil.getSecondaryIndexPartitionsToInit(any(), any(), any()))
           .thenReturn(Collections.singleton("sec_idx"));
       mockedUtil.when(() -> HoodieTableMetadataUtil.getHoodieIndexDefinition("sec_idx", metaClient)).thenReturn(definition);
-      mockedSecondaryUtil.when(() -> org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.readSecondaryKeysFromFileSlices(any(), any(), anyInt(), any(), any(), any(), any()))
+      mockedSecondaryUtil.when(() -> SecondaryIndexRecordGenerationUtils.readSecondaryKeysFromFileSlices(any(), any(), anyInt(), any(), any(), any(), any()))
           .thenReturn(records);
       mockedUtil.when(() -> HoodieTableMetadataUtil.estimateFileGroupCount(any(), any(), anyInt(), anyInt(), anyInt(), anyFloat(), anyLong()))
           .thenReturn(7);
@@ -195,7 +253,7 @@ class TestSecondaryIndexer {
   @Test
   void testBuildUpdateReturnsEmptyWhenSecondaryIndexUnavailable() {
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
-    when(metaClient.getIndexMetadata()).thenReturn(org.apache.hudi.common.util.Option.empty());
+    when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
     SecondaryIndexer indexer = new SecondaryIndexer(
         mock(HoodieEngineContext.class), mock(HoodieWriteConfig.class), metaClient);
     assertTrue(indexer.buildUpdate(IndexUpdateContext.of(
@@ -213,7 +271,7 @@ class TestSecondaryIndexer {
     HoodieIndexMetadata indexMetadata = mock(HoodieIndexMetadata.class);
     HoodieIndexDefinition indexDefinition = mock(HoodieIndexDefinition.class);
 
-    when(metaClient.getIndexMetadata()).thenReturn(org.apache.hudi.common.util.Option.of(indexMetadata));
+    when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
     when(indexMetadata.getIndexDefinitions()).thenReturn(Collections.singletonMap("secondary_index_idx", indexDefinition));
     when(indexDefinition.getIndexName()).thenReturn("secondary_index_idx");
 
@@ -236,7 +294,7 @@ class TestSecondaryIndexer {
     HoodieIndexMetadata indexMetadata = mock(HoodieIndexMetadata.class);
     HoodieIndexDefinition indexDefinition = mock(HoodieIndexDefinition.class);
 
-    when(metaClient.getIndexMetadata()).thenReturn(org.apache.hudi.common.util.Option.of(indexMetadata));
+    when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
     when(indexMetadata.getIndexDefinitions()).thenReturn(Collections.singletonMap("secondary_index_idx", indexDefinition));
     when(indexDefinition.getIndexName()).thenReturn("secondary_index_idx");
 

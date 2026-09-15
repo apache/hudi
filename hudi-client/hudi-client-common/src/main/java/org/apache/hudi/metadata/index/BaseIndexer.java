@@ -64,9 +64,10 @@ public abstract class BaseIndexer implements Indexer {
    * are still uninitialized. A regular write names nothing, and the partition is inferred from
    * the uninitialized definitions: exactly one means that one, any other count means nothing
    * is initialized. A requested partition without a definition goes through the same inference
-   * (that is where a first-time index mints its definition from the write config), but when the
-   * inference cannot resolve to exactly one partition the action fails rather than completing
-   * with nothing built and the requested partition marked complete.
+   * (that is where a first-time index mints its definition from the write config), but the
+   * inference only answers for the partition that was asked for: when it resolves to a single
+   * partition that is a different index, or cannot resolve to exactly one at all, the action
+   * fails rather than building another index while the requested partition is marked complete.
    *
    * @param context                  the initialization context
    * @param uninitializedPartitions  the uninitialized partitions of this type, as the definition
@@ -89,7 +90,11 @@ public abstract class BaseIndexer implements Indexer {
     if (requested.isPresent() && dataTableMetaClient.getIndexForMetadataPartition(requested.get()).isPresent()) {
       return Collections.singleton(requested.get());
     }
-    if (uninitializedPartitions.size() == 1) {
+    // A single candidate answers for a request only when it is the requested partition itself, which is what a
+    // first-time index looks like once the lookup has minted its definition. Any other single candidate is a
+    // different index, and building it would leave the requested partition marked complete with nothing in it.
+    if (uninitializedPartitions.size() == 1
+        && (!requested.isPresent() || uninitializedPartitions.contains(requested.get()))) {
       return uninitializedPartitions;
     }
     if (requested.isPresent()) {
