@@ -142,8 +142,38 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     this.metrics = new HoodieMetrics(config, storage);
     this.txnManager = transactionManager;
     this.timeGenerator = timeGenerator;
-    startEmbeddedServerView();
-    runClientInitCallbacks();
+    try {
+      startEmbeddedServerView();
+      runClientInitCallbacks();
+    } catch (RuntimeException | Error e) {
+      // The constructor is not returning, so no caller ever gets an instance to close(): release here or leak.
+      releaseAfterFailedInit(e);
+      throw e;
+    }
+  }
+
+  /**
+   * Releases what the constructor already acquired, for the case where it cannot hand back an instance.
+   * This mirrors {@link #close()} but must not call it, because subclasses override close() and it would
+   * then run against a half-built object. Subclasses call this from their own constructor once they have
+   * released whatever they added on top.
+   */
+  protected final void releaseAfterFailedInit(Throwable initFailure) {
+    try {
+      stopEmbeddedServerView(true);
+    } catch (Exception e) {
+      initFailure.addSuppressed(e);
+    }
+    try {
+      this.heartbeatClient.close();
+    } catch (Exception e) {
+      initFailure.addSuppressed(e);
+    }
+    try {
+      this.txnManager.close();
+    } catch (Exception e) {
+      initFailure.addSuppressed(e);
+    }
   }
 
   /**
@@ -151,10 +181,40 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
    */
   @Override
   public void close() {
-    stopEmbeddedServerView(true);
-    this.context.setJobStatus("", "");
-    this.heartbeatClient.close();
-    this.txnManager.close();
+    // Each step owns a resource the others do not, and the transaction manager holds the write
+    // lock, so an earlier failure must not stop the rest from being released.
+    Exception failure = null;
+    try {
+      stopEmbeddedServerView(true);
+    } catch (Exception e) {
+      failure = e;
+    }
+    try {
+      this.context.setJobStatus("", "");
+    } catch (Exception e) {
+      failure = appendFailure(failure, e);
+    }
+    try {
+      this.heartbeatClient.close();
+    } catch (Exception e) {
+      failure = appendFailure(failure, e);
+    }
+    try {
+      this.txnManager.close();
+    } catch (Exception e) {
+      failure = appendFailure(failure, e);
+    }
+    if (failure != null) {
+      throw failure instanceof RuntimeException ? (RuntimeException) failure : new HoodieException(failure);
+    }
+  }
+
+  private static Exception appendFailure(Exception previousFailure, Exception failure) {
+    if (previousFailure == null) {
+      return failure;
+    }
+    previousFailure.addSuppressed(failure);
+    return previousFailure;
   }
 
   private synchronized void stopEmbeddedServerView(boolean resetViewStorageConfig) {
