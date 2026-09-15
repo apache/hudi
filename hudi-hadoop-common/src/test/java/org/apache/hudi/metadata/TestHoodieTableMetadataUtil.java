@@ -96,6 +96,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
@@ -640,11 +641,18 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     // Table initialisation is the exception: the configured names are recorded without schemas, so col
     // stats can be enabled before the first commit has produced one. The meta columns are added by the
     // caller either way.
+    //
+    // The schema is supplied as a lazy that fails if it is ever forced, because this branch must return
+    // without resolving it at all. ColumnStatsIndexer passes isTableInitializing=true together with a
+    // Lazy.lazily(tryResolveSchemaForTable) whenever an explicit column list is set, including on tables
+    // that already have data, so resolving here would cost a schema read on that path. An eagerly-computed
+    // empty Option cannot tell "never resolved" from "resolved and absent"; this can.
     List<String> expectedWhileInitialising = new ArrayList<>(Arrays.asList(HoodieTableMetadataUtil.META_COLS_TO_ALWAYS_INDEX));
     expectedWhileInitialising.addAll(Arrays.asList("col_1", "col_2"));
     assertListEquality(expectedWhileInitialising,
         new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, withColumnList,
-            Lazy.eagerly(Option.empty()), true, V1).keySet()));
+            Lazy.lazily(() -> fail("the initializing branch must not resolve the table schema")),
+            true, V1).keySet()));
   }
 
   private void assertListEquality(List<String> expected, List<String> actual) {
