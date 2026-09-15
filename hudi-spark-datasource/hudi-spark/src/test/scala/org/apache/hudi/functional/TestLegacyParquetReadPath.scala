@@ -26,7 +26,7 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
-import org.apache.spark.sql.functions.{col, lit, struct}
+import org.apache.spark.sql.functions.{broadcast, col, lit, struct}
 import org.apache.spark.sql.types.{IntegerType, LongType}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
@@ -43,6 +43,11 @@ private case class LegacyTestRow(id: String,
                                  partition: String,
                                  nested: LegacyNested,
                                  tags: Seq[Int])
+
+/** Flat, all-atomic-type row shape, used where a nested schema (see [[LegacyTestRow]]) is not
+ * needed. Must stay top-level: a case class local to a method has no TypeTag, and
+ * `spark.createDataFrame` needs one. */
+private case class FlatTestRow(id: String, name: String, partition: String)
 
 /**
  * Functional tests for the legacy (pre-file-group-reader) Spark read path:
@@ -298,6 +303,39 @@ class TestLegacyParquetReadPath extends HoodieSparkClientTestBase with ScalaAsse
       assertSameRows(newReaderDf, legacyRelationDf())
     } finally {
       spark.conf.set(vectorizedKey, previous)
+    }
+  }
+
+  @Test
+  def testBroadcastJoinHonorsPlanTimeBatchingDecision(): Unit = {
+    // Regression test: broadcast joins used to crash with a ColumnarBatch/InternalRow cast error
+    // once whole-stage codegen was off, because the reader ignored the plan's OPTION_RETURNING_BATCH.
+    spark.createDataFrame(Seq(FlatTestRow("1", "a", "p0"), FlatTestRow("2", "b", "p0")))
+      .write.format("hudi")
+      .options(Map(
+        DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
+        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
+        DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
+        DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key -> "true",
+        HoodieWriteConfig.TBL_NAME.key -> "legacy_read_path_tbl"))
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    assertTrue(legacyFormatSupportsBatch,
+      "Flat all-atomic-type schema must support the vectorized reader on its own")
+
+    val wholeStageKey = "spark.sql.codegen.wholeStage"
+    val previous = spark.conf.get(wholeStageKey, "true")
+    spark.conf.set(wholeStageKey, "false")
+    try {
+      val small = legacyFileFormatDf()
+      val big = spark.range(2).toDF("n")
+      // Must not throw ClassCastException: ColumnarBatch cannot be cast to InternalRow.
+      val joined = big.join(broadcast(small), col("n") === col("id").cast("long"), "left")
+      assertEquals(2L, joined.count())
+    } finally {
+      spark.conf.set(wholeStageKey, previous)
     }
   }
 
