@@ -19,8 +19,8 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 
 import java.util.Collections;
@@ -36,10 +36,7 @@ public abstract class BaseSparkBucketIndexBucketInfoGetter implements SparkBucke
   public BaseSparkBucketIndexBucketInfoGetter(Map<String, Set<String>> updatePartitionPathFileIds,
                                               boolean isOverwrite,
                                               boolean isNonBlockingConcurrencyControl) {
-    if (isOverwrite) {
-      ValidationUtils.checkArgument(!isNonBlockingConcurrencyControl,
-          "Insert overwrite is not supported with non-blocking concurrency control");
-    }
+    WriteConcurrencyMode.checkInsertOverwriteSupported(isNonBlockingConcurrencyControl, isOverwrite);
     this.updatePartitionPathFileIds = updatePartitionPathFileIds;
     this.isOverwrite = isOverwrite;
     this.isNonBlockingConcurrencyControl = isNonBlockingConcurrencyControl;

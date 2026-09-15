@@ -19,9 +19,13 @@
 package org.apache.hudi.streamer;
 
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.util.StreamerUtil;
@@ -42,6 +46,8 @@ import org.mockito.MockedStatic;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
@@ -49,6 +55,7 @@ import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -194,6 +201,48 @@ class TestHoodieFlinkStreamer {
       resolver.when(() -> OptionsResolver.needsAsyncCleaning(any())).thenReturn(false);
       HoodieFlinkStreamer.main(args("--table-type", "MERGE_ON_READ", "--op", "UPSERT"));
       pipelines.verify(() -> Pipelines.dummySink(same(pipeline)));
+    }
+  }
+
+  /**
+   * The Flink streamer entry point must reject insert overwrite combined with non-blocking
+   * concurrency control. Both overwrite variants funnel through {@link Pipelines#hoodieStreamWrite},
+   * whose guard throws before the pipeline is built and the job is submitted.
+   */
+  @Test
+  void testInsertOverwriteRejectedUnderNonBlockingConcurrencyControl() throws Exception {
+    for (WriteOperationType operation : new WriteOperationType[] {
+        WriteOperationType.INSERT_OVERWRITE, WriteOperationType.INSERT_OVERWRITE_TABLE}) {
+      StreamExecutionEnvironment env = mockEnvironment();
+      DataStream<RowData> source = mock(DataStream.class);
+      DataStream<HoodieFlinkInternalRow> bootstrapped = mock(DataStream.class);
+
+      // Only the heavy Flink internals are mocked; hoodieStreamWrite runs for real so its guard fires.
+      try (MockedStatic<StreamExecutionEnvironment> environments = mockStatic(StreamExecutionEnvironment.class);
+           MockedStatic<StreamerUtils> streamerUtils = mockStatic(StreamerUtils.class);
+           MockedStatic<OptionsInference> inference = mockStatic(OptionsInference.class);
+           MockedStatic<Pipelines> pipelines = mockStatic(Pipelines.class)) {
+        environments.when(() -> StreamExecutionEnvironment.getExecutionEnvironment(any(Configuration.class)))
+            .thenReturn(env);
+        streamerUtils.when(() -> StreamerUtils.createKafkaStream(
+            same(env), any(RowType.class), eq("orders"), any())).thenReturn(source);
+        pipelines.when(() -> Pipelines.bootstrap(any(), any(RowType.class), same(source)))
+            .thenReturn(bootstrapped);
+        pipelines.when(() -> Pipelines.hoodieStreamWrite(any(), any(RowType.class), same(bootstrapped)))
+            .thenCallRealMethod();
+
+        HoodieException exception = assertThrows(HoodieException.class, () ->
+            HoodieFlinkStreamer.main(args(
+                "--table-type", "MERGE_ON_READ",
+                "--op", operation.name(),
+                "--hoodie-conf", HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key() + "="
+                    + WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL.name())));
+        assertTrue(exception.getMessage()
+                .contains(WriteConcurrencyMode.INSERT_OVERWRITE_NOT_SUPPORTED_ERROR),
+            "Insert overwrite under non-blocking concurrency control must be rejected for " + operation);
+        // The guard fires while building the pipeline, so the job is never submitted.
+        verify(env, never()).execute(any(String.class));
+      }
     }
   }
 
