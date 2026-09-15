@@ -22,51 +22,14 @@ package org.apache.hudi.io.compress.airlift;
 import org.apache.hudi.io.compress.CompressionCodec;
 import org.apache.hudi.io.compress.HoodieCompressor;
 
-import io.airlift.compress.hadoop.HadoopInputStream;
-import io.airlift.compress.hadoop.HadoopOutputStream;
 import io.airlift.compress.snappy.SnappyHadoopStreams;
-
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.ByteBuffer;
-
-import static org.apache.hudi.io.util.IOUtils.readFully;
 
 /**
  * Implementation of {@link HoodieCompressor} for {@link CompressionCodec#SNAPPY} compression
  * codec using airlift aircompressor's Snappy compressor and decompressor.
  */
-public class HoodieAirliftSnappyCompressor implements HoodieCompressor {
-  private final SnappyHadoopStreams snappyStreams;
-
+public class HoodieAirliftSnappyCompressor extends HoodieAirliftCompressor {
   public HoodieAirliftSnappyCompressor() {
-    snappyStreams = new SnappyHadoopStreams();
-  }
-
-  @Override
-  public int decompress(InputStream compressedInput,
-                        byte[] targetByteArray,
-                        int offset,
-                        int length) throws IOException {
-    try (HadoopInputStream stream = snappyStreams.createInputStream(compressedInput)) {
-      return readFully(stream, targetByteArray, offset, length);
-    }
-  }
-
-  @Override
-  public byte[] compress(byte[] data) throws IOException {
-    ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-    try (HadoopOutputStream snappyOutputStream = snappyStreams.createOutputStream(byteArrayOutputStream)) {
-      snappyOutputStream.write(data);
-    }
-    return byteArrayOutputStream.toByteArray();
-  }
-
-  @Override
-  public ByteBuffer compress(ByteBuffer uncompressedBytes) throws IOException {
-    byte[] temp = new byte[uncompressedBytes.remaining()];
-    uncompressedBytes.get(temp);
-    return ByteBuffer.wrap(this.compress(temp));
+    super(new SnappyHadoopStreams());
   }
 }

@@ -23,50 +23,13 @@ import org.apache.hudi.io.compress.CompressionCodec;
 import org.apache.hudi.io.compress.HoodieCompressor;
 
 import io.airlift.compress.gzip.JdkGzipHadoopStreams;
-import io.airlift.compress.hadoop.HadoopInputStream;
-import io.airlift.compress.hadoop.HadoopOutputStream;
-
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.ByteBuffer;
-
-import static org.apache.hudi.io.util.IOUtils.readFully;
 
 /**
  * Implementation of {@link HoodieCompressor} for {@link CompressionCodec#GZIP} compression
  * codec using airlift aircompressor's GZIP decompressor.
  */
-public class HoodieAirliftGzipCompressor implements HoodieCompressor {
-  private final JdkGzipHadoopStreams gzipStreams;
-
+public class HoodieAirliftGzipCompressor extends HoodieAirliftCompressor {
   public HoodieAirliftGzipCompressor() {
-    gzipStreams = new JdkGzipHadoopStreams();
-  }
-
-  @Override
-  public int decompress(InputStream compressedInput,
-                        byte[] targetByteArray,
-                        int offset,
-                        int length) throws IOException {
-    try (HadoopInputStream stream = gzipStreams.createInputStream(compressedInput)) {
-      return readFully(stream, targetByteArray, offset, length);
-    }
-  }
-
-  @Override
-  public byte[] compress(byte[] data) throws IOException {
-    ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-    try (HadoopOutputStream gzipOutputStream = gzipStreams.createOutputStream(byteArrayOutputStream)) {
-      gzipOutputStream.write(data);
-    }
-    return byteArrayOutputStream.toByteArray();
-  }
-
-  @Override
-  public ByteBuffer compress(ByteBuffer uncompressedBytes) throws IOException {
-    byte[] temp = new byte[uncompressedBytes.remaining()];
-    uncompressedBytes.get(temp);
-    return ByteBuffer.wrap(this.compress(temp));
+    super(new JdkGzipHadoopStreams());
   }
 }

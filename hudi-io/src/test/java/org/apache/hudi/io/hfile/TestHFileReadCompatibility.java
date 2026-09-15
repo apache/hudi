@@ -38,6 +38,8 @@ import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.apache.hadoop.hbase.io.hfile.HFileScanner;
 import org.apache.hadoop.hbase.util.Bytes;
+import org.apache.hadoop.io.compress.SnappyCodec;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -198,9 +200,10 @@ class TestHFileReadCompatibility {
    * file and gets an exact match with the correct value.
    */
   @ParameterizedTest
-  @EnumSource(value = CompressionCodec.class, names = {"NONE", "GZIP"})
+  @EnumSource(value = CompressionCodec.class, names = {"NONE", "GZIP", "SNAPPY"})
   void hbaseReaderPointLooksUpEveryKeyInNativeMultiBlockFile(CompressionCodec codec)
       throws IOException {
+    assumeNativeSnappyAvailableIfNeeded(codec);
     byte[] data = writeMultiBlockHudiHFile(MULTI_BLOCK_RECORDS, SMALL_BLOCK_SIZE, codec);
     try (HFile.Reader reader = createHBaseHFileReader(data)) {
       int blocks = reader.getTrailer().getDataIndexCount();
@@ -234,9 +237,10 @@ class TestHFileReadCompatibility {
    * bytes), establishing that the native writer emits HBase-format cells.
    */
   @ParameterizedTest
-  @EnumSource(value = CompressionCodec.class, names = {"NONE", "GZIP"})
+  @EnumSource(value = CompressionCodec.class, names = {"NONE", "GZIP", "SNAPPY"})
   void nativeAndHBaseWrittenCellsAreByteIdenticalUnderHBaseReader(CompressionCodec codec)
       throws IOException {
+    assumeNativeSnappyAvailableIfNeeded(codec);
     byte[] nativeData = writeMultiBlockHudiHFile(MULTI_BLOCK_RECORDS, SMALL_BLOCK_SIZE, codec);
     byte[] hbaseData =
         writeMultiBlockHBaseHFile(MULTI_BLOCK_RECORDS, SMALL_BLOCK_SIZE, hbaseAlgo(codec));
@@ -299,6 +303,32 @@ class TestHFileReadCompatibility {
   }
 
   /**
+   * Confirms {@code SnappyHadoopStreams} (hudi-io's own decompressor) correctly decodes a
+   * genuine HBase-written SNAPPY multi-block file: real Hadoop {@code BlockCompressorStream}
+   * framing and real (non-null) block checksums, as opposed to a file the native writer
+   * produced itself.
+   */
+  @Test
+  void nativeReaderReadsHBaseWrittenSnappyFile() throws IOException {
+    assumeNativeSnappyAvailableIfNeeded(CompressionCodec.SNAPPY);
+    byte[] hbaseData = writeMultiBlockHBaseHFile(
+        MULTI_BLOCK_RECORDS, SMALL_BLOCK_SIZE, Compression.Algorithm.SNAPPY);
+    try (HFileReader nativeReader = createHFileReader(hbaseData)) {
+      nativeReader.seekTo();
+      for (int i = 0; i < MULTI_BLOCK_RECORDS; i++) {
+        org.apache.hudi.io.hfile.KeyValue kv = nativeReader.getKeyValue().get();
+        assertEquals(key(i), kv.getKey().getContentInString());
+        byte[] value = Arrays.copyOfRange(
+            kv.getBytes(), kv.getValueOffset(), kv.getValueOffset() + kv.getValueLength());
+        assertArrayEquals(value(i).getBytes(StandardCharsets.UTF_8), value);
+        if (i < MULTI_BLOCK_RECORDS - 1) {
+          assertTrue(nativeReader.next());
+        }
+      }
+    }
+  }
+
+  /**
    * The data block's previous-block-offset header must be correct: the HBase reader uses it in
    * {@link HFileScanner#seekBefore} to step back to the prior block when the target lands on a
    * block's first key. With a wrong offset (e.g. the block's own offset) the HBase reader re-reads
@@ -323,6 +353,16 @@ class TestHFileReadCompatibility {
             "seekBefore(" + key(i) + ") must land on the immediately preceding key");
       }
     }
+  }
+
+  // HBase's own reader/writer decompress/compress SNAPPY blocks through Hadoop's native
+  // SnappyCodec, independent of the pure-Java aircompressor codec hudi-io uses. Without
+  // libhadoop's native Snappy support, HBase throws UnsatisfiedLinkError (surfaced by
+  // HFile.createReader as a misleading CorruptHFileException) even though the bytes hudi-io
+  // produced/reads are fine. Skip rather than fail when that native library isn't present.
+  private static void assumeNativeSnappyAvailableIfNeeded(CompressionCodec codec) {
+    Assumptions.assumeTrue(codec != CompressionCodec.SNAPPY || SnappyCodec.isNativeCodeLoaded(),
+        "Native Snappy library (libhadoop) is not available in this environment");
   }
 
   static boolean isPrefix(byte[] prefix, byte[] array) {
@@ -437,7 +477,13 @@ class TestHFileReadCompatibility {
   }
 
   private static Compression.Algorithm hbaseAlgo(CompressionCodec codec) {
-    return codec == CompressionCodec.GZIP ? Compression.Algorithm.GZ : Compression.Algorithm.NONE;
+    if (codec == CompressionCodec.GZIP) {
+      return Compression.Algorithm.GZ;
+    }
+    if (codec == CompressionCodec.SNAPPY) {
+      return Compression.Algorithm.SNAPPY;
+    }
+    return Compression.Algorithm.NONE;
   }
 
   private static byte[] writeMultiBlockHudiHFile(int numRecords, int blockSize, CompressionCodec codec)
