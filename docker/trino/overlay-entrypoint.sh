@@ -24,6 +24,11 @@
 # image's baked-in trino-hudi plugin with it (rm -rf then copy), so plugin
 # iterations need only a rebuild of that dir plus a container restart, not a
 # docker image rebuild. Otherwise the image-baked plugin is used as-is.
+#
+# This runs on released images (<= 483, which still shipped bin/run-trino) and on
+# images built from the pinned trino.sha (after trinodb/trino f0d1f3c982e, which
+# removed run-trino in favor of launcher in the CMD, on a hardened base image
+# without grep or find). Keep it bash builtins only, apart from cp/rm/mkdir.
 set -euo pipefail
 
 OVERLAY=/opt/hudi-plugin-overlay
@@ -32,7 +37,14 @@ PLUGIN_DIR=/usr/lib/trino/plugin/hudi
 # The overlay counts as present only if it holds at least one jar: the compose
 # default mount is docker/trino/empty-overlay, whose .gitkeep must not trigger
 # a wipe of the baked-in plugin.
-if [ -d "$OVERLAY" ] && [ -n "$(find "$OVERLAY" -name '*.jar' -print -quit 2>/dev/null)" ]; then
+# dotglob mirrors find, which also descends into hidden dirs.
+OVERLAY_JARS=()
+if [ -d "$OVERLAY" ]; then
+  shopt -s globstar nullglob dotglob
+  OVERLAY_JARS=("$OVERLAY"/**/*.jar)
+  shopt -u globstar nullglob dotglob
+fi
+if [ "${#OVERLAY_JARS[@]}" -gt 0 ]; then
   echo "Applying trino-hudi plugin overlay from $OVERLAY (fully replacing $PLUGIN_DIR)"
   rm -rf "$PLUGIN_DIR"
   mkdir -p "$PLUGIN_DIR"
@@ -49,4 +61,20 @@ if [ ! -d "$PLUGIN_DIR/hdfs" ] && [ -d /opt/hudi-hdfs-lib ]; then
   cp -r /opt/hudi-hdfs-lib "$PLUGIN_DIR/hdfs"
 fi
 
-exec /usr/lib/trino/bin/run-trino
+# Inlined from the removed bin/run-trino wrapper. The node.id check mirrors its
+# `grep -s -q 'node.id' /etc/trino/node.properties`: a missing or unreadable file
+# means not set.
+launcher_opts=(--etc-dir /etc/trino)
+NODE_ID_SET=false
+if [ -r /etc/trino/node.properties ]; then
+  while IFS= read -r line || [ -n "$line" ]; do
+    if [[ "$line" == *node.id* ]]; then
+      NODE_ID_SET=true
+      break
+    fi
+  done < /etc/trino/node.properties
+fi
+if [ "$NODE_ID_SET" != "true" ]; then
+  launcher_opts+=("-Dnode.id=${HOSTNAME}")
+fi
+exec /usr/lib/trino/bin/launcher run "${launcher_opts[@]}" "$@"
