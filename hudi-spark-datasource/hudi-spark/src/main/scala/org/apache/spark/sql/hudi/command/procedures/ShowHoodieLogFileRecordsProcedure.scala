@@ -63,6 +63,9 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
     val filter = getArgValueOrDefault(args, parameters(5)).get.asInstanceOf[String]
 
     validateFilter(filter, outputType)
+    // `limit` bounds how many records are read out of the log files, so with a filter it has to be lifted
+    // here and reapplied to the matching rows; otherwise the filter only ever sees the first `limit`.
+    val scanLimit = if (hasFilter(filter)) Int.MaxValue else limit
     val client = createMetaClient(jsc, basePath)
     val storage = client.getStorage
     val logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(storage, new StoragePath(logFilePathPattern)).iterator().asScala
@@ -86,12 +89,12 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
         .build
       scanner.asScala.foreach(hoodieRecord => {
         val record = hoodieRecord.getData.asInstanceOf[HoodieRecordPayload[_]].getInsertValue(schema.toAvroSchema).get()
-        if (allRecords.size() < limit) {
+        if (allRecords.size() < scanLimit) {
           allRecords.add(record)
         }
       })
     } else {
-      logFilePaths.toStream.takeWhile(_ => allRecords.size() < limit).foreach {
+      logFilePaths.toStream.takeWhile(_ => allRecords.size() < scanLimit).foreach {
         logFilePath => {
           val schema = Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(client, new StoragePath(logFilePath)))
           val reader = HoodieLogFormat.newReader(client, new HoodieLogFile(logFilePath), schema)
@@ -101,7 +104,7 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
               case dataBlock: HoodieDataBlock =>
                 val recordItr = dataBlock.getRecordIterator(HoodieRecordType.AVRO)
                 recordItr.asScala.foreach(record => {
-                  if (allRecords.size() < limit) {
+                  if (allRecords.size() < scanLimit) {
                     allRecords.add(record.getData.asInstanceOf[IndexedRecord])
                   }
                 })
@@ -117,7 +120,7 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
       rows.add(Row(record.toString))
     })
     val results = rows.asScala.toSeq
-    applyFilter(results, filter, outputType)
+    applyFilterAndLimit(results, filter, outputType, limit)
   }
 
   override def build: Procedure = new ShowHoodieLogFileRecordsProcedure

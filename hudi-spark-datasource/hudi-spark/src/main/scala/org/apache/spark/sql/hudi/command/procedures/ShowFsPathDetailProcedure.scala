@@ -77,20 +77,12 @@ class ShowFsPathDetailProcedure extends BaseProcedure with ProcedureBuilder {
     }
 
     val df = spark.sqlContext.createDataFrame(rows, OUTPUT_TYPE)
-    val results = if (sort) {
-      if (limit.isDefined) {
-        df.orderBy(df("storage_size").desc).limit(limit.get.asInstanceOf[Int]).collect()
-      } else {
-        df.orderBy(df("storage_size").desc).collect()
-      }
-    } else {
-      if (limit.isDefined) {
-        df.orderBy(df("file_num").desc).limit(limit.get.asInstanceOf[Int]).collect()
-      } else {
-        df.orderBy(df("file_num").desc).collect()
-      }
-    }
-    applyFilter(results, filter, outputType)
+    val ordered = df.orderBy(df(if (sort) "storage_size" else "file_num").desc)
+    val limitValue = limit.map(_.asInstanceOf[Int]).getOrElse(Int.MaxValue)
+    // The bound has to come after the filter; limiting the DataFrame first would show the filter only
+    // the first `limit` rows of the ordering.
+    val results = if (limit.isDefined && !hasFilter(filter)) ordered.limit(limitValue).collect() else ordered.collect()
+    applyFilterAndLimit(results.toSeq, filter, outputType, limitValue)
   }
 
   def getFileSize(size: Long): String = {
