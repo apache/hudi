@@ -124,14 +124,7 @@ jobs:
         run: rm -rf ~/.m2/repository/io/trino
       # The connector and the shim assembly resolve io.trino from the pinned trinodb/trino
       # commit: Trino publishes no SNAPSHOT artifacts, so nothing here comes from Central.
-      - name: Restore Trino artifacts for the pinned commit
-        id: trino-m2
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2/repository/io/trino
-          key: trino-m2-v2-${{ hashFiles('scripts/trino/bootstrap_trino.sh') }}-${{ steps.trino-pin.outputs.trino_sha }}
-          # No restore-keys on purpose: a partial restore from another pin collides on the
-          # same SNAPSHOT coordinates and poisons the build.
+      # Not cached, for the same reason as the server image below.
       - name: Checkout trinodb/trino at the pinned commit
         uses: actions/checkout@v5
         with:
@@ -139,7 +132,6 @@ jobs:
           ref: ${{ steps.trino-pin.outputs.trino_sha }}
           path: trino-src
       - name: Build Trino artifacts from source (JDK 25)
-        if: steps.trino-m2.outputs.cache-hit != 'true'
         run: scripts/trino/bootstrap_trino.sh trino-src --skip-checkout
       # Built on every run, from the same commit as the connector. Not cached: the scheduled
       # workflow's delete-all-caches job removes Actions caches before a later run can restore them.
