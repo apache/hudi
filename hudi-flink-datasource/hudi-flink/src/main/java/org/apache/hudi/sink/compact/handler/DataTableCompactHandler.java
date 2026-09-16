@@ -107,7 +107,10 @@ public class DataTableCompactHandler implements CompactHandler {
     if (executor != null) {
       executor.execute(
           () -> doCompaction(event, collector, needReloadMetaClient),
-          (errMsg, t) -> collector.collect(createFailedCommitEvent(event)),
+          (errMsg, t) -> {
+            compactionMetrics.markCompactionFailed();
+            collector.collect(createFailedCommitEvent(event));
+          },
           "Execute compaction for instant %s from task %d", instantTime, taskID);
     } else {
       // executes the compaction task synchronously for batch mode.
