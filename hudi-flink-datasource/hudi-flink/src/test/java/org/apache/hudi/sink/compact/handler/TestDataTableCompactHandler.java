@@ -28,6 +28,7 @@ import org.apache.hudi.table.HoodieFlinkTable;
 
 import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.MetricGroup;
+import org.apache.flink.util.Collector;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.function.ThrowingRunnable;
 import org.junit.jupiter.api.Test;
@@ -75,7 +76,7 @@ class TestDataTableCompactHandler {
     CompactionPlanEvent event = new CompactionPlanEvent("001", operation, 0, false, false);
 
     AtomicReference<CompactionCommitEvent> collected = new AtomicReference<>();
-    org.apache.flink.util.Collector<CompactionCommitEvent> collector = new org.apache.flink.util.Collector<CompactionCommitEvent>() {
+    Collector<CompactionCommitEvent> collector = new Collector<CompactionCommitEvent>() {
       @Override
       public void collect(CompactionCommitEvent record) {
         collected.set(record);
