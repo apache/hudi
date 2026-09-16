@@ -108,20 +108,25 @@ jobs:
             -DoutputFile="$RUNNER_TEMP/deps-hudi-trino.txt" -DappendOutput=false
           test -s "$RUNNER_TEMP/deps-hudi-trino.txt" || { echo "ERROR: dependency:list wrote no hudi-trino classpath" >&2; exit 1; }
       - name: List plugin classpath (JDK 25)
-        # runtime scope approximates what trino-plugin packaging bundles: it keeps compile
-        # and runtime deps and drops the provided SPI surface the server supplies. The
-        # shim's parent version is literal and advanced by the pin bot, same as the build
-        # steps above. The shim sets air.check.skip-all, which airbase also wires to the
-        # dependency plugin's skip flag, so re-enable just that plugin for this goal.
+        # One reference file from two listings: runtime is what trino-plugin packaging
+        # bundles, provided is the SPI surface the server supplies at load (the shim
+        # hand-pins some of it, e.g. jackson-annotations). Naming both scopes keeps
+        # test-only artifacts out once REFERENCE_POM becomes the upstream pom, which has
+        # them. The shim sets air.check.skip-all, which airbase wires to the dependency
+        # plugin's skip flag, so re-enable it for this goal.
         run: |
           set -euo pipefail
           HUDI_VERSION=$(mvn -q -ntp -N help:evaluate -Dexpression=project.version -DforceStdout)
           echo "Listing $REFERENCE_POM against hudi-trino $HUDI_VERSION"
-          mvn $MVN_ARGS -f "$REFERENCE_POM" dependency:list \
-            -Dair.check.skip-dependency=false \
-            -DincludeScope=runtime -Ddep.hudi.version="$HUDI_VERSION" \
-            -DoutputFile="$RUNNER_TEMP/deps-plugin.txt" -DappendOutput=false
-          test -s "$RUNNER_TEMP/deps-plugin.txt" || { echo "ERROR: dependency:list wrote no plugin classpath" >&2; exit 1; }
+          for scope in runtime provided; do
+            mvn $MVN_ARGS -f "$REFERENCE_POM" dependency:list \
+              -Dair.check.skip-dependency=false \
+              -DincludeScope="$scope" -Ddep.hudi.version="$HUDI_VERSION" \
+              -DoutputFile="$RUNNER_TEMP/deps-plugin-$scope.txt" -DappendOutput=false
+            test -s "$RUNNER_TEMP/deps-plugin-$scope.txt" || { echo "ERROR: dependency:list wrote no plugin $scope classpath" >&2; exit 1; }
+          done
+          cat "$RUNNER_TEMP/deps-plugin-runtime.txt" "$RUNNER_TEMP/deps-plugin-provided.txt" > "$RUNNER_TEMP/deps-plugin.txt"
+          test -s "$RUNNER_TEMP/deps-plugin.txt" || { echo "ERROR: empty plugin classpath listing" >&2; exit 1; }
       - name: Compare classpaths
         id: drift
         run: |
