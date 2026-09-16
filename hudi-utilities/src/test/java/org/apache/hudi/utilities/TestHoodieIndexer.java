@@ -44,6 +44,7 @@ import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
@@ -373,12 +374,12 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
 
     assertIndexesNotBuilt(Arrays.asList(riderSecondaryIndex, driverSecondaryIndex));
     // The failure aborts the action: the requested partition is not left inflight in the table config and the
-    // indexing instant is not left inflight on the timeline.
+    // indexing instant is gone from the timeline, requested and inflight files alike.
     assertFalse(metaClient.getTableConfig().getMetadataPartitionsInflight().contains(driverSecondaryIndex),
         "the aborted action must not leave the requested partition inflight in the table config");
-    assertTrue(metaClient.getActiveTimeline().filterPendingIndexTimeline().getInstantsAsStream()
-            .noneMatch(instant -> instant.getState() == HoodieInstant.State.INFLIGHT),
-        "the aborted action must not leave the indexing instant inflight");
+    assertTrue(metaClient.getActiveTimeline().filterPendingIndexTimeline().empty(),
+        "the aborted action must not leave the indexing instant pending, but the timeline has "
+            + metaClient.getActiveTimeline().filterPendingIndexTimeline().getInstants());
   }
 
   private static String rootCauseMessage(Throwable thrown) {
@@ -954,8 +955,51 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     assertEquals(100, secondaryIndexRecordCount("driver-"), driverSecondaryIndex + " must hold one record per data record");
   }
 
+  /**
+   * An index build that fails midway, here on a definition naming a column the table does not have, is
+   * aborted: the index is left neither inflight nor complete in the table config, no indexing instant stays
+   * pending on the data timeline, and no partition is left on storage, so correcting the definition and
+   * running the action again builds the index.
+   */
+  @Test
+  void testAnIndexBuildThatFailsMidwayIsAbortedAndCanBeRetried() {
+    String tableName = "indexer_failed_build_abort";
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+        .enable(true).withAsyncIndex(false).withMetadataIndexColumnStats(false).build();
+    upsertToTable(metadataConfig, tableName);
+
+    metaClient = reload(metaClient);
+    String riderSecondaryIndex = SECONDARY_INDEX.getPartitionPath() + "idx_rider";
+    metaClient.buildIndexDefinition(secondaryIndexDefinition(riderSecondaryIndex, "no_such_column"));
+
+    assertThrows(HoodieIndexException.class, () -> indexWithWriteClient(metadataConfig, tableName, riderSecondaryIndex));
+
+    metaClient = reload(metaClient);
+    assertFalse(metaClient.getTableConfig().getMetadataPartitionsInflight().contains(riderSecondaryIndex),
+        "the aborted build must clear the index from the inflight list");
+    assertFalse(metaClient.getTableConfig().getMetadataPartitions().contains(riderSecondaryIndex),
+        "the aborted build must not list the index complete");
+    assertTrue(metaClient.getActiveTimeline().filterPendingIndexTimeline().empty(),
+        "the aborted build must leave no indexing instant pending, but the timeline has "
+            + metaClient.getActiveTimeline().filterPendingIndexTimeline().getInstants());
+    assertFalse(metadataPartitionExists(basePath(), context(), riderSecondaryIndex),
+        "the aborted build must leave no partition on storage");
+
+    metaClient.deleteIndexDefinition(riderSecondaryIndex);
+    metaClient.buildIndexDefinition(secondaryIndexDefinition(riderSecondaryIndex, "rider"));
+    scheduleAndExecuteIndexingWithWriteClient(metadataConfig, tableName, riderSecondaryIndex);
+    assertEquals(100, secondaryIndexRecordCount("rider-"), riderSecondaryIndex + " must hold one record per data record");
+  }
+
   /** Schedules and runs an indexing action for one index partition through a synchronous-metadata write client. */
   private void scheduleAndExecuteIndexingWithWriteClient(HoodieMetadataConfig metadataConfig, String tableName, String indexPartition) {
+    indexWithWriteClient(metadataConfig, tableName, indexPartition);
+    metaClient = reload(metaClient);
+    assertTrue(metaClient.getTableConfig().getMetadataPartitions().contains(indexPartition));
+  }
+
+  /** Runs an indexing action for one index partition and lets any failure propagate. */
+  private void indexWithWriteClient(HoodieMetadataConfig metadataConfig, String tableName, String indexPartition) {
     HoodieWriteConfig writeConfig = getWriteConfigBuilder(basePath(), tableName)
         .withMetadataConfig(metadataConfig)
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
@@ -967,8 +1011,6 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
       assertTrue(instant.isPresent(), "scheduling " + indexPartition + " must return an instant");
       writeClient.index(instant.get());
     }
-    metaClient = reload(metaClient);
-    assertTrue(metaClient.getTableConfig().getMetadataPartitions().contains(indexPartition));
   }
 
   /** Secondary-index records in the metadata table whose secondary key starts with the prefix. */
