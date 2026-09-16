@@ -143,7 +143,7 @@ jobs:
           case "$rc" in
             0) echo "drift=false" >> "$GITHUB_OUTPUT" ;;
             1) echo "drift=true" >> "$GITHUB_OUTPUT"
-               # Surface drift on a green run, PRs included.
+               # The run stays green, so the warning is what shows drift in the run log.
                echo "::warning title=Dependency drift::$(grep -m1 'version mismatch(es)' "$RUNNER_TEMP/drift.md")" ;;
             # A broken comparison must fail loudly, never read as "no drift".
             *) echo "ERROR: check_dependency_drift.py exited $rc" >&2; exit "$rc" ;;
@@ -178,20 +178,30 @@ jobs:
         with:
           script: |
             const fs = require('fs');
+            const label = 'trino-dependency-drift';
+            // Kept for continuity with the issues already filed; the lookup is by label.
             const marker = '<!-- hudi-trino-dependency-drift -->';
             const table = fs.readFileSync('drift/drift.md', 'utf8');
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const shortSha = process.env.TRINO_SHA.substring(0, 12);
             // Drift persists until someone aligns the versions. Comment on the open report
-            // instead of filing a fresh issue every night.
-            const existing = await github.rest.search.issuesAndPullRequests({
-              q: `repo:${context.repo.owner}/${context.repo.repo} is:issue is:open in:body "${marker}"`,
+            // instead of filing a fresh issue every night. The lookup goes by label, not
+            // by the marker: issue search tokenizes the quoted marker, so it matches
+            // unrelated issues, and its index is only eventually consistent. GitHub
+            // creates the label on the first issue that uses it.
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: [label],
+              state: 'open',
             });
-            if (existing.data.total_count > 0) {
+            // listForRepo also returns pull requests that carry the label.
+            const issue = existing.data.find((candidate) => !candidate.pull_request);
+            if (issue) {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: existing.data.items[0].number,
+                issue_number: issue.number,
                 body: `Drift against Trino at ${shortSha}. See ${runUrl}.\n\n${table}`,
               });
               return;
@@ -200,5 +210,6 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               title: `hudi-trino dependency drift against Trino at ${shortSha}`,
+              labels: [label],
               body: `${marker}\nhudi-trino's test classpath and the plugin's classpath resolve different versions of the libraries below (see #19958). See ${runUrl}.\n\n${table}`,
             });
