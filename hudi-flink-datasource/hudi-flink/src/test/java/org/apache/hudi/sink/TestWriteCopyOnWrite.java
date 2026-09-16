@@ -46,6 +46,8 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.sink.partitioner.index.IndexRowUtils;
+import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
 import org.apache.hudi.sink.utils.TestWriteBase;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -55,7 +57,9 @@ import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestUtils;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.StringData;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -1031,6 +1035,29 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         // the first inflight cache will not be cleaned, since the current total memory size does not exceed the limit.
         .assertInflightCachesOfBucketAssigner(2)
         .checkWrittenData(EXPECTED1);
+  }
+
+  @Test
+  public void testIndexWriteFunctionWithSmallBuffer() throws Exception {
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+    conf.setString(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "true");
+    conf.set(FlinkOptions.INDEX_RLI_WRITE_BUFFER_SIZE, 1L);
+
+    StreamWriteFunctionWrapper<RowData> pipeline =
+        (StreamWriteFunctionWrapper<RowData>) TestData.getWritePipeline(tempFile.getAbsolutePath(), conf);
+    pipeline.openFunction();
+    try {
+      // The record cannot fit even after flushing and resetting the 1 MB index buffer.
+      RowData indexRow = GenericRowData.of(IndexRowUtils.RLI_TYPE,
+          StringData.fromString("k".repeat(2 * 1024 * 1024)),
+          StringData.fromString("par1"), StringData.fromString("file1"));
+      HoodieException exception = assertThrows(HoodieException.class,
+          () -> pipeline.getIndexWriteFunction().processElement(indexRow, null, null));
+      assertEquals("Index write buffer is too small to hold a single record.", exception.getMessage());
+    } finally {
+      pipeline.close();
+    }
   }
 
   @Test
