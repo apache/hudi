@@ -121,7 +121,8 @@ if [[ -z "$IMAGE" ]]; then
   IMAGE="hudi-trino-server:${TRINO_SHA}"
 fi
 
-export MAVEN_OPTS="${MAVEN_OPTS:--Xmx4g}"
+# No MAVEN_OPTS default: trino's .mvn/jvm.config asks for -Xmx8192m and Maven's launcher
+# appends MAVEN_OPTS after it, so a default here would halve the heap for the build below.
 
 # Why the whole repo (minus docs) instead of -pl :trino-server -am: the server's provisio
 # descriptors pull in plugin zips that are not Maven dependencies, so -am would not build
