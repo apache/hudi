@@ -25,7 +25,9 @@ outputs and prints a Markdown table of the libraries whose versions differ.
 Only dependencies present on both classpaths are compared: a library on one
 side alone cannot run with a different version at runtime. org.apache.hudi and
 io.trino artifacts are skipped because both sides take them from the same
-source of truth.
+source of truth. Artifacts are keyed by groupId:artifactId, plus the classifier
+when there is one, so an artifact and its tests/shaded sibling stay separate
+rows.
 
 Exit codes: 0 no drift, 1 drift found, 2 usage or parse error.
 """
@@ -36,22 +38,49 @@ import sys
 
 ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 SKIPPED_GROUPS = ("org.apache.hudi", "io.trino")
+RESOLVED_HEADER = "The following files have been resolved:"
+# What dependency:list writes under the header for a scope with no dependencies.
+EMPTY_MARKER = "none"
+
+
+class DependencyListError(Exception):
+    """A dependency:list file did not parse as a dependency listing."""
 
 
 def parse_dependency_list(path):
-    """Returns {groupId:artifactId: set(versions)} parsed from a dependency:list file."""
+    """Returns {groupId:artifactId[:classifier]: set(versions)} from a dependency:list file.
+
+    Parsing is strict: once the resolved-files header is seen, every non-blank line
+    must be a dependency coordinate. A format change that silently dropped most
+    lines would otherwise be reported as "0 version mismatch(es)", i.e. as no drift.
+    """
     deps = {}
+    started = False
     with open(path, encoding="utf-8") as handle:
-        for raw in handle:
+        for number, raw in enumerate(handle, start=1):
             line = ANSI_ESCAPE.sub("", raw).strip()
+            if not line:
+                continue
+            if line == RESOLVED_HEADER:
+                # The reference listing concatenates one file per scope, so the
+                # header can show up more than once.
+                started = True
+                continue
+            if not started or line == EMPTY_MARKER:
+                # Whatever Maven printed ahead of the first header, and empty scopes.
+                continue
             # Drop the JPMS " -- module ..." suffix and markers such as " (optional)".
-            coordinate = line.split(" -- ")[0].split()[0] if line else ""
+            coordinate = line.split(" -- ")[0].split()[0]
             fields = coordinate.split(":")
             # groupId:artifactId:type:version:scope or
             # groupId:artifactId:type:classifier:version:scope
             if len(fields) not in (5, 6) or not all(fields):
-                continue
+                raise DependencyListError(
+                    f"{path} line {number} is not a dependency coordinate: {line}")
+            classifier = fields[3] if len(fields) == 6 else ""
             key = f"{fields[0]}:{fields[1]}"
+            if classifier:
+                key = f"{key}:{classifier}"
             deps.setdefault(key, set()).add(fields[-2])
     return deps
 
@@ -99,6 +128,10 @@ def main(argv=None):
             deps = parse_dependency_list(path)
         except OSError as error:
             print(f"ERROR: cannot read {path}: {error}", file=sys.stderr)
+            return 2
+        except DependencyListError as error:
+            # A partial parse must fail loudly, never read as "no drift".
+            print(f"ERROR: {label} listing: {error}", file=sys.stderr)
             return 2
         if not deps:
             # An empty list means the Maven step produced nothing; never report "no drift".
