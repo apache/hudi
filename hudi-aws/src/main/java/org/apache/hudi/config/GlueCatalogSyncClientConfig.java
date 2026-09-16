@@ -105,10 +105,13 @@ public class GlueCatalogSyncClientConfig extends HoodieConfig {
           + "Enabling this configuration will drop and create the table to match the Hoodie config");
 
   public static final ConfigProperty<String> GLUE_CATALOG_ID = ConfigProperty
-      .key(GLUE_CLIENT_PROPERTY_PREFIX + "catalogId")
+      .key(GLUE_CLIENT_PROPERTY_PREFIX + "catalog_id")
       .noDefaultValue()
       .sinceVersion("1.1.0")
       .markAdvanced()
+      .withAlternatives(
+          GLUE_CLIENT_PROPERTY_PREFIX + "catalogId",
+          GLUE_CLIENT_PROPERTY_PREFIX + "catalogid")
       .withDocumentation("The catalogId needs to be populated for syncing hoodie tables in a different AWS account");
 
   public static final ConfigProperty<String> GLUE_SYNC_DATABASE_NAME = ConfigProperty

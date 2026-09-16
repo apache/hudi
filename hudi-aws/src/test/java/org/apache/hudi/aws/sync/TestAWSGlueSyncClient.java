@@ -327,6 +327,20 @@ class TestAWSGlueSyncClient {
   }
 
   @Test
+  void testGetCatalogId_GivenLowercaseKey_WhenReadingConfig_ThenReturnsConfiguredValue() {
+    // Spark's DataFrameWriter lower-cases every option key, so a config set via
+    // .option("hoodie.datasource.meta.sync.glue.catalogId", ...) arrives here as
+    // "hoodie.datasource.meta.sync.glue.catalogid".
+    String lowercaseKey = "hoodie.datasource.meta.sync.glue.catalogid";
+    String configuredCatalogId = "222222222222";
+    TypedProperties properties = GlueTestUtil.getHiveSyncConfig().getProps();
+    properties.setProperty(lowercaseKey, configuredCatalogId);
+    HiveSyncConfig hiveSyncConfig = new HiveSyncConfig(properties);
+    assertEquals(configuredCatalogId, hiveSyncConfig.getStringOrDefault(GlueCatalogSyncClientConfig.GLUE_CATALOG_ID, "fallback"),
+        "lowercase catalogId key should resolve through withAlternatives, not fall back");
+  }
+
+  @Test
   void testGetTableLocation_ThrowsException() {
     String tableName = "testTable";
     // mock aws glue get table call to throw an exception
