@@ -105,6 +105,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.TimeZone;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import static org.apache.avro.Schema.Type.ARRAY;
@@ -167,6 +168,13 @@ public class HoodieAvroUtils {
   public static final Conversions.DecimalConversion DECIMAL_CONVERSION = new Conversions.DecimalConversion();
 
   private static final Properties PROPERTIES = new Properties();
+
+  /**
+   * Generated SpecificRecord classes keyed by schema full name, mirroring the class cache inside
+   * {@link SpecificData#getClass(Schema)} that the direct {@code Class.forName} lookup in
+   * {@link #getSpecificRecordClass(Schema, SpecificData)} bypasses. Bounded because only compiled SCHEMA$ schemas reach it.
+   */
+  private static final Map<String, Class<? extends SpecificRecordBase>> SPECIFIC_RECORD_CLASS_CACHE = new ConcurrentHashMap<>();
 
   /**
    * Resolves the Avro library version, preferring Maven's generated pom.properties over
@@ -1767,14 +1775,18 @@ public class HoodieAvroUtils {
    * {@link SpecificData#getClass(Schema)}), which rejects Hudi's generated classes.
    *
    * <p>Only pass schemas taken from a compiled SCHEMA$, never a schema read from storage, which is what the validation guards against.
+   *
+   * <p>The result is cached by schema full name so the per-record path does not pay {@code Class.forName}.
    */
   private static Class<? extends SpecificRecordBase> getSpecificRecordClass(Schema recordSchema, SpecificData specificData) {
-    String className = SpecificData.getClassName(recordSchema);
-    try {
-      return Class.forName(className, false, specificData.getClassLoader()).asSubclass(SpecificRecordBase.class);
-    } catch (ClassNotFoundException e) {
-      throw new HoodieException("Failed to load SpecificRecord class " + className + " for Avro schema " + recordSchema.getFullName(), e);
-    }
+    return SPECIFIC_RECORD_CLASS_CACHE.computeIfAbsent(recordSchema.getFullName(), fullName -> {
+      String className = SpecificData.getClassName(recordSchema);
+      try {
+        return Class.forName(className, false, specificData.getClassLoader()).asSubclass(SpecificRecordBase.class);
+      } catch (ClassNotFoundException e) {
+        throw new HoodieException("Failed to load SpecificRecord class " + className + " for Avro schema " + fullName, e);
+      }
+    });
   }
 
   private static Object convertFieldToSpecificRecordValue(Schema fieldSchema, Object value, SpecificData specificData) {
