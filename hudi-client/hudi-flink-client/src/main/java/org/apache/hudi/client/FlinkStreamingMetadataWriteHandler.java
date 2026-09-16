@@ -107,6 +107,19 @@ public class FlinkStreamingMetadataWriteHandler extends StreamingMetadataWriteHa
   }
 
   /**
+   * Wait for the metadata heartbeat started for recommit without starting a new metadata commit.
+   */
+  public void awaitHeartbeat(String instantTime, long timeoutMs) {
+    Option<HoodieTableMetadataWriter> metadataWriterOpt = this.metadataWriterMap.get(instantTime);
+    ValidationUtils.checkState(metadataWriterOpt != null && metadataWriterOpt.isPresent(),
+        "Metadata writer must be initialized before waiting for its heartbeat");
+    FlinkHoodieBackedTableMetadataWriter metadataWriter = (FlinkHoodieBackedTableMetadataWriter) metadataWriterOpt.get();
+    if (metadataWriter.getWriteClient().getConfig().getFailedWritesCleanPolicy().isLazy()) {
+      metadataWriter.getWriteClient().getHeartbeatClient().awaitHeartbeat(instantTime, timeoutMs);
+    }
+  }
+
+  /**
    * Clean resources after streaming write to the metadata table in index write function or stop
    * heartbeat for instant in the coordinator. This method removes the metadata writer associated
    * with the given instant time from the internal map and closes it if it exists.

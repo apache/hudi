@@ -57,6 +57,8 @@ import static org.apache.hudi.common.heartbeat.HoodieHeartbeatUtils.getLastHeart
 @Slf4j
 public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
 
+  private static final long HEARTBEAT_POLL_INTERVAL_MS = 100;
+
   private final transient HoodieStorage storage;
   private final String basePath;
   // path to the heartbeat folder where all writers are updating their heartbeats
@@ -102,7 +104,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
     private String instantTime;
     private boolean isHeartbeatStarted = false;
     private boolean isHeartbeatStopped = false;
-    private Long lastHeartbeatTime;
+    private volatile Long lastHeartbeatTime;
     private Integer numHeartbeats = 0;
     private ScheduledExecutorService heartbeatScheduler =
         Executors.newSingleThreadScheduledExecutor(new CustomizedThreadFactory("heartbeat_scheduler", true));
@@ -144,12 +146,43 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
     Heartbeat newHeartbeat = new Heartbeat();
     newHeartbeat.setHeartbeatStarted(true);
     instantToHeartbeatMap.put(instantTime, newHeartbeat);
-    // Ensure heartbeat is generated for the first time with this blocking call.
-    // Since scheduler submits the task to a thread, no guarantee when that thread will get CPU
-    // cycles to generate the first heartbeat.
+    // Attempt the first heartbeat synchronously. A timed-out write is retried by the scheduler;
+    // callers that need a confirmed heartbeat before proceeding can use awaitHeartbeat().
     updateHeartbeat(instantTime);
     newHeartbeat.setScheduledFuture(newHeartbeat.getHeartbeatScheduler().scheduleAtFixedRate(
         new HeartbeatTask(instantTime), this.heartbeatIntervalInMs, this.heartbeatIntervalInMs, TimeUnit.MILLISECONDS));
+  }
+
+  /**
+   * Wait until this client has successfully written a heartbeat for an instant started with {@link #start(String)}.
+   * A timeout does not stop background retries. This method only confirms a successful write;
+   * callers must still perform the regular commit-time heartbeat expiry check.
+   *
+   * @param instantTime The instant time
+   * @param timeoutMs Maximum time to wait in milliseconds; zero only checks readiness
+   */
+  public void awaitHeartbeat(String instantTime, long timeoutMs) {
+    ValidationUtils.checkArgument(timeoutMs >= 0, "Heartbeat wait timeout must not be negative");
+    Heartbeat heartbeat = instantToHeartbeatMap.get(instantTime);
+    ValidationUtils.checkArgument(heartbeat != null, "Heartbeat has not been started for instant " + instantTime + " in " + basePath);
+    long waitStarted = System.nanoTime();
+    long timeoutNanos = TimeUnit.MILLISECONDS.toNanos(timeoutMs);
+    try {
+      // Only a confirmed write updates this volatile field, whether in start() or a scheduled retry.
+      while (heartbeat.getLastHeartbeatTime() == null) {
+        long remainingNanos = timeoutNanos - (System.nanoTime() - waitStarted);
+        if (remainingNanos <= 0) {
+          throw new TimeoutException();
+        }
+        TimeUnit.NANOSECONDS.sleep(Math.min(remainingNanos, TimeUnit.MILLISECONDS.toNanos(HEARTBEAT_POLL_INTERVAL_MS)));
+      }
+    } catch (TimeoutException e) {
+      throw new HoodieHeartbeatException("Timed out waiting " + timeoutMs + " ms for the first heartbeat for instant "
+          + instantTime + " in " + basePath, e);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new HoodieHeartbeatException("Interrupted while waiting for heartbeat for instant " + instantTime + " in " + basePath, e);
+    }
   }
 
   /**
