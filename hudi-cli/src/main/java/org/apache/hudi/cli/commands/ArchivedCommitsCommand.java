@@ -85,8 +85,12 @@ public class ArchivedCommitsCommand {
     String sparkPropertiesPath =
         Utils.getDefaultPropertiesFile(convertJavaPropertiesToScalaMap(System.getProperties()));
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    SparkMain.addAppArgs(sparkLauncher, SparkCommand.ARCHIVE, master, sparkMemory, Integer.toString(minCommits), Integer.toString(maxCommits),
-        Integer.toString(retained), Boolean.toString(enableMetadata), HoodieCLI.basePath);
+    SparkMain.addNamedAppArgs(sparkLauncher, SparkCommand.ARCHIVE, master, sparkMemory,
+        "minCommits", Integer.toString(minCommits),
+        "maxCommits", Integer.toString(maxCommits),
+        "commitsRetained", Integer.toString(retained),
+        "enableMetadata", Boolean.toString(enableMetadata),
+        "basePath", HoodieCLI.basePath);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();

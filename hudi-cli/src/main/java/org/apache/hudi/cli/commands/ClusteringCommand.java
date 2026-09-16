@@ -60,8 +60,10 @@ public class ClusteringCommand {
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
 
     String tableName = client.getTableConfig().getTableName();
-    SparkMain.addAppArgs(sparkLauncher, SparkCommand.CLUSTERING_SCHEDULE, master, sparkMemory,
-        HoodieCLI.basePath, tableName, propsFilePath);
+    SparkMain.addNamedAppArgs(sparkLauncher, SparkCommand.CLUSTERING_SCHEDULE, master, sparkMemory,
+        "basePath", HoodieCLI.basePath,
+        "tableName", tableName,
+        "propsFilePath", propsFilePath);
     UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
@@ -99,9 +101,13 @@ public class ClusteringCommand {
     String sparkPropertiesPath =
         Utils.getDefaultPropertiesFile(JavaConverters.mapAsScalaMapConverter(System.getenv()).asScala());
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    SparkMain.addAppArgs(sparkLauncher, SparkCommand.CLUSTERING_RUN, master, sparkMemory,
-        HoodieCLI.basePath, client.getTableConfig().getTableName(), clusteringInstantTime,
-        parallelism, retry, propsFilePath);
+    SparkMain.addNamedAppArgs(sparkLauncher, SparkCommand.CLUSTERING_RUN, master, sparkMemory,
+        "basePath", HoodieCLI.basePath,
+        "tableName", client.getTableConfig().getTableName(),
+        "clusteringInstant", clusteringInstantTime,
+        "parallelism", parallelism,
+        "retry", retry,
+        "propsFilePath", propsFilePath);
     UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
@@ -136,8 +142,12 @@ public class ClusteringCommand {
     String sparkPropertiesPath =
         Utils.getDefaultPropertiesFile(JavaConverters.mapAsScalaMapConverter(System.getenv()).asScala());
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    SparkMain.addAppArgs(sparkLauncher, SparkCommand.CLUSTERING_SCHEDULE_AND_EXECUTE, master, sparkMemory,
-        HoodieCLI.basePath, client.getTableConfig().getTableName(), parallelism, retry, propsFilePath);
+    SparkMain.addNamedAppArgs(sparkLauncher, SparkCommand.CLUSTERING_SCHEDULE_AND_EXECUTE, master, sparkMemory,
+        "basePath", HoodieCLI.basePath,
+        "tableName", client.getTableConfig().getTableName(),
+        "parallelism", parallelism,
+        "retry", retry,
+        "propsFilePath", propsFilePath);
     UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);

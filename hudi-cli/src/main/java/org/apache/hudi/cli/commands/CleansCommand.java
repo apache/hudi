@@ -142,7 +142,9 @@ public class CleansCommand {
         Utils.getDefaultPropertiesFile(JavaConverters.mapAsScalaMapConverter(System.getenv()).asScala());
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
 
-    SparkMain.addAppArgs(sparkLauncher, SparkMain.SparkCommand.CLEAN, master, sparkMemory, HoodieCLI.basePath, propsFilePath);
+    SparkMain.addNamedAppArgs(sparkLauncher, SparkMain.SparkCommand.CLEAN, master, sparkMemory,
+        "basePath", HoodieCLI.basePath,
+        "propsFilePath", propsFilePath);
     UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
