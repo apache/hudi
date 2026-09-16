@@ -31,7 +31,6 @@ import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
-import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
@@ -46,7 +45,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.StreamSupport;
 
 /**
  * Base infrastructures for streaming writer function.
@@ -101,11 +99,6 @@ public abstract class AbstractStreamWriteFunction<I>
   private transient ListState<WriteMetadataEvent> writeMetadataState;
 
   /**
-   * List state of the JobID.
-   */
-  private transient ListState<JobID> jobIdState;
-
-  /**
    * Write status list for the current checkpoint.
    */
   protected List<WriteStatus> writeStatuses;
@@ -141,15 +134,13 @@ public abstract class AbstractStreamWriteFunction<I>
             "write-metadata-state",
             TypeInformation.of(WriteMetadataEvent.class)
         ));
-    this.jobIdState = context.getOperatorStateStore().getListState(
-        new ListStateDescriptor<>(
-            "job-id-state",
-            TypeInformation.of(JobID.class)
-        ));
 
     int attemptId = RuntimeContextUtils.getAttemptNumber(getRuntimeContext());
     if (context.isRestored()) {
-      initCheckpointId(attemptId, context.getRestoredCheckpointId().orElse(-1L));
+      // sets up the known checkpoint id as the last successful checkpoint id for purposes of:
+      // 1). old events cleaning;
+      // 2). instant time request for current checkpoint.
+      this.checkpointId = context.getRestoredCheckpointId().orElse(-1L);
     }
     sendBootstrapEvent(attemptId, context.isRestored());
   }
@@ -162,8 +153,6 @@ public abstract class AbstractStreamWriteFunction<I>
     snapshotState();
     // Reload the snapshot state as the current state.
     reloadWriteMetaState();
-    // Reload the job ID state
-    reloadJobIdState();
     // Update checkpoint id
     this.checkpointId = functionSnapshotContext.getCheckpointId();
   }
@@ -199,24 +188,7 @@ public abstract class AbstractStreamWriteFunction<I>
   //  Utilities
   // -------------------------------------------------------------------------
 
-  private void initCheckpointId(int attemptId, long restoredCheckpointId) throws Exception {
-    if (attemptId <= 0) {
-      // returns early if the job/task is initially started.
-      return;
-    }
-    JobID currentJobId = RuntimeContextUtils.getJobId(getRuntimeContext());
-    if (StreamSupport.stream(this.jobIdState.get().spliterator(), false)
-        .noneMatch(currentJobId::equals)) {
-      // do not set up the checkpoint id if the state comes from the old job.
-      return;
-    }
-    // sets up the known checkpoint id as the last successful checkpoint id for purposes of:
-    // 1). old events cleaning;
-    // 2). instant time request for current checkpoint.
-    this.checkpointId = restoredCheckpointId;
-  }
-
-  private void sendBootstrapEvent(int attemptId, boolean isRestored) throws Exception {
+  protected void sendBootstrapEvent(int attemptId, boolean isRestored) throws Exception {
     if (attemptId <= 0) {
       if (isRestored) {
         HoodieTimeline pendingTimeline = this.metaClient.getActiveTimeline().filterPendingExcludingCompaction();
@@ -255,14 +227,6 @@ public abstract class AbstractStreamWriteFunction<I>
         .build();
     this.writeMetadataState.add(event);
     writeStatuses.clear();
-  }
-
-  /**
-   * Reload job id state as current job id.
-   */
-  private void reloadJobIdState() throws Exception {
-    this.jobIdState.clear();
-    this.jobIdState.add(RuntimeContextUtils.getJobId(getRuntimeContext()));
   }
 
   public void handleOperatorEvent(OperatorEvent event) {
