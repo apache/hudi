@@ -18,20 +18,15 @@
 
 package org.apache.hudi.adapter;
 
-import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.connector.sink2.WithPreWriteTopology;
 
 /**
- * {@code SupportsPreWriteTopology} is introduced for Sink V2 since Flink 1.19,
- * We add the adapter here to just make the compilation successful for earlier
- * Flink versions (< 1.19).
+ * Adapter clazz for {@code SupportsPreWriteTopology}.
+ *
+ * <p>{@code SupportsPreWriteTopology} only exists since Flink 1.19, where it was split out of
+ * {@link WithPreWriteTopology}; both declare the same {@code addPreWriteTopology} method, and
+ * Flink 1.18 dispatches on {@link WithPreWriteTopology} in {@code SinkTransformationTranslator}.
+ * Extending it here keeps the pre-write topology hook wired for Flink 1.18 as well.
  */
-public interface SupportsPreWriteTopologyAdapter<InputT> {
-  /**
-   * Adds an arbitrary topology before the writer. The topology may be used to repartition the
-   * data.
-   *
-   * @param inputDataStream the stream of input records.
-   * @return the custom topology before {@code SinkWriter}.
-   */
-  DataStream<InputT> addPreWriteTopology(DataStream<InputT> inputDataStream);
+public interface SupportsPreWriteTopologyAdapter<InputT> extends WithPreWriteTopology<InputT> {
 }
