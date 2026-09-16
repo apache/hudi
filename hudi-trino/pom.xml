@@ -45,18 +45,18 @@
              which beats the imported trino-root BOM. Bump when
              .github/workflows/hudi_trino_dependency_drift.yml reports drift. -->
         <!-- Floor 2.16: airlift uses StreamReadConstraints.Builder.maxNameLength. -->
-        <fasterxml.version>2.22.2</fasterxml.version>
-        <fasterxml.jackson.databind.version>2.22.2</fasterxml.jackson.databind.version>
-        <!-- Since Jackson 2.20 annotations drop the patch; jackson-bom 2.22.2 pins 2.22. -->
+        <fasterxml.version>2.22.1</fasterxml.version>
+        <fasterxml.jackson.databind.version>2.22.1</fasterxml.jackson.databind.version>
+        <!-- Since Jackson 2.20 annotations drop the patch; jackson-bom 2.22.1 pins 2.22. -->
         <fasterxml.jackson.annotation.version>2.22</fasterxml.jackson.annotation.version>
         <caffeine.version>3.2.4</caffeine.version>
-        <proto.version>4.36.0</proto.version>
-        <metrics.version>4.2.40</metrics.version>
+        <proto.version>4.35.1</proto.version>
+        <metrics.version>4.2.39</metrics.version>
         <!-- Floor 2.14.2: Trino's DateTimeZoneIndex needs its time-zone names. -->
-        <joda.version>2.14.3</joda.version>
-        <avro.version>1.12.2</avro.version>
+        <joda.version>2.14.2</joda.version>
+        <avro.version>1.12.1</avro.version>
         <log4j2.version>2.26.1</log4j2.version>
-        <roaringbitmap.version>1.6.20</roaringbitmap.version>
+        <roaringbitmap.version>1.6.15</roaringbitmap.version>
         <slf4j.version>2.0.18</slf4j.version>
         <snappy.version>1.1.10.8</snappy.version>
     </properties>
@@ -80,6 +80,18 @@
                 <groupId>org.eclipse.jetty</groupId>
                 <artifactId>jetty-server</artifactId>
                 <version>12.1.9</version>
+            </dependency>
+            <!-- trino-root manages only metrics-core, so the plugin bundles Alluxio's metrics-graphite
+                 and metrics-jmx at 4.1.11, while the root pom would pin them to metrics.version. -->
+            <dependency>
+                <groupId>io.dropwizard.metrics</groupId>
+                <artifactId>metrics-graphite</artifactId>
+                <version>4.1.11</version>
+            </dependency>
+            <dependency>
+                <groupId>io.dropwizard.metrics</groupId>
+                <artifactId>metrics-jmx</artifactId>
+                <version>4.1.11</version>
             </dependency>
             <!-- Hudi parent pins jersey-server at 2.17 (legacy javax). Trino runs on Jersey 4.x
                  (jakarta). The mixed-version classpath crashes with NoSuchFieldError on
