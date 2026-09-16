@@ -91,12 +91,12 @@ TRINO_VERSION=$(sed -n 's|.*<trino.version>\(.*\)</trino.version>.*|\1|p' pom.xm
 mvn -f docker/trino/shim/pom.xml clean package -DskipTests -Ddep.hudi.version="$HUDI_VERSION"
 unzip -o -q "docker/trino/shim/target/trino-hudi-$TRINO_VERSION.zip" -d docker/trino/shim/target  # trino-maven-plugin 24 emits only the zip
 
-# 4a. Optional, JDK 25: build the server image from a trinodb/trino checkout at trino.sha
+# 3a. Optional, JDK 25: build the server image from a trinodb/trino checkout at trino.sha
 #     (the same one bootstrap used). Builds the whole trino repo, so it takes a while.
 docker/trino/build_trino_server_image.sh /path/to/trino
 TRINO_SHA=$(sed -n 's|.*<trino.sha>\(.*\)</trino.sha>.*|\1|p' pom.xml)
 
-# 4. Build the Trino image (locally tagged; never published) on the server from 4a.
+# 4. Build the Trino image (locally tagged; never published) on the server from 3a.
 #    Without --base-image it falls back to the released trinodb/trino:<trino.e2e.version>
 #    (or --trino-version), which only boots when the pin's SPI matches that release.
 docker/trino/build_image.sh --plugin-dir "docker/trino/shim/target/trino-hudi-$TRINO_VERSION" \
