@@ -52,6 +52,7 @@ import org.apache.hudi.table.format.cdc.CdcIterators;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadTableState;
 import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.util.VectorConversionUtils;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.table.data.RowData;
@@ -63,6 +64,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -83,6 +85,9 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
   private transient HoodieTableMetaClient metaClient;
   // Fallback reader for non-CDC splits (e.g. snapshot reads when read.start-commit='earliest')
   private transient HoodieSplitReaderFunction fallbackReaderFunction;
+  private transient DataType[] readFieldTypes;
+  private transient Map<Integer, HoodieSchema.Vector> vectorColumnInfo;
+  private transient HoodieSchema requiredSchema;
 
   /**
    * Creates a CDC split reader function.
@@ -280,12 +285,19 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
   /** Reads a CDC base file returning required-schema records. */
   private ClosableIterator<RowData> getBaseFileIterator(String path) throws IOException {
     if (path.endsWith(HoodieFileFormat.LANCE.getFileExtension())) {
-      return FormatUtils.getLanceRecordIterator(
-          path, tableState.getRowType().getFieldNames(), fieldTypes, tableState.getRequiredPositions(), getHadoopConf());
+      if (requiredSchema == null) {
+        requiredSchema = HoodieSchemaCache.intern(HoodieSchema.parse(tableState.getRequiredSchema()));
+      }
+      return FormatUtils.getLanceRecordIterator(path, requiredSchema, getHadoopConf());
     }
 
-    String[] fieldNames = tableState.getRowType().getFieldNames().toArray(new String[0]);
-    DataType[] fieldTypesArray = fieldTypes.toArray(new DataType[0]);
+    if (readFieldTypes == null) {
+      HoodieSchema tableSchema = HoodieSchemaCache.intern(HoodieSchema.parse(tableState.getTableSchema()));
+      String[] fullFieldNames = tableState.getRowType().getFieldNames().toArray(new String[0]);
+      vectorColumnInfo = VectorConversionUtils.detectVectorColumns(fullFieldNames, tableState.getRequiredPositions(), tableSchema);
+      readFieldTypes = VectorConversionUtils.getParquetReadFieldTypes(fullFieldNames, fieldTypes.toArray(new DataType[0]), tableSchema);
+    }
+
     LinkedHashMap<String, Object> partObjects = FilePathUtils.generatePartitionSpecs(
             path,
             tableState.getRowType().getFieldNames(),
@@ -295,20 +307,23 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
             conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING)
     );
 
-    return RecordIterators.getParquetRecordIterator(
+    int[] requiredPositions = tableState.getRequiredPositions();
+    ClosableIterator<RowData> rows = RecordIterators.getParquetRecordIterator(
         internalSchemaManager,
         conf.get(FlinkOptions.READ_UTC_TIMEZONE),
         true,
         HadoopConfigurations.getParquetConf(conf, getHadoopConf()),
-        fieldNames,
-        fieldTypesArray,
+        tableState.getRowType().getFieldNames().toArray(new String[0]),
+        readFieldTypes,
         partObjects,
-        tableState.getRequiredPositions(),
+        requiredPositions,
         2048,
         new org.apache.flink.core.fs.Path(path),
         0,
         Long.MAX_VALUE,
         predicates);
+    return vectorColumnInfo.isEmpty() ? rows
+        : VectorConversionUtils.wrapVectorColumnIterator(rows, fieldTypes.toArray(new DataType[0]), requiredPositions, vectorColumnInfo);
   }
 
   private static FileSlice buildFileSlice(MergeOnReadInputSplit split) {

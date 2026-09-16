@@ -40,6 +40,7 @@ import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.RecordIterators;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.util.VectorConversionUtils;
 
 import lombok.Getter;
 import org.apache.flink.annotation.VisibleForTesting;
@@ -52,9 +53,11 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -83,12 +86,15 @@ public class MergeOnReadInputFormat
   /**
    * Full table names.
    */
-  private final List<String> fieldNames;
+  private final String[] fieldNames;
 
   /**
    * Full field data types.
    */
-  private final List<DataType> fieldTypes;
+  private final DataType[] fieldTypes;
+  private transient DataType[] readFieldTypes;
+  private transient Map<Integer, HoodieSchema.Vector> vectorColumnInfo;
+  private transient HoodieSchema requiredSchema;
 
   /**
    * Required field positions.
@@ -149,8 +155,8 @@ public class MergeOnReadInputFormat
       InternalSchemaManager internalSchemaManager) {
     this.conf = conf;
     this.tableState = tableState;
-    this.fieldNames = tableState.getRowType().getFieldNames();
-    this.fieldTypes = fieldTypes;
+    this.fieldNames = tableState.getRowType().getFieldNames().toArray(new String[0]);
+    this.fieldTypes = fieldTypes.toArray(new DataType[0]);
     // Needs improvement: this requiredPos is only suitable for parquet reader,
     // because we need to
     this.requiredPos = tableState.getRequiredPositions();
@@ -272,25 +278,34 @@ public class MergeOnReadInputFormat
 
   protected ClosableIterator<RowData> getBaseFileIterator(String path) throws IOException {
     if (path.endsWith(HoodieFileFormat.LANCE.getFileExtension())) {
-      return FormatUtils.getLanceRecordIterator(path, fieldNames, fieldTypes, requiredPos, hadoopConf);
+      if (requiredSchema == null) {
+        requiredSchema = HoodieSchemaCache.intern(HoodieSchema.parse(tableState.getRequiredSchema()));
+      }
+      return FormatUtils.getLanceRecordIterator(path, requiredSchema, hadoopConf);
+    }
+
+    if (readFieldTypes == null) {
+      HoodieSchema tableSchema = HoodieSchema.parse(tableState.getTableSchema());
+      vectorColumnInfo = VectorConversionUtils.detectVectorColumns(fieldNames, requiredPos, tableSchema);
+      readFieldTypes = VectorConversionUtils.getParquetReadFieldTypes(fieldNames, fieldTypes, tableSchema);
     }
 
     LinkedHashMap<String, Object> partObjects = FilePathUtils.generatePartitionSpecs(
         path,
-        fieldNames,
-        fieldTypes,
+        Arrays.asList(fieldNames),
+        Arrays.asList(fieldTypes),
         conf.get(FlinkOptions.PARTITION_DEFAULT_NAME),
         conf.get(FlinkOptions.PARTITION_PATH_FIELD),
         conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING)
     );
 
-    return RecordIterators.getParquetRecordIterator(
+    ClosableIterator<RowData> rows = RecordIterators.getParquetRecordIterator(
         internalSchemaManager,
         this.conf.get(FlinkOptions.READ_UTC_TIMEZONE),
         true,
         HadoopConfigurations.getParquetConf(this.conf, hadoopConf),
-        fieldNames.toArray(new String[0]),
-        fieldTypes.toArray(new DataType[0]),
+        fieldNames,
+        readFieldTypes,
         partObjects,
         requiredPos,
         2048,
@@ -298,6 +313,8 @@ public class MergeOnReadInputFormat
         0,
         Long.MAX_VALUE, // read the whole file
         predicates);
+    return vectorColumnInfo.isEmpty() ? rows
+        : VectorConversionUtils.wrapVectorColumnIterator(rows, fieldTypes, requiredPos, vectorColumnInfo);
   }
 
   /**
