@@ -61,7 +61,7 @@ import static org.apache.hudi.common.function.FunctionWrapper.throwingReduceWrap
 /**
  * A java based engine context, use this implementation on the query engine integrations if needed.
  */
-public final class HoodieLocalEngineContext extends HoodieEngineContext {
+public class HoodieLocalEngineContext extends HoodieEngineContext {
 
   public HoodieLocalEngineContext(StorageConfiguration<?> conf) {
     this(conf, new LocalTaskContextSupplier());
