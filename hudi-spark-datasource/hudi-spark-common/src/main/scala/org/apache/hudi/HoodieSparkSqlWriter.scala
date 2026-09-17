@@ -41,7 +41,7 @@ import org.apache.hudi.common.util.{CommitUtils, ConfigUtils, Option => HOption,
 import org.apache.hudi.common.util.ConfigUtils.getAllConfigKeys
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME}
-import org.apache.hudi.config.HoodieWriteConfig.{SPARK_SQL_MERGE_INTO_PREPPED_KEY, WRITE_TABLE_VERSION}
+import org.apache.hudi.config.HoodieWriteConfig.{SPARK_SQL_MERGE_INTO_PREPPED_KEY, SPARK_SQL_MERGE_INTO_WRITES_KEY, WRITE_TABLE_VERSION}
 import org.apache.hudi.exception.{HoodieException, HoodieRecordCreationException, HoodieWriteConflictException}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.hive.{HiveSyncConfigHolder, HiveSyncTool}
@@ -107,7 +107,7 @@ object HoodieSparkSqlWriter {
    * for writes from merge into. This config is used for internal purposes.
    */
   val SQL_MERGE_INTO_WRITES: ConfigProperty[Boolean] =
-    ConfigProperty.key("hoodie.internal.sql.merge.into.writes")
+    ConfigProperty.key(SPARK_SQL_MERGE_INTO_WRITES_KEY)
       .defaultValue(false)
 
   /**

@@ -52,8 +52,10 @@ import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.SizeEstimator;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
@@ -137,6 +139,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
   private final Properties recordProperties = new Properties();
   private final String[] orderingFields;
+  // True when this write comes from a Spark SQL MERGE INTO statement; read once here rather than
+  // per record, since bufferDelete is on the per-record path.
+  private final boolean sqlMergeIntoWrite;
 
   /**
    * This is used by log compaction only.
@@ -171,6 +176,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     this.statuses = new ArrayList<>();
     this.recordProperties.putAll(config.getProps());
     this.orderingFields = ConfigUtils.getOrderingFields(recordProperties);
+    this.sqlMergeIntoWrite = config.getBooleanOrDefault(HoodieWriteConfig.SPARK_SQL_MERGE_INTO_WRITES_KEY, false);
     boolean shouldWriteRecordPositions = config.shouldWriteRecordPositions()
         // record positions supported only from table version 8
         && config.getWriteVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT);
@@ -664,10 +670,44 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     hoodieRecord.seal();
     recordsDeleted++;
 
-    // store ordering value with Java type.
-    final Comparable<?> orderingVal = hoodieRecord.getOrderingValueAsJava(writeSchema, recordProperties, orderingFields);
+    final Comparable<?> orderingVal = getDeleteOrderingValue(hoodieRecord);
     long position = baseFileInstantTimeOfPositions.isPresent() ? hoodieRecord.getCurrentPosition() : -1L;
     recordsToDeleteWithPositions.add(Pair.of(DeleteRecord.create(hoodieRecord.getKey(), orderingVal), position));
+  }
+
+  /**
+   * Ordering value to stamp on a delete record.
+   *
+   * <p>A delete issued by a Spark SQL {@code MERGE INTO} statement is unconditional: it carries the
+   * default ordering value, which makes the reader treat it as a commit time ordered delete and
+   * apply it whatever the stored record holds. That matches COW, where the delete is resolved at
+   * write time without consulting the ordering value, and {@code DELETE FROM}, which already
+   * behaves this way on both table types. Every other writer, ingestion and CDC in particular,
+   * keeps event time semantics and passes its own ordering value through.
+   *
+   * <p>Log compaction is excluded even when it runs under a MERGE INTO write config, which inline
+   * log compaction does because it reuses the same config: the records it rewrites are pre-existing
+   * log records, not the statement's own. Stamping the default on one of those would make an
+   * unrelated ingestion delete unconditional for every later read, so a subsequent upsert older
+   * than the delete would resurrect the record.
+   */
+  @VisibleForTesting
+  Comparable<?> getDeleteOrderingValue(HoodieRecord<T> hoodieRecord) {
+    return stampsStatementIssuedDeletes()
+        ? OrderingValues.getDefault()
+        : hoodieRecord.getOrderingValueAsJava(writeSchema, recordProperties, orderingFields);
+  }
+
+  /**
+   * Whether the deletes this handle buffers were issued by the Spark SQL {@code MERGE INTO}
+   * statement that owns the write, and so should carry the default ordering value.
+   *
+   * <p>Subclasses that rewrite pre-existing records rather than the statement's own must return
+   * false, even though they run under the statement's write config. A table service inherits the
+   * config of the client that scheduled it, so the config alone cannot tell the two apart.
+   */
+  protected boolean stampsStatementIssuedDeletes() {
+    return sqlMergeIntoWrite && !isLogCompaction;
   }
 
   /**

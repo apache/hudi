@@ -71,6 +71,17 @@ public class FileGroupReaderBasedAppendHandle<T, I, K, O> extends HoodieAppendHa
     this.readerContext = readerContext;
   }
 
+  /**
+   * Log compaction rewrites the records already in the file group's log files, rebuilt here from
+   * the file group reader, not the records of whatever statement scheduled it. Stamping the
+   * default ordering value on one of those would make an unrelated ingestion delete unconditional
+   * for every later read, so a subsequent upsert older than that delete would resurrect the record.
+   */
+  @Override
+  protected boolean stampsStatementIssuedDeletes() {
+    return false;
+  }
+
   @Override
   public void doAppend() {
     boolean usePosition = config.getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);

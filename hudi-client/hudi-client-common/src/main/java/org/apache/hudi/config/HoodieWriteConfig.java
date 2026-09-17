@@ -993,6 +993,14 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final String SPARK_SQL_MERGE_INTO_PREPPED_KEY = "_hoodie.spark.sql.merge.into.prepped";
 
   /**
+   * Config key with boolean value marking the write as originating from a Spark SQL
+   * {@code MERGE INTO} statement. Set by {@code MergeIntoHoodieTableCommand}; mirrors
+   * {@code HoodieSparkSqlWriter#SQL_MERGE_INTO_WRITES}, which lives in the Spark module and so is
+   * not referenceable from here.
+   */
+  public static final String SPARK_SQL_MERGE_INTO_WRITES_KEY = "hoodie.internal.sql.merge.into.writes";
+
+  /**
    * An internal config referring to fileID encoding. 0 refers to UUID based encoding and 1 refers to raw string format(random string).
    */
   public static final String WRITES_FILEID_ENCODING = "_hoodie.writes.fileid.encoding";
