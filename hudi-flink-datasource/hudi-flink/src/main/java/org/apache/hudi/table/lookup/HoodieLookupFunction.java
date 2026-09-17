@@ -165,6 +165,7 @@ public class HoodieLookupFunction extends LookupFunction implements Serializable
             cache.addRow(key, rowData);
           }
         }
+        cache.flush();
         currentCommit = latestCommitInstant.get();
         scheduleNextLoad();
         log.info("Loaded {} row(s) into lookup join cache", count);
