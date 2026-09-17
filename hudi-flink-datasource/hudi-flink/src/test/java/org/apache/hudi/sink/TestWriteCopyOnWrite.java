@@ -19,6 +19,7 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieListData;
@@ -45,7 +46,10 @@ import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.io.HoodieWriteMergeHandle;
+import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.sink.partitioner.index.IndexRowUtils;
+import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
 import org.apache.hudi.sink.utils.TestWriteBase;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -55,7 +59,10 @@ import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestUtils;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.StringData;
+import org.apache.flink.table.data.TimestampData;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -64,6 +71,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -1031,6 +1039,83 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         // the first inflight cache will not be cleaned, since the current total memory size does not exceed the limit.
         .assertInflightCachesOfBucketAssigner(2)
         .checkWrittenData(EXPECTED1);
+  }
+
+  @Test
+  public void testIndexWriteFunctionWithSmallBuffer() throws Exception {
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+    conf.setString(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "true");
+    conf.set(FlinkOptions.INDEX_RLI_WRITE_BUFFER_SIZE, 1L);
+
+    StreamWriteFunctionWrapper<RowData> pipeline =
+        (StreamWriteFunctionWrapper<RowData>) TestData.getWritePipeline(tempFile.getAbsolutePath(), conf);
+    pipeline.openFunction();
+    try {
+      // The record cannot fit even after flushing and resetting the 1 MB index buffer.
+      RowData indexRow = GenericRowData.of(IndexRowUtils.RLI_TYPE,
+          StringData.fromString("k".repeat(2 * 1024 * 1024)),
+          StringData.fromString("par1"), StringData.fromString("file1"));
+      HoodieException exception = assertThrows(HoodieException.class,
+          () -> pipeline.getIndexWriteFunction().processElement(indexRow, null, null));
+      assertEquals("Index write buffer is too small to hold a single record.", exception.getMessage());
+    } finally {
+      pipeline.close();
+    }
+  }
+
+  @Test
+  public void testIndexWriteFunctionRetriesAfterBufferFull() throws Exception {
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+    conf.setString(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "true");
+    conf.set(FlinkOptions.INDEX_RLI_WRITE_BUFFER_SIZE, 1L);
+    // Assign buckets immediately so the index buffer fills before the checkpoint.
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+
+    StreamWriteFunctionWrapper<RowData> pipeline =
+        (StreamWriteFunctionWrapper<RowData>) TestData.getWritePipeline(tempFile.getAbsolutePath(), conf);
+    pipeline.openFunction();
+    try {
+      String payload = "k".repeat(4 * 1024);
+      List<String> keys = new ArrayList<>();
+      // Each row fits alone. Stop as soon as their combined size exhausts the 1 MB buffer.
+      for (int i = 0; i < 400; i++) {
+        String key = i + payload;
+        keys.add(key);
+        pipeline.invoke(TestData.insertRow(StringData.fromString(key), StringData.fromString("name"),
+            20, TimestampData.fromEpochMillis(1), StringData.fromString("par1")));
+        if (pipeline.getIndexEventBuffer() != null && pipeline.getIndexEventBuffer()[0] != null) {
+          break;
+        }
+      }
+
+      // Earlier rows were flushed without a checkpoint; the triggering row survived the retry.
+      assertNotNull(pipeline.getIndexEventBuffer());
+      assertNotNull(pipeline.getIndexEventBuffer()[0]);
+      assertTrue(keys.size() > 1);
+      assertEquals(keys.size() - 1L, pipeline.getIndexEventBuffer()[0].getWriteStatuses().stream()
+          .mapToLong(WriteStatus::getTotalRecords).sum());
+      assertEquals(Collections.singletonList(keys.get(keys.size() - 1)), pipeline.getIndexDataBuffer().stream()
+          .map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
+      String fileId = ((HoodieMetadataPayload) pipeline.getIndexDataBuffer().get(0).getData())
+          .getRecordGlobalLocation().getFileId();
+
+      pipeline.checkpointFunction(1);
+      assertTrue(pipeline.getIndexDataBuffer().isEmpty());
+      pipeline.getCoordinator().handleEventFromOperator(0, pipeline.getNextEvent());
+      pipeline.checkpointComplete(1);
+
+      Map<String, HoodieRecordGlobalLocation> locations = getRecordKeyIndex(StreamerUtil.createMetaClient(conf), keys);
+      assertEquals(keys.size(), locations.size());
+      assertTrue(locations.keySet().containsAll(keys));
+      locations.values().forEach(location -> {
+        assertEquals("par1", location.getPartitionPath());
+        assertEquals(fileId, location.getFileId());
+      });
+    } finally {
+      pipeline.close();
+    }
   }
 
   @Test
