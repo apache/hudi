@@ -39,6 +39,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -421,6 +422,20 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY.name(),
         config.getString(HoodieTableConfig.META_FIELDS_MODE),
         "the mode must survive on a v6 table -- Uber-style deployments set it there via hudi-cli");
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT", "NINE", "TEN"})
+  void testComplexKeyGenEncodingSurvivesConfigVersionDropping(HoodieTableVersion tableVersion) {
+    // the property records what the table's data carries, so it is kept on every table version
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING, ComplexKeyGenEncoding.VALUE_ONLY.name());
+    config.setValue(HoodieTableConfig.VERSION, String.valueOf(tableVersion.versionCode()));
+
+    HoodieTableConfig.dropInvalidConfigs(config);
+
+    assertEquals(ComplexKeyGenEncoding.VALUE_ONLY.name(), config.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING),
+        "the recorded encoding must survive on a " + tableVersion + " table");
   }
 
   private static Stream<Arguments> tableVersionsAndMetaFieldsModes() {

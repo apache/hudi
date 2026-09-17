@@ -34,9 +34,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
-import org.apache.hudi.keygen.KeyGenUtils;
-import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.HashMap;
@@ -56,8 +53,6 @@ import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
-import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
-import static org.apache.hudi.keygen.KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.PAYLOAD_CLASSES_TO_HANDLE;
 
 /**
@@ -83,10 +78,6 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
                                                          SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     HoodieTableMetaClient metaClient = table.getMetaClient();
-    if (config.enableComplexKeygenValidation()
-        && isComplexKeyGeneratorWithSingleRecordKeyField(metaClient.getTableConfig())) {
-      throw new HoodieUpgradeDowngradeException(getComplexKeygenErrorMessage("downgrade"));
-    }
     // Handle index Changes
     UpgradeDowngradeUtils.dropNonV1IndexPartitions(
         config, context, table, upgradeDowngradeHelper, "downgrading from table version nine to eight");
@@ -96,28 +87,7 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
     reconcileMergeConfigs(propertiesToAdd, propertiesToRemove, tableConfig);
     reconcileOrderingFieldsConfig(propertiesToAdd, propertiesToRemove, tableConfig);
-    reconcileComplexKeygenEncodingConfig(propertiesToRemove, metaClient, config);
     return new UpgradeDowngrade.TableConfigChangeSet(propertiesToAdd, propertiesToRemove);
-  }
-
-  /**
-   * Removes {@link HoodieTableConfig#COMPLEX_KEYGEN_ENCODING}, which is only defined at version 9 and above.
-   *
-   * <p>Below version 9 the encoding is a per-write decision driven by
-   * {@code hoodie.write.complex.keygen.new.encoding}, with nowhere on the table to record what the data
-   * carries -- which is why the validation guard above refuses the downgrade of a single-field complex keygen
-   * table unless the user turns it off and takes responsibility for configuring the encoding.
-   */
-  private void reconcileComplexKeygenEncodingConfig(Set<ConfigProperty> propertiesToRemove,
-                                                    HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
-    propertiesToRemove.add(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING);
-    Option<ComplexKeyGenEncoding> encoding = KeyGenUtils.resolveComplexKeyGenEncoding(metaClient.getTableConfig());
-    if (encoding.isPresent()) {
-      // carry the known encoding onto the downgrading writer's own config, so the write that performs the
-      // downgrade keeps keying records the way the table's data is keyed
-      config.setValue(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING, String.valueOf(encoding.get().useNewEncoding()));
-      config.clearValue(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING);
-    }
   }
 
   private void reconcileMergeConfigs(Map<ConfigProperty, String> propertiesToAdd,

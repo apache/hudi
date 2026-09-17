@@ -147,8 +147,9 @@ public abstract class BaseRecordLevelIndex implements FlinkMetadataIndex {
     if (metaClient == null) {
       metaClient = StreamerUtil.createMetaClient(conf);
     }
-    // disallow RLI for new encoding with complex key gen when the table version is lower than NINE.
-    if (KeyGenUtils.mayUseNewEncodingForComplexKeyGen(metaClient.getTableConfig())) {
+    // a single-field complex keygen table whose record key encoding is unknown cannot be pruned by key
+    Option<ComplexKeyGenEncoding> encodingOpt = KeyGenUtils.resolveComplexKeyGenEncoding(metaClient);
+    if (metaClient.getTableConfig().isComplexKeyGenWithSingleRecordKeyField() && !encodingOpt.isPresent()) {
       return Option.empty();
     }
 
@@ -158,7 +159,8 @@ public abstract class BaseRecordLevelIndex implements FlinkMetadataIndex {
       return Option.empty();
     }
     boolean consistentLogicalTimestampEnabled = OptionsResolver.isConsistentLogicalTimestampEnabled(conf);
-    List<String> hoodieKeysFromFilter = computeHoodieKeyFromFilters(conf, metaClient, evaluators, recordKeyFields, rowType, consistentLogicalTimestampEnabled);
+    List<String> hoodieKeysFromFilter = computeHoodieKeyFromFilters(evaluators, recordKeyFields, rowType,
+        consistentLogicalTimestampEnabled, encodingOpt.map(ComplexKeyGenEncoding::encodesFieldName).orElse(false));
     if (hoodieKeysFromFilter.isEmpty()) {
       log.warn("The number of keys from query predicate is empty, skipping the rli pruning.");
       return Option.empty();
@@ -189,16 +191,12 @@ public abstract class BaseRecordLevelIndex implements FlinkMetadataIndex {
    */
   @VisibleForTesting
   public static List<String> computeHoodieKeyFromFilters(
-      Configuration conf,
-      HoodieTableMetaClient metaClient,
       List<ExpressionEvaluators.Evaluator> evaluators,
       String[] keyFields,
       RowType rowType,
-      boolean consistentLogicalTimestampEnabled) {
-    // align with the check logic in RowDataKeyGen: a single record key carries the `<field>:` prefix iff the
-    // table's (persisted or version-9 default) complex keygen encoding says so.
-    boolean prefixedSingleFieldKey = KeyGenUtils.resolveComplexKeyGenEncoding(metaClient.getTableConfig())
-        .map(ComplexKeyGenEncoding::encodesFieldName).orElse(false);
+      boolean consistentLogicalTimestampEnabled,
+      boolean prefixedSingleFieldKey) {
+    // align with RowDataKeyGen: a single record key carries the `<field>:` prefix iff the table's encoding says so
     boolean isComplexRecordKey = keyFields.length > 1 || prefixedSingleFieldKey;
     List<String> hoodieKeys = new ArrayList<>();
     List<String> fieldNames = rowType.getFieldNames();

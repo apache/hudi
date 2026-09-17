@@ -51,6 +51,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
+
 /**
  * Helper class to assist in upgrading/downgrading Hoodie when there is a version change.
  */
@@ -214,9 +216,9 @@ public class UpgradeDowngrade {
     log.info("Attempting to move table from version {} to {}", fromVersion, toVersion);
     Map<ConfigProperty, String> tablePropsToAdd = new Hashtable<>();
     Set<ConfigProperty> tablePropsToRemove = new HashSet<>();
+    resolveComplexKeygenEncoding(tablePropsToAdd, isUpgrade ? "upgrade" : "downgrade");
     if (isUpgrade) {
       // upgrade
-      resolveComplexKeygenEncodingBeforeUpgrade(fromVersion, toVersion);
       while (fromVersion.versionCode() < toVersion.versionCode()) {
         HoodieTableVersion nextVersion = HoodieTableVersion.fromVersionCode(fromVersion.versionCode() + 1);
         UpgradeDowngrade.TableConfigChangeSet tableConfigChangeSet =
@@ -416,33 +418,22 @@ public class UpgradeDowngrade {
   }
 
   /**
-   * Resolves, before any hop runs, the record key encoding a single-field complex key generator table carries,
-   * so that the 8 to 9 hop can persist it as {@link HoodieTableConfig#COMPLEX_KEYGEN_ENCODING}.
-   *
-   * <p>This has to happen up-front, on the pristine table: the 7 to 8 hop rewrites the timeline to the V2
-   * layout on storage while {@code hoodie.properties} still reports the old version, so reading the data from
-   * inside a later hop is not reliable. The result is set on the writer's own config, which also makes it
-   * visible to the key generators of the write that triggered this upgrade.
+   * Resolves, before any hop runs, the record key encoding of a single-field complex key generator table that
+   * does not carry {@link HoodieTableConfig#COMPLEX_KEYGEN_ENCODING} yet, and persists it with the version change.
+   * The data has to be read up-front: the 7 to 8 hop rewrites the timeline on storage while
+   * {@code hoodie.properties} still reports the old version. The result also goes on the writer's own config, so
+   * the write that triggered the upgrade keys its records the same way.
    */
-  private void resolveComplexKeygenEncodingBeforeUpgrade(HoodieTableVersion fromVersion, HoodieTableVersion toVersion) {
+  private void resolveComplexKeygenEncoding(Map<ConfigProperty, String> tablePropsToAdd, String operation) {
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    if (!fromVersion.lesserThan(HoodieTableVersion.NINE)
-        || !toVersion.greaterThanOrEquals(HoodieTableVersion.NINE)
-        || !KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig)
-        || config.contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING)) {
+    if (!KeyGenUtils.isComplexKeyGenEncodingTracked(tableConfig) || tableConfig.getComplexKeyGenEncoding().isPresent()) {
       return;
     }
-    if (!tableConfig.populateMetaFields()) {
-      // virtual keys: there is no stored _hoodie_record_key to learn the encoding from
-      return;
-    }
-    Option<Boolean> useNewEncoding = KeyGenUtils.resolveUseNewEncodingFromStorage(metaClient);
-    if (useNewEncoding.isPresent()) {
-      ComplexKeyGenEncoding encoding = ComplexKeyGenEncoding.fromUseNewEncoding(useNewEncoding.get());
-      config.setValue(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING, encoding.name());
-      config.setValue(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING, String.valueOf(useNewEncoding.get()));
-      log.info("Resolved complex keygen record key encoding {} for table {} ahead of upgrading from version {} to {}",
-          encoding, metaClient.getBasePath(), fromVersion, toVersion);
-    }
+    ComplexKeyGenEncoding encoding = KeyGenUtils.resolveComplexKeyGenEncodingForWrite(metaClient, config)
+        .orElseThrow(() -> new HoodieUpgradeDowngradeException(getComplexKeygenErrorMessage(operation)));
+    tablePropsToAdd.put(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING, encoding.name());
+    config.setValue(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING, encoding.name());
+    log.info("Recording complex keygen record key encoding {} on table {} as part of the {}",
+        encoding, metaClient.getBasePath(), operation);
   }
 }

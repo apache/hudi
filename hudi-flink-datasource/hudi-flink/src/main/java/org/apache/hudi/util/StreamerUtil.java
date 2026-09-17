@@ -68,6 +68,7 @@ import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
@@ -351,6 +352,8 @@ public class StreamerUtil {
           .setPayloadClassName(getPayloadClass(conf))
           .setDatabaseName(conf.get(FlinkOptions.DATABASE_NAME))
           .setRecordKeyFields(conf.getString(FlinkOptions.RECORD_KEY_FIELD.key(), null))
+          .setComplexKeyGenEncoding(conf.containsKey(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key())
+              ? ComplexKeyGenEncoding.fromString(conf.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null)) : null)
           .setOrderingFields(OptionsResolver.getOrderingFieldsStr(conf))
           .setArchiveLogFolder(TIMELINE_HISTORY_PATH.defaultValue())
           .setPartitionFields(conf.getString(FlinkOptions.PARTITION_PATH_FIELD.key(), null))

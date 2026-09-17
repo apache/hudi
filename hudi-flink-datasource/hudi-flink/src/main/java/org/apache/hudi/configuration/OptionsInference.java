@@ -22,7 +22,9 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.keygen.KeyGenUtils;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.util.ClientIds;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
@@ -158,30 +160,39 @@ public class OptionsInference {
   }
 
   /**
-   * Resolves the record key encoding of a single-field complex key generator table from its table config
-   * ({@code hoodie.table.complex.keygen.encoding} when the version 8 to 9 upgrade stamped one, otherwise the
-   * version-9 default) into the job configuration, unless the user set it explicitly. Flink does not merge the table
-   * config into the job configuration wholesale, so without this the row key generator would fall back to
-   * the version-derived default and key records with the wrong encoding.
-   */
-  public static void setupComplexKeygenEncoding(Configuration conf, HoodieTableConfig tableConfig) {
-    if (conf.containsKey(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key())) {
-      return;
-    }
-    // Resolve rather than copy the raw property: a table created at version 9 or above carries no property and
-    // is FIELD_PREFIXED by convention, and Flink has to learn that from the table as well, because its own key
-    // generator options are not a reliable signal (HoodieTableFactory#setupHoodieKeyOptions rewrites them to the
-    // non-partitioned key generator for a non-partitioned table). This is the same call the reader side makes.
-    KeyGenUtils.resolveComplexKeyGenEncoding(tableConfig).ifPresent(encoding ->
-        conf.setString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), encoding.name()));
-  }
-
-  /**
-   * Same as {@link #setupComplexKeygenEncoding(Configuration, HoodieTableConfig)}, loading the table config
-   * from the table path in the configuration; a no-op when the table does not exist yet.
+   * Resolves the record key encoding of a single-field complex key generator table into the job configuration,
+   * which is what the row key generator keys records from. For an existing table this is the persisted
+   * {@code hoodie.table.complex.keygen.encoding}, otherwise the encoding deduced from the table's data, and it
+   * wins over a value set on the job. For a table this job creates, it is the encoding the table gets created
+   * with: the value set on the job, otherwise {@link ComplexKeyGenEncoding#FIELD_PREFIXED}. Must run after the
+   * key generator options are final.
    */
   public static void setupComplexKeygenEncoding(Configuration conf) {
-    StreamerUtil.getTableConfig(conf.get(FlinkOptions.PATH), HadoopConfigurations.getHadoopConf(conf))
-        .ifPresent(tableConfig -> setupComplexKeygenEncoding(conf, tableConfig));
+    String key = HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key();
+    String configured = conf.getString(key, null);
+    String basePath = conf.get(FlinkOptions.PATH);
+    org.apache.hadoop.conf.Configuration hadoopConf = HadoopConfigurations.getHadoopConf(conf);
+    if (!StreamerUtil.tableExists(basePath, hadoopConf)) {
+      if (configured == null && isSingleFieldComplexKeyGenWithRecordKeyMetaField(conf)) {
+        conf.setString(key, ComplexKeyGenEncoding.FIELD_PREFIXED.name());
+      }
+      return;
+    }
+    Option<ComplexKeyGenEncoding> encoding =
+        KeyGenUtils.resolveComplexKeyGenEncoding(StreamerUtil.createMetaClient(basePath, hadoopConf));
+    if (!encoding.isPresent()) {
+      return;
+    }
+    if (configured != null && !configured.trim().equalsIgnoreCase(encoding.get().name())) {
+      log.warn("Ignoring {}={} from the job configuration: table {} carries {} record keys",
+          key, configured, basePath, encoding.get());
+    }
+    conf.setString(key, encoding.get().name());
+  }
+
+  private static boolean isSingleFieldComplexKeyGenWithRecordKeyMetaField(Configuration conf) {
+    return OptionsResolver.isComplexKeyGenerator(conf)
+        && conf.getOptional(FlinkOptions.RECORD_KEY_FIELD).orElse("").split(",").length == 1
+        && OptionsResolver.getMetaFieldsMode(conf).isRecordKeyPopulated();
   }
 }

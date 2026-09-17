@@ -28,17 +28,17 @@ import java.util.Locale;
  * How {@code _hoodie_record_key} is encoded for a {@code ComplexKeyGenerator} configured with a
  * single record key field.
  *
- * <p>Persisted in {@code hoodie.properties} as {@code hoodie.table.complex.keygen.encoding} by the
- * table version 8 to 9 upgrade, so that writers and readers at version 9+ know the format the table
- * actually carries instead of assuming it from the table version (HUDI-7001).
+ * <p>Persisted in {@code hoodie.properties} as {@code hoodie.table.complex.keygen.encoding}, on creation for
+ * new tables and by the first write or upgrade that finds it missing on an existing table, so that writers and
+ * readers know the format the table actually carries instead of assuming it from the table version.
  */
 public enum ComplexKeyGenEncoding {
   @EnumFieldDescription("Record key is stored as `<field_name>:<field_value>`. Written by Hudi 0.14.0 and older, "
-      + "and by all writers at table version 9 and above.")
+      + "by 1.1.0 and later, and the encoding of every newly created table.")
   FIELD_PREFIXED,
 
   @EnumFieldDescription("Record key is stored as the bare `<field_value>`. Written by Hudi 0.14.1, 0.15.0, 1.0.0, "
-      + "1.0.1 and 1.0.2 at table version 8 and below.")
+      + "1.0.1 and 1.0.2.")
   VALUE_ONLY;
 
   /**
@@ -72,12 +72,5 @@ public enum ComplexKeyGenEncoding {
    */
   public boolean encodesFieldName() {
     return this == FIELD_PREFIXED;
-  }
-
-  /**
-   * @return the equivalent value of {@code hoodie.write.complex.keygen.new.encoding}.
-   */
-  public boolean useNewEncoding() {
-    return this == VALUE_ONLY;
   }
 }

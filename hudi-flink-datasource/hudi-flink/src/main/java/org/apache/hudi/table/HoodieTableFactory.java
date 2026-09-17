@@ -90,6 +90,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     setupTableOptions(conf.get(FlinkOptions.PATH), conf);
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     setupConfOptions(conf, context.getObjectIdentifier(), context.getCatalogTable(), schema);
+    OptionsInference.setupComplexKeygenEncoding(conf);
     checkBaseFileFormatForRead(conf);
     return new HoodieTableSource(
         SerializableSchema.create(schema),
@@ -108,6 +109,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     sanityCheck(conf, schema);
     setupConfOptions(conf, context.getObjectIdentifier(), context.getCatalogTable(), schema);
+    OptionsInference.setupComplexKeygenEncoding(conf);
     setupSortOptions(conf, context.getConfiguration());
     return new HoodieTableSink(conf, schema);
   }
@@ -132,7 +134,6 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
           }
           conf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
               tableConfig.getTableStorageLayout().configValue());
-          OptionsInference.setupComplexKeygenEncoding(conf, tableConfig);
           if (tableConfig.contains(HoodieTableConfig.TYPE) && conf.contains(FlinkOptions.TABLE_TYPE)) {
             if (!tableConfig.getString(HoodieTableConfig.TYPE).equals(conf.get(FlinkOptions.TABLE_TYPE))) {
               log.error("Table type conflict : {} in {} and {} in table options. Update your config to match the table type in hoodie.properties.",

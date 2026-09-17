@@ -59,7 +59,6 @@ import org.apache.hudi.common.schema.internal.utils.SchemaChangeUtils;
 import org.apache.hudi.common.schema.internal.utils.SerDeHelper;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -118,6 +117,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
@@ -125,7 +125,6 @@ import java.util.function.BiFunction;
 import static org.apache.hudi.common.model.HoodieCommitMetadata.SCHEMA_KEY;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
-import static org.apache.hudi.keygen.KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
 
 /**
@@ -1515,7 +1514,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
 
     doInitTable(operationType, metaClient, instantTime);
-    // Resolve the complex key generator record key encoding before table creation (HUDI-9666 / HUDI-7001)
     resolveComplexKeygenEncoding(metaClient);
     HoodieTable table = createTable(config, metaClient);
 
@@ -1550,32 +1548,34 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   /**
    * Resolves the record key encoding of a single-field {@code ComplexKeyGenerator} table onto the write config,
-   * so that every key generator built from it keys records the way the table's existing data is keyed.
-   *
-   * <p>Only meaningful at table version 9 and above, where the encoding is known: the property persisted by the
-   * 8 to 9 upgrade ({@link HoodieTableConfig#COMPLEX_KEYGEN_ENCODING}), or the version-9 default
-   * ({@link ComplexKeyGenEncoding#FIELD_PREFIXED}) for tables created there. Below version 9 the encoding is a
-   * per-write decision driven by {@code hoodie.write.complex.keygen.new.encoding}, guarded by
-   * {@code hoodie.write.complex.keygen.validation.enable}.
+   * so that every key generator built from it keys records the way the table's data is keyed. A table that does
+   * not carry {@link HoodieTableConfig#COMPLEX_KEYGEN_ENCODING} yet gets it deduced from its data and backfilled
+   * under the transaction lock, or the write fails when the encoding cannot be determined and
+   * {@code hoodie.write.complex.keygen.validation.enable} is on.
    * Public because the streamer keys its records before {@link #initTable} runs and has to call this itself.
    */
   public void resolveComplexKeygenEncoding(HoodieTableMetaClient metaClient) {
-    HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    if (!KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig)) {
+    if (!KeyGenUtils.isComplexKeyGenEncodingTracked(metaClient.getTableConfig())) {
       return;
     }
-    Option<ComplexKeyGenEncoding> knownEncoding = KeyGenUtils.resolveComplexKeyGenEncoding(tableConfig);
-    if (!knownEncoding.isPresent()) {
+    if (!metaClient.getTableConfig().getComplexKeyGenEncoding().isPresent()) {
+      executeUsingTxnManager(Option.empty(), () -> backfillComplexKeygenEncoding(metaClient));
+    }
+    config.setValue(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING, metaClient.getTableConfig().getComplexKeyGenEncoding().get().name());
+  }
+
+  private void backfillComplexKeygenEncoding(HoodieTableMetaClient metaClient) {
+    metaClient.reloadTableConfig();
+    if (metaClient.getTableConfig().getComplexKeyGenEncoding().isPresent()) {
       return;
     }
-    String configured = config.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING);
-    if (!StringUtils.isNullOrEmpty(configured) && !configured.trim().equalsIgnoreCase(knownEncoding.get().name())) {
-      LOG.warn("Ignoring {}={} from the write config: table {} is at version {} and carries {} record keys.",
-          HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), configured, metaClient.getBasePath(),
-          tableConfig.getTableVersion(), knownEncoding.get());
-    }
-    config.setValue(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING, knownEncoding.get().name());
-    config.setValue(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING, String.valueOf(knownEncoding.get().useNewEncoding()));
+    ComplexKeyGenEncoding encoding = KeyGenUtils.resolveComplexKeyGenEncodingForWrite(metaClient, config)
+        .orElseThrow(() -> new HoodieException(getComplexKeygenErrorMessage("ingestion")));
+    Properties props = new Properties();
+    props.setProperty(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), encoding.name());
+    HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), props);
+    metaClient.reloadTableConfig();
+    LOG.info("Recorded complex keygen record key encoding {} on table {}", encoding, metaClient.getBasePath());
   }
 
   /**
@@ -1648,15 +1648,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
             indexType, HoodieRecord.RECORD_KEY_METADATA_FIELD,
             HoodieTableConfig.META_FIELDS_MODE.key(), tableConfig.getMetaFieldsMode()));
       }
-    }
-    // Below table version 9 the record key encoding of a single-field complex keygen table is a per-write
-    // decision that is never recorded, so a writer cannot tell what the existing data carries. Fail loud
-    // rather than silently writing with a possibly-wrong encoding. From version 9 on the encoding is known
-    // (the table property stamped by the 8 to 9 upgrade, or the version-9 default), so no guard is needed.
-    if (tableConfig.getTableVersion().lesserThan(HoodieTableVersion.NINE)
-            && config.enableComplexKeygenValidation()
-            && isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig)) {
-      throw new HoodieException(getComplexKeygenErrorMessage("ingestion"));
     }
     //Check to make sure it's not a COW table with consistent hashing bucket index
     if (tableConfig.getTableType() == HoodieTableType.COPY_ON_WRITE) {

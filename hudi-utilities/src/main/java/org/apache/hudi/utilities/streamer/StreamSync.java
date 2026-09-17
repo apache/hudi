@@ -86,6 +86,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.keygen.KeyGenUtils;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.storage.HoodieStorage;
@@ -476,6 +477,8 @@ public class StreamSync implements Serializable, Closeable {
         .setPartitionFields(partitionColumns)
         .setTableVersion(ConfigUtils.getIntWithAltKeys(props, WRITE_TABLE_VERSION))
         .setRecordKeyFields(props.getProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key()))
+        .setComplexKeyGenEncoding(props.containsKey(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key())
+            ? ComplexKeyGenEncoding.fromString(props.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key())) : null)
         // null when unstated: TableBuilder rejects a boolean that contradicts an explicit
         // meta.fields.mode, so handing it the `true` default would turn a plain
         // hoodie.meta.fields.mode=COMMIT_TIME_ONLY run into a spurious conflict.

@@ -74,7 +74,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.getCommitTimeAtUTC;
-import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -423,19 +422,8 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     String operation = fromVersion.lesserThan(toVersion) ? "upgrade" : "downgrade";
     Dataset<Row> originalData = readTableData(originalMetaClient, "before " + operation);
 
-    // Landing at version 9 or above resolves the encoding from the data and persists it, so the table is safe
-    // and the move succeeds even with validation on. Landing below version 9 leaves the encoding unrecorded --
-    // a writer there cannot tell what the data carries -- so the validation still fails those moves.
-    boolean expectFailure = enableValidation && toVersion.lesserThan(HoodieTableVersion.NINE);
-    if (expectFailure) {
-      HoodieUpgradeDowngradeException exception = assertThrows(HoodieUpgradeDowngradeException.class,
-          () -> new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance()).run(toVersion, null),
-          "Expected HoodieUpgradeDowngradeException when landing below version 9 with complex keygen validation enabled");
-
-      assertEquals(getComplexKeygenErrorMessage(operation), exception.getMessage(), "Exception message should mention complex key generator issue");
-      return;
-    }
-
+    // The fixtures predate the property, so every move deduces the encoding from the data and records it,
+    // in either direction and whatever the validation setting.
     new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance())
         .run(toVersion, null);
 
@@ -448,30 +436,22 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     validateVersionSpecificProperties(resultMetaClient, toVersion);
     validateDataConsistency(originalData, resultMetaClient, "after " + operation);
 
-    HoodieTableConfig resultTableConfig = resultMetaClient.getTableConfig();
-    if (toVersion.greaterThanOrEquals(HoodieTableVersion.NINE)) {
-      // The v6 fixture was written by 0.14.0 (`id:<value>` keys), the v8 fixture by 1.0.2 (bare values): the
-      // upgrade must record what each actually carries so writers at version 9+ keep matching existing rows.
-      ComplexKeyGenEncoding expectedEncoding = fromVersion.equals(HoodieTableVersion.EIGHT)
-          ? ComplexKeyGenEncoding.VALUE_ONLY : ComplexKeyGenEncoding.FIELD_PREFIXED;
-      assertEquals(expectedEncoding.name(), resultTableConfig.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING),
-          "Upgrade to version 9+ must persist the record key encoding found in the data");
-      assertEquals(Option.of(expectedEncoding), resultTableConfig.getComplexKeyGenEncoding());
-      assertEquals(expectedEncoding, KeyGenUtils.resolveComplexKeyGenEncoding(resultTableConfig).get());
-    } else {
-      assertFalse(resultTableConfig.contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING),
-          "The encoding property is only defined at version 9 and above");
-    }
+    // The v6 fixture was written by 0.14.0 (`id:<value>` keys), the v8 and v9 fixtures with bare values: the
+    // move must record what each actually carries so later writes keep matching.
+    ComplexKeyGenEncoding expectedEncoding = fromVersion.equals(HoodieTableVersion.SIX)
+        ? ComplexKeyGenEncoding.FIELD_PREFIXED : ComplexKeyGenEncoding.VALUE_ONLY;
+    assertEquals(Option.of(expectedEncoding), resultMetaClient.getTableConfig().getComplexKeyGenEncoding(),
+        "The " + operation + " must persist the record key encoding found in the data");
+    assertEquals(expectedEncoding, KeyGenUtils.resolveComplexKeyGenEncoding(resultMetaClient).get());
   }
 
   /**
-   * Downgrading from version 9 must drop a persisted encoding property and carry its value over to the
-   * downgrading writer's own config; the fixture has no property, so seed one first. The validation has to be
-   * off: below version 9 there is nowhere on the table to record the encoding, so the guard refuses the move.
+   * A persisted encoding is authoritative on every table version, so a downgrade keeps it and passes the
+   * validation; the fixture has no property, so seed one first.
    */
   @ParameterizedTest
   @ValueSource(strings = {"VALUE_ONLY", "FIELD_PREFIXED"})
-  public void testDowngradeFromNineRemovesPersistedComplexKeygenEncoding(String persistedEncoding) throws Exception {
+  public void testDowngradeFromNineKeepsPersistedComplexKeygenEncoding(String persistedEncoding) throws Exception {
     HoodieTableMetaClient originalMetaClient = loadFixtureTable(HoodieTableVersion.NINE, "-complex-keygen");
     Properties props = new Properties();
     props.put(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), persistedEncoding);
@@ -482,7 +462,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withPath(originalMetaClient.getBasePath().toString())
         .withAutoUpgradeVersion(true)
-        .withComplexKeygenValidation(false)
+        .withComplexKeygenValidation(true)
         .build();
     new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance())
         .run(HoodieTableVersion.EIGHT, null);
@@ -492,12 +472,8 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         .setBasePath(originalMetaClient.getBasePath())
         .build();
     assertEquals(HoodieTableVersion.EIGHT, resultMetaClient.getTableConfig().getTableVersion());
-    assertFalse(resultMetaClient.getTableConfig().contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING),
-        "The encoding property must be removed when leaving version 9");
-    assertFalse(config.contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING),
-        "The version 9 property must not linger on the write config after a downgrade");
-    assertEquals(String.valueOf(ComplexKeyGenEncoding.valueOf(persistedEncoding).useNewEncoding()),
-        config.getString(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING));
+    assertEquals(persistedEncoding, resultMetaClient.getTableConfig().getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING),
+        "The encoding property must survive the downgrade");
   }
 
   @ParameterizedTest

@@ -51,6 +51,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieSimpleIndex;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.KeyGenUtils;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
@@ -77,7 +78,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
-import static org.apache.hudi.testutils.Assertions.assertComplexKeyGeneratorValidationThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -503,20 +503,22 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     BaseHoodieTableServiceClient<String, String, String> tableServiceClient = mock(BaseHoodieTableServiceClient.class);
     TestWriteClient writeClient = new TestWriteClient(writeConfigBuilder.build(), table, Option.empty(), tableServiceClient);
 
-    if (tableVersion <= 8 && enableComplexKeyGeneratorValidation
-        && (ComplexAvroKeyGenerator.class.getCanonicalName().equals(keyGeneratorClass)
+    // the encoding of a single-field complex keygen table is recorded on creation and resolved onto the write
+    // config by initTable, on every table version and whatever the validation setting
+    boolean singleFieldComplexKeygen = (ComplexAvroKeyGenerator.class.getCanonicalName().equals(keyGeneratorClass)
         || "org.apache.hudi.keygen.ComplexKeyGenerator".equals(keyGeneratorClass))
-        && KeyGenUtils.getRecordKeyFields(recordKeyFields).size() == 1) {
-      assertComplexKeyGeneratorValidationThrows(() -> writeClient.initTable(WriteOperationType.INSERT, Option.empty()), "ingestion");
-    } else {
-      writeClient.initTable(WriteOperationType.INSERT, Option.empty());
-      String requestedTime = writeClient.startCommit("commit");
+        && KeyGenUtils.getRecordKeyFields(recordKeyFields).size() == 1;
+    assertEquals(singleFieldComplexKeygen ? Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED) : Option.empty(),
+        metaClient.getTableConfig().getComplexKeyGenEncoding());
+    writeClient.initTable(WriteOperationType.INSERT, Option.empty());
+    assertEquals(singleFieldComplexKeygen ? ComplexKeyGenEncoding.FIELD_PREFIXED.name() : null,
+        writeClient.getConfig().getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING));
+    String requestedTime = writeClient.startCommit("commit");
 
-      HoodieTimeline writeTimeline = metaClient.getActiveTimeline().getWriteTimeline();
-      assertTrue(writeTimeline.lastInstant().isPresent());
-      assertEquals("commit", writeTimeline.lastInstant().get().getAction());
-      assertEquals(requestedTime, writeTimeline.lastInstant().get().requestedTime());
-    }
+    HoodieTimeline writeTimeline = metaClient.getActiveTimeline().getWriteTimeline();
+    assertTrue(writeTimeline.lastInstant().isPresent());
+    assertEquals("commit", writeTimeline.lastInstant().get().getAction());
+    assertEquals(requestedTime, writeTimeline.lastInstant().get().requestedTime());
   }
 
   @Test

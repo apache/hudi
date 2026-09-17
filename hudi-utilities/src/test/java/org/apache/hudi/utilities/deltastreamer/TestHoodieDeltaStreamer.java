@@ -501,8 +501,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   /**
    * The streamer keys its records before the write client's initTable() runs, so it has to resolve the single-field
-   * ComplexKeyGenerator encoding itself: a version 8 table with bare record keys (0.14.1 style) upserted by a streamer at
-   * the current version must be upgraded, get the encoding persisted, and keep writing bare keys, with the row writer too.
+   * ComplexKeyGenerator encoding itself: a version 8 table with bare record keys (0.14.1 style) and no encoding property,
+   * upserted by a streamer at the current version, must be upgraded, get the encoding deduced from its data and
+   * persisted, and keep writing bare keys, with the row writer too.
    */
   @Test
   public void testComplexKeyGenSingleFieldUpgradeKeepsBareKeys() throws Exception {
@@ -515,11 +516,15 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // makeConfig's tableVersion argument only drives merge-config inference; the write itself still has to be
     // pinned, or the "legacy" table is created at the current version and there is no upgrade left to test.
     legacyCfg.configs.add(HoodieWriteConfig.WRITE_TABLE_VERSION.key() + "=" + HoodieTableVersion.EIGHT.versionCode());
-    legacyCfg.configs.add(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key() + "=true");
-    legacyCfg.configs.add(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key() + "=false");
+    legacyCfg.configs.add(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key() + "=" + ComplexKeyGenEncoding.VALUE_ONLY.name());
     syncOnce(legacyCfg);
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(context, tablePath);
     assertEquals(HoodieTableVersion.EIGHT, metaClient.getTableConfig().getTableVersion());
+    // a table written before the encoding was recorded carries no property
+    HoodieTableConfig.delete(metaClient.getStorage(), metaClient.getMetaPath(),
+        Collections.singleton(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()));
+    metaClient = HoodieTestUtils.createMetaClient(context, tablePath);
+    assertFalse(metaClient.getTableConfig().getComplexKeyGenEncoding().isPresent());
     String recordKeyPrefix = metaClient.getTableConfig().getRecordKeyFields().get()[0] + ":";
     assertComplexKeygenTableState(tablePath, recordKeyPrefix, true);
 

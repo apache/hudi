@@ -21,7 +21,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, RecordLevelIndexSupport}
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding
 
@@ -33,6 +33,8 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
+
+import scala.collection.JavaConverters._
 
 /**
  * The record level index point lookup must build its lookup key the way the table actually stores
@@ -53,12 +55,11 @@ class TestRecordLevelIndexComplexKeyGenEncoding extends RecordLevelIndexTestBase
     DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.ComplexKeyGenerator",
     DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
     HoodieWriteConfig.WRITE_TABLE_VERSION.key -> "8",
-    HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key -> valueOnly.toString,
-    HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false")
+    HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key ->
+      (if (valueOnly) ComplexKeyGenEncoding.VALUE_ONLY else ComplexKeyGenEncoding.FIELD_PREFIXED).name)
 
   private def upgradedOpts(valueOnly: Boolean): Map[String, String] = legacyOpts(valueOnly) --
-    Seq(HoodieWriteConfig.WRITE_TABLE_VERSION.key, HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key,
-      HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key)
+    Seq(HoodieWriteConfig.WRITE_TABLE_VERSION.key, HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key)
 
   private def readOpts: Map[String, String] = Map(
     DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
@@ -86,11 +87,15 @@ class TestRecordLevelIndexComplexKeyGenEncoding extends RecordLevelIndexTestBase
     val recordKey = probe.getAs[String](recordKeyField)
     val dataFilter: Expression = EqualTo(AttributeReference(recordKeyField, StringType)(), Literal(recordKey))
 
+    // Simulate a table written before the encoding was recorded: the reader then deduces it from the data.
     metaClient = getLatestMetaClient(true)
+    HoodieTableConfig.delete(metaClient.getStorage, metaClient.getMetaPath, Set(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key).asJava)
+    metaClient = HoodieTableMetaClient.reload(metaClient)
     assertEquals(HoodieTableVersion.EIGHT, metaClient.getTableConfig.getTableVersion)
-    // Below version 9 the encoding is unknown to readers, so record-key pruning is deliberately switched off.
-    assertTrue(candidateFiles(legacyOpts(valueOnly), selectedPartition, dataFilter).isEmpty,
-      "Record-key pruning must be disabled for a single-field complex keygen table below version 9")
+    assertFalse(metaClient.getTableConfig.getComplexKeyGenEncoding.isPresent)
+    val legacyCandidates = candidateFiles(legacyOpts(valueOnly), selectedPartition, dataFilter)
+    assertTrue(legacyCandidates.isDefined, "Record-key pruning must stay enabled: the encoding is deduced from the data")
+    assertEquals(1, legacyCandidates.get.size, "The point lookup literal must match the stored key even before the backfill")
 
     // The upgraded writer, pure defaults: moves the table to the current version and persists the encoding.
     doWriteAndValidateDataAndRecordIndex(upgradedOpts(valueOnly),
@@ -110,9 +115,9 @@ class TestRecordLevelIndexComplexKeyGenEncoding extends RecordLevelIndexTestBase
     val storedKey = table.filter(col(recordKeyField) === recordKey).select("_hoodie_record_key").collect()(0).getString(0)
     assertEquals(if (valueOnly) recordKey else s"$recordKeyField:$recordKey", storedKey)
 
-    // From version 9 on the encoding is known, pruning is on, and the lookup literal must match the stored key.
+    // The recorded encoding drives the lookup literal, which must match the stored key.
     val candidates = candidateFiles(upgradedOpts(valueOnly), selectedPartition, dataFilter)
-    assertTrue(candidates.isDefined, "Record-key pruning must be enabled at version 9+")
+    assertTrue(candidates.isDefined, "Record-key pruning must be enabled")
     assertEquals(1, candidates.get.size, "The point lookup must resolve to exactly the file holding the record")
 
     // Query level: a silently mis-encoded lookup prunes everything and returns nothing.

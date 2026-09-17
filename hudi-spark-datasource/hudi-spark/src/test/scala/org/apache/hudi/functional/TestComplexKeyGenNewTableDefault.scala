@@ -20,9 +20,10 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
+import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen.KeyGenUtils
 import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding
@@ -32,6 +33,8 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.collection.JavaConverters._
 
@@ -67,47 +70,67 @@ class TestComplexKeyGenNewTableDefault extends HoodieSparkClientTestBase {
     cleanupResources()
   }
 
-  @Test
-  def testNewTableDefaultKeyFormat(): Unit = {
-    val recordKeyField = "_row_key"
-    val partitionPathField = "partition"
+  private val recordKeyField = "_row_key"
+  private val partitionPathField = "partition"
 
+  private def writeNewTable(extraOpts: Map[String, String]): Unit = {
     val dataGen = new HoodieTestDataGenerator(0xDEED)
     val records = recordsToStrings(dataGen.generateInserts("001", 100)).asScala.toList
     val inputDF = sparkSession.read.json(sparkSession.sparkContext.parallelize(records, 2))
-
-    // PURE DEFAULTS: only set keygen class + record key + partition path.
-    // Do NOT set hoodie.write.complex.keygen.new.encoding
-    // Do NOT set hoodie.write.complex.keygen.validation.enable
     val options = commonOpts ++ Map(
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> recordKeyField,
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> partitionPathField,
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.ComplexKeyGenerator"
-    )
-
+    ) ++ extraOpts
     inputDF.write.format("org.apache.hudi")
       .options(options)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Overwrite)
       .save(basePath)
+  }
 
-    // A brand-new table written with pure defaults must use the legacy field:value encoding
-    // ("<recordKeyField>:<value>") for every record key, matching the COMPLEX_KEYGEN_NEW_ENCODING
-    // default (false) and the fixed encoding of table version 9 and above.
+  private def storedRecordKeys(): Array[String] = {
     val recordKeys = sparkSession.read.format("org.apache.hudi").load(basePath)
       .select("_hoodie_record_key").collect().map(_.getString(0))
     assertTrue(recordKeys.nonEmpty, "Expected records to be written to the new table")
+    recordKeys
+  }
+
+  private def loadMetaClient(): HoodieTableMetaClient = {
+    val storage = HoodieTestUtils.getStorage(new StoragePath(basePath))
+    HoodieTableMetaClient.builder().setConf(storage.getConf.newInstance()).setBasePath(basePath).build()
+  }
+
+  /** A new table written with pure defaults records FIELD_PREFIXED and stores `<field>:<value>` keys. */
+  @ParameterizedTest
+  @ValueSource(ints = Array(8, 10))
+  def testNewTableRecordsFieldPrefixedEncoding(tableVersion: Int): Unit = {
+    writeNewTable(Map(HoodieWriteConfig.WRITE_TABLE_VERSION.key -> tableVersion.toString))
+    val recordKeys = storedRecordKeys()
     val expectedPrefix = recordKeyField + ":"
     assertTrue(recordKeys.forall(_.startsWith(expectedPrefix)),
-      s"New-table default must use field:value encoding ($expectedPrefix<value>); " +
-        s"got sample: ${recordKeys.take(5).mkString(", ")}")
+      s"New-table default must use field:value encoding ($expectedPrefix<value>); got sample: ${recordKeys.take(5).mkString(", ")}")
+    val metaClient = loadMetaClient()
+    assertEquals(HoodieTableVersion.fromVersionCode(tableVersion), metaClient.getTableConfig.getTableVersion)
+    assertEquals(Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED), metaClient.getTableConfig.getComplexKeyGenEncoding)
+    assertEquals(Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED), KeyGenUtils.resolveComplexKeyGenEncoding(metaClient))
+  }
 
-    val storage = HoodieTestUtils.getStorage(new StoragePath(basePath))
-    // The encoding table property is only ever stamped by the 8 -> 9 upgrade; a table created directly at the
-    // current version carries no property and is read as FIELD_PREFIXED by convention.
-    val metaClient = HoodieTableMetaClient.builder().setConf(storage.getConf.newInstance()).setBasePath(basePath).build()
-    assertFalse(metaClient.getTableConfig.contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING),
-      "A table created at the current version must not carry hoodie.table.complex.keygen.encoding")
-    assertEquals(ComplexKeyGenEncoding.FIELD_PREFIXED, KeyGenUtils.resolveComplexKeyGenEncoding(metaClient.getTableConfig).get)
+  /** An explicitly requested encoding is honored on creation and by the keys written. */
+  @Test
+  def testNewTableHonorsExplicitEncoding(): Unit = {
+    writeNewTable(Map(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key -> ComplexKeyGenEncoding.VALUE_ONLY.name))
+    val recordKeys = storedRecordKeys()
+    assertTrue(recordKeys.forall(!_.startsWith(recordKeyField + ":")), s"Keys must be bare; got sample: ${recordKeys.take(5).mkString(", ")}")
+    assertEquals(Option.of(ComplexKeyGenEncoding.VALUE_ONLY), loadMetaClient().getTableConfig.getComplexKeyGenEncoding)
+  }
+
+  /** Without a stored record key there is no encoding to track, so nothing is recorded. */
+  @Test
+  def testNewTableWithoutRecordKeyMetaFieldRecordsNothing(): Unit = {
+    writeNewTable(Map(HoodieTableConfig.POPULATE_META_FIELDS.key -> "false", "hoodie.index.type" -> "SIMPLE"))
+    val metaClient = loadMetaClient()
+    assertFalse(metaClient.getTableConfig.isRecordKeyPopulated)
+    assertFalse(metaClient.getTableConfig.getComplexKeyGenEncoding.isPresent)
   }
 }

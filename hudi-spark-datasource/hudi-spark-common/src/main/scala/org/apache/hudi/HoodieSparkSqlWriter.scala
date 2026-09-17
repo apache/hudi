@@ -51,8 +51,8 @@ import org.apache.hudi.hive.{HiveSyncConfigHolder, HiveSyncTool}
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils
-import org.apache.hudi.keygen.{BaseKeyGenerator, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
-import org.apache.hudi.keygen.constant.KeyGeneratorType
+import org.apache.hudi.keygen.{BaseKeyGenerator, KeyGenUtils, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
+import org.apache.hudi.keygen.constant.{ComplexKeyGenEncoding, KeyGeneratorType}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.metrics.Metrics
 import org.apache.hudi.storage.HoodieStorage
@@ -321,6 +321,7 @@ class HoodieSparkSqlWriterInternal {
           .setPopulateMetaFields(populateMetaFields)
           .setMetaFieldsModeFromString(metaFieldsMode)
           .setRecordKeyFields(hoodieConfig.getString(RECORDKEY_FIELD))
+          .setComplexKeyGenEncoding(explicitComplexKeyGenEncoding(hoodieConfig))
           .setSecondaryKeyFields(hoodieConfig.getString(SECONDARYKEY_COLUMN_NAME))
           .setCDCEnabled(hoodieConfig.getBooleanOrDefault(HoodieTableConfig.CDC_ENABLED))
           .setCDCSupplementalLoggingMode(hoodieConfig.getStringOrDefault(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE))
@@ -436,6 +437,11 @@ class HoodieSparkSqlWriterInternal {
 
             // Issue deletes
             instantTime = client.startCommit(commitActionType)
+            // the delete keys are generated from hoodieConfig, which must carry the record key encoding the
+            // client resolved (and possibly backfilled) for the table
+            tableMetaClient.reloadTableConfig()
+            client.resolveComplexKeygenEncoding(tableMetaClient)
+            KeyGenUtils.copyResolvedComplexKeyEncoding(client.getConfig, hoodieConfig)
             val writeStatuses = DataSourceUtils.doDeleteOperation(client, hoodieKeysAndLocationsToDelete, instantTime, preppedSparkSqlWrites || preppedWriteOperation)
             (writeStatuses, client)
 
@@ -534,6 +540,9 @@ class HoodieSparkSqlWriterInternal {
             // if table has undergone upgrade, we need to reload table config
             tableMetaClient.reloadTableConfig()
             tableConfig = tableMetaClient.getTableConfig
+            // the records are keyed from writeConfig before the write's initTable runs (the insert dedup
+            // lookup materializes them), so the record key encoding has to be resolved onto it here
+            client.resolveComplexKeygenEncoding(tableMetaClient)
             // Convert to RDD[HoodieRecord] and force type immediately
             val hoodieRecords: JavaRDD[HoodieRecord[_]] = Try(HoodieCreateRecordUtils.createHoodieRecordRdd(
               HoodieCreateRecordUtils.createHoodieRecordRddArgs(df, writeConfig, parameters, avroRecordName,
@@ -780,6 +789,7 @@ class HoodieSparkSqlWriterInternal {
           .setTableType(HoodieTableType.valueOf(tableType))
           .setTableName(tableName)
           .setRecordKeyFields(recordKeyFields)
+          .setComplexKeyGenEncoding(explicitComplexKeyGenEncoding(hoodieConfig))
           .setTableVersion(tableVersion)
           .setTableFormat(tableFormat)
           .setTableStorageLayout(hoodieConfig.getStringOrDefault(HoodieTableConfig.TABLE_STORAGE_LAYOUT))
@@ -1100,6 +1110,15 @@ class HoodieSparkSqlWriterInternal {
           .setConf(HadoopFSUtils.getStorageConfWithCopy(sparkContext.hadoopConfiguration))
           .setBasePath(tablePath)
           .build().getTableConfig)
+    } else {
+      null
+    }
+  }
+
+  /** The record key encoding explicitly requested for a new single-field complex keygen table, if any. */
+  private def explicitComplexKeyGenEncoding(hoodieConfig: HoodieConfig): ComplexKeyGenEncoding = {
+    if (hoodieConfig.contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING)) {
+      ComplexKeyGenEncoding.fromString(hoodieConfig.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING))
     } else {
       null
     }

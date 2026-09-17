@@ -66,6 +66,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.io.util.FileIOUtils;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieInstantWriter;
@@ -1018,6 +1019,7 @@ public class HoodieTableMetaClient implements Serializable {
     private Boolean bootstrapIndexEnable;
     private Boolean populateMetaFields;
     private MetaFieldsMode metaFieldsMode;
+    private ComplexKeyGenEncoding complexKeyGenEncoding;
     private String keyGeneratorClassProp;
     private String partitionValueExtractorClass;
     private String keyGeneratorType;
@@ -1185,6 +1187,11 @@ public class HoodieTableMetaClient implements Serializable {
     @Deprecated
     public TableBuilder setPopulateMetaFields(Boolean populateMetaFields) {
       this.populateMetaFields = populateMetaFields;
+      return this;
+    }
+
+    public TableBuilder setComplexKeyGenEncoding(ComplexKeyGenEncoding complexKeyGenEncoding) {
+      this.complexKeyGenEncoding = complexKeyGenEncoding;
       return this;
     }
 
@@ -1411,6 +1418,9 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.RECORDKEY_FIELDS)) {
         setRecordKeyFields(hoodieConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS));
       }
+      if (hoodieConfig.contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING)) {
+        setComplexKeyGenEncoding(ComplexKeyGenEncoding.fromString(hoodieConfig.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING)));
+      }
       if (hoodieConfig.contains(HoodieTableConfig.TIMELINE_TIMEZONE)) {
         setCommitTimezone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getStringOrDefault(HoodieTableConfig.TIMELINE_TIMEZONE)));
       }
@@ -1594,6 +1604,10 @@ public class HoodieTableMetaClient implements Serializable {
                 USER_PROVIDED.name()));
         KeyGeneratorType type = KeyGeneratorType.valueOf(keyGeneratorType);
         tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, type.name());
+      }
+      if (tableConfig.isComplexKeyGenWithSingleRecordKeyField() && metaFieldsMode.isRecordKeyPopulated()) {
+        tableConfig.setValue(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING,
+            complexKeyGenEncoding != null ? complexKeyGenEncoding.name() : ComplexKeyGenEncoding.FIELD_PREFIXED.name());
       }
       if (null != slashSeparatedDatePartitioning) {
         tableConfig.setValue(HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING, Boolean.toString(slashSeparatedDatePartitioning));

@@ -49,7 +49,6 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.storage.StoragePath;
@@ -70,8 +69,6 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.TimelineLayout.TIMELINE_LAYOUT_V1;
 import static org.apache.hudi.common.table.timeline.TimelineLayout.TIMELINE_LAYOUT_V2;
-import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
-import static org.apache.hudi.keygen.KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.SIX_TO_EIGHT_TIMELINE_ACTION_MAP;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.checkAndHandleMetadataTable;
 
@@ -91,15 +88,6 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     HoodieTableMetaClient metaClient = table.getMetaClient();
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    // When the upgrade is headed for version 9 or above, UpgradeDowngrade#run has already resolved the record
-    // key encoding from the table's data and put it on the config, and the 8 to 9 hop persists it as a table
-    // property -- the table is protected, so do not block here. Only fail when the encoding stayed unknown
-    // (an upgrade stopping at version 8, or one where the data could not be read).
-    if (config.enableComplexKeygenValidation()
-        && !config.contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING)
-        && isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig)) {
-      throw new HoodieUpgradeDowngradeException(getComplexKeygenErrorMessage("upgrade"));
-    }
     // If metadata is enabled for the data table, and existing metadata table is behind the data table, then delete it
     checkAndHandleMetadataTable(context, table, config, metaClient, true);
 

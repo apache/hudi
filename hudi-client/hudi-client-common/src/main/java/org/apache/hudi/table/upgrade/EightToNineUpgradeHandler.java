@@ -35,12 +35,8 @@ import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
-import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.table.HoodieTable;
-
-import lombok.extern.slf4j.Slf4j;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -63,8 +59,6 @@ import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
-import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
-import static org.apache.hudi.keygen.KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.PAYLOAD_CLASSES_TO_HANDLE;
 
 /**
@@ -86,7 +80,6 @@ import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.PAYLOAD_CLASSE
  *   for table with custom merger or payload,
  *     set hoodie.table.partial.update.mode to default value.
  */
-@Slf4j
 public class EightToNineUpgradeHandler implements UpgradeHandler {
   private static final Set<String> PAYLOADS_MAPPED_TO_EVENT_TIME_MERGE_MODE = new HashSet<>(Arrays.asList(
       EventTimeAvroPayload.class.getName(),
@@ -113,8 +106,6 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
     Set<ConfigProperty> tablePropsToRemove = new HashSet<>();
     HoodieTableMetaClient metaClient = table.getMetaClient();
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    // Persist the single-field complex keygen record key encoding (HUDI-7001).
-    reconcileComplexKeygenEncodingConfig(tablePropsToAdd, tableConfig, config);
     // Populate missing index versions indexes
     Option<HoodieIndexMetadata> indexMetadataOpt = metaClient.getIndexMetadata();
     if (indexMetadataOpt.isPresent()) {
@@ -137,43 +128,6 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
     // Handle ordering fields config.
     reconcileOrderingFieldsConfig(tablePropsToAdd, tablePropsToRemove, tableConfig, config);
     return new UpgradeDowngrade.TableConfigChangeSet(tablePropsToAdd, tablePropsToRemove);
-  }
-
-  /**
-   * Stamps {@link HoodieTableConfig#COMPLEX_KEYGEN_ENCODING} on a single-field complex key generator table.
-   *
-   * <p>From version 9 on the writer no longer consults {@code hoodie.write.complex.keygen.new.encoding}, so the
-   * encoding the existing data carries has to be recorded now or every later write would key records with the
-   * version-9 default and, on a table written with bare values (0.14.1, 0.15.0, 1.0.0-1.0.2), duplicate them.
-   * The value is resolved before the hops run ({@code UpgradeDowngrade#resolveComplexKeygenEncodingBeforeUpgrade})
-   * from the aux cache or the data; when that was not possible, the configured
-   * {@code hoodie.write.complex.keygen.new.encoding} is used only if the user disabled the validation, otherwise
-   * the upgrade fails with the guidance message.
-   */
-  private void reconcileComplexKeygenEncodingConfig(Map<ConfigProperty, String> tablePropsToAdd,
-                                                    HoodieTableConfig tableConfig, HoodieWriteConfig config) {
-    if (!isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig)) {
-      return;
-    }
-    String resolved = config.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING);
-    if (StringUtils.isNullOrEmpty(resolved)) {
-      if (config.enableComplexKeygenValidation()) {
-        throw new HoodieUpgradeDowngradeException(getComplexKeygenErrorMessage("upgrade"));
-      }
-      resolved = ComplexKeyGenEncoding.fromUseNewEncoding(config.getBooleanOrDefault(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING)).name();
-      // The data could not be read and the validation was disabled, so this is the configured value, not an
-      // observed one, and it is about to become permanent. Say so loudly: if it is wrong, every later write
-      // mis-keys its records, and unlike before version 9 the mistake can no longer be corrected per write.
-      log.warn("Could not determine the record key encoding of {} from its data; recording the configured {}={} "
-              + "because {} is disabled. If the table's existing keys are not {}, set {} accordingly and re-run the "
-              + "upgrade, or the records written from now on will not match the existing ones.",
-          tableConfig.getTableName(), HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(),
-          config.getBooleanOrDefault(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING), resolved,
-          HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key(),
-          HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key());
-      config.setValue(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING, resolved);
-    }
-    tablePropsToAdd.put(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING, resolved);
   }
 
   private void reconcileMergeModeConfig(Map<ConfigProperty, String> tablePropsToAdd, Set<ConfigProperty> tablePropsToRemove,
