@@ -796,4 +796,32 @@ object HoodieBaseRelation extends SparkAdapterSupport {
       DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean ||
       ProvidesHoodieConfig.isSchemaEvolutionEnabled(sparkSession)
   }
+
+  /**
+   * Checks in parallel whether any of the given file paths are missing from storage.
+   * Uses sparkContext.parallelize to distribute the exists() checks across executors,
+   * avoiding sequential driver-side RPCs that can take minutes on cloud storage for
+   * large file counts.
+   */
+  def checkIfAnyFilesMissing(sqlContext: SQLContext,
+                             metaClient: HoodieTableMetaClient,
+                             filePaths: java.util.List[StoragePathInfo]): Boolean = {
+    val sc = sqlContext.sparkContext
+    val allFilesToCheck = filePaths.asScala.map(_.getPath.toString)
+    val storageConf = HadoopFSUtils.getStorageConfWithCopy(sc.hadoopConfiguration)
+    val localBasePathStr = metaClient.getBasePath.toString
+    val numPartitions = Math.max(1, Math.min(allFilesToCheck.size, sc.defaultParallelism))
+    val previousJobDescription = sc.getLocalProperty("spark.job.description")
+    try {
+      sc.setJobDescription(s"Checking existence of ${allFilesToCheck.size} files for incremental fallback scan")
+      val missingFileFound = sc.parallelize(allFilesToCheck.toSeq, numPartitions)
+        .map(path => {
+          val storage = HoodieStorageUtils.getStorage(localBasePathStr, storageConf)
+          storage.exists(new StoragePath(path))
+        }).collect().exists(v => !v)
+      missingFileFound
+    } finally {
+      sc.setJobDescription(previousJobDescription)
+    }
+  }
 }
