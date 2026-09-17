@@ -19,7 +19,7 @@
 package org.apache.hudi.client.common;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.engine.BaseLocalEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
@@ -32,7 +32,7 @@ import java.util.Map;
 /**
  * A java engine implementation of HoodieEngineContext.
  */
-public class HoodieJavaEngineContext extends HoodieLocalEngineContext {
+public class HoodieJavaEngineContext extends BaseLocalEngineContext {
 
   public HoodieJavaEngineContext(StorageConfiguration<?> conf) {
     this(conf, new JavaTaskContextSupplier());
