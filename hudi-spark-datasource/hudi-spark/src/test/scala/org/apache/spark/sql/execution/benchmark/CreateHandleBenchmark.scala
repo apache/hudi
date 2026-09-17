@@ -27,7 +27,7 @@ import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieAvroIndex
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.marker.MarkerType
-import org.apache.hudi.common.util.HoodieRecordUtils
+import org.apache.hudi.common.util.{HoodieRecordUtils, Option => HOption}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.io.HoodieCreateHandle
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
@@ -128,7 +128,8 @@ object CreateHandleBenchmark extends HoodieBenchmarkBase {
       it => {
         it.map { genRec =>
           val hoodieKey = new HoodieKey(genRec.get("key").toString, "")
-          HoodieRecordUtils.createHoodieRecord(genRec, 0L, hoodieKey, classOf[DefaultHoodieRecordPayload].getName, false, null)
+          HoodieRecordUtils.createHoodieRecord(genRec, java.lang.Long.valueOf(0L), hoodieKey,
+            classOf[DefaultHoodieRecordPayload].getName, null, HOption.empty(), null)
         }
       }).toJavaRDD().collect().stream().map[HoodieRecord[_]](hoodieRec => {
       hoodieRec.asInstanceOf[HoodieAvroIndexedRecord].toIndexedRecord(schema, dummpProps)

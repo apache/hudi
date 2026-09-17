@@ -41,7 +41,6 @@ import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieKeyException;
@@ -71,7 +70,6 @@ import java.util.Iterator;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.model.WriteOperationType.isChangingRecords;
 import static org.apache.hudi.common.table.HoodieTableConfig.DROP_PARTITION_COLUMNS;
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_RECORD_CREATION;
 
@@ -99,7 +97,6 @@ public class HoodieStreamerUtils {
     String payloadClassName = StringUtils.isNullOrEmpty(cfg.payloadClassName)
         ? HoodieRecordPayload.getAvroPayloadForMergeMode(cfg.recordMergeMode, cfg.payloadClassName)
         : cfg.payloadClassName;
-    boolean requiresPayload = isChangingRecords(cfg.operation) && !HoodieWriteConfig.isFileGroupReaderBasedMergeHandle(props);
 
     return avroRDDOptional.map(avroRDD -> {
       HoodieSchema targetSchema = schemaProvider.getTargetHoodieSchema();
@@ -133,8 +130,8 @@ public class HoodieStreamerUtils {
                       ? OrderingValues.create(orderingFieldsStr.split(","),
                          field -> (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, field, false, useConsistentLogicalTimestamp))
                       : null;
-                  HoodieRecord record = shouldUseOrderingField ? HoodieRecordUtils.createHoodieRecord(gr, orderingValue, hoodieKey, payloadClassName, requiresPayload, isDelete)
-                      : HoodieRecordUtils.createHoodieRecord(gr, hoodieKey, payloadClassName, requiresPayload, isDelete);
+                  HoodieRecord record = shouldUseOrderingField ? HoodieRecordUtils.createHoodieRecord(gr, orderingValue, hoodieKey, payloadClassName, isDelete)
+                      : HoodieRecordUtils.createHoodieRecord(gr, hoodieKey, payloadClassName, isDelete);
                   return Either.left(record);
                 } catch (Exception e) {
                   return generateErrorRecordOrThrowException(genRec, e, shouldErrorTable);
