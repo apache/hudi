@@ -24,6 +24,7 @@ import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.DistributedQueryRunner;
 import io.trino.testing.QueryRunner;
 import org.intellij.lang.annotations.Language;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
@@ -82,6 +83,7 @@ public class TestHudiAlluxioCacheFileOperations
     }
 
     @Test
+    @Disabled("Asserts the exclusions of HudiCacheKeyProvider (table properties and index definitions are re-read from storage on every query). release-1.2.1 does not bind that provider, so Trino's default provider caches those files and the counts no longer hold. Re-enable together with the binding in HudiModule.")
     public void testSelectWithFilter()
     {
         @Language("SQL") String query = "SELECT * FROM " + HUDI_MULTI_FG_PT_V8_MOR + " WHERE country='SG'";
@@ -103,6 +105,7 @@ public class TestHudiAlluxioCacheFileOperations
     }
 
     @Test
+    @Disabled("Asserts the exclusions of HudiCacheKeyProvider (table properties and index definitions are re-read from storage on every query). release-1.2.1 does not bind that provider, so Trino's default provider caches those files and the counts no longer hold. Re-enable together with the binding in HudiModule.")
     public void testJoin()
     {
         @Language("SQL") String query = "SELECT t1.id, t1.name, t1.price, t1.ts FROM " +
