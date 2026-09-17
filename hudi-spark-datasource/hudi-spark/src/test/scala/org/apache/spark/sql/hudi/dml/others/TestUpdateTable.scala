@@ -25,6 +25,7 @@ import org.apache.hudi.HoodieSparkUtils.gteqSpark3_4
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.{AnalysisException, Row}
@@ -76,6 +77,52 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
               Seq(1, "a1", 40.0, 1000)
             )
           }
+        }
+      }
+    })
+  }
+
+  test("Test Update Table With Row Merge Handle") {
+    // Same statements as above with the merge handle pinned to HoodieWriteMergeHandle, so the write
+    // builds payload-carrying records and merges on the ordering value each record carries.
+    withRecordType()(withTempDir { tmp =>
+      Seq(true, false).foreach { sparkSqlOptimizedWrites =>
+        Seq("cow", "mor").foreach { tableType =>
+          val tableName = generateTableName
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               | location '${tmp.getCanonicalPath}/$tableName'
+               | tblproperties (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts',
+               |  '${HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key()}' = 'org.apache.hudi.io.HoodieWriteMergeHandle'
+               | )
+         """.stripMargin)
+
+          spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+          checkAnswer(s"select id, name, price, ts from $tableName")(
+            Seq(1, "a1", 10.0, 1000)
+          )
+
+          spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=$sparkSqlOptimizedWrites")
+
+          // the ordering column is not assigned, so the update must take effect
+          spark.sql(s"update $tableName set price = 20 where id = 1")
+          checkAnswer(s"select id, name, price, ts from $tableName")(
+            Seq(1, "a1", 20.0, 1000)
+          )
+
+          spark.sql(s"update $tableName set price = price * 2 where id = 1")
+          checkAnswer(s"select id, name, price, ts from $tableName")(
+            Seq(1, "a1", 40.0, 1000)
+          )
         }
       }
     })
