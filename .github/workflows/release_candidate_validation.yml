@@ -15,10 +15,10 @@ env:
 jobs:
   validate-release-candidate-bundles:
     runs-on: ubuntu-latest
-    if: false
+    if: true
     env:
-      HUDI_VERSION: 1.1.0
-      STAGING_REPO_NUM: 1164
+      HUDI_VERSION: 1.2.1-rc2
+      STAGING_REPO_NUM: 1191
     strategy:
       matrix:
         include:
@@ -66,10 +66,10 @@ jobs:
 
   validate-release-candidate-bundles-spark4:
     runs-on: ubuntu-latest
-    if: false
+    if: true
     env:
-      HUDI_VERSION: 1.1.0
-      STAGING_REPO_NUM: 1164
+      HUDI_VERSION: 1.2.1-rc2
+      STAGING_REPO_NUM: 1191
     strategy:
       matrix:
         include:
@@ -101,10 +101,10 @@ jobs:
 
   validate-release-candidate-bundles-flink2:
     runs-on: ubuntu-latest
-    if: false
+    if: true
     env:
-      HUDI_VERSION: 1.1.0
-      STAGING_REPO_NUM: 1164
+      HUDI_VERSION: 1.2.1-rc2
+      STAGING_REPO_NUM: 1191
     strategy:
       matrix:
         include:
