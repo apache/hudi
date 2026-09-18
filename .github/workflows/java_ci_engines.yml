@@ -1,0 +1,615 @@
+name: Java CI Engines
+
+# This filter replaces the former `changes` job. That job listed the changed files and every test
+# job waited on it through `needs`, which made each run wait for a shared runner twice: once for
+# the filter, once for the tests. GitHub evaluates `paths` before creating any job, so the same
+# decision now costs nothing. A docs-only change creates no run of this workflow at all, which is
+# fine because no required status check lives here (see validate_source.yml).
+# yml/yaml files are deliberately NOT ignored, unlike the old filter: docker/compose/*.yml drives
+# the integration tests, several modules keep yml test resources, and the workflow files themselves
+# need CI to run when they change.
+on:
+  push:
+    branches:
+      - master
+      - 'release-*'
+      - branch-0.x
+    paths:
+      - '**'
+      # Listed explicitly so the filter does not depend on '**' matching dot-prefixed paths.
+      - '.github/**'
+      - '!**.bmp'
+      - '!**.gif'
+      - '!**.jpg'
+      - '!**.jpeg'
+      - '!**.md'
+      - '!**.pdf'
+      - '!**.png'
+      - '!**.svg'
+      - '!.gitignore'
+  pull_request:
+    branches:
+      - master
+      - 'release-*'
+      - branch-0.x
+    paths:
+      - '**'
+      # Listed explicitly so the filter does not depend on '**' matching dot-prefixed paths.
+      - '.github/**'
+      - '!**.bmp'
+      - '!**.gif'
+      - '!**.jpg'
+      - '!**.jpeg'
+      - '!**.md'
+      - '!**.pdf'
+      - '!**.png'
+      - '!**.svg'
+      - '!.gitignore'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !contains(github.ref, 'master') && !contains(github.ref, 'branch-0.x') && !contains(github.ref, 'release-') }}
+
+env:
+  # The retry/timeout knobs below are maven-resolver (aether.*) properties. Maven 3.9 resolves
+  # artifacts through the native resolver HTTP transport, which ignores the older maven.wagon.* names.
+  # serviceUnavailable lists the HTTP codes retried instead of failing the build. 403 is deliberately
+  # absent: Maven Central answers 403 when its CDN has blocked the runner's egress IP, and retrying
+  # that is what escalates the block.
+  # Keep MVN_ARGS in sync with bot.yml.
+  MVN_ARGS: -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn -Daether.connector.http.retryHandler.count=5 -Daether.connector.http.retryHandler.interval=3000 -Daether.connector.http.retryHandler.intervalMax=30000 -Daether.connector.http.retryHandler.serviceUnavailable=429,500,502,503,504 -Daether.connector.http.connectionMaxTtl=25 -Dorg.eclipse.jetty.LEVEL=WARN
+  FLINK_IT_FILTER1: -Dit.test=ITTestHoodieDataSource
+  FLINK_IT_FILTER2: -Dit.test=!ITTestHoodieDataSource
+
+jobs:
+  test-flink-1:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          # [CI-TRIM] to revisit for CI improvement
+#          - flinkProfile: "flink1.18"
+#            flinkAvroVersion: "1.11.4"
+#            flinkParquetVersion: '1.13.1'
+#          - flinkProfile: "flink1.19"
+#            flinkAvroVersion: "1.11.4"
+#            flinkParquetVersion: '1.13.1'
+#          - flinkProfile: "flink1.20"
+#            flinkAvroVersion: "1.11.4"
+#            flinkParquetVersion: '1.13.1'
+#          - flinkProfile: "flink2.0"
+#            flinkAvroVersion: "1.11.4"
+#            flinkParquetVersion: '1.14.4'
+          - flinkProfile: "flink2.2"
+            flinkAvroVersion: "1.11.4"
+            flinkParquetVersion: '1.15.2'
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up JDK 11
+        uses: actions/setup-java@v5
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Build Project
+        env:
+          SCALA_PROFILE: 'scala-2.12'
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
+          FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
+        run:
+          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -DskipTests=true $MVN_ARGS
+      - name: Quickstart Test
+        env:
+          SCALA_PROFILE: 'scala-2.12'
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
+          FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
+        run:
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -pl hudi-examples/hudi-examples-flink $MVN_ARGS
+      - name: Integration Test 1
+        env:
+          SCALA_PROFILE: 'scala-2.12'
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
+          FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
+        if: ${{ endsWith(env.FLINK_PROFILE, '2.2') }}
+        run: |
+          mvn clean install -T 2 -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -DskipTests=true $MVN_ARGS
+          mvn verify -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" $FLINK_IT_FILTER1 -pl hudi-flink-datasource/hudi-flink $MVN_ARGS -Djacoco.skip=false
+      - name: Generate merged coverage report
+        if: always() && endsWith(matrix.flinkProfile, '2.2')
+        run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
+      - name: Upload coverage to Codecov
+        if: always() && endsWith(matrix.flinkProfile, '2.2')
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        with:
+          files: ./jacoco-report.xml
+          disable_search: true
+          flags: flink-integration-tests
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  test-flink-2:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - flinkProfile: "flink2.2"
+            flinkAvroVersion: "1.11.4"
+            flinkParquetVersion: '1.15.2'
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up JDK 11
+        uses: actions/setup-java@v5
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Build Project
+        env:
+          SCALA_PROFILE: 'scala-2.12'
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
+          FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
+        run:
+          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -DskipTests=true $MVN_ARGS
+      - name: Integration Test 2
+        env:
+          SCALA_PROFILE: 'scala-2.12'
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
+          FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
+        if: ${{ endsWith(env.FLINK_PROFILE, '2.2') }}
+        run: |
+          mvn clean install -T 2 -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -DskipTests=true $MVN_ARGS
+          mvn verify -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" $FLINK_IT_FILTER2 -pl hudi-flink-datasource/hudi-flink $MVN_ARGS -Djacoco.skip=false
+      - name: Generate merged coverage report
+        if: always() && endsWith(matrix.flinkProfile, '2.2')
+        run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
+      - name: Upload coverage to Codecov
+        if: always() && endsWith(matrix.flinkProfile, '2.2')
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        with:
+          files: ./jacoco-report.xml
+          disable_search: true
+          flags: flink-integration-tests
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  # [CI-TRIM] to revisit for CI improvement
+#  docker-java17-test:
+#    runs-on: ubuntu-latest
+#    strategy:
+#      matrix:
+#        include:
+#          - scalaProfile: 'scala-2.13'
+#            flinkProfile: 'flink2.1'
+#            sparkProfile: 'spark3.5'
+#            sparkRuntime: 'spark3.5.0'
+#          - scalaProfile: 'scala-2.12'
+#            flinkProfile: 'flink2.1'
+#            sparkProfile: 'spark3.5'
+#            sparkRuntime: 'spark3.5.0'
+#          - scalaProfile: 'scala-2.13'
+#            flinkProfile: 'flink2.1'
+#            sparkProfile: 'spark4.0'
+#            sparkRuntime: 'spark4.0.0'
+#          - scalaProfile: 'scala-2.13'
+#            flinkProfile: 'flink2.1'
+#            sparkProfile: 'spark4.1'
+#            sparkRuntime: 'spark4.1.1'
+#          - scalaProfile: 'scala-2.13'
+#            flinkProfile: 'flink1.20'
+#            sparkProfile: 'spark4.2'
+#            sparkRuntime: 'spark4.2.0'
+
+#    steps:
+#      - uses: actions/checkout@v5
+#      - name: Set up JDK 17
+#        uses: actions/setup-java@v5
+#        with:
+#          java-version: '17'
+#          distribution: 'temurin'
+#          architecture: x64
+#          # No `cache: maven` on purpose. This job runs no Maven on the host: run_docker_java17.sh
+#          # builds inside the container and never mounts $HOME/.m2. Caching here seals a near-empty
+#          # repo under the key all jobs share, which every later job then discards and re-downloads.
+#      - name: UT/FT - Docker Test - OpenJDK 17
+#        env:
+#          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+#          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+#          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
+#          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+#        # Only support Spark 3.4 for now
+#        if: ${{ env.SPARK_PROFILE >= 'spark3.4' }}
+#        run: |
+#          ./packaging/bundle-validation/run_docker_java17.sh
+
+  validate-bundles:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink2.2'
+            flinkAvroVersion: '1.11.4'
+            flinkParquetVersion: '1.15.2'
+            sparkProfile: 'spark3.5'
+            sparkRuntime: 'spark3.5.1'
+          # [CI-TRIM] to revisit for CI improvement
+#          - scalaProfile: 'scala-2.13'
+#            flinkProfile: 'flink1.19'
+#            flinkAvroVersion: '1.11.4'
+#            flinkParquetVersion: '1.13.1'
+#            sparkProfile: 'spark3.5'
+#            sparkRuntime: 'spark3.5.1'
+#          - scalaProfile: 'scala-2.12'
+#            flinkProfile: 'flink1.18'
+#            flinkAvroVersion: '1.11.4'
+#            flinkParquetVersion: '1.13.1'
+#            sparkProfile: 'spark3.4'
+#            sparkRuntime: 'spark3.4.3'
+#          - scalaProfile: 'scala-2.12'
+#            flinkProfile: 'flink1.18'
+#            flinkAvroVersion: '1.11.4'
+#            flinkParquetVersion: '1.13.1'
+#            sparkProfile: 'spark3.3'
+#            sparkRuntime: 'spark3.3.4'
+
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up JDK 11
+        uses: actions/setup-java@v5
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Build Project
+        env:
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
+          FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
+        run: |
+          if [ "$SCALA_PROFILE" == "scala-2.13" ]; then
+            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-hadoop-mr-bundle,packaging/hudi-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle,packaging/hudi-cli-bundle -am
+          else
+            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS
+            # TODO remove the sudo below. It's a needed workaround as detailed in HUDI-5708.
+            sudo chown -R "$USER:$(id -g -n)" hudi-platform-service/hudi-metaserver/target/generated-sources
+            mvn package -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION"
+          fi
+      - name: Validate Bundle UI Assets
+        run: ./scripts/release/validate_bundle_ui_assets.sh
+      - name: IT - Bundle Validation - OpenJDK 11
+        env:
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+        run: |
+          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          ./packaging/bundle-validation/ci_run.sh hudi_docker_java11 $HUDI_VERSION openjdk11
+      - name: IT - Bundle Validation - OpenJDK 17
+        env:
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+        run: |
+          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          ./packaging/bundle-validation/ci_run.sh hudi_docker_java17 $HUDI_VERSION openjdk17
+
+  validate-bundle-spark4:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          # [CI-TRIM] to revisit for CI improvement
+#          - scalaProfile: 'scala-2.13'
+#            flinkProfile: 'flink1.20'
+#            flinkAvroVersion: '1.11.4'
+#            flinkParquetVersion: '1.13.1'
+#            sparkProfile: 'spark4.0'
+#            sparkRuntime: 'spark4.0.0'
+#          - scalaProfile: 'scala-2.13'
+#            flinkProfile: 'flink1.20'
+#            flinkAvroVersion: '1.11.4'
+#            flinkParquetVersion: '1.13.1'
+#            sparkProfile: 'spark4.1'
+#            sparkRuntime: 'spark4.1.1'
+          - scalaProfile: 'scala-2.13'
+            flinkProfile: 'flink1.20'
+            flinkAvroVersion: '1.11.4'
+            flinkParquetVersion: '1.13.1'
+            sparkProfile: 'spark4.2'
+            sparkRuntime: 'spark4.2.0'
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          architecture: x64
+      - name: Build Project
+        env:
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
+          FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
+        run: |
+          mvn clean package -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true -Dmaven.javadoc.skip=true $MVN_ARGS -pl packaging/hudi-hadoop-mr-bundle,packaging/hudi-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle,packaging/hudi-cli-bundle -am
+      - name: Validate Bundle UI Assets
+        run: ./scripts/release/validate_bundle_ui_assets.sh
+      - name: IT - Spark4 Bundle Validation - OpenJDK 17
+        env:
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+        run: |
+          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          ./packaging/bundle-validation/ci_run.sh hudi_docker_java17 $HUDI_VERSION openjdk17
+
+  # [CI-TRIM] to revisit for CI improvement
+#  # flink 2.0/2.1 only support Java 11 and above version
+#  validate-bundles-java11:
+#    runs-on: ubuntu-latest
+#    strategy:
+#      matrix:
+#        include:
+#          - scalaProfile: 'scala-2.12'
+#            flinkProfile: 'flink2.0'
+#            flinkAvroVersion: '1.11.4'
+#            flinkParquetVersion: '1.14.4'
+#            sparkProfile: 'spark3.5'
+#            sparkRuntime: 'spark3.5.1'
+#          - scalaProfile: 'scala-2.12'
+#            flinkProfile: 'flink2.1'
+#            flinkAvroVersion: '1.11.4'
+#            flinkParquetVersion: '1.15.2'
+#            sparkProfile: 'spark3.5'
+#            sparkRuntime: 'spark3.5.1'
+
+#    steps:
+#      - uses: actions/checkout@v5
+#      - name: Set up JDK 11
+#        uses: actions/setup-java@v5
+#        with:
+#          java-version: '11'
+#          distribution: 'temurin'
+#          architecture: x64
+#          cache: maven
+#      - name: Build Project
+#        env:
+#          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+#          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+#          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+#          FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
+#          FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
+#        run: |
+#          mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION"
+#      - name: Validate Bundle UI Assets
+#        run: ./scripts/release/validate_bundle_ui_assets.sh
+#      - name: IT - Bundle Validation - OpenJDK 11
+#        env:
+#          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+#          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+#          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
+#          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+#        run: |
+#          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+#          ./packaging/bundle-validation/ci_run.sh hudi_docker_java11 $HUDI_VERSION openjdk11
+#      - name: IT - Bundle Validation - OpenJDK 17
+#        env:
+#          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+#          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+#          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
+#          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+#        run: |
+#          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+#          ./packaging/bundle-validation/ci_run.sh hudi_docker_java17 $HUDI_VERSION openjdk17
+
+  integration-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - sparkProfile: 'spark3.5'
+            flinkProfile: 'flink2.2'
+            sparkArchive: 'spark-3.5.9/spark-3.5.9-bin-hadoop3.tgz'
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up JDK 11
+        uses: actions/setup-java@v5
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Check disk space
+        run: df -h
+      - name: 'Free space'
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          docker system prune --all --force --volumes
+      - name: Check disk space after cleanup
+        run: df -h
+      - name: Build Project
+        env:
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          SCALA_PROFILE: '-Dscala-2.12 -Dscala.binary.version=2.12'
+        run:
+          mvn clean install -T 2 $SCALA_PROFILE -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -Pintegration-tests -DskipTests=true $MVN_ARGS -Ddocker.compose.skip=true
+      - name: 'UT integ-test'
+        env:
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SCALA_PROFILE: '-Dscala-2.12 -Dscala.binary.version=2.12'
+        run:
+          mvn test $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -DskipUTs=false -DskipITs=true -pl hudi-integ-test $MVN_ARGS -Djacoco.skip=false
+      - name: 'IT'
+        env:
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_ARCHIVE: ${{ matrix.sparkArchive }}
+          SCALA_PROFILE: '-Dscala-2.12 -Dscala.binary.version=2.12'
+        run: |
+          # dlcdn only carries the current release of each line; fall back to
+          # the archive for older pins (#19883). Plain --retry, not
+          # --retry-all-errors, so a 404 on the CDN falls through immediately.
+          # --speed-limit is a dead-connection detector, not a slowness one:
+          # --retry truncates the output back to byte 0, so a floor set near
+          # the archive's real throughput re-downloads 382MB per abort.
+          DEST="$GITHUB_WORKSPACE/$SPARK_ARCHIVE"
+          downloaded=false
+          for base in https://dlcdn.apache.org/spark https://archive.apache.org/dist/spark; do
+            echo "Downloading $SPARK_ARCHIVE from $base"
+            if curl -fL --create-dirs -o "$DEST" \
+                --retry 5 --retry-delay 10 \
+                --connect-timeout 30 --speed-limit 1000 --speed-time 120 \
+                "$base/$SPARK_ARCHIVE"; then
+              downloaded=true
+              break
+            fi
+            echo "$base did not serve $SPARK_ARCHIVE"
+            rm -f "$DEST"
+          done
+          if [ "$downloaded" != true ]; then
+            echo "ERROR: could not download $SPARK_ARCHIVE from any source"
+            exit 1
+          fi
+          tar -xf "$DEST" -C $GITHUB_WORKSPACE/
+          mkdir /tmp/spark-events/
+          SPARK_ARCHIVE_BASENAME=$(basename $SPARK_ARCHIVE)
+          export SPARK_HOME=$GITHUB_WORKSPACE/${SPARK_ARCHIVE_BASENAME%.*}
+          rm -f $GITHUB_WORKSPACE/$SPARK_ARCHIVE
+          mvn verify $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -pl !hudi-flink-datasource/hudi-flink $MVN_ARGS -Djacoco.skip=false
+      - name: Generate merged coverage report
+        if: always()
+        run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
+      - name: Upload coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        with:
+          files: ./jacoco-report.xml
+          disable_search: true
+          flags: integration-tests
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  # [CI-TRIM] to revisit for CI improvement
+#  integration-tests-hive-sync:
+#    # Testcontainers-based E2E hive sync coverage for Hudi's custom logical types
+#    # (VECTOR, BLOB) and the Spark 4.0+ VARIANT type. Runs the integ2 testcontainers
+#    # suite (ITTestCustomTypeHiveSync) against a real Hive metastore on Spark 3.5.9,
+#    # 4.0.2, and 4.1.1 stacks.
+#    runs-on: ubuntu-latest
+#    strategy:
+#      fail-fast: false
+#      matrix:
+#        include:
+#          - sparkProfile: 'spark3.5'
+#            scalaProfile: '-Dscala-2.12 -Dscala.binary.version=2.12'
+#            flinkProfile: 'flink1.20'
+#            jdkVersion: '11'
+#            composePrefix: 'docker-compose_hadoop284_hive2310_spark359'
+#            sparkAdhocImage: 'apachehudi/hudi-hadoop_2.8.4-hive_2.3.10-sparkadhoc_3.5.9:latest'
+#          - sparkProfile: 'spark4.0'
+#            scalaProfile: '-Dscala-2.13 -Dscala.binary.version=2.13'
+#            flinkProfile: 'flink1.20'
+#            jdkVersion: '17'
+#            composePrefix: 'docker-compose_hadoop340_hive2310_spark402'
+#            sparkAdhocImage: 'apachehudi/hudi-hadoop_3.4.0-hive_2.3.10-sparkadhoc_4.0.2:latest'
+#          - sparkProfile: 'spark4.1'
+#            scalaProfile: '-Dscala-2.13 -Dscala.binary.version=2.13'
+#            flinkProfile: 'flink1.20'
+#            jdkVersion: '17'
+#            composePrefix: 'docker-compose_hadoop340_hive2310_spark411'
+#            sparkAdhocImage: 'apachehudi/hudi-hadoop_3.4.0-hive_2.3.10-sparkadhoc_4.1.1:latest'
+#    steps:
+#      - uses: actions/checkout@v5
+#      - name: Set up JDK ${{ matrix.jdkVersion }}
+#        uses: actions/setup-java@v5
+#        with:
+#          java-version: ${{ matrix.jdkVersion }}
+#          distribution: 'temurin'
+#          architecture: x64
+#          cache: maven
+#      - name: Free disk space
+#        run: |
+#          sudo rm -rf /usr/share/dotnet
+#          sudo rm -rf /usr/local/lib/android
+#          sudo rm -rf /opt/ghc
+#          sudo rm -rf /usr/local/share/boost
+#          docker system prune --all --force --volumes
+#      - name: Pre-pull compose images (fails fast if not published)
+#        env:
+#          SPARK_ADHOC_IMAGE: ${{ matrix.sparkAdhocImage }}
+#        run: |
+#          # Surface missing Spark 4.0.2 images before the 15-minute Maven install.
+#          # The remaining images in the compose stack are pulled by docker-compose at
+#          # test time.
+#          docker pull "$SPARK_ADHOC_IMAGE"
+#      - name: Build and install Hudi artifacts
+#        env:
+#          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+#          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+#          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+#        run:
+#          mvn clean install -T 2 $SCALA_PROFILE -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -Pintegration-tests -DskipTests=true -Ddocker.compose.skip=true $MVN_ARGS
+#      - name: Run integ2 testcontainers suite
+#        env:
+#          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+#          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+#          COMPOSE_PREFIX: ${{ matrix.composePrefix }}
+#        run: |
+#          # -DskipITs=false overrides the spark4.0 profile's skipITs=true default
+#          # (see root pom.xml). Without it, failsafe skips all ITs on the spark4.0 matrix row.
+#          mvn verify $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests \
+#            -pl hudi-integ-test \
+#            -DskipITs=false \
+#            -Ddocker.compose.skip=true \
+#            -Dit.test='ITTestCustomTypeHiveSync' \
+#            -Dspark.docker.compose.prefix=$COMPOSE_PREFIX \
+#            $MVN_ARGS
+
+  # [CI-TRIM] to revisit for CI improvement
+#  build-flink-java17:
+#    runs-on: ubuntu-latest
+#    strategy:
+#      matrix:
+#        include:
+#          - scalaProfile: "scala-2.12"
+#            flinkProfile: "flink2.1"
+#            flinkAvroVersion: '1.11.4'
+#            flinkParquetVersion: '1.15.2'
+#    steps:
+#      - uses: actions/checkout@v5
+#      - name: Set up JDK 17
+#        uses: actions/setup-java@v5
+#        with:
+#          java-version: '17'
+#          distribution: 'temurin'
+#          architecture: x64
+#          cache: maven
+#      - name: Build Project
+#        env:
+#          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+#          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+#          FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
+#          FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
+#        run:
+#          mvn clean install -T 2 -Djava17 -Djava.version=17 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -DskipTests=true $MVN_ARGS
+#      - name: Quickstart Test
+#        env:
+#          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+#          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+#        run:
+#          mvn test -Punit-tests -Djava17 -Djava.version=17 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink $MVN_ARGS
