@@ -20,12 +20,13 @@ package org.apache.hudi
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.log.InstantRange
 import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.timeline.TimelineUtils.{concatTimeline, getCommitMetadata}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
-import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.common.util.{Option => HOption, StringUtils}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.listAffectedFilesForCommits
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.getWritePartitionPaths
@@ -45,6 +46,7 @@ import scala.collection.immutable
 trait MergeOnReadIncrementalRelation {
   def listFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Map[InternalRow, Seq[FileSlice]]
   def getRequiredFilters: Seq[Filter]
+  def getInstantRange: HOption[InstantRange] = HOption.empty()
 }
 
 case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
@@ -85,6 +87,7 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
       mergeType = mergeType,
       fileSplits = fileSplits,
       includedInstantTimeSet = Option(includedCommits.map(_.requestedTime).toSet),
+      instantRangeOpt = queryContext.getInstantRange,
       optionalFilters = optionalFilters,
       metaClient = metaClient,
       options = optParams)
@@ -149,6 +152,13 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
       incrementalSpanRecordFilters
     }
   }
+
+  /**
+   * Returns the requested-time range selected by the completion-time query analysis. The file-group
+   * reader needs this in addition to Spark's required filters so that out-of-range log records do
+   * not participate in record merging and mask an earlier in-range version of the same key.
+   */
+  override def getInstantRange: HOption[InstantRange] = queryContext.getInstantRange
 
   override def shouldIncludeLogFiles(): Boolean = fullTableScan
 
@@ -271,4 +281,3 @@ trait HoodieIncrementalRelationV2Trait extends HoodieBaseRelation {
     optParams.getOrElse(DataSourceReadOptions.INCR_PATH_GLOB.key, DataSourceReadOptions.INCR_PATH_GLOB.defaultValue)
 
 }
-
