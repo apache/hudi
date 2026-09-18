@@ -96,6 +96,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
@@ -603,6 +604,51 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     expected.add("localTimestampMillisField");
     assertListEquality(expected, new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
         Lazy.eagerly(Option.of(schema)), true, V1).keySet()));
+  }
+
+  /**
+   * The schema-absent branch of {@code getColumnsToIndexWithoutRequiredMetaFields}, which
+   * {@link #testGetColumnsToIndex()} never reaches because every case there supplies a schema. With no
+   * explicit column list it yields only the always-indexed meta columns; with one it throws, since those
+   * names cannot be resolved without a schema. While initializing it returns them unresolved instead.
+   */
+  @Test
+  public void testGetColumnsToIndexWhenTableSchemaIsAbsent() {
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+
+    HoodieMetadataConfig noColumnList = HoodieMetadataConfig.newBuilder()
+        .enable(true).withMetadataIndexColumnStats(true)
+        .build();
+    assertListEquality(new ArrayList<>(Arrays.asList(HoodieTableMetadataUtil.META_COLS_TO_ALWAYS_INDEX)),
+        new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, noColumnList,
+            Lazy.eagerly(Option.empty()), false, V1).keySet()));
+
+    HoodieMetadataConfig withColumnList = HoodieMetadataConfig.newBuilder()
+        .enable(true).withMetadataIndexColumnStats(true)
+        .withColumnStatsIndexForColumns("col_1,col_2")
+        .build();
+    Throwable thrown = assertThrows(IllegalArgumentException.class,
+        () -> HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, withColumnList,
+            Lazy.eagerly(Option.empty()), false, V1),
+        "an explicit column list cannot be resolved without a table schema");
+    assertTrue(String.valueOf(thrown.getMessage()).contains("Table schema not found"),
+        () -> "the failure should name the missing schema, but was: " + thrown.getMessage());
+
+    // Table initialisation is the exception: the configured names are recorded without schemas, so col
+    // stats can be enabled before the first commit has produced one. The meta columns are added by the
+    // caller either way.
+    //
+    // The schema is supplied as a lazy that fails if it is ever forced, because this branch must return
+    // without resolving it at all. ColumnStatsIndexer passes isTableInitializing=true together with a
+    // Lazy.lazily(tryResolveSchemaForTable) whenever an explicit column list is set, including on tables
+    // that already have data, so resolving here would cost a schema read on that path. An eagerly-computed
+    // empty Option cannot tell "never resolved" from "resolved and absent"; this can.
+    List<String> expectedWhileInitialising = new ArrayList<>(Arrays.asList(HoodieTableMetadataUtil.META_COLS_TO_ALWAYS_INDEX));
+    expectedWhileInitialising.addAll(Arrays.asList("col_1", "col_2"));
+    assertListEquality(expectedWhileInitialising,
+        new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, withColumnList,
+            Lazy.lazily(() -> fail("the initializing branch must not resolve the table schema")),
+            true, V1).keySet()));
   }
 
   private void assertListEquality(List<String> expected, List<String> actual) {
