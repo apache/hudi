@@ -1,0 +1,4 @@
+SLF4J: Class path contains multiple SLF4J bindings.
+SLF4J: Found binding in [jar:file:/tmp/hudi-cli-staging/hudi-cli-bundle_2.12-0.14.1-rc2.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+Main called
+hudi->Metadata for table trips loaded
