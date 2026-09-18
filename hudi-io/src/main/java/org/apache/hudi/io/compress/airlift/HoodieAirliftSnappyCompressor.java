@@ -22,14 +22,14 @@ package org.apache.hudi.io.compress.airlift;
 import org.apache.hudi.io.compress.CompressionCodec;
 import org.apache.hudi.io.compress.HoodieCompressor;
 
-import io.airlift.compress.gzip.JdkGzipHadoopStreams;
+import io.airlift.compress.snappy.SnappyHadoopStreams;
 
 /**
- * Implementation of {@link HoodieCompressor} for {@link CompressionCodec#GZIP} compression
- * codec using airlift aircompressor's GZIP decompressor.
+ * Implementation of {@link HoodieCompressor} for {@link CompressionCodec#SNAPPY} compression
+ * codec using airlift aircompressor's Snappy compressor and decompressor.
  */
-public class HoodieAirliftGzipCompressor extends HoodieAirliftCompressor {
-  public HoodieAirliftGzipCompressor() {
-    super(new JdkGzipHadoopStreams());
+public class HoodieAirliftSnappyCompressor extends HoodieAirliftCompressor {
+  public HoodieAirliftSnappyCompressor() {
+    super(new SnappyHadoopStreams());
   }
 }
