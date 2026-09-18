@@ -44,6 +44,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.TableServiceType;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
@@ -586,6 +587,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public void preWrite(String instantTime, WriteOperationType writeOperationType,
                        HoodieTableMetaClient metaClient, Option<HoodieData<HoodieRecord<T>>> recordsOpt) {
+    // Engine-agnostic backstop rejecting insert overwrite under non-blocking concurrency control.
+    // Complements the engine-specific guards by covering entry points that bypass them (e.g. Hudi
+    // Streamer, which reaches the write client directly).
+    WriteConcurrencyMode.checkInsertOverwriteSupported(
+        config.getWriteConcurrencyMode().isNonBlockingConcurrencyControl(),
+        WriteOperationType.isOverwrite(writeOperationType));
     setOperationType(writeOperationType);
     this.lastCompletedTxnAndMetadata = txnManager.isLockRequired()
         ? TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient) : Option.empty();
