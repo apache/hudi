@@ -176,9 +176,10 @@ object TestDataSkippingUtils {
         Seq(
           IndexRow("file_1", valueCount = 1, B_minValue = "aba", B_maxValue = "adf", B_nullCount = 1), // may contain strings starting w/ "abc"
           IndexRow("file_2", valueCount = 1, B_minValue = "adf", B_maxValue = "azy", B_nullCount = 0),
-          IndexRow("file_3", valueCount = 1, B_minValue = "aaa", B_maxValue = "aba", B_nullCount = 0)
+          IndexRow("file_3", valueCount = 1, B_minValue = "aaa", B_maxValue = "aba", B_nullCount = 0),
+          IndexRow("file_4", valueCount = 1, B_minValue = "abc123", B_maxValue = "abc345", B_nullCount = 0) // all strings start w/ "abc"; minValue > "abc"
         ),
-        Seq("file_1")),
+        Seq("file_1", "file_4")),
       arguments(
         Not(sparkAdapter.getExpressionFromColumn(col("B").startsWith("abc"))),
         Seq(
