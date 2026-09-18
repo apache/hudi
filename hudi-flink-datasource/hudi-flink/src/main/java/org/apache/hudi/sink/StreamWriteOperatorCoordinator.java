@@ -74,7 +74,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -156,6 +158,28 @@ public class StreamWriteOperatorCoordinator
   private volatile String instant = WriteMetadataEvent.BOOTSTRAP_INSTANT;
 
   /**
+   * Coordinator generation, bumped on {@link #start()}, {@link #resetToCheckpoint} and {@link #close()}.
+   *
+   * <p>An asynchronous instant creation carries the generation it was submitted under and refuses to
+   * publish its result once the generation has moved on, so a recovery/close never observes a stale
+   * instant. Only mutated on the single coordinator thread; read by the creation worker.
+   */
+  private volatile long epoch;
+
+  /**
+   * Whether the coordinator is closing; when set, new instant requests are rejected.
+   */
+  private volatile boolean isClosing;
+
+  /**
+   * In-flight instant creations keyed by checkpoint id.
+   *
+   * <p>Serves the poll-based instant request protocol: the fast path reports the current
+   * {@link Correspondent.Status} in O(1) while the blocking creation runs on {@link #instantRequestExecutor}.
+   */
+  private final ConcurrentHashMap<Long, InstantOp> instantOps = new ConcurrentHashMap<>();
+
+  /**
    * Event buffers for checkpointing.
    *
    * <p>It's a map of {checkpointId -> (instant, events)}.
@@ -220,6 +244,10 @@ public class StreamWriteOperatorCoordinator
     // setup classloader for APIs that use reflection without taking ClassLoader param
     // reference: https://stackoverflow.com/questions/1771679/difference-between-threads-context-class-loader-and-normal-classloader
     Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
+    // fresh generation: fence any instant creation left over from a previous incarnation.
+    this.isClosing = false;
+    this.epoch++;
+    this.instantOps.clear();
     initEventBufferIfNecessary();
     this.tableState = TableState.create(conf);
     this.gateways = new SubtaskGateway[this.parallelism];
@@ -243,7 +271,7 @@ public class StreamWriteOperatorCoordinator
       this.instantRequestExecutor = NonThrownExecutor.builder(log)
           .threadFactory(getThreadFactory("instant-request"))
           .exceptionHook((errMsg, t) -> this.context.failJob(new HoodieException(errMsg, t)))
-          .build();
+          .waitForTasksFinish(true).build();
       // start the executor if required
       if (tableState.syncHive) {
         initHiveSync();
@@ -265,11 +293,16 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public void close() throws Exception {
+    // reject new instant requests and fence any in-flight creation from publishing.
+    this.isClosing = true;
+    this.epoch++;
     // teardown the resource
     if (executor != null) {
       executor.close();
     }
     if (instantRequestExecutor != null) {
+      // waitForTasksFinish(true) drains a running instant creation (e.g. inside startInstant()) before
+      // the write client is closed below.
       instantRequestExecutor.close();
     }
     if (hiveSyncExecutor != null) {
@@ -328,6 +361,10 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public void resetToCheckpoint(long checkpointID, byte[] checkpointData) {
+    // bump the generation so any in-flight instant creation from the previous generation is fenced;
+    // covers global failover where start() is not called again.
+    this.epoch++;
+    this.instantOps.clear();
     if (checkpointData != null) {
       // resetToCheckpoint() is called in two cases:
       // 1. The job is restarted from state, start() will be called later.
@@ -412,22 +449,76 @@ public class StreamWriteOperatorCoordinator
   }
 
   private CompletableFuture<CoordinationResponse> handleInstantRequest(Correspondent.InstantTimeRequest request) {
-    CompletableFuture<CoordinationResponse> response = new CompletableFuture<>();
-    instantRequestExecutor.execute(() -> {
-      long checkpointId = request.getCheckpointId();
-      Pair<String, EventBuffer> instantTimeAndEventBuffer = this.eventBuffers.getInstantAndEventBuffer(checkpointId);
-      final String instantTime;
-      if (instantTimeAndEventBuffer == null) {
-        // wait until previous instants are committed.
-        eventBuffers.awaitAllInstantsToCompleteIfNecessary();
-        instantTime = startInstant();
-        this.eventBuffers.initNewEventBuffer(checkpointId, instantTime);
-      } else {
-        instantTime = instantTimeAndEventBuffer.getLeft();
+    final long checkpointId = request.getCheckpointId();
+    if (isClosing) {
+      return failedResponse("Coordinator is closing, rejecting instant request for checkpoint " + checkpointId);
+    }
+    // Idempotent fast path: the checkpoint -> instant mapping is authoritative and survives op retirement,
+    // so a lost READY reply is recovered by the next poll without creating a second instant.
+    Pair<String, EventBuffer> instantTimeAndEventBuffer = this.eventBuffers.getInstantAndEventBuffer(checkpointId);
+    if (instantTimeAndEventBuffer != null) {
+      return readyResponse(instantTimeAndEventBuffer.getLeft());
+    }
+    // Register or join exactly one creation for this checkpoint; only the first caller submits the work.
+    final long currentEpoch = this.epoch;
+    InstantOp op = instantOps.computeIfAbsent(checkpointId, cid -> new InstantOp(cid, currentEpoch));
+    if (op.claimCreation()) {
+      NonThrownExecutor worker = this.instantRequestExecutor;
+      if (worker != null && !isClosing) {
+        worker.execute(() -> runInstantCreation(op), "create instant for checkpoint %d", checkpointId);
       }
-      response.complete(CoordinationResponseSerDe.wrap(Correspondent.InstantTimeResponse.getInstance(instantTime)));
-    }, "request instant time");
-    return response;
+    }
+    // Reply with the current status without blocking; the requester polls until READY/FAILED.
+    switch (op.getStatus()) {
+      case READY:
+        return readyResponse(op.getInstant());
+      case FAILED:
+        return failedResponse(op.getError());
+      default:
+        return CompletableFuture.completedFuture(
+            CoordinationResponseSerDe.wrap(Correspondent.InstantTimeResponse.pending()));
+    }
+  }
+
+  /**
+   * Creates a new instant for the given operation on the instant-request worker thread.
+   *
+   * <p>Runs off the coordination-RPC path so the RPC can always answer in O(1). The result is only
+   * published (buffer installed, status flipped to READY) when the coordinator generation is unchanged,
+   * so a concurrent failover/close never observes a stale instant. Any failure is terminal: the op is
+   * marked FAILED for prompt requester feedback and the exception is rethrown so the executor's exception
+   * hook fails the job.
+   */
+  private void runInstantCreation(InstantOp op) {
+    if (op.getEpoch() != this.epoch || isClosing) {
+      // fenced before starting: a newer generation (or a close) took over.
+      return;
+    }
+    try {
+      // ordering: wait until all prior-checkpoint instants are committed (blocking-generation mode only).
+      eventBuffers.awaitAllInstantsToCompleteIfNecessary(op.getCheckpointId());
+      String instantTime = startInstant();
+      if (op.getEpoch() != this.epoch || isClosing) {
+        // fenced after starting: do not publish the now-stale instant; recovery reconciles the
+        // requested instant left on the timeline via recommit/rollback.
+        return;
+      }
+      this.eventBuffers.initNewEventBuffer(op.getCheckpointId(), instantTime);
+      op.markReady(instantTime);
+    } catch (Throwable t) {
+      op.markFailed("Failed to create instant for checkpoint " + op.getCheckpointId() + ": " + t.getMessage());
+      throw new HoodieException("Failed to create instant for checkpoint " + op.getCheckpointId(), t);
+    }
+  }
+
+  private CompletableFuture<CoordinationResponse> readyResponse(String instantTime) {
+    return CompletableFuture.completedFuture(
+        CoordinationResponseSerDe.wrap(Correspondent.InstantTimeResponse.ready(instantTime)));
+  }
+
+  private CompletableFuture<CoordinationResponse> failedResponse(String message) {
+    return CompletableFuture.completedFuture(
+        CoordinationResponseSerDe.wrap(Correspondent.InstantTimeResponse.failed(message)));
   }
 
   private CompletableFuture<CoordinationResponse> handleInFlightInstantsRequest(Correspondent.InflightInstantsRequest request) {
@@ -438,6 +529,15 @@ public class StreamWriteOperatorCoordinator
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
+
+  /**
+   * Resets the event buffer for the checkpoint and retires its in-flight instant creation, so a
+   * subsequent request for the same checkpoint creates a fresh instant instead of replaying a stale one.
+   */
+  private void resetEventBuffer(long checkpointId) {
+    this.eventBuffers.reset(checkpointId);
+    this.instantOps.remove(checkpointId);
+  }
 
   private void restoreEvents(long checkpointId) {
     if (this.eventBuffers.nonEmpty()) {
@@ -559,7 +659,7 @@ public class StreamWriteOperatorCoordinator
       return commitInstant(checkpointId, instant, bootstrapBuffer);
     } else {
       // clean the corresponding event buffer if the instant is already committed.
-      eventBuffers.reset(checkpointId);
+      resetEventBuffer(checkpointId);
       writeClient.cleanResources(instant);
       return false;
     }
@@ -626,7 +726,7 @@ public class StreamWriteOperatorCoordinator
   private boolean commitInstant(long checkpointId, String instant, EventBuffer eventBuffer) {
     if (eventBuffer.isEmptyDataWriteBuffer()) {
       // all the data write tasks are reset by failover, reset the while buffer and returns early.
-      this.eventBuffers.reset(checkpointId);
+      resetEventBuffer(checkpointId);
       // stop the heart beat for lazy cleaning
       writeClient.cleanResources(instant);
       return false;
@@ -635,7 +735,7 @@ public class StreamWriteOperatorCoordinator
     List<WriteStatus> dataWriteResults = eventBuffer.collectDataWriteStatuses();
     if (dataWriteResults.isEmpty() && !OptionsResolver.allowCommitOnEmptyBatch(conf)) {
       // No data has written, reset the buffer and returns early
-      this.eventBuffers.reset(checkpointId);
+      resetEventBuffer(checkpointId);
       // stop the heart beat for lazy cleaning
       writeClient.cleanResources(instant);
       return false;
@@ -665,7 +765,7 @@ public class StreamWriteOperatorCoordinator
     boolean success = writeClient.commit(instant, allWriteStatus, Option.of(checkpointCommitMetadata),
         tableState.commitAction, partitionToReplacedFileIds);
     if (success) {
-      this.eventBuffers.reset(checkpointId);
+      this.resetEventBuffer(checkpointId);
       log.info("Commit instant [{}] success!", instant);
     } else {
       throw new HoodieException(String.format("Commit instant [%s] failed!", instant));
@@ -756,6 +856,57 @@ public class StreamWriteOperatorCoordinator
   /**
    * Remember some table state variables.
    */
+  /**
+   * State of an asynchronous instant creation for one checkpoint.
+   *
+   * <p>Created on the coordinator thread when the first request for a checkpoint arrives and mutated by
+   * the {@link #instantRequestExecutor} worker as the creation progresses. {@code status}/{@code instant}/
+   * {@code error} are read back by later requests on the coordinator thread, hence {@code volatile}. The
+   * {@code epoch} pins the creation to the coordinator generation that submitted it so a stale result is
+   * never published after a failover or close.
+   */
+  private static class InstantOp {
+    final long checkpointId;
+    final long epoch;
+    private final AtomicBoolean creationClaimed = new AtomicBoolean(false);
+    @Getter
+    private volatile Correspondent.Status status = Correspondent.Status.PENDING;
+    @Getter
+    private volatile String instant;
+    @Getter
+    private volatile String error;
+
+    InstantOp(long checkpointId, long epoch) {
+      this.checkpointId = checkpointId;
+      this.epoch = epoch;
+    }
+
+    long getCheckpointId() {
+      return checkpointId;
+    }
+
+    long getEpoch() {
+      return epoch;
+    }
+
+    /**
+     * Returns {@code true} for exactly one caller, which is then responsible for submitting the creation.
+     */
+    boolean claimCreation() {
+      return creationClaimed.compareAndSet(false, true);
+    }
+
+    void markReady(String instantTime) {
+      this.instant = instantTime;
+      this.status = Correspondent.Status.READY;
+    }
+
+    void markFailed(String errorMessage) {
+      this.error = errorMessage;
+      this.status = Correspondent.Status.FAILED;
+    }
+  }
+
   private static class TableState implements Serializable {
     private static final long serialVersionUID = 1L;
 

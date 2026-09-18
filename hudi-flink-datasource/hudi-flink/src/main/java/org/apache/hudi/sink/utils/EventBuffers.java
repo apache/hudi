@@ -20,6 +20,7 @@ package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
@@ -71,7 +72,13 @@ public class EventBuffers implements Serializable {
   }
 
   public EventBuffer addEventToBuffer(WriteMetadataEvent event) {
-    EventBuffer eventBuffer = this.eventBuffers.get(event.getCheckpointId()).getRight();
+    Pair<String, EventBuffer> bufferPair = this.eventBuffers.get(event.getCheckpointId());
+    ValidationUtils.checkState(bufferPair != null,
+        "No event buffer bound to checkpoint " + event.getCheckpointId());
+    ValidationUtils.checkState(bufferPair.getLeft().equals(event.getInstantTime()),
+        String.format("Event instant %s does not match the instant %s bound to checkpoint %d",
+            event.getInstantTime(), bufferPair.getLeft(), event.getCheckpointId()));
+    EventBuffer eventBuffer = bufferPair.getRight();
     eventBuffer.addEvent(event);
     return eventBuffer;
   }
@@ -134,13 +141,22 @@ public class EventBuffers implements Serializable {
   }
 
   public void initNewEventBuffer(long checkpointId, String instantTime) {
-    this.eventBuffers.put(checkpointId, Pair.of(instantTime, new EventBuffer(dataWriteParallelism, indexWriteParallelism)));
+    this.eventBuffers.compute(checkpointId, (cid, existing) -> {
+      ValidationUtils.checkState(existing == null,
+          String.format("Checkpoint %d is already bound to instant %s, refusing to rebind to %s",
+              cid, existing == null ? null : existing.getLeft(), instantTime));
+      return Pair.of(instantTime, new EventBuffer(dataWriteParallelism, indexWriteParallelism));
+    });
   }
 
-  public void awaitAllInstantsToCompleteIfNecessary() {
-    if (this.commitGuardOption.isPresent() && nonEmpty()) {
-      this.commitGuardOption.get().blockFor(getPendingInstants());
-    }
+  /**
+   * Waits until all the pending instants before {@code checkpointId} are committed.
+   *
+   * <p>Only blocks in blocking-instant-generation mode (a commit guard is present); otherwise no-op.
+   * Uses a predicate loop so a spurious wakeup does not let a new instant start before prior commits finish.
+   */
+  public void awaitAllInstantsToCompleteIfNecessary(long checkpointId) {
+    this.commitGuardOption.ifPresent(guard -> guard.blockFor(() -> getPendingInstantsBefore(checkpointId)));
   }
 
   public void reset(long checkpointId) {
