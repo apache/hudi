@@ -31,6 +31,9 @@ import org.apache.hudi.utils.TestConfigurations;
 
 import org.apache.flink.api.dag.Transformation;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.MemorySize;
+import org.apache.flink.configuration.TaskManagerOptions;
+import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSink;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
@@ -396,6 +399,7 @@ public class TestPipelines {
     assertEquals("compact_commit", compaction.getTransformation().getName());
     assertEquals(1, compaction.getTransformation().getParallelism());
     assertEquals(1, compaction.getTransformation().getMaxParallelism());
+    assertTrue(findTransformation(compaction.getTransformation(), "compact_plan_generate").getSlotSharingGroup().isEmpty());
 
     DataStreamSink<?> clustering = Pipelines.cluster(conf, TestConfigurations.ROW_TYPE, input);
     assertEquals("clustering_commit", clustering.getTransformation().getName());
@@ -410,6 +414,61 @@ public class TestPipelines {
     DataStreamSink<?> dummy = Pipelines.dummySink(rowDataInput(5));
     assertEquals("dummy", dummy.getTransformation().getName());
     assertEquals(5, dummy.getTransformation().getParallelism());
+  }
+
+  @Test
+  void testCompactionPlanGenerateSlotSharingGroup() {
+    Configuration conf = defaultConf();
+    conf.set(FlinkOptions.COMPACTION_TASKS, 4);
+    conf.set(FlinkOptions.COMPACTION_PLAN_GENERATE_SLOT_SHARING_GROUP, "compaction-plan-group");
+    conf.set(TaskManagerOptions.CPU_CORES, 2.0);
+    conf.set(TaskManagerOptions.TASK_HEAP_MEMORY, MemorySize.ofMebiBytes(512));
+    DataStream<RowData> input = rowDataInput();
+
+    DataStreamSink<?> compaction = Pipelines.compact(conf, input);
+    assertEquals("compaction-plan-group",
+        findTransformation(compaction.getTransformation(), "compact_plan_generate")
+            .getSlotSharingGroup().get().getName());
+
+    ResourceProfile resource = input.getExecutionEnvironment().getStreamGraph(false)
+        .getSlotSharingGroupResource("compaction-plan-group")
+        .orElseThrow(() -> new AssertionError("Slot sharing group not registered"));
+    assertEquals(2.0, resource.getCpuCores().getValue().doubleValue());
+    assertEquals(MemorySize.ofMebiBytes(512), resource.getTaskHeapMemory());
+  }
+
+  @Test
+  void testCompactionPlanGenerateSlotSharingGroupDerivesTaskHeapMemoryFromProcessMemory() {
+    Configuration conf = defaultConf();
+    conf.set(FlinkOptions.COMPACTION_TASKS, 4);
+    conf.set(FlinkOptions.COMPACTION_PLAN_GENERATE_SLOT_SHARING_GROUP, "compaction-plan-group");
+    conf.set(TaskManagerOptions.CPU_CORES, 2.0);
+    conf.set(TaskManagerOptions.TOTAL_PROCESS_MEMORY, MemorySize.parse("10240m"));
+    DataStream<RowData> input = rowDataInput();
+
+    MemorySize expectedTaskHeapMemory = Pipelines.deriveTaskHeapMemory(conf)
+        .orElseThrow(() -> new AssertionError("Task heap memory should be derivable from process memory"));
+    assertTrue(expectedTaskHeapMemory.getBytes() > 0);
+
+    DataStreamSink<?> compaction = Pipelines.compact(conf, input);
+    ResourceProfile resource = input.getExecutionEnvironment().getStreamGraph(false)
+        .getSlotSharingGroupResource("compaction-plan-group")
+        .orElseThrow(() -> new AssertionError("Slot sharing group not registered"));
+    assertEquals(expectedTaskHeapMemory, resource.getTaskHeapMemory());
+  }
+
+  @Test
+  void testDeriveTaskHeapMemoryEmptyWithoutMemoryConfigs() {
+    Configuration conf = defaultConf();
+    assertTrue(Pipelines.deriveTaskHeapMemory(conf).isEmpty());
+  }
+
+  @Test
+  void testDeriveTaskHeapMemoryEmptyWhenBudgetExhausted() {
+    Configuration conf = defaultConf();
+    // the default JVM metaspace (256m) alone already exceeds this tiny process memory budget
+    conf.set(TaskManagerOptions.TOTAL_PROCESS_MEMORY, MemorySize.parse("10m"));
+    assertTrue(Pipelines.deriveTaskHeapMemory(conf).isEmpty());
   }
 
   @Test
@@ -460,6 +519,13 @@ public class TestPipelines {
     return stream.getTransformation().getTransitivePredecessors().stream()
         .map(Transformation::getName)
         .collect(Collectors.toList());
+  }
+
+  private Transformation<?> findTransformation(Transformation<?> root, String name) {
+    return root.getTransitivePredecessors().stream()
+        .filter(transformation -> transformation.getName().equals(name))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("Transformation not found: " + name));
   }
 
   private long countCustomPartitions(DataStream<?> stream, Class<?> partitionerClass) throws Exception {
