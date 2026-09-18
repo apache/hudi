@@ -39,6 +39,7 @@ import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -94,6 +95,11 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
   private boolean isInsertOverwrite;
 
   /**
+   * Whether this task was restored from a checkpoint/savepoint.
+   */
+  private boolean restoredFromState;
+
+  /**
    * Constructs a BucketStreamWriteFunction.
    *
    * @param config The config options
@@ -124,6 +130,7 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
   @Override
   public void initializeState(FunctionInitializationContext context) throws Exception {
     super.initializeState(context);
+    this.restoredFromState = context.isRestored();
   }
 
   @Override
@@ -189,6 +196,10 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
     log.info("Loading Hoodie Table {}, with path {}/{}", this.metaClient.getTableConfig().getTableName(),
         this.metaClient.getBasePath(), partition);
 
+    // Query the coordinator for pending fileIds before loading the committed view.
+    // Only needed after a restore.
+    Set<String> pendingFileIds = restoredFromState ? requestPendingBucketFileIds(partition) : Collections.emptySet();
+
     // Load existing fileID belongs to this task
     Map<Integer, String> bucketToFileIDMap = new HashMap<>();
     this.writeClient.getHoodieTable().getHoodieView().getLatestFileSlices(partition).forEach(fileSlice -> {
@@ -206,6 +217,33 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
         }
       }
     });
+    overlayPendingBucketFileIds(partition, pendingFileIds, bucketToFileIDMap);
     bucketIndex.put(partition, bucketToFileIDMap);
+  }
+
+  /**
+   * Requests the fileIds the coordinator still holds pending (flushed but not yet committed) for
+   * {@code partition}, or an empty set when no correspondent is wired (some tests).
+   */
+  private Set<String> requestPendingBucketFileIds(String partition) {
+    if (this.correspondent == null) {
+      return Collections.emptySet();
+    }
+    return this.correspondent.requestPendingBucketFileIds(partition);
+  }
+
+  /**
+   * Overlays the coordinator's pending fileIds onto the committed view, which cannot see them yet.
+   * The committed view wins on conflict, so a pending fileId is adopted only for a bucket this task
+   * owns that the committed view left empty.
+   */
+  private void overlayPendingBucketFileIds(String partition, Set<String> pendingFileIds, Map<Integer, String> bucketToFileIDMap) {
+    for (String fileId : pendingFileIds) {
+      int bucketNumber = BucketIdentifier.bucketIdFromFileId(fileId);
+      if (isBucketToLoad(bucketNumber, partition) && !bucketToFileIDMap.containsKey(bucketNumber)) {
+        log.info("Adopting pending fileId {} for bucket {} of partition {} from the coordinator.", fileId, bucketNumber, partition);
+        bucketToFileIDMap.put(bucketNumber, fileId);
+      }
+    }
   }
 }

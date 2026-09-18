@@ -193,6 +193,14 @@ public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<
     }
   }
 
+  @Override
+  public void subTaskFails(int taskID, int attemptNumber) throws Exception {
+    coordinator.subtaskFailed(taskID, new RuntimeException("Dummy exception"));
+    // reset the attempt number to simulate the task failover/retries
+    ((MockStreamingRuntimeContext) this.runtimeContext).setAttemptNumber(attemptNumber);
+    setupWriteFunction();
+  }
+
   public void close() throws Exception {
     coordinator.close();
     ioManager.close();
