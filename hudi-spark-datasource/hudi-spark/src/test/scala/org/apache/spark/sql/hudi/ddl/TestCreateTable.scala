@@ -1562,6 +1562,62 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
     spark.sql(s"drop table $tableName")
   }
 
+  test("Test Create Table with a non partitioned key generator and partition columns") {
+    // A non partitioned key generator produces no partition path, so the table config that would be
+    // written disagrees with itself and every later write is rejected for a partition path conflict.
+    // Creating the table has to fail instead. See HUDI-5263.
+    Seq(
+      "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
+      "org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator"
+    ).foreach { keyGenClassName =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        checkExceptionContain(
+          s"""
+             | create table $tableName (
+             |  id bigint,
+             |  name string,
+             |  ts bigint,
+             |  dt string
+             | ) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |   type = 'cow',
+             |   primaryKey = 'id',
+             |   orderingFields = 'ts',
+             |   hoodie.table.keygenerator.class = '$keyGenClassName'
+             | )
+             | partitioned by (dt)
+       """.stripMargin)("which does not generate a partition path")
+      }
+    }
+  }
+
+  test("Test Create Table with a non partitioned key generator and no partition columns") {
+    // The guard above must not fire when the table really is non partitioned.
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName (
+           |  id bigint,
+           |  name string,
+           |  ts bigint
+           | ) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |   type = 'cow',
+           |   primaryKey = 'id',
+           |   orderingFields = 'ts',
+           |   hoodie.table.keygenerator.class = 'org.apache.hudi.keygen.NonpartitionedKeyGenerator'
+           | )
+       """.stripMargin)
+      spark.sql(s"insert into $tableName values (1, 'a1', 1000)")
+      checkAnswer(s"select id, name, ts from $tableName")(Seq(1, "a1", 1000))
+      spark.sql(s"drop table $tableName")
+    }
+  }
+
   test("Test CTAS not de-duplicating (by default)") {
     withRecordType() {
       withTempDir { tmp =>
