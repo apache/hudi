@@ -103,10 +103,14 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     this.gateway = new MockOperatorEventGateway();
     this.conf = conf;
     this.rowType = (RowType) HoodieSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf)).getLogicalType();
-    this.rowTypeWithFileId = BucketBulkInsertWriterHelper.rowTypeWithFileId(rowType);
+    boolean isNonBlockingConcurrencyControl =
+        OptionsResolver.isNonBlockingConcurrencyControl(conf);
+    this.rowTypeWithFileId = BucketBulkInsertWriterHelper.rowTypeWithFileId(
+        rowType, isNonBlockingConcurrencyControl);
     this.lsmSortInput = OptionsResolver.isLsmTreeStorageLayout(conf);
     this.sortInputRowType = lsmSortInput
-        ? LsmBucketBulkInsertWriterHelper.rowTypeWithFileIdAndKey(rowType)
+        ? LsmBucketBulkInsertWriterHelper.rowTypeWithFileIdAndKey(
+            rowType, isNonBlockingConcurrencyControl)
         : rowTypeWithFileId;
     this.coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), 1);
     this.coordinator = new StreamWriteOperatorCoordinator(conf, this.coordinatorContext);
@@ -235,6 +239,8 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   }
 
   private void setupSortOperator() throws Exception {
+    boolean isNonBlockingConcurrencyControl =
+        OptionsResolver.isNonBlockingConcurrencyControl(conf);
     MockEnvironment environment = new MockEnvironmentBuilder()
         .setTaskName("mockTask")
         .setManagedMemorySize(12 * MemoryManager.DEFAULT_PAGE_SIZE)
@@ -245,8 +251,10 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
         .setExecutionConfig(new ExecutionConfig().enableObjectReuse())
         .build();
     SortOperatorGen sortOperatorGen = lsmSortInput
-        ? LsmBucketBulkInsertWriterHelper.getFileIdAndKeySorterGen(sortInputRowType)
-        : BucketBulkInsertWriterHelper.getFileIdSorterGen(rowTypeWithFileId);
+        ? LsmBucketBulkInsertWriterHelper.getFileIdAndKeySorterGen(
+            sortInputRowType, isNonBlockingConcurrencyControl)
+        : BucketBulkInsertWriterHelper.getFileIdSorterGen(
+            rowTypeWithFileId, isNonBlockingConcurrencyControl);
     this.sortOperator = (SortOperator) sortOperatorGen.createSortOperator(conf);
     this.sortOperator.setProcessingTimeService(new TestProcessingTimeService());
     this.output = new CollectOutputAdapter<>();
