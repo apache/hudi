@@ -111,18 +111,19 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
             Seq(1, "a1", 10.0, 1000)
           )
 
-          spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=$sparkSqlOptimizedWrites")
+          withSQLConf(SPARK_SQL_OPTIMIZED_WRITES.key() -> sparkSqlOptimizedWrites.toString) {
 
-          // the ordering column is not assigned, so the update must take effect
-          spark.sql(s"update $tableName set price = 20 where id = 1")
-          checkAnswer(s"select id, name, price, ts from $tableName")(
-            Seq(1, "a1", 20.0, 1000)
-          )
+            // the ordering column is not assigned, so the update must take effect
+            spark.sql(s"update $tableName set price = 20 where id = 1")
+            checkAnswer(s"select id, name, price, ts from $tableName")(
+              Seq(1, "a1", 20.0, 1000)
+            )
 
-          spark.sql(s"update $tableName set price = price * 2 where id = 1")
-          checkAnswer(s"select id, name, price, ts from $tableName")(
-            Seq(1, "a1", 40.0, 1000)
-          )
+            spark.sql(s"update $tableName set price = price * 2 where id = 1")
+            checkAnswer(s"select id, name, price, ts from $tableName")(
+              Seq(1, "a1", 40.0, 1000)
+            )
+          }
         }
       }
     })
