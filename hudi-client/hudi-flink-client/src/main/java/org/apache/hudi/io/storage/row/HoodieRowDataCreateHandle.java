@@ -168,7 +168,11 @@ public class HoodieRowDataCreateHandle implements Serializable {
           commitInstant = !metaFieldsMode.isCommitTimePopulated() ? null : preserveHoodieMetadata
               ? record.getString(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD).toString()
               : instantTime;
-          rowData = HoodieRowDataCreation.create(commitInstant, null, null, null,
+          seqId = !metaFieldsMode.isCommitSeqnoPopulated() ? null : preserveHoodieMetadata
+              ? record.getString(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD).toString()
+              : HoodieRecord.generateSequenceId(instantTime, taskPartitionId, SEQGEN.getAndIncrement());
+          rowData = HoodieRowDataCreation.create(commitInstant, seqId, null,
+              metaFieldsMode.isPartitionPathPopulated() ? partitionPath : null,
               metaFieldsMode.isFileNamePopulated() ? path.getName() : null,
               record, writeConfig.allowOperationMetadataField(), preserveHoodieMetadata);
         }

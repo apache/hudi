@@ -254,10 +254,10 @@ class TestFlinkWriteClientFunctional extends HoodieFlinkClientTestHarness {
         String expectedInstant = id.equals("id1") ? updateInstant : insertInstant;
         assertEquals(mode.isCommitTimePopulated() ? expectedInstant : null,
             Objects.toString(row.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD), null));
-        assertEquals(mode != MetaFieldsMode.ALL, row.get(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD) == null);
+        assertEquals(!mode.isCommitSeqnoPopulated(), row.get(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD) == null);
         assertEquals(mode.isRecordKeyPopulated() ? id : null,
             Objects.toString(row.get(HoodieRecord.RECORD_KEY_METADATA_FIELD), null));
-        assertEquals(mode == MetaFieldsMode.ALL ? PARTITION_PATH : null,
+        assertEquals(mode.isPartitionPathPopulated() ? PARTITION_PATH : null,
             Objects.toString(row.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD), null));
         assertEquals(mode.isFileNamePopulated(), row.get(HoodieRecord.FILENAME_METADATA_FIELD) != null);
         if (id.equals("id1")) {
