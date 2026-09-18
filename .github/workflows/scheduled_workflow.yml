@@ -34,11 +34,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Delete Cache
+        # Spark archives must survive the purge so integration-tests can reuse them.
         run: |
           gh extension install actions/gh-actions-cache
 
           echo "Fetching list of cache key"
-          cacheKeysForPR=$(gh actions-cache list -R $REPO -L 100 | cut -f 1 )
+          cacheKeysForPR=$(gh actions-cache list -R $REPO -L 100 | cut -f 1 | grep -v '^spark-archive-v1-' || true)
 
           ## Setting this to not fail the workflow while deleting cache keys.
           set +e
