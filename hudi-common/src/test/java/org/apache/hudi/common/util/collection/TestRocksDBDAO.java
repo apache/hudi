@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.util.collection;
 
+import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 
 import lombok.Value;
@@ -28,6 +29,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -42,6 +44,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -49,6 +52,8 @@ import java.util.stream.IntStream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -162,6 +167,53 @@ public class TestRocksDBDAO {
     String rocksDBBasePath = dbManager.getRocksDBBasePath();
     dbManager.close();
     assertFalse(new File(rocksDBBasePath).exists());
+  }
+
+  @Test
+  public void testPrefixSearchHandler() throws IOException {
+    String family = "prefix_handler";
+    AtomicInteger deserialized = new AtomicInteger();
+    ConcurrentHashMap<String, CustomSerializer<?>> serializers = new ConcurrentHashMap<>();
+    serializers.put(family, new CustomSerializer<byte[]>() {
+      @Override
+      public byte[] serialize(byte[] value) {
+        return value;
+      }
+
+      @Override
+      public byte[] deserialize(byte[] bytes) {
+        deserialized.incrementAndGet();
+        return bytes;
+      }
+    });
+    RocksDBDAO dao = new RocksDBDAO("/prefix-handler", dbManager.getRocksDBBasePath(), serializers);
+    try {
+      dao.addColumnFamily(family);
+      dao.put(family, "key_1", new byte[] {1});
+      dao.put(family, "key_2", new byte[] {2});
+      dao.put(family, "key_other", new byte[] {3});
+      dao.put(family, "other", new byte[] {4});
+      List<String> keys = new ArrayList<>();
+      dao.<byte[], IOException>prefixSearch(family, "key_", (key, value) -> {
+        keys.add(key);
+        assertEquals(keys.size(), deserialized.get(), "Values must be consumed during the scan");
+        assertEquals(keys.size(), value[0]);
+      });
+      assertEquals(Arrays.asList("key_1", "key_2", "key_other"), keys);
+      assertEquals(keys, dao.prefixSearch(family, "key_").map(Pair::getKey).collect(Collectors.toList()));
+      dao.prefixSearch(family, "missing", (key, value) -> {
+        throw new AssertionError("No entries should match");
+      });
+      IOException failure = new IOException("handler failed");
+      deserialized.set(0);
+      assertSame(failure, assertThrows(IOException.class, () -> dao.prefixSearch(family, "key_", (key, value) -> {
+        throw failure;
+      })));
+      assertEquals(1, deserialized.get(), "A failed handler must stop the scan immediately");
+      assertEquals(4, dao.prefixSearch(family, "").count());
+    } finally {
+      dao.close();
+    }
   }
 
   @Test

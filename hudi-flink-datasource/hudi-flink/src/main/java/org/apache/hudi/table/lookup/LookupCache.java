@@ -45,6 +45,13 @@ public interface LookupCache extends Closeable {
   void addRow(RowData key, RowData row) throws IOException;
 
   /**
+   * Flushes buffered writes after loading the cache. Implementations must also make buffered
+   * rows visible to {@link #getRows(RowData)} before an explicit flush.
+   */
+  default void flush() throws IOException {
+  }
+
+  /**
    * Returns all rows matching the given lookup key, or {@code null} / empty list if none exist.
    *
    * @param key the lookup key row

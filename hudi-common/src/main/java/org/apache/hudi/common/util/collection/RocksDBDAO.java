@@ -52,7 +52,6 @@ import java.io.Serializable;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -380,24 +379,44 @@ public class RocksDBDAO {
    * @param <T> Type of value stored
    */
   public <T extends Serializable> Stream<Pair<String, T>> prefixSearch(String columnFamilyName, String prefix) {
+    List<Pair<String, T>> results = new ArrayList<>();
+    this.<T, RuntimeException>prefixSearch(columnFamilyName, prefix, (key, value) -> results.add(Pair.of(key, value)));
+    return results.stream();
+  }
+
+  /**
+   * Visits matching entries synchronously without collecting them in memory. The iterator is
+   * closed before returning, including when the handler throws an exception.
+   *
+   * @param columnFamilyName Column family name
+   * @param prefix Prefix key
+   * @param handler Handler invoked once per matching entry, in key order
+   * @param <T> Type of value stored
+   * @param <E> Type of exception thrown by the handler
+   */
+  public <T extends Serializable, E extends Exception> void prefixSearch(
+      String columnFamilyName, String prefix, PrefixSearchHandler<T, E> handler) throws E {
     ValidationUtils.checkArgument(!closed);
-    final HoodieTimer timer = HoodieTimer.start();
-    long timeTakenMicro = 0;
-    List<Pair<String, T>> results = new LinkedList<>();
+    final boolean debug = log.isDebugEnabled();
+    final HoodieTimer timer = debug ? HoodieTimer.start() : null;
+    long count = 0;
     try (final RocksIterator it = getRocksDB().newIterator(managedHandlesMap.get(columnFamilyName))) {
       it.seek(getUTF8Bytes(prefix));
-      while (it.isValid() && fromUTF8Bytes(it.key()).startsWith(prefix)) {
-        long beginTs = System.nanoTime();
-        T val = deserializePayload(columnFamilyName, it.value());
-        timeTakenMicro += ((System.nanoTime() - beginTs) / 1000);
-        results.add(Pair.of(fromUTF8Bytes(it.key()), val));
+      while (it.isValid()) {
+        String key = fromUTF8Bytes(it.key());
+        if (!key.startsWith(prefix)) {
+          break;
+        }
+        handler.accept(key, deserializePayload(columnFamilyName, it.value()));
+        count++;
         it.next();
       }
     }
 
-    log.info("Prefix Search for (query={}) on {}. Total Time Taken (msec)={}. Serialization Time taken(micro)={}, num entries={}",
-        prefix, columnFamilyName, timer.endTimer(), timeTakenMicro, results.size());
-    return results.stream();
+    if (debug) {
+      log.debug("Prefix Search for (query={}) on {}. Total Time Taken (msec)={}, num entries={}",
+          prefix, columnFamilyName, timer.endTimer(), count);
+    }
   }
 
   /**
@@ -613,5 +632,14 @@ public class RocksDBDAO {
   public interface BatchHandler {
 
     void apply(WriteBatch batch);
+  }
+
+  /**
+   * Handler for a prefix search that may propagate a checked exception to the caller.
+   */
+  @FunctionalInterface
+  public interface PrefixSearchHandler<T, E extends Exception> {
+
+    void accept(String key, T value) throws E;
   }
 }
