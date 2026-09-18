@@ -56,7 +56,7 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, E
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.functions.lit
 import org.apache.spark.sql.hudi.command.{CreateIndexCommand, ShowIndexesCommand}
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.common.{ExclusiveSuite, HoodieSparkSqlTestBase}
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
@@ -64,7 +64,7 @@ import java.util.stream.Collectors
 
 import scala.collection.JavaConverters
 
-class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSupport {
+class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSupport with ExclusiveSuite {
 
   override protected def beforeAll(): Unit = {
     spark.sql("set hoodie.metadata.index.column.stats.enable=false")

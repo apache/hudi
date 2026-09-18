@@ -293,9 +293,10 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
 
   test("Test parse CREATE TABLE with BLOB column and primitive data types") {
     // Exercises the primitive-data-type match arms plus NOT NULL and column COMMENT.
+    val tableName = generateTableName
     val plan = parseCreateTable(
       s"""
-         |CREATE TABLE blob_prim_tbl (
+         |CREATE TABLE $tableName (
          |  c_bool BOOLEAN,
          |  c_tiny TINYINT,
          |  c_small SMALLINT,
@@ -341,9 +342,10 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
   test("Test parse CREATE TABLE with BLOB column and complex data types") {
     // Exercises the ARRAY / MAP / STRUCT arms. BLOB-in-struct metadata handling is already
     // covered by "test BLOB in nested struct".
+    val tableName = generateTableName
     val plan = parseCreateTable(
       s"""
-         |CREATE TABLE blob_complex_tbl (
+         |CREATE TABLE $tableName (
          |  c_arr ARRAY<INT>,
          |  c_map MAP<STRING, INT>,
          |  c_struct STRUCT<a: INT, b: STRING>,
@@ -360,9 +362,10 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
   }
 
   test("Test parse CREATE TABLE with BLOB column and interval data types") {
+    val tableName = generateTableName
     val plan = parseCreateTable(
       s"""
-         |CREATE TABLE blob_ivl_tbl (
+         |CREATE TABLE $tableName (
          |  i_year INTERVAL YEAR,
          |  i_ym INTERVAL YEAR TO MONTH,
          |  i_day INTERVAL DAY,
@@ -382,18 +385,21 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
     // Endpoints where the end field does not follow the start are rejected by both interval
     // data-type visitors. The grammar only allows YEAR/MONTH -> MONTH and DAY/HOUR/MINUTE/SECOND
     // -> HOUR/MINUTE/SECOND, so these stay grammatical yet still hit the builder's end <= start guard.
+    val badYmTableName = generateTableName
     interceptParse(
-      "CREATE TABLE blob_bad_ym (id BIGINT, bad INTERVAL MONTH TO MONTH, data BLOB) USING hudi")(
+      s"CREATE TABLE $badYmTableName (id BIGINT, bad INTERVAL MONTH TO MONTH, data BLOB) USING hudi")(
       "are not supported")
+    val badDtTableName = generateTableName
     interceptParse(
-      "CREATE TABLE blob_bad_dt (id BIGINT, bad INTERVAL SECOND TO HOUR, data BLOB) USING hudi")(
+      s"CREATE TABLE $badDtTableName (id BIGINT, bad INTERVAL SECOND TO HOUR, data BLOB) USING hudi")(
       "are not supported")
   }
 
   test("Test parse CREATE TABLE with BLOB column and partition transforms") {
+    val tableName = generateTableName
     val plan = parseCreateTable(
       s"""
-         |CREATE TABLE blob_tf_tbl (
+         |CREATE TABLE $tableName (
          |  id BIGINT,
          |  ts DATE,
          |  region STRING,
@@ -413,8 +419,9 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
     // bucket(numBuckets, col) with int, long and short number-of-buckets literals exercises the
     // three numeric arms of the bucket handling.
     Seq("4", "4L", "4S").foreach { numLiteral =>
+      val bucketTableName = generateTableName
       val bp = parseCreateTable(
-        s"CREATE TABLE blob_bkt_tbl (id BIGINT, data BLOB) USING hudi " +
+        s"CREATE TABLE $bucketTableName (id BIGINT, data BLOB) USING hudi " +
           s"PARTITIONED BY (bucket($numLiteral, id))")
       val bkt = transformByName(bp, "bucket")
       assertResult("4")(firstLiteralArg(bkt).value.toString)
@@ -426,24 +433,28 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
     // The partition-COLUMN arm is the only partitioning branch that changes the emitted schema:
     // the parsed partition columns are appended to the table columns and each becomes an
     // identity transform.
+    val tableName = generateTableName
     val plan = parseCreateTable(
-      "CREATE TABLE blob_pcol_tbl (id BIGINT, data BLOB) USING hudi PARTITIONED BY (p STRING)")
+      s"CREATE TABLE $tableName (id BIGINT, data BLOB) USING hudi PARTITIONED BY (p STRING)")
     assertResult(StringType)(plan.tableSchema("p").dataType)
     assertResult(BlobType())(plan.tableSchema("data").dataType)
     assertResult(Seq(Seq("p")))(transformFieldRefs(transformByName(plan, "identity")))
 
     // Mixing partition columns and transform expressions is rejected.
+    val mixTableName = generateTableName
     checkExceptionContain(
-      "CREATE TABLE blob_mix_tbl (id BIGINT, data BLOB) USING hudi " +
+      s"CREATE TABLE $mixTableName (id BIGINT, data BLOB) USING hudi " +
         "PARTITIONED BY (p STRING, bucket(4, id))")(
       "Cannot mix partition expressions and partition columns")
 
     // SKEWED BY and CREATE TEMPORARY TABLE are rejected by the clause and header visitors.
+    val skewTableName = generateTableName
     checkExceptionContain(
-      "CREATE TABLE blob_skew_tbl (id BIGINT, data BLOB) USING hudi SKEWED BY (id) ON (1, 2)")(
+      s"CREATE TABLE $skewTableName (id BIGINT, data BLOB) USING hudi SKEWED BY (id) ON (1, 2)")(
       "CREATE TABLE ... SKEWED BY")
+    val tmpTableName = generateTableName
     checkExceptionContain(
-      "CREATE TEMPORARY TABLE blob_tmp_tbl (id BIGINT, data BLOB) USING hudi")(
+      s"CREATE TEMPORARY TABLE $tmpTableName (id BIGINT, data BLOB) USING hudi")(
       "use CREATE TEMPORARY VIEW instead")
   }
 
@@ -458,9 +469,10 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
     // dependent: only TRUE is ansiNonReserved, so a bare true always parses as a column
     // reference, while false and null are column references under the default non-ANSI keyword
     // mode but typed literals under ANSI mode (both cases are asserted below).
+    val tableName = generateTableName
     val plan = parseCreateTable(
       s"""
-         |CREATE TABLE blob_lit_tbl (
+         |CREATE TABLE $tableName (
          |  id BIGINT,
          |  data BLOB
          |) USING hudi
@@ -489,8 +501,9 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
     // and visitNullLiteral as typed literals, while a bare true stays a column reference
     // (TRUE is ansiNonReserved; FALSE and NULL are not).
     withSQLConf("spark.sql.ansi.enabled" -> "true") {
+      val boolTableName = generateTableName
       val ansiPlan = parseCreateTable(
-        "CREATE TABLE blob_bool_tbl (id BIGINT, data BLOB) USING hudi " +
+        s"CREATE TABLE $boolTableName (id BIGINT, data BLOB) USING hudi " +
           "PARTITIONED BY (bool_t(false, id), true_t(true, id), null_t(null, id))")
       assertResult(BooleanType)(firstLiteralArg(transformByName(ansiPlan, "bool_t")).dataType)
       assertResult(false)(firstLiteralArg(transformByName(ansiPlan, "bool_t")).value)
@@ -506,30 +519,37 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
     // clean ParseException on every Spark profile (#19450). Assertions stay substring-based
     // because the Spark 4.x builders add an "Operation not allowed: " prefix.
     // Non-numeric number of buckets.
-    interceptParse("CREATE TABLE blob_e1 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (bucket('x', id))")(
+    val e1TableName = generateTableName
+    interceptParse(s"CREATE TABLE $e1TableName (id BIGINT, data BLOB) USING hudi PARTITIONED BY (bucket('x', id))")(
       "Invalid number of buckets")
     // A non-column-reference where a column is required. The buggy interpolation rendered the
     // literal text "5.describe" (a superstring of the expected message), so pin its absence too.
-    val e2 = interceptParse("CREATE TABLE blob_e2 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (bucket(4, 5))")(
+    val e2TableName = generateTableName
+    val e2 = interceptParse(s"CREATE TABLE $e2TableName (id BIGINT, data BLOB) USING hudi PARTITIONED BY (bucket(4, 5))")(
       "Expected a column reference for transform bucket: 5")
     assert(!e2.getMessage.contains(".describe"))
     // A single-field transform given more than one argument.
-    interceptParse("CREATE TABLE blob_e3 (id BIGINT, ts DATE, data BLOB) USING hudi PARTITIONED BY (years(id, ts))")(
+    val e3TableName = generateTableName
+    interceptParse(s"CREATE TABLE $e3TableName (id BIGINT, ts DATE, data BLOB) USING hudi PARTITIONED BY (years(id, ts))")(
       "Too many arguments")
     // Typed literal that fails to parse (visitTypeConstructor arm).
-    interceptParse("CREATE TABLE blob_e4 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(DATE 'nope', id))")(
+    val e4TableName = generateTableName
+    interceptParse(s"CREATE TABLE $e4TableName (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(DATE 'nope', id))")(
       "Cannot parse the DATE value: nope")
     // Invalid INTERVAL literal: the builders copy the triggering exception's stack trace onto the
     // ParseException (the construct-then-setStackTrace arm), so the thrower must be visible.
-    val e5 = interceptParse("CREATE TABLE blob_e5 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL 'x', id))")(
+    val e5TableName = generateTableName
+    val e5 = interceptParse(s"CREATE TABLE $e5TableName (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL 'x', id))")(
       "Cannot parse the INTERVAL value: x")
     assert(e5.getStackTrace.exists(_.getClassName.contains("IntervalUtils")))
     // Out-of-range fractional literal; pre-fix the message's interior dots broke Spark 3.4+
     // error-class lookup and surfaced as a bare AssertionError.
-    interceptParse("CREATE TABLE blob_e6 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (bucket(1e40F, id))")(
+    val e6TableName = generateTableName
+    interceptParse(s"CREATE TABLE $e6TableName (id BIGINT, data BLOB) USING hudi PARTITIONED BY (bucket(1e40F, id))")(
       "does not fit in range")
     // Mixed year-month and day-time interval fields.
-    interceptParse("CREATE TABLE blob_e7 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL '1 year 2 hours', id))")(
+    val e7TableName = generateTableName
+    interceptParse(s"CREATE TABLE $e7TableName (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL '1 year 2 hours', id))")(
       "Cannot mix year-month and day-time fields")
   }
 
@@ -537,25 +557,32 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
     // Remaining error arms of the literal and interval visitors, one SQL per throw site; all must
     // surface as a clean ParseException on every Spark profile (#19450).
     // A typed literal whose type keyword has no visitor arm.
-    interceptParse("CREATE TABLE blob_e8 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(FOO 'bar', id))")(
+    val e8TableName = generateTableName
+    interceptParse(s"CREATE TABLE $e8TableName (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(FOO 'bar', id))")(
       "Literals of type 'FOO' are currently not supported")
     // A hex literal with a non-hex character (the IllegalArgumentException fallback arm).
-    interceptParse("CREATE TABLE blob_e9 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(X'zz', id))")(
+    val e9TableName = generateTableName
+    interceptParse(s"CREATE TABLE $e9TableName (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(X'zz', id))")(
       "hexBinary")
     // Multi-unit interval combined with a from-to unit.
-    interceptParse("CREATE TABLE blob_e10 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL 1 DAY 2 HOUR TO MINUTE, id))")(
+    val e10TableName = generateTableName
+    interceptParse(s"CREATE TABLE $e10TableName (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL 1 DAY 2 HOUR TO MINUTE, id))")(
       "Can only have a single from-to unit in the interval literal syntax")
     // From-to unit combined with a trailing multi-unit interval (the error-recovery arm).
-    interceptParse("CREATE TABLE blob_e11 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL '1' DAY TO HOUR '2' MINUTE, id))")(
+    val e11TableName = generateTableName
+    interceptParse(s"CREATE TABLE $e11TableName (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL '1' DAY TO HOUR '2' MINUTE, id))")(
       "Can only have a single from-to unit in the interval literal syntax")
     // A non-numeric value in a unit-value pair.
-    interceptParse("CREATE TABLE blob_e12 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL 'x' DAY, id))")(
+    val e12TableName = generateTableName
+    interceptParse(s"CREATE TABLE $e12TableName (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL 'x' DAY, id))")(
       "Can only use numbers in the interval value part")
     // A from-to interval whose value is not a string literal.
-    interceptParse("CREATE TABLE blob_e13 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL 1 DAY TO HOUR, id))")(
+    val e13TableName = generateTableName
+    interceptParse(s"CREATE TABLE $e13TableName (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL 1 DAY TO HOUR, id))")(
       "The value of from-to unit must be a string")
     // A from-to unit pair outside the supported YEAR TO MONTH / DAY TO SECOND family.
-    interceptParse("CREATE TABLE blob_e14 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL '1' MONTH TO HOUR, id))")(
+    val e14TableName = generateTableName
+    interceptParse(s"CREATE TABLE $e14TableName (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL '1' MONTH TO HOUR, id))")(
       "Intervals FROM month TO hour are not supported")
   }
 
@@ -564,36 +591,43 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
     // Spark 3.3 through 4.2 via tableSpec.serde); asserting only the BLOB column type would pass
     // even if the file/row-format visitors dropped their clause.
     // Generic STORED AS format.
-    val ff1 = parseCreateTable("CREATE TABLE blob_ff1 (id BIGINT, data BLOB) STORED AS PARQUET")
+    val ff1TableName = generateTableName
+    val ff1 = parseCreateTable(s"CREATE TABLE $ff1TableName (id BIGINT, data BLOB) STORED AS PARQUET")
     assertResult(BlobType())(ff1.tableSchema("data").dataType)
     assertResult(Some("PARQUET"))(ff1.tableSpec.serde.get.storedAs)
     // STORED AS INPUTFORMAT ... OUTPUTFORMAT ... (the table-file-format arm).
-    val ff2 = parseCreateTable("CREATE TABLE blob_ff2 (id BIGINT, data BLOB) " +
+    val ff2TableName = generateTableName
+    val ff2 = parseCreateTable(s"CREATE TABLE $ff2TableName (id BIGINT, data BLOB) " +
       "STORED AS INPUTFORMAT 'com.example.InFmt' OUTPUTFORMAT 'com.example.OutFmt'")
     assertResult(Some(FormatClasses("com.example.InFmt", "com.example.OutFmt")))(
       ff2.tableSpec.serde.get.formatClasses)
     // ROW FORMAT SERDE on its own.
-    val ff3 = parseCreateTable("CREATE TABLE blob_ff3 (id BIGINT, data BLOB) " +
+    val ff3TableName = generateTableName
+    val ff3 = parseCreateTable(s"CREATE TABLE $ff3TableName (id BIGINT, data BLOB) " +
       "ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe'")
     assertResult(Some("org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe"))(
       ff3.tableSpec.serde.get.serde)
     // ROW FORMAT DELIMITED on its own.
-    val ff4 = parseCreateTable("CREATE TABLE blob_ff4 (id BIGINT, data BLOB) " +
+    val ff4TableName = generateTableName
+    val ff4 = parseCreateTable(s"CREATE TABLE $ff4TableName (id BIGINT, data BLOB) " +
       "ROW FORMAT DELIMITED FIELDS TERMINATED BY ','")
     assertResult(",")(ff4.tableSpec.serde.get.serdeProperties("field.delim"))
     // Compatible ROW FORMAT SERDE + STORED AS SEQUENCEFILE merges both into one SerdeInfo.
-    val ff5 = parseCreateTable("CREATE TABLE blob_ff5 (id BIGINT, data BLOB) " +
+    val ff5TableName = generateTableName
+    val ff5 = parseCreateTable(s"CREATE TABLE $ff5TableName (id BIGINT, data BLOB) " +
       "ROW FORMAT SERDE 'com.example.Serde' STORED AS SEQUENCEFILE")
     assertResult(Some("SEQUENCEFILE"))(ff5.tableSpec.serde.get.storedAs)
     assertResult(Some("com.example.Serde"))(ff5.tableSpec.serde.get.serde)
     // Compatible ROW FORMAT DELIMITED + STORED AS TEXTFILE.
-    val ff6 = parseCreateTable("CREATE TABLE blob_ff6 (id BIGINT, data BLOB) " +
+    val ff6TableName = generateTableName
+    val ff6 = parseCreateTable(s"CREATE TABLE $ff6TableName (id BIGINT, data BLOB) " +
       "ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' STORED AS TEXTFILE")
     assertResult(Some("TEXTFILE"))(ff6.tableSpec.serde.get.storedAs)
     assertResult(",")(ff6.tableSpec.serde.get.serdeProperties("field.delim"))
     // Any ROW FORMAT combined with STORED AS INPUTFORMAT/OUTPUTFORMAT is accepted (the
     // table-file-format arm of validateRowFormatFileFormat).
-    val ff7 = parseCreateTable("CREATE TABLE blob_ff7 (id BIGINT, data BLOB) " +
+    val ff7TableName = generateTableName
+    val ff7 = parseCreateTable(s"CREATE TABLE $ff7TableName (id BIGINT, data BLOB) " +
       "ROW FORMAT SERDE 'com.example.Serde' " +
       "STORED AS INPUTFORMAT 'com.example.InFmt' OUTPUTFORMAT 'com.example.OutFmt'")
     assertResult(Some("com.example.Serde"))(ff7.tableSpec.serde.get.serde)
@@ -601,31 +635,36 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
       ff7.tableSpec.serde.get.formatClasses)
 
     // ROW FORMAT DELIMITED with a non-text file format is rejected.
+    val ferr1TableName = generateTableName
     checkExceptionContain(
-      "CREATE TABLE blob_ferr1 (id BIGINT, data BLOB) " +
+      s"CREATE TABLE $ferr1TableName (id BIGINT, data BLOB) " +
         "ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' STORED AS PARQUET")(
       "only compatible with 'textfile'")
     // ROW FORMAT SERDE with a format that also specifies a serde is rejected.
+    val ferr2TableName = generateTableName
     checkExceptionContain(
-      "CREATE TABLE blob_ferr2 (id BIGINT, data BLOB) " +
+      s"CREATE TABLE $ferr2TableName (id BIGINT, data BLOB) " +
         "ROW FORMAT SERDE 'com.example.Serde' STORED AS PARQUET")(
       "incompatible with format")
     // STORED BY (a storage handler) is not allowed. The full "Operation not allowed" prefix is
     // asserted because ParseException.getMessage echoes the SQL text, so a bare "STORED BY"
     // expectation would match any failure of this statement.
+    val ferr3TableName = generateTableName
     checkExceptionContain(
-      "CREATE TABLE blob_ferr3 (id BIGINT, data BLOB) STORED BY 'com.example.Handler'")(
+      s"CREATE TABLE $ferr3TableName (id BIGINT, data BLOB) STORED BY 'com.example.Handler'")(
       "Operation not allowed: STORED BY")
     // ROW FORMAT combined with STORED BY leaves no file format for the row format to pair with;
     // validateRowFormatFileFormat's catch-all arm rejects the combination before the STORED BY
     // error can fire.
+    val ferr5TableName = generateTableName
     checkExceptionContain(
-      "CREATE TABLE blob_ferr5 (id BIGINT, data BLOB) " +
+      s"CREATE TABLE $ferr5TableName (id BIGINT, data BLOB) " +
         "ROW FORMAT SERDE 'com.example.Serde' STORED BY 'com.example.Handler'")(
       "Unexpected combination of")
     // A USING provider combined with a serde clause is not allowed.
+    val ferr4TableName = generateTableName
     checkExceptionContain(
-      "CREATE TABLE blob_ferr4 (id BIGINT, data BLOB) USING hudi STORED AS PARQUET")(
+      s"CREATE TABLE $ferr4TableName (id BIGINT, data BLOB) USING hudi STORED AS PARQUET")(
       "CREATE TABLE ... USING")
   }
 }
