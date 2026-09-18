@@ -52,10 +52,12 @@ import lombok.Builder;
 import lombok.Getter;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 
@@ -399,9 +401,17 @@ public final class HoodieFileGroupReader<T> implements HoodieRecordReader<T> {
     return new CloseableMappingIterator<>(getBufferedRecordIterator(IteratorMode.RECORD_KEY), BufferedRecord::getRecordKey);
   }
 
+  @Override
   public ClosableIterator<BufferedRecord<T>> getLogRecordsOnly() throws IOException {
     initRecordIterators();
-    return recordBuffer.getLogRecordIterator();
+    return recordBuffer == null ? new EmptyIterator<>() : recordBuffer.getLogRecordIterator();
+  }
+
+  @Override
+  public Map<Serializable, BufferedRecord<T>> getLogRecordsMap() throws IOException {
+    initRecordIterators();
+    // The record buffer is only built when there is something to merge into the base file.
+    return recordBuffer == null ? Collections.emptyMap() : Collections.unmodifiableMap(recordBuffer.getLogRecords());
   }
 
   public static class HoodieFileGroupReaderIterator<T> implements ClosableIterator<BufferedRecord<T>> {
