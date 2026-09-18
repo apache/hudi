@@ -52,8 +52,11 @@ import lombok.Builder;
 import lombok.Getter;
 
 import java.io.IOException;
+import java.io.Serializable;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 
@@ -231,6 +234,25 @@ public final class HoodieLsmFileGroupReader<T> implements HoodieRecordReader<T> 
   @Override
   public ClosableIterator<BufferedRecord<T>> getLogRecordsOnly() throws IOException {
     return getBufferedRecordIterator(IteratorMode.HOODIE_RECORD, false);
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * <p>This reader merges the log files as it streams them, so it holds no index to hand back and
+   * materializes one here, keyed by record key. Callers that only need a single pass should use
+   * {@link #getLogRecordsOnly()} instead.
+   */
+  @Override
+  public Map<Serializable, BufferedRecord<T>> getLogRecordsMap() throws IOException {
+    Map<Serializable, BufferedRecord<T>> logRecords = new HashMap<>();
+    try (ClosableIterator<BufferedRecord<T>> iterator = getLogRecordsOnly()) {
+      while (iterator.hasNext()) {
+        BufferedRecord<T> record = iterator.next();
+        logRecords.put(record.getRecordKey(), record);
+      }
+    }
+    return logRecords;
   }
 
   boolean hasNext() {
