@@ -83,7 +83,7 @@ class ShowMetadataTableFilesProcedure() extends BaseProcedure with ProcedureBuil
       rows.add(Row(f.getPath.getName))
     })
     val results = rows.asScala.toList
-    applyFilterAndLimit(results, filter, outputType, limit.map(_.asInstanceOf[Int]).getOrElse(Int.MaxValue))
+    applyFilterAndLimit(results, filter, outputType, resolveLimit(limit))
   }
 
   override def build: Procedure = new ShowMetadataTableFilesProcedure()

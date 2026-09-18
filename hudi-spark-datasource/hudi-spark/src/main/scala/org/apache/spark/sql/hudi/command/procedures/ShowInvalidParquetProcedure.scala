@@ -113,7 +113,7 @@ class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
       } else {
         parquetRdd.collect().toSeq
       }
-      applyFilterAndLimit(results, filter, outputType, limit.map(_.asInstanceOf[Int]).getOrElse(Int.MaxValue))
+      applyFilterAndLimit(results, filter, outputType, resolveLimit(limit))
     }
   }
 

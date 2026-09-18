@@ -39,6 +39,9 @@ import java.util.function.Supplier
 import scala.collection.JavaConverters._
 
 class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuilder {
+  /** Rows buffered before the filter is evaluated, so the driver heap does not grow with the log files. */
+  private val FILTER_BATCH_SIZE = 1024
+
   override def parameters: Array[ProcedureParameter] = Array[ProcedureParameter](
     ProcedureParameter.optional(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "path", DataTypes.StringType),
@@ -63,15 +66,38 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
     val filter = getArgValueOrDefault(args, parameters(5)).get.asInstanceOf[String]
 
     validateFilter(filter, outputType)
-    // `limit` bounds how many records are read out of the log files, so with a filter it has to be lifted
-    // here and reapplied to the matching rows; otherwise the filter only ever sees the first `limit`.
-    val scanLimit = if (hasFilter(filter)) Int.MaxValue else limit
+    // `limit` bounds how many records are read out of the log files, so a filter cannot simply be applied
+    // to the first `limit`. Rather than lifting the bound and buffering every record on the driver heap,
+    // rows are filtered in batches and only the matches are kept, so scanning stops once `limit` of them
+    // have been found. Heap stays bounded by the batch plus the matches, whatever the log files hold.
+    // With no filter applyFilter is a passthrough, so a batch of one reproduces the previous bound exactly.
+    val batchSize = if (hasFilter(filter)) FILTER_BATCH_SIZE else 1
+    val matched = new java.util.ArrayList[Row]
+    val batch = new java.util.ArrayList[Row](batchSize)
+
+    def flushBatch(): Unit = {
+      if (!batch.isEmpty) {
+        matched.addAll(applyFilter(batch.asScala.toSeq, filter, outputType).asJava)
+        batch.clear()
+      }
+    }
+
+    def enoughMatches: Boolean = matched.size() >= limit
+
+    def offer(record: IndexedRecord): Unit = {
+      if (!enoughMatches) {
+        batch.add(Row(record.toString))
+        if (batch.size() >= batchSize) {
+          flushBatch()
+        }
+      }
+    }
+
     val client = createMetaClient(jsc, basePath)
     val storage = client.getStorage
     val logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(storage, new StoragePath(logFilePathPattern)).iterator().asScala
       .map(_.getPath.toString).toList
     ValidationUtils.checkArgument(logFilePaths.nonEmpty, "There is no log file")
-    val allRecords: java.util.List[IndexedRecord] = new java.util.ArrayList[IndexedRecord]
     if (merge) {
       val schema = Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(client, new StoragePath(logFilePaths.last)))
       val scanner = HoodieMergedLogRecordScanner.newBuilder
@@ -87,26 +113,21 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
         .withDiskMapType(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue)
         .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue)
         .build
-      scanner.asScala.foreach(hoodieRecord => {
-        val record = hoodieRecord.getData.asInstanceOf[HoodieRecordPayload[_]].getInsertValue(schema.toAvroSchema).get()
-        if (allRecords.size() < scanLimit) {
-          allRecords.add(record)
-        }
+      scanner.asScala.takeWhile(_ => !enoughMatches).foreach(hoodieRecord => {
+        offer(hoodieRecord.getData.asInstanceOf[HoodieRecordPayload[_]].getInsertValue(schema.toAvroSchema).get())
       })
     } else {
-      logFilePaths.toStream.takeWhile(_ => allRecords.size() < scanLimit).foreach {
+      logFilePaths.toStream.takeWhile(_ => !enoughMatches).foreach {
         logFilePath => {
           val schema = Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(client, new StoragePath(logFilePath)))
           val reader = HoodieLogFormat.newReader(client, new HoodieLogFile(logFilePath), schema)
-          while (reader.hasNext) {
+          while (reader.hasNext && !enoughMatches) {
             val block = reader.next()
             block match {
               case dataBlock: HoodieDataBlock =>
                 val recordItr = dataBlock.getRecordIterator(HoodieRecordType.AVRO)
-                recordItr.asScala.foreach(record => {
-                  if (allRecords.size() < scanLimit) {
-                    allRecords.add(record.getData.asInstanceOf[IndexedRecord])
-                  }
+                recordItr.asScala.takeWhile(_ => !enoughMatches).foreach(record => {
+                  offer(record.getData.asInstanceOf[IndexedRecord])
                 })
                 recordItr.close()
             }
@@ -115,12 +136,8 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
         }
       }
     }
-    val rows: java.util.List[Row] = new java.util.ArrayList[Row](allRecords.size())
-    allRecords.asScala.foreach(record => {
-      rows.add(Row(record.toString))
-    })
-    val results = rows.asScala.toSeq
-    applyFilterAndLimit(results, filter, outputType, limit)
+    flushBatch()
+    matched.asScala.toSeq.take(limit)
   }
 
   override def build: Procedure = new ShowHoodieLogFileRecordsProcedure
