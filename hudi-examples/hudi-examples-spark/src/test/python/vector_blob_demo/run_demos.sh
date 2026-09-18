@@ -32,8 +32,10 @@ cd "$(dirname "$0")"
 # then end up with offsets past EOF, causing file boundary errors during read.
 clean() {
   rm -rf /tmp/hudi_*_pets \
+         /tmp/hudi_batch_*_pets \
          /tmp/pets_blob_container.bin \
          /tmp/staging_pets_*.parquet \
+         /tmp/staging_pets_batch_*.parquet \
          spark-warehouse
 }
 
@@ -67,6 +69,11 @@ run "sql / lance"                                  HUDI_BASE_FILE_FORMAT=lance  
 run "dataframe / parquet"                          HUDI_BASE_FILE_FORMAT=parquet python hudi_dataframe_vector_blob_demo.py
 [[ "${SKIP_LANCE:-0}" != "1" ]] && \
 run "dataframe / lance"                            HUDI_BASE_FILE_FORMAT=lance   python hudi_dataframe_vector_blob_demo.py
+
+# batch vector search certification: format only; oracle check asserts correctness
+run "batch / parquet"                              HUDI_BASE_FILE_FORMAT=parquet python hudi_vector_search_batch_demo.py
+[[ "${SKIP_LANCE:-0}" != "1" ]] && \
+run "batch / lance"                                HUDI_BASE_FILE_FORMAT=lance   python hudi_vector_search_batch_demo.py
 
 echo
 echo "All combinations finished."
