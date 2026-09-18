@@ -147,7 +147,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
       HoodieCompactionPlan plan =
           CompactionUtils.getCompactionPlan(metaClient, compactionOperationWithInstant.getKey());
       List<HoodieCompactionOperation> newOps = plan.getOperations().stream().filter(op ->
-              (!op.getFileId().equals(fgId.getFileId())) && (!op.getPartitionPath().equals(fgId.getPartitionPath())))
+              !(op.getFileId().equals(fgId.getFileId()) && op.getPartitionPath().equals(fgId.getPartitionPath())))
           .collect(Collectors.toList());
       if (newOps.size() == plan.getOperations().size()) {
         return new ArrayList<>();
