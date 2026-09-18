@@ -45,6 +45,7 @@ import scala.collection.immutable
 trait MergeOnReadIncrementalRelation {
   def listFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Map[InternalRow, Seq[FileSlice]]
   def getRequiredFilters: Seq[Filter]
+  def getIncrementalFilesSize: Long
 }
 
 case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
@@ -148,6 +149,10 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
     } else {
       incrementalSpanRecordFilters
     }
+  }
+
+  override def getIncrementalFilesSize: Long = {
+    affectedFilesInCommits.asScala.map(_.getLength).sum
   }
 
   override def shouldIncludeLogFiles(): Boolean = fullTableScan
