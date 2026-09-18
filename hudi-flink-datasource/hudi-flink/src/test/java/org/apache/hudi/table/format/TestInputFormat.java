@@ -118,7 +118,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
@@ -999,12 +999,19 @@ public class TestInputFormat {
     options.put("hoodie.commits.archival.batch", "1");
     beforeEach(HoodieTableType.MERGE_ON_READ, options);
 
-    // Keep updating the same file group so that the latest file slice advances beyond
-    // the archived incremental range selected below.
-    for (int i = 1; i <= 8; i++) {
+    // The second commit updates the same pre-v8 MOR file group. Its log block is appended
+    // to a log file whose filename still carries the first commit instant.
+    for (int i = 1; i <= 2; i++) {
       TestData.writeData(Collections.singletonList(insertRow(
           StringData.fromString("id1"), StringData.fromString("Danny"), 20 + i,
           TimestampData.fromEpochMillis(i), StringData.fromString("par1"))), conf);
+    }
+    // Generate unrelated commits to archive the two commits under test without advancing
+    // the file slice containing id1.
+    for (int i = 3; i <= 8; i++) {
+      TestData.writeData(Collections.singletonList(insertRow(
+          StringData.fromString("id" + i), StringData.fromString("User" + i), 20 + i,
+          TimestampData.fromEpochMillis(i), StringData.fromString("par2"))), conf);
     }
 
     HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
@@ -1028,8 +1035,17 @@ public class TestInputFormat {
         .build();
     IncrementalInputSplits.Result splits = incrementalInputSplits.inputSplits(metaClient, false);
     assertFalse(splits.isEmpty());
-    assertTrue(splits.getInputSplits().stream()
-        .allMatch(split -> compareTimestamps(split.getLatestCommit(), GREATER_THAN, endCommit)));
+    MergeOnReadInputSplit split = splits.getInputSplits().stream()
+        .filter(inputSplit -> inputSplit.getPartitionPath().equals("par1"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("No input split found for par1"));
+    assertTrue(split.getLogPaths().isPresent());
+    String latestLogFileInstant = split.getLogPaths().get().stream()
+        .map(logPath -> new HoodieLogFile(new StoragePath(logPath)).getDeltaCommitTime())
+        .max(String::compareTo)
+        .orElseThrow(() -> new AssertionError("No log file found for par1"));
+    assertTrue(compareTimestamps(latestLogFileInstant, LESSER_THAN, endCommit),
+        "The in-range update must be newer than the filename-derived log instant");
 
     List<RowData> actual = readData(inputFormat,
         splits.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
