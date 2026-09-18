@@ -20,26 +20,50 @@ package org.apache.hudi.common.util.collection;
 
 import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.exception.HoodieException;
 
 import lombok.Value;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.Logger;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
+import org.apache.logging.log4j.core.config.Configurator;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.rocksdb.AbstractImmutableNativeReference;
+import org.rocksdb.ColumnFamilyDescriptor;
+import org.rocksdb.ColumnFamilyHandle;
+import org.rocksdb.ColumnFamilyOptions;
+import org.rocksdb.DBOptions;
+import org.rocksdb.InfoLogLevel;
+import org.rocksdb.RocksDB;
+import org.rocksdb.RocksDBException;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
+import java.lang.ref.WeakReference;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -55,6 +79,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Tests RocksDB manager {@link RocksDBDAO}.
@@ -74,6 +99,322 @@ public class TestRocksDBDAO {
     if (dbManager != null) {
       dbManager.close();
       dbManager = null;
+    }
+  }
+
+  /**
+   * close() must release the RocksDB {@link org.rocksdb.Logger} and its {@link DBOptions}. The native
+   * LoggerJniCallback holds a JNI global reference to the Logger, so leaving it open pins the object
+   * for the life of the JVM and no GC can reclaim it.
+   */
+  @Test
+  void testCloseReleasesNativeLoggerAndOptions() {
+    org.rocksdb.Logger logger = dbManager.getLogger();
+    DBOptions dbOptions = dbManager.getDbOptions();
+    assertTrue(logger.isOwningHandle());
+    assertTrue(dbOptions.isOwningHandle());
+
+    dbManager.close();
+
+    assertFalse(logger.isOwningHandle(), "logger handle must be closed so it releases its shared_ptr to the native callback");
+    assertFalse(dbOptions.isOwningHandle(), "dbOptions must be closed so it drops its shared_ptr to the logger");
+    assertNull(dbManager.getLogger());
+    assertNull(dbManager.getDbOptions());
+  }
+
+  /**
+   * The general contract: every native handle reachable from the DAO before close() must be
+   * released by it. A field-by-field list only catches what someone remembered to list -- the
+   * column-family descriptors hold their own native options inside a Map, which is exactly the
+   * shape such a list misses.
+   */
+  @Test
+  void testCloseReleasesEveryReachableNativeHandle() throws Exception {
+    dbManager.addColumnFamily("family");
+    dbManager.put("family", "key", "value");
+    Map<AbstractImmutableNativeReference, String> openBeforeClose = reachableOpenHandles(dbManager);
+    assertFalse(openBeforeClose.isEmpty(), "expected the DAO to hold native handles before close()");
+
+    dbManager.close();
+
+    List<String> stillOpen = openBeforeClose.entrySet().stream()
+        .filter(entry -> entry.getKey().isOwningHandle())
+        .map(Map.Entry::getValue)
+        .sorted()
+        .collect(Collectors.toList());
+    assertTrue(stillOpen.isEmpty(), "native handles still open after close(): " + stillOpen);
+  }
+
+  /**
+   * Breadth-first over the DAO's own object graph, naming each handle by the path it was found on
+   * so a failure says which one leaked. Native references are not walked into -- their innards are
+   * RocksDB's business -- and the walk stays inside hudi and rocksdb classes so it never reflects
+   * into JDK internals.
+   */
+  private static Map<AbstractImmutableNativeReference, String> reachableOpenHandles(Object root)
+      throws IllegalAccessException {
+    Map<AbstractImmutableNativeReference, String> found = new IdentityHashMap<>();
+    Set<Object> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+    Deque<Object[]> queue = new ArrayDeque<>();
+    queue.add(new Object[] {root, root.getClass().getSimpleName()});
+
+    while (!queue.isEmpty()) {
+      Object[] current = queue.poll();
+      Object value = current[0];
+      String path = (String) current[1];
+      if (value == null || !visited.add(value)) {
+        continue;
+      }
+      if (value instanceof AbstractImmutableNativeReference) {
+        AbstractImmutableNativeReference handle = (AbstractImmutableNativeReference) value;
+        if (handle.isOwningHandle()) {
+          found.put(handle, path + " (" + handle.getClass().getSimpleName() + ")");
+        }
+        continue;
+      }
+      if (value instanceof Map) {
+        ((Map<?, ?>) value).forEach((key, mapValue) -> queue.add(new Object[] {mapValue, path + "[" + key + "]"}));
+        continue;
+      }
+      if (value instanceof Iterable) {
+        int index = 0;
+        for (Object element : (Iterable<?>) value) {
+          queue.add(new Object[] {element, path + "[" + index++ + "]"});
+        }
+        continue;
+      }
+      String className = value.getClass().getName();
+      if (!className.startsWith("org.apache.hudi") && !className.startsWith("org.rocksdb")) {
+        continue;
+      }
+      for (Field field : value.getClass().getDeclaredFields()) {
+        if (Modifier.isStatic(field.getModifiers()) || field.getType().isPrimitive()) {
+          continue;
+        }
+        field.setAccessible(true);
+        queue.add(new Object[] {field.get(value), path + "." + field.getName()});
+      }
+    }
+    return found;
+  }
+
+  /**
+   * The column-family descriptors each own a native ColumnFamilyOptions that no weak-reference test
+   * can see: the Java object is collectable either way, and rocksdbjni does not free the native
+   * struct on GC, so an unclosed one leaks silently per column family.
+   */
+  @Test
+  void testCloseReleasesColumnFamilyDescriptorOptions() throws Exception {
+    dbManager.addColumnFamily("family");
+    List<ColumnFamilyOptions> descriptorOptions = descriptorOptionsOf(dbManager);
+    assertFalse(descriptorOptions.isEmpty(), "expected at least one column-family descriptor");
+    assertTrue(descriptorOptions.stream().allMatch(ColumnFamilyOptions::isOwningHandle));
+
+    dbManager.close();
+
+    long stillOpen = descriptorOptions.stream().filter(ColumnFamilyOptions::isOwningHandle).count();
+    assertEquals(0, stillOpen, stillOpen + " column-family descriptor options are still open after close()");
+  }
+
+  /**
+   * Dropping a column family discards its descriptor, so it has to release the options with it.
+   */
+  @Test
+  void testDropColumnFamilyReleasesDescriptorOptions() throws Exception {
+    dbManager.addColumnFamily("family");
+    List<ColumnFamilyOptions> descriptorOptions = descriptorOptionsOf(dbManager);
+
+    dbManager.dropColumnFamily("family");
+
+    long stillOpen = descriptorOptions.stream().filter(ColumnFamilyOptions::isOwningHandle).count();
+    assertEquals(descriptorOptions.size() - 1, stillOpen,
+        "dropColumnFamily must close the dropped descriptor's options");
+  }
+
+  @SuppressWarnings("unchecked")
+  private static List<ColumnFamilyOptions> descriptorOptionsOf(RocksDBDAO dao) throws Exception {
+    Field field = RocksDBDAO.class.getDeclaredField("managedDescriptorMap");
+    field.setAccessible(true);
+    Map<String, ColumnFamilyDescriptor> descriptors = (Map<String, ColumnFamilyDescriptor>) field.get(dao);
+    return descriptors.values().stream().map(ColumnFamilyDescriptor::getOptions).collect(Collectors.toList());
+  }
+
+  /**
+   * The end-to-end claim: once every holder of the callback's shared_ptr is released, the native
+   * LoggerJniCallback is destroyed and deletes its JNI global reference, so the Logger -- and with
+   * it anything it reaches -- becomes collectable. Handle state alone does not show this; a single
+   * surviving copy of the shared_ptr (the Options built in loadManagedColumnFamilies is one) keeps
+   * the object pinned for the life of the JVM with every handle reading as closed.
+   */
+  @Test
+  void testCloseMakesLoggerCollectable() throws InterruptedException {
+    WeakReference<org.rocksdb.Logger> loggerRef = new WeakReference<>(dbManager.getLogger());
+
+    dbManager.close();
+    dbManager = null;
+
+    for (int attempt = 0; attempt < 30 && loggerRef.get() != null; attempt++) {
+      System.gc();
+      Thread.sleep(50);
+    }
+    assertNull(loggerRef.get(), "logger is still strongly reachable after close(), so a JNI global reference survived");
+  }
+
+  /**
+   * The production symptom was DAOs accumulating, not just Loggers: 458 instances retaining
+   * 9.51 GB on a driver after 13 days. One surviving JNI global reference per DAO is all it takes,
+   * so the contract is that a closed DAO -- and everything it reaches -- becomes collectable, over
+   * repeated create/close cycles rather than a single one.
+   */
+  @Test
+  void testClosedDaosDoNotAccumulate() throws InterruptedException {
+    List<WeakReference<?>> refs = new ArrayList<>();
+    String rocksDBBasePath = FileSystemViewStorageConfig.newBuilder().build().getRocksdbBasePath();
+    for (int cycle = 0; cycle < 20; cycle++) {
+      RocksDBDAO dao = new RocksDBDAO("/dummy/path/" + UUID.randomUUID(), rocksDBBasePath);
+      dao.addColumnFamily("family");
+      dao.put("family", "key", "value");
+      refs.add(new WeakReference<>(dao));
+      refs.add(new WeakReference<>(dao.getLogger()));
+      refs.add(new WeakReference<>(dao.getDbOptions()));
+      dao.close();
+      dao = null;
+    }
+    assertAllCollectable(refs);
+  }
+
+  private static void assertAllCollectable(List<WeakReference<?>> refs) throws InterruptedException {
+    for (int attempt = 0; attempt < 50; attempt++) {
+      if (refs.stream().allMatch(ref -> ref.get() == null)) {
+        return;
+      }
+      System.gc();
+      Thread.sleep(50);
+    }
+    long alive = refs.stream().filter(ref -> ref.get() != null).count();
+    fail(alive + " of " + refs.size() + " objects are still strongly reachable after close(); "
+        + "a native reference is still pinning them");
+  }
+
+  /**
+   * init() runs from the constructor, so a failure there leaves no reference for anyone to call
+   * close() on. Fails before RocksDB.open().
+   */
+  @Test
+  void testInitFailureBeforeOpenReleasesNativeHandles() {
+    CAPTURED.clear();
+    assertThrows(HoodieException.class, () -> newFailingDao(FailurePoint.BEFORE_OPEN));
+
+    assertFalse(CAPTURED.logger.isOwningHandle(), "logger must be closed when init() fails");
+    assertFalse(CAPTURED.dbOptions.isOwningHandle(), "dbOptions must be closed when init() fails");
+  }
+
+  /**
+   * The same contract for a failure raised after RocksDB.open() has handed back an open DB.
+   */
+  @Test
+  void testInitFailureAfterOpenReleasesDatabaseAndHandles() {
+    CAPTURED.clear();
+    assertThrows(IllegalStateException.class, () -> newFailingDao(FailurePoint.AFTER_OPEN));
+
+    assertFalse(CAPTURED.rocksDB.isOwningHandle(), "an opened RocksDB must be closed when init() fails after it");
+    assertFalse(CAPTURED.logger.isOwningHandle(), "logger must be closed when init() fails");
+    assertFalse(CAPTURED.dbOptions.isOwningHandle(), "dbOptions must be closed when init() fails");
+  }
+
+  private static RocksDBDAO newFailingDao(FailurePoint failurePoint) {
+    CAPTURED.failurePoint = failurePoint;
+    return new FailingRocksDBDAO("/dummy/path/" + UUID.randomUUID(),
+        FileSystemViewStorageConfig.newBuilder().build().getRocksdbBasePath());
+  }
+
+  private enum FailurePoint {
+    BEFORE_OPEN, AFTER_OPEN
+  }
+
+  /**
+   * Static, including the failure point: the overrides run from the superclass constructor, before
+   * any instance field of the subclass has been assigned.
+   */
+  private static final Captured CAPTURED = new Captured();
+
+  private static final class Captured {
+    private org.rocksdb.Logger logger;
+    private DBOptions dbOptions;
+    private RocksDB rocksDB;
+    private FailurePoint failurePoint;
+
+    void clear() {
+      logger = null;
+      dbOptions = null;
+      rocksDB = null;
+      failurePoint = null;
+    }
+  }
+
+  /**
+   * Injects a failure into init(), capturing the native objects the DAO opened first -- they are
+   * unreachable afterwards, since a throwing constructor hands back no reference.
+   */
+  private static final class FailingRocksDBDAO extends RocksDBDAO {
+
+    private FailingRocksDBDAO(String basePath, String rocksDBBasePath) {
+      super(basePath, rocksDBBasePath);
+    }
+
+    @Override
+    List<ColumnFamilyDescriptor> loadManagedColumnFamilies(DBOptions dbOptions) throws RocksDBException {
+      CAPTURED.logger = getLogger();
+      CAPTURED.dbOptions = dbOptions;
+      if (FailurePoint.BEFORE_OPEN == CAPTURED.failurePoint) {
+        throw new RocksDBException("injected init failure before open");
+      }
+      return super.loadManagedColumnFamilies(dbOptions);
+    }
+
+    @Override
+    void registerColumnFamilies(List<ColumnFamilyDescriptor> managedColumnFamilies,
+                                List<ColumnFamilyHandle> managedHandles) throws RocksDBException {
+      CAPTURED.rocksDB = getRocksDB();
+      if (FailurePoint.AFTER_OPEN == CAPTURED.failurePoint) {
+        throw new IllegalStateException("injected init failure after open");
+      }
+      super.registerColumnFamilies(managedColumnFamilies, managedHandles);
+    }
+  }
+
+
+  /**
+   * RocksDB's own levels must land on the log levels an operator greps for -- a FATAL_LEVEL
+   * emitted at INFO would hide a corrupt DB behind routine chatter.
+   */
+  @Test
+  void testLoggerMapsRocksDbLevelsToLogLevels() {
+    CapturingAppender appender = new CapturingAppender();
+    Logger daoLogger = (Logger) LogManager.getLogger(RocksDBDAO.class);
+    Level originalLevel = daoLogger.getLevel();
+    RocksDBDAO.RocksDBLogger rocksLogger = (RocksDBDAO.RocksDBLogger) dbManager.getLogger();
+    try {
+      appender.start();
+      daoLogger.addAppender(appender);
+      Configurator.setLevel(RocksDBDAO.class.getName(), Level.DEBUG);
+
+      rocksLogger.log(InfoLogLevel.DEBUG_LEVEL, "rocksdb-level-debug");
+      rocksLogger.log(InfoLogLevel.WARN_LEVEL, "rocksdb-level-warn");
+      rocksLogger.log(InfoLogLevel.ERROR_LEVEL, "rocksdb-level-error");
+      rocksLogger.log(InfoLogLevel.FATAL_LEVEL, "rocksdb-level-fatal");
+      rocksLogger.log(InfoLogLevel.INFO_LEVEL, "rocksdb-level-info");
+      rocksLogger.log(InfoLogLevel.HEADER_LEVEL, "rocksdb-level-header");
+
+      assertEquals(Level.DEBUG, appender.levelOf("rocksdb-level-debug"));
+      assertEquals(Level.WARN, appender.levelOf("rocksdb-level-warn"));
+      assertEquals(Level.ERROR, appender.levelOf("rocksdb-level-error"));
+      assertEquals(Level.ERROR, appender.levelOf("rocksdb-level-fatal"));
+      assertEquals(Level.INFO, appender.levelOf("rocksdb-level-info"));
+      assertEquals(Level.INFO, appender.levelOf("rocksdb-level-header"));
+    } finally {
+      daoLogger.removeAppender(appender);
+      Configurator.setLevel(RocksDBDAO.class.getName(), originalLevel);
     }
   }
 
@@ -476,4 +817,31 @@ public class TestRocksDBDAO {
     String val;
     String family;
   }
+
+  /**
+   * RocksDB logs from its own background threads, so the captured list must tolerate concurrent
+   * appends and events are matched by marker rather than by position.
+   */
+  private static final class CapturingAppender extends AbstractAppender {
+
+    private final List<LogEvent> events = new CopyOnWriteArrayList<>();
+
+    private CapturingAppender() {
+      super(UUID.randomUUID().toString(), null, null, false, null);
+    }
+
+    @Override
+    public void append(LogEvent event) {
+      events.add(event.toImmutable());
+    }
+
+    Level levelOf(String marker) {
+      return events.stream()
+          .filter(event -> event.getMessage().getFormattedMessage().contains(marker))
+          .map(LogEvent::getLevel)
+          .findFirst()
+          .orElseThrow(() -> new AssertionError("no log event captured for " + marker));
+    }
+  }
+
 }
