@@ -1,0 +1,72 @@
+name: Source Validation
+
+# Both jobs here are required status checks in .asf.yaml. A required check must report on every PR,
+# including docs-only ones, and a path-filtered workflow is never instantiated for PRs that miss the
+# filter, so these jobs cannot live in bot.yml once it is path-filtered.
+on:
+  push:
+    branches:
+      - master
+      - 'release-*'
+      - branch-0.x
+  pull_request:
+    branches:
+      - master
+      - 'release-*'
+      - branch-0.x
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !contains(github.ref, 'master') && !contains(github.ref, 'branch-0.x') && !contains(github.ref, 'release-') }}
+
+jobs:
+  # [CI-TRIM] to revisit for CI improvement
+  # This only blocks PRs whose checks predate the matrix trim (#19514). Since bot.yml and
+  # java_ci_engines.yml are path-filtered, a green result here no longer means any Java CI
+  # job ran; reviewers gate on the checks the PR shows. Delete under #19535.
+  validate-ci-baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm CI ran against the reduced matrix
+        run: echo "Ran against the reduced CI matrix."
+
+  validate-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up JDK 11
+        uses: actions/setup-java@v5
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          architecture: x64
+          # No `cache: maven` on purpose. All jobs share one cache key and the first job to finish
+          # wins the write. This one only runs `mvn apache-rat:check`, finishes in well under a
+          # minute, and would seal a ~10 MB local repo that every build job then has to discard and
+          # re-download from Maven Central.
+      # Both checks describe the source release, not the git checkout, so they run inside the
+      # directory create_source_directory.sh produces - the same way validate_staged_release.sh
+      # runs them inside an extracted source tarball. On the raw checkout they would see the
+      # images under rfc/, docker/images/ and hudi-notebooks/, which the source release excludes.
+      #
+      # Stage the copy outside the workspace. `mvn apache-rat:check` in the RAT check step scans
+      # the filesystem from the repository root, so a copy of the tree left inside the workspace
+      # gets scanned too, and every root-anchored exclude in the root pom (such as `.github/**`)
+      # silently stops applying to it.
+      #
+      # hudi-trino needs no RAT exclude: its files carry AL headers that RAT's default matchers
+      # accept. The Trino-style header check (airbase's license-maven-plugin) runs only in the
+      # upstream trinodb/trino build; nothing in this repo runs it since RFC-105 dropped the
+      # trino-root parent.
+      - name: Create source release directory
+        run: ./scripts/release/create_source_directory.sh "${{ runner.temp }}/hudi-tmp-repo"
+      - name: Check Binary Files
+        run: |
+          cd "${{ runner.temp }}/hudi-tmp-repo"
+          ./scripts/release/validate_source_binary_files.sh
+      - name: Check Copyright
+        run: |
+          cd "${{ runner.temp }}/hudi-tmp-repo"
+          ./scripts/release/validate_source_copyright.sh
+      - name: RAT check
+        run: ./scripts/release/validate_source_rat.sh
