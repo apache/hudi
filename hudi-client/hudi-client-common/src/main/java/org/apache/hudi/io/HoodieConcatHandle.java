@@ -84,8 +84,8 @@ public class HoodieConcatHandle<T, I, K, O> extends HoodieWriteMergeHandle<T, I,
 
   public HoodieConcatHandle(HoodieWriteConfig config, String instantTime, HoodieTable hoodieTable,
                             Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
-                            HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier) {
-    super(config, instantTime, hoodieTable, Collections.emptyMap(), partitionPath, fileId, dataFileToBeMerged, taskContextSupplier, Option.empty());
+                            HoodieBaseFile baseFile, TaskContextSupplier taskContextSupplier) {
+    super(config, instantTime, hoodieTable, Collections.emptyMap(), partitionPath, fileId, baseFile, taskContextSupplier, Option.empty());
     this.recordItr = keyToNewRecords.values().iterator();
   }
 
