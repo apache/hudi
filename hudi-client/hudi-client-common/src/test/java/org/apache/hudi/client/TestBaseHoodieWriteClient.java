@@ -503,16 +503,14 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     BaseHoodieTableServiceClient<String, String, String> tableServiceClient = mock(BaseHoodieTableServiceClient.class);
     TestWriteClient writeClient = new TestWriteClient(writeConfigBuilder.build(), table, Option.empty(), tableServiceClient);
 
-    // the encoding of a single-field complex keygen table is recorded on creation and resolved onto the write
-    // config by initTable, on every table version and whatever the validation setting
+    // the encoding of a single-field complex keygen table is recorded on creation, on every table version and
+    // whatever the validation setting, so neither initTable nor startCommit has anything to object to
     boolean singleFieldComplexKeygen = (ComplexAvroKeyGenerator.class.getCanonicalName().equals(keyGeneratorClass)
         || "org.apache.hudi.keygen.ComplexKeyGenerator".equals(keyGeneratorClass))
         && KeyGenUtils.getRecordKeyFields(recordKeyFields).size() == 1;
     assertEquals(singleFieldComplexKeygen ? Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED) : Option.empty(),
         metaClient.getTableConfig().getComplexKeyGenEncoding());
     writeClient.initTable(WriteOperationType.INSERT, Option.empty());
-    assertEquals(singleFieldComplexKeygen ? ComplexKeyGenEncoding.FIELD_PREFIXED.name() : null,
-        writeClient.getConfig().getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING));
     String requestedTime = writeClient.startCommit("commit");
 
     HoodieTimeline writeTimeline = metaClient.getActiveTimeline().getWriteTimeline();

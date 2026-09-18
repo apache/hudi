@@ -1150,6 +1150,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       // unclear what instant to use, since upgrade does have a given instant.
       executeUsingTxnManager(Option.empty(), () -> tryUpgrade(metaClient, Option.empty()));
     }
+    recordComplexKeygenEncodingIfMissing(metaClient);
     runPreWriteCleanerPolicy(metaClient);
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
         HoodieTimeline.COMMIT_ACTION, () -> tableServiceClient.rollbackFailedWrites(metaClient));
@@ -1514,7 +1515,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
 
     doInitTable(operationType, metaClient, instantTime);
-    resolveComplexKeygenEncoding(metaClient);
+    if (!WriteOperationType.isTableService(operationType) && operationType != WriteOperationType.DELETE_PARTITION) {
+      validateComplexKeygenEncodingRecorded(metaClient.getTableConfig());
+    }
     HoodieTable table = createTable(config, metaClient);
 
     // Validate table properties
@@ -1547,35 +1550,40 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
-   * Resolves the record key encoding of a single-field {@code ComplexKeyGenerator} table onto the write config,
-   * so that every key generator built from it keys records the way the table's data is keyed. A table that does
-   * not carry {@link HoodieTableConfig#COMPLEX_KEYGEN_ENCODING} yet gets it deduced from its data and backfilled
-   * under the transaction lock, or the write fails when the encoding cannot be determined and
+   * Records {@link HoodieTableConfig#COMPLEX_KEYGEN_ENCODING} on a single-field {@code ComplexKeyGenerator} table
+   * that does not carry it yet, deduced from the table's data, so that every key generator built for this
+   * transaction keys records the way the table stores them. Runs when a commit starts, under the transaction
+   * lock; the write fails when the encoding cannot be determined and
    * {@code hoodie.write.complex.keygen.validation.enable} is on.
-   * Public because the streamer keys its records before {@link #initTable} runs and has to call this itself.
    */
-  public void resolveComplexKeygenEncoding(HoodieTableMetaClient metaClient) {
-    if (!KeyGenUtils.isComplexKeyGenEncodingTracked(metaClient.getTableConfig())) {
+  private void recordComplexKeygenEncodingIfMissing(HoodieTableMetaClient metaClient) {
+    if (!KeyGenUtils.isComplexKeyGenEncodingTracked(metaClient.getTableConfig())
+        || metaClient.getTableConfig().getComplexKeyGenEncoding().isPresent()) {
       return;
     }
-    if (!metaClient.getTableConfig().getComplexKeyGenEncoding().isPresent()) {
-      executeUsingTxnManager(Option.empty(), () -> backfillComplexKeygenEncoding(metaClient));
-    }
-    config.setValue(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING, metaClient.getTableConfig().getComplexKeyGenEncoding().get().name());
+    executeUsingTxnManager(Option.empty(), () -> {
+      metaClient.reloadTableConfig();
+      if (metaClient.getTableConfig().getComplexKeyGenEncoding().isPresent()) {
+        return;
+      }
+      ComplexKeyGenEncoding encoding = KeyGenUtils.resolveComplexKeyGenEncodingForWrite(metaClient, config)
+          .orElseThrow(() -> new HoodieException(getComplexKeygenErrorMessage("ingestion")));
+      Properties props = new Properties();
+      props.setProperty(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), encoding.name());
+      HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), props);
+      metaClient.reloadTableConfig();
+      LOG.info("Recorded complex keygen record key encoding {} on table {}", encoding, metaClient.getBasePath());
+    });
   }
 
-  private void backfillComplexKeygenEncoding(HoodieTableMetaClient metaClient) {
-    metaClient.reloadTableConfig();
-    if (metaClient.getTableConfig().getComplexKeyGenEncoding().isPresent()) {
-      return;
+  /**
+   * A write that keys records needs the encoding recorded; {@link #startCommit} records it, so this only fails
+   * when a write bypassed the commit start on a table that predates the property.
+   */
+  private static void validateComplexKeygenEncodingRecorded(HoodieTableConfig tableConfig) {
+    if (KeyGenUtils.isComplexKeyGenEncodingTracked(tableConfig) && !tableConfig.getComplexKeyGenEncoding().isPresent()) {
+      throw new HoodieException(getComplexKeygenErrorMessage("ingestion"));
     }
-    ComplexKeyGenEncoding encoding = KeyGenUtils.resolveComplexKeyGenEncodingForWrite(metaClient, config)
-        .orElseThrow(() -> new HoodieException(getComplexKeygenErrorMessage("ingestion")));
-    Properties props = new Properties();
-    props.setProperty(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), encoding.name());
-    HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), props);
-    metaClient.reloadTableConfig();
-    LOG.info("Recorded complex keygen record key encoding {} on table {}", encoding, metaClient.getBasePath());
   }
 
   /**

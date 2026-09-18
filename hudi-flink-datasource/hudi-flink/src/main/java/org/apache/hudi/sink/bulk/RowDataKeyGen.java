@@ -27,6 +27,7 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.util.RowDataProjection;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -87,7 +88,8 @@ public class RowDataKeyGen implements Serializable {
       boolean encodePartitionPath,
       boolean consistentLogicalTimestampEnabled,
       Option<TimestampBasedAvroKeyGenerator> keyGenOpt,
-      boolean prefixSingleRecordKey) {
+      Option<ComplexKeyGenEncoding> complexKeygenEncoding,
+      boolean useComplexKeygenNewEncoding) {
     this.partitionPathFields = partitionFields.split(DEFAULT_FIELD_SEPARATOR);
     this.hiveStylePartitioning = hiveStylePartitioning;
     this.encodePartitionPath = encodePartitionPath;
@@ -97,6 +99,7 @@ public class RowDataKeyGen implements Serializable {
     List<LogicalType> fieldTypes = rowType.getChildren();
 
     boolean simpleRecordKey = false;
+    boolean multiplePartitions = false;
     if (!recordKeys.isPresent()) {
       this.recordKeyFields = null;
       this.recordKeyProjection = null;
@@ -125,11 +128,15 @@ public class RowDataKeyGen implements Serializable {
       this.partitionPathProjection = null;
     } else {
       this.partitionPathProjection = getProjection(this.partitionPathFields, fieldNames, fieldTypes);
+      multiplePartitions = true;
     }
     if (simpleRecordKey) {
+      // the table's recorded encoding decides whether a single record key carries the `<field>:` prefix;
+      // without one (a table this job does not track), a single key with multiple partition fields is prefixed
+      boolean prefixSingleRecordKey = complexKeygenEncoding.isPresent()
+          ? complexKeygenEncoding.get().encodesFieldName()
+          : multiplePartitions && !useComplexKeygenNewEncoding;
       if (prefixSingleRecordKey) {
-        // single record key under the complex key generator, stored as `<field>:<value>`; this follows the
-        // table's complex keygen encoding and, unlike before, does not depend on the number of partition fields
         this.simpleRecordKeyFunc = rowData -> {
           String oriKey = getRecordKey(recordKeyFieldGetter.getFieldOrNull(rowData), this.recordKeyFields[0], consistentLogicalTimestampEnabled);
           return new StringBuilder(this.recordKeyFields[0]).append(DEFAULT_COLUMN_VALUE_SEPARATOR).append(oriKey).toString();
@@ -153,7 +160,8 @@ public class RowDataKeyGen implements Serializable {
     boolean consistentLogicalTimestampEnabled = OptionsResolver.isConsistentLogicalTimestampEnabled(conf);
     return new RowDataKeyGen(Option.of(conf.get(FlinkOptions.RECORD_KEY_FIELD)), conf.get(FlinkOptions.PARTITION_PATH_FIELD),
         rowType, conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING), conf.get(FlinkOptions.URL_ENCODE_PARTITIONING),
-        consistentLogicalTimestampEnabled, keyGeneratorOpt, OptionsResolver.prefixSingleRecordKey(conf));
+        consistentLogicalTimestampEnabled, keyGeneratorOpt, OptionsResolver.getComplexKeygenEncoding(conf),
+        OptionsResolver.useComplexKeygenNewEncoding(conf));
   }
 
   public HoodieKey getHoodieKey(RowData rowData) {

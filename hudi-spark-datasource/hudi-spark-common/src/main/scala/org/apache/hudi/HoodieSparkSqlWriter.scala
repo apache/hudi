@@ -403,20 +403,6 @@ class HoodieSparkSqlWriterInternal {
         operation match {
           case WriteOperationType.DELETE | WriteOperationType.DELETE_PREPPED =>
             mayBeValidateParamsForAutoGenerationOfRecordKeys(parameters, hoodieConfig)
-            val genericRecords = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace)
-            // Convert to RDD[HoodieKey]
-            val hoodieKeysAndLocationsToDelete = genericRecords.mapPartitions(it => {
-              val keyGenerator: Option[BaseKeyGenerator] = if (preppedSparkSqlWrites || preppedWriteOperation) {
-                None
-              } else {
-                Some(HoodieSparkKeyGeneratorFactory.createKeyGenerator(TypedProperties.copy(hoodieConfig.getProps))
-                  .asInstanceOf[BaseKeyGenerator])
-              }
-              it.map { avroRec =>
-                HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, avroRec, preppedSparkSqlWrites || preppedWriteOperation, preppedSparkSqlWrites || preppedSparkSqlMergeInto || preppedWriteOperation)
-              }
-            }).toJavaRDD()
-
             if (!tableExists) {
               throw new HoodieException(s"hoodie table at $basePath does not exist")
             }
@@ -435,13 +421,24 @@ class HoodieSparkSqlWriterInternal {
               streamingWritesParamsOpt.map(_.asyncClusteringTriggerFn.get.apply(client))
             }
 
-            // Issue deletes
             instantTime = client.startCommit(commitActionType)
-            // the delete keys are generated from hoodieConfig, which must carry the record key encoding the
-            // client resolved (and possibly backfilled) for the table
+            // the commit start may have upgraded the table or recorded the record key encoding
             tableMetaClient.reloadTableConfig()
-            client.resolveComplexKeygenEncoding(tableMetaClient)
-            KeyGenUtils.copyResolvedComplexKeyEncoding(client.getConfig, hoodieConfig)
+            val deleteKeyGenProps = KeyGenUtils.withComplexKeyGenEncoding(TypedProperties.copy(hoodieConfig.getProps), tableMetaClient.getTableConfig)
+            val genericRecords = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace)
+            // Convert to RDD[HoodieKey]
+            val hoodieKeysAndLocationsToDelete = genericRecords.mapPartitions(it => {
+              val keyGenerator: Option[BaseKeyGenerator] = if (preppedSparkSqlWrites || preppedWriteOperation) {
+                None
+              } else {
+                Some(HoodieSparkKeyGeneratorFactory.createKeyGenerator(deleteKeyGenProps).asInstanceOf[BaseKeyGenerator])
+              }
+              it.map { avroRec =>
+                HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, avroRec, preppedSparkSqlWrites || preppedWriteOperation, preppedSparkSqlWrites || preppedSparkSqlMergeInto || preppedWriteOperation)
+              }
+            }).toJavaRDD()
+
+            // Issue deletes
             val writeStatuses = DataSourceUtils.doDeleteOperation(client, hoodieKeysAndLocationsToDelete, instantTime, preppedSparkSqlWrites || preppedWriteOperation)
             (writeStatuses, client)
 
@@ -537,12 +534,9 @@ class HoodieSparkSqlWriterInternal {
 
             val writeConfig = client.getConfig
             instantTime = client.startCommit(commitActionType)
-            // if table has undergone upgrade, we need to reload table config
+            // the commit start may have upgraded the table or recorded the record key encoding
             tableMetaClient.reloadTableConfig()
             tableConfig = tableMetaClient.getTableConfig
-            // the records are keyed from writeConfig before the write's initTable runs (the insert dedup
-            // lookup materializes them), so the record key encoding has to be resolved onto it here
-            client.resolveComplexKeygenEncoding(tableMetaClient)
             // Convert to RDD[HoodieRecord] and force type immediately
             val hoodieRecords: JavaRDD[HoodieRecord[_]] = Try(HoodieCreateRecordUtils.createHoodieRecordRdd(
               HoodieCreateRecordUtils.createHoodieRecordRddArgs(df, writeConfig, parameters, avroRecordName,

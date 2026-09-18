@@ -1097,12 +1097,7 @@ public class StreamSync implements Serializable, Closeable {
       writeClientWriteResult = new WriteClientWriteResult(executor.execute(df, !HoodieStreamerUtils.getPartitionColumns(props).isEmpty()).getWriteStatuses());
     } else {
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      // Records are keyed here, before writeClient.upsert() runs initTable(), so resolve the single-field
-      // ComplexKeyGenerator encoding now (table property at version 9+, auto-deduction below) and hand it
-      // to the key generator props; otherwise the streamer would key records with the config default.
-      writeClient.resolveComplexKeygenEncoding(metaClient);
-      TypedProperties mergeProps = TypedProperties.copy(ConfigUtils.getMergeProps(props, metaClient.getTableConfig()));
-      KeyGenUtils.copyResolvedComplexKeyEncoding(writeClient.getConfig(), mergeProps);
+      TypedProperties mergeProps = ConfigUtils.getMergeProps(props, metaClient.getTableConfig());
       HoodieRecordType recordType = createRecordMerger(mergeProps).getRecordType();
       Option<JavaRDD<HoodieRecord>> recordsOption = HoodieStreamerUtils.createHoodieRecords(cfg, mergeProps, inputBatch.getBatch(), inputBatch.getSchemaProvider(),
           recordType, autoGenerateRecordKeys, instantTime, errorTableWriter, metaClient.getTableConfig());

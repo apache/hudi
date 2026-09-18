@@ -19,7 +19,6 @@
 package org.apache.hudi.keygen;
 
 import org.apache.hudi.common.avro.HoodieAvroUtils;
-import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
@@ -570,30 +569,29 @@ public class KeyGenUtils {
     return Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED);
   }
 
-  /** Data files may have been written by commits that have since been archived; only a table without any is new. */
+  /**
+   * Data files may have been written by commits that have since been archived; only a table without any is new.
+   * A listing of the archive folder answers that without loading the archived timeline.
+   */
   private static boolean hasArchivedCommits(HoodieTableMetaClient metaClient) {
     try {
-      return !metaClient.getArchivedTimeline().getCommitsTimeline().empty();
+      StoragePath archivePath = metaClient.getArchivePath();
+      return metaClient.getStorage().exists(archivePath) && !metaClient.getStorage().listDirectEntries(archivePath).isEmpty();
     } catch (Exception e) {
-      LOG.warn("Could not read the archived timeline of table {}", metaClient.getBasePath(), e);
+      LOG.warn("Could not list the archive folder of table {}", metaClient.getBasePath(), e);
       return true;
     }
   }
 
   /**
-   * Copies the resolved {@link HoodieTableConfig#COMPLEX_KEYGEN_ENCODING} from a write config onto another
-   * config, for components that build their key generator from a separate config.
+   * Puts the table's recorded {@link HoodieTableConfig#COMPLEX_KEYGEN_ENCODING} on the props a key generator is
+   * built from, so that it keys records the way the table stores them. Call right before instantiating the key
+   * generator, on a copy of the write props.
    */
-  public static void copyResolvedComplexKeyEncoding(HoodieConfig from, HoodieConfig to) {
-    if (from.contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING)) {
-      to.setValue(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING, from.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING));
-    }
-  }
-
-  public static void copyResolvedComplexKeyEncoding(HoodieConfig from, TypedProperties to) {
-    if (from.contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING)) {
-      to.setProperty(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), from.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING));
-    }
+  public static TypedProperties withComplexKeyGenEncoding(TypedProperties keyGenProps, HoodieTableConfig tableConfig) {
+    tableConfig.getComplexKeyGenEncoding().ifPresent(encoding ->
+        keyGenProps.setProperty(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), encoding.name()));
+    return keyGenProps;
   }
 
   private static List<HoodieWriteStat> getWriteStats(HoodieInstant instant, HoodieTimeline timeline) {

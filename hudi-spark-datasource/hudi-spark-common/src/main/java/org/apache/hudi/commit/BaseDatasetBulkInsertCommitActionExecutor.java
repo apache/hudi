@@ -44,7 +44,6 @@ import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitionerWithRow
 import org.apache.hudi.execution.bulkinsert.ConsistentBucketIndexBulkInsertPartitionerWithRows;
 import org.apache.hudi.execution.bulkinsert.NonSortPartitionerWithRows;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -117,13 +116,6 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
 
     boolean populateMetaFields = writeConfig.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS);
     preExecute();
-
-    // preExecute() -> initTable() resolves the single-field ComplexKeyGenerator encoding (from the table
-    // property at version 9+, or by auto-deduction below that) and sets it on the write client's config.
-    // The row-writer builds its key generator from this executor's separate writeConfig, so propagate the
-    // resolved encoding across; otherwise the row-writer would fall back to the default and write record
-    // keys with the wrong encoding, reintroducing the key mismatch this resolution is meant to prevent.
-    KeyGenUtils.copyResolvedComplexKeyEncoding(writeClient.getConfig(), writeConfig);
 
     BulkInsertPartitioner<Dataset<Row>> bulkInsertPartitionerRows = getPartitioner(populateMetaFields, isTablePartitioned);
     Dataset<Row> hoodieDF = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(records, writeConfig, table.getMetaClient().getTableConfig(), bulkInsertPartitionerRows, instantTime);

@@ -421,8 +421,7 @@ public class UpgradeDowngrade {
    * Resolves, before any hop runs, the record key encoding of a single-field complex key generator table that
    * does not carry {@link HoodieTableConfig#COMPLEX_KEYGEN_ENCODING} yet, and persists it with the version change.
    * The data has to be read up-front: the 7 to 8 hop rewrites the timeline on storage while
-   * {@code hoodie.properties} still reports the old version. The result also goes on the writer's own config, so
-   * the write that triggered the upgrade keys its records the same way.
+   * {@code hoodie.properties} still reports the old version.
    */
   private void resolveComplexKeygenEncoding(Map<ConfigProperty, String> tablePropsToAdd, String operation) {
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
@@ -432,7 +431,6 @@ public class UpgradeDowngrade {
     ComplexKeyGenEncoding encoding = KeyGenUtils.resolveComplexKeyGenEncodingForWrite(metaClient, config)
         .orElseThrow(() -> new HoodieUpgradeDowngradeException(getComplexKeygenErrorMessage(operation)));
     tablePropsToAdd.put(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING, encoding.name());
-    config.setValue(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING, encoding.name());
     log.info("Recording complex keygen record key encoding {} on table {} as part of the {}",
         encoding, metaClient.getBasePath(), operation);
   }

@@ -24,7 +24,6 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
-import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieTableFactory;
@@ -144,25 +143,21 @@ public class TestRowDataKeyGens {
   }
 
   /**
-   * Without a persisted encoding a table at the current version (9+) always prefixes a single complex key, and
-   * only the complex key generator does: a simple single key with several partition fields stays bare.
+   * Without a recorded encoding on the job (a table this job does not track) the single-key rule stays as it
+   * was: prefixed only with several partition fields and the legacy new-encoding flag off.
    */
   @Test
-  void testSingleKeyAtCurrentVersionPrefixesOnlyForComplexKeygen() {
+  void testSingleKeyWithoutRecordedEncodingFollowsPartitionFields() {
     final RowData rowData = insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
         TimestampData.fromEpochMillis(1), StringData.fromString("par1"));
-    for (String partitionFields : new String[] {"partition", "partition,ts"}) {
-      Configuration conf = TestConfigurations.getDefaultConf("path1");
-      conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
-      conf.set(FlinkOptions.PARTITION_PATH_FIELD, partitionFields);
-      conf.set(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
-      assertThat("complex keygen, partition fields: " + partitionFields,
-          RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE).getRecordKey(rowData), is("uuid:id1"));
-
-      conf.set(FlinkOptions.KEYGEN_CLASS_NAME, SimpleAvroKeyGenerator.class.getName());
-      assertThat("simple keygen, partition fields: " + partitionFields,
-          RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE).getRecordKey(rowData), is("id1"));
-    }
+    Configuration conf = TestConfigurations.getDefaultConf("path1");
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition");
+    assertThat(RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE).getRecordKey(rowData), is("id1"));
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition,ts");
+    assertThat(RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE).getRecordKey(rowData), is("uuid:id1"));
+    conf.setString(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(), "true");
+    assertThat(RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE).getRecordKey(rowData), is("id1"));
   }
 
   @Test

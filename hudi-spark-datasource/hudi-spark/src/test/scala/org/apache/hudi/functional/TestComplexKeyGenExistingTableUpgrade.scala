@@ -25,7 +25,8 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, H
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.keygen.KeyGenerator
+import org.apache.hudi.exception.HoodieDuplicateKeyException
+import org.apache.hudi.keygen.{KeyGenerator, KeyGenUtils}
 import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.table.upgrade.{SparkUpgradeDowngradeHelper, UpgradeDowngrade}
@@ -33,7 +34,7 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql.{DataFrame, SaveMode}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 
 import scala.collection.JavaConverters._
 import scala.io.Source
@@ -126,6 +127,9 @@ class TestComplexKeyGenExistingTableUpgrade extends HoodieSparkClientTestBase {
     val in = storage.open(new StoragePath(loadMetaClient().getMetaPath, HoodieTableConfig.HOODIE_PROPERTIES_FILE))
     try Source.fromInputStream(in).getLines().toList finally in.close()
   }
+
+  private def rootCauses(t: Throwable): Seq[Throwable] =
+    Iterator.iterate(t)(_.getCause).takeWhile(_ != null).toList
 
   private def readTable(): DataFrame =
     sparkSession.read.format("org.apache.hudi").load(basePath)
@@ -261,6 +265,52 @@ class TestComplexKeyGenExistingTableUpgrade extends HoodieSparkClientTestBase {
 
     assertEquals((100L, 100L, 100L, 0L), keyStatsRaw(), "Every incoming record already exists and must be dropped")
     assertEquals(Some(ComplexKeyGenEncoding.VALUE_ONLY.name), persistedEncoding())
+  }
+
+  /** The fail-duplicates policy proves the dedup lookup saw the deduced encoding: every incoming key is found. */
+  @Test
+  def testInsertWithFailDuplicatesOnTableWithoutProperty(): Unit = {
+    val dataGen = new HoodieTestDataGenerator(0xDEED)
+    val inserted = writeInitialLegacyTable(dataGen, bareKeys = true, tableVersion = HoodieTableVersion.current().versionCode().toString)
+
+    val thrown = assertThrows(classOf[Throwable], () =>
+      toDF(inserted).write.format("org.apache.hudi")
+        .options(commonOpts)
+        .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+        .option(DataSourceWriteOptions.INSERT_DUP_POLICY.key, DataSourceWriteOptions.FAIL_INSERT_DUP_POLICY)
+        .mode(SaveMode.Append)
+        .save(basePath))
+    assertTrue(rootCauses(thrown).exists(_.isInstanceOf[HoodieDuplicateKeyException]),
+      s"Expected a duplicate key failure, got: ${rootCauses(thrown).map(_.getClass.getSimpleName).mkString(" | ")}")
+    assertEquals(Some(ComplexKeyGenEncoding.VALUE_ONLY.name), persistedEncoding(), "The encoding is recorded when the commit starts")
+    assertEquals((100L, 100L, 100L, 0L), keyStatsRaw())
+  }
+
+  /** Data files that yield no record key leave the encoding undetermined: the write fails unless the validation is off. */
+  @Test
+  def testUnreadableDataFilesFailTheWriteUnlessValidationIsOff(): Unit = {
+    val dataGen = new HoodieTestDataGenerator(0xDEED)
+    val inserted = writeInitial0141Table(dataGen)
+    storage.listFiles(new StoragePath(basePath)).asScala
+      .filter(f => f.getPath.getName.endsWith(".parquet") && !f.getPath.toString.contains("/.hoodie/"))
+      .foreach { f =>
+        val out = storage.create(f.getPath, true)
+        try out.write("not a parquet file".getBytes) finally out.close()
+      }
+
+    val thrown = assertThrows(classOf[Throwable], () => upsertSameRecords(dataGen, inserted, commonOpts))
+    assertTrue(rootCauses(thrown).exists(t => Option(t.getMessage).exists(_.contains("complex key generator with a single record key field"))),
+      s"Expected the complex keygen guidance, got: ${rootCauses(thrown).map(_.getMessage).mkString(" | ")}")
+    assertEquals(None, persistedEncoding(), "Nothing is recorded when the encoding stays undetermined")
+
+    val metaClient = loadMetaClient()
+    val validationOn = HoodieWriteConfig.newBuilder().withPath(basePath).withProps(commonOpts.asJava).build()
+    assertFalse(KeyGenUtils.resolveComplexKeyGenEncodingForWrite(metaClient, validationOn).isPresent)
+    val validationOff = HoodieWriteConfig.newBuilder().withPath(basePath).withProps((commonOpts ++ Map(
+      HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false",
+      HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key -> "true")).asJava).build()
+    assertEquals(org.apache.hudi.common.util.Option.of(ComplexKeyGenEncoding.VALUE_ONLY),
+      KeyGenUtils.resolveComplexKeyGenEncodingForWrite(metaClient, validationOff))
   }
 
   /** A MOR table whose only data files are log files (log-indexing index, no compaction yet) is deduced from a log block. */

@@ -1243,6 +1243,48 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
     }
   }
 
+  test("Test Merge Into a legacy single-field complex keygen table without the recorded encoding") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      import spark.implicits._
+      val df = Seq((1, "a1", 10, 1000, "2025-07-29", 12), (2, "a2", 20, 1000, "2025-07-29", 12))
+        .toDF("id", "name", "value", "ts", "day", "hh")
+      // a table with bare record keys, written before the encoding was recorded
+      df.write.format("hudi")
+        .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+        .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
+        .option(RECORDKEY_FIELD.key, "id")
+        .option(ORDERING_FIELDS.key, "ts")
+        .option(PARTITIONPATH_FIELD.key, "day,hh")
+        .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
+        .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
+        .option(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key, ComplexKeyGenEncoding.VALUE_ONLY.name)
+        .mode(SaveMode.Overwrite)
+        .save(tablePath)
+      val metaClient = createMetaClient(spark, tablePath)
+      HoodieTableConfig.delete(metaClient.getStorage, metaClient.getMetaPath, Set(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key).asJava)
+
+      spark.sql(s"create table $tableName using hudi location '$tablePath'")
+      spark.sql(
+        s"""
+           |merge into $tableName h0
+           |using (
+           |  select 1 as id, 'a1' as name, 11 as value, 1001 as ts, '2025-07-29' as day, 12 as hh union all
+           |  select 3 as id, 'a3' as name, 30 as value, 1000 as ts, '2025-07-29' as day, 12 as hh
+           |) s0
+           |on h0.id = s0.id
+           |when matched then update set *
+           |when not matched then insert *
+           |""".stripMargin)
+
+      checkAnswer(s"select _hoodie_record_key, id, value from $tableName order by id")(
+        Seq("1", 1, 11), Seq("2", 2, 20), Seq("3", 3, 30))
+      val properties = createMetaClient(spark, tablePath).getTableConfig.getProps.asScala.toMap
+      assertResult(ComplexKeyGenEncoding.VALUE_ONLY.name)(properties(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key))
+    }
+  }
+
   test("Test Create Table with Complex Key Generator with multiple partition fields and record key fields") {
     withTempDir { tmp =>
       val tableName = generateTableName

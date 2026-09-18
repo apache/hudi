@@ -18,7 +18,6 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.MetaFieldsMode;
@@ -419,18 +418,15 @@ public class TestKeyGenUtils {
   }
 
   @Test
-  void testCopyResolvedComplexKeyEncoding() {
-    HoodieConfig from = new HoodieConfig();
-    HoodieConfig to = new HoodieConfig();
-    KeyGenUtils.copyResolvedComplexKeyEncoding(from, to);
-    assertFalse(to.contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING));
-
-    from.setValue(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING, "VALUE_ONLY");
-    KeyGenUtils.copyResolvedComplexKeyEncoding(from, to);
-    assertEquals("VALUE_ONLY", to.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING));
-
+  void testWithComplexKeyGenEncoding() {
     TypedProperties props = new TypedProperties();
-    KeyGenUtils.copyResolvedComplexKeyEncoding(from, props);
+    props.setProperty(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), "FIELD_PREFIXED");
+    // a table without the property leaves the props alone
+    KeyGenUtils.withComplexKeyGenEncoding(props, complexKeygenTableConfig(8, "id", null));
+    assertEquals("FIELD_PREFIXED", props.getProperty(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()));
+    // the table's recorded encoding wins over whatever the props carried
+    KeyGenUtils.withComplexKeyGenEncoding(props, complexKeygenTableConfig(8, "id", "VALUE_ONLY"));
     assertEquals("VALUE_ONLY", props.getProperty(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()));
+    assertFalse(KeyGenUtils.encodeSingleKeyFieldNameForComplexKeyGen(props));
   }
 }

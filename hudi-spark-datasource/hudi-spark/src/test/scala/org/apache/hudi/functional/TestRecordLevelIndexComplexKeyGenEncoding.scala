@@ -19,7 +19,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, RecordLevelIndexSupport}
+import org.apache.hudi.{BloomFiltersIndexSupport, DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, RecordLevelIndexSupport}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.config.HoodieWriteConfig
@@ -65,13 +65,42 @@ class TestRecordLevelIndexComplexKeyGenEncoding extends RecordLevelIndexTestBase
     DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
     HoodieMetadataConfig.ENABLE.key -> "true")
 
-  private def candidateFiles(opts: Map[String, String], selectedPartition: String, dataFilter: Expression): Option[Set[String]] = {
+  private def candidateFiles(opts: Map[String, String], selectedPartition: String, dataFilter: Expression,
+                             bloomFilters: Boolean = false): Option[Set[String]] = {
     val fileIndex = new HoodieFileIndex(spark, metaClient, Option.empty, Map("path" -> basePath), includeLogFiles = false)
     val partitionFilter: Expression = EqualTo(AttributeReference("partition", StringType)(), Literal(selectedPartition))
     val (_, prunedPaths) = fileIndex.prunePartitionsAndGetFileSlices(Seq.empty, Seq(partitionFilter))
-    val rliIndexSupport = RecordLevelIndexSupport.create(spark, getWriteConfig(opts).getMetadataConfig, metaClient)
-    val candidates = rliIndexSupport.computeCandidateFileNames(fileIndex, Seq(dataFilter), null, prunedPaths, false)
+    val metadataConfig = getWriteConfig(opts).getMetadataConfig
+    val indexSupport = if (bloomFilters) new BloomFiltersIndexSupport(spark, metadataConfig, metaClient)
+      else RecordLevelIndexSupport.create(spark, metadataConfig, metaClient)
+    val candidates = indexSupport.computeCandidateFileNames(fileIndex, Seq(dataFilter), null, prunedPaths, false)
     if (candidates.isDefined) Some(candidates.get.toSet) else None
+  }
+
+  /** The bloom filter index shares the record key literal logic with the RLI, and must prune with the stored encoding too. */
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testBloomFilterPruningHonorsRecordedEncoding(valueOnly: Boolean): Unit = {
+    val bloomOpts = legacyOpts(valueOnly) ++ Map(
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER.key -> "true",
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> HoodieTableVersion.current().versionCode().toString)
+    val df = doWriteAndValidateDataAndRecordIndex(bloomOpts,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite,
+      validate = false)
+    val probe = df.limit(1).collect()(0)
+    val selectedPartition = probe.getAs[String]("partition")
+    val recordKey = probe.getAs[String](recordKeyField)
+    val dataFilter: Expression = EqualTo(AttributeReference(recordKeyField, StringType)(), Literal(recordKey))
+    metaClient = getLatestMetaClient(true)
+    val expectedEncoding = if (valueOnly) ComplexKeyGenEncoding.VALUE_ONLY else ComplexKeyGenEncoding.FIELD_PREFIXED
+    assertEquals(expectedEncoding, metaClient.getTableConfig.getComplexKeyGenEncoding.get)
+
+    val candidates = candidateFiles(bloomOpts, selectedPartition, dataFilter, bloomFilters = true)
+    assertTrue(candidates.isDefined, "Bloom filter pruning must be enabled")
+    assertEquals(1, candidates.get.size, "The bloom filter lookup must keep exactly the file holding the record")
+    val table = spark.read.format("hudi").options(readOpts).load(basePath)
+    assertEquals(1L, table.filter(col(recordKeyField) === recordKey).count())
   }
 
   @ParameterizedTest

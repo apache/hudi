@@ -23,8 +23,10 @@ import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.util.ClientIds;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
@@ -190,8 +192,12 @@ public class OptionsInference {
     conf.setString(key, encoding.get().name());
   }
 
+  /** Mirrors what {@code StreamerUtil#initTableIfNotExists} records for the table this job creates. */
   private static boolean isSingleFieldComplexKeyGenWithRecordKeyMetaField(Configuration conf) {
-    return OptionsResolver.isComplexKeyGenerator(conf)
+    String keyGenClass = conf.getOptional(FlinkOptions.KEYGEN_CLASS_NAME).orElse(null);
+    boolean complexKeyGen = ComplexAvroKeyGenerator.class.getName().equals(keyGenClass)
+        || KeyGeneratorType.COMPLEX.getClassName().equals(keyGenClass);
+    return complexKeyGen
         && conf.getOptional(FlinkOptions.RECORD_KEY_FIELD).orElse("").split(",").length == 1
         && OptionsResolver.getMetaFieldsMode(conf).isRecordKeyPopulated();
   }
