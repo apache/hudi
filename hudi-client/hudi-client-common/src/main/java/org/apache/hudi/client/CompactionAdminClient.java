@@ -232,17 +232,17 @@ public class CompactionAdminClient extends BaseHoodieClient {
                 .filter(fs -> fs.getFileId().equals(operation.getFileId())).findFirst());
         if (fileSliceOptional.isPresent()) {
           FileSlice fs = fileSliceOptional.get();
-          Option<HoodieBaseFile> bf = fs.getBaseFile();
+          Option<HoodieBaseFile> baseFile = fs.getBaseFile();
           if (operation.getDataFileName().isPresent()) {
             String expPath = metaClient.getStorage()
                 .getPathInfo(new StoragePath(
                     FSUtils.constructAbsolutePath(metaClient.getBasePath(), operation.getPartitionPath()),
                     operation.getDataFileName().get()))
                 .getPath().toString();
-            ValidationUtils.checkArgument(bf.isPresent(),
+            ValidationUtils.checkArgument(baseFile.isPresent(),
                 "Data File must be present. File Slice was : " + fs + ", operation :" + operation);
-            ValidationUtils.checkArgument(bf.get().getPath().equals(expPath),
-                "Base Path in operation is specified as " + expPath + " but got path " + bf.get().getPath());
+            ValidationUtils.checkArgument(baseFile.get().getPath().equals(expPath),
+                "Base Path in operation is specified as " + expPath + " but got path " + baseFile.get().getPath());
           }
           Set<HoodieLogFile> logFilesInFileSlice = fs.getLogFiles().collect(Collectors.toSet());
           Set<HoodieLogFile> logFilesInCompactionOp = operation.getDeltaFileNames().stream().map(dp -> {

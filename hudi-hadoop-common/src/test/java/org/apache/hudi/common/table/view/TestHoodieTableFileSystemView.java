@@ -1096,7 +1096,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
       assertEquals(0, baseFiles.size(), "Expect no data file to be returned");
     } else {
       assertEquals(1, baseFiles.size(), "Expect only one data-file to be sent");
-      baseFiles.forEach(bf -> assertEquals(bf.getCommitTime(), instantTime1, "Expect data-file for instant 1 be returned"));
+      baseFiles.forEach(baseFile -> assertEquals(baseFile.getCommitTime(), instantTime1, "Expect data-file for instant 1 be returned"));
       checkExternalFile(srcFileStatus, baseFiles.get(0).getBootstrapBaseFile(), testBootstrap);
     }
 
@@ -1105,7 +1105,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
       assertEquals(0, baseFiles.size(), "Expect no data file to be returned");
     } else {
       assertEquals(1, baseFiles.size(), "Expect only one data-file to be sent");
-      baseFiles.forEach(bf -> assertEquals(bf.getCommitTime(), instantTime1, "Expect data-file for instant 1 be returned"));
+      baseFiles.forEach(baseFile -> assertEquals(baseFile.getCommitTime(), instantTime1, "Expect data-file for instant 1 be returned"));
       checkExternalFile(srcFileStatus, baseFiles.get(0).getBootstrapBaseFile(), testBootstrap);
     }
 
@@ -1114,7 +1114,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
       assertEquals(0, baseFiles.size(), "Expect no data file to be returned");
     } else {
       assertEquals(1, baseFiles.size(), "Expect only one data-file to be sent");
-      baseFiles.forEach(bf -> assertEquals(bf.getCommitTime(), instantTime1, "Expect data-file for instant 1 be returned"));
+      baseFiles.forEach(baseFile -> assertEquals(baseFile.getCommitTime(), instantTime1, "Expect data-file for instant 1 be returned"));
       checkExternalFile(srcFileStatus, baseFiles.get(0).getBootstrapBaseFile(), testBootstrap);
     }
 
@@ -1123,7 +1123,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
       assertEquals(0, baseFiles.size(), "Expect no data file to be returned");
     } else {
       assertEquals(1, baseFiles.size(), "Expect only one data-file to be sent");
-      baseFiles.forEach(bf -> assertEquals(bf.getCommitTime(), instantTime1, "Expect data-file for instant 1 be returned"));
+      baseFiles.forEach(baseFile -> assertEquals(baseFile.getCommitTime(), instantTime1, "Expect data-file for instant 1 be returned"));
       checkExternalFile(srcFileStatus, baseFiles.get(0).getBootstrapBaseFile(), testBootstrap);
     }
 
@@ -1265,27 +1265,27 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertEquals(1, baseFiles.size(), "Expect only one data-file to be sent");
     assertFalse(baseFiles.get(0).getBootstrapBaseFile().isPresent(), "No external data file must be present");
 
-    baseFiles.forEach(bf -> {
-      assertEquals(bf.getCommitTime(), compactionRequestedTime, "Expect data-file created by compaction be returned");
-      assertFalse(bf.getBootstrapBaseFile().isPresent(), "No external data file must be present");
+    baseFiles.forEach(baseFile -> {
+      assertEquals(baseFile.getCommitTime(), compactionRequestedTime, "Expect data-file created by compaction be returned");
+      assertFalse(baseFile.getBootstrapBaseFile().isPresent(), "No external data file must be present");
     });
     baseFiles = roView.getLatestBaseFiles(partitionPath).collect(Collectors.toList());
     assertEquals(1, baseFiles.size(), "Expect only one data-file to be sent");
-    baseFiles.forEach(bf -> {
-      assertEquals(bf.getCommitTime(), compactionRequestedTime, "Expect data-file created by compaction be returned");
-      assertFalse(bf.getBootstrapBaseFile().isPresent(), "No external data file must be present");
+    baseFiles.forEach(baseFile -> {
+      assertEquals(baseFile.getCommitTime(), compactionRequestedTime, "Expect data-file created by compaction be returned");
+      assertFalse(baseFile.getBootstrapBaseFile().isPresent(), "No external data file must be present");
     });
     baseFiles = roView.getLatestBaseFilesBeforeOrOn(partitionPath, deltaInstantTime5).collect(Collectors.toList());
     assertEquals(1, baseFiles.size(), "Expect only one data-file to be sent");
-    baseFiles.forEach(bf -> {
-      assertEquals(bf.getCommitTime(), compactionRequestedTime, "Expect data-file created by compaction be returned");
-      assertFalse(bf.getBootstrapBaseFile().isPresent(), "No external data file must be present");
+    baseFiles.forEach(baseFile -> {
+      assertEquals(baseFile.getCommitTime(), compactionRequestedTime, "Expect data-file created by compaction be returned");
+      assertFalse(baseFile.getBootstrapBaseFile().isPresent(), "No external data file must be present");
     });
     baseFiles = roView.getLatestBaseFilesInRange(allInstantTimes).collect(Collectors.toList());
     assertEquals(1, baseFiles.size(), "Expect only one data-file to be sent");
-    baseFiles.forEach(bf -> {
-      assertEquals(bf.getCommitTime(), compactionRequestedTime, "Expect data-file created by compaction be returned");
-      assertFalse(bf.getBootstrapBaseFile().isPresent(), "No external data file must be present");
+    baseFiles.forEach(baseFile -> {
+      assertEquals(baseFile.getCommitTime(), compactionRequestedTime, "Expect data-file created by compaction be returned");
+      assertFalse(baseFile.getBootstrapBaseFile().isPresent(), "No external data file must be present");
     });
 
     assertEquals(expTotalFileSlices, rtView.getAllFileSlices(partitionPath).count(),

@@ -214,9 +214,9 @@ public class TestCleanerInsertAndCleanByVersions extends SparkClientFunctionalTe
             if (compactionFileIdToLatestFileSlice.containsKey(fileGroup.getFileGroupId())) {
               // Ensure latest file-slice selected for compaction is retained
               Option<HoodieBaseFile> baseFileForCompactionPresent =
-                  Option.fromJavaOptional(fileGroup.getAllBaseFiles().filter(bf -> {
+                  Option.fromJavaOptional(fileGroup.getAllBaseFiles().filter(baseFile -> {
                     return compactionFileIdToLatestFileSlice.get(fileGroup.getFileGroupId()).getBaseInstantTime()
-                        .equals(bf.getCommitTime());
+                        .equals(baseFile.getCommitTime());
                   }).findAny());
               assertTrue(baseFileForCompactionPresent.isPresent(),
                   "Data File selected for compaction is retained");
