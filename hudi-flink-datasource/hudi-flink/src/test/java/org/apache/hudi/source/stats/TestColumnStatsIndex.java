@@ -21,6 +21,8 @@ package org.apache.hudi.source.stats;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
+import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
@@ -30,9 +32,12 @@ import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -42,6 +47,9 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Test cases for {@link ColumnStatsIndex}.
@@ -61,7 +69,7 @@ public class TestColumnStatsIndex {
 
     String[] queryColumns = {"uuid", "age"};
     PartitionStatsIndex indexSupport = new PartitionStatsIndex(path, TestConfigurations.ROW_TYPE, conf, StreamerUtil.createMetaClient(conf));
-    List<RowData> indexRows = indexSupport.readColumnStatsIndexByColumns(queryColumns);
+    List<RowData> indexRows = indexSupport.readColumnStatsIndexByColumns(queryColumns, Collections.emptyList());
     List<String> results = indexRows.stream().map(Object::toString).sorted(String::compareTo).collect(Collectors.toList());
     List<String> expected = Arrays.asList(
         "+I(par1,+I(23),+I(33),0,2,age)",
@@ -99,7 +107,8 @@ public class TestColumnStatsIndex {
     // explicit query columns
     String[] queryColumns1 = {"uuid", "age"};
     FileStatsIndex indexSupport = new FileStatsIndex(path, TestConfigurations.ROW_TYPE, conf, StreamerUtil.createMetaClient(conf));
-    List<RowData> indexRows1 = indexSupport.readColumnStatsIndexByColumns(queryColumns1);
+    // An empty partition list reads column statistics across all partitions.
+    List<RowData> indexRows1 = indexSupport.readColumnStatsIndexByColumns(queryColumns1, Collections.emptyList());
     Pair<List<RowData>, String[]> transposedIndexTable1 = indexSupport.transposeColumnStatsIndex(indexRows1, queryColumns1);
     assertThat("The schema columns should sort by natural order",
         Arrays.toString(transposedIndexTable1.getRight()), is("[age, uuid]"));
@@ -112,9 +121,47 @@ public class TestColumnStatsIndex {
         + "+I(2,44,56,0,id7,id8,0)]";
     assertThat(transposed1.toString(), is(expected));
 
+    List<RowData> scopedRows = indexSupport.readColumnStatsIndexByColumns(queryColumns1, Arrays.asList("par1", "par3"));
+    assertEquals(4, scopedRows.size());
+    assertEquals("[+I(2,18,20,0,id5,id6,0), +I(2,23,33,0,id1,id2,0)]",
+        filterOutFileNames(indexSupport.transposeColumnStatsIndex(scopedRows, queryColumns1).getLeft()).toString());
+
     // no query columns, only for tests
     assertThrows(IllegalArgumentException.class,
-        () -> indexSupport.readColumnStatsIndexByColumns(new String[0]));
+        () -> indexSupport.readColumnStatsIndexByColumns(new String[0], Collections.emptyList()));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"par1", "partition=par1", ""})
+  void testReadColumnStatsForCandidatePartitions(String partition) throws Exception {
+    final String path = tempFile.getAbsolutePath();
+    Configuration conf = TestConfigurations.getDefaultConf(path);
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
+    conf.set(FlinkOptions.HIVE_STYLE_PARTITIONING, partition.startsWith("partition="));
+    if (partition.isEmpty()) {
+      conf.set(FlinkOptions.PARTITION_PATH_FIELD, "");
+      conf.set(FlinkOptions.KEYGEN_CLASS_NAME, NonpartitionedAvroKeyGenerator.class.getName());
+    }
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    String[] columns = {"uuid", "age"};
+    try (FileStatsIndex index = new FileStatsIndex(path, TestConfigurations.ROW_TYPE, conf, StreamerUtil.createMetaClient(conf))) {
+      // Repeated candidate partitions must not duplicate statistics during transposition.
+      List<RowData> rows = index.readColumnStatsIndexByColumns(columns, Arrays.asList(partition, partition));
+      assertEquals(2, rows.size());
+      List<RowData> transposed = filterOutFileNames(index.transposeColumnStatsIndex(rows, columns).getLeft());
+      assertEquals(partition.isEmpty() ? "[+I(8,18,56,0,id1,id8,0)]" : "[+I(2,23,33,0,id1,id2,0)]", transposed.toString());
+
+      // Reject all indexed files, but retain candidates with no statistics.
+      ColumnStatsProbe probe = mock(ColumnStatsProbe.class);
+      when(probe.getReferencedCols()).thenReturn(columns);
+      List<String> files = rows.stream().map(row -> row.getString(0).toString()).distinct().collect(Collectors.toList());
+      files.add("missing-stats.parquet");
+      assertEquals(Collections.singleton("missing-stats.parquet"),
+          index.computeCandidateFiles(probe, files, Collections.singletonList(partition)));
+      assertTrue(index.readColumnStatsIndexByColumns(columns, Collections.singletonList("unknown-partition")).isEmpty());
+    }
   }
 
   private static List<RowData> filterOutFileNames(List<RowData> indexRows) {

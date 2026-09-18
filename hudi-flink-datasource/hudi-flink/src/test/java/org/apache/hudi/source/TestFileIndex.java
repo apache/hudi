@@ -81,6 +81,9 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 /**
  * Test cases for {@link FileIndex}.
@@ -145,6 +148,18 @@ public class TestFileIndex {
     List<Map<String, String>> partitions =
         fileIndex.getPartitions(partitionKeys, PARTITION_DEFAULT_NAME.defaultValue(), false);
     assertThat(partitions.size(), is(0));
+  }
+
+  @Test
+  void testFilterFileSlicesWithoutColumnStatsProbe() {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    FileIndex fileIndex = FileIndex.builder().path(new StoragePath(tempFile.getAbsolutePath())).conf(conf)
+        .rowType(TestConfigurations.ROW_TYPE).build();
+    FileSlice fileSlice = mock(FileSlice.class);
+    List<FileSlice> fileSlices = Collections.singletonList(fileSlice);
+
+    assertEquals(fileSlices, fileIndex.filterFileSlices(fileSlices));
+    verify(fileSlice, never()).getAllFileNames();
   }
 
   @Test

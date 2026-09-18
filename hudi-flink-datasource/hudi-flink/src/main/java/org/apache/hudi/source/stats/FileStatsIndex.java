@@ -128,13 +128,13 @@ public class FileStatsIndex implements ColumnStatsIndex {
   }
 
   @Override
-  public Set<String> computeCandidateFiles(ColumnStatsProbe probe, List<String> allFiles) {
+  public Set<String> computeCandidateFiles(ColumnStatsProbe probe, List<String> allFiles, List<String> candidatePartitions) {
     if (probe == null || !isIndexAvailable()) {
       return null;
     }
     try {
       String[] targetColumns = probe.getReferencedCols();
-      final List<RowData> statsRows = readColumnStatsIndexByColumns(targetColumns);
+      final List<RowData> statsRows = readColumnStatsIndexByColumns(targetColumns, candidatePartitions);
       return candidatesInMetadataTable(probe, statsRows, allFiles);
     } catch (Throwable t) {
       log.error("Failed to read metadata index: {} for data skipping", getIndexPartitionName(), t);
@@ -384,20 +384,26 @@ public class FileStatsIndex implements ColumnStatsIndex {
     return converter.convert(rawVal);
   }
 
+  /**
+   * Reads statistics for the requested columns and relative partition paths.
+   * An empty partition list reads all partitions using column-only prefixes.
+   */
   @VisibleForTesting
-  public List<RowData> readColumnStatsIndexByColumns(String[] targetColumns) {
-    // NOTE: If specific columns have been provided, we can considerably trim down amount of data fetched
-    //       by only fetching Column Stats Index records pertaining to the requested columns.
-    //       Otherwise, we fall back to read whole Column Stats Index
+  public List<RowData> readColumnStatsIndexByColumns(String[] targetColumns, List<String> candidatePartitions) {
     ValidationUtils.checkArgument(targetColumns.length > 0,
         "Column stats is only valid when push down filters have referenced columns");
 
     // Read Metadata Table's column stats Flink's RowData list by
-    //    - Fetching the records by key-prefixes (column names)
+    //    - Fetching the records by key-prefixes (column names and candidate partitions, when provided)
     //    - Deserializing fetched records into [[RowData]]s
-    List<ColumnStatsIndexPrefixRawKey> rawKeys = Arrays.stream(targetColumns)
-        .map(ColumnStatsIndexPrefixRawKey::new)  // Just column name, no partition
-        .collect(Collectors.toList());
+    List<ColumnStatsIndexPrefixRawKey> rawKeys;
+    if (candidatePartitions.isEmpty()) {
+      rawKeys = Arrays.stream(targetColumns).map(ColumnStatsIndexPrefixRawKey::new).collect(Collectors.toList());
+    } else {
+      rawKeys = candidatePartitions.stream().distinct()
+          .flatMap(partition -> Arrays.stream(targetColumns).map(column -> new ColumnStatsIndexPrefixRawKey(column, partition)))
+          .collect(Collectors.toList());
+    }
 
     HoodieData<HoodieRecord<HoodieMetadataPayload>> records =
         getMetadataTable().getRecordsByKeyPrefixes(

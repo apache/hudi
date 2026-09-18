@@ -197,8 +197,12 @@ public class FileIndex implements Serializable, AutoCloseable {
     }
 
     // data skipping based on column stats
+    if (colStatsProbe == null || filteredFileSlices.isEmpty()) {
+      return filteredFileSlices;
+    }
+    List<String> candidatePartitions = filteredFileSlices.stream().map(FileSlice::getPartitionPath).distinct().collect(Collectors.toList());
     List<String> allFiles = filteredFileSlices.stream().map(FileSlice::getAllFileNames).flatMap(List::stream).collect(Collectors.toList());
-    Set<String> candidateFiles = fileStatsIndex.computeCandidateFiles(colStatsProbe, allFiles);
+    Set<String> candidateFiles = fileStatsIndex.computeCandidateFiles(colStatsProbe, allFiles, candidatePartitions);
     if (candidateFiles == null) {
       // no need to filter by col stats or error occurs.
       return filteredFileSlices;
