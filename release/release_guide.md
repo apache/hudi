@@ -343,14 +343,13 @@ Source Release step) -- otherwise the voted tarball ships a `-SNAPSHOT` Trino pi
 
 ## Verify that a Release Build Works
 
-Run "mvn -Prelease clean install" to ensure that the build processes are in good shape. // You need to execute this command once you have the release branch in apache/hudi
+Run the `mvn -Prelease clean install` command below to ensure that the build processes are in good shape. // You need to execute this command once you have the release branch in apache/hudi
 
 Good to run this for all profiles
 
 ```shell
-mvn -Prelease clean install
-mvn -Prelease clean install -Dscala-2.12
-mvn -Prelease clean install -Dspark3
+# -Prelease turns off the activeByDefault profiles; keep these in sync with the activeByDefault spark and flink profiles in the root pom.xml
+mvn -Prelease clean install -Dscala-2.12 -Dspark3.5 -Dflink2.2
 ```
 
 ## Checklist to proceed to the next step
