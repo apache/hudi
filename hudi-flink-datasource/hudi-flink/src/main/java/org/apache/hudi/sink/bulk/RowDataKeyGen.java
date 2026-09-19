@@ -27,6 +27,7 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.util.RowDataProjection;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -87,6 +88,7 @@ public class RowDataKeyGen implements Serializable {
       boolean encodePartitionPath,
       boolean consistentLogicalTimestampEnabled,
       Option<TimestampBasedAvroKeyGenerator> keyGenOpt,
+      Option<ComplexKeyGenEncoding> complexKeygenEncoding,
       boolean useComplexKeygenNewEncoding) {
     this.partitionPathFields = partitionFields.split(DEFAULT_FIELD_SEPARATOR);
     this.hiveStylePartitioning = hiveStylePartitioning;
@@ -129,8 +131,12 @@ public class RowDataKeyGen implements Serializable {
       multiplePartitions = true;
     }
     if (simpleRecordKey) {
-      if (multiplePartitions && !useComplexKeygenNewEncoding) {
-        // single record key with multiple partition fields
+      // the table's recorded encoding decides whether a single record key carries the `<field>:` prefix;
+      // without one (a table this job does not track), a single key with multiple partition fields is prefixed
+      boolean prefixSingleRecordKey = complexKeygenEncoding.isPresent()
+          ? complexKeygenEncoding.get().encodesFieldName()
+          : multiplePartitions && !useComplexKeygenNewEncoding;
+      if (prefixSingleRecordKey) {
         this.simpleRecordKeyFunc = rowData -> {
           String oriKey = getRecordKey(recordKeyFieldGetter.getFieldOrNull(rowData), this.recordKeyFields[0], consistentLogicalTimestampEnabled);
           return new StringBuilder(this.recordKeyFields[0]).append(DEFAULT_COLUMN_VALUE_SEPARATOR).append(oriKey).toString();
@@ -154,7 +160,8 @@ public class RowDataKeyGen implements Serializable {
     boolean consistentLogicalTimestampEnabled = OptionsResolver.isConsistentLogicalTimestampEnabled(conf);
     return new RowDataKeyGen(Option.of(conf.get(FlinkOptions.RECORD_KEY_FIELD)), conf.get(FlinkOptions.PARTITION_PATH_FIELD),
         rowType, conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING), conf.get(FlinkOptions.URL_ENCODE_PARTITIONING),
-        consistentLogicalTimestampEnabled, keyGeneratorOpt, OptionsResolver.useComplexKeygenNewEncoding(conf));
+        consistentLogicalTimestampEnabled, keyGeneratorOpt, OptionsResolver.getComplexKeygenEncoding(conf),
+        OptionsResolver.useComplexKeygenNewEncoding(conf));
   }
 
   public HoodieKey getHoodieKey(RowData rowData) {

@@ -18,10 +18,12 @@
 
 package org.apache.hudi.sink.bulk;
 
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.exception.HoodieValidationException;
+import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieTableFactory;
@@ -115,6 +117,47 @@ public class TestRowDataKeyGens {
     assertThat(keyGen2.getPartitionPath(rowData1), is(String.format("partition=%s/ts=%s", "par1", "1970-01-01T00:00:00.001")));
     assertThat(keyGen2.getPartitionPath(rowData2), is(String.format("partition=%s/ts=%s", DEFAULT_PARTITION_PATH, DEFAULT_PARTITION_PATH)));
     assertThat(keyGen2.getPartitionPath(rowData3), is(String.format("partition=%s/ts=%s", DEFAULT_PARTITION_PATH, "1970-01-01T00:00:00.001")));
+  }
+
+  /**
+   * With the complex key generator, a single record key follows the table's persisted encoding ({@code
+   * hoodie.table.complex.keygen.encoding}, copied into the job configuration from hoodie.properties), whether
+   * the partition path has one field or several. Spark applies the same rule.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = {"FIELD_PREFIXED", "VALUE_ONLY"})
+  void testSingleKeyComplexKeygenHonorsPersistedEncoding(String persistedEncoding) {
+    final RowData rowData = insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+        TimestampData.fromEpochMillis(1), StringData.fromString("par1"));
+    String expectedKey = "FIELD_PREFIXED".equals(persistedEncoding) ? "uuid:id1" : "id1";
+    for (String partitionFields : new String[] {"partition", "partition,ts"}) {
+      Configuration conf = TestConfigurations.getDefaultConf("path1");
+      conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+      conf.set(FlinkOptions.PARTITION_PATH_FIELD, partitionFields);
+      conf.set(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
+      conf.setString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), persistedEncoding);
+      RowDataKeyGen keyGen = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE);
+      assertThat("partition fields: " + partitionFields, keyGen.getRecordKey(rowData), is(expectedKey));
+      assertThat(keyGen.getRecordKeyForComparison(rowData), is("id1"));
+    }
+  }
+
+  /**
+   * Without a recorded encoding on the job (a table this job does not track) the single-key rule stays as it
+   * was: prefixed only with several partition fields and the legacy new-encoding flag off.
+   */
+  @Test
+  void testSingleKeyWithoutRecordedEncodingFollowsPartitionFields() {
+    final RowData rowData = insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+        TimestampData.fromEpochMillis(1), StringData.fromString("par1"));
+    Configuration conf = TestConfigurations.getDefaultConf("path1");
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition");
+    assertThat(RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE).getRecordKey(rowData), is("id1"));
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition,ts");
+    assertThat(RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE).getRecordKey(rowData), is("uuid:id1"));
+    conf.setString(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(), "true");
+    assertThat(RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE).getRecordKey(rowData), is("id1"));
   }
 
   @Test

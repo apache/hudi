@@ -36,6 +36,7 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.sink.buffer.BufferMemoryType;
 import org.apache.hudi.utils.TestConfigurations;
@@ -385,6 +386,11 @@ public class TestOptionsResolver {
     assertTrue(OptionsResolver.allowCommitOnEmptyBatch(conf));
     conf.setString(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(), "true");
     assertTrue(OptionsResolver.useComplexKeygenNewEncoding(conf));
+    assertFalse(OptionsResolver.getComplexKeygenEncoding(conf).isPresent());
+    conf.setString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), "value_only");
+    assertEquals(ComplexKeyGenEncoding.VALUE_ONLY, OptionsResolver.getComplexKeygenEncoding(conf).get());
+    conf.setString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), "FIELD_PREFIXED");
+    assertEquals(ComplexKeyGenEncoding.FIELD_PREFIXED, OptionsResolver.getComplexKeygenEncoding(conf).get());
   }
 
   @Test

@@ -27,7 +27,7 @@ import org.apache.hudi.common.util.PartitionPathEncodeUtils.escapePathName
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat
-import org.apache.hudi.keygen.constant.KeyGeneratorType
+import org.apache.hudi.keygen.constant.{ComplexKeyGenEncoding, KeyGeneratorType}
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.Assertions
@@ -40,7 +40,7 @@ import org.apache.spark.sql.functions.{col, concat, expr, lit}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.command.CreateHoodieTableCommand
 import org.apache.spark.sql.hudi.common.{ExtendedParserTestHelpers, HoodieSparkSqlTestBase}
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.{disableComplexKeygenValidation, getLastCommitMetadata}
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMetadata
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNull, assertTrue}
 
@@ -1139,14 +1139,16 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
 
   test("Test Create Table with Complex Key Generator and Key Encoding") {
     withTempDir { tmp =>
-      Seq((false, 6), (true, 6), (false, 8), (true, 8), (false, 9), (true, 9)).foreach { params =>
+      Seq((ComplexKeyGenEncoding.VALUE_ONLY, 6), (ComplexKeyGenEncoding.FIELD_PREFIXED, 6),
+        (ComplexKeyGenEncoding.VALUE_ONLY, 8), (ComplexKeyGenEncoding.FIELD_PREFIXED, 8),
+        (ComplexKeyGenEncoding.VALUE_ONLY, 9), (ComplexKeyGenEncoding.FIELD_PREFIXED, 9)).foreach { params =>
         val tableName = generateTableName
         val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-        val encodeSingleKeyFieldValue = params._1
+        val encoding = params._1
         val tableVersion = params._2
         import spark.implicits._
-        // The COMPLEX_KEYGEN_NEW_ENCODING config only works for table version 8 and below
-        val keyPrefix = if (encodeSingleKeyFieldValue && tableVersion < 9) "" else "id:"
+        // The encoding recorded on the table drives every SQL write on every table version.
+        val keyPrefix = if (encoding.encodesFieldName()) "id:" else ""
         val df = Seq((1, "a1", 10, 1000, "2025-07-29", 12)).toDF("id", "name", "value", "ts", "day", "hh")
         // Write a table by spark dataframe.
         df.write.format("hudi")
@@ -1159,10 +1161,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.WRITE_TABLE_VERSION.key, tableVersion.toString)
-          .option(
-            HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key,
-            encodeSingleKeyFieldValue.toString)
-          .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, (tableVersion >= 9).toString)
+          .option(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key, encoding.name)
           .mode(SaveMode.Overwrite)
           .save(tablePath)
 
@@ -1178,20 +1177,20 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
         spark.sql(
           s"""
              |ALTER TABLE $tableName
-             |SET TBLPROPERTIES (hoodie.write.complex.keygen.new.encoding = '$encodeSingleKeyFieldValue',
-             | hoodie.write.table.version = '$tableVersion')
+             |SET TBLPROPERTIES (hoodie.write.table.version = '$tableVersion')
              |""".stripMargin)
         // Check the missing properties for spark sql
         val metaClient = createMetaClient(spark, tablePath)
         val properties = metaClient.getTableConfig.getProps.asScala.toMap
         assertResult("day,hh")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
         assertResult("ts")(properties(HoodieTableConfig.ORDERING_FIELDS.key))
+        assertResult(encoding.name)(properties(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key))
 
         val query = s"select _hoodie_record_key, _hoodie_partition_path, id, name, value, ts, day, hh from $tableName order by id"
 
         // Test insert into
         writeAndValidateWithComplexKeyGenerator(
-          spark, tableVersion, tableName,
+          spark, tableName,
           s"insert into $tableName values(2, 'a2', 10, 1000, '2025-07-29', 12)", query
         )(
           Seq(keyPrefix + "1", "2025-07-29/12", 1, "a1", 10, 1000, "2025-07-29", 12)
@@ -1202,7 +1201,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
 
         // Test merge into
         writeAndValidateWithComplexKeyGenerator(
-          spark, tableVersion, tableName,
+          spark, tableName,
           s"""
              |merge into $tableName h0
              |using (select 1 as id, 'a1' as name, 11 as value, 1001 as ts, '2025-07-29' as day, 12 as hh) s0
@@ -1220,7 +1219,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
 
         // Test update
         writeAndValidateWithComplexKeyGenerator(
-          spark, tableVersion, tableName,
+          spark, tableName,
           s"update $tableName set value = value + 1 where id = 2", query
         )(
           Seq(keyPrefix + "1", "2025-07-29/12", 1, "a1", 11, 1001, "2025-07-29", 12),
@@ -1232,7 +1231,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
 
         // Test delete
         writeAndValidateWithComplexKeyGenerator(
-          spark, tableVersion, tableName,
+          spark, tableName,
           s"delete from $tableName where id = 1", query
         )(
           Seq(keyPrefix + "1", "2025-07-29/12", 1, "a1", 11, 1001, "2025-07-29", 12),
@@ -1241,6 +1240,48 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
           Seq(keyPrefix + "2", "2025-07-29/12", 2, "a2", 11, 1000, "2025-07-29", 12)
         )
       }
+    }
+  }
+
+  test("Test Merge Into a legacy single-field complex keygen table without the recorded encoding") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      import spark.implicits._
+      val df = Seq((1, "a1", 10, 1000, "2025-07-29", 12), (2, "a2", 20, 1000, "2025-07-29", 12))
+        .toDF("id", "name", "value", "ts", "day", "hh")
+      // a table with bare record keys, written before the encoding was recorded
+      df.write.format("hudi")
+        .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+        .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
+        .option(RECORDKEY_FIELD.key, "id")
+        .option(ORDERING_FIELDS.key, "ts")
+        .option(PARTITIONPATH_FIELD.key, "day,hh")
+        .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
+        .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
+        .option(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key, ComplexKeyGenEncoding.VALUE_ONLY.name)
+        .mode(SaveMode.Overwrite)
+        .save(tablePath)
+      val metaClient = createMetaClient(spark, tablePath)
+      HoodieTableConfig.delete(metaClient.getStorage, metaClient.getMetaPath, Set(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key).asJava)
+
+      spark.sql(s"create table $tableName using hudi location '$tablePath'")
+      spark.sql(
+        s"""
+           |merge into $tableName h0
+           |using (
+           |  select 1 as id, 'a1' as name, 11 as value, 1001 as ts, '2025-07-29' as day, 12 as hh union all
+           |  select 3 as id, 'a3' as name, 30 as value, 1000 as ts, '2025-07-29' as day, 12 as hh
+           |) s0
+           |on h0.id = s0.id
+           |when matched then update set *
+           |when not matched then insert *
+           |""".stripMargin)
+
+      checkAnswer(s"select _hoodie_record_key, id, value from $tableName order by id")(
+        Seq("1", 1, 11), Seq("2", 2, 20), Seq("3", 3, 30))
+      val properties = createMetaClient(spark, tablePath).getTableConfig.getProps.asScala.toMap
+      assertResult(ComplexKeyGenEncoding.VALUE_ONLY.name)(properties(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key))
     }
   }
 
@@ -1820,7 +1861,6 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
            |PARTITIONED BY (city, state)
            |location '$tablePath';
        """.stripMargin)
-      disableComplexKeygenValidation(spark, tableName)
       // insert and validate
       spark.sql(s"insert into $tableName values(1695332066,'trip3','rider-E','driver-O',93.50,'austin','texas')")
       checkAnswer(s"select ts, id, rider, driver, fare, city, state from $tableName")(
@@ -2041,21 +2081,12 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
   }
 
   def writeAndValidateWithComplexKeyGenerator(spark: SparkSession,
-                                              tableVersion: Int,
                                               tableName: String,
                                               dmlToWrite: String,
                                               query: String)(
                                                expectedRowsBefore: Seq[Any]*)(expectedRowsAfter: Seq[Any]*): Unit = {
-    if (tableVersion < 9) {
-      // By default, the complex key generator validation is enabled and should throw exception on DML
-      Assertions.assertComplexKeyGeneratorValidationThrows(() => spark.sql(dmlToWrite), "ingestion")
-      // Query should still succeed
-      checkAnswer(query)(expectedRowsBefore: _*)
-      // Disabling the complex key generator validation should let write succeed
-      HoodieSparkSqlTestBase.disableComplexKeygenValidation(spark, tableName)
-    }
+    checkAnswer(query)(expectedRowsBefore: _*)
     spark.sql(dmlToWrite)
-    HoodieSparkSqlTestBase.enableComplexKeygenValidation(spark, tableName)
     checkAnswer(query)(expectedRowsAfter: _*)
   }
 

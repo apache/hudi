@@ -379,14 +379,13 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
         conf.set(FlinkOptions.KEYGEN_CLASS_NAME, NonpartitionedAvroKeyGenerator.class.getName());
         log.info("Table option [{}] is reset to {} because this is a non-partitioned table",
             FlinkOptions.KEYGEN_CLASS_NAME.key(), NonpartitionedAvroKeyGenerator.class.getName());
-        return;
-      }
-      DataType partitionFieldType = table.getSchema().getFieldDataType(partitionField)
-          .orElseThrow(() -> new HoodieValidationException("Field " + partitionField + " does not exist"));
-      if (pks.length <= 1 && DataTypeUtils.isDatetimeType(partitionFieldType)) {
-        // timestamp based key gen only supports simple primary key
-        setupTimestampKeygenOptions(conf, partitionFieldType);
-        return;
+      } else {
+        DataType partitionFieldType = table.getSchema().getFieldDataType(partitionField)
+            .orElseThrow(() -> new HoodieValidationException("Field " + partitionField + " does not exist"));
+        if (pks.length <= 1 && DataTypeUtils.isDatetimeType(partitionFieldType)) {
+          // timestamp based key gen only supports simple primary key
+          setupTimestampKeygenOptions(conf, partitionFieldType);
+        }
       }
     }
     boolean complexHoodieKey = pks.length > 1 || partitions.length > 1;
