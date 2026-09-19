@@ -29,6 +29,8 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.OrderedProperties;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.metrics.LocalRegistry;
+import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.BootstrapIndexType;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
@@ -61,6 +63,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieTableVersionPinExceededException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
@@ -179,6 +182,16 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("Initial Version of table when the table was created. Used for upgrade/downgrade"
           + " to identify what upgrade/downgrade paths happened on the table. This is only configured "
           + "when the table is initially setup.");
+
+  public static final ConfigProperty<String> MAX_ALLOWED_TABLE_VERSION = ConfigProperty
+      .key("hoodie.table.version.pinned")
+      .defaultValue("UN_PINNED")
+      .withDocumentation("Ceiling on hoodie.table.version: loading or writing a table whose version exceeds "
+          + "this value throws immediately, so an accidental upgrade is caught before it silently makes the "
+          + "table unreadable by older readers. A version at or below the pin is unaffected. Also honored as "
+          + "a JVM system property of the same key (this config value takes precedence over the system "
+          + "property) so the pin can be applied fleet-wide without editing every table's hoodie.properties. "
+          + "Default UN_PINNED disables the check (no behavior change).");
 
   /**
    * @deprecated Use {@link #ORDERING_FIELDS} instead
@@ -793,9 +806,79 @@ public class HoodieTableConfig extends HoodieConfig {
    * This function returns the hoodie.table.version from hoodie.properties file.
    */
   public static HoodieTableVersion getTableVersion(HoodieConfig config) {
-    return contains(VERSION, config)
+    HoodieTableVersion version = contains(VERSION, config)
         ? HoodieTableVersion.fromVersionCode(config.getInt(VERSION))
         : VERSION.defaultValue();
+    enforceVersionPin(config, version);
+    return version;
+  }
+
+  private static boolean isBlank(String value) {
+    return value == null || value.trim().isEmpty();
+  }
+
+  /**
+   * Resolves the configured {@link #MAX_ALLOWED_TABLE_VERSION} (falling back to the JVM system property of the
+   * same key) into a version code, or {@link Option#empty()} if the pin is disabled (unset, blank, or
+   * {@code UN_PINNED}).
+   */
+  private static Option<Integer> resolvePinnedVersionCode(HoodieConfig config) {
+    String rawValue = contains(MAX_ALLOWED_TABLE_VERSION, config)
+        ? config.getString(MAX_ALLOWED_TABLE_VERSION)
+        : null;
+    // A blank table-level value counts as unset rather than as an explicit opt-out, so that it cannot
+    // silently shadow a fleet-wide pin supplied through the system property.
+    if (isBlank(rawValue)) {
+      rawValue = System.getProperty(MAX_ALLOWED_TABLE_VERSION.key());
+    }
+    if (isBlank(rawValue) || MAX_ALLOWED_TABLE_VERSION.defaultValue().equalsIgnoreCase(rawValue.trim())) {
+      return Option.empty();
+    }
+    try {
+      int versionCode = Integer.parseInt(rawValue.trim());
+      if (versionCode < 0) {
+        throw new NumberFormatException("Table version pin must not be negative: " + versionCode);
+      }
+      // Validates that the code corresponds to a recognized table version.
+      HoodieTableVersion.fromVersionCode(versionCode);
+      return Option.of(versionCode);
+    } catch (NumberFormatException | HoodieException e) {
+      throw new HoodieTableVersionPinExceededException(
+          "Invalid value for " + MAX_ALLOWED_TABLE_VERSION.key() + ": '" + rawValue
+              + "'. Must be '" + MAX_ALLOWED_TABLE_VERSION.defaultValue() + "' or a recognized table version code.", e);
+    }
+  }
+
+  /**
+   * Throws {@link HoodieTableVersionPinExceededException} and emits a metric when {@code version} exceeds the
+   * configured {@link #MAX_ALLOWED_TABLE_VERSION} ceiling. A version at or below the pin is a no-op. Disabled
+   * entirely (no-op, no metric) when the pin is unset/{@code UN_PINNED}.
+   */
+  private static void enforceVersionPin(HoodieConfig config, HoodieTableVersion version) {
+    Option<Integer> pinnedVersionCode = resolvePinnedVersionCode(config);
+    if (!pinnedVersionCode.isPresent() || version.versionCode() <= pinnedVersionCode.get()) {
+      return;
+    }
+    String tableName = contains(NAME, config) ? config.getString(NAME) : "unknown";
+    emitVersionPinExceededMetric(tableName);
+    throw new HoodieTableVersionPinExceededException(String.format(
+        "Table version %s (code %d) for table '%s' exceeds the pin %d configured via '%s'. Refusing to proceed "
+            + "to avoid silently upgrading a table past its pinned version.",
+        version, version.versionCode(), tableName, pinnedVersionCode.get(), MAX_ALLOWED_TABLE_VERSION.key()));
+  }
+
+  /**
+   * Emits a per-table counter metric via {@link Registry} when a table version pin violation is detected. Failures
+   * emitting the metric are swallowed so they can never mask the {@link HoodieTableVersionPinExceededException}
+   * thrown by the caller.
+   */
+  private static void emitVersionPinExceededMetric(String tableName) {
+    try {
+      Registry.getRegistryOfClass(tableName, "hoodie.table.version.pin", LocalRegistry.class.getName())
+          .increment("exceeded");
+    } catch (Exception e) {
+      log.warn("Failed to emit table version pin exceeded metric for table {}", tableName, e);
+    }
   }
 
   /**
@@ -842,8 +925,18 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   public void setTableVersion(HoodieTableVersion tableVersion) {
+    enforceVersionPin(this, tableVersion);
     setValue(VERSION, Integer.toString(tableVersion.versionCode()));
     setValue(TIMELINE_LAYOUT_VERSION, Integer.toString(tableVersion.getTimelineLayoutVersion().getVersion()));
+  }
+
+  /**
+   * Validates {@code version} against the configured {@link #MAX_ALLOWED_TABLE_VERSION} pin, throwing
+   * {@link HoodieTableVersionPinExceededException} if it is exceeded. Exposed so callers (e.g. upgrade/downgrade)
+   * can fail fast on a target version before performing any work towards persisting it.
+   */
+  public void validateVersionPin(HoodieTableVersion version) {
+    enforceVersionPin(this, version);
   }
 
   public void setInitialVersion(HoodieTableVersion initialVersion) {

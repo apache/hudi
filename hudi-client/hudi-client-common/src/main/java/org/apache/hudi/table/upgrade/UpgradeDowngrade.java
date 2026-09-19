@@ -32,6 +32,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieTableVersionPinExceededException;
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -175,6 +176,10 @@ public class UpgradeDowngrade {
    * @param instantTime current instant time that should not be touched.
    */
   public void run(HoodieTableVersion toVersion, String instantTime) {
+    // Fail fast, before any rollback/compaction work is attempted, if the target version exceeds the
+    // configured table version pin.
+    metaClient.getTableConfig().validateVersionPin(toVersion);
+
     // Fetch version from property file and current version
     HoodieTableVersion fromVersion = metaClient.getTableConfig().getTableVersion();
     // Determine if we are upgrading or downgrading
@@ -200,6 +205,10 @@ public class UpgradeDowngrade {
           new UpgradeDowngrade(mdtMetaClient, mdtWriteConfig, context, upgradeDowngradeHelper)
               .run(toVersion, instantTime);
         }
+      } catch (HoodieTableVersionPinExceededException e) {
+        // Surfaced as-is: a pin violation is a configuration decision to honor, not a metadata table failure
+        // that disabling the metadata table would resolve.
+        throw e;
       } catch (Exception e) {
         throw new HoodieUpgradeDowngradeException("Upgrade/downgrade for the Hudi metadata table failed. "
             + "Please try again. If the failure repeats for metadata table, it is recommended to disable "
