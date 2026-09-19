@@ -137,4 +137,18 @@ abstract class BaseProcedure extends Procedure {
       results
     }
   }
+
+  protected def hasFilter(filter: String): Boolean = filter != null && filter.trim.nonEmpty
+
+  /** An optional `limit` argument as a bound, with "unset" meaning no bound rather than zero. */
+  protected def resolveLimit(limit: Option[Any]): Int = limit.map(_.asInstanceOf[Int]).getOrElse(Int.MaxValue)
+
+  /**
+   * Filters first and truncates afterwards, so `limit` bounds the matching rows rather than the rows the
+   * filter gets to see. Truncating first makes `limit => n, filter => ...` return the matches among the
+   * first n rows, which is empty whenever the matches all sit past the cut-off.
+   */
+  protected def applyFilterAndLimit(results: Seq[Row], filter: String, schema: StructType, limit: Int): Seq[Row] = {
+    applyFilter(results, filter, schema).take(limit)
+  }
 }

@@ -159,24 +159,28 @@ class ShowCleansProcedure(includePartitionMetadata: Boolean) extends BaseProcedu
     val basePath = hoodieCatalogTable.tableLocation
     val metaClient = createMetaClient(jsc, basePath)
 
+    // `limit` bounds how many clean instants get their metadata read, so with a filter it has to be
+    // lifted here and reapplied to the matching rows; otherwise the filter only ever sees the newest
+    // `limit` cleans.
+    val scanLimit = if (hasFilter(filter)) Int.MaxValue else limit
     val activeResults = if (includePartitionMetadata) {
-      getCleansWithPartitionMetadata(metaClient.getActiveTimeline, limit)
+      getCleansWithPartitionMetadata(metaClient.getActiveTimeline, scanLimit)
     } else {
-      getCleans(metaClient.getActiveTimeline, limit)
+      getCleans(metaClient.getActiveTimeline, scanLimit)
     }
     val finalResults = if (showArchived) {
       val archivedResults = if (includePartitionMetadata) {
-        getCleansWithPartitionMetadata(metaClient.getArchivedTimeline, limit)
+        getCleansWithPartitionMetadata(metaClient.getArchivedTimeline, scanLimit)
       } else {
-        getCleans(metaClient.getArchivedTimeline, limit)
+        getCleans(metaClient.getArchivedTimeline, scanLimit)
       }
       (activeResults ++ archivedResults)
         .sortWith((a, b) => a.getString(0) > b.getString(0))
-        .take(limit)
+        .take(scanLimit)
     } else {
       activeResults
     }
-    applyFilter(finalResults, filter, outputType)
+    applyFilterAndLimit(finalResults, filter, outputType, limit)
   }
 
   override def build: Procedure = new ShowCleansProcedure(includePartitionMetadata)
