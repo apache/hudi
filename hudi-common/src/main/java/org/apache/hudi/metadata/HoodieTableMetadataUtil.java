@@ -2463,7 +2463,8 @@ public class HoodieTableMetadataUtil {
                 return null;
               }
               return new HoodieMetadataFileInfo(
-                  Math.max(newFileInfo.getSize(), oldFileInfo.getSize()), false);
+                  Math.max(newFileInfo.getSize(), oldFileInfo.getSize()), false,
+                  newFileInfo.getSourceBasePath() != null ? newFileInfo.getSourceBasePath() : oldFileInfo.getSourceBasePath());
             });
       });
     }

@@ -303,7 +303,8 @@ public enum MetadataPartitionType {
       payload.filesystemMetadata = metadata;
       payload.filesystemMetadata.keySet().forEach(k -> {
         GenericRecord v = payload.filesystemMetadata.get(k);
-        payload.filesystemMetadata.put(k, new HoodieMetadataFileInfo((Long) v.get("size"), (Boolean) v.get("isDeleted")));
+        payload.filesystemMetadata.put(k, new HoodieMetadataFileInfo((Long) v.get("size"), (Boolean) v.get("isDeleted"),
+            v.get("sourceBasePath") == null ? null : v.get("sourceBasePath").toString()));
       });
     }
   }

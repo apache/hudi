@@ -50,6 +50,12 @@
                                 "name": "isDeleted",
                                 "type": "boolean",
                                 "doc": "True if this file has been deleted"
+                            },
+                            {
+                                "name": "sourceBasePath",
+                                "type": ["null", "string"],
+                                "default": null,
+                                "doc": "Base path the file lives under, when it is not under the table base path. Null for files the table owns."
                             }
                         ]
                     }

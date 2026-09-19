@@ -202,7 +202,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * You can find more details in HUDI-3834.
    */
   public static final Lazy<HoodieMetadataColumnStats.Builder> METADATA_COLUMN_STATS_BUILDER_STUB = Lazy.lazily(HoodieMetadataColumnStats::newBuilder);
-  private static final HoodieMetadataFileInfo DELETE_FILE_METADATA = new HoodieMetadataFileInfo(0L, true);
+  private static final HoodieMetadataFileInfo DELETE_FILE_METADATA = new HoodieMetadataFileInfo(0L, true, null);
   protected String key = null;
   protected int type = 0;
   protected Map<String, HoodieMetadataFileInfo> filesystemMetadata = null;
@@ -286,7 +286,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    */
   public static HoodieRecord<HoodieMetadataPayload> createPartitionListRecord(Collection<String> partitions, boolean isDeleted) {
     Map<String, HoodieMetadataFileInfo> fileInfo = new HashMap<>();
-    partitions.forEach(partition -> fileInfo.put(getPartitionIdentifierForFilesPartition(partition), new HoodieMetadataFileInfo(0L, isDeleted)));
+    partitions.forEach(partition -> fileInfo.put(getPartitionIdentifierForFilesPartition(partition), new HoodieMetadataFileInfo(0L, isDeleted, null)));
 
     HoodieKey key = new HoodieKey(RECORDKEY_PARTITION_LIST, MetadataPartitionType.ALL_PARTITIONS.getPartitionPath());
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), MetadataPartitionType.ALL_PARTITIONS.getRecordType(), fileInfo);
@@ -323,7 +323,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       // should not be creating empty files
       checkState(fileSize > 0, () -> "File name " + fileName
           + ", is a 0 byte file. It does not have any contents");
-      fileInfo.put(fileName, new HoodieMetadataFileInfo(fileSize, false));
+      fileInfo.put(fileName, new HoodieMetadataFileInfo(fileSize, false, null));
     });
 
     filesDeleted.forEach(fileName -> fileInfo.put(fileName, DELETE_FILE_METADATA));
@@ -505,7 +505,11 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         .map(e -> {
           // NOTE: Since we know that the Metadata Table's Payload is simply a file-name we're
           //       creating Hadoop's Path using more performant unsafe variant
-          return new StoragePathInfo(new StoragePath(partitionPath, e.getKey()), e.getValue().getSize(),
+          // A registered file lives outside the table, so it resolves against the base path it was
+          // registered with rather than against this table's partition path.
+          StoragePath basePath = e.getValue().getSourceBasePath() == null
+              ? partitionPath : new StoragePath(e.getValue().getSourceBasePath());
+          return new StoragePathInfo(new StoragePath(basePath, e.getKey()), e.getValue().getSize(),
               false, (short) 0, blockSize, 0);
         })
         .collect(Collectors.toList());
