@@ -1581,16 +1581,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       }
     } finally {
       String metadataTableName = writeClient.getConfig().getTableName();
-      boolean tableNameExists = StringUtils.nonEmpty(metadataTableName);
-      String executionDurationMetricName = tableNameExists
-          ? String.format("%s.%s", metadataTableName, HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_DURATION)
-          : HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_DURATION;
-      String executionStatusMetricName = tableNameExists
-          ? String.format("%s.%s", metadataTableName, HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_STATUS)
-          : HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_STATUS;
-      String deltaCommitsMetricName = tableNameExists
-          ? String.format("%s.%s", metadataTableName, HoodieMetadataMetrics.DELTA_COMMITS_SINCE_LAST_COMPACTION)
-          : HoodieMetadataMetrics.DELTA_COMMITS_SINCE_LAST_COMPACTION;
+      String executionDurationMetricName = qualifiedMetricName(metadataTableName, HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_DURATION);
+      String executionStatusMetricName = qualifiedMetricName(metadataTableName, HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_STATUS);
+      String deltaCommitsMetricName = qualifiedMetricName(metadataTableName, HoodieMetadataMetrics.DELTA_COMMITS_SINCE_LAST_COMPACTION);
       long timeSpent = metadataTableServicesTimer.endTimer();
       metrics.ifPresent(m -> m.setMetric(executionDurationMetricName, timeSpent));
       if (allTableServicesExecutedSuccessfullyOrSkipped) {
@@ -1600,6 +1593,14 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       }
       reportDeltaCommitsSinceLastCompaction(deltaCommitsMetricName);
     }
+  }
+
+  /**
+   * Prefixes {@code metricName} with the metadata table name, matching the convention applied by
+   * {@code Metrics#registerGauges} for metrics registered directly via {@code Metrics#registerGauge}.
+   */
+  private static String qualifiedMetricName(String metadataTableName, String metricName) {
+    return StringUtils.nonEmpty(metadataTableName) ? String.format("%s.%s", metadataTableName, metricName) : metricName;
   }
 
   /**
