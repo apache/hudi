@@ -120,11 +120,15 @@ class TestTimelineViewRefresh extends HoodieCommonTestHarness {
   }
 
   @Test
-  void testExtensionPassesInitialAndFinalChecks() throws IOException {
+  void testExactExtensionSkipsRefreshButFinalCheckStaysStrict() throws IOException {
     HoodieTimeline clientTimeline = timeline(instant(COMPLETED, COMMIT_ACTION, "001"));
     for (String action : Arrays.asList(COMMIT_ACTION, CLEAN_ACTION, REPLACE_COMMIT_ACTION, COMPACTION_ACTION, LOG_COMPACTION_ACTION)) {
       when(view.getTimeline()).thenReturn(timeline(instant(COMPLETED, COMMIT_ACTION, "001"), instant(COMPLETED, action, "002")));
-      assertEquals(0, request(clientTimeline, "001", "partition").size(), action);
+      if (CLEAN_ACTION.equals(action)) {
+        assertEquals(0, request(clientTimeline, "001", "partition").size(), action);
+      } else {
+        assertThrows(IOException.class, () -> request(clientTimeline, "001", "partition"), action);
+      }
     }
     verify(view, never()).sync();
   }
@@ -135,7 +139,7 @@ class TestTimelineViewRefresh extends HoodieCommonTestHarness {
     HoodieInstant clean = instant(COMPLETED, CLEAN_ACTION, "001");
     HoodieTimeline clientTimeline = timeline(commit, clean);
     when(view.getTimeline()).thenReturn(timeline(commit, clean, instant(COMPLETED, COMMIT_ACTION, "002")));
-    request(clientTimeline, "001", "partition");
+    assertThrows(IOException.class, () -> request(clientTimeline, "001", "partition"));
     verify(view, never()).sync();
     when(view.getTimeline()).thenReturn(timeline(commit, instant(COMPLETED, COMMIT_ACTION, "002")));
     doAnswer(invocation -> {
@@ -147,14 +151,14 @@ class TestTimelineViewRefresh extends HoodieCommonTestHarness {
   }
 
   @Test
-  void testExtensionDuringRequestPassesFinalCheck() throws IOException {
+  void testExtensionDuringRequestFailsFinalCheck() {
     HoodieTimeline clientTimeline = timeline(instant(COMPLETED, COMMIT_ACTION, "001"));
     when(view.getTimeline()).thenReturn(clientTimeline);
     when(view.getLatestBaseFiles(anyString())).thenAnswer(invocation -> {
       when(view.getTimeline()).thenReturn(timeline(instant(COMPLETED, COMMIT_ACTION, "001"), instant(COMPLETED, COMMIT_ACTION, "002")));
       return Stream.empty();
     });
-    request(clientTimeline, "001", "partition");
+    assertThrows(IOException.class, () -> request(clientTimeline, "001", "partition"));
     verify(view, never()).sync();
   }
 
@@ -199,7 +203,7 @@ class TestTimelineViewRefresh extends HoodieCommonTestHarness {
     HoodieTimeline rawClient = timeline(commit, instant(INFLIGHT, COMMIT_ACTION, "002"), clean);
     HoodieTimeline filteredClient = rawClient.filterCompletedAndCompactionInstants();
     when(view.getTimeline()).thenReturn(timeline(commit, instant(REQUESTED, CLEAN_ACTION, "002"), clean, instant(COMPLETED, COMMIT_ACTION, "004")));
-    request(filteredClient, "003", "partition");
+    assertThrows(IOException.class, () -> request(filteredClient, "003", "partition"));
     verify(view, never()).sync();
 
     // A pending log compaction is included by the server's existing filter but not the remote client's.
@@ -262,7 +266,7 @@ class TestTimelineViewRefresh extends HoodieCommonTestHarness {
   }
 
   @Test
-  void testExactExtensionServesCurrentFilesWithoutFallback() throws Exception {
+  void testExactExtensionPreservesLocalFallback() throws Exception {
     FileCreateUtils.createCommit(metaClient, "001");
     FileCreateUtils.createBaseFile(metaClient, "partition", "001", "file");
     HoodieTimeline initial = metaClient.reloadActiveTimeline();
@@ -272,16 +276,14 @@ class TestTimelineViewRefresh extends HoodieCommonTestHarness {
     FileCreateUtils.createCommit(metaClient, "002");
     FileCreateUtils.createBaseFile(metaClient, "partition", "002", "file");
     view = spy(HoodieTableFileSystemView.fileListingBasedFileSystemView(context, metaClient, metaClient.reloadActiveTimeline()));
-    PriorityBasedFileSystemView priorityView = new PriorityBasedFileSystemView(remoteView, ignored -> {
-      throw new AssertionError("An exact extension must not cause fallback");
-    }, context);
+    PriorityBasedFileSystemView priorityView = new PriorityBasedFileSystemView(remoteView, ignored -> secondary, context);
     try {
       assertEquals("001", secondary.getLatestBaseFile("partition", "file").get().getCommitTime());
-      assertEquals("002", priorityView.getLatestBaseFile("partition", "file").get().getCommitTime());
-      assertEquals(Arrays.asList("002"), priorityView.getLatestBaseFiles("partition")
+      assertEquals("001", priorityView.getLatestBaseFile("partition", "file").get().getCommitTime());
+      assertEquals(Arrays.asList("001"), priorityView.getLatestBaseFiles("partition")
           .map(HoodieBaseFile::getCommitTime).collect(Collectors.toList()));
-      assertEquals("002", priorityView.getLatestFileSlice("partition", "file").get().getBaseInstantTime());
-      assertEquals(Arrays.asList("002"), priorityView.getLatestFileSlices("partition")
+      assertEquals("001", priorityView.getLatestFileSlice("partition", "file").get().getBaseInstantTime());
+      assertEquals(Arrays.asList("001"), priorityView.getLatestFileSlices("partition")
           .map(slice -> slice.getBaseInstantTime()).collect(Collectors.toList()));
       assertEquals(Arrays.asList("001"), priorityView.getLatestBaseFilesBeforeOrOn("partition", "001")
           .map(HoodieBaseFile::getCommitTime).collect(Collectors.toList()));
@@ -295,7 +297,7 @@ class TestTimelineViewRefresh extends HoodieCommonTestHarness {
   }
 
   @Test
-  void testBoundedSelectionUsesServerPendingCompaction() throws Exception {
+  void testBoundedSelectionPreservesClientPendingCompactionView() throws Exception {
     FileCreateUtils.createCommit(metaClient, "001");
     FileCreateUtils.createBaseFile(metaClient, "partition", "001", "file");
     HoodieTimeline initial = metaClient.reloadActiveTimeline();
@@ -306,12 +308,10 @@ class TestTimelineViewRefresh extends HoodieCommonTestHarness {
         CompactionUtils.buildFromFileSlices(Arrays.asList(Pair.of("partition", secondary.getLatestFileSlice("partition", "file").get())),
             Option.empty(), Option.empty()));
     view = spy(HoodieTableFileSystemView.fileListingBasedFileSystemView(context, metaClient, metaClient.reloadActiveTimeline()));
-    PriorityBasedFileSystemView priorityView = new PriorityBasedFileSystemView(remoteView, ignored -> {
-      throw new AssertionError("An exact extension must not cause fallback");
-    }, context);
+    PriorityBasedFileSystemView priorityView = new PriorityBasedFileSystemView(remoteView, ignored -> secondary, context);
     try {
       assertEquals(1, secondary.getLatestFileSlicesBeforeOrOn("partition", "001", false).count());
-      assertEquals(0, priorityView.getLatestFileSlicesBeforeOrOn("partition", "001", false).count());
+      assertEquals(1, priorityView.getLatestFileSlicesBeforeOrOn("partition", "001", false).count());
       assertEquals(Arrays.asList("001"), priorityView.getLatestFileSlicesBeforeOrOn("partition", "001", true)
           .map(slice -> slice.getBaseInstantTime()).collect(Collectors.toList()));
       verify(view, never()).sync();
