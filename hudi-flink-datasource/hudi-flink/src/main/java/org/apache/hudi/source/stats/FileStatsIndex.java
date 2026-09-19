@@ -386,6 +386,7 @@ public class FileStatsIndex implements ColumnStatsIndex {
 
   /**
    * Reads statistics for the requested columns and relative partition paths.
+   * Column prefixes limit reads to the referenced columns; partition prefixes further restrict reads after partition pruning.
    * An empty partition list reads all partitions using column-only prefixes.
    */
   @VisibleForTesting

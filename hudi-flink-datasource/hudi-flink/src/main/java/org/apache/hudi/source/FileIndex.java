@@ -72,6 +72,7 @@ public class FileIndex implements Serializable, AutoCloseable {
   private final ColumnStatsProbe colStatsProbe;                    // for probing column stats
   private final Function<String, Integer> partitionBucketIdFunc;   // for bucket pruning
   private List<String> partitionPaths;                             // cache of partition paths
+  private int totalPartitionCount;                                // partition count before pruning
   private final FileStatsIndex fileStatsIndex;                     // for data skipping
   private final Option<BaseRecordLevelIndex> recordLevelIndex;
   private final HoodieTableMetaClient metaClient;
@@ -201,6 +202,10 @@ public class FileIndex implements Serializable, AutoCloseable {
       return filteredFileSlices;
     }
     List<String> candidatePartitions = filteredFileSlices.stream().map(FileSlice::getPartitionPath).distinct().collect(Collectors.toList());
+    // Avoid expanding column prefixes when the remaining files still span every partition.
+    if (candidatePartitions.size() == totalPartitionCount) {
+      candidatePartitions = Collections.emptyList();
+    }
     List<String> allFiles = filteredFileSlices.stream().map(FileSlice::getAllFileNames).flatMap(List::stream).collect(Collectors.toList());
     Set<String> candidateFiles = fileStatsIndex.computeCandidateFiles(colStatsProbe, allFiles, candidatePartitions);
     if (candidateFiles == null) {
@@ -236,6 +241,7 @@ public class FileIndex implements Serializable, AutoCloseable {
   @VisibleForTesting
   public void reset() {
     this.partitionPaths = null;
+    this.totalPartitionCount = 0;
   }
 
   // -------------------------------------------------------------------------
@@ -253,6 +259,7 @@ public class FileIndex implements Serializable, AutoCloseable {
     }
     List<String> allPartitionPaths = this.tableExists ? FSUtils.getAllPartitionPaths(new HoodieFlinkEngineContext(hadoopConf), metaClient, metadataConfig)
         : Collections.emptyList();
+    this.totalPartitionCount = allPartitionPaths.size();
     this.partitionPaths = partitionPruner.map(pruner -> pruner.filter(allPartitionPaths).stream().collect(Collectors.toList())).orElse(allPartitionPaths);
     return this.partitionPaths;
   }

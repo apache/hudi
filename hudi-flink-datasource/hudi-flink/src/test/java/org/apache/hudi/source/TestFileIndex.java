@@ -19,6 +19,7 @@
 package org.apache.hudi.source;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -28,6 +29,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.source.prune.PartitionPruners;
+import org.apache.hudi.source.stats.FileStatsIndex;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.util.StreamerUtil;
@@ -53,6 +55,8 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.MockedConstruction;
+import org.mockito.MockedStatic;
 
 import java.io.File;
 import java.math.BigDecimal;
@@ -64,6 +68,7 @@ import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -81,9 +86,16 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockConstruction;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * Test cases for {@link FileIndex}.
@@ -192,6 +204,106 @@ public class TestFileIndex {
 
     List<FileSlice> fileSlices = getFilteredFileSlices(metaClient, fileIndex);
     assertThat(fileSlices.size(), is(2));
+  }
+
+  @ParameterizedTest
+  @MethodSource("columnStatsPartitionScopes")
+  void testColumnStatsPartitionScope(List<String> allPartitions, List<String> selectedPartitions,
+                                    List<String> filePartitions, List<String> expectedScope) throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(METADATA_ENABLED, true);
+    conf.set(READ_DATA_SKIPPING_ENABLED, true);
+    HoodieTableMetaClient metaClient = StreamerUtil.initTableIfNotExists(conf);
+    ColumnStatsProbe probe = mock(ColumnStatsProbe.class);
+
+    try (MockedStatic<FSUtils> fsUtils = mockStatic(FSUtils.class);
+         MockedConstruction<FileStatsIndex> statsIndexes = mockConstruction(FileStatsIndex.class, (index, context) ->
+             when(index.computeCandidateFiles(any(), anyList(), anyList())).thenReturn(null))) {
+      fsUtils.when(() -> FSUtils.getAllPartitionPaths(any(), eq(metaClient), any(HoodieMetadataConfig.class))).thenReturn(allPartitions);
+      try (FileIndex fileIndex = FileIndex.builder().path(new StoragePath(tempFile.getAbsolutePath())).conf(conf)
+          .rowType(TestConfigurations.ROW_TYPE).metaClient(metaClient).columnStatsProbe(probe)
+          .partitionPruner(partitions -> new HashSet<>(selectedPartitions)).build()) {
+        assertEquals(new HashSet<>(selectedPartitions), new HashSet<>(fileIndex.getOrBuildPartitionPaths()));
+        List<FileSlice> slices = filePartitions.stream().map(partition -> new FileSlice(partition, "001", "file1")).collect(Collectors.toList());
+        assertEquals(slices, fileIndex.filterFileSlices(slices));
+        verify(statsIndexes.constructed().get(0)).computeCandidateFiles(eq(probe), anyList(), eq(expectedScope));
+        // Choosing prefixes must reuse the partition listing, not request another one.
+        fsUtils.verify(() -> FSUtils.getAllPartitionPaths(any(), eq(metaClient), any(HoodieMetadataConfig.class)), times(1));
+      }
+    }
+  }
+
+  private static Stream<Arguments> columnStatsPartitionScopes() {
+    List<String> allPartitions = Arrays.asList("par1", "par2");
+    List<String> onePartition = Collections.singletonList("par1");
+    List<String> nonPartitioned = Collections.singletonList("");
+    return Stream.of(
+        // A partition pruner that retains every partition must still use column-only prefixes.
+        Arguments.of(allPartitions, allPartitions, Arrays.asList("par1", "par1", "par2"), Collections.emptyList()),
+        Arguments.of(allPartitions, onePartition, onePartition, onePartition),
+        // Incremental reads may contain files from fewer partitions than the partition listing.
+        Arguments.of(allPartitions, allPartitions, onePartition, onePartition),
+        Arguments.of(nonPartitioned, nonPartitioned, nonPartitioned, Collections.emptyList()));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testColumnStatsPartitionScopeAfterBucketPruning(boolean removesPartition) throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(METADATA_ENABLED, true);
+    conf.set(READ_DATA_SKIPPING_ENABLED, true);
+    HoodieTableMetaClient metaClient = StreamerUtil.initTableIfNotExists(conf);
+    ColumnStatsProbe probe = mock(ColumnStatsProbe.class);
+
+    try (MockedStatic<FSUtils> fsUtils = mockStatic(FSUtils.class);
+         MockedConstruction<FileStatsIndex> statsIndexes = mockConstruction(FileStatsIndex.class, (index, context) ->
+             when(index.computeCandidateFiles(any(), anyList(), anyList())).thenReturn(null))) {
+      fsUtils.when(() -> FSUtils.getAllPartitionPaths(any(), eq(metaClient), any(HoodieMetadataConfig.class)))
+          .thenReturn(Arrays.asList("par1", "par2"));
+      try (FileIndex fileIndex = FileIndex.builder().path(new StoragePath(tempFile.getAbsolutePath())).conf(conf)
+          .rowType(TestConfigurations.ROW_TYPE).metaClient(metaClient).columnStatsProbe(probe)
+          .partitionBucketIdFunc(partition -> removesPartition && partition.equals("par2") ? 2 : 0).build()) {
+        fileIndex.getOrBuildPartitionPaths();
+        List<FileSlice> slices = Arrays.asList(
+            new FileSlice("par1", "001", "00000000-file1"), new FileSlice("par1", "001", "00000001-file2"),
+            new FileSlice("par2", "001", "00000000-file3"), new FileSlice("par2", "001", "00000001-file4"));
+        assertEquals(removesPartition ? 1 : 2, fileIndex.filterFileSlices(slices).size());
+        verify(statsIndexes.constructed().get(0)).computeCandidateFiles(eq(probe), anyList(),
+            eq(removesPartition ? Collections.singletonList("par1") : Collections.emptyList()));
+      }
+    }
+  }
+
+  @Test
+  void testColumnStatsPartitionScopeAfterReset() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(METADATA_ENABLED, true);
+    conf.set(READ_DATA_SKIPPING_ENABLED, true);
+    HoodieTableMetaClient metaClient = StreamerUtil.initTableIfNotExists(conf);
+    ColumnStatsProbe probe = mock(ColumnStatsProbe.class);
+    List<String> onePartition = Collections.singletonList("par1");
+    List<FileSlice> slices = Collections.singletonList(new FileSlice("par1", "001", "file1"));
+
+    try (MockedStatic<FSUtils> fsUtils = mockStatic(FSUtils.class);
+         MockedConstruction<FileStatsIndex> statsIndexes = mockConstruction(FileStatsIndex.class, (index, context) ->
+             when(index.computeCandidateFiles(any(), anyList(), anyList())).thenReturn(null))) {
+      fsUtils.when(() -> FSUtils.getAllPartitionPaths(any(), eq(metaClient), any(HoodieMetadataConfig.class)))
+          .thenReturn(onePartition, Arrays.asList("par1", "par2"));
+      try (FileIndex fileIndex = FileIndex.builder().path(new StoragePath(tempFile.getAbsolutePath())).conf(conf)
+          .rowType(TestConfigurations.ROW_TYPE).metaClient(metaClient).columnStatsProbe(probe).build()) {
+        fileIndex.getOrBuildPartitionPaths();
+        fileIndex.filterFileSlices(slices);
+        verify(statsIndexes.constructed().get(0)).computeCandidateFiles(eq(probe), anyList(), eq(Collections.emptyList()));
+
+        fileIndex.reset();
+        // Until the next listing, do not assume the cached partition count is still valid.
+        fileIndex.filterFileSlices(slices);
+        fileIndex.getOrBuildPartitionPaths();
+        fileIndex.filterFileSlices(slices);
+        verify(statsIndexes.constructed().get(0), times(2)).computeCandidateFiles(eq(probe), anyList(), eq(onePartition));
+        fsUtils.verify(() -> FSUtils.getAllPartitionPaths(any(), eq(metaClient), any(HoodieMetadataConfig.class)), times(2));
+      }
+    }
   }
 
   @ParameterizedTest
