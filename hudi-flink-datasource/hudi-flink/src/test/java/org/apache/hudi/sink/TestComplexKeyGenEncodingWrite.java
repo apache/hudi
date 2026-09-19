@@ -51,7 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Flink writes to a single-field ComplexKeyGenerator table that predates {@code hoodie.table.complex.keygen.encoding}:
- * the job resolves the encoding from the table's data before keying its records, and the write records it.
+ * the job supplies the matching encoding before keying its records, and the write records it.
  */
 public class TestComplexKeyGenEncodingWrite {
 
@@ -61,6 +61,7 @@ public class TestComplexKeyGenEncodingWrite {
   private Configuration complexKeygenConf() {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.set(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition,name");
     return conf;
   }
 
@@ -78,9 +79,10 @@ public class TestComplexKeyGenEncodingWrite {
         Collections.singleton(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()));
     checkRecordKeys(encoding, TestData.DATA_SET_INSERT);
 
-    // a job at the current version: the encoding is resolved into the job conf ahead of the upgrade, so the
+    // a job at the current version: the matching encoding is supplied in the job conf ahead of the upgrade, so the
     // records it keys match the existing ones and the upgrade records the same encoding on the table
     Configuration conf = complexKeygenConf();
+    conf.setString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), encoding.name());
     OptionsInference.setupComplexKeygenEncoding(conf);
     assertEquals(encoding.name(), conf.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null));
     TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
@@ -116,10 +118,12 @@ public class TestComplexKeyGenEncodingWrite {
     String prefix = encoding.encodesFieldName() ? "uuid:" : "";
     Map<String, TreeSet<String>> keysByPartition = new TreeMap<>();
     Stream.of(dataSets).flatMap(List::stream).forEach(row ->
-        keysByPartition.computeIfAbsent(row.getString(4).toString(), p -> new TreeSet<>()).add(prefix + row.getString(0)));
+        keysByPartition.computeIfAbsent(row.getString(4) + "/" + row.getString(1), p -> new TreeSet<>()).add(prefix + row.getString(0)));
     Map<String, String> expected = keysByPartition.entrySet().stream()
         .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().toString()));
-    TestData.checkWrittenData(tempFile, expected, expected.size(),
+    int topLevelPartitions = (int) Stream.of(dataSets).flatMap(List::stream)
+        .map(row -> row.getString(4).toString()).distinct().count();
+    TestData.checkWrittenData(tempFile, expected, topLevelPartitions,
         record -> record.get("_hoodie_record_key").toString());
   }
 }

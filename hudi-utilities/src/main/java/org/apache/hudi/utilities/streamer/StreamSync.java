@@ -1251,6 +1251,7 @@ public class StreamSync implements Serializable, Closeable {
       // Close Write client.
       writeClient.close();
     }
+    KeyGenUtils.recordComplexKeygenEncodingIfMissing(metaClient, writeConfig);
     writeClient = new SparkRDDWriteClient<>(hoodieSparkContext, writeConfig, embeddedTimelineService);
     onInitializingHoodieWriteClient.apply(writeClient);
   }

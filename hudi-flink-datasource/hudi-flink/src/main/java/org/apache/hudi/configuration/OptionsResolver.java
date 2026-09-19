@@ -736,8 +736,7 @@ public class OptionsResolver {
 
   /**
    * Returns the record key encoding of a single-field complex key generator table, when the table option
-   * {@code hoodie.table.complex.keygen.encoding} was set up on the job configuration
-   * ({@code OptionsInference#setupComplexKeygenEncoding}).
+   * {@code hoodie.table.complex.keygen.encoding} was set up on the job configuration.
    */
   public static Option<ComplexKeyGenEncoding> getComplexKeygenEncoding(Configuration conf) {
     String encoding = conf.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null);

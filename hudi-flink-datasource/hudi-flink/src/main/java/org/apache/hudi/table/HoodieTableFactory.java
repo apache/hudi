@@ -29,7 +29,6 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
-import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.index.HoodieIndex;
@@ -90,7 +89,6 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     setupTableOptions(conf.get(FlinkOptions.PATH), conf);
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     setupConfOptions(conf, context.getObjectIdentifier(), context.getCatalogTable(), schema);
-    OptionsInference.setupComplexKeygenEncoding(conf);
     checkBaseFileFormatForRead(conf);
     return new HoodieTableSource(
         SerializableSchema.create(schema),
@@ -109,7 +107,6 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     sanityCheck(conf, schema);
     setupConfOptions(conf, context.getObjectIdentifier(), context.getCatalogTable(), schema);
-    OptionsInference.setupComplexKeygenEncoding(conf);
     setupSortOptions(conf, context.getConfiguration());
     return new HoodieTableSink(conf, schema);
   }
@@ -382,14 +379,13 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
         conf.set(FlinkOptions.KEYGEN_CLASS_NAME, NonpartitionedAvroKeyGenerator.class.getName());
         log.info("Table option [{}] is reset to {} because this is a non-partitioned table",
             FlinkOptions.KEYGEN_CLASS_NAME.key(), NonpartitionedAvroKeyGenerator.class.getName());
-        return;
-      }
-      DataType partitionFieldType = table.getSchema().getFieldDataType(partitionField)
-          .orElseThrow(() -> new HoodieValidationException("Field " + partitionField + " does not exist"));
-      if (pks.length <= 1 && DataTypeUtils.isDatetimeType(partitionFieldType)) {
-        // timestamp based key gen only supports simple primary key
-        setupTimestampKeygenOptions(conf, partitionFieldType);
-        return;
+      } else {
+        DataType partitionFieldType = table.getSchema().getFieldDataType(partitionField)
+            .orElseThrow(() -> new HoodieValidationException("Field " + partitionField + " does not exist"));
+        if (pks.length <= 1 && DataTypeUtils.isDatetimeType(partitionFieldType)) {
+          // timestamp based key gen only supports simple primary key
+          setupTimestampKeygenOptions(conf, partitionFieldType);
+        }
       }
     }
     boolean complexHoodieKey = pks.length > 1 || partitions.length > 1;

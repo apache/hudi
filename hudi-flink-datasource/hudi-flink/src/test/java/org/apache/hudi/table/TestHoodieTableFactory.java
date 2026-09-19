@@ -55,9 +55,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -359,8 +361,9 @@ public class TestHoodieTableFactory {
     assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext5));
   }
 
-  @Test
-  void testSupplementComplexKeygenEncodingFromTableConfig() throws Exception {
+  @ParameterizedTest
+  @ValueSource(strings = {"partition", "f2", ""})
+  void testComplexKeygenEncodingDoesNotLoadTableConfig(String partitionField) throws Exception {
     String tablePath = new File(tempFile.getAbsolutePath(), "ckg").getAbsolutePath();
     Configuration tableConf = new Configuration();
     tableConf.set(FlinkOptions.PATH, tablePath);
@@ -369,7 +372,7 @@ public class TestHoodieTableFactory {
     tableConf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition");
     tableConf.set(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
     StreamerUtil.initTableIfNotExists(tableConf);
-    // the property is only ever written by the 8 -> 9 upgrade; stamp it the way the upgrade would
+    // The table's encoding must not be loaded into the job configuration.
     HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tableConf);
     Properties props = new Properties();
     props.put(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), "VALUE_ONLY");
@@ -384,19 +387,17 @@ public class TestHoodieTableFactory {
         .field("f2", DataTypes.TIMESTAMP(3))
         .field("partition", DataTypes.VARCHAR(10))
         .build();
-    final MockContext context1 = MockContext.getInstance(writeConf, schema, "partition");
+    final MockContext context1 = MockContext.getInstance(writeConf, schema, partitionField);
     HoodieTableSource source1 = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(context1);
     HoodieTableSink sink1 = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(context1);
-    assertThat("encoding not provided, fallback to table config",
-        source1.getConf().getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null), is("VALUE_ONLY"));
-    assertThat("encoding not provided, fallback to table config",
-        sink1.getConf().getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null), is("VALUE_ONLY"));
+    assertThat(source1.getConf().getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null), is(nullValue()));
+    assertThat(sink1.getConf().getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null), is(nullValue()));
 
-    // the table's recorded encoding wins over a conflicting value in the write config
+    // An explicitly configured encoding is preserved regardless of the table's recorded encoding.
     writeConf.setString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), "FIELD_PREFIXED");
-    final MockContext context2 = MockContext.getInstance(writeConf, schema, "partition");
+    final MockContext context2 = MockContext.getInstance(writeConf, schema, partitionField);
     HoodieTableSink sink2 = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(context2);
-    assertThat(sink2.getConf().getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null), is("VALUE_ONLY"));
+    assertThat(sink2.getConf().getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null), is("FIELD_PREFIXED"));
   }
 
   @Test
@@ -408,7 +409,7 @@ public class TestHoodieTableFactory {
         .field("f2", DataTypes.TIMESTAMP(3))
         .field("partition", DataTypes.VARCHAR(10))
         .build();
-    // single record key under the complex key generator: the job keys the way the new table gets created
+    // A complex generator class alone does not imply multiple key or partition fields.
     Configuration complexConf = new Configuration();
     complexConf.set(FlinkOptions.PATH, tablePath);
     complexConf.set(FlinkOptions.TABLE_NAME, "t_ckg_new");
@@ -416,6 +417,11 @@ public class TestHoodieTableFactory {
     complexConf.set(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
     HoodieTableSink complexSink = (HoodieTableSink) new HoodieTableFactory()
         .createDynamicTableSink(MockContext.getInstance(complexConf, schema, "partition"));
+    assertThat(complexSink.getConf().getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null), is(nullValue()));
+
+    // A single record key with multiple partition fields defaults to FIELD_PREFIXED.
+    complexSink = (HoodieTableSink) new HoodieTableFactory()
+        .createDynamicTableSink(MockContext.getInstance(complexConf, schema, Arrays.asList("partition", "f1")));
     assertThat(complexSink.getConf().getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null), is("FIELD_PREFIXED"));
 
     // simple key generator: nothing to record

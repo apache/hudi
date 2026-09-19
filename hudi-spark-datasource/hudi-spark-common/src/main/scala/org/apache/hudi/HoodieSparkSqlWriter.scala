@@ -422,7 +422,7 @@ class HoodieSparkSqlWriterInternal {
             }
 
             instantTime = client.startCommit(commitActionType)
-            // the commit start may have upgraded the table or recorded the record key encoding
+            // Ingestion setup may have recorded the encoding, and commit start may have upgraded the table.
             tableMetaClient.reloadTableConfig()
             val deleteKeyGenProps = KeyGenUtils.withComplexKeyGenEncoding(TypedProperties.copy(hoodieConfig.getProps), tableMetaClient.getTableConfig)
             val genericRecords = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace)
@@ -534,7 +534,7 @@ class HoodieSparkSqlWriterInternal {
 
             val writeConfig = client.getConfig
             instantTime = client.startCommit(commitActionType)
-            // the commit start may have upgraded the table or recorded the record key encoding
+            // Ingestion setup may have recorded the encoding, and commit start may have upgraded the table.
             tableMetaClient.reloadTableConfig()
             tableConfig = tableMetaClient.getTableConfig
             // Convert to RDD[HoodieRecord] and force type immediately

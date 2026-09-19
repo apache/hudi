@@ -731,13 +731,19 @@ public class StreamerUtil {
   }
 
   /**
-   * Validate keygen generator.
+   * Validate the key generator and default its record key encoding if not already configured.
    */
   public static void checkKeygenGenerator(boolean isComplexHoodieKey, Configuration conf) {
-    if (isComplexHoodieKey && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.KEYGEN_CLASS_NAME)) {
-      conf.set(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
-      log.info("Table option [{}] is reset to {} because record key or partition path has two or more fields",
-          FlinkOptions.KEYGEN_CLASS_NAME.key(), ComplexAvroKeyGenerator.class.getName());
+    if (isComplexHoodieKey) {
+      if (FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.KEYGEN_CLASS_NAME)) {
+        conf.set(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
+        log.info("Table option [{}] is reset to {} because record key or partition path has two or more fields",
+            FlinkOptions.KEYGEN_CLASS_NAME.key(), ComplexAvroKeyGenerator.class.getName());
+      }
+      String encodingKey = HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key();
+      if (!conf.containsKey(encodingKey)) {
+        conf.setString(encodingKey, ComplexKeyGenEncoding.FIELD_PREFIXED.name());
+      }
     }
   }
 

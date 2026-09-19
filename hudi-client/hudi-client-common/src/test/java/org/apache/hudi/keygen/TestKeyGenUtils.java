@@ -415,6 +415,16 @@ public class TestKeyGenUtils {
     assertEquals(Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED), KeyGenUtils.resolveComplexKeyGenEncoding(metaClient));
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(tempDir.toString()).build();
     assertEquals(Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED), KeyGenUtils.resolveComplexKeyGenEncodingForWrite(metaClient, writeConfig));
+
+    KeyGenUtils.recordComplexKeygenEncodingIfMissing(metaClient, writeConfig);
+    assertEquals(Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED), metaClient.getTableConfig().getComplexKeyGenEncoding());
+
+    Properties recorded = new Properties();
+    recorded.setProperty(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), ComplexKeyGenEncoding.VALUE_ONLY.name());
+    HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), recorded);
+    metaClient.reloadTableConfig();
+    KeyGenUtils.recordComplexKeygenEncodingIfMissing(metaClient, writeConfig);
+    assertEquals(Option.of(ComplexKeyGenEncoding.VALUE_ONLY), metaClient.getTableConfig().getComplexKeyGenEncoding());
   }
 
   @Test

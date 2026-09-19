@@ -70,6 +70,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -517,6 +518,42 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     assertTrue(writeTimeline.lastInstant().isPresent());
     assertEquals("commit", writeTimeline.lastInstant().get().getAction());
     assertEquals(requestedTime, writeTimeline.lastInstant().get().requestedTime());
+  }
+
+  @Test
+  void testComplexKeygenEncodingRecordedBeforeIngestionOnly() throws IOException {
+    initPath();
+    Properties tableProperties = new Properties();
+    tableProperties.setProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), ComplexAvroKeyGenerator.class.getName());
+    tableProperties.setProperty(HoodieTableConfig.RECORDKEY_FIELDS.key(), "id");
+    metaClient = HoodieTestUtils.init(getDefaultStorageConf(), basePath, getTableType(), tableProperties);
+    HoodieTableConfig.delete(metaClient.getStorage(), metaClient.getMetaPath(),
+        Collections.singleton(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()));
+    metaClient.reloadTableConfig();
+
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    try (TestWriteClient writeClient = new TestWriteClient(writeConfig, mock(HoodieTable.class), Option.empty(),
+        mock(BaseHoodieTableServiceClient.class))) {
+      KeyGenUtils.recordComplexKeygenEncodingIfMissing(metaClient, writeConfig);
+      assertEquals(Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED), metaClient.getTableConfig().getComplexKeyGenEncoding());
+      assertTrue(metaClient.getActiveTimeline().empty(), "Encoding must be recorded before the first commit");
+
+      writeClient.startCommit(Option.of("20260101000000001"), "commit", metaClient);
+      HoodieTableConfig.delete(metaClient.getStorage(), metaClient.getMetaPath(),
+          Collections.singleton(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()));
+      metaClient.reloadTableConfig();
+      writeClient.startCommit(Option.of("20260101000000002"), "commit", metaClient);
+      metaClient.reloadTableConfig();
+      assertFalse(metaClient.getTableConfig().getComplexKeyGenEncoding().isPresent(),
+          "Starting another commit must not run initialization again");
+    }
+
+    try (TestWriteClient ignored = new TestWriteClient(writeConfig, mock(HoodieTable.class), Option.empty(),
+        mock(BaseHoodieTableServiceClient.class))) {
+      KeyGenUtils.recordComplexKeygenEncodingIfMissing(metaClient, writeConfig);
+      assertEquals(Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED), metaClient.getTableConfig().getComplexKeyGenEncoding(),
+          "A restarted ingestion must initialize the encoding again");
+    }
   }
 
   @Test

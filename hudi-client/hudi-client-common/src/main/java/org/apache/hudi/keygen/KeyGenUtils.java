@@ -18,6 +18,7 @@
 
 package org.apache.hudi.keygen;
 
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
@@ -62,6 +63,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Properties;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
@@ -484,6 +486,35 @@ public class KeyGenUtils {
    */
   public static boolean isComplexKeyGenEncodingTracked(HoodieTableConfig tableConfig) {
     return tableConfig.isComplexKeyGenWithSingleRecordKeyField() && tableConfig.isRecordKeyPopulated();
+  }
+
+  /**
+   * Records a missing complex key generator encoding before ingestion starts. Engine entry points call this
+   * once during setup, before creating record keys. Existing data determines the encoding under the table lock.
+   */
+  public static void recordComplexKeygenEncodingIfMissing(HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
+    if (!isComplexKeyGenEncodingTracked(metaClient.getTableConfig())
+        || metaClient.getTableConfig().getComplexKeyGenEncoding().isPresent()) {
+      return;
+    }
+    try (TransactionManager transactionManager = new TransactionManager(config, metaClient.getStorage())) {
+      transactionManager.beginStateChange(Option.empty(), Option.empty());
+      try {
+        metaClient.reloadTableConfig();
+        if (metaClient.getTableConfig().getComplexKeyGenEncoding().isPresent()) {
+          return;
+        }
+        ComplexKeyGenEncoding encoding = resolveComplexKeyGenEncodingForWrite(metaClient, config)
+            .orElseThrow(() -> new HoodieException(getComplexKeygenErrorMessage("ingestion")));
+        Properties props = new Properties();
+        props.setProperty(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), encoding.name());
+        HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), props);
+        metaClient.reloadTableConfig();
+        LOG.info("Recorded complex keygen record key encoding {} on table {}", encoding, metaClient.getBasePath());
+      } finally {
+        transactionManager.endStateChange(Option.empty());
+      }
+    }
   }
 
   /**

@@ -20,13 +20,7 @@ package org.apache.hudi.configuration;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
-import org.apache.hudi.keygen.KeyGenUtils;
-import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
-import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.util.ClientIds;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
@@ -162,43 +156,11 @@ public class OptionsInference {
   }
 
   /**
-   * Resolves the record key encoding of a single-field complex key generator table into the job configuration,
-   * which is what the row key generator keys records from. For an existing table this is the persisted
-   * {@code hoodie.table.complex.keygen.encoding}, otherwise the encoding deduced from the table's data, and it
-   * wins over a value set on the job. For a table this job creates, it is the encoding the table gets created
-   * with: the value set on the job, otherwise {@link ComplexKeyGenEncoding#FIELD_PREFIXED}. Must run after the
-   * key generator options are final.
+   * Apply key generator defaults from the job configuration, as in HoodieTableFactory.
    */
   public static void setupComplexKeygenEncoding(Configuration conf) {
-    String key = HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key();
-    String configured = conf.getString(key, null);
-    String basePath = conf.get(FlinkOptions.PATH);
-    org.apache.hadoop.conf.Configuration hadoopConf = HadoopConfigurations.getHadoopConf(conf);
-    if (!StreamerUtil.tableExists(basePath, hadoopConf)) {
-      if (configured == null && isSingleFieldComplexKeyGenWithRecordKeyMetaField(conf)) {
-        conf.setString(key, ComplexKeyGenEncoding.FIELD_PREFIXED.name());
-      }
-      return;
-    }
-    Option<ComplexKeyGenEncoding> encoding =
-        KeyGenUtils.resolveComplexKeyGenEncoding(StreamerUtil.createMetaClient(basePath, hadoopConf));
-    if (!encoding.isPresent()) {
-      return;
-    }
-    if (configured != null && !configured.trim().equalsIgnoreCase(encoding.get().name())) {
-      log.warn("Ignoring {}={} from the job configuration: table {} carries {} record keys",
-          key, configured, basePath, encoding.get());
-    }
-    conf.setString(key, encoding.get().name());
-  }
-
-  /** Mirrors what {@code StreamerUtil#initTableIfNotExists} records for the table this job creates. */
-  private static boolean isSingleFieldComplexKeyGenWithRecordKeyMetaField(Configuration conf) {
-    String keyGenClass = conf.getOptional(FlinkOptions.KEYGEN_CLASS_NAME).orElse(null);
-    boolean complexKeyGen = ComplexAvroKeyGenerator.class.getName().equals(keyGenClass)
-        || KeyGeneratorType.COMPLEX.getClassName().equals(keyGenClass);
-    return complexKeyGen
-        && conf.getOptional(FlinkOptions.RECORD_KEY_FIELD).orElse("").split(",").length == 1
-        && OptionsResolver.getMetaFieldsMode(conf).isRecordKeyPopulated();
+    boolean complexHoodieKey = OptionsResolver.getRecordKeys(conf).length > 1
+        || conf.get(FlinkOptions.PARTITION_PATH_FIELD).split(",").length > 1;
+    StreamerUtil.checkKeygenGenerator(complexHoodieKey, conf);
   }
 }

@@ -86,7 +86,6 @@ import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.KeyGenUtils;
-import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
@@ -117,7 +116,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
@@ -1150,7 +1148,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       // unclear what instant to use, since upgrade does have a given instant.
       executeUsingTxnManager(Option.empty(), () -> tryUpgrade(metaClient, Option.empty()));
     }
-    recordComplexKeygenEncodingIfMissing(metaClient);
     runPreWriteCleanerPolicy(metaClient);
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
         HoodieTimeline.COMMIT_ACTION, () -> tableServiceClient.rollbackFailedWrites(metaClient));
@@ -1550,35 +1547,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
-   * Records {@link HoodieTableConfig#COMPLEX_KEYGEN_ENCODING} on a single-field {@code ComplexKeyGenerator} table
-   * that does not carry it yet, deduced from the table's data, so that every key generator built for this
-   * transaction keys records the way the table stores them. Runs when a commit starts, under the transaction
-   * lock; the write fails when the encoding cannot be determined and
-   * {@code hoodie.write.complex.keygen.validation.enable} is on.
-   */
-  private void recordComplexKeygenEncodingIfMissing(HoodieTableMetaClient metaClient) {
-    if (!KeyGenUtils.isComplexKeyGenEncodingTracked(metaClient.getTableConfig())
-        || metaClient.getTableConfig().getComplexKeyGenEncoding().isPresent()) {
-      return;
-    }
-    executeUsingTxnManager(Option.empty(), () -> {
-      metaClient.reloadTableConfig();
-      if (metaClient.getTableConfig().getComplexKeyGenEncoding().isPresent()) {
-        return;
-      }
-      ComplexKeyGenEncoding encoding = KeyGenUtils.resolveComplexKeyGenEncodingForWrite(metaClient, config)
-          .orElseThrow(() -> new HoodieException(getComplexKeygenErrorMessage("ingestion")));
-      Properties props = new Properties();
-      props.setProperty(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), encoding.name());
-      HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), props);
-      metaClient.reloadTableConfig();
-      LOG.info("Recorded complex keygen record key encoding {} on table {}", encoding, metaClient.getBasePath());
-    });
-  }
-
-  /**
-   * A write that keys records needs the encoding recorded; {@link #startCommit} records it, so this only fails
-   * when a write bypassed the commit start on a table that predates the property.
+   * A write that keys records needs the encoding recorded before ingestion starts or during table creation.
    */
   private static void validateComplexKeygenEncodingRecorded(HoodieTableConfig tableConfig) {
     if (KeyGenUtils.isComplexKeyGenEncodingTracked(tableConfig) && !tableConfig.getComplexKeyGenEncoding().isPresent()) {

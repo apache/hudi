@@ -282,7 +282,7 @@ class TestComplexKeyGenExistingTableUpgrade extends HoodieSparkClientTestBase {
         .save(basePath))
     assertTrue(rootCauses(thrown).exists(_.isInstanceOf[HoodieDuplicateKeyException]),
       s"Expected a duplicate key failure, got: ${rootCauses(thrown).map(_.getClass.getSimpleName).mkString(" | ")}")
-    assertEquals(Some(ComplexKeyGenEncoding.VALUE_ONLY.name), persistedEncoding(), "The encoding is recorded when the commit starts")
+    assertEquals(Some(ComplexKeyGenEncoding.VALUE_ONLY.name), persistedEncoding(), "The encoding is recorded during ingestion setup")
     assertEquals((100L, 100L, 100L, 0L), keyStatsRaw())
   }
 
