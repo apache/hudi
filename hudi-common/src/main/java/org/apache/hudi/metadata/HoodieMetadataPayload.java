@@ -59,6 +59,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -310,6 +311,18 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
                                                                                Map<String, Long> filesAdded,
                                                                                List<String> filesDeleted,
                                                                                boolean isPartitionDeleted) {
+    return createPartitionFilesRecord(partition, filesAdded, Collections.emptyMap(), filesDeleted, isPartitionDeleted);
+  }
+
+  /**
+   * @param fileToSourceBasePath for each added file that lives outside the table, the base path it
+   *                             lives under. Files absent from this map resolve under the table as usual.
+   */
+  public static HoodieRecord<HoodieMetadataPayload> createPartitionFilesRecord(String partition,
+                                                                               Map<String, Long> filesAdded,
+                                                                               Map<String, String> fileToSourceBasePath,
+                                                                               List<String> filesDeleted,
+                                                                               boolean isPartitionDeleted) {
     String partitionIdentifier = getPartitionIdentifierForFilesPartition(partition);
     HoodieKey key = new HoodieKey(partitionIdentifier, MetadataPartitionType.FILES.getPartitionPath());
     if (isPartitionDeleted) {
@@ -323,7 +336,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       // should not be creating empty files
       checkState(fileSize > 0, () -> "File name " + fileName
           + ", is a 0 byte file. It does not have any contents");
-      fileInfo.put(fileName, new HoodieMetadataFileInfo(fileSize, false, null));
+      fileInfo.put(fileName, new HoodieMetadataFileInfo(fileSize, false, fileToSourceBasePath.get(fileName)));
     });
 
     filesDeleted.forEach(fileName -> fileInfo.put(fileName, DELETE_FILE_METADATA));
