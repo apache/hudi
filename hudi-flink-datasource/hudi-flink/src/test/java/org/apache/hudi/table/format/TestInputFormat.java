@@ -118,6 +118,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.utils.TestData.insertRow;
@@ -982,6 +984,75 @@ public class TestInputFormat {
 
     List<RowData> actual6 = readData(inputFormat6);
     TestData.assertRowDataEquals(actual6, Collections.emptyList());
+  }
+
+  @Test
+  void testReadArchivedCommitsIncrementallyForPreEightMOR() throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.QUERY_TYPE.key(), FlinkOptions.QUERY_TYPE_INCREMENTAL);
+    options.put(FlinkOptions.WRITE_TABLE_VERSION.key(), String.valueOf(HoodieTableVersion.SIX.versionCode()));
+    options.put(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(), HoodieTableConfig.TableStorageLayout.DEFAULT.configValue());
+    options.put(FlinkOptions.ARCHIVE_MIN_COMMITS.key(), "3");
+    options.put(FlinkOptions.ARCHIVE_MAX_COMMITS.key(), "4");
+    options.put(FlinkOptions.CLEAN_RETAIN_COMMITS.key(), "2");
+    options.put(FlinkOptions.METADATA_ENABLED.key(), "false");
+    options.put("hoodie.commits.archival.batch", "1");
+    beforeEach(HoodieTableType.MERGE_ON_READ, options);
+
+    // The second commit updates the same pre-v8 MOR file group. Its log block is appended
+    // to a log file whose filename still carries the first commit instant.
+    for (int i = 1; i <= 2; i++) {
+      TestData.writeData(Collections.singletonList(insertRow(
+          StringData.fromString("id1"), StringData.fromString("Danny"), 20 + i,
+          TimestampData.fromEpochMillis(i), StringData.fromString("par1"))), conf);
+    }
+    // Generate unrelated commits to archive the two commits under test without advancing
+    // the file slice containing id1.
+    for (int i = 3; i <= 8; i++) {
+      TestData.writeData(Collections.singletonList(insertRow(
+          StringData.fromString("id" + i), StringData.fromString("User" + i), 20 + i,
+          TimestampData.fromEpochMillis(i), StringData.fromString("par2"))), conf);
+    }
+
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    assertSame(HoodieTableVersion.SIX, metaClient.getTableConfig().getTableVersion());
+    List<String> archivedCommits = metaClient.getArchivedTimeline().getCommitsTimeline().filterCompletedInstants()
+        .getInstantsAsStream().map(HoodieInstant::requestedTime).collect(Collectors.toList());
+    assertTrue(archivedCommits.size() >= 2);
+
+    String startCommit = archivedCommits.get(0);
+    String endCommit = archivedCommits.get(1);
+    conf.set(FlinkOptions.READ_START_COMMIT, startCommit);
+    conf.set(FlinkOptions.READ_END_COMMIT, endCommit);
+    this.tableSource = getTableSource(conf);
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
+
+    IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
+        .rowType(TestConfigurations.ROW_TYPE)
+        .conf(conf)
+        .path(FilePathUtils.toFlinkPath(metaClient.getBasePath()))
+        .build();
+    IncrementalInputSplits.Result splits = incrementalInputSplits.inputSplits(metaClient, false);
+    assertFalse(splits.isEmpty());
+    MergeOnReadInputSplit split = splits.getInputSplits().stream()
+        .filter(inputSplit -> inputSplit.getPartitionPath().equals("par1"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("No input split found for par1"));
+    assertTrue(split.getLogPaths().isPresent());
+    String latestLogFileInstant = split.getLogPaths().get().stream()
+        .map(logPath -> new HoodieLogFile(new StoragePath(logPath)).getDeltaCommitTime())
+        .max(String::compareTo)
+        .orElseThrow(() -> new AssertionError("No log file found for par1"));
+    assertTrue(compareTimestamps(latestLogFileInstant, LESSER_THAN, endCommit),
+        "The in-range update must be newer than the filename-derived log instant");
+
+    List<RowData> actual = readData(inputFormat,
+        splits.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
+    List<RowData> expected = Collections.singletonList(insertRow(
+        StringData.fromString("id1"), StringData.fromString("Danny"), 22,
+        TimestampData.fromEpochMillis(2), StringData.fromString("par1")));
+    TestData.assertRowDataEquals(actual, expected);
   }
 
   @Test
