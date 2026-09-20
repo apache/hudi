@@ -1515,14 +1515,13 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ~/spark-archives/${{ matrix.sparkArchive }}
+          # Purged-cache exception lives in scheduled_workflow.yml: keep the
+          # exclusion prefix there in sync if this key ever changes.
           key: spark-archive-v1-${{ runner.os }}-${{ matrix.sparkArchive }}
-      - name: 'IT'
-        if: needs.changes.outputs.relevant == 'true'
+      - name: Fetch Spark archive
+        if: needs.changes.outputs.relevant == 'true' && steps.spark-archive.outputs.cache-hit != 'true'
         env:
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_ARCHIVE: ${{ matrix.sparkArchive }}
-          SCALA_PROFILE: '-Dscala-2.12 -Dscala.binary.version=2.12'
-          SPARK_ARCHIVE_CACHE_HIT: ${{ steps.spark-archive.outputs.cache-hit }}
         run: |
           # dlcdn only carries the current release of each line; fall back to
           # the archive for older pins (#19883). Plain --retry, not
@@ -1532,37 +1531,55 @@ jobs:
           # the archive's real throughput re-downloads 382MB per abort.
           DEST="$HOME/spark-archives/$SPARK_ARCHIVE"
           downloaded=false
-          if [ "$SPARK_ARCHIVE_CACHE_HIT" != 'true' ]; then
-            for base in https://dlcdn.apache.org/spark https://archive.apache.org/dist/spark; do
-              echo "Downloading $SPARK_ARCHIVE from $base"
-              if curl -fL --create-dirs -o "$DEST" \
-                  --retry 5 --retry-delay 10 \
-                  --connect-timeout 30 --speed-limit 1000 --speed-time 120 \
-                  "$base/$SPARK_ARCHIVE"; then
-                downloaded=true
-                break
-              fi
-              echo "$base did not serve $SPARK_ARCHIVE"
-              rm -f "$DEST"
-            done
-            if [ "$downloaded" != true ]; then
-              echo "ERROR: could not download $SPARK_ARCHIVE from any source"
-              exit 1
+          for base in https://dlcdn.apache.org/spark https://archive.apache.org/dist/spark; do
+            echo "Downloading $SPARK_ARCHIVE from $base"
+            if curl -fL --create-dirs -o "$DEST" \
+                --retry 5 --retry-delay 10 \
+                --connect-timeout 30 --speed-limit 1000 --speed-time 120 \
+                "$base/$SPARK_ARCHIVE"; then
+              downloaded=true
+              break
             fi
-          else
+            echo "$base did not serve $SPARK_ARCHIVE"
+            rm -f "$DEST"
+          done
+          if [ "$downloaded" != true ]; then
+            echo "ERROR: could not download $SPARK_ARCHIVE from any source"
+            exit 1
+          fi
+      - name: Verify and extract Spark archive
+        if: needs.changes.outputs.relevant == 'true'
+        env:
+          SPARK_ARCHIVE: ${{ matrix.sparkArchive }}
+          SPARK_ARCHIVE_CACHE_HIT: ${{ steps.spark-archive.outputs.cache-hit }}
+        run: |
+          # Apache publishes a .sha512 beside every archive; verify on both
+          # the restored and the freshly downloaded paths. A restored entry
+          # predates checksums, so it is verified here rather than trusted.
+          DEST="$HOME/spark-archives/$SPARK_ARCHIVE"
+          if [ "$SPARK_ARCHIVE_CACHE_HIT" = 'true' ]; then
             echo "Restored $SPARK_ARCHIVE from the actions cache"
           fi
+          curl -fL --create-dirs -o "$DEST.sha512" \
+            "https://archive.apache.org/dist/spark/$SPARK_ARCHIVE.sha512"
+          (cd "$(dirname "$DEST")" && sha512sum -c "$(basename "$DEST").sha512")
           tar -xf "$DEST" -C $GITHUB_WORKSPACE/
-          mkdir /tmp/spark-events/
+          mkdir -p /tmp/spark-events/
           SPARK_ARCHIVE_BASENAME=$(basename $SPARK_ARCHIVE)
-          export SPARK_HOME=$GITHUB_WORKSPACE/${SPARK_ARCHIVE_BASENAME%.*}
-          mvn verify $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -pl !hudi-flink-datasource/hudi-flink $MVN_ARGS -Djacoco.skip=false
+          echo "SPARK_HOME=$GITHUB_WORKSPACE/${SPARK_ARCHIVE_BASENAME%.*}" >> $GITHUB_ENV
       - name: Save Spark archive
         if: needs.changes.outputs.relevant == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.spark-archive.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: ~/spark-archives/${{ matrix.sparkArchive }}
           key: ${{ steps.spark-archive.outputs.cache-primary-key }}
+      - name: 'IT'
+        if: needs.changes.outputs.relevant == 'true'
+        env:
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SCALA_PROFILE: '-Dscala-2.12 -Dscala.binary.version=2.12'
+        run: |
+          mvn verify $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -pl !hudi-flink-datasource/hudi-flink $MVN_ARGS -Djacoco.skip=false
       - name: Generate merged coverage report
         if: always() && needs.changes.outputs.relevant == 'true'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE

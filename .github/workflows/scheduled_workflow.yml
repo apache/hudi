@@ -34,12 +34,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Delete Cache
-        # Spark archives must survive the purge so integration-tests can reuse them.
+        # Spark archives and Trino m2 entries must survive the purge so
+        # integration-tests and the Trino build can reuse them.
         run: |
           gh extension install actions/gh-actions-cache
 
           echo "Fetching list of cache key"
-          cacheKeysForPR=$(gh actions-cache list -R $REPO -L 100 | cut -f 1 | grep -v '^spark-archive-v1-' || true)
+          # Keep the exclusions anchored on version-independent prefixes: the
+          # keys they protect live in other workflows (spark archives in
+          # bot.yml, Trino m2 in hudi_trino_ci.yml), so pinning a literal
+          # version here would silently re-arm the purge on the next key bump.
+          cacheKeysForPR=$(gh actions-cache list -R $REPO -L 100 | cut -f 1 | grep -v '^spark-archive-' | grep -v '^trino-m2-v2-' || true)
 
           ## Setting this to not fail the workflow while deleting cache keys.
           set +e
