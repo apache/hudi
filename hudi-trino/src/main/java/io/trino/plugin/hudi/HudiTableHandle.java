@@ -20,7 +20,6 @@ import com.google.common.collect.ImmutableSet;
 import io.airlift.log.Logger;
 import io.trino.metastore.Table;
 import io.trino.plugin.hive.HiveColumnHandle;
-import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ConnectorTableHandle;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.predicate.TupleDomain;
@@ -40,6 +39,7 @@ import java.util.function.Supplier;
 import static com.google.common.base.Preconditions.checkArgument;
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
 import static java.util.Objects.requireNonNull;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.INIT_INSTANT_TS;
 
 public class HudiTableHandle
         implements ConnectorTableHandle
@@ -116,9 +116,12 @@ public class HudiTableHandle
                         .filterCompletedInstants()
                         .lastInstant()
                         .map(HoodieInstant::requestedTime)
-                        .orElseThrow(() -> new TrinoException(
-                                HudiErrorCode.HUDI_NO_VALID_COMMIT,
-                                "Table has no valid commits")));
+                        // An initialized table has a schema but intentionally has no data commit.
+                        // Hudi uses INIT_INSTANT_TS as the lower bound for this state. Passing it to
+                        // the file-system view produces no file slices, so empty native CREATE TABLE
+                        // and newly registered empty tables remain queryable without fabricating a
+                        // commit or entering the row-writing path.
+                        .orElse(INIT_INSTANT_TS));
     }
 
     HudiTableHandle(
