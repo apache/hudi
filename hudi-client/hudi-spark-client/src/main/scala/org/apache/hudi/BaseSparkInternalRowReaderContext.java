@@ -55,12 +55,6 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
 
   protected BaseSparkInternalRowReaderContext(StorageConfiguration<?> storageConfig,
                                               HoodieTableConfig tableConfig,
-                                              BaseSparkInternalRecordContext recordContext) {
-    this(storageConfig, tableConfig, Option.empty(), recordContext);
-  }
-
-  protected BaseSparkInternalRowReaderContext(StorageConfiguration<?> storageConfig,
-                                              HoodieTableConfig tableConfig,
                                               Option<InstantRange> instantRangeOpt,
                                               BaseSparkInternalRecordContext recordContext) {
     super(storageConfig, tableConfig, instantRangeOpt, Option.empty(), recordContext);

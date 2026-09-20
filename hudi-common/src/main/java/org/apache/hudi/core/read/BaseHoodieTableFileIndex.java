@@ -79,6 +79,7 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.HOODIE_FILE_INDEX
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
+import static org.apache.hudi.common.table.read.IncrementalQueryAnalyzer.START_COMMIT_EARLIEST;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.validateTimestampAsOf;
 
 /**
@@ -429,6 +430,9 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   }
 
   private boolean isBeforeTimelineStarts() {
+    if (START_COMMIT_EARLIEST.equalsIgnoreCase(incrementalQueryStartTime.get())) {
+      return true;
+    }
     if (isCompletionTimeBasedQuery) {
       return metaClient.getActiveTimeline().isBeforeTimelineStartsByCompletionTime(incrementalQueryStartTime.get());
     } else {
