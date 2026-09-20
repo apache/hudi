@@ -403,7 +403,10 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     List<String> matchedPartitionPaths;
     try {
       if (isPartitionedTable()) {
-        if (queryType == HoodieTableQueryType.INCREMENTAL && incrementalQueryStartTime.isPresent() && !isBeforeTimelineStarts()) {
+        if (queryType == HoodieTableQueryType.INCREMENTAL
+            && incrementalQueryStartTime.isPresent()
+            && !START_COMMIT_EARLIEST.equalsIgnoreCase(incrementalQueryStartTime.get())
+            && !isBeforeTimelineStarts()) {
           HoodieTimeline timelineToQuery = findInstantsInRange();
           matchedPartitionPaths = TimelineUtils.getWrittenPartitions(timelineToQuery);
         } else {
@@ -430,9 +433,6 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   }
 
   private boolean isBeforeTimelineStarts() {
-    if (START_COMMIT_EARLIEST.equalsIgnoreCase(incrementalQueryStartTime.get())) {
-      return true;
-    }
     if (isCompletionTimeBasedQuery) {
       return metaClient.getActiveTimeline().isBeforeTimelineStartsByCompletionTime(incrementalQueryStartTime.get());
     } else {
