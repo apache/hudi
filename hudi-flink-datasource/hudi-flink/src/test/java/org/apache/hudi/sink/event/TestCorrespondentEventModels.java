@@ -26,6 +26,7 @@ import java.util.HashMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.mock;
 
@@ -40,7 +41,12 @@ class TestCorrespondentEventModels {
     assertSame(gateway, correspondent.getGateway());
 
     assertEquals(9L, Correspondent.InstantTimeRequest.getInstance(9L).getCheckpointId());
-    assertEquals("001", Correspondent.InstantTimeResponse.getInstance("001").getInstant());
+    Correspondent.InstantTimeResponse ready = Correspondent.InstantTimeResponse.ready("001");
+    assertEquals(Correspondent.Status.READY, ready.getStatus());
+    assertEquals("001", ready.getInstant());
+    Correspondent.InstantTimeResponse pending = Correspondent.InstantTimeResponse.pending();
+    assertEquals(Correspondent.Status.PENDING, pending.getStatus());
+    assertNull(pending.getInstant());
     assertNotNull(Correspondent.InflightInstantsRequest.getInstance());
 
     HashMap<Long, String> instants = new HashMap<>();

@@ -65,11 +65,7 @@ public class Correspondent {
     /**
      * The instant is still being created, the requester should poll again.
      */
-    PENDING,
-    /**
-     * The instant creation failed terminally, the requester should fail fast.
-     */
-    FAILED
+    PENDING
   }
 
   private final OperatorID operatorID;
@@ -98,8 +94,9 @@ public class Correspondent {
    *
    * <p>The coordinator answers each request in O(1) with a {@link Status}: the requester polls with a
    * capped exponential backoff (plus jitter) under a single {@code pollBudgetMs} deadline until the
-   * instant is {@code READY}, fails fast on {@code FAILED}, and retries transient transport errors
-   * within the same budget. A {@code PENDING} reply never extends the deadline.
+   * instant is {@code READY}, and retries transient transport errors within the same budget. A
+   * {@code PENDING} reply never extends the deadline. Instant creation failures fail the job through
+   * the coordinator's normal asynchronous failure path.
    *
    * @param checkpointId The checkpoint id (or -1 for bulk insert)
    * @param pollBudgetMs The overall budget to wait for an instant, in milliseconds
@@ -124,18 +121,14 @@ public class Correspondent {
         backoffMs = sleepAndGrow(backoffMs);
         continue;
       }
-      switch (response.getStatus()) {
-        case READY:
-          return response.getInstant();
-        case FAILED:
-          throw new HoodieException("Instant creation failed for checkpoint " + checkpointId + ": " + response.getErrorMessage());
-        default:
-          // PENDING: keep polling, but never reset the deadline.
-          if (System.nanoTime() >= deadlineNanos) {
-            throw new HoodieException("Timeout waiting for the instant time from the coordinator for checkpoint " + checkpointId);
-          }
-          backoffMs = sleepAndGrow(backoffMs);
+      if (response.getStatus() == Status.READY) {
+        return response.getInstant();
       }
+      // PENDING: keep polling, but never reset the deadline.
+      if (System.nanoTime() >= deadlineNanos) {
+        throw new HoodieException("Timeout waiting for the instant time from the coordinator for checkpoint " + checkpointId);
+      }
+      backoffMs = sleepAndGrow(backoffMs);
     }
   }
 
@@ -209,34 +202,19 @@ public class Correspondent {
 
     private final Status status;
     private final String instant;
-    private final String errorMessage;
 
     /**
      * The instant is ready to use.
      */
     public static InstantTimeResponse ready(String instant) {
-      return new InstantTimeResponse(Status.READY, instant, null);
+      return new InstantTimeResponse(Status.READY, instant);
     }
 
     /**
      * The instant is still being created, the requester should poll again.
      */
     public static InstantTimeResponse pending() {
-      return new InstantTimeResponse(Status.PENDING, null, null);
-    }
-
-    /**
-     * The instant creation failed terminally.
-     */
-    public static InstantTimeResponse failed(String errorMessage) {
-      return new InstantTimeResponse(Status.FAILED, null, errorMessage);
-    }
-
-    /**
-     * Kept for backward compatibility: a ready response carrying the instant.
-     */
-    public static InstantTimeResponse getInstance(String instant) {
-      return ready(instant);
+      return new InstantTimeResponse(Status.PENDING, null);
     }
   }
 

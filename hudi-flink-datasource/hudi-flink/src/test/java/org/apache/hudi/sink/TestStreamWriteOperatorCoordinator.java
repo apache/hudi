@@ -880,6 +880,25 @@ public class TestStreamWriteOperatorCoordinator {
     }
   }
 
+  @Test
+  void testResetAllowsInstantCreationToBeResubmitted() throws Exception {
+    final long checkpointId = 1L;
+    NonThrownExecutor stalledWorker = Mockito.mock(NonThrownExecutor.class);
+    coordinator.setInstantRequestExecutor(stalledWorker);
+
+    Correspondent.InstantTimeResponse pending = CoordinationResponseSerDe.unwrap(
+        coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(checkpointId)).get());
+    assertEquals(Correspondent.Status.PENDING, pending.getStatus());
+
+    coordinator.resetToCheckpoint(checkpointId, null);
+    MockOperatorCoordinatorContext context = (MockOperatorCoordinatorContext) coordinator.getContext();
+    coordinator.setInstantRequestExecutor(new MockCoordinatorExecutor(context));
+
+    String instant = requestInstantTime(checkpointId);
+    assertNotNull(instant);
+    assertThat(instant, not(is("")));
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
