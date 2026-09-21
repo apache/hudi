@@ -20,6 +20,7 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.engine.ReaderContextFactory;
@@ -33,7 +34,9 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.read.HoodieRecordReader;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.io.storage.HoodieFileWriter;
@@ -62,6 +65,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -70,7 +74,9 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
@@ -282,6 +288,64 @@ public class TestSortedAndChangeLogMergeHandles {
     }
   }
 
+  @Test
+  public void testFileGroupMergeWriteFailureClosesWriter() throws Exception {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withProps(config().getProps())
+        .withWriteIgnoreFailed(false).build();
+    TestContext context = new TestContext(config);
+    IOException failure = new IOException("record write failed");
+    IOException closeFailure = new IOException("writer close failed");
+    try (MockedStatic<WriteMarkersFactory> markers = mockStatic(WriteMarkersFactory.class);
+         MockedStatic<HoodieFileWriterFactory> writers = mockStatic(HoodieFileWriterFactory.class)) {
+      context.stubWriters(markers, writers);
+      FileGroupReaderBasedMergeHandle handle = spy(new FileGroupReaderBasedMergeHandle(
+          config, "100", context.table, MergeContext.create(Collections.emptyIterator()), "partition", "file-1",
+          new LocalTaskContextSupplier(), null, Option.empty()));
+      HoodieRecordReader reader = mock(HoodieRecordReader.class);
+      ClosableIterator iterator = mock(ClosableIterator.class);
+      when(reader.getClosableHoodieRecordIterator()).thenReturn(iterator);
+      when(iterator.hasNext()).thenReturn(true);
+      HoodieRecord inputRecord = record("key");
+      when(iterator.next()).thenReturn(inputRecord);
+      doReturn(reader).when(handle).getFileGroupReader(anyBoolean(), any(), any(), any(), any());
+      doThrow(failure).when(handle).writeToFile(any(), any(), any(), any(), anyBoolean());
+      doThrow(closeFailure).when(context.fileWriter).close();
+
+      HoodieUpsertException actual = assertThrows(HoodieUpsertException.class, handle::doMerge);
+      assertSame(failure, actual.getCause().getCause());
+      assertArrayEquals(new Throwable[] {closeFailure}, actual.getCause().getSuppressed());
+      assertNull(handle.fileWriter);
+      verify(context.fileWriter).close();
+      verify(iterator).close();
+      verify(reader).close();
+    }
+  }
+
+  @Test
+  public void testMergeCloseFailureClosesCDCWriter() throws Exception {
+    HoodieWriteConfig config = config();
+    TestContext context = new TestContext(config);
+    HoodieCDCLogWriter<IndexedRecord> cdcWriter = mock(HoodieCDCLogWriter.class);
+    IOException failure = new IOException("base writer close failed");
+    RuntimeException cdcFailure = new IllegalStateException("CDC close failed");
+    try (MockedStatic<WriteMarkersFactory> markers = mockStatic(WriteMarkersFactory.class);
+         MockedStatic<HoodieFileWriterFactory> writers = mockStatic(HoodieFileWriterFactory.class);
+         MockedStatic<HoodieCDCLogWriterFactory> cdcWriters = mockStatic(HoodieCDCLogWriterFactory.class)) {
+      context.stubWriters(markers, writers);
+      cdcWriters.when(() -> HoodieCDCLogWriterFactory.createAvroCDCLogWriter(
+          anyString(), any(), any(), anyString(), any(), any(), anyString(), anyString(), any(), any(), any()))
+          .thenReturn(cdcWriter);
+      TestableChangeLogMergeHandle handle = new TestableChangeLogMergeHandle(config, context.table, new HashMap<>());
+      doThrow(failure).when(context.fileWriter).close();
+      doThrow(cdcFailure).when(cdcWriter).close();
+      HoodieUpsertException actual = assertThrows(HoodieUpsertException.class, handle::close);
+      assertSame(failure, actual.getCause());
+      assertArrayEquals(new Throwable[] {cdcFailure}, actual.getSuppressed());
+      verify(context.fileWriter).close();
+      verify(cdcWriter).close();
+    }
+  }
+
   private static HoodieWriteConfig config() {
     return HoodieWriteConfig.newBuilder()
         .withPath("/tmp")
@@ -322,6 +386,7 @@ public class TestSortedAndChangeLogMergeHandles {
       when(metaClient.getBasePath()).thenReturn(new StoragePath("/tmp"));
       when(metaClient.getTableConfig()).thenReturn(tableConfig);
       when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
+      when(tableConfig.getProps()).thenReturn(new TypedProperties());
       when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.TEN);
       when(tableConfig.getMetaFieldsMode()).thenReturn(MetaFieldsMode.ALL);
       when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.COMMIT_TIME_ORDERING);

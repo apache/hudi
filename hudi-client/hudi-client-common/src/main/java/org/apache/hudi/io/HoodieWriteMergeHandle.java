@@ -521,7 +521,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
     }
   }
 
-  private void closeFileWriterQuietly(Throwable failure) {
+  protected void closeFileWriterQuietly(Throwable failure) {
     CloseableUtils.closeSuppressing(fileWriter, failure);
     fileWriter = null;
   }
