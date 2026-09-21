@@ -343,21 +343,6 @@ public class TestHoodieCreateHandle extends HoodieCommonTestHarness {
 
   @Test
   void testMarkerFileCreatedWhenFileWriterWriteFails() throws Exception {
-    // Create a custom HoodieCreateHandle that uses TestFileWriter that succeeds on initialization but fails on write
-    class CreateHandleWithFileWriterWriteFailure extends HoodieCreateHandle<Object, Object, Object, Object> {
-      public CreateHandleWithFileWriterWriteFailure(HoodieWriteConfig config, String instantTime,
-                                                HoodieTable<Object, Object, Object, Object> hoodieTable,
-                                                String partitionPath, String fileId,
-                                                TaskContextSupplier taskContextSupplier) {
-        super(config, instantTime, hoodieTable, partitionPath, fileId, taskContextSupplier);
-      }
-
-      @Override
-      protected HoodieFileWriter initializeFileWriter() throws IOException {
-        return new TestFileWriter(path, hoodieTable.getStorage(), false, true);
-      }
-    }
-
     CreateHandleWithFileWriterWriteFailure createHandle = new CreateHandleWithFileWriterWriteFailure(
         writeConfig, TEST_INSTANT_TIME, hoodieTable, TEST_PARTITION_PATH, TEST_FILE_ID, taskContextSupplier);
     
@@ -404,12 +389,14 @@ public class TestHoodieCreateHandle extends HoodieCommonTestHarness {
         failOnWriteConfig, TEST_INSTANT_TIME, failOnWriteTable, TEST_PARTITION_PATH, TEST_FILE_ID, taskContextSupplier);
     HoodieRecord testRecord = dataGen.generateInserts(TEST_INSTANT_TIME, 1).get(0);
 
+    HoodieFileWriter fileWriter = createHandle.fileWriter;
     HoodieException exception = assertThrows(HoodieException.class, () ->
         createHandle.doWrite(testRecord, TEST_SCHEMA, new TypedProperties()));
 
     assertEquals("Simulated file writer write failure", exception.getMessage());
     assertNull(createHandle.fileWriter);
     assertTrue(createHandle.isClosed());
+    assertFalse(fileWriter.canWrite());
     assertDoesNotThrow(createHandle::close);
   }
 

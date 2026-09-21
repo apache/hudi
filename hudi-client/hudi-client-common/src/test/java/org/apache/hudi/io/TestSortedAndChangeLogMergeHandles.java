@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.io.storage.HoodieFileWriter;
 import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
@@ -61,15 +62,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -237,6 +242,43 @@ public class TestSortedAndChangeLogMergeHandles {
       assertEquals(1, second.size());
       assertSame(first.get(0), second.get(0));
       verify(context.fileWriter, times(1)).close();
+    }
+  }
+
+  @Test
+  public void testWriterCloseFailureDoesNotCloseWriterTwice() throws Exception {
+    HoodieWriteConfig config = config();
+    TestContext context = new TestContext(config);
+    IOException failure = new IOException("writer close failed");
+    try (MockedStatic<WriteMarkersFactory> markers = mockStatic(WriteMarkersFactory.class);
+         MockedStatic<HoodieFileWriterFactory> writers = mockStatic(HoodieFileWriterFactory.class)) {
+      context.stubWriters(markers, writers);
+      TestableWriteMergeHandle handle = new TestableWriteMergeHandle(config, context.table, new HashMap<>());
+      doThrow(failure).when(context.fileWriter).close();
+      assertSame(failure, assertThrows(HoodieUpsertException.class, handle::close).getCause());
+      assertNull(handle.fileWriter);
+      assertDoesNotThrow(handle::close);
+      verify(context.fileWriter).close();
+    }
+  }
+
+  @Test
+  public void testPendingRecordFailureClosesSpillableMap() throws Exception {
+    HoodieWriteConfig config = config();
+    TestContext context = new TestContext(config);
+    IOException failure = new IOException("pending records failed");
+    try (MockedStatic<WriteMarkersFactory> markers = mockStatic(WriteMarkersFactory.class);
+         MockedStatic<HoodieFileWriterFactory> writers = mockStatic(HoodieFileWriterFactory.class)) {
+      context.stubWriters(markers, writers);
+      TestableWriteMergeHandle handle = spy(new TestableWriteMergeHandle(config, context.table, new HashMap<>()));
+      ExternalSpillableMap map = mock(ExternalSpillableMap.class);
+      handle.keyToNewRecords = map;
+      doThrow(failure).when(handle).writeIncomingRecords();
+      assertSame(failure, assertThrows(HoodieUpsertException.class, handle::close).getCause());
+      assertNull(handle.keyToNewRecords);
+      assertDoesNotThrow(handle::close);
+      verify(map).close();
+      verify(context.fileWriter).close();
     }
   }
 

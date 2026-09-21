@@ -22,7 +22,6 @@ import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
@@ -114,7 +113,6 @@ public class TestHoodieAppendHandle extends HoodieCommonTestHarness {
     HoodieLogFormat.Writer writer = mock(HoodieLogFormat.Writer.class);
     handle.writer = writer;
     handle.recordItr = Collections.emptyIterator();
-    handle.recordList.add(mock(HoodieRecord.class));
     RuntimeException failure = new IllegalStateException("flush failed");
     RuntimeException closeFailure = new IllegalStateException("close failed");
     doThrow(failure).when(handle).flushAppend();

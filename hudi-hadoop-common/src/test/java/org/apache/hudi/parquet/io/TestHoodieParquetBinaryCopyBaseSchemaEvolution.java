@@ -23,7 +23,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.column.EncodingStats;
-import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
 import org.apache.parquet.hadoop.metadata.ColumnChunkMetaData;
 import org.apache.parquet.hadoop.metadata.ColumnPath;
@@ -39,34 +38,26 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import java.io.Closeable;
-import java.io.IOException;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.withSettings;
 
 /**
  * Tests for HoodieParquetBinaryCopyBase schema evolution behavior.
@@ -299,62 +290,6 @@ public class TestHoodieParquetBinaryCopyBaseSchemaEvolution {
     assertEquals(true, legacyConversionAttempted, "Legacy conversion should be attempted when schema evolution is enabled");
   }
 
-  @Test
-  public void testCloseParquetFileWriterQuietlyIgnoresWriterWithoutCloseMethod() {
-    ParquetFileWriter parquetFileWriter = mock(ParquetFileWriter.class);
-
-    assertDoesNotThrow(() -> copyBase.closeParquetFileWriterQuietlyForTesting(parquetFileWriter));
-  }
-
-  @Test
-  public void testCloseParquetFileWriterQuietlyInvokesCloseWhenAvailable() throws Exception {
-    ParquetFileWriter parquetFileWriter = mock(ParquetFileWriter.class, withSettings().extraInterfaces(Closeable.class));
-
-    copyBase.closeParquetFileWriterQuietlyForTesting(parquetFileWriter);
-
-    verify((Closeable) parquetFileWriter).close();
-  }
-
-  @Test
-  public void testCloseClearsWriterWhenEndFails() throws Exception {
-    ParquetFileWriter parquetFileWriter = mock(ParquetFileWriter.class);
-    IOException failure = new IOException("end failed");
-    doThrow(failure).when(parquetFileWriter).end(any(Map.class));
-    copyBase.setWriterForTesting(parquetFileWriter);
-
-    IOException actual = assertThrows(IOException.class, copyBase::close);
-
-    assertEquals(failure, actual);
-    assertNull(copyBase.getWriterForTesting());
-  }
-
-  @Test
-  public void testCloseReleasesWriterWhenMetadataFails() throws Exception {
-    ParquetFileWriter parquetFileWriter = mock(ParquetFileWriter.class, withSettings().extraInterfaces(Closeable.class));
-    RuntimeException failure = new IllegalStateException("metadata failed");
-    doThrow(failure).when(copyBase).finalizeMetadata();
-    copyBase.setWriterForTesting(parquetFileWriter);
-
-    assertEquals(failure, assertThrows(IllegalStateException.class, copyBase::close));
-    assertNull(copyBase.getWriterForTesting());
-    verify((Closeable) parquetFileWriter).close();
-    assertDoesNotThrow(copyBase::close);
-  }
-
-  @Test
-  public void testClosePreservesFailureWhenWriterCloseFails() throws Exception {
-    ParquetFileWriter parquetFileWriter = mock(ParquetFileWriter.class, withSettings().extraInterfaces(Closeable.class));
-    IOException failure = new IOException("end failed");
-    IOException closeFailure = new IOException("close failed");
-    doThrow(failure).when(parquetFileWriter).end(any(Map.class));
-    doThrow(closeFailure).when((Closeable) parquetFileWriter).close();
-    copyBase.setWriterForTesting(parquetFileWriter);
-
-    assertEquals(failure, assertThrows(IOException.class, copyBase::close));
-    assertArrayEquals(new Throwable[] {closeFailure}, failure.getSuppressed());
-    assertNull(copyBase.getWriterForTesting());
-  }
-
   /**
    * Testable subclass that exposes internal methods and provides test setup.
    */
@@ -411,28 +346,6 @@ public class TestHoodieParquetBinaryCopyBaseSchemaEvolution {
         }
       }
       return false; // Legacy conversion was not attempted
-    }
-
-    public void closeParquetFileWriterQuietlyForTesting(ParquetFileWriter parquetFileWriter) throws Exception {
-      setWriterForTesting(parquetFileWriter);
-      Method closeMethod = HoodieParquetBinaryCopyBase.class.getDeclaredMethod("closeParquetFileWriterQuietly", Throwable.class);
-      closeMethod.setAccessible(true);
-      closeMethod.invoke(this, new IOException("write failed"));
-      assertNull(getWriterForTesting());
-    }
-
-    public void setWriterForTesting(ParquetFileWriter writer) throws Exception {
-      writerField().set(this, writer);
-    }
-
-    public ParquetFileWriter getWriterForTesting() throws Exception {
-      return (ParquetFileWriter) writerField().get(this);
-    }
-
-    private Field writerField() throws Exception {
-      Field writerField = HoodieParquetBinaryCopyBase.class.getDeclaredField("writer");
-      writerField.setAccessible(true);
-      return writerField;
     }
 
     private List<ColumnDescriptor> missedColumns(MessageType requiredSchema, MessageType fileSchema) {

@@ -474,10 +474,8 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       }
 
       markClosed();
-      writeIncomingRecords();
-
-      if (keyToNewRecords instanceof Closeable) {
-        ((Closeable) keyToNewRecords).close();
+      try (Closeable records = keyToNewRecords instanceof Closeable ? (Closeable) keyToNewRecords : null) {
+        writeIncomingRecords();
       }
       closeFileWriter();
 

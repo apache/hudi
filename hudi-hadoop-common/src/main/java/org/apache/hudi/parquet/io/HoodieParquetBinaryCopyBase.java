@@ -190,12 +190,23 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
   protected abstract Map<String, String> finalizeMetadata();
 
   private void closeParquetFileWriterQuietly(Throwable failure) {
-    // Parquet 1.12.x/1.13.x have no close(); newer versions implement AutoCloseable.
+    // Parquet 1.12.x/1.13.x have no close() API; a failed start()/end() can leave the stream open.
+    // Newer versions implement AutoCloseable, allowing explicit cleanup here.
     ParquetFileWriter parquetFileWriter = writer;
     writer = null;
     if (parquetFileWriter instanceof AutoCloseable) {
       CloseableUtils.closeSuppressing((AutoCloseable) parquetFileWriter, failure);
     }
+  }
+
+  @VisibleForTesting
+  void setWriter(ParquetFileWriter writer) {
+    this.writer = writer;
+  }
+
+  @VisibleForTesting
+  ParquetFileWriter getWriter() {
+    return writer;
   }
 
   public void processBlocksFromReader(CompressionConverter.TransParquetFileReader reader, BlockMetaData block, String originalCreatedBy) throws IOException {
