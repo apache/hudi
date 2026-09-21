@@ -15,8 +15,10 @@ package io.trino.plugin.hudi;
 
 import io.trino.testing.BaseConnectorSmokeTest;
 import io.trino.testing.TestingConnectorBehavior;
+import io.trino.testing.sql.TestTable;
 import org.junit.jupiter.api.Test;
 
+import static io.trino.spi.connector.ConnectorMetadata.MODIFYING_ROWS_MESSAGE;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public abstract class BaseHudiConnectorSmokeTest
@@ -57,5 +59,42 @@ public abstract class BaseHudiConnectorSmokeTest
                         "WITH (\n" +
                         "   location = \\E'.*/region'\n\\Q" +
                         ")");
+    }
+
+    @Test
+    @Override
+    public void verifySupportsDeleteDeclaration()
+    {
+        assertModificationUnsupported("DELETE FROM %s");
+    }
+
+    @Test
+    @Override
+    public void verifySupportsRowLevelDeleteDeclaration()
+    {
+        assertModificationUnsupported("DELETE FROM %s WHERE a = 1");
+    }
+
+    @Test
+    @Override
+    public void verifySupportsUpdateDeclaration()
+    {
+        assertModificationUnsupported("UPDATE %s SET a = 1");
+    }
+
+    @Test
+    @Override
+    public void verifySupportsRowLevelUpdateDeclaration()
+    {
+        assertModificationUnsupported("UPDATE %s SET a = a + 1 WHERE b = 2");
+    }
+
+    private void assertModificationUnsupported(String statement)
+    {
+        // The inherited checks use CTAS for setup, but Hudi supports only empty CREATE TABLE in
+        // this stage. An empty table is sufficient to verify the DELETE/UPDATE capability contract.
+        try (TestTable table = newTrinoTable("test_unsupported_modification", getCreateTableDefaultDefinition())) {
+            assertQueryFails(statement.formatted(table.getName()), MODIFYING_ROWS_MESSAGE);
+        }
     }
 }
