@@ -205,7 +205,7 @@ public class MercifulJsonConverter {
     }
 
     ValidationUtils.checkArgument(
-        processor != null, String.format("JsonConverter cannot handle type: %s", type));
+        processor != null, () -> String.format("JsonConverter cannot handle type: %s", type));
     return processor;
   }
 

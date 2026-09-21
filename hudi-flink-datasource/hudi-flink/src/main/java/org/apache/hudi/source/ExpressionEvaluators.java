@@ -191,7 +191,7 @@ public class ExpressionEvaluators {
       ColumnStats columnStats = columnStatsMap.get(this.name);
       ValidationUtils.checkState(
           columnStats != null,
-          "Can not find column " + this.name);
+          () -> "Can not find column " + this.name);
       return columnStats;
     }
 
