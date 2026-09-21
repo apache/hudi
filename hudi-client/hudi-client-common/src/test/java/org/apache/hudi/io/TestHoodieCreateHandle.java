@@ -409,6 +409,8 @@ public class TestHoodieCreateHandle extends HoodieCommonTestHarness {
 
     assertEquals("Simulated file writer write failure", exception.getMessage());
     assertNull(createHandle.fileWriter);
+    assertTrue(createHandle.isClosed());
+    assertDoesNotThrow(createHandle::close);
   }
 
   private static class CreateHandleWithFileWriterWriteFailure extends HoodieCreateHandle<Object, Object, Object, Object> {

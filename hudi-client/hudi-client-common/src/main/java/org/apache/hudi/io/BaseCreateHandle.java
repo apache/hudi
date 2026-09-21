@@ -197,6 +197,7 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
   }
 
   private void closeFileWriterQuietly(Throwable failure) {
+    markClosed();
     AutoCloseableUtils.closeQuietlyWithSuppressed(fileWriter, failure);
     fileWriter = null;
   }

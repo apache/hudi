@@ -160,8 +160,7 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
       try {
         writer.start();
       } catch (Exception e) {
-        closeParquetFileWriterQuietly(writer);
-        writer = null;
+        closeParquetFileWriterQuietly();
         throw e;
       }
       log.info("init writer ");
@@ -176,12 +175,15 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
     if (writer == null) {
       return;
     }
-    Map<String, String> extraMetaData = finalizeMetadata();
-    extraMetaData = extraMetaData == null ? new HashMap<>() : extraMetaData;
-    extraMetaData.remove("parquet.avro.schema");
-    extraMetaData.remove("org.apache.spark.sql.parquet.row.metadata");
     try {
+      Map<String, String> extraMetaData = finalizeMetadata();
+      extraMetaData = extraMetaData == null ? new HashMap<>() : extraMetaData;
+      extraMetaData.remove("parquet.avro.schema");
+      extraMetaData.remove("org.apache.spark.sql.parquet.row.metadata");
       writer.end(extraMetaData);
+    } catch (IOException | RuntimeException e) {
+      closeParquetFileWriterQuietly();
+      throw e;
     } finally {
       writer = null;
       // Release the buffer
@@ -191,13 +193,16 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
 
   protected abstract Map<String, String> finalizeMetadata();
 
-  private void closeParquetFileWriterQuietly(ParquetFileWriter parquetFileWriter) {
+  private void closeParquetFileWriterQuietly() {
+    ParquetFileWriter parquetFileWriter = writer;
+    writer = null;
     if (parquetFileWriter == null) {
       return;
     }
     Method closeMethod;
     try {
-      // ParquetFileWriter does not implement Closeable in all versions, so attempt close() reflectively.
+      // Parquet 1.12.x/1.13.x have no close(); newer versions (for example 1.15.2) expose it.
+      // Use reflection to keep this cleanup compatible with the older compile-time dependency.
       closeMethod = parquetFileWriter.getClass().getMethod("close");
     } catch (NoSuchMethodException e) {
       return;
@@ -578,7 +583,8 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
             cWriter.writeNull(rlvl, dlvl - 1);
           }
         } else {
-          cWriter.writeNull(rlvl, dlvl); // 因为repeatition level没有重复所以后面都是以0在第一层，definition level是字段path的第0层
+          // A zero repetition level starts a new record; a zero definition level marks the field absent.
+          cWriter.writeNull(rlvl, dlvl);
         }
         cStore.endRecord();
       }

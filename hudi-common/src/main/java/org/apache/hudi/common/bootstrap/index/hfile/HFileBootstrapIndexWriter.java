@@ -178,8 +178,10 @@ public class HFileBootstrapIndexWriter extends BootstrapIndex.IndexWriter {
     if (closed) {
       return;
     }
-    Exception failure = closeWriter(indexByPartitionWriter, null);
-    failure = closeWriter(indexByFileIdWriter, failure);
+    Exception failure = closeHFileWriter(indexByPartitionWriter, null);
+    failure = closeHFileWriter(indexByFileIdWriter, failure);
+    indexByPartitionWriter = null;
+    indexByFileIdWriter = null;
     closed = true;
     if (failure != null) {
       throw new HoodieException(failure.getMessage(), failure);
@@ -214,7 +216,7 @@ public class HFileBootstrapIndexWriter extends BootstrapIndex.IndexWriter {
     }
   }
 
-  private Exception closeWriter(HFileWriter writer, Exception failure) {
+  private Exception closeHFileWriter(HFileWriter writer, Exception failure) {
     if (writer == null) {
       return failure;
     }

@@ -54,7 +54,6 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
-import static org.apache.hudi.io.util.FileIOUtils.closeQuietly;
 
 /**
  * HoodieHFileWriter writes IndexedRecords into an HFile. The record's key is used as the key and the
@@ -110,14 +109,25 @@ public class HoodieAvroHFileWriter
     OutputStream outputStream = HoodieStorageUtils.getStorage(filePath, storageConf).create(filePath);
     try {
       this.writer = new HFileWriterImpl(context, outputStream);
-    } finally {
-      if (this.writer == null) {
-        closeQuietly(outputStream);
+      this.prevRecordKey = "";
+      writer.appendFileInfo(
+          HoodieAvroHFileReaderImplBase.SCHEMA_KEY, getUTF8Bytes(schema.toString()));
+    } catch (RuntimeException e) {
+      try {
+        if (writer != null) {
+          writer.close();
+        } else {
+          outputStream.close();
+        }
+      } catch (IOException | RuntimeException closeException) {
+        if (e != closeException) {
+          e.addSuppressed(closeException);
+        }
+      } finally {
+        writer = null;
       }
+      throw e;
     }
-    this.prevRecordKey = "";
-    writer.appendFileInfo(
-        HoodieAvroHFileReaderImplBase.SCHEMA_KEY, getUTF8Bytes(schema.toString()));
   }
 
   @Override

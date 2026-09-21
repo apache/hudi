@@ -41,25 +41,35 @@ public final class AutoCloseableUtils {
       closeable.close();
     } catch (IOException ioe) {
       if (failure != null) {
-        failure.addSuppressed(ioe);
+        if (failure != ioe) {
+          failure.addSuppressed(ioe);
+        }
       } else {
         throw ioe;
       }
     } catch (RuntimeException re) {
       if (failure != null) {
-        failure.addSuppressed(re);
+        if (failure != re) {
+          failure.addSuppressed(re);
+        }
       } else {
         throw re;
       }
     } catch (Exception e) {
       if (failure != null) {
-        failure.addSuppressed(e);
+        if (failure != e) {
+          failure.addSuppressed(e);
+        }
       } else {
         throw new IOException("Failed to close resource", e);
       }
     }
   }
 
+  /**
+   * Closes a resource without propagating exceptions; other checked exceptions are wrapped as
+   * {@link IOException} by {@link #closeWithSuppressed(AutoCloseable, Throwable)}.
+   */
   public static void closeQuietlyWithSuppressed(AutoCloseable closeable, Throwable failure) {
     try {
       closeWithSuppressed(closeable, failure);

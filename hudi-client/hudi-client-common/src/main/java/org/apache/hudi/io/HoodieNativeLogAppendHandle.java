@@ -163,8 +163,11 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
 
   @Override
   protected void closeLogWriter() {
-    if (writer != null) {
-      writer.close();
+    try {
+      if (writer != null) {
+        writer.close();
+      }
+    } finally {
       writer = null;
     }
   }

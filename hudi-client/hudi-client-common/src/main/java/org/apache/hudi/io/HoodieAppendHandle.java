@@ -152,11 +152,16 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
    * Writes all records from the incoming iterator and flushes remaining pending data.
    */
   public void doAppend() {
-    while (recordItr.hasNext()) {
-      HoodieRecord<T> record = recordItr.next();
-      writeRecord(record);
+    try {
+      while (recordItr.hasNext()) {
+        HoodieRecord<T> record = recordItr.next();
+        writeRecord(record);
+      }
+      flushAppend();
+    } catch (RuntimeException e) {
+      closeLogWriterQuietly(e);
+      throw e;
     }
-    flushAppend();
   }
 
   /**
@@ -229,6 +234,10 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
   private void closeLogWriterQuietly(Throwable failure) {
     markClosed();
     AutoCloseableUtils.closeQuietlyWithSuppressed(this::closeLogWriter, failure);
+    if (recordItr instanceof Closeable) {
+      AutoCloseableUtils.closeQuietlyWithSuppressed((Closeable) recordItr, failure);
+    }
+    recordItr = null;
   }
 
   @Override

@@ -23,13 +23,13 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.column.EncodingStats;
+import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
 import org.apache.parquet.hadoop.metadata.ColumnChunkMetaData;
 import org.apache.parquet.hadoop.metadata.ColumnPath;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.hadoop.metadata.FileMetaData;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
-import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.util.CompressionConverter;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.PrimitiveType;
@@ -327,6 +327,19 @@ public class TestHoodieParquetBinaryCopyBaseSchemaEvolution {
     assertNull(copyBase.getWriterForTesting());
   }
 
+  @Test
+  public void testCloseReleasesWriterWhenMetadataFails() throws Exception {
+    ParquetFileWriter parquetFileWriter = mock(ParquetFileWriter.class, withSettings().extraInterfaces(Closeable.class));
+    RuntimeException failure = new IllegalStateException("metadata failed");
+    doThrow(failure).when(copyBase).finalizeMetadata();
+    copyBase.setWriterForTesting(parquetFileWriter);
+
+    assertEquals(failure, assertThrows(IllegalStateException.class, copyBase::close));
+    assertNull(copyBase.getWriterForTesting());
+    verify((Closeable) parquetFileWriter).close();
+    assertDoesNotThrow(copyBase::close);
+  }
+
   /**
    * Testable subclass that exposes internal methods and provides test setup.
    */
@@ -386,9 +399,11 @@ public class TestHoodieParquetBinaryCopyBaseSchemaEvolution {
     }
 
     public void closeParquetFileWriterQuietlyForTesting(ParquetFileWriter parquetFileWriter) throws Exception {
-      Method closeMethod = HoodieParquetBinaryCopyBase.class.getDeclaredMethod("closeParquetFileWriterQuietly", ParquetFileWriter.class);
+      setWriterForTesting(parquetFileWriter);
+      Method closeMethod = HoodieParquetBinaryCopyBase.class.getDeclaredMethod("closeParquetFileWriterQuietly");
       closeMethod.setAccessible(true);
-      closeMethod.invoke(this, parquetFileWriter);
+      closeMethod.invoke(this);
+      assertNull(getWriterForTesting());
     }
 
     public void setWriterForTesting(ParquetFileWriter writer) throws Exception {

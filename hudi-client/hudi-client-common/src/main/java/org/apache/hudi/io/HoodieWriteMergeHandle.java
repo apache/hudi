@@ -479,8 +479,6 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       if (keyToNewRecords instanceof Closeable) {
         ((Closeable) keyToNewRecords).close();
       }
-      keyToNewRecords = null;
-      writtenRecordKeys = null;
       closeFileWriter(null);
 
       long fileSizeInBytes = storage.getPathInfo(newFilePath).getLength();

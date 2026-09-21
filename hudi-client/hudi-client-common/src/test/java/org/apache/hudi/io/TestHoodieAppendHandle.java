@@ -22,6 +22,7 @@ import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
@@ -37,15 +38,27 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -87,6 +100,38 @@ public class TestHoodieAppendHandle extends HoodieCommonTestHarness {
     when(mockHoodieTable.getMetaClient()).thenReturn(metaClient);
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void testFailedFlushClosesWriterAndPreventsAnotherFlush(boolean closeFails) throws IOException {
+    writeConfig = HoodieWriteConfig.newBuilder()
+        .withProps(writeConfig.getProps())
+        .withWriteTableVersion(HoodieTableVersion.SIX.versionCode())
+        .build();
+    when(mockHoodieTable.getStorage()).thenReturn(metaClient.getStorage());
+    HoodieInlineLogAppendHandle<Object, Object, Object, Object> handle = spy(
+        new HoodieInlineLogAppendHandle<>(writeConfig, TEST_INSTANT_TIME, mockHoodieTable,
+            TEST_PARTITION_PATH, TEST_FILE_ID, taskContextSupplier));
+    HoodieLogFormat.Writer writer = mock(HoodieLogFormat.Writer.class);
+    handle.writer = writer;
+    handle.recordItr = Collections.emptyIterator();
+    handle.recordList.add(mock(HoodieRecord.class));
+    RuntimeException failure = new IllegalStateException("flush failed");
+    RuntimeException closeFailure = new IllegalStateException("close failed");
+    doThrow(failure).when(handle).flushAppend();
+    if (closeFails) {
+      doThrow(closeFailure).when(writer).close();
+    }
+
+    assertSame(failure, assertThrows(IllegalStateException.class, handle::doAppend));
+    assertTrue(handle.isClosed());
+    assertNull(handle.writer);
+    assertNull(handle.recordItr);
+    assertArrayEquals(closeFails ? new Throwable[] {closeFailure} : new Throwable[0], failure.getSuppressed());
+    assertDoesNotThrow(handle::close);
+    verify(handle, times(1)).flushAppend();
+    verify(writer, times(1)).close();
+  }
+
   private static Stream<Arguments> versionsSixAndAbove() {
     return Stream.of(
         Arguments.of(HoodieTableVersion.SIX),
@@ -114,7 +159,7 @@ public class TestHoodieAppendHandle extends HoodieCommonTestHarness {
       when(mockedFSView.getLatestBaseFile(TEST_PARTITION_PATH, TEST_FILE_ID)).thenReturn(Option.empty());
     }
 
-    HoodieAppendHandle<Object, Object, Object, Object> appendHandle =
+    HoodieInlineLogAppendHandle<Object, Object, Object, Object> appendHandle =
         new HoodieInlineLogAppendHandle<>(writeConfig, TEST_INSTANT_TIME, mockHoodieTable, TEST_PARTITION_PATH, TEST_FILE_ID, taskContextSupplier);
 
     FileSlice mockFileSlice = mock(FileSlice.class);

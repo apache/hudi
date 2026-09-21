@@ -32,6 +32,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.parquet.io.HoodieParquetFileBinaryCopier;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.AutoCloseableUtils;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
@@ -120,10 +121,10 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
       log.info("Schema evolution enabled for binary copy: {}", schemaEvolutionEnabled);
       records = this.writer.binaryCopy(inputFiles, Collections.singletonList(path), writeScheMessageType, schemaEvolutionEnabled);
     } catch (IOException e) {
-      closeWriterAfterFailure(e);
+      closeWriterQuietly(e);
       throw new HoodieIOException(e.getMessage(), e);
     } catch (RuntimeException e) {
-      closeWriterAfterFailure(e);
+      closeWriterQuietly(e);
       throw e;
     } finally {
       this.recordsWritten = records;
@@ -132,18 +133,19 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
     log.info("Finish rewriting {}. Using {} mills", this.path, timer.endTimer());
   }
 
-  private void closeWriterAfterFailure(Throwable failure) {
-    try {
-      this.writer.close();
-    } catch (IOException ioe) {
-      failure.addSuppressed(ioe);
-    }
+  private void closeWriterQuietly(Throwable failure) {
+    markClosed();
+    AutoCloseableUtils.closeQuietlyWithSuppressed(writer::close, failure);
   }
 
   @Override
   public List<WriteStatus> close() {
     log.info("Closing the file {} as we are done with all the records {}", writeStatus.getFileId(), recordsWritten);
     try {
+      if (isClosed()) {
+        return Collections.singletonList(writeStatus);
+      }
+      markClosed();
       this.writer.close();
 
       HoodieWriteStat stat = writeStatus.getStat();
