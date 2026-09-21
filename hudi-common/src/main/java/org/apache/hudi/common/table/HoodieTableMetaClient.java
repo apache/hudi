@@ -1606,8 +1606,14 @@ public class HoodieTableMetaClient implements Serializable {
         tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, type.name());
       }
       if (tableConfig.isComplexKeyGenWithSingleRecordKeyField() && metaFieldsMode.isRecordKeyPopulated()) {
-        tableConfig.setValue(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING,
-            complexKeyGenEncoding != null ? complexKeyGenEncoding.name() : ComplexKeyGenEncoding.FIELD_PREFIXED.name());
+        // New tables store `<field>:<value>` keys. Only releases up to 1.0.2 (table version 8 and below) ever
+        // wrote bare values, so that encoding can only be declared for a table created at such a version.
+        ComplexKeyGenEncoding encoding = complexKeyGenEncoding != null ? complexKeyGenEncoding : ComplexKeyGenEncoding.FIELD_PREFIXED;
+        checkArgument(encoding == ComplexKeyGenEncoding.FIELD_PREFIXED || tableVersion.lesserThan(HoodieTableVersion.NINE),
+            String.format("%s=%s is only valid for a table created at version %s or below; tables at version %s and above "
+                    + "store `<field>:<value>` record keys (%s)", HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), encoding,
+                HoodieTableVersion.EIGHT.versionCode(), HoodieTableVersion.NINE.versionCode(), ComplexKeyGenEncoding.FIELD_PREFIXED));
+        tableConfig.setValue(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING, encoding.name());
       }
       if (null != slashSeparatedDatePartitioning) {
         tableConfig.setValue(HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING, Boolean.toString(slashSeparatedDatePartitioning));

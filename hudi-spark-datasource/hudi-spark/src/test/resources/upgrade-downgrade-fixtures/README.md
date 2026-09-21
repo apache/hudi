@@ -31,9 +31,21 @@ Tables that include table service operations such as (compaction, clustering, ar
 
 ### Complex Key Generator Tables (`complex-keygen-tables/`)
 Tables that use complex key generators for testing key generator compatibility:
-- `hudi-v6-table-complex-keygen.zip` - Hudi 0.14.0, Table Version 6
-- `hudi-v8-table-complex-keygen.zip` - Hudi 1.0.2, Table Version 8
-- `hudi-v9-table-complex-keygen.zip` - Hudi 1.1.0, Table Version 9
+- `hudi-v6-table-complex-keygen.zip` - Hudi 0.14.0, Table Version 6 (`id:<value>` record keys)
+- `hudi-v6-table-complex-keygen-bare.zip` - Hudi 0.14.1, Table Version 6 (bare `<value>` record keys)
+- `hudi-v8-table-complex-keygen.zip` - Hudi 1.0.2, Table Version 8 (bare `<value>` record keys)
+- `hudi-v9-table-complex-keygen.zip` - Hudi 1.1.0, Table Version 9 (bare `<value>` record keys)
+
+All of them use a `ComplexKeyGenerator` with the single record key field `id` and the partition fields
+`partition,category`, and none of them carries `hoodie.table.complex.keygenerator.encoding`: they are the
+legacy tables the encoding is deduced from (see `TestComplexKeyGenExistingTableUpgrade`,
+`TestRecordLevelIndexComplexKeyGenEncoding`, `TestCreateTable` and the streamer test). The record key
+encoding of each is what the release that wrote it produced, so these tables keep guarding the
+upgrade path even once no current writer can produce bare keys.
+
+`hudi-v6-table-complex-keygen-bare.zip` was produced by running `generate-fixture-complex-keygen.scala`
+the way `generate-fixtures.sh` does for version 6, but against the `org.apache.hudi:hudi-spark3.4-bundle_2.12:0.14.1`
+package (the first release that stored bare keys) on Spark 3.4.3.
 
 ### Unsupported Tables (`unsupported-upgrade-tables`)
 Tables that are not supported for upgrade/downgrade testing such as v4 and v5. (We support v6 and above)

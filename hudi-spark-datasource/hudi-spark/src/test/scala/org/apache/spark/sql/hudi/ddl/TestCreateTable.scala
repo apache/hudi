@@ -22,6 +22,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.HoodieStorageUtils
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.escapePathName
 import org.apache.hudi.config.HoodieWriteConfig
@@ -1139,9 +1140,10 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
 
   test("Test Create Table with Complex Key Generator and Key Encoding") {
     withTempDir { tmp =>
+      // VALUE_ONLY keys were only ever written by releases up to 1.0.2, so a table can only be created with them at version 8 and below
       Seq((ComplexKeyGenEncoding.VALUE_ONLY, 6), (ComplexKeyGenEncoding.FIELD_PREFIXED, 6),
         (ComplexKeyGenEncoding.VALUE_ONLY, 8), (ComplexKeyGenEncoding.FIELD_PREFIXED, 8),
-        (ComplexKeyGenEncoding.VALUE_ONLY, 9), (ComplexKeyGenEncoding.FIELD_PREFIXED, 9)).foreach { params =>
+        (ComplexKeyGenEncoding.FIELD_PREFIXED, 9)).foreach { params =>
         val tableName = generateTableName
         val tablePath = s"${tmp.getCanonicalPath}/$tableName"
         val encoding = params._1
@@ -1245,43 +1247,47 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
 
   test("Test Merge Into a legacy single-field complex keygen table without the recorded encoding") {
     withTempDir { tmp =>
+      // the checked-in 1.0.2 table (version 8): bare record keys, written before the encoding was recorded
+      val fixtureName = "hudi-v8-table-complex-keygen"
+      HoodieTestUtils.extractZipToDirectory(s"/upgrade-downgrade-fixtures/complex-keygen-tables/$fixtureName.zip", tmp.toPath, getClass)
+      val tablePath = s"${tmp.getCanonicalPath}/$fixtureName"
       val tableName = generateTableName
-      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-      import spark.implicits._
-      val df = Seq((1, "a1", 10, 1000, "2025-07-29", 12), (2, "a2", 20, 1000, "2025-07-29", 12))
-        .toDF("id", "name", "value", "ts", "day", "hh")
-      // a table with bare record keys, written before the encoding was recorded
-      df.write.format("hudi")
-        .option(HoodieWriteConfig.TBL_NAME.key, tableName)
-        .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
-        .option(RECORDKEY_FIELD.key, "id")
-        .option(ORDERING_FIELDS.key, "ts")
-        .option(PARTITIONPATH_FIELD.key, "day,hh")
-        .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
-        .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
-        .option(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key, ComplexKeyGenEncoding.VALUE_ONLY.name)
-        .mode(SaveMode.Overwrite)
-        .save(tablePath)
-      val metaClient = createMetaClient(spark, tablePath)
-      HoodieTableConfig.delete(metaClient.getStorage, metaClient.getMetaPath, Set(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key).asJava)
+      assertResult(false)(createMetaClient(spark, tablePath).getTableConfig.contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING))
 
       spark.sql(s"create table $tableName using hudi location '$tablePath'")
+      checkAnswer(s"select _hoodie_record_key, id, ts from $tableName where id in ('id1', 'id2') order by id")(
+        Seq("id1", "id1", 1001L), Seq("id2", "id2", 2001L))
+
+      // the upgrading write: it must find the bare key of id1 and update it in place, not insert a prefixed twin
       spark.sql(
         s"""
            |merge into $tableName h0
            |using (
-           |  select 1 as id, 'a1' as name, 11 as value, 1001 as ts, '2025-07-29' as day, 12 as hh union all
-           |  select 3 as id, 'a3' as name, 30 as value, 1000 as ts, '2025-07-29' as day, 12 as hh
+           |  select 'id1' as id, 'Alice_merged' as name, 5000L as ts, '2023-01-01' as `partition`, 'a' as category union all
+           |  select 'id9' as id, 'Ivy' as name, 9000L as ts, '2023-01-05' as `partition`, 'a' as category
            |) s0
            |on h0.id = s0.id
            |when matched then update set *
            |when not matched then insert *
            |""".stripMargin)
 
-      checkAnswer(s"select _hoodie_record_key, id, value from $tableName order by id")(
-        Seq("1", 1, 11), Seq("2", 2, 20), Seq("3", 3, 30))
+      checkAnswer(s"select _hoodie_record_key, id, name, ts from $tableName where id in ('id1', 'id9') order by id")(
+        Seq("id1", "id1", "Alice_merged", 5000L), Seq("id9", "id9", "Ivy", 9000L))
+      assertResult(9L)(spark.sql(s"select id from $tableName").count())
+      assertResult(9L)(spark.sql(s"select distinct _hoodie_record_key from $tableName").count())
       val properties = createMetaClient(spark, tablePath).getTableConfig.getProps.asScala.toMap
       assertResult(ComplexKeyGenEncoding.VALUE_ONLY.name)(properties(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key))
+
+      // the table is at the current version now: with the property gone again, no upgrade runs and the SQL write
+      // itself has to record the encoding from the data before keying its records
+      val metaClient = createMetaClient(spark, tablePath)
+      HoodieTableConfig.delete(metaClient.getStorage, metaClient.getMetaPath, Set(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key).asJava)
+      spark.sql(s"update $tableName set name = 'Bob_updated', ts = 6000 where id = 'id2'")
+      checkAnswer(s"select _hoodie_record_key, id, name, ts from $tableName where id = 'id2'")(
+        Seq("id2", "id2", "Bob_updated", 6000L))
+      assertResult(9L)(spark.sql(s"select distinct _hoodie_record_key from $tableName").count())
+      assertResult(ComplexKeyGenEncoding.VALUE_ONLY.name)(
+        createMetaClient(spark, tablePath).getTableConfig.getProps.asScala.toMap.apply(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key))
     }
   }
 

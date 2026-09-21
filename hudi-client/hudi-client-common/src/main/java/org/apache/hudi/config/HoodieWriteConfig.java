@@ -287,7 +287,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("1.1.0")
       .supportedVersions("0.14.2", "0.15.1", "1.0.3")
-      .withDocumentation("Only takes effect when the table property `hoodie.table.complex.keygen.encoding` is absent. "
+      .withDocumentation("Only takes effect when the table property `hoodie.table.complex.keygenerator.encoding` is absent. "
           + "That property is set on every new table and backfilled on an existing table by the next write or upgrade, "
           + "from the encoding found in its data; once present it is authoritative and this config is ignored. When the "
           + "encoding cannot be determined from the data and `hoodie.write.complex.keygen.validation.enable` is false, "
@@ -307,7 +307,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("1.1.0")
       .supportedVersions("0.14.2", "0.15.1", "1.0.3")
-      .withDocumentation("Only takes effect when the table property `hoodie.table.complex.keygen.encoding` is absent "
+      .withDocumentation("Only takes effect when the table property `hoodie.table.complex.keygenerator.encoding` is absent "
           + "and the record key encoding cannot be determined from the table's data during a write, upgrade or "
           + "downgrade. If set to true, the writer enables the validation on whether the "
           + "table uses the complex key generator with a single record key field, which can be affected "

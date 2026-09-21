@@ -122,7 +122,6 @@ import java.util.function.BiFunction;
 
 import static org.apache.hudi.common.model.HoodieCommitMetadata.SCHEMA_KEY;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
-import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
 
 /**
@@ -1512,8 +1511,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
 
     doInitTable(operationType, metaClient, instantTime);
-    if (!WriteOperationType.isTableService(operationType) && operationType != WriteOperationType.DELETE_PARTITION) {
-      validateComplexKeygenEncodingRecorded(metaClient.getTableConfig());
+    if (keysRecords(operationType)) {
+      ensureComplexKeyGenEncodingRecorded(metaClient);
     }
     HoodieTable table = createTable(config, metaClient);
 
@@ -1546,12 +1545,34 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     return true;
   }
 
+  /** Operations that key incoming records, unlike table services, partition deletes, rollbacks or restores. */
+  private static boolean keysRecords(WriteOperationType operationType) {
+    switch (operationType) {
+      case INSERT:
+      case INSERT_PREPPED:
+      case UPSERT:
+      case UPSERT_PREPPED:
+      case BULK_INSERT:
+      case BULK_INSERT_PREPPED:
+      case DELETE:
+      case DELETE_PREPPED:
+      case INSERT_OVERWRITE:
+      case INSERT_OVERWRITE_TABLE:
+        return true;
+      default:
+        return false;
+    }
+  }
+
   /**
-   * A write that keys records needs the encoding recorded before ingestion starts or during table creation.
+   * A write that keys records needs {@link HoodieTableConfig#COMPLEX_KEYGEN_ENCODING} recorded before it keys them.
+   * Engines that key records outside the client (Spark, the streamer) record it when ingestion is set up, before
+   * this client exists, so the default only checks; a client whose callers hand it keyed records may record it here.
    */
-  private static void validateComplexKeygenEncodingRecorded(HoodieTableConfig tableConfig) {
+  protected void ensureComplexKeyGenEncodingRecorded(HoodieTableMetaClient metaClient) {
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
     if (KeyGenUtils.isComplexKeyGenEncodingTracked(tableConfig) && !tableConfig.getComplexKeyGenEncoding().isPresent()) {
-      throw new HoodieException(getComplexKeygenErrorMessage("ingestion"));
+      throw new HoodieException(KeyGenUtils.getComplexKeygenEncodingMissingMessage());
     }
   }
 

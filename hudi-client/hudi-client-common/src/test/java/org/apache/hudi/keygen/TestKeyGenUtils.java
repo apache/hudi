@@ -18,6 +18,7 @@
 
 package org.apache.hudi.keygen;
 
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.MetaFieldsMode;
@@ -352,6 +353,55 @@ public class TestKeyGenUtils {
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
     return metaClient;
+  }
+
+  /** The pre-check on the write config alone decides whether the table config is worth loading at all. */
+  @Test
+  void testMayNeedComplexKeyGenEncodingRecorded() {
+    assertFalse(KeyGenUtils.mayNeedComplexKeyGenEncodingRecorded(new HoodieConfig()), "no key generator at all");
+
+    HoodieConfig writeOptions = new HoodieConfig();
+    writeOptions.setValue(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
+    writeOptions.setValue(KeyGeneratorOptions.RECORDKEY_FIELD_NAME, "id");
+    assertTrue(KeyGenUtils.mayNeedComplexKeyGenEncodingRecorded(writeOptions));
+    writeOptions.setValue(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING, ComplexKeyGenEncoding.VALUE_ONLY.name());
+    assertFalse(KeyGenUtils.mayNeedComplexKeyGenEncodingRecorded(writeOptions), "already known to the writer");
+
+    HoodieConfig byType = new HoodieConfig();
+    byType.setValue(HoodieWriteConfig.KEYGENERATOR_TYPE, KeyGeneratorType.COMPLEX.name());
+    byType.setValue(KeyGeneratorOptions.RECORDKEY_FIELD_NAME, "id");
+    assertTrue(KeyGenUtils.mayNeedComplexKeyGenEncodingRecorded(byType));
+    byType.setValue(KeyGeneratorOptions.RECORDKEY_FIELD_NAME, "id,name");
+    assertFalse(KeyGenUtils.mayNeedComplexKeyGenEncodingRecorded(byType), "several record key fields");
+
+    // the table config merged into Spark's write options
+    HoodieConfig tableKeys = new HoodieConfig();
+    tableKeys.setValue(KEY_GENERATOR_TYPE, KeyGeneratorType.COMPLEX.name());
+    tableKeys.setValue(RECORDKEY_FIELDS, "id");
+    assertTrue(KeyGenUtils.mayNeedComplexKeyGenEncodingRecorded(tableKeys));
+    tableKeys.setValue(HoodieTableConfig.POPULATE_META_FIELDS, "false");
+    assertFalse(KeyGenUtils.mayNeedComplexKeyGenEncodingRecorded(tableKeys), "no stored record key");
+
+    HoodieConfig simple = new HoodieConfig();
+    simple.setValue(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME, "org.apache.hudi.keygen.SimpleKeyGenerator");
+    simple.setValue(KeyGeneratorOptions.RECORDKEY_FIELD_NAME, "id");
+    assertFalse(KeyGenUtils.mayNeedComplexKeyGenEncodingRecorded(simple));
+    // a custom class, such as Spark SQL's wrapper: the merged table config decides, or the check cannot rule it out
+    HoodieConfig custom = new HoodieConfig();
+    custom.setValue(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME, "org.apache.spark.sql.hudi.command.SqlKeyGenerator");
+    custom.setValue(KeyGeneratorOptions.RECORDKEY_FIELD_NAME, "id");
+    assertTrue(KeyGenUtils.mayNeedComplexKeyGenEncodingRecorded(custom), "custom class without table config");
+    custom.setValue(KEY_GENERATOR_TYPE, KeyGeneratorType.SIMPLE.name());
+    assertFalse(KeyGenUtils.mayNeedComplexKeyGenEncodingRecorded(custom), "the table says simple");
+    custom.setValue(KEY_GENERATOR_TYPE, KeyGeneratorType.COMPLEX.name());
+    assertTrue(KeyGenUtils.mayNeedComplexKeyGenEncodingRecorded(custom), "the table says complex");
+
+    // the type option carries a default: an explicit class wins over it
+    HoodieConfig defaultedType = new HoodieConfig();
+    defaultedType.setValue(HoodieWriteConfig.KEYGENERATOR_TYPE, KeyGeneratorType.SIMPLE.name());
+    defaultedType.setValue(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME, "org.apache.hudi.keygen.ComplexKeyGenerator");
+    defaultedType.setValue(KeyGeneratorOptions.RECORDKEY_FIELD_NAME, "id");
+    assertTrue(KeyGenUtils.mayNeedComplexKeyGenEncodingRecorded(defaultedType));
   }
 
   @Test

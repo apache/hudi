@@ -520,6 +520,28 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     assertEquals(requestedTime, writeTimeline.lastInstant().get().requestedTime());
   }
 
+  /** A write that keys records on a tracked table without the property is refused; table services, partition deletes and rollbacks are not. */
+  @Test
+  void testInitTableRequiresRecordedComplexKeygenEncoding() throws IOException {
+    initPath();
+    Properties tableProperties = new Properties();
+    tableProperties.setProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), ComplexAvroKeyGenerator.class.getName());
+    tableProperties.setProperty(HoodieTableConfig.RECORDKEY_FIELDS.key(), "id");
+    metaClient = HoodieTestUtils.init(getDefaultStorageConf(), basePath, getTableType(), tableProperties);
+    HoodieTableConfig.delete(metaClient.getStorage(), metaClient.getMetaPath(),
+        Collections.singleton(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()));
+
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    try (TestWriteClient writeClient = new TestWriteClient(writeConfig, mock(HoodieTable.class), Option.empty(),
+        mock(BaseHoodieTableServiceClient.class))) {
+      HoodieException e = assertThrows(HoodieException.class, () -> writeClient.initTable(WriteOperationType.UPSERT, Option.empty()));
+      assertTrue(e.getMessage().contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()), e.getMessage());
+      writeClient.initTable(WriteOperationType.COMPACT, Option.empty());
+      writeClient.initTable(WriteOperationType.DELETE_PARTITION, Option.empty());
+      writeClient.initTable(WriteOperationType.UNKNOWN, Option.empty());
+    }
+  }
+
   @Test
   void testComplexKeygenEncodingRecordedBeforeIngestionOnly() throws IOException {
     initPath();

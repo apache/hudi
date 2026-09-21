@@ -32,7 +32,7 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -116,13 +116,29 @@ class TestComplexKeyGenNewTableDefault extends HoodieSparkClientTestBase {
     assertEquals(Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED), KeyGenUtils.resolveComplexKeyGenEncoding(metaClient))
   }
 
-  /** An explicitly requested encoding is honored on creation and by the keys written. */
+  /**
+   * An explicitly requested encoding is honored on creation and by the keys written. VALUE_ONLY describes keys
+   * that only releases up to 1.0.2 wrote, so it is accepted for a table created at version 8 and refused above.
+   */
   @Test
   def testNewTableHonorsExplicitEncoding(): Unit = {
-    writeNewTable(Map(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key -> ComplexKeyGenEncoding.VALUE_ONLY.name))
+    writeNewTable(Map(
+      HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key -> ComplexKeyGenEncoding.VALUE_ONLY.name,
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> "8"))
     val recordKeys = storedRecordKeys()
     assertTrue(recordKeys.forall(!_.startsWith(recordKeyField + ":")), s"Keys must be bare; got sample: ${recordKeys.take(5).mkString(", ")}")
+    assertEquals(HoodieTableVersion.EIGHT, loadMetaClient().getTableConfig.getTableVersion)
     assertEquals(Option.of(ComplexKeyGenEncoding.VALUE_ONLY), loadMetaClient().getTableConfig.getComplexKeyGenEncoding)
+
+    val thrown = assertThrows(classOf[Throwable], () =>
+      writeNewTable(Map(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key -> ComplexKeyGenEncoding.VALUE_ONLY.name)))
+    val causes = Iterator.iterate(thrown)(_.getCause).takeWhile(_ != null).toList
+    assertTrue(causes.exists(t => scala.Option(t.getMessage).exists(_.contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key))),
+      s"A table at the current version cannot declare VALUE_ONLY, got: ${causes.map(_.getMessage).mkString(" | ")}")
+
+    writeNewTable(Map(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key -> ComplexKeyGenEncoding.FIELD_PREFIXED.name))
+    assertTrue(storedRecordKeys().forall(_.startsWith(recordKeyField + ":")))
+    assertEquals(Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED), loadMetaClient().getTableConfig.getComplexKeyGenEncoding)
   }
 
   /** Without a stored record key there is no encoding to track, so nothing is recorded. */

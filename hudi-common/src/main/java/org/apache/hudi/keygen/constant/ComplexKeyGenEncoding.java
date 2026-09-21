@@ -28,7 +28,7 @@ import java.util.Locale;
  * How {@code _hoodie_record_key} is encoded for a {@code ComplexKeyGenerator} configured with a
  * single record key field.
  *
- * <p>Persisted in {@code hoodie.properties} as {@code hoodie.table.complex.keygen.encoding}, on creation for
+ * <p>Persisted in {@code hoodie.properties} as {@code hoodie.table.complex.keygenerator.encoding}, on creation for
  * new tables and by the first write or upgrade that finds it missing on an existing table, so that writers and
  * readers know the format the table actually carries instead of assuming it from the table version.
  */
@@ -54,7 +54,7 @@ public enum ComplexKeyGenEncoding {
    */
   public static ComplexKeyGenEncoding fromString(String value) {
     if (value == null || value.trim().isEmpty()) {
-      throw new IllegalArgumentException("hoodie.table.complex.keygen.encoding is set but empty; remove the line "
+      throw new IllegalArgumentException("hoodie.table.complex.keygenerator.encoding is set but empty; remove the line "
           + "or set it to one of " + Arrays.toString(values()));
     }
     try {
@@ -62,7 +62,7 @@ public enum ComplexKeyGenEncoding {
     } catch (IllegalArgumentException e) {
       // Reached on every read and write of the table, including on executors, so name the property and the
       // legal values rather than letting "No enum constant" surface with no context.
-      throw new IllegalArgumentException("Unrecognized hoodie.table.complex.keygen.encoding '" + value
+      throw new IllegalArgumentException("Unrecognized hoodie.table.complex.keygenerator.encoding '" + value
           + "'; expected one of " + Arrays.toString(values()), e);
     }
   }

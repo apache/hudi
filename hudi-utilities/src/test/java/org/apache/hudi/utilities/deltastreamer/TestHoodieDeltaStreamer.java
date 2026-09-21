@@ -154,6 +154,8 @@ import org.apache.spark.sql.AnalysisException;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.RowFactory;
+import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.api.java.UDF4;
 import org.apache.spark.sql.functions;
@@ -507,44 +509,73 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
    */
   @Test
   public void testComplexKeyGenSingleFieldUpgradeKeepsBareKeys() throws Exception {
-    String tablePath = basePath + "/complex_keygen_single_field_upgrade";
-    // 1. legacy table at version 8, written the 0.14.1 way (bare record keys)
-    HoodieDeltaStreamer.Config legacyCfg = TestHelpers.makeConfig(tablePath, WriteOperationType.INSERT, TestDataSource.class.getName(),
-        Collections.singletonList(TripsWithDistanceTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, false, true, 1000, true,
-        OverwriteWithLatestAvroPayload.class.getName(), null, "timestamp", null, false, HoodieTableVersion.EIGHT);
-    legacyCfg.configs.add(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key() + "=" + ComplexKeyGenerator.class.getName());
-    // makeConfig's tableVersion argument only drives merge-config inference; the write itself still has to be
-    // pinned, or the "legacy" table is created at the current version and there is no upgrade left to test.
-    legacyCfg.configs.add(HoodieWriteConfig.WRITE_TABLE_VERSION.key() + "=" + HoodieTableVersion.EIGHT.versionCode());
-    legacyCfg.configs.add(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key() + "=" + ComplexKeyGenEncoding.VALUE_ONLY.name());
-    syncOnce(legacyCfg);
+    // 1. the checked-in 1.0.2 table (version 8): bare record keys, written before the encoding was recorded
+    String fixtureName = "hudi-v8-table-complex-keygen";
+    HoodieTestUtils.extractZipToDirectory("/upgrade-downgrade-fixtures/complex-keygen-tables/" + fixtureName + ".zip",
+        Paths.get(URI.create(basePath)), getClass());
+    String tablePath = basePath + "/" + fixtureName;
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(context, tablePath);
     assertEquals(HoodieTableVersion.EIGHT, metaClient.getTableConfig().getTableVersion());
-    // a table written before the encoding was recorded carries no property
-    HoodieTableConfig.delete(metaClient.getStorage(), metaClient.getMetaPath(),
-        Collections.singleton(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()));
-    metaClient = HoodieTestUtils.createMetaClient(context, tablePath);
     assertFalse(metaClient.getTableConfig().getComplexKeyGenEncoding().isPresent());
     String recordKeyPrefix = metaClient.getTableConfig().getRecordKeyFields().get()[0] + ":";
     assertComplexKeygenTableState(tablePath, recordKeyPrefix, true);
+    assertEquals(8, sqlContext.read().format("org.apache.hudi").load(tablePath).count());
 
-    // 2. the upgraded streamer with defaults: upserts, upgrades to the current version, persists the encoding
-    HoodieDeltaStreamer.Config upgradedCfg = TestHelpers.makeConfig(tablePath, WriteOperationType.UPSERT);
-    upgradedCfg.configs.add(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key() + "=" + ComplexKeyGenerator.class.getName());
+    // a parquet source in the fixture's schema: every fixture record updated, plus one new record
+    String sourceRoot = basePath + "/complex_keygen_fixture_source";
+    writeFixtureSourceBatch(sourceRoot, 10000L, "id1", "id2", "id3", "id4", "id5", "id6", "id7", "id8", "id9");
+    TypedProperties props = new TypedProperties();
+    props.setProperty("include", "base.properties");
+    props.setProperty("hoodie.embed.timeline.server", "false");
+    props.setProperty(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), ComplexKeyGenerator.class.getName());
+    props.setProperty("hoodie.datasource.write.recordkey.field", "id");
+    props.setProperty("hoodie.datasource.write.partitionpath.field", "partition,category");
+    props.setProperty("hoodie.streamer.source.dfs.root", sourceRoot);
+    String propsFile = "test-complex-keygen-fixture-source.properties";
+    UtilitiesTestBase.Helpers.savePropsToDFS(props, storage, basePath + "/" + propsFile);
+
+    // 2. the upgraded streamer with defaults: upserts, upgrades to the current version, records the encoding
+    HoodieDeltaStreamer.Config upgradedCfg = TestHelpers.makeConfig(tablePath, WriteOperationType.UPSERT, ParquetDFSSource.class.getName(),
+        null, propsFile, false, false, 100000, false, null, "MERGE_ON_READ", "ts", null);
+    upgradedCfg.targetTableName = fixtureName + "_table";
     syncOnce(upgradedCfg);
     metaClient = HoodieTestUtils.createMetaClient(context, tablePath);
     assertEquals(HoodieTableVersion.current(), metaClient.getTableConfig().getTableVersion());
     assertEquals(Option.of(ComplexKeyGenEncoding.VALUE_ONLY), metaClient.getTableConfig().getComplexKeyGenEncoding());
     assertComplexKeygenTableState(tablePath, recordKeyPrefix, true);
+    Dataset<Row> upgraded = sqlContext.read().format("org.apache.hudi").load(tablePath);
+    assertEquals(9, upgraded.count(), "Every fixture record must be updated in place, plus the new one");
+    assertEquals(9, upgraded.filter("ts = 10000").count(), "Every record must carry the new ordering value");
 
     // 3. the row writer path builds its key generator from a separate config: it must see the encoding as well
-    HoodieDeltaStreamer.Config rowWriterCfg = TestHelpers.makeConfig(tablePath, WriteOperationType.BULK_INSERT);
-    rowWriterCfg.configs.add(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key() + "=" + ComplexKeyGenerator.class.getName());
+    writeFixtureSourceBatch(sourceRoot, 20000L, "id10");
+    HoodieDeltaStreamer.Config rowWriterCfg = TestHelpers.makeConfig(tablePath, WriteOperationType.BULK_INSERT, ParquetDFSSource.class.getName(),
+        null, propsFile, false, false, 100000, false, null, "MERGE_ON_READ", "ts", null);
+    rowWriterCfg.targetTableName = fixtureName + "_table";
     rowWriterCfg.configs.add(DataSourceWriteOptions.ENABLE_ROW_WRITER().key() + "=true");
     syncOnce(rowWriterCfg);
-    // Bulk insert neither looks up the index nor combines, so a key the table already holds legitimately lands
-    // as another row; only the encoding it wrote is of interest here.
+    // Bulk insert neither looks up the index nor combines; only the encoding it wrote is of interest here.
     assertComplexKeygenTableState(tablePath, recordKeyPrefix, false);
+    assertEquals(10, sqlContext.read().format("org.apache.hudi").load(tablePath).count());
+  }
+
+  /** Writes one parquet file of rows in the complex keygen fixture schema (id, name, ts, partition, category). */
+  private void writeFixtureSourceBatch(String sourceRoot, long ts, String... ids) {
+    List<StructField> fields = Arrays.asList(
+        DataTypes.createStructField("id", DataTypes.StringType, false),
+        DataTypes.createStructField("name", DataTypes.StringType, false),
+        DataTypes.createStructField("ts", DataTypes.LongType, false),
+        DataTypes.createStructField("partition", DataTypes.StringType, false),
+        DataTypes.createStructField("category", DataTypes.StringType, false));
+    List<Row> rows = new ArrayList<>();
+    for (String id : ids) {
+      int n = Integer.parseInt(id.substring(2));
+      // the partitions the fixture script placed its records in; new ids land in a partition of their own
+      String partition = n <= 8 ? "2023-01-0" + ((n + 1) / 2) : "2023-01-05";
+      String category = (n == 1 || n == 3 || n == 5 || n == 6 || n > 8) ? "a" : "b";
+      rows.add(RowFactory.create(id, id + "_" + ts, ts, partition, category));
+    }
+    sqlContext.createDataFrame(rows, DataTypes.createStructType(fields)).write().mode(SaveMode.Append).parquet(sourceRoot);
   }
 
   /** Every stored record key is bare (no `<field>:` prefix); for operations that key off the index, also unique. */

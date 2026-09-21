@@ -415,7 +415,7 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("This property when set, will define how two versions of the record will be merged together when records are partially formed");
 
   public static final ConfigProperty<String> COMPLEX_KEYGEN_ENCODING = ConfigProperty
-      .key("hoodie.table.complex.keygen.encoding")
+      .key("hoodie.table.complex.keygenerator.encoding")
       .noDefaultValue()
       .sinceVersion("1.3.0")
       .withDocumentation("Encoding of the _hoodie_record_key meta field for a ComplexKeyGenerator configured with a "

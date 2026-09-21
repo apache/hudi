@@ -121,7 +121,7 @@ public class TestRowDataKeyGens {
 
   /**
    * With the complex key generator, a single record key follows the table's persisted encoding ({@code
-   * hoodie.table.complex.keygen.encoding}, copied into the job configuration from hoodie.properties), whether
+   * hoodie.table.complex.keygenerator.encoding}, copied into the job configuration from hoodie.properties), whether
    * the partition path has one field or several. Spark applies the same rule.
    */
   @ParameterizedTest

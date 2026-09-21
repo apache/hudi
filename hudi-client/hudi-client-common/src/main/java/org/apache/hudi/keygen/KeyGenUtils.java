@@ -20,6 +20,7 @@ package org.apache.hudi.keygen;
 
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
@@ -449,6 +450,19 @@ public class KeyGenUtils {
     return tableConfig.isComplexKeyGenWithSingleRecordKeyField();
   }
 
+  /**
+   * Guidance for a write that keys records on a tracked table whose encoding has not been recorded yet.
+   */
+  public static String getComplexKeygenEncodingMissingMessage() {
+    return "This table uses the complex key generator with a single record key field, but "
+        + HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key() + " is not recorded in hoodie.properties, so the "
+        + "writer cannot tell whether the stored _hoodie_record_key values carry the `<field>:` prefix (HUDI-7001). "
+        + "The Spark datasource, Spark SQL, Hudi Streamer and the Java write client record it from the table's data "
+        + "when ingestion is set up, and so does any table upgrade or downgrade: run one of those first, or set the "
+        + "property to FIELD_PREFIXED or VALUE_ONLY to match the stored keys. See "
+        + "https://hudi.apache.org/docs/deployment#complex-key-generator.";
+  }
+
   public static String getComplexKeygenErrorMessage(String operation) {
     return "This table uses the complex key generator with a single record "
         + "key field. If the table is written with Hudi 0.14.1, 0.15.0, 1.0.0, 1.0.1, or 1.0.2 "
@@ -486,6 +500,66 @@ public class KeyGenUtils {
    */
   public static boolean isComplexKeyGenEncodingTracked(HoodieTableConfig tableConfig) {
     return tableConfig.isComplexKeyGenWithSingleRecordKeyField() && tableConfig.isRecordKeyPopulated();
+  }
+
+  /**
+   * Cheap pre-check on the write config alone, before any table config is loaded: whether the write may target a
+   * table whose encoding is tracked and not yet recorded. A write config that already carries the recorded
+   * encoding (Spark merges the table config into the write options), names a non-complex built-in key generator,
+   * keys on several fields or does not populate the meta fields cannot need the recording, so callers skip
+   * loading the table config for it. A custom key generator class (such as the wrapper Spark SQL configures) is
+   * decided by the table's own key generator settings when they are present, and cannot be ruled out otherwise.
+   */
+  public static boolean mayNeedComplexKeyGenEncodingRecorded(HoodieConfig writeConfig) {
+    if (writeConfig.contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING)
+        || !writeConfig.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)) {
+      return false;
+    }
+    // the write option names the key generator the write instantiates; the type option carries a default, so
+    // the class, when given, is what counts
+    KeyGeneratorType keyGeneratorType = null;
+    if (writeConfig.contains(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME)) {
+      keyGeneratorType = KeyGeneratorType.fromClassName(writeConfig.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME));
+    } else if (writeConfig.contains(HoodieWriteConfig.KEYGENERATOR_TYPE)) {
+      try {
+        keyGeneratorType = KeyGeneratorType.valueOf(writeConfig.getString(HoodieWriteConfig.KEYGENERATOR_TYPE).toUpperCase());
+      } catch (IllegalArgumentException e) {
+        return true;
+      }
+    }
+    if (keyGeneratorType == null || !isBuiltInKeyGenerator(keyGeneratorType)) {
+      // a wrapper (Spark SQL) or a custom class hides the table's key generator: the table's own settings, merged
+      // into the write options for existing tables, decide; without them the check cannot rule the table out
+      String tableKeyGeneratorType = writeConfig.getProps().getProperty(HoodieTableConfig.KEY_GENERATOR_TYPE.key());
+      String tableKeyGeneratorClass = writeConfig.getProps().getProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key());
+      if (tableKeyGeneratorType != null) {
+        keyGeneratorType = KeyGeneratorType.valueOf(tableKeyGeneratorType);
+      } else if (tableKeyGeneratorClass != null) {
+        keyGeneratorType = KeyGeneratorType.fromClassName(tableKeyGeneratorClass);
+      } else {
+        return keyGeneratorType != null;
+      }
+    }
+    if (keyGeneratorType != KeyGeneratorType.COMPLEX && keyGeneratorType != KeyGeneratorType.COMPLEX_AVRO) {
+      return false;
+    }
+    String recordKeyFields = writeConfig.contains(KeyGeneratorOptions.RECORDKEY_FIELD_NAME)
+        ? writeConfig.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME)
+        : writeConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS);
+    return recordKeyFields != null && getRecordKeyFields(recordKeyFields).size() == 1;
+  }
+
+  /** Whether the type names the key generator that keys the records itself, rather than wrapping or hiding one. */
+  private static boolean isBuiltInKeyGenerator(KeyGeneratorType keyGeneratorType) {
+    switch (keyGeneratorType) {
+      case USER_PROVIDED:
+      case SPARK_SQL:
+      case SPARK_SQL_UUID:
+      case SPARK_SQL_MERGE_INTO:
+        return false;
+      default:
+        return true;
+    }
   }
 
   /**

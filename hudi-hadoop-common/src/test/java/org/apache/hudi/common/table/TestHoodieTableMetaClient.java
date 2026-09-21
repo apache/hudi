@@ -31,6 +31,8 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.util.FileIOUtils;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieInstantWriter;
@@ -381,6 +383,50 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     String randomDefinitionPath = "/a/b/c";
     metaClient.getTableConfig().setValue(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH.key(), "/a/b/c");
     assertEquals(randomDefinitionPath, metaClient.getIndexDefinitionPath());
+  }
+
+  /**
+   * A single-field complex keygen table records {@code FIELD_PREFIXED} on creation. {@code VALUE_ONLY} describes
+   * keys that only releases up to 1.0.2 wrote, so it can be declared for a table created at version 8 or below
+   * (test fixtures, migrations) and is rejected from version 9 on.
+   */
+  @Test
+  void testComplexKeyGenEncodingOnTableCreation() throws IOException {
+    int tableId = 0;
+    for (HoodieTableVersion version : Arrays.asList(HoodieTableVersion.SIX, HoodieTableVersion.EIGHT,
+        HoodieTableVersion.NINE, HoodieTableVersion.current())) {
+      HoodieTableMetaClient created = complexKeyGenTableBuilder(version, null)
+          .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath() + Path.SEPARATOR + "ckg" + tableId++);
+      assertEquals(Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED), created.getTableConfig().getComplexKeyGenEncoding());
+
+      HoodieTableMetaClient.TableBuilder valueOnly = complexKeyGenTableBuilder(version, ComplexKeyGenEncoding.VALUE_ONLY);
+      String valueOnlyPath = tempDir.toAbsolutePath() + Path.SEPARATOR + "ckg" + tableId++;
+      if (version.lesserThan(HoodieTableVersion.NINE)) {
+        assertEquals(Option.of(ComplexKeyGenEncoding.VALUE_ONLY),
+            valueOnly.initTable(this.metaClient.getStorageConf(), valueOnlyPath).getTableConfig().getComplexKeyGenEncoding());
+      } else {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+            () -> valueOnly.initTable(this.metaClient.getStorageConf(), valueOnlyPath));
+        assertTrue(e.getMessage().contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()), e.getMessage());
+      }
+    }
+
+    // without a stored record key there is no encoding to record, whatever the version
+    HoodieTableMetaClient virtualKeys = complexKeyGenTableBuilder(HoodieTableVersion.current(), null)
+        .setPopulateMetaFields(false)
+        .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath() + Path.SEPARATOR + "ckg" + tableId);
+    assertFalse(virtualKeys.getTableConfig().getComplexKeyGenEncoding().isPresent());
+  }
+
+  private static HoodieTableMetaClient.TableBuilder complexKeyGenTableBuilder(HoodieTableVersion version, ComplexKeyGenEncoding encoding) {
+    return HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+        .setTableName("table")
+        .setTableVersion(version)
+        .setRecordKeyFields("id")
+        .setPartitionFields("dt")
+        .setKeyGeneratorType(KeyGeneratorType.COMPLEX.name())
+        .setComplexKeyGenEncoding(encoding);
   }
 
   @Test

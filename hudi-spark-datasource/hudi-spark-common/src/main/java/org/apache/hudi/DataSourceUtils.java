@@ -188,11 +188,15 @@ public class DataSourceUtils {
                                                        String tblName, Map<String, String> parameters) {
     HoodieSparkEngineContext context = new HoodieSparkEngineContext(jssc);
     HoodieWriteConfig writeConfig = createHoodieConfig(schemaStr, basePath, tblName, parameters);
-    HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, context.getStorageConf());
-    if (TablePathUtils.isHoodieTablePath(storage, new StoragePath(basePath))) {
-      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-          .setConf(context.getStorageConf()).setBasePath(basePath).build();
-      KeyGenUtils.recordComplexKeygenEncodingIfMissing(metaClient, writeConfig);
+    // The write options carry the table config of an existing table, so only a single-field complex keygen table
+    // whose encoding is not known yet pays for loading the table config here; every other write skips it.
+    if (KeyGenUtils.mayNeedComplexKeyGenEncodingRecorded(writeConfig)) {
+      HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, context.getStorageConf());
+      if (TablePathUtils.isHoodieTablePath(storage, new StoragePath(basePath))) {
+        HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+            .setConf(context.getStorageConf()).setBasePath(basePath).build();
+        KeyGenUtils.recordComplexKeygenEncodingIfMissing(metaClient, writeConfig);
+      }
     }
     return new SparkRDDWriteClient<>(context, writeConfig);
   }

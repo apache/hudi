@@ -50,7 +50,7 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Flink writes to a single-field ComplexKeyGenerator table that predates {@code hoodie.table.complex.keygen.encoding}:
+ * Flink writes to a single-field ComplexKeyGenerator table that predates {@code hoodie.table.complex.keygenerator.encoding}:
  * the job supplies the matching encoding before keying its records, and the write records it.
  */
 public class TestComplexKeyGenEncodingWrite {
