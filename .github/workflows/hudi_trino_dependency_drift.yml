@@ -83,7 +83,6 @@ jobs:
         with:
           java-version: '25'
           distribution: 'temurin'
-          cache: maven
       - name: Purge Trino artifacts from the local m2
         # Artifacts an older pin left behind carry the same SNAPSHOT coordinates as the current ones.
         run: rm -rf ~/.m2/repository/io/trino
