@@ -65,6 +65,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
@@ -140,7 +141,7 @@ public class HoodieFlinkWriteClient<T>
   }
 
   /**
-   * Restart the heartbeat for a recommitted instant.
+   * Restart the heartbeats for a recommitted instant and wait for their first successful writes.
    *
    * @param instantTime The instant time
    */
@@ -150,6 +151,17 @@ public class HoodieFlinkWriteClient<T>
     }
     if (isStreamingWriteMetadataTable) {
       this.streamingMetadataWriteHandler.startHeartbeat(instantTime, getHoodieTable());
+    }
+    // Recommit has no data-writing phase in which a timed-out first heartbeat can recover.
+    // Start both heartbeats before waiting and share the configured heartbeat expiry window.
+    long timeoutMs = getConfig().getHoodieClientHeartbeatIntervalInMs() * getConfig().getHoodieClientHeartbeatTolerableMisses();
+    long waitStarted = System.nanoTime();
+    if (getConfig().getFailedWritesCleanPolicy().isLazy()) {
+      getHeartbeatClient().awaitHeartbeat(instantTime, timeoutMs);
+    }
+    if (isStreamingWriteMetadataTable) {
+      long remainingMs = Math.max(0, timeoutMs - TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - waitStarted));
+      this.streamingMetadataWriteHandler.awaitHeartbeat(instantTime, remainingMs);
     }
   }
 

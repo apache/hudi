@@ -33,6 +33,10 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
 
@@ -43,7 +47,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.Collections;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -51,6 +57,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class TestFlinkWriteClient extends HoodieFlinkClientTestHarness {
 
@@ -128,6 +137,74 @@ public class TestFlinkWriteClient extends HoodieFlinkClientTestHarness {
     assertThrows(HoodieException.class, () -> writeClient.postCommit(failedPostCommitInstantTime));
     assertFalse(HoodieHeartbeatClient.heartbeatExists(
         metaClient.getStorage(), metaClient.getBasePath().toString(), failedPostCommitInstantTime));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testRestartHeartbeatWaitsForTimedOutInitialWrite(boolean metadataHeartbeat) throws IOException {
+    String instantTime = "20260709120000000";
+    String heartbeatBasePath = metadataHeartbeat ? basePath + "/" + HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH : basePath;
+    CountDownLatch releaseFirstWrite = new CountDownLatch(1);
+    AtomicBoolean firstWrite = new AtomicBoolean(true);
+    HoodieHadoopStorage slowStorage = new HoodieHadoopStorage(fs) {
+      @Override
+      public OutputStream create(StoragePath path, boolean overwrite) throws IOException {
+        if (firstWrite.getAndSet(false)) {
+          try {
+            releaseFirstWrite.await();
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted first heartbeat write", e);
+          }
+        }
+        return super.create(path, overwrite);
+      }
+    };
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withEngineType(EngineType.FLINK)
+        .withHeartbeatIntervalInMs(1000)
+        .withHeartbeatTolerableMisses(10)
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(metadataHeartbeat ? HoodieFailedWritesCleaningPolicy.EAGER : HoodieFailedWritesCleaningPolicy.LAZY)
+            .build())
+        .build();
+    try (HoodieHeartbeatClient delayedHeartbeatClient = new HoodieHeartbeatClient(slowStorage, heartbeatBasePath, 1000L, 10)) {
+      HoodieFlinkTable table = mock(HoodieFlinkTable.class);
+      if (metadataHeartbeat) {
+        HoodieWriteConfig metadataConfig = HoodieWriteConfig.newBuilder()
+            .withPath(heartbeatBasePath)
+            .withCleanConfig(HoodieCleanConfig.newBuilder()
+                .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build())
+            .build();
+        HoodieFlinkWriteClient metadataClient = mock(HoodieFlinkWriteClient.class);
+        when(metadataClient.getConfig()).thenReturn(metadataConfig);
+        when(metadataClient.getHeartbeatClient()).thenReturn(delayedHeartbeatClient);
+        FlinkHoodieBackedTableMetadataWriter metadataWriter = mock(FlinkHoodieBackedTableMetadataWriter.class);
+        doReturn(metadataClient).when(metadataWriter).getWriteClient();
+        when(table.getMetaClient()).thenReturn(metaClient);
+        when(table.getMetadataWriter(instantTime, true, true)).thenReturn(Option.of(metadataWriter));
+      }
+      writeClient = new HoodieFlinkWriteClient(context, writeConfig, metadataHeartbeat) {
+        @Override
+        public HoodieHeartbeatClient getHeartbeatClient() {
+          return metadataHeartbeat ? super.getHeartbeatClient() : delayedHeartbeatClient;
+        }
+
+        @Override
+        public HoodieFlinkTable getHoodieTable() {
+          return table;
+        }
+      };
+
+      writeClient.restartHeartbeat(instantTime);
+      assertFalse(firstWrite.get(), "The injected slow storage must be used by the restarted heartbeat");
+      assertTrue(HoodieHeartbeatClient.heartbeatExists(slowStorage, heartbeatBasePath, instantTime),
+          "Recommit must wait for a successful heartbeat after the first write times out");
+      assertFalse(delayedHeartbeatClient.isHeartbeatExpired(instantTime));
+    } finally {
+      releaseFirstWrite.countDown();
+    }
   }
 
   @Test

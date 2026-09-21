@@ -19,6 +19,7 @@
 package org.apache.hudi.client.heartbeat;
 
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.exception.HoodieHeartbeatException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
@@ -31,6 +32,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -39,6 +41,7 @@ import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieHeartbeatClient extends HoodieCommonTestHarness {
@@ -129,7 +132,7 @@ public class TestHoodieHeartbeatClient extends HoodieCommonTestHarness {
    * expiry path (which intentionally stops refresh on a genuine lapse).
    */
   @Test
-  public void testSlowHeartbeatWriteDoesNotBlockScheduler() {
+  public void testSlowHeartbeatWriteDoesNotBlockScheduler() throws IOException {
     CountDownLatch releaseFirstWrite = new CountDownLatch(1);
     SlowCreateStorage slowStorage =
         new SlowCreateStorage((FileSystem) metaClient.getStorage().getFileSystem(), releaseFirstWrite);
@@ -141,11 +144,61 @@ public class TestHoodieHeartbeatClient extends HoodieCommonTestHarness {
     try {
       hoodieHeartbeatClient.start(instantTime1);
       // Despite the first write hanging, the scheduler must keep generating heartbeats on fresh threads.
+      hoodieHeartbeatClient.awaitHeartbeat(instantTime1, 10000);
+      assertTrue(HoodieHeartbeatClient.heartbeatExists(slowStorage, basePath, instantTime1));
       await().atMost(15, SECONDS)
           .until(() -> hoodieHeartbeatClient.getHeartbeat(instantTime1).getNumHeartbeats() >= 2);
     } finally {
       releaseFirstWrite.countDown();
       hoodieHeartbeatClient.close();
+    }
+  }
+
+  @Test
+  public void testAwaitHeartbeatTimeoutAndInterruptionDoNotStopRetries() throws IOException {
+    CountDownLatch releaseWrites = new CountDownLatch(1);
+    BlockingCreateStorage storage = new BlockingCreateStorage((FileSystem) metaClient.getStorage().getFileSystem(), releaseWrites);
+    try (HoodieHeartbeatClient client = new HoodieHeartbeatClient(storage, basePath, heartBeatInterval, 10)) {
+      // An existing file is not proof that this client's first write has succeeded.
+      try (OutputStream ignored = metaClient.getStorage().create(new StoragePath(client.getHeartbeatFolderPath(), instantTime1), true)) {
+        // Leave a heartbeat from a previous writer on storage.
+      }
+      client.start(instantTime1);
+      assertNull(client.getHeartbeat(instantTime1).getLastHeartbeatTime());
+      HoodieHeartbeatException timeout = assertThrows(HoodieHeartbeatException.class,
+          () -> client.awaitHeartbeat(instantTime1, 20));
+      assertTrue(timeout.getCause() instanceof TimeoutException);
+
+      Thread.currentThread().interrupt();
+      try {
+        HoodieHeartbeatException interrupted = assertThrows(HoodieHeartbeatException.class,
+            () -> client.awaitHeartbeat(instantTime1, 10000));
+        assertTrue(interrupted.getCause() instanceof InterruptedException);
+        assertTrue(Thread.currentThread().isInterrupted());
+      } finally {
+        Thread.interrupted();
+      }
+
+      releaseWrites.countDown();
+      client.awaitHeartbeat(instantTime1, 10000);
+      assertTrue(HoodieHeartbeatClient.heartbeatExists(storage, basePath, instantTime1));
+      assertFalse(client.isHeartbeatExpired(instantTime1));
+      client.awaitHeartbeat(instantTime1, 0);
+    } finally {
+      releaseWrites.countDown();
+    }
+  }
+
+  @Test
+  public void testAwaitHeartbeatDoesNotReplaceExpiryCheck() throws IOException {
+    try (HoodieHeartbeatClient client = new HoodieHeartbeatClient(metaClient.getStorage(), basePath, heartBeatInterval, 10)) {
+      assertThrows(IllegalArgumentException.class, () -> client.awaitHeartbeat(instantTime1, 0));
+      client.start(instantTime1);
+      client.awaitHeartbeat(instantTime1, 0);
+      client.stopHeartbeatTimers();
+      client.getHeartbeat(instantTime1).setLastHeartbeatTime(0L);
+      client.awaitHeartbeat(instantTime1, 0);
+      assertTrue(client.isHeartbeatExpired(instantTime1), "A past successful write does not bypass commit-time expiry checks");
     }
   }
 
@@ -188,6 +241,27 @@ public class TestHoodieHeartbeatClient extends HoodieCommonTestHarness {
           Thread.currentThread().interrupt();
           throw new IOException("Interrupted while simulating a hung heartbeat write", e);
         }
+      }
+      return super.create(path, overwrite);
+    }
+  }
+
+  private static class BlockingCreateStorage extends HoodieHadoopStorage {
+
+    private final CountDownLatch releaseWrites;
+
+    BlockingCreateStorage(FileSystem fs, CountDownLatch releaseWrites) {
+      super(fs);
+      this.releaseWrites = releaseWrites;
+    }
+
+    @Override
+    public OutputStream create(StoragePath path, boolean overwrite) throws IOException {
+      try {
+        releaseWrites.await();
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new IOException("Interrupted heartbeat write", e);
       }
       return super.create(path, overwrite);
     }
