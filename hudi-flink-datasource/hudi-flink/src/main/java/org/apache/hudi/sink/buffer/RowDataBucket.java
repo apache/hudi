@@ -61,7 +61,7 @@ public class RowDataBucket {
   public boolean writeRow(RowData rowData) throws IOException {
     ValidationUtils.checkState(
         !diverged,
-        "RowData bucket " + bucketId + " diverged after a failed write and cannot be reused");
+        () -> "RowData bucket " + bucketId + " diverged after a failed write and cannot be reused");
     boolean success = dataBuffer.write(rowData);
     if (success) {
       detector.detect(rowData);

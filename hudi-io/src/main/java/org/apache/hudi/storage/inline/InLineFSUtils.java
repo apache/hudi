@@ -75,7 +75,7 @@ public class InLineFSUtils {
     final String outerFileScheme = inlineFSPath.getParent().getName();
     final StoragePath basePath = inlineFSPath.getParent().getParent();
     checkArgument(basePath.toString().contains(SCHEME_SEPARATOR),
-        "Invalid InLineFS path: " + inlineFSPath);
+        () -> "Invalid InLineFS path: " + inlineFSPath);
 
     final String pathExceptScheme = basePath.toString().substring(basePath.toString().indexOf(SCHEME_SEPARATOR) + 1);
     final String fullPath = outerFileScheme + SCHEME_SEPARATOR

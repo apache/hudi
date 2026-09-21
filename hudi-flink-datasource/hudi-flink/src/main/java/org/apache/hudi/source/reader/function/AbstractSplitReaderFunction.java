@@ -112,7 +112,7 @@ public abstract class AbstractSplitReaderFunction implements SplitReaderFunction
   @Override
   public BatchRecords<RowData> readBatch(HoodieSourceSplit split, int batchSize, BooleanSupplier wakeupSignal) {
     ValidationUtils.checkState(currentIterator != null,
-        "readBatch called before open for split " + split.splitId());
+        () -> "readBatch called before open for split " + split.splitId());
     RowDataSerializer serializer = getCopySerializer();
     List<RowData> buffer = new ArrayList<>();
     try {
