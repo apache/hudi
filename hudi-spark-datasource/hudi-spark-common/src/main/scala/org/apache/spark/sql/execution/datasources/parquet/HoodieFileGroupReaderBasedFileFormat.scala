@@ -218,7 +218,11 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       } else {
         throw new HoodieNotSupportedException("Unsupported file format: " + hoodieFileFormat)
       }
-      supportVectorizedRead = !isIncremental && !isBootstrap && supportBatch
+      // MOR incremental embeds file slices that may contain log files requiring row-level
+      // merging, so vectorized reading must be disabled. All other combinations (COW snapshot,
+      // COW incremental, MOR snapshot) either have no log merging or handle it via a separate
+      // non-vectorized fileGroupBaseFileReader while the base file reader stays vectorized.
+      supportVectorizedRead = !(isMOR && isIncremental) && !isBootstrap && supportBatch
       supportReturningBatch = !isMOR && supportVectorizedRead
       logDebug(s"supportReturningBatch: $supportReturningBatch, supportVectorizedRead: $supportVectorizedRead, isIncremental: $isIncremental, " +
         s"isBootstrap: $isBootstrap, superSupportBatch: $supportBatch")
@@ -273,7 +277,9 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     // For overly large single files, we can use multiple concurrent tasks to read them, thereby reducing the overall job reading time consumption
     val superSplitable = super.isSplitable(sparkSession, options, path)
     val isLance = hoodieFileFormat == HoodieFileFormat.LANCE
-    val splitable = !isMOR && !isIncremental && !isBootstrap && !isLance && superSplitable
+    // COW incremental reads have no log files to merge, so file splitting is safe.
+    // Only MOR and bootstrap reads need to disable splitting.
+    val splitable = !isMOR && !isBootstrap && !isLance && superSplitable
     logDebug(s"isSplitable: $splitable, super.isSplitable: $superSplitable, isMOR: $isMOR, isIncremental: $isIncremental, isBootstrap: $isBootstrap")
     splitable
   }
@@ -347,6 +353,21 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     }
 
     val broadcastedStorageConf = spark.sparkContext.broadcast(new SerializableConfiguration(augmentedStorageConf.unwrap()))
+
+    // Build stock Spark ParquetFileFormat reader for COW base-file-only bypass.
+    // When a file slice has only a base file (no log files), this avoids the overhead of
+    // HoodieFileGroupReader (schema handler, record merger, row copy/seal) by using Spark's
+    // native parquet reader directly.
+    val stockParquetReader: Option[PartitionedFile => Iterator[InternalRow]] = if (!isMOR && !isBootstrap) {
+      val stockFormat = new ParquetFileFormat()
+      val allFilters = filters ++ requiredFilters
+      Some(stockFormat.buildReaderWithPartitionValues(spark, dataStructType, partitionSchema,
+        requiredSchema, allFilters, options, augmentedStorageConf.unwrap()))
+    } else {
+      None
+    }
+    val broadcastStockReader = stockParquetReader.map(r => spark.sparkContext.broadcast(r))
+
     val fileIndexProps: TypedProperties = HoodieFileIndex.getConfigProperties(spark, options, null)
 
     val engineContext = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
@@ -366,6 +387,12 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
             .getSparkPartitionedFileUtils.getPathFromPartitionedFile(file))
           fileSliceMapping.getSlice(fileGroupName) match {
             case Some(fileSlice) if !isCount && (requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
+              if (!fileSlice.getLogFiles.findAny().isPresent && !isBootstrap && broadcastStockReader.isDefined) {
+                // COW base-file-only read: use stock Spark ParquetFileFormat reader directly.
+                // This bypasses HoodieFileGroupReader overhead (schema handler, record merger,
+                // row copy/seal) when there are no log files to merge.
+                broadcastStockReader.get.value(file)
+              } else {
               val readerContext = new SparkFileFormatInternalRowReaderContext(
                 fileGroupBaseFileReader.value, filters, requiredFilters, storageConf, metaClient.getTableConfig,
                 sparkRequiredSchema = Some(requiredSchema))
@@ -421,6 +448,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                 outputSchema,
                 fileSliceMapping.getPartitionValues,
                 fixedPartitionIndexes)
+              }
 
             case _ =>
               readBaseFile(file, baseFileReader.value, requestedStructType, remainingPartitionSchema, fixedPartitionIndexes,
