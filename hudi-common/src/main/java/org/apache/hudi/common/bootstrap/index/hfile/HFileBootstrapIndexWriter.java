@@ -26,6 +26,7 @@ import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.model.BootstrapFileMapping;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -195,10 +196,10 @@ public class HFileBootstrapIndexWriter extends BootstrapIndex.IndexWriter {
       this.indexByPartitionWriter = createHFileWriter(indexByPartitionPath, context);
       this.indexByFileIdWriter = createHFileWriter(indexByFileIdPath, context);
     } catch (IOException ioe) {
-      closeAfterFailedBegin(ioe);
+      CloseableUtils.closeSuppressing(this::close, ioe);
       throw new HoodieIOException(ioe.getMessage(), ioe);
     } catch (RuntimeException re) {
-      closeAfterFailedBegin(re);
+      CloseableUtils.closeSuppressing(this::close, re);
       throw re;
     }
   }
@@ -229,14 +230,6 @@ public class HFileBootstrapIndexWriter extends BootstrapIndex.IndexWriter {
       failure.addSuppressed(e);
     }
     return failure;
-  }
-
-  private void closeAfterFailedBegin(Throwable failure) {
-    try {
-      close();
-    } catch (Throwable closeException) {
-      failure.addSuppressed(closeException);
-    }
   }
 
   @Override

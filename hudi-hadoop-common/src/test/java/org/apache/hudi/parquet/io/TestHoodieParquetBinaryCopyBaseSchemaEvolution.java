@@ -49,6 +49,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -340,6 +341,20 @@ public class TestHoodieParquetBinaryCopyBaseSchemaEvolution {
     assertDoesNotThrow(copyBase::close);
   }
 
+  @Test
+  public void testClosePreservesFailureWhenWriterCloseFails() throws Exception {
+    ParquetFileWriter parquetFileWriter = mock(ParquetFileWriter.class, withSettings().extraInterfaces(Closeable.class));
+    IOException failure = new IOException("end failed");
+    IOException closeFailure = new IOException("close failed");
+    doThrow(failure).when(parquetFileWriter).end(any(Map.class));
+    doThrow(closeFailure).when((Closeable) parquetFileWriter).close();
+    copyBase.setWriterForTesting(parquetFileWriter);
+
+    assertEquals(failure, assertThrows(IOException.class, copyBase::close));
+    assertArrayEquals(new Throwable[] {closeFailure}, failure.getSuppressed());
+    assertNull(copyBase.getWriterForTesting());
+  }
+
   /**
    * Testable subclass that exposes internal methods and provides test setup.
    */
@@ -400,9 +415,9 @@ public class TestHoodieParquetBinaryCopyBaseSchemaEvolution {
 
     public void closeParquetFileWriterQuietlyForTesting(ParquetFileWriter parquetFileWriter) throws Exception {
       setWriterForTesting(parquetFileWriter);
-      Method closeMethod = HoodieParquetBinaryCopyBase.class.getDeclaredMethod("closeParquetFileWriterQuietly");
+      Method closeMethod = HoodieParquetBinaryCopyBase.class.getDeclaredMethod("closeParquetFileWriterQuietly", Throwable.class);
       closeMethod.setAccessible(true);
-      closeMethod.invoke(this);
+      closeMethod.invoke(this, new IOException("write failed"));
       assertNull(getWriterForTesting());
     }
 

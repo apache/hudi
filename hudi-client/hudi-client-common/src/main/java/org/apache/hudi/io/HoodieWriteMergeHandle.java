@@ -34,6 +34,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
+import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
@@ -52,7 +53,6 @@ import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.HoodieMergeHelper;
-import org.apache.hudi.util.AutoCloseableUtils;
 
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -479,7 +479,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       if (keyToNewRecords instanceof Closeable) {
         ((Closeable) keyToNewRecords).close();
       }
-      closeFileWriter(null);
+      closeFileWriter();
 
       long fileSizeInBytes = storage.getPathInfo(newFilePath).getLength();
       HoodieWriteStat stat = writeStatus.getStat();
@@ -513,16 +513,18 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
     }
   }
 
-  private void closeFileWriter(Throwable failure) throws IOException {
+  private void closeFileWriter() throws IOException {
     try {
-      AutoCloseableUtils.closeWithSuppressed(fileWriter, failure);
+      if (fileWriter != null) {
+        fileWriter.close();
+      }
     } finally {
       fileWriter = null;
     }
   }
 
   private void closeFileWriterQuietly(Throwable failure) {
-    AutoCloseableUtils.closeQuietlyWithSuppressed(fileWriter, failure);
+    CloseableUtils.closeSuppressing(fileWriter, failure);
     fileWriter = null;
   }
 

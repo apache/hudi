@@ -20,6 +20,7 @@ package org.apache.hudi.parquet.io;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetaFieldsMode;
+import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieException;
 
@@ -65,7 +66,6 @@ import org.apache.parquet.schema.Type;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -157,14 +157,10 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
       ParquetFileWriter.Mode writerMode = ParquetFileWriter.Mode.CREATE;
       writer = new ParquetFileWriter(HadoopOutputFile.fromPath(outPutFile, conf), schema, writerMode, DEFAULT_BLOCK_SIZE, MAX_PADDING_SIZE_DEFAULT, DEFAULT_COLUMN_INDEX_TRUNCATE_LENGTH,
           DEFAULT_STATISTICS_TRUNCATE_LENGTH, ParquetProperties.DEFAULT_PAGE_WRITE_CHECKSUM_ENABLED);
-      try {
-        writer.start();
-      } catch (Exception e) {
-        closeParquetFileWriterQuietly();
-        throw e;
-      }
+      writer.start();
       log.info("init writer ");
     } catch (Exception e) {
+      closeParquetFileWriterQuietly(e);
       log.error("failed to init parquet writer", e);
       throw new HoodieException(e);
     }
@@ -182,7 +178,7 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
       extraMetaData.remove("org.apache.spark.sql.parquet.row.metadata");
       writer.end(extraMetaData);
     } catch (IOException | RuntimeException e) {
-      closeParquetFileWriterQuietly();
+      closeParquetFileWriterQuietly(e);
       throw e;
     } finally {
       writer = null;
@@ -193,24 +189,12 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
 
   protected abstract Map<String, String> finalizeMetadata();
 
-  private void closeParquetFileWriterQuietly() {
+  private void closeParquetFileWriterQuietly(Throwable failure) {
+    // Parquet 1.12.x/1.13.x have no close(); newer versions implement AutoCloseable.
     ParquetFileWriter parquetFileWriter = writer;
     writer = null;
-    if (parquetFileWriter == null) {
-      return;
-    }
-    Method closeMethod;
-    try {
-      // Parquet 1.12.x/1.13.x have no close(); newer versions (for example 1.15.2) expose it.
-      // Use reflection to keep this cleanup compatible with the older compile-time dependency.
-      closeMethod = parquetFileWriter.getClass().getMethod("close");
-    } catch (NoSuchMethodException e) {
-      return;
-    }
-    try {
-      closeMethod.invoke(parquetFileWriter);
-    } catch (ReflectiveOperationException | RuntimeException e) {
-      log.warn("Failed to close parquet file writer", e);
+    if (parquetFileWriter instanceof AutoCloseable) {
+      CloseableUtils.closeSuppressing((AutoCloseable) parquetFileWriter, failure);
     }
   }
 
@@ -529,8 +513,7 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
         new ColumnChunkPageWriteStore(compressor, newSchema, props.getAllocator(), props.getColumnIndexTruncateLength(), props.getPageWriteChecksumEnabled(), null, numBlocksRewritten);
     ColumnWriteStore cStore = props.newColumnWriteStore(newSchema, cPageStore);
     ColumnWriter cWriter = cStore.getColumnWriter(descriptor);
-    Throwable failure = null;
-    try {
+    try (Closeable columnWriter = cWriter::close; Closeable columnStore = cStore::close) {
       // For masked column, we assume it's present (DL = max) and not repeated (RL = 0)
       // This is valid for _hoodie_file_name which is a top-level field.
       int rlvl = 0;
@@ -543,11 +526,6 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
 
       cStore.flush();
       cPageStore.flushToFileWriter(writer);
-    } catch (IOException | RuntimeException e) {
-      failure = e;
-      throw e;
-    } finally {
-      closeColumnWriters(cStore, cWriter, failure);
     }
   }
 
@@ -565,8 +543,7 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
         new ColumnChunkPageWriteStore(compressor, newSchema, props.getAllocator(), props.getColumnIndexTruncateLength(), props.getPageWriteChecksumEnabled(), null, numBlocksRewritten);
     ColumnWriteStore cStore = props.newColumnWriteStore(newSchema, cPageStore);
     ColumnWriter cWriter = cStore.getColumnWriter(descriptor);
-    Throwable failure = null;
-    try {
+    try (Closeable columnWriter = cWriter::close; Closeable columnStore = cStore::close) {
       int dMax = descriptor.getMaxDefinitionLevel();
 
       for (int i = 0; i < totalChunkValues; i++) {
@@ -591,40 +568,6 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
 
       cStore.flush();
       cPageStore.flushToFileWriter(writer);
-    } catch (IOException | RuntimeException e) {
-      failure = e;
-      throw e;
-    } finally {
-      closeColumnWriters(cStore, cWriter, failure);
-    }
-  }
-
-  private void closeColumnWriters(ColumnWriteStore cStore, ColumnWriter cWriter, Throwable failure) {
-    RuntimeException closeException = null;
-    try {
-      if (cStore != null) {
-        cStore.close();
-      }
-    } catch (RuntimeException re) {
-      closeException = re;
-    }
-    try {
-      if (cWriter != null) {
-        cWriter.close();
-      }
-    } catch (RuntimeException re) {
-      if (closeException == null) {
-        closeException = re;
-      } else {
-        closeException.addSuppressed(re);
-      }
-    }
-    if (closeException != null) {
-      if (failure != null) {
-        failure.addSuppressed(closeException);
-      } else {
-        throw closeException;
-      }
     }
   }
 

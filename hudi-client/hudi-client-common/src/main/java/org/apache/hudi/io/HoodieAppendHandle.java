@@ -40,6 +40,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.view.TableFileSystemView;
+import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -50,7 +51,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.util.AutoCloseableUtils;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -226,16 +226,14 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
     } catch (RuntimeException e) {
       closeLogWriterQuietly(e);
       throw e;
-    } finally {
-      recordItr = null;
     }
   }
 
   private void closeLogWriterQuietly(Throwable failure) {
     markClosed();
-    AutoCloseableUtils.closeQuietlyWithSuppressed(this::closeLogWriter, failure);
+    CloseableUtils.closeSuppressing(this::closeLogWriter, failure);
     if (recordItr instanceof Closeable) {
-      AutoCloseableUtils.closeQuietlyWithSuppressed((Closeable) recordItr, failure);
+      CloseableUtils.closeSuppressing((Closeable) recordItr, failure);
     }
     recordItr = null;
   }

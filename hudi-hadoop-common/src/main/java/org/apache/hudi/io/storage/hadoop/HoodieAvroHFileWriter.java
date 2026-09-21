@@ -24,6 +24,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.HFileUtils;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
@@ -113,19 +114,8 @@ public class HoodieAvroHFileWriter
       writer.appendFileInfo(
           HoodieAvroHFileReaderImplBase.SCHEMA_KEY, getUTF8Bytes(schema.toString()));
     } catch (RuntimeException e) {
-      try {
-        if (writer != null) {
-          writer.close();
-        } else {
-          outputStream.close();
-        }
-      } catch (IOException | RuntimeException closeException) {
-        if (e != closeException) {
-          e.addSuppressed(closeException);
-        }
-      } finally {
-        writer = null;
-      }
+      CloseableUtils.closeSuppressing(writer != null ? writer : outputStream, e);
+      writer = null;
       throw e;
     }
   }

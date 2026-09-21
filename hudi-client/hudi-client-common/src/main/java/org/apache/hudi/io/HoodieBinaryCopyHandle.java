@@ -23,6 +23,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -32,7 +33,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.parquet.io.HoodieParquetFileBinaryCopier;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.util.AutoCloseableUtils;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
@@ -135,7 +135,7 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
 
   private void closeWriterQuietly(Throwable failure) {
     markClosed();
-    AutoCloseableUtils.closeQuietlyWithSuppressed(writer::close, failure);
+    CloseableUtils.closeSuppressing(writer::close, failure);
   }
 
   @Override

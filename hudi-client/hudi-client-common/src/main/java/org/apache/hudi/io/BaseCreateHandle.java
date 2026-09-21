@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -38,7 +39,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.util.AutoCloseableUtils;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -198,7 +198,7 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
 
   private void closeFileWriterQuietly(Throwable failure) {
     markClosed();
-    AutoCloseableUtils.closeQuietlyWithSuppressed(fileWriter, failure);
+    CloseableUtils.closeSuppressing(fileWriter, failure);
     fileWriter = null;
   }
 
