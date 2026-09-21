@@ -284,7 +284,7 @@ public final class HoodieSchemaCompatibility {
    * @return the writer field, if any does correspond, or None.
    */
   public static HoodieSchemaField lookupWriterField(final HoodieSchema writerSchema, final HoodieSchemaField readerField) {
-    ValidationUtils.checkArgument(writerSchema.getType() == HoodieSchemaType.RECORD, writerSchema + " is not a record");
+    ValidationUtils.checkArgument(writerSchema.getType() == HoodieSchemaType.RECORD, () -> writerSchema + " is not a record");
     Option<HoodieSchemaField> directOpt = writerSchema.getField(readerField.name());
     // Check aliases
     for (final String readerFieldAliasName : readerField.getAvroField().aliases()) {
