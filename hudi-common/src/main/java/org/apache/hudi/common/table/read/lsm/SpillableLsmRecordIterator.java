@@ -166,6 +166,13 @@ class SpillableLsmRecordIterator<T> implements ClosableIterator<BufferedRecord<T
       if (spillFailure != null) {
         spillFailure.addSuppressed(e);
       } else {
+        // Closing the source iterator failed, so construction cannot complete and the outer reader
+        // cannot call close() on this spill iterator. Delete its spill file here to avoid leaking it.
+        try {
+          deleteSpillFile();
+        } catch (RuntimeException cleanupFailure) {
+          e.addSuppressed(cleanupFailure);
+        }
         throw e;
       }
     }

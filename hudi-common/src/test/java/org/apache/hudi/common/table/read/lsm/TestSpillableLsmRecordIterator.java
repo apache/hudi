@@ -26,11 +26,15 @@ import org.apache.hudi.exception.HoodieIOException;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -39,6 +43,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.spy;
 
 class TestSpillableLsmRecordIterator {
 
@@ -106,12 +113,43 @@ class TestSpillableLsmRecordIterator {
     iterator.close();
   }
 
-  @Test
-  void testSuccessfulSpillPropagatesSourceCloseFailure() {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void testSuccessfulSpillCleansUpOnSourceCloseFailure(boolean empty) throws IOException {
     RuntimeException closeFailure = new RuntimeException("source close failed");
+    List<BufferedRecord<String>> records = empty ? Collections.emptyList()
+        : Collections.singletonList(new BufferedRecord<>("key", 1, null, null, null));
+    ClosableIterator<BufferedRecord<String>> sourceIterator = spy(ClosableIterator.wrap(records.iterator()));
+    doThrow(closeFailure).when(sourceIterator).close();
 
     assertSame(closeFailure, assertThrows(RuntimeException.class, () -> new SpillableLsmRecordIterator<>(
-        closeFailingIterator(closeFailure), new DefaultSerializer<>(), null, tempDir.toString())));
+        sourceIterator, new DefaultSerializer<>(), null, tempDir.toString())));
+    assertEquals(0, spillFileCount());
+  }
+
+  @Test
+  void testSourceCloseFailurePreservesSpillCleanupFailureAsSuppressed() {
+    RuntimeException closeFailure = new RuntimeException("source close failed");
+    ClosableIterator<BufferedRecord<String>> sourceIterator = spy(closeFailingIterator(closeFailure));
+    doAnswer(invocation -> {
+      Path spillFile;
+      try (Stream<Path> paths = Files.list(tempDir)) {
+        spillFile = paths.findFirst().get();
+      }
+      // A non-empty directory makes deletion fail reliably without relying on filesystem permissions.
+      Files.delete(spillFile);
+      Files.createDirectory(spillFile);
+      Files.createFile(spillFile.resolve("child"));
+      throw closeFailure;
+    }).when(sourceIterator).close();
+
+    RuntimeException exception = assertThrows(RuntimeException.class, () -> new SpillableLsmRecordIterator<>(
+        sourceIterator, new DefaultSerializer<>(), null, tempDir.toString()));
+
+    assertSame(closeFailure, exception);
+    assertEquals(1, exception.getSuppressed().length);
+    assertTrue(exception.getSuppressed()[0] instanceof HoodieIOException);
+    assertTrue(exception.getSuppressed()[0].getCause() instanceof DirectoryNotEmptyException);
   }
 
   private long spillFileCount() throws IOException {
