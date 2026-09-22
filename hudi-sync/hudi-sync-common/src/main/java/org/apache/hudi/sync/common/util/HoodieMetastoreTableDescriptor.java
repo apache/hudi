@@ -166,38 +166,26 @@ public final class HoodieMetastoreTableDescriptor {
     // files over the base files. Registering it with the Copy-on-Write input format instead does not
     // fail, it silently reads only the base files.
     boolean useRealtimeInputFormat = tableType == HoodieTableType.MERGE_ON_READ;
-    return forView(tableSchema, partitionFieldNames, tableType, basePath, external,
-        useRealtimeInputFormat, false, "", DEFAULT_SCHEMA_STRING_LENGTH_THRESHOLD, false,
-        Collections.emptyMap());
+    return forView(tableSchema, partitionFieldNames, tableType, basePath,
+        ViewOptions.builder()
+            .setExternal(external)
+            .setUseRealtimeInputFormat(useRealtimeInputFormat)
+            .build());
   }
 
   /**
    * The general form, retaining every knob hive-sync varies. Callers registering one table should
    * prefer {@link #forSnapshotView}.
    *
-   * @param useRealtimeInputFormat whether to use the real-time input format. Independent of
-   *     {@code tableType} only because hive-sync registers a Merge-on-Read table twice, once each
-   *     way; for Copy-on-Write it must be false, as there is no real-time view to read.
-   * @param readAsOptimized recorded as {@code hoodie.query.as.ro.table}. True only for the
-   *     read-optimized view of a Merge-on-Read table.
-   * @param sparkVersion written as {@code spark.sql.create.version}; empty omits the property, as
-   *     hive-sync does by default
-   * @param includeFieldDocs whether column comments are carried into the serialized Spark schema
-   * @param extraTableParameters additional table parameters, applied last so a caller can override
-   *     anything derived here
+   * @param options options for the metastore view; named builder methods keep the boolean settings
+   *     distinct at call sites
    */
   public static HoodieMetastoreTableDescriptor forView(
       HoodieSchema tableSchema,
       List<String> partitionFieldNames,
       HoodieTableType tableType,
       String basePath,
-      boolean external,
-      boolean useRealtimeInputFormat,
-      boolean readAsOptimized,
-      String sparkVersion,
-      int schemaStringLengthThreshold,
-      boolean includeFieldDocs,
-      Map<String, String> extraTableParameters) {
+      ViewOptions options) {
     if (tableSchema == null) {
       throw new IllegalArgumentException("tableSchema is required");
     }
@@ -207,7 +195,10 @@ public final class HoodieMetastoreTableDescriptor {
     if (tableType == null) {
       throw new IllegalArgumentException("tableType is required");
     }
-    if (useRealtimeInputFormat && tableType == HoodieTableType.COPY_ON_WRITE) {
+    if (options == null) {
+      throw new IllegalArgumentException("options are required");
+    }
+    if (options.useRealtimeInputFormat && tableType == HoodieTableType.COPY_ON_WRITE) {
       throw new IllegalArgumentException(
           "A Copy-on-Write table has no real-time view, so it cannot use the real-time input format");
     }
@@ -245,7 +236,7 @@ public final class HoodieMetastoreTableDescriptor {
     }
 
     Map<String, String> tableParameters = new LinkedHashMap<>();
-    if (external) {
+    if (options.external) {
       tableParameters.put(EXTERNAL_PARAMETER, EXTERNAL_PARAMETER_VALUE);
     }
     // Emitted unconditionally. hive-sync gates these on
@@ -253,24 +244,23 @@ public final class HoodieMetastoreTableDescriptor {
     // spark.sql.sources.provider is not recognised by Spark SQL as a Hudi datasource table at all,
     // so there is no reason for a newly created table to omit them.
     tableParameters.putAll(SparkDataSourceTableUtils.getSparkTableProperties(
-        partitionNames, sparkVersion, schemaStringLengthThreshold, tableSchema, includeFieldDocs));
-    if (extraTableParameters != null) {
-      tableParameters.putAll(extraTableParameters);
-    }
+        partitionNames, options.sparkVersion, options.schemaStringLengthThreshold, tableSchema,
+        options.includeFieldDocs));
+    tableParameters.putAll(options.extraTableParameters);
 
     Map<String, String> serdeParameters = new LinkedHashMap<>(
-        SparkDataSourceTableUtils.getSparkSerdeProperties(readAsOptimized, basePath));
+        SparkDataSourceTableUtils.getSparkSerdeProperties(options.readAsOptimized, basePath));
     serdeParameters.put(SERIALIZATION_FORMAT_PARAMETER, SERIALIZATION_FORMAT_VALUE);
 
     return new HoodieMetastoreTableDescriptor(
         dataColumns,
         partitionColumns,
-        inputFormatClassName(tableType, useRealtimeInputFormat),
+        inputFormatClassName(options.useRealtimeInputFormat),
         PARQUET_OUTPUT_FORMAT_CLASS,
         PARQUET_SERDE_CLASS,
         tableParameters,
         serdeParameters,
-        external);
+        options.external);
   }
 
   /**
@@ -278,8 +268,93 @@ public final class HoodieMetastoreTableDescriptor {
    * {@code HoodieInputFormatUtils#getInputFormatClassName(HoodieFileFormat.PARQUET, realtime)},
    * which lives in {@code hudi-hadoop-mr} and drags in Hadoop MapReduce.
    */
-  public static String inputFormatClassName(HoodieTableType tableType, boolean useRealtimeInputFormat) {
+  public static String inputFormatClassName(boolean useRealtimeInputFormat) {
     return useRealtimeInputFormat ? PARQUET_REALTIME_INPUT_FORMAT_CLASS : PARQUET_INPUT_FORMAT_CLASS;
+  }
+
+  /** Options for the general metastore view factory. */
+  public static final class ViewOptions {
+    private final boolean external;
+    private final boolean useRealtimeInputFormat;
+    private final boolean readAsOptimized;
+    private final String sparkVersion;
+    private final int schemaStringLengthThreshold;
+    private final boolean includeFieldDocs;
+    private final Map<String, String> extraTableParameters;
+
+    private ViewOptions(Builder builder) {
+      this.external = builder.external;
+      this.useRealtimeInputFormat = builder.useRealtimeInputFormat;
+      this.readAsOptimized = builder.readAsOptimized;
+      this.sparkVersion = builder.sparkVersion;
+      this.schemaStringLengthThreshold = builder.schemaStringLengthThreshold;
+      this.includeFieldDocs = builder.includeFieldDocs;
+      this.extraTableParameters = Collections.unmodifiableMap(
+          new LinkedHashMap<>(builder.extraTableParameters));
+    }
+
+    public static Builder builder() {
+      return new Builder();
+    }
+
+    /** Builds options whose defaults match hive-sync's default registration. */
+    public static final class Builder {
+      private boolean external;
+      private boolean useRealtimeInputFormat;
+      private boolean readAsOptimized;
+      private String sparkVersion = "";
+      private int schemaStringLengthThreshold = DEFAULT_SCHEMA_STRING_LENGTH_THRESHOLD;
+      private boolean includeFieldDocs;
+      private Map<String, String> extraTableParameters = Collections.emptyMap();
+
+      public Builder setExternal(boolean external) {
+        this.external = external;
+        return this;
+      }
+
+      /**
+       * Whether to use the real-time input format. This is independent of the table type because
+       * hive-sync registers a Merge-on-Read table twice, once for each view.
+       */
+      public Builder setUseRealtimeInputFormat(boolean useRealtimeInputFormat) {
+        this.useRealtimeInputFormat = useRealtimeInputFormat;
+        return this;
+      }
+
+      /** Records this view as the read-optimized view of a Merge-on-Read table. */
+      public Builder setReadAsOptimized(boolean readAsOptimized) {
+        this.readAsOptimized = readAsOptimized;
+        return this;
+      }
+
+      /** Sets {@code spark.sql.create.version}; an empty value omits the property. */
+      public Builder setSparkVersion(String sparkVersion) {
+        this.sparkVersion = sparkVersion;
+        return this;
+      }
+
+      public Builder setSchemaStringLengthThreshold(int schemaStringLengthThreshold) {
+        this.schemaStringLengthThreshold = schemaStringLengthThreshold;
+        return this;
+      }
+
+      /** Whether column comments are carried into the serialized Spark schema. */
+      public Builder setIncludeFieldDocs(boolean includeFieldDocs) {
+        this.includeFieldDocs = includeFieldDocs;
+        return this;
+      }
+
+      /** Adds table parameters after derived properties, so callers can override them. */
+      public Builder setExtraTableParameters(Map<String, String> extraTableParameters) {
+        this.extraTableParameters = extraTableParameters == null
+            ? Collections.emptyMap() : extraTableParameters;
+        return this;
+      }
+
+      public ViewOptions build() {
+        return new ViewOptions(this);
+      }
+    }
   }
 
   /** Data columns, in schema order, excluding partition columns. */
