@@ -40,6 +40,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.view.TableFileSystemView;
+import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -151,11 +152,16 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
    * Writes all records from the incoming iterator and flushes remaining pending data.
    */
   public void doAppend() {
-    while (recordItr.hasNext()) {
-      HoodieRecord<T> record = recordItr.next();
-      writeRecord(record);
+    try {
+      while (recordItr.hasNext()) {
+        HoodieRecord<T> record = recordItr.next();
+        writeRecord(record);
+      }
+      flushAppend();
+    } catch (RuntimeException e) {
+      closeLogWriterQuietly(e);
+      throw e;
     }
-    flushAppend();
   }
 
   /**
@@ -178,6 +184,7 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
       }
       flushAppend();
     } catch (Exception e) {
+      closeLogWriterQuietly(e);
       throw new HoodieUpsertException("Failed to compact blocks for fileId " + fileId, e);
     }
   }
@@ -214,8 +221,21 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
 
       return statuses;
     } catch (IOException e) {
+      closeLogWriterQuietly(e);
       throw new HoodieUpsertException("Failed to close " + getClass().getSimpleName(), e);
+    } catch (RuntimeException e) {
+      closeLogWriterQuietly(e);
+      throw e;
     }
+  }
+
+  private void closeLogWriterQuietly(Throwable failure) {
+    markClosed();
+    CloseableUtils.closeSuppressing(this::closeLogWriter, failure);
+    if (recordItr instanceof Closeable) {
+      CloseableUtils.closeSuppressing((Closeable) recordItr, failure);
+    }
+    recordItr = null;
   }
 
   @Override
@@ -382,6 +402,7 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
     } catch (Exception e) {
       log.error("Error writing record {}", hoodieRecord, e);
       if (!config.getIgnoreWriteFailed() || ExceptionUtil.isCausedBy(e, HoodieEarlyConflictDetectionException.class)) {
+        closeLogWriterQuietly(e);
         throw new HoodieException(e.getMessage(), e);
       }
       writeStatus.markFailure(hoodieRecord, e, recordMetadata);

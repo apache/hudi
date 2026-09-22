@@ -32,6 +32,8 @@ import org.apache.parquet.hadoop.api.WriteSupport;
 
 import java.io.IOException;
 
+import static org.apache.hudi.io.util.FileIOUtils.closeQuietly;
+
 /**
  * An implementation for {@link HoodieRowDataFileWriter} which is used to write hoodie records into an {@link FSDataOutputStream}.
  *
@@ -67,7 +69,12 @@ public class HoodieRowDataParquetOutputStreamWriter implements HoodieRowDataFile
     parquetWriterbuilder.withDictionaryEncoding(parquetConfig.isDictionaryEnabled());
     parquetWriterbuilder.withWriterVersion(ParquetWriter.DEFAULT_WRITER_VERSION);
     parquetWriterbuilder.withConf(parquetConfig.getStorageConf().unwrapAs(Configuration.class));
-    this.writer = parquetWriterbuilder.build();
+    try {
+      this.writer = parquetWriterbuilder.build();
+    } catch (IOException | RuntimeException e) {
+      closeQuietly(outputStream);
+      throw e;
+    }
   }
 
   @Override
