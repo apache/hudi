@@ -210,6 +210,35 @@ final class TestHudiSchemaConverter
     }
 
     @Test
+    void testNestedRecordNameDoesNotCollideWithTableName()
+    {
+        Schema tableSchema = HudiSchemaConverter.toTableSchema(
+                ImmutableList.of(column("trips", RowType.rowType(RowType.field("id", BIGINT)))),
+                "trips").toAvroSchema();
+        Schema nestedRecord = unwrapNullable(tableSchema.getField("trips").schema());
+
+        assertThat(nestedRecord.getFullName()).isNotEqualTo(tableSchema.getFullName());
+    }
+
+    @Test
+    void testNestedRecordNamesRemainUniqueWhenSanitizedPathsCollide()
+    {
+        Type nestedRow = RowType.rowType(RowType.field(
+                "b",
+                RowType.rowType(RowType.field("id", BIGINT))));
+        Schema tableSchema = HudiSchemaConverter.toTableSchema(
+                ImmutableList.of(
+                        column("a", nestedRow),
+                        column("a_b", RowType.rowType(RowType.field("id", BIGINT)))),
+                "test_table").toAvroSchema();
+        Schema nestedPathRecord = unwrapNullable(
+                unwrapNullable(tableSchema.getField("a").schema()).getField("b").schema());
+        Schema topLevelPathRecord = unwrapNullable(tableSchema.getField("a_b").schema());
+
+        assertThat(nestedPathRecord.getFullName()).isNotEqualTo(topLevelPathRecord.getFullName());
+    }
+
+    @Test
     void testRejectsCharBecausePaddingWouldBeLost()
     {
         assertThatThrownBy(() -> tableSchema(column("c", CharType.createCharType(5))))

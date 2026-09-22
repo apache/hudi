@@ -32,8 +32,10 @@ import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static io.trino.spi.type.BigintType.BIGINT;
@@ -118,9 +120,11 @@ public final class HudiSchemaConverter
      */
     public static HoodieSchema toTableSchema(List<ColumnMetadata> columns, String tableName)
     {
+        String recordName = sanitizeName(tableName);
+        RecordNameAllocator recordNames = new RecordNameAllocator(recordName);
         ImmutableList.Builder<HoodieSchemaField> fields = ImmutableList.builder();
         for (ColumnMetadata column : columns) {
-            HoodieSchema fieldSchema = toHoodieSchema(column.getType(), column.getName());
+            HoodieSchema fieldSchema = toHoodieSchema(column.getType(), column.getName(), recordNames);
             if (column.isNullable()) {
                 fields.add(HoodieSchemaField.of(
                         column.getName(),
@@ -133,7 +137,7 @@ public final class HudiSchemaConverter
             }
         }
         HoodieSchema record = HoodieSchema.createRecord(
-                sanitizeName(tableName), NAMESPACE, null, fields.build());
+                recordName, NAMESPACE, null, fields.build());
         return HoodieSchemaUtils.addMetadataFields(record);
     }
 
@@ -144,6 +148,11 @@ public final class HudiSchemaConverter
      * Avro names.
      */
     public static HoodieSchema toHoodieSchema(Type type, String path)
+    {
+        return toHoodieSchema(type, path, new RecordNameAllocator());
+    }
+
+    private static HoodieSchema toHoodieSchema(Type type, String path, RecordNameAllocator recordNames)
     {
         if (BOOLEAN.equals(type)) {
             return HoodieSchema.create(HoodieSchemaType.BOOLEAN);
@@ -200,7 +209,7 @@ public final class HudiSchemaConverter
         }
         if (type instanceof ArrayType arrayType) {
             return HoodieSchema.createArray(
-                    HoodieSchema.createNullable(toHoodieSchema(arrayType.getElementType(), path + "_element")));
+                    HoodieSchema.createNullable(toHoodieSchema(arrayType.getElementType(), path + "_element", recordNames)));
         }
         if (type instanceof MapType mapType) {
             if (!(mapType.getKeyType() instanceof VarcharType)) {
@@ -209,7 +218,7 @@ public final class HudiSchemaConverter
                         mapType.getKeyType().getDisplayName()));
             }
             return HoodieSchema.createMap(
-                    HoodieSchema.createNullable(toHoodieSchema(mapType.getValueType(), path + "_value")));
+                    HoodieSchema.createNullable(toHoodieSchema(mapType.getValueType(), path + "_value", recordNames)));
         }
         if (type instanceof RowType rowType) {
             ImmutableList.Builder<HoodieSchemaField> fields = ImmutableList.builder();
@@ -218,11 +227,11 @@ public final class HudiSchemaConverter
                         .orElseThrow(() -> unsupported(type, path, "Avro record fields must be named, but this ROW has an unnamed field"));
                 fields.add(HoodieSchemaField.of(
                         fieldName,
-                        HoodieSchema.createNullable(toHoodieSchema(field.getType(), path + "_" + fieldName)),
+                        HoodieSchema.createNullable(toHoodieSchema(field.getType(), path + "_" + fieldName, recordNames)),
                         null,
                         HoodieSchema.NULL_VALUE));
             }
-            return HoodieSchema.createRecord(sanitizeName(path), NAMESPACE, null, fields.build());
+            return HoodieSchema.createRecord(recordNames.allocate(path), NAMESPACE, null, fields.build());
         }
         throw unsupported(type, path, "the Hudi connector has no Avro mapping for this type");
     }
@@ -250,5 +259,25 @@ public final class HudiSchemaConverter
             sanitized.append(valid ? character : '_');
         }
         return sanitized.toString().toLowerCase(Locale.ROOT);
+    }
+
+    private static final class RecordNameAllocator
+    {
+        private final Set<String> allocatedNames = new HashSet<>();
+
+        private RecordNameAllocator(String... reservedNames)
+        {
+            allocatedNames.addAll(List.of(reservedNames));
+        }
+
+        private String allocate(String path)
+        {
+            String baseName = sanitizeName(path);
+            String candidate = baseName;
+            for (int suffix = 2; !allocatedNames.add(candidate); suffix++) {
+                candidate = baseName + "_" + suffix;
+            }
+            return candidate;
+        }
     }
 }
