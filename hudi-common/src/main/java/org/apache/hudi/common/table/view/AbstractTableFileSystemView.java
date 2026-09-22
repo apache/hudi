@@ -1525,7 +1525,10 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   protected Option<HoodieBaseFile> getLatestBaseFile(HoodieFileGroup fileGroup) {
     return Option
-        .fromJavaOptional(fileGroup.getAllBaseFiles().filter(baseFile -> !isBaseFileDueToPendingCompaction(fileGroup.getPartitionPath(), baseFile) && !isBaseFileDueToPendingClustering(baseFile)).findFirst());
+        .fromJavaOptional(fileGroup.getAllBaseFiles()
+            .filter(baseFile -> !isBaseFileDueToPendingCompaction(fileGroup.getPartitionPath(), baseFile)
+                && !isBaseFileDueToPendingClustering(baseFile))
+            .findFirst());
   }
 
   /**
