@@ -31,10 +31,10 @@ import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.avro.generic.{GenericData, GenericRecord}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{DataFrame, Row}
-import org.apache.spark.sql.execution.{FileSourceScanExec, ProjectExec}
+import org.apache.spark.sql.execution.{FileSourceScanExec, ProjectExec, SparkPlan}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{ArrayType, IntegerType, MapType, StringType, StructField, StructType}
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
 import scala.collection.JavaConverters._
 
@@ -297,6 +297,39 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase {
         selectDF.count
       }
     }
+  }
+
+  test("Nested struct predicate pushdown") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+
+        createTableWithNestedStructSchema(tableType, tableName, tablePath)
+
+        val selectDF = spark.sql(s"SELECT id FROM $tableName WHERE item.name = 'a1' AND item.price > 5")
+
+        val fileScan = findFileScan(selectDF.queryExecution.executedPlan)
+        val planString = fileScan.toString()
+
+        assertTrue(fileScan.dataFilters.nonEmpty,
+          s"[$tableType] dataFilters should contain nested predicates but was empty")
+        assertFalse(planString.contains("PushedFilters: []"),
+          s"[$tableType] PushedFilters should not be empty — nested predicate pushdown is not working.\n" +
+            s"Verify that shortName() returns a lowercase value present in " +
+            s"spark.sql.optimizer.nestedPredicatePushdown.supportedFileSources.\nPlan:\n$planString")
+        assertTrue(planString.contains("PushedFilters: ["),
+          s"[$tableType] Plan should contain PushedFilters section.\nPlan:\n$planString")
+
+        checkAnswer(s"SELECT id FROM $tableName WHERE item.name = 'a1' AND item.price > 5")(Seq(1))
+      }
+    }
+  }
+
+  private def findFileScan(plan: SparkPlan): FileSourceScanExec = {
+    val scans = plan.collect { case f: FileSourceScanExec => f }
+    assert(scans.nonEmpty, s"No FileSourceScanExec found in plan:\n$plan")
+    scans.head
   }
 
   private def assertPrunedReadSchema(selectDF: DataFrame,

@@ -19,7 +19,11 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.SparkAdapterSupport
 
+import org.apache.spark.internal.Logging
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.SparkSessionExtensions
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis
 import org.apache.spark.sql.parser.HoodieCommonSqlParser
 
@@ -45,6 +49,8 @@ class HoodieSparkSessionExtension extends (SparkSessionExtensions => Unit)
       extensions.injectOptimizerRule(ruleBuilder(_))
     }
 
+    extensions.injectOptimizerRule(HoodieNestedPredicatePushdownConfig(_))
+
     /*
     // CBO is only supported in Spark >= 3.1.x
     HoodieAnalysis.customPreCBORules.foreach { ruleBuilder =>
@@ -55,5 +61,28 @@ class HoodieSparkSessionExtension extends (SparkSessionExtensions => Unit)
     sparkAdapter.injectTableFunctions(extensions)
     sparkAdapter.injectScalarFunctions(extensions)
     sparkAdapter.injectPlannerStrategies(extensions)
+  }
+}
+
+/**
+ * Ensures that Spark's nested predicate pushdown allowlist includes "hoodiefilegroup"
+ * so that nested struct field predicates (e.g., msg.field = 'value') are pushed down
+ * to the Parquet reader when using HoodieFileGroupReaderBasedFileFormat.
+ */
+case class HoodieNestedPredicatePushdownConfig(spark: SparkSession) extends Rule[LogicalPlan] with Logging {
+  @volatile private var applied = false
+
+  override def apply(plan: LogicalPlan): LogicalPlan = {
+    if (!applied) {
+      val key = "spark.sql.optimizer.nestedPredicatePushdown.supportedFileSources"
+      val current = spark.conf.get(key, "parquet,orc")
+      if (!current.toLowerCase.contains("hoodiefilegroup")) {
+        val updated = current + ",hoodiefilegroup"
+        spark.conf.set(key, updated)
+        logInfo(s"Added hoodiefilegroup to $key: $updated")
+      }
+      applied = true
+    }
+    plan
   }
 }
