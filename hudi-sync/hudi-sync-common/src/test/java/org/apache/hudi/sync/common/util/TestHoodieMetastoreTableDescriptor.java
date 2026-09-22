@@ -76,8 +76,11 @@ class TestHoodieMetastoreTableDescriptor {
   @Test
   void copyOnWriteCannotUseTheRealtimeInputFormat() {
     assertThrows(IllegalArgumentException.class, () -> HoodieMetastoreTableDescriptor.forView(
-        schema(), Collections.emptyList(), HoodieTableType.COPY_ON_WRITE, BASE_PATH, true,
-        true, false, "", 4000, false, Collections.emptyMap()));
+        schema(), Collections.emptyList(), HoodieTableType.COPY_ON_WRITE, BASE_PATH,
+        HoodieMetastoreTableDescriptor.ViewOptions.builder()
+            .setExternal(true)
+            .setUseRealtimeInputFormat(true)
+            .build()));
   }
 
   @Test
@@ -85,8 +88,11 @@ class TestHoodieMetastoreTableDescriptor {
     // The _ro registration hive-sync performs for MOR: non-realtime input format, but flagged as the
     // read-optimized view. Trino does not create these; the general form still has to express it.
     HoodieMetastoreTableDescriptor descriptor = HoodieMetastoreTableDescriptor.forView(
-        schema(), Collections.emptyList(), HoodieTableType.MERGE_ON_READ, BASE_PATH, true,
-        false, true, "", 4000, false, Collections.emptyMap());
+        schema(), Collections.emptyList(), HoodieTableType.MERGE_ON_READ, BASE_PATH,
+        HoodieMetastoreTableDescriptor.ViewOptions.builder()
+            .setExternal(true)
+            .setReadAsOptimized(true)
+            .build());
 
     assertEquals(HoodieMetastoreTableDescriptor.PARQUET_INPUT_FORMAT_CLASS, descriptor.getInputFormatClassName());
     assertEquals("true", descriptor.getSerdeParameters().get("hoodie.query.as.ro.table"));
@@ -198,8 +204,11 @@ class TestHoodieMetastoreTableDescriptor {
   @Test
   void extraTableParametersAreAppliedLast() {
     HoodieMetastoreTableDescriptor descriptor = HoodieMetastoreTableDescriptor.forView(
-        schema(), Collections.emptyList(), HoodieTableType.COPY_ON_WRITE, BASE_PATH, true,
-        false, false, "", 4000, false, Collections.singletonMap("spark.sql.sources.provider", "overridden"));
+        schema(), Collections.emptyList(), HoodieTableType.COPY_ON_WRITE, BASE_PATH,
+        HoodieMetastoreTableDescriptor.ViewOptions.builder()
+            .setExternal(true)
+            .setExtraTableParameters(Collections.singletonMap("spark.sql.sources.provider", "overridden"))
+            .build());
 
     assertEquals("overridden", descriptor.getTableParameters().get("spark.sql.sources.provider"));
   }
@@ -207,8 +216,11 @@ class TestHoodieMetastoreTableDescriptor {
   @Test
   void theSchemaIsSplitIntoPartsOfTheGivenThreshold() {
     HoodieMetastoreTableDescriptor descriptor = HoodieMetastoreTableDescriptor.forView(
-        schema(), Collections.emptyList(), HoodieTableType.COPY_ON_WRITE, BASE_PATH, true,
-        false, false, "", 16, false, Collections.emptyMap());
+        schema(), Collections.emptyList(), HoodieTableType.COPY_ON_WRITE, BASE_PATH,
+        HoodieMetastoreTableDescriptor.ViewOptions.builder()
+            .setExternal(true)
+            .setSchemaStringLengthThreshold(16)
+            .build());
 
     int numParts = Integer.parseInt(descriptor.getTableParameters().get("spark.sql.sources.schema.numParts"));
     assertTrue(numParts > 1, "a 16-character threshold should split the schema");

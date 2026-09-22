@@ -19,7 +19,6 @@
 package org.apache.hudi.hive;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.sync.common.util.HoodieMetastoreTableDescriptor;
 
@@ -68,10 +67,10 @@ class TestHoodieMetastoreTableDescriptorFormatNames {
     // uses the realtime one. See HiveSyncTool#doSync.
     assertEquals(
         HoodieInputFormatUtils.getInputFormatClassName(HoodieFileFormat.PARQUET, false),
-        HoodieMetastoreTableDescriptor.inputFormatClassName(HoodieTableType.COPY_ON_WRITE, false));
+        HoodieMetastoreTableDescriptor.inputFormatClassName(false));
     assertEquals(
         HoodieInputFormatUtils.getInputFormatClassName(HoodieFileFormat.PARQUET, true),
-        HoodieMetastoreTableDescriptor.inputFormatClassName(HoodieTableType.MERGE_ON_READ, true));
+        HoodieMetastoreTableDescriptor.inputFormatClassName(true));
   }
 
   @Test
