@@ -24,6 +24,7 @@ import io.trino.metastore.Column;
 import io.trino.metastore.Database;
 import io.trino.metastore.HiveMetastore;
 import io.trino.metastore.Table;
+import io.trino.metastore.TableAlreadyExistsException;
 import io.trino.metastore.TableInfo;
 import io.trino.plugin.base.classloader.ClassLoaderSafeSystemTable;
 import io.trino.plugin.hive.HiveColumnHandle;
@@ -378,6 +379,16 @@ public class HudiMetadata
             HudiTableInitializer.initializeTable(fileSystem, basePath, tableMetadata, tableSchema);
             metastore.createTable(table, NO_PRIVILEGES);
         }
+        catch (TableAlreadyExistsException e) {
+            // Another CREATE TABLE may have initialized the same managed location and won the
+            // metastore race. Its catalog entry now owns .hoodie, so deleting it would corrupt the
+            // live table. A different location still belongs to this failed attempt and is safe to
+            // clean up.
+            if (!isTableRegisteredAtLocation(schemaTableName, basePath, e)) {
+                cleanupTableMetadata(fileSystem, basePath, e);
+            }
+            throw e;
+        }
         catch (RuntimeException e) {
             // Initialization may have written some or all of .hoodie, but no catalog entry from
             // this call references it. Left there it would make a retry fail the emptiness check.
@@ -386,13 +397,33 @@ public class HudiMetadata
             // someone else, and this connector did not create it. On object storage there is no
             // directory to delete in any case -- deleteDirectory removes the objects under the
             // prefix, which is exactly the set initTable wrote or may have partially written.
-            try {
-                fileSystem.deleteDirectory(Location.of(appendPath(basePath, METAFOLDER_NAME)));
-            }
-            catch (IOException | RuntimeException cleanupFailure) {
-                e.addSuppressed(cleanupFailure);
-            }
+            cleanupTableMetadata(fileSystem, basePath, e);
             throw e;
+        }
+    }
+
+    private boolean isTableRegisteredAtLocation(SchemaTableName tableName, String basePath, RuntimeException failure)
+    {
+        try {
+            return metastore.getTable(tableName.getSchemaName(), tableName.getTableName())
+                    .map(table -> table.getStorage().getLocation().equals(basePath))
+                    .orElse(false);
+        }
+        catch (RuntimeException lookupFailure) {
+            // When ownership cannot be established, leave storage intact. An orphan is recoverable;
+            // deleting metadata that a successful concurrent CREATE references is not.
+            failure.addSuppressed(lookupFailure);
+            return true;
+        }
+    }
+
+    private static void cleanupTableMetadata(TrinoFileSystem fileSystem, String basePath, RuntimeException failure)
+    {
+        try {
+            fileSystem.deleteDirectory(Location.of(appendPath(basePath, METAFOLDER_NAME)));
+        }
+        catch (IOException | RuntimeException cleanupFailure) {
+            failure.addSuppressed(cleanupFailure);
         }
     }
 
