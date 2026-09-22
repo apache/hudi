@@ -195,7 +195,10 @@ public class S3StorageLockClient implements StorageLockClient {
       logger.warn("OwnerId: {}, Rate limit exceeded for: {}", ownerId, lockFilePath);
       return LockUpsertResult.THROTTLED;
     } else if (status >= INTERNAL_SERVER_ERROR_CODE_MIN) {
+      // A 5xx means S3 rejected the write server-side, so the conditional write did not take
+      // effect. Retrying the same ifMatch/ifNoneMatch write is safe and is expected to converge.
       logger.warn("OwnerId: {}, internal server error for: {}", ownerId, lockFilePath, e);
+      return LockUpsertResult.TRANSIENT_ERROR;
     } else {
       logger.warn("OwnerId: {}, Error writing lock file: {}", ownerId, lockFilePath, e);
     }

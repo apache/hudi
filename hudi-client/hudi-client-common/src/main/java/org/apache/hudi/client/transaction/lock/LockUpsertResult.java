@@ -31,7 +31,12 @@ public enum LockUpsertResult {
   // Unable to determine lock state due to transient errors with code 2
   UNKNOWN_ERROR(2),
   // Request was throttled by the storage backend (e.g. HTTP 429) with code 3
-  THROTTLED(3);
+  THROTTLED(3),
+  // The storage backend returned a transient, retriable server-side error
+  // (e.g. HTTP 500/502/503/504) with code 4. Distinct from UNKNOWN_ERROR: the write
+  // is known to have been rejected by the service, so retrying the same conditional
+  // write is safe and is expected to converge.
+  TRANSIENT_ERROR(4);
 
   private final int code;
 }
