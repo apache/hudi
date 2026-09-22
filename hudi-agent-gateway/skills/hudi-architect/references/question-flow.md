@@ -27,8 +27,11 @@ Round 1 is the minimum to specify a PROTOTYPING design. For EXPLORATION, replace
 
 > "Which processing engine are you planning to use — Spark, Flink, or undecided?"
 
-- Spark or Flink → proceed to Q1.2.
-- Undecided → present Spark vs Flink tradeoff (see decision-tables.md → engine). Recommend based on workload signals.
+- Spark → proceed to Q1.2 and retain the existing shared flow.
+- Flink → stop before Q1.2 and load `flink-question-flow.md`. The current Flink route runs the
+  PR1 safety gates and must not enter the Spark-specific source, writer, or submit-command flow.
+- Undecided → present Spark vs Flink tradeoff (see decision-tables.md → engine). Recommend based on
+  workload signals, ask the user to confirm, then take the Spark or Flink route above.
 
 ### Q1.2 — Source
 
