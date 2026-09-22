@@ -87,7 +87,7 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
       mergeType = mergeType,
       fileSplits = fileSplits,
       includedInstantTimeSet = Option(includedCommits.map(_.requestedTime).toSet),
-      instantRangeOpt = queryContext.getInstantRange,
+      instantRangeOpt = getInstantRange,
       optionalFilters = optionalFilters,
       metaClient = metaClient,
       options = optParams)
@@ -154,11 +154,12 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
   }
 
   /**
-   * Returns the requested-time range selected by the completion-time query analysis. The file-group
-   * reader needs this in addition to Spark's required filters so that out-of-range log records do
-   * not participate in record merging and mask an earlier in-range version of the same key.
+   * Returns the requested-time range selected by the completion-time query analysis when an
+   * incremental query falls back to a full-table scan. The file-group reader needs this range so
+   * that out-of-range log records from the latest file slices do not participate in record merging.
    */
-  override def getInstantRange: HOption[InstantRange] = queryContext.getInstantRange
+  override def getInstantRange: HOption[InstantRange] =
+    if (fullTableScan) queryContext.getInstantRange else HOption.empty()
 
   override def shouldIncludeLogFiles(): Boolean = fullTableScan
 
