@@ -18,16 +18,21 @@
 
 package org.apache.hudi.sink.event;
 
+import org.apache.hudi.exception.HoodieException;
+
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.jobgraph.tasks.TaskOperatorEventGateway;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.util.HashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 
 class TestCorrespondentEventModels {
@@ -61,5 +66,22 @@ class TestCorrespondentEventModels {
     assertEquals(11L, event.getCheckpointId());
     event.setCheckpointId(12L);
     assertEquals(12L, event.getCheckpointId());
+  }
+
+  @Test
+  void testInstantRequestFailureIsNotRetried() {
+    AtomicInteger requestCount = new AtomicInteger();
+    Correspondent correspondent = new Correspondent() {
+      @Override
+      protected InstantTimeResponse fetchInstantTimeResponse(long checkpointId) throws Exception {
+        requestCount.incrementAndGet();
+        throw new IOException("request failed");
+      }
+    };
+
+    HoodieException error = assertThrows(
+        HoodieException.class, () -> correspondent.requestInstantTime(9L, 10_000L));
+    assertEquals("request failed", error.getCause().getMessage());
+    assertEquals(1, requestCount.get());
   }
 }

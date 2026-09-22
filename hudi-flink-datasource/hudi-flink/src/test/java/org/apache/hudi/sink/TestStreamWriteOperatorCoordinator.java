@@ -908,12 +908,8 @@ public class TestStreamWriteOperatorCoordinator {
   }
 
   private String requestInstantTime(StreamWriteOperatorCoordinator coordinator, long checkpointId) {
-    try {
-      Correspondent.InstantTimeResponse response = CoordinationResponseSerDe.unwrap(coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(checkpointId)).get());
-      return response.getInstant();
-    } catch (Exception e) {
-      throw new HoodieException("Error requesting the instant time from the coordinator", e);
-    }
+    return new MockCorrespondent(coordinator)
+        .requestInstantTime(checkpointId, TimeUnit.SECONDS.toMillis(10));
   }
 
   private void resetToMergeOnRead(Configuration conf) throws Exception {

@@ -94,9 +94,9 @@ public class Correspondent {
    *
    * <p>The coordinator answers each request in O(1) with a {@link Status}: the requester polls with a
    * capped exponential backoff (plus jitter) under a single {@code pollBudgetMs} deadline until the
-   * instant is {@code READY}, and retries transient transport errors within the same budget. A
-   * {@code PENDING} reply never extends the deadline. Instant creation failures fail the job through
-   * the coordinator's normal asynchronous failure path.
+   * instant is {@code READY}. A {@code PENDING} reply never extends the deadline. Instant creation
+   * failures fail the job through the coordinator's normal asynchronous failure path, while request
+   * failures are propagated immediately.
    *
    * @param checkpointId The checkpoint id (or -1 for bulk insert)
    * @param pollBudgetMs The overall budget to wait for an instant, in milliseconds
@@ -114,12 +114,8 @@ public class Correspondent {
         Thread.currentThread().interrupt();
         throw new HoodieException("Interrupted while requesting the instant time from the coordinator", e);
       } catch (Exception e) {
-        // transient transport/coordinator error: retry within the budget, reusing the same checkpoint identity.
-        if (System.nanoTime() >= deadlineNanos) {
-          throw new HoodieException("Timeout requesting the instant time from the coordinator for checkpoint " + checkpointId, e);
-        }
-        backoffMs = sleepAndGrow(backoffMs);
-        continue;
+        throw new HoodieException(
+            "Error requesting the instant time from the coordinator for checkpoint " + checkpointId, e);
       }
       if (response.getStatus() == Status.READY) {
         return response.getInstant();
@@ -143,9 +139,8 @@ public class Correspondent {
   }
 
   private static long sleepAndGrow(long backoffMs) {
-    long capped = Math.min(backoffMs, POLL_CAP_MS);
-    // full jitter in [capped/2, capped] to avoid a thundering herd of polls landing together.
-    long sleepMs = capped / 2 + ThreadLocalRandom.current().nextLong(capped / 2 + 1);
+    // jitter in [backoffMs/2, backoffMs] to avoid a thundering herd of polls landing together.
+    long sleepMs = backoffMs / 2 + ThreadLocalRandom.current().nextLong(backoffMs / 2 + 1);
     try {
       Thread.sleep(sleepMs);
     } catch (InterruptedException e) {

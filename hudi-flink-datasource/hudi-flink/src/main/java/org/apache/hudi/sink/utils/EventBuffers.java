@@ -72,13 +72,7 @@ public class EventBuffers implements Serializable {
   }
 
   public EventBuffer addEventToBuffer(WriteMetadataEvent event) {
-    Pair<String, EventBuffer> bufferPair = this.eventBuffers.get(event.getCheckpointId());
-    ValidationUtils.checkState(bufferPair != null,
-        "No event buffer bound to checkpoint " + event.getCheckpointId());
-    ValidationUtils.checkState(bufferPair.getLeft().equals(event.getInstantTime()),
-        String.format("Event instant %s does not match the instant %s bound to checkpoint %d",
-            event.getInstantTime(), bufferPair.getLeft(), event.getCheckpointId()));
-    EventBuffer eventBuffer = bufferPair.getRight();
+    EventBuffer eventBuffer = this.eventBuffers.get(event.getCheckpointId()).getRight();
     eventBuffer.addEvent(event);
     return eventBuffer;
   }

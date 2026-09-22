@@ -428,7 +428,8 @@ public class StreamWriteOperatorCoordinator
     final long checkpointId = request.getCheckpointId();
     // Idempotent fast path: the checkpoint -> instant mapping is authoritative and survives marker retirement,
     // so a lost READY reply is recovered by the next poll without creating a second instant.
-    Pair<String, EventBuffer> instantTimeAndEventBuffer = this.eventBuffers.getInstantAndEventBuffer(checkpointId);
+    final Pair<String, EventBuffer> instantTimeAndEventBuffer =
+        this.eventBuffers.getInstantAndEventBuffer(checkpointId);
     if (instantTimeAndEventBuffer != null) {
       return readyResponse(instantTimeAndEventBuffer.getLeft());
     }
@@ -436,12 +437,6 @@ public class StreamWriteOperatorCoordinator
     if (instantCreationCheckpoints.add(checkpointId)) {
       this.instantRequestExecutor.execute(
           () -> createInstant(checkpointId), "create instant for checkpoint %d", checkpointId);
-    }
-
-    // A synchronous test executor may have completed creation already; production workers normally return PENDING here.
-    instantTimeAndEventBuffer = this.eventBuffers.getInstantAndEventBuffer(checkpointId);
-    if (instantTimeAndEventBuffer != null) {
-      return readyResponse(instantTimeAndEventBuffer.getLeft());
     }
     return CompletableFuture.completedFuture(
         CoordinationResponseSerDe.wrap(Correspondent.InstantTimeResponse.pending()));
