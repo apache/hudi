@@ -159,8 +159,9 @@ For append-only input:
 - Stable key → record the field names when available and prefer this posture in PR2. Also surface
   `FLINK_STABLE_KEY_NOT_IDEMPOTENT`: a stable key does not make `write.operation = insert`
   deduplicate an independent replay.
-- No stable key → record the explicitly accepted auto-generated-key posture and surface
-  `FLINK_AUTO_KEY_DURABILITY`.
+- Confirm that no stable key exists → assess replay and deduplication requirements → surface 
+  `FLINK_AUTO_KEY_DURABILITY` and explain the implications of auto-generated record keys → ask 
+  for explicit acceptance → persist the decision only after acceptance.
 - Not sure → `INCOMPLETE` with `FLINK_RECORD_KEY_POSTURE_REQUIRED`.
 
 ## F6 — Replay and backfill idempotence
