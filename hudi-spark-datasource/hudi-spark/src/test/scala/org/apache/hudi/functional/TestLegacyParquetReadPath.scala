@@ -309,9 +309,15 @@ class TestLegacyParquetReadPath extends HoodieSparkClientTestBase with ScalaAsse
   @Test
   def testBroadcastJoinHonorsPlanTimeBatchingDecision(): Unit = {
     // Regression test: broadcast joins used to crash with a ColumnarBatch/InternalRow cast error
-    // once whole-stage codegen was off, because the reader ignored the plan's OPTION_RETURNING_BATCH.
-    spark.createDataFrame(Seq(FlatTestRow("1", "a", "p0"), FlatTestRow("2", "b", "p0")))
-      .write.format("hudi")
+    // because the reader ignored the plan's OPTION_RETURNING_BATCH and recomputed its own batching
+    // decision -- a wide schema (>spark.sql.codegen.maxFields) makes FileSourceScanExec go
+    // row-based while supportBatch, lacking a field-count check, still says batchable.
+    val numExtraColumns = 150 // comfortably over spark.sql.codegen.maxFields's default of 100
+    val baseDf = spark.createDataFrame(Seq(FlatTestRow("1", "a", "p0"), FlatTestRow("2", "b", "p0")))
+    val wideDf = (1 to numExtraColumns).foldLeft(baseDf) { (df, i) => df.withColumn(s"col$i", lit(i.toLong)) }
+    assertTrue(wideDf.schema.fields.length > 100, "Test setup must produce a >100 column schema")
+
+    wideDf.write.format("hudi")
       .options(Map(
         DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
         DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
@@ -323,20 +329,13 @@ class TestLegacyParquetReadPath extends HoodieSparkClientTestBase with ScalaAsse
       .save(basePath)
 
     assertTrue(legacyFormatSupportsBatch,
-      "Flat all-atomic-type schema must support the vectorized reader on its own")
+      "Wide, all-atomic-type schema must look batchable to the legacy reader on its own")
 
-    val wholeStageKey = "spark.sql.codegen.wholeStage"
-    val previous = spark.conf.get(wholeStageKey, "true")
-    spark.conf.set(wholeStageKey, "false")
-    try {
-      val small = legacyFileFormatDf()
-      val big = spark.range(2).toDF("n")
-      // Must not throw ClassCastException: ColumnarBatch cannot be cast to InternalRow.
-      val joined = big.join(broadcast(small), col("n") === col("id").cast("long"), "left")
-      assertEquals(2L, joined.count())
-    } finally {
-      spark.conf.set(wholeStageKey, previous)
-    }
+    val small = legacyFileFormatDf()
+    val big = spark.range(2).toDF("n")
+    val joined = big.join(broadcast(small), col("n") === col("id").cast("long"), "left")
+    // Must collect, not count() (which prunes the schema back under the threshold).
+    assertEquals(2L, joined.collect().length)
   }
 
   @Test

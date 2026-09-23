@@ -47,7 +47,7 @@ import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjectio
 import org.apache.spark.sql.catalyst.types.DataTypeUtils
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.WholeStageCodegenExec
-import org.apache.spark.sql.execution.datasources.{DataSourceUtils, PartitionedFile, RecordReaderIterator}
+import org.apache.spark.sql.execution.datasources.{DataSourceUtils, FileFormat, PartitionedFile, RecordReaderIterator}
 import org.apache.spark.sql.execution.datasources.parquet.Spark40LegacyHoodieParquetFileFormat._
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
@@ -152,10 +152,11 @@ class Spark40LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
     val datetimeRebaseModeInRead = parquetOptions.datetimeRebaseModeInRead
     val int96RebaseModeInRead = parquetOptions.int96RebaseModeInRead
     val timeZoneId = Option(sqlConf.sessionLocalTimeZone)
-    // Should always be set by FileSourceScanExec creating this.
-    // Check conf before checking option, to allow working around an issue by changing conf.
+    // Respect the plan-time OPTION_RETURNING_BATCH decision when present, instead of recomputing it here.
     val returningBatch = sparkSession.sessionState.conf.parquetVectorizedReaderEnabled &&
-      supportsColumnar(sparkSession, resultSchema).toString.equals("true")
+      options.get(FileFormat.OPTION_RETURNING_BATCH)
+        .map(_ == "true")
+        .getOrElse(supportsColumnar(sparkSession, resultSchema))
 
 
     (file: PartitionedFile) => {
