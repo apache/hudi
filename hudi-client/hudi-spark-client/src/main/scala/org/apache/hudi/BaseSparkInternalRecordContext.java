@@ -55,6 +55,7 @@ import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
 public abstract class BaseSparkInternalRecordContext extends RecordContext<InternalRow> {
 
   private OrderingValueEngineTypeConverter orderingValueConverter;
+  private UnaryOperator<StructType> rowShape;
 
   protected BaseSparkInternalRecordContext(HoodieTableConfig tableConfig) {
     super(tableConfig, new DefaultJavaTypeConverter());
@@ -214,10 +215,30 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
     return unsafeProjection.apply(internalRow);
   }
 
+  /**
+   * Installs the Spark type the rows of an engine schema actually carry in this read; null, the default, means the
+   * plain conversion. {@code SparkFileFormatInternalRowReaderContext} installs the PushVariantIntoScan overlay here
+   * (see its setSchemaHandler), because every row writer this context builds from an engine schema has to be typed
+   * over that shape: a VariantType-typed writer re-encodes a projection struct through UnsafeRow.getVariant instead
+   * of copying it across.
+   */
+  public void setRowShape(UnaryOperator<StructType> rowShape) {
+    this.rowShape = rowShape;
+  }
+
+  /**
+   * The Spark type the rows of {@code schema} carry in this read: the plain conversion, or the row shape installed
+   * by {@link #setRowShape} when the reader hands its rows over in a rewritten shape.
+   */
+  public StructType getRowStructType(HoodieSchema schema) {
+    StructType structType = getCachedSchema(schema);
+    return rowShape == null ? structType : rowShape.apply(structType);
+  }
+
   @Override
   public UnaryOperator<InternalRow> projectRecord(HoodieSchema from, HoodieSchema to, Map<String, String> renamedColumns) {
     Function1<InternalRow, UnsafeRow> unsafeRowWriter =
-        HoodieInternalRowUtils.getCachedUnsafeRowWriter(getCachedSchema(from), getCachedSchema(to), renamedColumns, Collections.emptyMap());
+        HoodieInternalRowUtils.getCachedUnsafeRowWriter(getRowStructType(from), getRowStructType(to), renamedColumns, Collections.emptyMap());
     return row -> (InternalRow) unsafeRowWriter.apply(row);
   }
 

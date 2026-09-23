@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRAT
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.log.InstantRange
+import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler
 import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
 import org.apache.hudi.common.util.{HoodieVectorUtils, Option => HOption}
 import org.apache.hudi.common.util.ValidationUtils.checkState
@@ -47,7 +48,7 @@ import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{ArrayType, ByteType, DoubleType, FloatType, LongType, MetadataBuilder, StructField, StructType}
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 
-import java.util.function.{Function => JFunction}
+import java.util.function.{Function => JFunction, UnaryOperator}
 
 import scala.collection.JavaConverters._
 
@@ -69,7 +70,9 @@ import scala.collection.JavaConverters._
  *                            collapses the projected struct back to a plain VARIANT, so the projected Spark
  *                            schema cannot be recovered from a HoodieSchema round-trip (#18739 sub-task 4).
  *                            Kept Spark-side so the engine-neutral schema model stays free of Spark 4.1
- *                            variant concepts.
+ *                            variant concepts. The same overlay also types the record context's row writers
+ *                            - the required-to-requested output converter and the bootstrap skeleton/data
+ *                            join - through BaseSparkInternalRecordContext.setRowShape, see setSchemaHandler.
  * @param instantRangeOpt optional requested-time range applied to base and log records before merging
  */
 class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileReader,
@@ -124,20 +127,45 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
     })
   }
 
+  // Whether the query carries a Spark 4.1 PushVariantIntoScan projection at all.
+  private lazy val hasVariantProjection: Boolean =
+    sparkRequiredSchema.exists(_.fields.exists(f => sparkAdapter.containsVariantProjection(f.dataType)))
+
+  private def isPayloadBasedMerge: Boolean = {
+    // getRecordMerger() is a Lombok getter over a field initialized to null (not Option.empty());
+    // it stays null until HoodieReaderContext.initRecordMerger runs (HoodieFileGroupReader calls it
+    // from its constructor), so the null guard is required.
+    val merger = getRecordMerger()
+    merger != null && merger.isPresent && merger.get.getMergingStrategy == PAYLOAD_BASED_MERGE_STRATEGY_UUID
+  }
+
   // True only when there is a Spark 4.1 PushVariantIntoScan projection to apply AND the table is
   // not using a custom (payload-based) merger. Payload-based tables round-trip records through
   // PayloadUpdateProcessor.convertToAvroRecord against a schema that still types variant fields as
   // VariantType, so a row already rewritten into the projected struct shape would be mis-decoded.
   // Single source of truth for both reader paths (parquet native projection + avro rewrite).
-  private def shouldProjectVariants(): Boolean = {
-    val hasVariantProjection =
-      sparkRequiredSchema.exists(_.fields.exists(f => sparkAdapter.containsVariantProjection(f.dataType)))
-    // getRecordMerger() is a Lombok getter over a field initialized to null (not Option.empty());
-    // it stays null until HoodieReaderContext.initRecordMerger runs (HoodieFileGroupReader calls it
-    // from its constructor), so the null guard is required.
-    val merger = getRecordMerger()
-    val isPayloadBased = merger != null && merger.isPresent && merger.get.getMergingStrategy == PAYLOAD_BASED_MERGE_STRATEGY_UUID
-    hasVariantProjection && !isPayloadBased
+  private def shouldProjectVariants(): Boolean = hasVariantProjection && !isPayloadBasedMerge
+
+  // HoodieFileGroupReader installs the schema handler after initRecordMerger and before it asks for
+  // the output converter, so this is where the record context learns what shape its rows carry.
+  // Base-file rows are ALWAYS read in the projected shape (getFileRecordIterator overlays it
+  // unconditionally); log rows only when shouldProjectVariants rewrites them, so the payload-based
+  // exclusion applies only when there are log files to merge. Two consumers need the shape: the
+  // output converter, which projects the reader's required schema down to the requested one
+  // (FileGroupReaderSchemaHandler.getOutputConverter), and the bootstrap skeleton/data join
+  // (getBootstrapProjection). Without it both build a VariantType-typed row writer that re-encodes
+  // the projection struct through UnsafeRow.getVariant - byte-identical only while the struct's
+  // null bitset stays small, and a NegativeArraySizeException once enough pushed fields are null.
+  override def setSchemaHandler(schemaHandler: FileGroupReaderSchemaHandler[InternalRow]): Unit = {
+    super.setSchemaHandler(schemaHandler)
+    if (hasVariantProjection && (!isPayloadBasedMerge || !getHasLogFiles)) {
+      val requiredStruct = sparkRequiredSchema.get
+      recordContext.asInstanceOf[BaseSparkInternalRecordContext].setRowShape(
+        new UnaryOperator[StructType] {
+          override def apply(structType: StructType): StructType =
+            overlayVariantProjections(structType, requiredStruct)
+        })
+    }
   }
 
   // Aligns avro log-block records with the PushVariantIntoScan-projected variant shape before
