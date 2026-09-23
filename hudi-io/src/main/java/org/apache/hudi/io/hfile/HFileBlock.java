@@ -241,6 +241,9 @@ public abstract class HFileBlock {
         // Passing the former to GZIPInputStream lets it interpret checksum bytes as
         // another gzip member and can result in ZipException (for example, during
         // metadata table compaction).
+        // byteBuff also reserves sizeCheckSum bytes, so limit output to uncompressedSizeWithoutHeader.
+        // Using byteBuff.length - HFILEBLOCK_HEADER_SIZE makes readFully keep reading beyond
+        // the first gzip stream to fill that checksum space.
         int compressedDataSize = onDiskDataSizeWithHeader - HFILEBLOCK_HEADER_SIZE;
         try (InputStream byteBuffInputStream = new ByteArrayInputStream(
             compressedByteBuff, startOffsetInCompressedBuff + HFILEBLOCK_HEADER_SIZE, compressedDataSize)) {
