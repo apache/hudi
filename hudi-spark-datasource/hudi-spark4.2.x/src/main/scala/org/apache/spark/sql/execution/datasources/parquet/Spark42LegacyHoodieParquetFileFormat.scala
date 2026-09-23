@@ -152,6 +152,8 @@ class Spark42LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
     val datetimeRebaseModeInRead = parquetOptions.datetimeRebaseModeInRead
     val int96RebaseModeInRead = parquetOptions.int96RebaseModeInRead
     val timeZoneId = Option(sqlConf.sessionLocalTimeZone)
+    // Should always be set by FileSourceScanExec creating this.
+    // Check conf before checking option, to allow working around an issue by changing conf.
     // Respect the plan-time OPTION_RETURNING_BATCH decision when present, instead of recomputing it here.
     val returningBatch = sqlConf.parquetVectorizedReaderEnabled &&
       options.get(FileFormat.OPTION_RETURNING_BATCH)
