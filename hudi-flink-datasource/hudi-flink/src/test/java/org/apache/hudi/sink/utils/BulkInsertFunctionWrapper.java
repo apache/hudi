@@ -103,6 +103,7 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   public void openFunction() throws Exception {
     this.coordinator.start();
     this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
+    this.coordinator.setInstantRequestExecutor(new MockCoordinatorExecutor(coordinatorContext));
     setupWriteFunction();
     setupMapFunction();
     if (needSortInput) {
@@ -172,6 +173,7 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     this.coordinator = new StreamWriteOperatorCoordinator(conf, this.coordinatorContext);
     this.coordinator.start();
     this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
+    this.coordinator.setInstantRequestExecutor(new MockCoordinatorExecutor(coordinatorContext));
   }
 
   public void checkpointFails(long checkpointId) {

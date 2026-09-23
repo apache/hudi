@@ -41,6 +41,7 @@ import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.utils.CoordinationResponseSerDe;
 import org.apache.hudi.sink.utils.MockCoordinatorExecutor;
+import org.apache.hudi.sink.utils.MockCorrespondent;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
@@ -54,6 +55,7 @@ import org.apache.flink.runtime.operators.coordination.MockOperatorCoordinatorCo
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.util.FileUtils;
+import org.apache.flink.util.function.ThrowingRunnable;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
@@ -70,6 +72,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
@@ -303,8 +306,8 @@ public class TestStreamWriteOperatorCoordinator {
         coordinator.getEventBuffer()[0].getWriteStatuses().size(), is(1));
 
     long nextCkpId = 1;
-    coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(nextCkpId));
-    OperatorEvent event4 = createOperatorEvent(0, nextCkpId, "002", "par1", false, false, 0.1);
+    String instant2 = requestInstantTime(nextCkpId);
+    OperatorEvent event4 = createOperatorEvent(0, nextCkpId, instant2, "par1", false, false, 0.1);
     coordinator.handleEventFromOperator(0, event4);
     assertThat("First instant is not committed yet, new event should not override the old event",
         coordinator.getEventBuffer(0)[0].getWriteStatuses().size(), is(1));
@@ -685,6 +688,40 @@ public class TestStreamWriteOperatorCoordinator {
     }
   }
 
+  @Test
+  void testInstantRequestPollsWhileCreationBlockedThenSucceeds() throws Exception {
+    MockOperatorCoordinatorContext ctx = (MockOperatorCoordinatorContext) coordinator.getContext();
+    CountDownLatch lockHeld = new CountDownLatch(1);
+    NonThrownExecutor gatedWorker = Mockito.spy(new GatedInstantRequestExecutor(
+        Mockito.mock(Logger.class),
+        (errMsg, t) -> ctx.failJob(new HoodieException(errMsg, t)),
+        lockHeld));
+    coordinator.setInstantRequestExecutor(gatedWorker);
+
+    try {
+      // The first request starts creation; subsequent requests must not queue more work while it is blocked.
+      for (long checkpointId : new long[] {1L, 1L, 2L}) {
+        Correspondent.InstantTimeResponse pending = CoordinationResponseSerDe.unwrap(
+            coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(checkpointId))
+                .get(1, TimeUnit.SECONDS));
+        assertNull(pending.getInstant());
+      }
+      assertTrue(gatedWorker.hasRunningTasks());
+      Mockito.verify(gatedWorker, Mockito.times(1)).execute(Mockito.any(), Mockito.eq("request instant time"));
+    } finally {
+      lockHeld.countDown();
+    }
+
+    String instant = requestInstantTime(1L);
+    assertNotNull(instant);
+    assertEquals(instant, requestInstantTime(1L), "Repeated requests must reuse the instant");
+    assertFalse(ctx.isJobFailed());
+    HoodieTimeline inflights = StreamerUtil.createMetaClient(TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()))
+        .reloadActiveTimeline().filterInflights();
+    assertEquals(1, inflights.countInstants());
+    assertTrue(inflights.containsInstant(instant));
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
@@ -694,12 +731,8 @@ public class TestStreamWriteOperatorCoordinator {
   }
 
   private String requestInstantTime(StreamWriteOperatorCoordinator coordinator, long checkpointId) {
-    try {
-      Correspondent.InstantTimeResponse response = CoordinationResponseSerDe.unwrap(coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(checkpointId)).get());
-      return response.getInstant();
-    } catch (Exception e) {
-      throw new HoodieException("Error requesting the instant time from the coordinator", e);
-    }
+    return new MockCorrespondent(coordinator)
+        .requestInstantTime(checkpointId, TimeUnit.SECONDS.toMillis(10));
   }
 
   private void resetToMergeOnRead(Configuration conf) throws Exception {
@@ -725,6 +758,27 @@ public class TestStreamWriteOperatorCoordinator {
   private static StreamWriteOperatorCoordinator createCoordinator(Configuration conf, int subTasks) {
     MockOperatorCoordinatorContext coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), subTasks);
     return new StreamWriteOperatorCoordinator(conf, coordinatorContext);
+  }
+
+  /**
+   * A real single-thread instant-request worker whose submitted creation task blocks on a latch before
+   * running, to deterministically delay instant creation (simulating a held table lock).
+   */
+  private static final class GatedInstantRequestExecutor extends NonThrownExecutor {
+    private final CountDownLatch gate;
+
+    private GatedInstantRequestExecutor(Logger logger, ExceptionHook exceptionHook, CountDownLatch gate) {
+      super(logger, null, exceptionHook, true);
+      this.gate = gate;
+    }
+
+    @Override
+    public void execute(ThrowingRunnable<Throwable> action, String actionName, Object... actionParams) {
+      super.execute(() -> {
+        gate.await();
+        action.run();
+      }, actionName, actionParams);
+    }
   }
 
   private String mockWriteWithMetadata(long checkpointId) {

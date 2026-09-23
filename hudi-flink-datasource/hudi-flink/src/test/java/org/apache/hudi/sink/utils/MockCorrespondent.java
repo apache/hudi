@@ -18,7 +18,6 @@
 
 package org.apache.hudi.sink.utils;
 
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.event.Correspondent;
 
@@ -32,12 +31,7 @@ public class MockCorrespondent extends Correspondent {
   }
 
   @Override
-  public String requestInstantTime(long checkpointId) {
-    try {
-      InstantTimeResponse response = CoordinationResponseSerDe.unwrap(this.coordinator.handleCoordinationRequest(InstantTimeRequest.getInstance(checkpointId)).get());
-      return response.getInstant();
-    } catch (Exception e) {
-      throw new HoodieException("Error requesting the instant time from the coordinator", e);
-    }
+  protected InstantTimeResponse fetchInstantTimeResponse(long checkpointId) throws Exception {
+    return CoordinationResponseSerDe.unwrap(this.coordinator.handleCoordinationRequest(InstantTimeRequest.getInstance(checkpointId)).get());
   }
 }

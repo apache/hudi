@@ -384,23 +384,30 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public CompletableFuture<CoordinationResponse> handleCoordinationRequest(CoordinationRequest request) {
-    CompletableFuture<CoordinationResponse> response = new CompletableFuture<>();
-    instantRequestExecutor.execute(() -> {
-      Correspondent.InstantTimeRequest instantTimeRequest = (Correspondent.InstantTimeRequest) request;
-      long checkpointId = instantTimeRequest.getCheckpointId();
-      Pair<String, WriteMetadataEvent[]> instantTimeAndEventBuffer = this.eventBuffers.getInstantAndEventBuffer(checkpointId);
-      final String instantTime;
-      if (instantTimeAndEventBuffer == null) {
-        // wait until previous instants are committed.
-        eventBuffers.awaitAllInstantsToCompleteIfNecessary();
-        instantTime = startInstant();
-        this.eventBuffers.initNewEventBuffer(checkpointId, instantTime, this.parallelism);
-      } else {
-        instantTime = instantTimeAndEventBuffer.getLeft();
-      }
-      response.complete(CoordinationResponseSerDe.wrap(Correspondent.InstantTimeResponse.getInstance(instantTime)));
-    }, "request instant time");
-    return response;
+    if (request instanceof Correspondent.InstantTimeRequest) {
+      return handleInstantRequest((Correspondent.InstantTimeRequest) request);
+    }
+    throw new HoodieException("Unexpected coordination request type: " + request.getClass().getSimpleName());
+  }
+
+  private CompletableFuture<CoordinationResponse> handleInstantRequest(Correspondent.InstantTimeRequest request) {
+    if (instantRequestExecutor.hasRunningTasks()) {
+      return CompletableFuture.completedFuture(CoordinationResponseSerDe.wrap(Correspondent.InstantTimeResponse.getInstance(null)));
+    }
+    long checkpointId = request.getCheckpointId();
+    Pair<String, WriteMetadataEvent[]> instantTimeAndEventBuffer = this.eventBuffers.getInstantAndEventBuffer(checkpointId);
+    if (instantTimeAndEventBuffer == null) {
+      instantRequestExecutor.execute(() -> {
+        if (this.eventBuffers.getInstantAndEventBuffer(checkpointId) == null) {
+          // Wait until previous instants are committed.
+          eventBuffers.awaitAllInstantsToCompleteIfNecessary();
+          this.eventBuffers.initNewEventBuffer(checkpointId, startInstant(), this.parallelism);
+        }
+      }, "request instant time");
+      instantTimeAndEventBuffer = this.eventBuffers.getInstantAndEventBuffer(checkpointId);
+    }
+    String instantTime = instantTimeAndEventBuffer == null ? null : instantTimeAndEventBuffer.getLeft();
+    return CompletableFuture.completedFuture(CoordinationResponseSerDe.wrap(Correspondent.InstantTimeResponse.getInstance(instantTime)));
   }
 
   // -------------------------------------------------------------------------

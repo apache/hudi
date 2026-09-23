@@ -23,6 +23,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.Correspondent;
@@ -242,6 +243,6 @@ public abstract class AbstractStreamWriteFunction<I>
    * @return The instant time
    */
   protected String instantToWrite(boolean hasData) {
-    return this.correspondent.requestInstantTime(this.checkpointId);
+    return this.correspondent.requestInstantTime(this.checkpointId, this.config.get(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT));
   }
 }
