@@ -174,7 +174,7 @@ abstract class Spark3LegacyHoodieParquetFileFormat(shouldAppendPartitionValues: 
     // Respect the plan-time OPTION_RETURNING_BATCH decision when present, instead of recomputing it here.
     val returningBatch = enableVectorizedReader &&
       options.get(FileFormat.OPTION_RETURNING_BATCH)
-        .map(_.equals("true"))
+        .map(_ == "true")
         .getOrElse(getReturningBatch(sparkSession, resultSchema))
 
     (file: PartitionedFile) => {
