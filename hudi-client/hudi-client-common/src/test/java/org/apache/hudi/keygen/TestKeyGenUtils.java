@@ -247,12 +247,12 @@ public class TestKeyGenUtils {
     HoodieTableConfig tableConfig = new HoodieTableConfig();
     tableConfig.setValue(KEY_GENERATOR_TYPE, KeyGeneratorType.COMPLEX.name());
     tableConfig.setValue(RECORDKEY_FIELDS, "id");
-    assertTrue(KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig));
+    assertTrue(tableConfig.isComplexKeyGenWithSingleRecordKeyField());
 
     tableConfig = new HoodieTableConfig();
     tableConfig.setValue(RECORDKEY_FIELDS, "userId");
     tableConfig.setValue(KEY_GENERATOR_TYPE, KeyGeneratorType.COMPLEX_AVRO.name());
-    assertTrue(KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig));
+    assertTrue(tableConfig.isComplexKeyGenWithSingleRecordKeyField());
   }
 
   @Test
@@ -260,12 +260,12 @@ public class TestKeyGenUtils {
     HoodieTableConfig tableConfig = new HoodieTableConfig();
     tableConfig.setValue(KEY_GENERATOR_TYPE, KeyGeneratorType.COMPLEX.name());
     tableConfig.setValue(RECORDKEY_FIELDS, "id,userId");
-    assertFalse(KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig));
+    assertFalse(tableConfig.isComplexKeyGenWithSingleRecordKeyField());
 
     tableConfig = new HoodieTableConfig();
     tableConfig.setValue(KEY_GENERATOR_TYPE, KeyGeneratorType.COMPLEX_AVRO.name());
     tableConfig.setValue(RECORDKEY_FIELDS, "id,userId,name");
-    assertFalse(KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig));
+    assertFalse(tableConfig.isComplexKeyGenWithSingleRecordKeyField());
   }
 
   @Test
@@ -273,29 +273,29 @@ public class TestKeyGenUtils {
     HoodieTableConfig tableConfig = new HoodieTableConfig();
     tableConfig.setValue(KEY_GENERATOR_TYPE, KeyGeneratorType.SIMPLE.name());
     tableConfig.setValue(RECORDKEY_FIELDS, "id");
-    assertFalse(KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig));
+    assertFalse(tableConfig.isComplexKeyGenWithSingleRecordKeyField());
 
     tableConfig = new HoodieTableConfig();
     tableConfig.setValue(KEY_GENERATOR_TYPE, KeyGeneratorType.SIMPLE_AVRO.name());
     tableConfig.setValue(RECORDKEY_FIELDS, "userId");
-    assertFalse(KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig));
+    assertFalse(tableConfig.isComplexKeyGenWithSingleRecordKeyField());
 
     tableConfig = new HoodieTableConfig();
     tableConfig.setValue(KEY_GENERATOR_TYPE, KeyGeneratorType.TIMESTAMP.name());
     tableConfig.setValue(RECORDKEY_FIELDS, "id");
-    assertFalse(KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig));
+    assertFalse(tableConfig.isComplexKeyGenWithSingleRecordKeyField());
 
     tableConfig = new HoodieTableConfig();
     tableConfig.setValue(KEY_GENERATOR_TYPE, KeyGeneratorType.CUSTOM.name());
     tableConfig.setValue(RECORDKEY_FIELDS, "id");
-    assertFalse(KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig));
+    assertFalse(tableConfig.isComplexKeyGenWithSingleRecordKeyField());
   }
 
   @Test
   void testIsComplexKeyGeneratorWithSingleRecordKeyFieldOnNoRecordKeyFields() {
     HoodieTableConfig tableConfig = new HoodieTableConfig();
     tableConfig.setValue(KEY_GENERATOR_TYPE, KeyGeneratorType.COMPLEX.name());
-    assertFalse(KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig));
+    assertFalse(tableConfig.isComplexKeyGenWithSingleRecordKeyField());
   }
 
   @Test
@@ -303,7 +303,7 @@ public class TestKeyGenUtils {
     HoodieTableConfig tableConfig = new HoodieTableConfig();
     tableConfig.setValue(KEY_GENERATOR_TYPE, KeyGeneratorType.COMPLEX.name());
     tableConfig.setValue(RECORDKEY_FIELDS, "");
-    assertFalse(KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig));
+    assertFalse(tableConfig.isComplexKeyGenWithSingleRecordKeyField());
   }
 
   /**
@@ -406,17 +406,17 @@ public class TestKeyGenUtils {
 
   @Test
   void testIsComplexKeyGenEncodingTracked() {
-    assertTrue(KeyGenUtils.isComplexKeyGenEncodingTracked(complexKeygenTableConfig(8, "id", null)));
-    assertTrue(KeyGenUtils.isComplexKeyGenEncodingTracked(complexKeygenTableConfig(10, "id", null)));
-    assertFalse(KeyGenUtils.isComplexKeyGenEncodingTracked(complexKeygenTableConfig(9, "id,name", null)));
+    assertTrue(KeyGenUtils.requireComplexKeyGenEncodingTracked(complexKeygenTableConfig(8, "id", null)));
+    assertTrue(KeyGenUtils.requireComplexKeyGenEncodingTracked(complexKeygenTableConfig(10, "id", null)));
+    assertFalse(KeyGenUtils.requireComplexKeyGenEncodingTracked(complexKeygenTableConfig(9, "id,name", null)));
 
     // without a stored record key there is no encoding to track
     HoodieTableConfig virtualKeys = complexKeygenTableConfig(9, "id", null);
     virtualKeys.setValue(HoodieTableConfig.POPULATE_META_FIELDS, "false");
-    assertFalse(KeyGenUtils.isComplexKeyGenEncodingTracked(virtualKeys));
+    assertFalse(KeyGenUtils.requireComplexKeyGenEncodingTracked(virtualKeys));
     HoodieTableConfig commitTimeOnly = complexKeygenTableConfig(10, "id", null);
     commitTimeOnly.setValue(HoodieTableConfig.META_FIELDS_MODE, MetaFieldsMode.COMMIT_TIME_ONLY.name());
-    assertFalse(KeyGenUtils.isComplexKeyGenEncodingTracked(commitTimeOnly));
+    assertFalse(KeyGenUtils.requireComplexKeyGenEncodingTracked(commitTimeOnly));
   }
 
   @Test

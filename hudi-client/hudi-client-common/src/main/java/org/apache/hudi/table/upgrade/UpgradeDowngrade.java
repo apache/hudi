@@ -425,7 +425,7 @@ public class UpgradeDowngrade {
    */
   private void resolveComplexKeygenEncoding(Map<ConfigProperty, String> tablePropsToAdd, String operation) {
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    if (!KeyGenUtils.isComplexKeyGenEncodingTracked(tableConfig) || tableConfig.getComplexKeyGenEncoding().isPresent()) {
+    if (!KeyGenUtils.requireComplexKeyGenEncodingTracked(tableConfig) || tableConfig.getComplexKeyGenEncoding().isPresent()) {
       return;
     }
     ComplexKeyGenEncoding encoding = KeyGenUtils.resolveComplexKeyGenEncodingForWrite(metaClient, config)

@@ -1571,7 +1571,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   protected void ensureComplexKeyGenEncodingRecorded(HoodieTableMetaClient metaClient) {
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    if (KeyGenUtils.isComplexKeyGenEncodingTracked(tableConfig) && !tableConfig.getComplexKeyGenEncoding().isPresent()) {
+    if (KeyGenUtils.requireComplexKeyGenEncodingTracked(tableConfig) && !tableConfig.getComplexKeyGenEncoding().isPresent()) {
       throw new HoodieException(KeyGenUtils.getComplexKeygenEncodingMissingMessage());
     }
   }

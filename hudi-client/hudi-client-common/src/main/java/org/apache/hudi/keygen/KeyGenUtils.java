@@ -78,6 +78,12 @@ import static org.apache.hudi.keygen.KeyGenerator.NULL_RECORDKEY_PLACEHOLDER;
 import static org.apache.hudi.keygen.KeyGenerator.constructRecordKey;
 
 public class KeyGenUtils {
+
+  /**
+   * How many of the most recent commits to inspect when deducing the record key encoding from data. Bounded so
+   * that a table whose latest commits wrote no data files does not turn the upgrade into a full timeline scan.
+   */
+  private static final int MAX_INSTANTS_SCANNED_FOR_ENCODING = 20;
   private static final Logger LOG = LoggerFactory.getLogger(KeyGenUtils.class);
 
   protected static final String HUDI_DEFAULT_PARTITION_PATH = PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
@@ -446,10 +452,6 @@ public class KeyGenUtils {
     // spark-sql sets record key config to empty string for update, and couple of other statements.
   }
 
-  public static boolean isComplexKeyGeneratorWithSingleRecordKeyField(HoodieTableConfig tableConfig) {
-    return tableConfig.isComplexKeyGenWithSingleRecordKeyField();
-  }
-
   /**
    * Guidance for a write that keys records on a tracked table whose encoding has not been recorded yet.
    */
@@ -483,7 +485,7 @@ public class KeyGenUtils {
    * prefix, 8 and below follow {@code hoodie.write.complex.keygen.new.encoding}.
    */
   public static boolean encodeSingleKeyFieldNameForComplexKeyGen(TypedProperties props) {
-    String tableEncoding = props.getProperty(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key());
+    String tableEncoding = ConfigUtils.getStringWithAltKeys(props, HoodieTableConfig.COMPLEX_KEYGEN_ENCODING, StringUtils.EMPTY_STRING);
     if (!StringUtils.isNullOrEmpty(tableEncoding)) {
       return ComplexKeyGenEncoding.fromString(tableEncoding).encodesFieldName();
     }
@@ -498,7 +500,7 @@ public class KeyGenUtils {
    * a complex key generator with a single record key field and a populated {@code _hoodie_record_key}.
    * Without the meta field there is no stored key whose encoding could diverge from the key generator's.
    */
-  public static boolean isComplexKeyGenEncodingTracked(HoodieTableConfig tableConfig) {
+  public static boolean requireComplexKeyGenEncodingTracked(HoodieTableConfig tableConfig) {
     return tableConfig.isComplexKeyGenWithSingleRecordKeyField() && tableConfig.isRecordKeyPopulated();
   }
 
@@ -567,7 +569,7 @@ public class KeyGenUtils {
    * once during setup, before creating record keys. Existing data determines the encoding under the table lock.
    */
   public static void recordComplexKeygenEncodingIfMissing(HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
-    if (!isComplexKeyGenEncodingTracked(metaClient.getTableConfig())
+    if (!requireComplexKeyGenEncodingTracked(metaClient.getTableConfig())
         || metaClient.getTableConfig().getComplexKeyGenEncoding().isPresent()) {
       return;
     }
@@ -614,7 +616,7 @@ public class KeyGenUtils {
 
   /**
    * Resolves the record key encoding a writer must use and persist on a table whose encoding is tracked
-   * ({@link #isComplexKeyGenEncodingTracked}) but not yet recorded: the encoding deduced from the data,
+   * ({@link #requireComplexKeyGenEncodingTracked}) but not yet recorded: the encoding deduced from the data,
    * otherwise the configured {@code hoodie.write.complex.keygen.new.encoding} when
    * {@code hoodie.write.complex.keygen.validation.enable} is false.
    *
@@ -641,20 +643,24 @@ public class KeyGenUtils {
    * Deduces the record key encoding of a single-field complex key generator table from the
    * {@code _hoodie_record_key} stored in its most recently written data file.
    *
-   * @return {@link ComplexKeyGenEncoding#FIELD_PREFIXED} for a table that never had data files, the encoding
-   * read from the first readable base or log file otherwise, or empty when the table has (or had) data files
-   * but none of them yields a record key
+   * @return {@link ComplexKeyGenEncoding#FIELD_PREFIXED} for a table that was never written to, the encoding
+   * read from the first readable base or log file among the most recent commits otherwise, or empty when none
+   * of the commits inspected yields a record key
    */
   public static Option<ComplexKeyGenEncoding> deduceComplexKeyGenEncodingFromData(HoodieTableMetaClient metaClient) {
     String expectedPrefix = metaClient.getTableConfig().getRecordKeyFields().get()[0] + DEFAULT_COLUMN_VALUE_SEPARATOR;
     HoodieTimeline completedTimeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-    boolean hasDataFiles = false;
-    for (HoodieInstant instant : completedTimeline.getReverseOrderedInstants().collect(Collectors.toList())) {
+    if (completedTimeline.empty()) {
+      // Nothing was ever written, so there is no stored key whose encoding could differ from the canonical one.
+      return Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED);
+    }
+    List<HoodieInstant> instantsToScan = completedTimeline.getReverseOrderedInstants()
+        .limit(MAX_INSTANTS_SCANNED_FOR_ENCODING).collect(Collectors.toList());
+    for (HoodieInstant instant : instantsToScan) {
       for (HoodieWriteStat writeStat : getWriteStats(instant, completedTimeline)) {
         if (StringUtils.isNullOrEmpty(writeStat.getPath())) {
           continue;
         }
-        hasDataFiles = true;
         StoragePath path = new StoragePath(metaClient.getBasePath(), writeStat.getPath());
         Option<String> recordKey = readFirstRecordKey(metaClient, path);
         if (recordKey.isPresent()) {
@@ -666,26 +672,10 @@ public class KeyGenUtils {
         }
       }
     }
-    if (hasDataFiles || hasArchivedCommits(metaClient)) {
-      LOG.warn("No data file with a readable record key found in table {}; the complex keygen record key "
-          + "encoding cannot be deduced", metaClient.getBasePath());
-      return Option.empty();
-    }
-    return Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED);
-  }
-
-  /**
-   * Data files may have been written by commits that have since been archived; only a table without any is new.
-   * A listing of the archive folder answers that without loading the archived timeline.
-   */
-  private static boolean hasArchivedCommits(HoodieTableMetaClient metaClient) {
-    try {
-      StoragePath archivePath = metaClient.getArchivePath();
-      return metaClient.getStorage().exists(archivePath) && !metaClient.getStorage().listDirectEntries(archivePath).isEmpty();
-    } catch (Exception e) {
-      LOG.warn("Could not list the archive folder of table {}", metaClient.getBasePath(), e);
-      return true;
-    }
+    LOG.warn("The most recent {} commit(s) of table {} yielded no data file with a readable record key, so the "
+            + "complex keygen record key encoding cannot be deduced from the data.",
+        instantsToScan.size(), metaClient.getBasePath());
+    return Option.empty();
   }
 
   /**
