@@ -30,11 +30,13 @@ import org.apache.hudi.testutils.DataSourceTestUtils
 
 import org.apache.hadoop.fs.{Path => HadoopPath}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
+import org.apache.spark.sql.Row
 import org.apache.spark.sql.SaveMode
+import org.apache.spark.sql.execution.FileSourceScanExec
 import org.apache.spark.sql.execution.datasources.parquet.HoodieFileGroupReaderBasedFileFormat
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMetadata
-import org.apache.spark.sql.types.{IntegerType, LongType, StructField, StructType}
+import org.apache.spark.sql.types.{ArrayType, DataType, IntegerType, LongType, MapType, StructField, StructType}
 
 import scala.collection.JavaConverters._
 
@@ -1344,6 +1346,167 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
         Seq(2, """{"k":"b1x"}""", null, 1)
       )
     })
+  }
+
+  test("Variants reached through array elements and map values read correctly on every path") {
+    assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
+
+    // PushVariantIntoScan rewrites struct paths only (VariantInRelation.rewriteType), so a variant
+    // that is an array element or a map value reaches the reader as native VariantType on both
+    // arms, and the reader context's overlay and row projector leave it alone (#19783). "Left
+    // alone" has to mean read correctly, not merely unrewritten, so every path is checked for the
+    // values themselves: parquet base files, parquet and avro log blocks, and the merged MOR row,
+    // including a null element, a null map value and a null struct member that arrive through the
+    // log, beside a top-level variant that IS rewritten on the conf-on arm in the very same scan.
+    val collectionCols = "arr array<variant>, m map<string, variant>, items array<struct<inner: variant>>"
+    def rowsSql(lo: Int, hi: Int): String =
+      s"""select cast(id as int) as id, parse_json(concat('{"k":"t', id, '"}')) as v,
+         | array(parse_json(concat('{"k":"a', id, '"}')), parse_json(concat('{"k":"b', id, '"}'))) as arr,
+         | map('p', parse_json(concat('{"k":"p', id, '"}')), 'q', parse_json(concat('{"k":"q', id, '"}'))) as m,
+         | array(named_struct('inner', parse_json(concat('{"k":"i', id, '"}')))) as items,
+         | 1000L as ts from range($lo, $hi, 1, 1)""".stripMargin
+
+    // ids 0-2 keep their inserted values, id 3 is updated, and id 4's update nulls the map value
+    // under 'q', the struct member inside the array element and, on the SPARK legs, the second
+    // array element. The AVRO legs keep that element non-null: the Avro write path forces
+    // parquet-avro's old list structure, which cannot write a null array element of ANY type
+    // ("Array contains a null element at 1"), a write-side limit unrelated to variants.
+    def top(id: Int): String = if (id < 3) s"t$id" else s"T$id"
+    def first(id: Int): String = if (id < 3) s"a$id" else s"A$id"
+    def second(id: Int, nullElement: Boolean): String =
+      if (id < 3) s"b$id" else if (id == 3 || !nullElement) s"B$id" else null
+    def pVal(id: Int): String = if (id < 3) s"p$id" else s"P$id"
+    def qVal(id: Int): String = if (id < 3) s"q$id" else if (id == 3) "Q3" else null
+    def item(id: Int): String = if (id < 3) s"i$id" else if (id == 3) "I3" else null
+    def json(k: String): String = Option(k).map(k => s"""{"k":"$k"}""").orNull
+
+    def assertCollectionsNative(sql: String, pushed: Boolean, leg: String): Unit = {
+      val scans = spark.sql(sql).queryExecution.sparkPlan.collect { case scan: FileSourceScanExec => scan }
+      assert(scans.nonEmpty, s"[$leg] expected a file scan in the plan of: $sql")
+      val required = scans.head.requiredSchema
+      def field(name: String): DataType = required.fields.find(_.name == name)
+        .getOrElse(fail(s"[$leg] scan does not read '$name': ${required.treeString}")).dataType
+      val adapter = SparkAdapterSupport.sparkAdapter
+      // The array element, the map value and the struct member inside the array element are all
+      // native VariantType in the scan on both arms; only the top-level column follows the conf.
+      assert(adapter.isVariantType(field("arr").asInstanceOf[ArrayType].elementType),
+        s"[$leg] arr's element should be native VariantType in the scan: ${required.treeString}")
+      assert(adapter.isVariantType(field("m").asInstanceOf[MapType].valueType),
+        s"[$leg] m's value should be native VariantType in the scan: ${required.treeString}")
+      val itemsElement = field("items").asInstanceOf[ArrayType].elementType.asInstanceOf[StructType]
+      assert(adapter.isVariantType(itemsElement("inner").dataType),
+        s"[$leg] items' element member should be native VariantType in the scan: ${required.treeString}")
+      assert(adapter.containsVariantProjection(field("v")) == pushed,
+        s"[$leg] the top-level v ${if (pushed) "should" else "must not"} be a projection struct: ${required.treeString}")
+    }
+
+    def runLeg(tableName: String, tablePath: String, tableType: String, pushed: Boolean,
+               nullElement: Boolean, expectedBlock: Option[HoodieLogBlockType], leg: String): Unit = {
+      def secondOf(id: Int): String = second(id, nullElement)
+      val secondElementSql = if (nullElement) {
+        """case when id = 4 then null else parse_json(concat('{"k":"B', id, '"}')) end"""
+      } else {
+        """parse_json(concat('{"k":"B', id, '"}'))"""
+      }
+      spark.sql(s"insert into $tableName ${rowsSql(0, 5)}")
+      spark.sql(s"update $tableName set " +
+        """v = parse_json(concat('{"k":"T', id, '"}')), """ +
+        s"""arr = array(parse_json(concat('{"k":"A', id, '"}')), $secondElementSql), """ +
+        """m = map('p', parse_json(concat('{"k":"P', id, '"}')), """ +
+        """  'q', case when id = 4 then null else parse_json(concat('{"k":"Q', id, '"}')) end), """ +
+        """items = array(named_struct('inner', """ +
+        """  case when id = 4 then null else parse_json(concat('{"k":"I', id, '"}')) end)), """ +
+        "ts = 1001 where id >= 3")
+      expectedBlock.foreach { block =>
+        val blockTypes = listLogBlockTypes(tablePath)
+        assert(blockTypes.contains(block), s"[$leg] expected a $block in the log files, found: $blockTypes")
+      }
+
+      // Extractions. get(arr, 1) rather than arr[1] only for symmetry with the shredded array test
+      // above; every row here has two elements.
+      val extractions = s"select id, variant_get(v, '$$.k', 'string'), " +
+        s"variant_get(arr[0], '$$.k', 'string'), variant_get(get(arr, 1), '$$.k', 'string'), size(arr), " +
+        s"variant_get(m['p'], '$$.k', 'string'), variant_get(element_at(m, 'q'), '$$.k', 'string'), size(m), " +
+        s"variant_get(items[0].inner, '$$.k', 'string') from $tableName order by id"
+      checkAnswer(extractions)(
+        (0 until 5).map(id => Seq(id, top(id), first(id), secondOf(id), 2, pVal(id), qVal(id), 2, item(id))): _*)
+      assertCollectionsNative(extractions, pushed, leg)
+      // Casts of the whole element / value.
+      checkAnswer(s"select id, cast(arr[0] as string), cast(get(arr, 1) as string), " +
+        s"cast(m['p'] as string), cast(m['q'] as string), cast(items[0].inner as string) " +
+        s"from $tableName order by id")(
+        (0 until 5).map(id => Seq(id, json(first(id)), json(secondOf(id)), json(pVal(id)), json(qVal(id)), json(item(id)))): _*)
+      // Filters served off a log row (ids 3, 4) and off a base row (id 1).
+      checkAnswer(s"select id from $tableName where variant_get(arr[0], '$$.k', 'string') = 'A3'")(Seq(3))
+      checkAnswer(s"select id from $tableName where variant_get(arr[0], '$$.k', 'string') = 'a1'")(Seq(1))
+      checkAnswer(s"select id from $tableName where variant_get(m['p'], '$$.k', 'string') = 'P3'")(Seq(3))
+      checkAnswer(s"select id from $tableName where variant_get(m['p'], '$$.k', 'string') = 'p1'")(Seq(1))
+      checkAnswer(s"select id from $tableName where variant_get(items[0].inner, '$$.k', 'string') = 'I3'")(Seq(3))
+      // Nulls that arrived through the log: the element, the map value and the struct member.
+      checkAnswer(s"select id from $tableName where get(arr, 1) is null")(
+        (if (nullElement) Seq(Seq(4)) else Seq.empty): _*)
+      checkAnswer(s"select count(*) from $tableName where get(arr, 1) is not null")(
+        Seq(if (nullElement) 4 else 5))
+      checkAnswer(s"select id from $tableName where m['q'] is null")(Seq(4))
+      checkAnswer(s"select count(*) from $tableName where m['q'] is not null")(Seq(4))
+      checkAnswer(s"select id from $tableName where items[0].inner is null")(Seq(4))
+      checkAnswer(s"select id from $tableName where arr[0] is null or m['p'] is null")()
+      // Exploded elements and entries keep their values and their nulls.
+      checkAnswer(s"select id, pos, variant_get(e, '$$.k', 'string') from $tableName " +
+        s"lateral view posexplode(arr) as pos, e order by id, pos")(
+        (0 until 5).flatMap(id => Seq(Seq(id, 0, first(id)), Seq(id, 1, secondOf(id)))): _*)
+      checkAnswer(s"select id, k, variant_get(mv, '$$.k', 'string') from $tableName " +
+        s"lateral view explode(m) as k, mv order by id, k")(
+        (0 until 5).flatMap(id => Seq(Seq(id, "p", pVal(id)), Seq(id, "q", qVal(id)))): _*)
+      // The whole collections: no extraction anywhere, so nothing is rewritten on either arm, and
+      // the values come back as VariantVal (toString is the JSON) with the nulls in place.
+      val whole = spark.sql(s"select id, arr, m, items from $tableName order by id").collect()
+      assert(whole.length == 5, s"[$leg] whole-collection read should return 5 rows")
+      whole.foreach { row =>
+        val id = row.getInt(0)
+        val arr = row.getSeq[Any](1).map(e => Option(e).map(_.toString).orNull)
+        assert(arr == Seq(json(first(id)), json(secondOf(id))), s"[$leg] arr of id $id: $arr")
+        val m = row.getMap[String, Any](2).map { case (k, e) => k -> Option(e).map(_.toString).orNull }
+        assert(m == Map("p" -> json(pVal(id)), "q" -> json(qVal(id))), s"[$leg] m of id $id: $m")
+        val items = row.getSeq[Row](3).map(s => Option(s.getAs[Any]("inner")).map(_.toString).orNull)
+        assert(items == Seq(json(item(id))), s"[$leg] items of id $id: $items")
+      }
+    }
+
+    Seq("cow", "mor").foreach { tableType =>
+      Seq("true", "false").foreach { pushIntoScan =>
+        Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK).foreach { recordType =>
+          withSQLConf("spark.sql.variant.pushVariantIntoScan" -> pushIntoScan) {
+            withVariantTable(s"collections $tableType pushVariantIntoScan=$pushIntoScan", tableType,
+              props = Seq("hoodie.compact.inline = 'false'"), extraCols = collectionCols,
+              recordTypes = Seq(recordType)) { (tableName, tablePath, leg) =>
+              // On the current table version the append handle writes native parquet log files
+              // whatever the record type, so both MOR record types read parquet data blocks here.
+              runLeg(tableName, tablePath, tableType, pushIntoScan.toBoolean,
+                nullElement = recordType == HoodieRecordType.SPARK,
+                expectedBlock = if (tableType == "mor") Some(HoodieLogBlockType.PARQUET_DATA_BLOCK) else None,
+                leg)
+            }
+          }
+        }
+      }
+    }
+
+    // Avro data blocks: the other log path, HoodieReaderContext.projectLogBlockRecords plus the
+    // avro deserializer's variant arm reached through an array element and a map value. Only a
+    // pre-native table version writes them.
+    Seq("true", "false").foreach { pushIntoScan =>
+      withSQLConf("spark.sql.variant.pushVariantIntoScan" -> pushIntoScan) {
+        withVariantTable(s"collections mor avro blocks pushVariantIntoScan=$pushIntoScan", "mor",
+          props = Seq("hoodie.compact.inline = 'false'",
+            "hoodie.write.table.version = '9'",
+            "hoodie.logfile.data.block.format = 'avro'"),
+          extraCols = collectionCols, recordTypes = Seq(HoodieRecordType.AVRO)) { (tableName, tablePath, leg) =>
+          runLeg(tableName, tablePath, "mor", pushIntoScan.toBoolean, nullElement = false,
+            expectedBlock = Some(HoodieLogBlockType.AVRO_DATA_BLOCK), leg)
+        }
+      }
+    }
   }
 
   // -----------------------------------------------------------------------------------------------
