@@ -1083,6 +1083,28 @@ public class TestHoodieSchemaUtils {
   }
 
   @Test
+  public void testGenerateProjectionSchemaWithPrebuiltFieldMap() {
+    HoodieSchema originalSchema = HoodieSchema.parse("{\"type\": \"record\",\"name\": \"rec\",\"fields\": ["
+            + "{\"name\": \"ID\", \"type\": \"string\"},"
+            + "{\"name\": \"Name\", \"type\": \"string\"},"
+            + "{\"name\": \"value\", \"type\": \"int\"}]}");
+
+    Map<String, HoodieSchemaField> schemaFieldsMap = originalSchema.getFields().stream()
+            .collect(Collectors.toMap(
+                    field -> field.name().toLowerCase(Locale.ROOT),
+                    field -> field));
+
+    HoodieSchema projected = HoodieSchemaUtils.generateProjectionSchema(
+            originalSchema,
+            schemaFieldsMap,
+            Arrays.asList("name", "ID"));
+
+    assertEquals(2, projected.getFields().size());
+    assertEquals("Name", projected.getFields().get(0).name());
+    assertEquals("ID", projected.getFields().get(1).name());
+  }
+
+  @Test
   public void testAppendFieldsToSchemaDedupNested() {
     HoodieSchema fullSchema = HoodieSchema.parse("{\n"
         + "  \"type\": \"record\",\n"

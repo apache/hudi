@@ -506,18 +506,8 @@ public final class HoodieSchemaUtils {
     Map<String, HoodieSchemaField> schemaFieldsMap = originalSchema.getFields().stream()
         .map(r -> Pair.of(r.name().toLowerCase(Locale.ROOT), r))
         .collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
-    List<HoodieSchemaField> projectedFields = new ArrayList<>(fieldNames.size());
-    for (String fn : fieldNames) {
-      HoodieSchemaField field = schemaFieldsMap.get(fn.toLowerCase(Locale.ROOT));
-      if (field == null) {
-        throw new HoodieException("Field " + fn + " not found in log schema. Query cannot proceed! "
-            + "Derived Schema Fields: " + new ArrayList<>(schemaFieldsMap.keySet()));
-      } else {
-        projectedFields.add(createNewSchemaField(field));
-      }
-    }
 
-    return HoodieSchema.createRecord(originalSchema.getName(), originalSchema.getNamespace().orElse(null), originalSchema.getDoc().orElse(null), projectedFields);
+    return generateProjectionSchema(originalSchema, schemaFieldsMap, fieldNames);
   }
 
   /**
