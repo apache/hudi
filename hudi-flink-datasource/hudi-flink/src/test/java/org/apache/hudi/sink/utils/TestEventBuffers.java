@@ -48,11 +48,11 @@ public class TestEventBuffers {
 
     ExecutorService executor = Executors.newSingleThreadExecutor();
     try {
-      // two tasks requesting instant for checkpoint 2 block waiting on the prior instant (checkpoint 1) to commit.
+      // two tasks block waiting on commit.
       CompletableFuture<Void> waitingFuture1 = CompletableFuture.runAsync(
-          () -> eventBuffers.awaitAllInstantsToCompleteIfNecessary(2L), executor);
+          eventBuffers::awaitAllInstantsToCompleteIfNecessary, executor);
       CompletableFuture<Void> waitingFuture2 = CompletableFuture.runAsync(
-          () -> eventBuffers.awaitAllInstantsToCompleteIfNecessary(2L), executor);
+          eventBuffers::awaitAllInstantsToCompleteIfNecessary, executor);
 
       Thread.sleep(100);
       assertFalse(waitingFuture1.isDone());

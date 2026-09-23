@@ -89,9 +89,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
@@ -829,74 +826,36 @@ public class TestStreamWriteOperatorCoordinator {
 
   @Test
   void testInstantRequestPollsWhileCreationBlockedThenSucceeds() throws Exception {
-    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-    coordinator = createCoordinator(conf, 2);
-    coordinator.start();
     MockOperatorCoordinatorContext ctx = (MockOperatorCoordinatorContext) coordinator.getContext();
-    coordinator.setExecutor(new MockCoordinatorExecutor(ctx));
-    // A real single-thread worker whose creation task blocks on the latch, simulating a held table lock
-    // (e.g. by cleaning) that outlasts the Flink coordination RPC ask timeout.
     CountDownLatch lockHeld = new CountDownLatch(1);
-    NonThrownExecutor gatedWorker = new GatedInstantRequestExecutor(
+    NonThrownExecutor gatedWorker = Mockito.spy(new GatedInstantRequestExecutor(
         Mockito.mock(Logger.class),
         (errMsg, t) -> ctx.failJob(new HoodieException(errMsg, t)),
-        lockHeld);
+        lockHeld));
     coordinator.setInstantRequestExecutor(gatedWorker);
 
-    final long checkpointId = 1L;
-    // Much larger than the (default 10s) RPC ask timeout, so the client keeps polling across it.
-    final long pollBudgetMs = 30_000L;
-    MockCorrespondent correspondent = new MockCorrespondent(coordinator);
-    ExecutorService writers = Executors.newFixedThreadPool(2);
     try {
-      Future<String> writer0 = writers.submit(() -> correspondent.requestInstantTime(checkpointId, pollBudgetMs));
-      Future<String> writer1 = writers.submit(() -> correspondent.requestInstantTime(checkpointId, pollBudgetMs));
-
-      try {
-        // While creation is blocked, a direct RPC must return promptly with PENDING (never blocking on the lock).
+      // The first request starts creation; subsequent requests must not queue more work while it is blocked.
+      for (long checkpointId : new long[] {1L, 1L, 2L}) {
         Correspondent.InstantTimeResponse pending = CoordinationResponseSerDe.unwrap(
-            coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(checkpointId)).get());
-        assertThat("RPC must return PENDING promptly while creation is blocked",
-            pending.getStatus(), is(Correspondent.Status.PENDING));
-        assertFalse(ctx.isJobFailed(), "No pipeline restart while the instant creation is in-flight");
-      } finally {
-        // Release the "lock": creation proceeds and both writers should observe READY.
-        lockHeld.countDown();
+            coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(checkpointId))
+                .get(1, TimeUnit.SECONDS));
+        assertNull(pending.getInstant());
       }
-
-      String instant0 = writer0.get(pollBudgetMs + 10_000, TimeUnit.MILLISECONDS);
-      String instant1 = writer1.get(pollBudgetMs + 10_000, TimeUnit.MILLISECONDS);
-      assertNotNull(instant0);
-      assertThat(instant0, not(is("")));
-      assertEquals(instant0, instant1, "Concurrent writers on the same checkpoint must share exactly one instant");
-      assertFalse(ctx.isJobFailed(), "Instant creation succeeds without a pipeline restart");
-
-      HoodieTimeline inflights = StreamerUtil.createMetaClient(conf).reloadActiveTimeline().filterInflights();
-      assertThat("Exactly one instant created for the checkpoint", inflights.countInstants(), is(1));
-      assertTrue(inflights.containsInstant(instant0), "The shared instant must be the one created on the timeline");
+      assertTrue(gatedWorker.hasRunningTasks());
+      Mockito.verify(gatedWorker, Mockito.times(1)).execute(Mockito.any(), Mockito.eq("request instant time"));
     } finally {
       lockHeld.countDown();
-      writers.shutdownNow();
     }
-  }
 
-  @Test
-  void testResetAllowsInstantCreationToBeResubmitted() throws Exception {
-    final long checkpointId = 1L;
-    NonThrownExecutor stalledWorker = Mockito.mock(NonThrownExecutor.class);
-    coordinator.setInstantRequestExecutor(stalledWorker);
-
-    Correspondent.InstantTimeResponse pending = CoordinationResponseSerDe.unwrap(
-        coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(checkpointId)).get());
-    assertEquals(Correspondent.Status.PENDING, pending.getStatus());
-
-    coordinator.resetToCheckpoint(checkpointId, null);
-    MockOperatorCoordinatorContext context = (MockOperatorCoordinatorContext) coordinator.getContext();
-    coordinator.setInstantRequestExecutor(new MockCoordinatorExecutor(context));
-
-    String instant = requestInstantTime(checkpointId);
+    String instant = requestInstantTime(1L);
     assertNotNull(instant);
-    assertThat(instant, not(is("")));
+    assertEquals(instant, requestInstantTime(1L), "Repeated requests must reuse the instant");
+    assertFalse(ctx.isJobFailed());
+    HoodieTimeline inflights = StreamerUtil.createMetaClient(TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()))
+        .reloadActiveTimeline().filterInflights();
+    assertEquals(1, inflights.countInstants());
+    assertTrue(inflights.containsInstant(instant));
   }
 
   // -------------------------------------------------------------------------
@@ -939,7 +898,7 @@ public class TestStreamWriteOperatorCoordinator {
 
   /**
    * A real single-thread instant-request worker whose submitted creation task blocks on a latch before
-   * running, to deterministically hold the coordinator in the PENDING state (simulating a held table lock).
+   * running, to deterministically delay instant creation (simulating a held table lock).
    */
   private static final class GatedInstantRequestExecutor extends NonThrownExecutor {
     private final CountDownLatch gate;
