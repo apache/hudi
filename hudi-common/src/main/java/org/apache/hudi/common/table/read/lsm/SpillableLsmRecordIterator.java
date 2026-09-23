@@ -22,6 +22,7 @@ package org.apache.hudi.common.table.read.lsm;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -72,7 +73,7 @@ class SpillableLsmRecordIterator<T> implements ClosableIterator<BufferedRecord<T
     } catch (IOException e) {
       spillFailure = e;
       throw new HoodieIOException("Failed to spill LSM input iterator", e);
-    } catch (RuntimeException e) {
+    } catch (Throwable e) {
       spillFailure = e;
       throw e;
     } finally {
@@ -89,8 +90,8 @@ class SpillableLsmRecordIterator<T> implements ClosableIterator<BufferedRecord<T
         outputStream.write(bytes);
         count++;
       }
-    } catch (IOException | RuntimeException e) {
-      deleteSpillFile();
+    } catch (Throwable e) {
+      CloseableUtils.closeSuppressing(this::deleteSpillFile, e);
       throw e;
     }
     return count;
@@ -162,10 +163,13 @@ class SpillableLsmRecordIterator<T> implements ClosableIterator<BufferedRecord<T
                                    Throwable spillFailure) {
     try {
       sourceIterator.close();
-    } catch (RuntimeException e) {
+    } catch (Throwable e) {
       if (spillFailure != null) {
         spillFailure.addSuppressed(e);
       } else {
+        // Closing the source iterator failed, so construction cannot complete and the outer reader
+        // cannot call close() on this spill iterator. Delete its spill file here to avoid leaking it.
+        CloseableUtils.closeSuppressing(this::deleteSpillFile, e);
         throw e;
       }
     }
