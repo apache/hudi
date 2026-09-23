@@ -314,7 +314,8 @@ class TestLegacyParquetReadPath extends HoodieSparkClientTestBase with ScalaAsse
     // row-based while supportBatch, lacking a field-count check, still says batchable.
     val numExtraColumns = 150 // comfortably over spark.sql.codegen.maxFields's default of 100
     val baseDf = spark.createDataFrame(Seq(FlatTestRow("1", "a", "p0"), FlatTestRow("2", "b", "p0")))
-    val wideDf = (1 to numExtraColumns).foldLeft(baseDf) { (df, i) => df.withColumn(s"col$i", lit(i.toLong)) }
+    val extraCols = (1 to numExtraColumns).map(i => lit(i.toLong).as(s"col$i"))
+    val wideDf = baseDf.select((baseDf.columns.map(col) ++ extraCols): _*)
     assertTrue(wideDf.schema.fields.length > 100, "Test setup must produce a >100 column schema")
 
     wideDf.write.format("hudi")
