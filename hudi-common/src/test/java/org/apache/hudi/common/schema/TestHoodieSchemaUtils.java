@@ -2419,5 +2419,15 @@ public class TestHoodieSchemaUtils {
     HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
     assertFalse(HoodieSchemaUtils.isTimestampMillisField(stringSchema),
         "Should return false for string");
+
+    // Test local-timestamp-millis
+    assertTrue(HoodieSchemaUtils.isTimestampMillisField(
+                    HoodieSchema.createLocalTimestampMillis()),
+            "Should return true for local-timestamp-millis");
+
+    // Test local-timestamp-micros (should return false)
+    assertFalse(HoodieSchemaUtils.isTimestampMillisField(
+                    HoodieSchema.createLocalTimestampMicros()),
+            "Should return false for local-timestamp-micros");
   }
 }

@@ -487,7 +487,7 @@ public final class HoodieSchemaUtils {
    *
    * <p>Field names are matched case-insensitively and the projected field keeps the schema's original casing:
    * Avro field names are case-sensitive while Hive lowercases column projections before they reach the reader
-   * (see {@code HoodieRealtimeRecordReaderUtils#generateProjectionSchema}), so both sides are lowercased with
+   * (see {@link #generateProjectionSchema(HoodieSchema, Map, List)}), so both sides are lowercased with
    * {@code Locale.ROOT} for the lookup. The default locale would map an upper-case I to dotless-i under a Turkish
    * or Azeri locale and break the match with {@code HiveHoodieReaderContext}, which pre-lowercases with
    * {@code Locale.ROOT}. A schema with two fields that differ only in case cannot be projected and fails on the
@@ -517,9 +517,13 @@ public final class HoodieSchemaUtils {
    * such as the realtime reader.</p>
    *
    * @param writeSchema      the source schema
-   * @param schemaFieldsMap  prebuilt case-insensitive field-name map
+   * @param schemaFieldsMap field map keyed by names lowercased with {@code Locale.ROOT}, as built by
+   *                        {@code HoodieRealtimeRecordReaderUtils#getNameToFieldMap}
    * @param fieldNames       the list of field names to include in the projection
    * @return new HoodieSchema containing only the specified fields
+   * @throws IllegalArgumentException if {@code writeSchema}, {@code schemaFieldsMap},
+   *     or {@code fieldNames} is null
+   * @since 1.2.0
    */
   public static HoodieSchema generateProjectionSchema(HoodieSchema writeSchema,
                                                       Map<String, HoodieSchemaField> schemaFieldsMap,
@@ -539,10 +543,10 @@ public final class HoodieSchemaUtils {
      *
      */
     List<HoodieSchemaField> projectedFields = new ArrayList<>(fieldNames.size());
-    for (String fn : fieldNames) {
-      HoodieSchemaField field = schemaFieldsMap.get(fn.toLowerCase(Locale.ROOT));
+    for (String fieldName : fieldNames) {
+      HoodieSchemaField field = schemaFieldsMap.get(fieldName.toLowerCase(Locale.ROOT));
       if (field == null) {
-        throw new HoodieException("Field " + fn + " not found in log schema. Query cannot proceed! "
+        throw new HoodieException("Field " + fieldName + " not found in log schema. Query cannot proceed! "
                 + "Derived Schema Fields: " + new ArrayList<>(schemaFieldsMap.keySet()));
       } else {
         projectedFields.add(createNewSchemaField(field));
@@ -1037,6 +1041,8 @@ public final class HoodieSchemaUtils {
 
   /**
    * Checks if a schema field is of type timestamp_millis (timestamp-millis or local-timestamp-millis).
+   *
+   * <p>For multi-branch unions, this method returns false.</p>
    *
    * @param fieldSchema The schema of the field to check
    * @return true if the field is of type timestamp_millis, false otherwise
