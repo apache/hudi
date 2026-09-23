@@ -120,7 +120,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @Test
   public void testCheckpointFails() throws Exception {
     // reset the config option
-    conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1L);
+    conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 10_000L);
     preparePipeline(conf)
         // no data written and triggers checkpoint fails,
         // then we should revert the start instant
@@ -139,7 +139,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @ParameterizedTest
   @EnumSource(value = HoodieIndex.IndexType.class,  names = {"FLINK_STATE", "GLOBAL_RECORD_LEVEL_INDEX"})
   public void testSubtaskFails(HoodieIndex.IndexType indexType) throws Exception {
-    conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1L);
+    conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 10_000L);
     conf.set(FlinkOptions.INDEX_TYPE, indexType.name());
     if (indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX) {
       conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
@@ -231,7 +231,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   // Task level failed retry, we should reuse the unfinished Instant with INSERT operationType
   @Test
   public void testPartialFailover() throws Exception {
-    conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1L);
+    conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 10_000L);
     conf.set(FlinkOptions.OPERATION, "INSERT");
     // open the function and ingest data
     preparePipeline()
