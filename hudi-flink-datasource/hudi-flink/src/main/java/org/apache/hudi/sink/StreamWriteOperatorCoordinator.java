@@ -412,22 +412,23 @@ public class StreamWriteOperatorCoordinator
   }
 
   private CompletableFuture<CoordinationResponse> handleInstantRequest(Correspondent.InstantTimeRequest request) {
-    CompletableFuture<CoordinationResponse> response = new CompletableFuture<>();
-    instantRequestExecutor.execute(() -> {
-      long checkpointId = request.getCheckpointId();
-      Pair<String, EventBuffer> instantTimeAndEventBuffer = this.eventBuffers.getInstantAndEventBuffer(checkpointId);
-      final String instantTime;
-      if (instantTimeAndEventBuffer == null) {
-        // wait until previous instants are committed.
-        eventBuffers.awaitAllInstantsToCompleteIfNecessary();
-        instantTime = startInstant();
-        this.eventBuffers.initNewEventBuffer(checkpointId, instantTime);
-      } else {
-        instantTime = instantTimeAndEventBuffer.getLeft();
-      }
-      response.complete(CoordinationResponseSerDe.wrap(Correspondent.InstantTimeResponse.getInstance(instantTime)));
-    }, "request instant time");
-    return response;
+    if (instantRequestExecutor.hasRunningTasks()) {
+      return CompletableFuture.completedFuture(CoordinationResponseSerDe.wrap(Correspondent.InstantTimeResponse.getInstance(null)));
+    }
+    long checkpointId = request.getCheckpointId();
+    Pair<String, EventBuffer> instantTimeAndEventBuffer = this.eventBuffers.getInstantAndEventBuffer(checkpointId);
+    if (instantTimeAndEventBuffer == null) {
+      instantRequestExecutor.execute(() -> {
+        if (this.eventBuffers.getInstantAndEventBuffer(checkpointId) == null) {
+          // Wait until previous instants are committed.
+          eventBuffers.awaitAllInstantsToCompleteIfNecessary();
+          this.eventBuffers.initNewEventBuffer(checkpointId, startInstant());
+        }
+      }, "request instant time");
+      instantTimeAndEventBuffer = this.eventBuffers.getInstantAndEventBuffer(checkpointId);
+    }
+    String instantTime = instantTimeAndEventBuffer == null ? null : instantTimeAndEventBuffer.getLeft();
+    return CompletableFuture.completedFuture(CoordinationResponseSerDe.wrap(Correspondent.InstantTimeResponse.getInstance(instantTime)));
   }
 
   private CompletableFuture<CoordinationResponse> handleInFlightInstantsRequest(Correspondent.InflightInstantsRequest request) {

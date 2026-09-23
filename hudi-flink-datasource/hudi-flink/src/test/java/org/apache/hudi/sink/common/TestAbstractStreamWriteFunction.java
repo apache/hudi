@@ -21,6 +21,7 @@ package org.apache.hudi.sink.common;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.utils.MockOperatorStateStore;
@@ -84,7 +85,7 @@ class TestAbstractStreamWriteFunction {
     initialize(-1L, attempt);
 
     assertEquals("002", function.instantToWrite(true));
-    verify(correspondent).requestInstantTime(-1L);
+    verify(correspondent).requestInstantTime(-1L, instantRequestPollBudget());
     if (attempt == 0) {
       assertTrue(events.isEmpty());
     } else {
@@ -103,7 +104,7 @@ class TestAbstractStreamWriteFunction {
     initialize(42L, attempt);
 
     assertEquals("002", function.instantToWrite(true));
-    verify(correspondent).requestInstantTime(42L);
+    verify(correspondent).requestInstantTime(42L, instantRequestPollBudget());
     if (attempt == 0) {
       assertTrue(events.isEmpty());
     } else {
@@ -116,7 +117,7 @@ class TestAbstractStreamWriteFunction {
     assertEquals("002", snapshot.getInstantTime());
     assertTrue(snapshot.isBootstrap());
     function.instantToWrite(true);
-    verify(correspondent).requestInstantTime(43L);
+    verify(correspondent).requestInstantTime(43L, instantRequestPollBudget());
   }
 
   @Test
@@ -140,7 +141,7 @@ class TestAbstractStreamWriteFunction {
     assertEquals(41L, bootstrap.getCheckpointId());
     assertEquals("001", bootstrap.getInstantTime());
     function.instantToWrite(true);
-    verify(correspondent).requestInstantTime(42L);
+    verify(correspondent).requestInstantTime(42L, instantRequestPollBudget());
   }
 
   private void initialize(long checkpointId, int attempt) throws Exception {
@@ -149,7 +150,7 @@ class TestAbstractStreamWriteFunction {
     when(context.getOperatorStateStore()).thenReturn(stateStore);
     when(context.isRestored()).thenReturn(checkpointId >= 0);
     when(context.getRestoredCheckpointId()).thenReturn(checkpointId >= 0 ? OptionalLong.of(checkpointId) : OptionalLong.empty());
-    when(correspondent.requestInstantTime(anyLong())).thenReturn("002");
+    when(correspondent.requestInstantTime(anyLong(), anyLong())).thenReturn("002");
     function.setRuntimeContext(runtimeContext);
     function.setCorrespondent(correspondent);
     function.setOperatorEventGateway(events::add);
@@ -166,6 +167,10 @@ class TestAbstractStreamWriteFunction {
       runtimeContextUtils.when(() -> RuntimeContextUtils.getAttemptNumber(runtimeContext)).thenReturn(attempt);
       function.initializeState(context);
     }
+  }
+
+  private long instantRequestPollBudget() {
+    return conf.get(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT);
   }
 
   private void assertCleanupEvent(long checkpointId) {
