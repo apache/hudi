@@ -87,7 +87,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -816,7 +815,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   public Map<String, String> stats() {
     MetadataPartitionType[] metadataPartitionTypes = MetadataPartitionType.getValidValues(metadataMetaClient.getTableConfig().getTableVersion());
     Set<String> allMetadataPartitionPaths = Arrays.stream(metadataPartitionTypes).map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
-    return metrics.map(m -> m.getStats(true, metadataMetaClient, this, allMetadataPartitionPaths)).orElseGet(HashMap::new);
+    return HoodieMetadataMetrics.computeStats(true, metadataMetaClient, this, allMetadataPartitionPaths);
   }
 
   @Override

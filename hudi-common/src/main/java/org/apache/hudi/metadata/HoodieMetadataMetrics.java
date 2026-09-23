@@ -95,6 +95,10 @@ public class HoodieMetadataMetrics implements Serializable {
   }
 
   public Map<String, String> getStats(boolean detailed, HoodieTableMetaClient metaClient, HoodieTableMetadata metadata, Set<String> metadataPartitions) {
+    return computeStats(detailed, metaClient, metadata, metadataPartitions);
+  }
+
+  static Map<String, String> computeStats(boolean detailed, HoodieTableMetaClient metaClient, HoodieTableMetadata metadata, Set<String> metadataPartitions) {
     try {
       HoodieTableFileSystemView fileSystemView =
           HoodieTableFileSystemView.fileListingBasedFileSystemView(new HoodieLocalEngineContext(metaClient.getStorageConf()), metaClient, metaClient.getActiveTimeline());
@@ -108,7 +112,7 @@ public class HoodieMetadataMetrics implements Serializable {
     return detailedMetricsEnabled;
   }
 
-  private Map<String, String> getStats(HoodieTableFileSystemView fsView, boolean detailed, HoodieTableMetadata tableMetadata, Set<String> metadataPartitions)
+  private static Map<String, String> getStats(HoodieTableFileSystemView fsView, boolean detailed, HoodieTableMetadata tableMetadata, Set<String> metadataPartitions)
       throws IOException {
     Map<String, String> stats = new HashMap<>();
 
