@@ -21,72 +21,104 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 import org.apache.hudi.io.ByteBufferBackedInputStream;
-import org.apache.hudi.io.compress.CompressionCodec;
 
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Arrays;
 import java.util.Random;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.io.hfile.HFileBlock.HFILEBLOCK_HEADER_SIZE;
+import static org.apache.hudi.io.util.FileIOUtils.readAsByteArray;
 import static org.apache.hudi.io.util.IOUtils.readInt;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Regression tests for compressed HFile block boundaries. */
 class TestHFileBlockDecompression {
 
-  // A valid gzip member header without a body. If checksum bytes are passed to the gzip decoder,
-  // the decoder treats these bytes as a second member and fails with "invalid block type".
+  private static final int CHECKSUM_LENGTH = 12;
   private static final byte[] GZIP_MEMBER_HEADER = {
-      0x1f, (byte) 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00,
-      0x00, 0x00, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00
+      0x1f, (byte) 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
   };
 
-  @Test
-  void compressedBlockDoesNotDecodeTrailingChecksums() throws IOException {
-    HFileContext context = HFileContext.builder()
-        .compressionCodec(CompressionCodec.GZIP)
-        .blockSize(1024 * 1024)
-        .build();
-    byte[] value = new byte[128 * 1024];
-    new Random(19929L).nextBytes(value);
+  private static Stream<Arguments> checksumTails() {
+    Stream.Builder<Arguments> tails = Stream.builder();
+    tails.add(Arguments.of("real CRC32C", (byte[]) null));
+    tails.add(Arguments.of("zeros", new byte[CHECKSUM_LENGTH]));
 
-    ByteArrayOutputStream output = new ByteArrayOutputStream();
-    try (HFileWriter writer = new HFileWriterImpl(context, output)) {
-      writer.append("row", value);
+    // A second gzip member with a reserved DEFLATE block type triggers ZipException.
+    byte[] invalidBlock = Arrays.copyOf(GZIP_MEMBER_HEADER, CHECKSUM_LENGTH);
+    invalidBlock[GZIP_MEMBER_HEADER.length] = 0x07;
+    tails.add(Arguments.of("gzip header with invalid block type", invalidBlock));
+    // An incomplete uncompressed DEFLATE block triggers EOFException.
+    tails.add(Arguments.of("gzip header with truncated data",
+        Arrays.copyOf(GZIP_MEMBER_HEADER, CHECKSUM_LENGTH)));
+
+    Random random = new Random(19929L);
+    for (int i = 0; i < 20; i++) {
+      byte[] tail = new byte[CHECKSUM_LENGTH];
+      random.nextBytes(tail);
+      System.arraycopy(GZIP_MEMBER_HEADER, 0, tail, 0, 3);
+      tails.add(Arguments.of("seeded random tail " + i, tail));
     }
+    return tails.build();
+  }
 
-    byte[] hfile = output.toByteArray();
-    int dataBlockOffset;
-    try (HFileReaderImpl reader = openReader(hfile)) {
-      reader.initializeMetadata();
-      dataBlockOffset = (int) reader.getDataBlockIndexMap().values().iterator().next().getOffset();
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("checksumTails")
+  void compressedBlockDoesNotDecodeTrailingChecksums(String description, byte[] checksumTail) throws IOException {
+    byte[] original;
+    try (InputStream input = getClass().getResourceAsStream(
+        "/hfile/hudi_1_0_hbase_2_4_9_512KB_GZ_20000.hfile")) {
+      assertNotNull(input);
+      original = readAsByteArray(input);
     }
+    byte[] modified = original.clone();
+    try (HFileReaderImpl expected = openReader(original)) {
+      expected.initializeMetadata();
+      int dataBlockOffset = (int) expected.getDataBlockIndexMap().values().iterator().next().getOffset();
+      int onDiskSizeWithoutHeader = readInt(
+          original, dataBlockOffset + HFileBlock.Header.ON_DISK_SIZE_WITHOUT_HEADER_INDEX);
+      int onDiskDataSizeWithHeader = readInt(
+          original, dataBlockOffset + HFileBlock.Header.ON_DISK_DATA_SIZE_WITH_HEADER_INDEX);
+      int checksumLength = onDiskSizeWithoutHeader + HFILEBLOCK_HEADER_SIZE - onDiskDataSizeWithHeader;
+      assertEquals(ChecksumType.CRC32C.getCode(), original[dataBlockOffset + HFileBlock.Header.CHECKSUM_TYPE_INDEX]);
+      assertEquals(CHECKSUM_LENGTH, checksumLength);
+      // The native reader does not validate CRCs. Changing only these bytes must not affect decoded rows.
+      if (checksumTail != null) {
+        assertEquals(checksumLength, checksumTail.length);
+        System.arraycopy(checksumTail, 0, modified, dataBlockOffset + onDiskDataSizeWithHeader, checksumLength);
+      }
 
-    int onDiskSizeWithoutHeader = readInt(
-        hfile, dataBlockOffset + HFileBlock.Header.ON_DISK_SIZE_WITHOUT_HEADER_INDEX);
-    int onDiskDataSizeWithHeader = readInt(
-        hfile, dataBlockOffset + HFileBlock.Header.ON_DISK_DATA_SIZE_WITH_HEADER_INDEX);
-    int compressedDataSize = onDiskDataSizeWithHeader - HFILEBLOCK_HEADER_SIZE;
-    int checksumStart = dataBlockOffset + onDiskDataSizeWithHeader;
-    int checksumLength = onDiskSizeWithoutHeader - compressedDataSize;
-    assertTrue(checksumLength >= GZIP_MEMBER_HEADER.length,
-        "the block must have enough checksum bytes for the gzip-boundary regression");
-    System.arraycopy(GZIP_MEMBER_HEADER, 0, hfile, checksumStart, GZIP_MEMBER_HEADER.length);
-
-    try (HFileReaderImpl reader = openReader(hfile)) {
-      reader.initializeMetadata();
-      assertEquals(1, reader.getNumKeyValueEntries());
-      assertTrue(reader.seekTo());
-      KeyValue keyValue = reader.getKeyValue().get();
-      assertEquals("row", keyValue.getKey().getContentInString());
-      assertArrayEquals(value, Arrays.copyOfRange(
-          keyValue.getBytes(), keyValue.getValueOffset(),
-          keyValue.getValueOffset() + keyValue.getValueLength()));
+      try (HFileReaderImpl actual = openReader(modified)) {
+        actual.initializeMetadata();
+        assertEquals(20000, expected.getNumKeyValueEntries());
+        assertEquals(expected.getNumKeyValueEntries(), actual.getNumKeyValueEntries());
+        assertTrue(expected.seekTo());
+        assertTrue(actual.seekTo());
+        int rows = 0;
+        boolean hasNext;
+        do {
+          KeyValue expectedRow = expected.getKeyValue().get();
+          KeyValue actualRow = actual.getKeyValue().get();
+          assertArrayEquals(Arrays.copyOfRange(expectedRow.getBytes(), expectedRow.getKeyOffset(),
+                  expectedRow.getValueOffset() + expectedRow.getValueLength()),
+              Arrays.copyOfRange(actualRow.getBytes(), actualRow.getKeyOffset(),
+                  actualRow.getValueOffset() + actualRow.getValueLength()), "row " + rows);
+          assertEquals(expectedRow.getKeyLength(), actualRow.getKeyLength());
+          rows++;
+          hasNext = expected.next();
+          assertEquals(hasNext, actual.next(), "next after row " + rows);
+        } while (hasNext);
+        assertEquals(expected.getNumKeyValueEntries(), rows);
+      }
     }
   }
 
