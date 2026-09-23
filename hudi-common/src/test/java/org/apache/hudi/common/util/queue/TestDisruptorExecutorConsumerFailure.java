@@ -71,4 +71,43 @@ public class TestDisruptorExecutorConsumerFailure {
       executor.shutdownNow();
     }
   }
+
+  @Test
+  @Timeout(30)
+  public void testExecutePrefersStoredConsumerFailureWhenFinishThrows() {
+    IllegalStateException consumeFailure = new IllegalStateException("consume failed");
+    IllegalArgumentException finishFailure = new IllegalArgumentException("finish failed");
+    // shutdownNow() calls finish() again; only the execute() call should fail.
+    AtomicBoolean finishThrew = new AtomicBoolean(false);
+    HoodieConsumer<String, String> consumer = new HoodieConsumer<String, String>() {
+      @Override
+      public void consume(String record) {
+        throw consumeFailure;
+      }
+
+      @Override
+      public String finish() {
+        if (finishThrew.compareAndSet(false, true)) {
+          throw finishFailure;
+        }
+        return "closed";
+      }
+    };
+
+    DisruptorExecutor<String, String, String> executor = new DisruptorExecutor<>(
+        8,
+        Collections.singletonList("row").iterator(),
+        consumer,
+        record -> record,
+        WaitStrategyFactory.DEFAULT_STRATEGY,
+        () -> { });
+
+    try {
+      HoodieException thrown = assertThrows(HoodieException.class, executor::execute);
+      assertSame(consumeFailure, thrown.getCause());
+      assertTrue(finishThrew.get(), "finish() must run so the catch path can prefer the stored failure");
+    } finally {
+      executor.shutdownNow();
+    }
+  }
 }
