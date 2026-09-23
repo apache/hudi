@@ -1400,8 +1400,9 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
         s"[$leg] the top-level v ${if (pushed) "should" else "must not"} be a projection struct: ${required.treeString}")
     }
 
-    def runLeg(tableName: String, tablePath: String, tableType: String, pushed: Boolean,
-               nullElement: Boolean, expectedBlock: Option[HoodieLogBlockType], leg: String): Unit = {
+    def runLeg(tableName: String, tablePath: String, pushed: Boolean, nullElement: Boolean,
+               expectedBlock: Option[HoodieLogBlockType], legLabel: String): Unit = {
+      val leg = legLabel
       def secondOf(id: Int): String = second(id, nullElement)
       val secondElementSql = if (nullElement) {
         """case when id = 4 then null else parse_json(concat('{"k":"B', id, '"}')) end"""
@@ -1422,54 +1423,68 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
         assert(blockTypes.contains(block), s"[$leg] expected a $block in the log files, found: $blockTypes")
       }
 
-      // Extractions. get(arr, 1) rather than arr[1] only for symmetry with the shredded array test
-      // above; every row here has two elements.
-      val extractions = s"select id, variant_get(v, '$$.k', 'string'), " +
-        s"variant_get(arr[0], '$$.k', 'string'), variant_get(get(arr, 1), '$$.k', 'string'), size(arr), " +
-        s"variant_get(m['p'], '$$.k', 'string'), variant_get(element_at(m, 'q'), '$$.k', 'string'), size(m), " +
-        s"variant_get(items[0].inner, '$$.k', 'string') from $tableName order by id"
-      checkAnswer(extractions)(
-        (0 until 5).map(id => Seq(id, top(id), first(id), secondOf(id), 2, pVal(id), qVal(id), 2, item(id))): _*)
-      assertCollectionsNative(extractions, pushed, leg)
-      // Casts of the whole element / value.
-      checkAnswer(s"select id, cast(arr[0] as string), cast(get(arr, 1) as string), " +
-        s"cast(m['p'] as string), cast(m['q'] as string), cast(items[0].inner as string) " +
-        s"from $tableName order by id")(
-        (0 until 5).map(id => Seq(id, json(first(id)), json(secondOf(id)), json(pVal(id)), json(qVal(id)), json(item(id)))): _*)
-      // Filters served off a log row (ids 3, 4) and off a base row (id 1).
-      checkAnswer(s"select id from $tableName where variant_get(arr[0], '$$.k', 'string') = 'A3'")(Seq(3))
-      checkAnswer(s"select id from $tableName where variant_get(arr[0], '$$.k', 'string') = 'a1'")(Seq(1))
-      checkAnswer(s"select id from $tableName where variant_get(m['p'], '$$.k', 'string') = 'P3'")(Seq(3))
-      checkAnswer(s"select id from $tableName where variant_get(m['p'], '$$.k', 'string') = 'p1'")(Seq(1))
-      checkAnswer(s"select id from $tableName where variant_get(items[0].inner, '$$.k', 'string') = 'I3'")(Seq(3))
-      // Nulls that arrived through the log: the element, the map value and the struct member.
-      checkAnswer(s"select id from $tableName where get(arr, 1) is null")(
-        (if (nullElement) Seq(Seq(4)) else Seq.empty): _*)
-      checkAnswer(s"select count(*) from $tableName where get(arr, 1) is not null")(
-        Seq(if (nullElement) 4 else 5))
-      checkAnswer(s"select id from $tableName where m['q'] is null")(Seq(4))
-      checkAnswer(s"select count(*) from $tableName where m['q'] is not null")(Seq(4))
-      checkAnswer(s"select id from $tableName where items[0].inner is null")(Seq(4))
-      checkAnswer(s"select id from $tableName where arr[0] is null or m['p'] is null")()
-      // Exploded elements and entries keep their values and their nulls.
-      checkAnswer(s"select id, pos, variant_get(e, '$$.k', 'string') from $tableName " +
-        s"lateral view posexplode(arr) as pos, e order by id, pos")(
-        (0 until 5).flatMap(id => Seq(Seq(id, 0, first(id)), Seq(id, 1, secondOf(id)))): _*)
-      checkAnswer(s"select id, k, variant_get(mv, '$$.k', 'string') from $tableName " +
-        s"lateral view explode(m) as k, mv order by id, k")(
-        (0 until 5).flatMap(id => Seq(Seq(id, "p", pVal(id)), Seq(id, "q", qVal(id)))): _*)
-      // The whole collections: no extraction anywhere, so nothing is rewritten on either arm, and
-      // the values come back as VariantVal (toString is the JSON) with the nulls in place.
-      val whole = spark.sql(s"select id, arr, m, items from $tableName order by id").collect()
-      assert(whole.length == 5, s"[$leg] whole-collection read should return 5 rows")
-      whole.foreach { row =>
-        val id = row.getInt(0)
-        val arr = row.getSeq[Any](1).map(e => Option(e).map(_.toString).orNull)
-        assert(arr == Seq(json(first(id)), json(secondOf(id))), s"[$leg] arr of id $id: $arr")
-        val m = row.getMap[String, Any](2).map { case (k, e) => k -> Option(e).map(_.toString).orNull }
-        assert(m == Map("p" -> json(pVal(id)), "q" -> json(qVal(id))), s"[$leg] m of id $id: $m")
-        val items = row.getSeq[Row](3).map(s => Option(s.getAs[Any]("inner")).map(_.toString).orNull)
-        assert(items == Seq(json(item(id))), s"[$leg] items of id $id: $items")
+      // Every read below runs against the merged MOR row first and, on the MOR legs, once more
+      // after compaction has rewritten the merged collections into a base file.
+      def assertReads(phase: String): Unit = {
+        val leg = s"$legLabel, $phase"
+        // Extractions. get(arr, 1) rather than arr[1] only for symmetry with the shredded array test
+        // above; every row here has two elements.
+        val extractions = s"select id, variant_get(v, '$$.k', 'string'), " +
+          s"variant_get(arr[0], '$$.k', 'string'), variant_get(get(arr, 1), '$$.k', 'string'), size(arr), " +
+          s"variant_get(m['p'], '$$.k', 'string'), variant_get(element_at(m, 'q'), '$$.k', 'string'), size(m), " +
+          s"variant_get(items[0].inner, '$$.k', 'string') from $tableName order by id"
+        checkAnswer(extractions)(
+          (0 until 5).map(id => Seq(id, top(id), first(id), secondOf(id), 2, pVal(id), qVal(id), 2, item(id))): _*)
+        assertCollectionsNative(extractions, pushed, leg)
+        // Casts of the whole element / value.
+        checkAnswer(s"select id, cast(arr[0] as string), cast(get(arr, 1) as string), " +
+          s"cast(m['p'] as string), cast(m['q'] as string), cast(items[0].inner as string) " +
+          s"from $tableName order by id")(
+          (0 until 5).map(id => Seq(id, json(first(id)), json(secondOf(id)), json(pVal(id)), json(qVal(id)), json(item(id)))): _*)
+        // Filters served off a log row (ids 3, 4) and off a base row (id 1).
+        checkAnswer(s"select id from $tableName where variant_get(arr[0], '$$.k', 'string') = 'A3'")(Seq(3))
+        checkAnswer(s"select id from $tableName where variant_get(arr[0], '$$.k', 'string') = 'a1'")(Seq(1))
+        checkAnswer(s"select id from $tableName where variant_get(m['p'], '$$.k', 'string') = 'P3'")(Seq(3))
+        checkAnswer(s"select id from $tableName where variant_get(m['p'], '$$.k', 'string') = 'p1'")(Seq(1))
+        checkAnswer(s"select id from $tableName where variant_get(items[0].inner, '$$.k', 'string') = 'I3'")(Seq(3))
+        // Nulls that arrived through the log: the element, the map value and the struct member.
+        checkAnswer(s"select id from $tableName where get(arr, 1) is null")(
+          (if (nullElement) Seq(Seq(4)) else Seq.empty): _*)
+        checkAnswer(s"select count(*) from $tableName where get(arr, 1) is not null")(
+          Seq(if (nullElement) 4 else 5))
+        checkAnswer(s"select id from $tableName where m['q'] is null")(Seq(4))
+        checkAnswer(s"select count(*) from $tableName where m['q'] is not null")(Seq(4))
+        checkAnswer(s"select id from $tableName where items[0].inner is null")(Seq(4))
+        checkAnswer(s"select id from $tableName where arr[0] is null or m['p'] is null")()
+        // Exploded elements and entries keep their values and their nulls.
+        checkAnswer(s"select id, pos, variant_get(e, '$$.k', 'string') from $tableName " +
+          s"lateral view posexplode(arr) as pos, e order by id, pos")(
+          (0 until 5).flatMap(id => Seq(Seq(id, 0, first(id)), Seq(id, 1, secondOf(id)))): _*)
+        checkAnswer(s"select id, k, variant_get(mv, '$$.k', 'string') from $tableName " +
+          s"lateral view explode(m) as k, mv order by id, k")(
+          (0 until 5).flatMap(id => Seq(Seq(id, "p", pVal(id)), Seq(id, "q", qVal(id)))): _*)
+        // The whole collections: no extraction anywhere, so nothing is rewritten on either arm, and
+        // the values come back as VariantVal (toString is the JSON) with the nulls in place.
+        val whole = spark.sql(s"select id, arr, m, items from $tableName order by id").collect()
+        assert(whole.length == 5, s"[$leg] whole-collection read should return 5 rows")
+        whole.foreach { row =>
+          val id = row.getInt(0)
+          val arr = row.getSeq[Any](1).map(e => Option(e).map(_.toString).orNull)
+          assert(arr == Seq(json(first(id)), json(secondOf(id))), s"[$leg] arr of id $id: $arr")
+          val m = row.getMap[String, Any](2).map { case (k, e) => k -> Option(e).map(_.toString).orNull }
+          assert(m == Map("p" -> json(pVal(id)), "q" -> json(qVal(id))), s"[$leg] m of id $id: $m")
+          val items = row.getSeq[Row](3).map(s => Option(s.getAs[Any]("inner")).map(_.toString).orNull)
+          assert(items == Seq(json(item(id))), s"[$leg] items of id $id: $items")
+        }
+      }
+
+      assertReads("merged read")
+      // Compaction carries the collections, nulls included, through the compaction merge path
+      // into a base file; the same reads then have to hold over that file.
+      expectedBlock.foreach { _ =>
+        runCompaction(tableName)
+        assertCompactionCount(tablePath, 1, leg)
+        assertReads("after compaction")
       }
     }
 
@@ -1482,7 +1497,7 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
               recordTypes = Seq(recordType)) { (tableName, tablePath, leg) =>
               // On the current table version the append handle writes native parquet log files
               // whatever the record type, so both MOR record types read parquet data blocks here.
-              runLeg(tableName, tablePath, tableType, pushIntoScan.toBoolean,
+              runLeg(tableName, tablePath, pushIntoScan.toBoolean,
                 nullElement = recordType == HoodieRecordType.SPARK,
                 expectedBlock = if (tableType == "mor") Some(HoodieLogBlockType.PARQUET_DATA_BLOCK) else None,
                 leg)
@@ -1502,7 +1517,7 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
             "hoodie.write.table.version = '9'",
             "hoodie.logfile.data.block.format = 'avro'"),
           extraCols = collectionCols, recordTypes = Seq(HoodieRecordType.AVRO)) { (tableName, tablePath, leg) =>
-          runLeg(tableName, tablePath, "mor", pushIntoScan.toBoolean, nullElement = false,
+          runLeg(tableName, tablePath, pushIntoScan.toBoolean, nullElement = false,
             expectedBlock = Some(HoodieLogBlockType.AVRO_DATA_BLOCK), leg)
         }
       }
