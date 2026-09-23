@@ -49,6 +49,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -63,6 +64,27 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieWriteConfig {
+
+  @Test
+  public void testCompactionPlanParallelism() {
+    assertEquals(200, HoodieWriteConfig.newBuilder().withPath("/tmp").build().getCompactionPlanParallelism());
+    assertEquals(8, HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withCompactionPlanParallelism(8).build())
+        .build().getCompactionPlanParallelism());
+    assertEquals(16, HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withProps(Collections.singletonMap(HoodieCompactionConfig.COMPACTION_PLAN_PARALLELISM.key(), "16"))
+        .build().getCompactionPlanParallelism());
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {0, -1})
+  public void testCompactionPlanParallelismMustBePositive(int parallelism) {
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+        () -> HoodieWriteConfig.newBuilder().withPath("/tmp")
+            .withProps(Collections.singletonMap(HoodieCompactionConfig.COMPACTION_PLAN_PARALLELISM.key(), String.valueOf(parallelism)))
+            .build());
+    assertTrue(exception.getMessage().contains(HoodieCompactionConfig.COMPACTION_PLAN_PARALLELISM.key()));
+  }
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})

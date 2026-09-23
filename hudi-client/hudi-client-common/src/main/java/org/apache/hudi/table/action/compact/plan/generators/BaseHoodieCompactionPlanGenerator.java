@@ -128,6 +128,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     LOG.info("Last completed instant time {} for table {}", lastCompletedInstantTime, hoodieTable.getConfig().getBasePath());
     Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
 
+    int parallelism = Math.min(partitionPaths.size(), writeConfig.getCompactionPlanParallelism());
     List<HoodieCompactionOperation> operations = engineContext.flatMap(partitionPaths, partitionPath -> fileSystemView
         .getLatestFileSlicesStateless(partitionPath)
         .filter(slice -> filterFileSlice(slice, lastCompletedInstantTime, fgIdsInPendingCompactionAndClustering, instantRange))
@@ -157,7 +158,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
           Option<HoodieBaseFile> dataFile = s.getBaseFile();
           return new CompactionOperation(dataFile, partitionPath, logFiles,
               writeConfig.getCompactionStrategy().captureMetrics(writeConfig, s));
-        }), partitionPaths.size()).stream()
+        }), parallelism).stream()
         .map(CompactionUtils::buildHoodieCompactionOperation).collect(toList());
 
     LOG.info("Total of {} compaction operations are retrieved for table {}", operations.size(), hoodieTable.getConfig().getBasePath());

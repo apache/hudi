@@ -1827,6 +1827,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieCompactionConfig.INLINE_COMPACT);
   }
 
+  public int getCompactionPlanParallelism() {
+    return getInt(HoodieCompactionConfig.COMPACTION_PLAN_PARALLELISM);
+  }
+
   public boolean scheduleInlineCompaction() {
     return getBoolean(HoodieCompactionConfig.SCHEDULE_INLINE_COMPACT);
   }
@@ -3706,6 +3710,9 @@ public class HoodieWriteConfig extends HoodieConfig {
               HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), cleanerCommitsRetained);
         }
       }
+
+      checkArgument(writeConfig.getCompactionPlanParallelism() > 0,
+          HoodieCompactionConfig.COMPACTION_PLAN_PARALLELISM.key() + " must be positive");
 
       boolean inlineCompact = writeConfig.getBoolean(HoodieCompactionConfig.INLINE_COMPACT);
       boolean inlineCompactSchedule = writeConfig.getBoolean(HoodieCompactionConfig.SCHEDULE_INLINE_COMPACT);
