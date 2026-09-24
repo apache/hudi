@@ -83,7 +83,7 @@ public class CommitMetadataProperties {
           .key("hoodie.commit.metadata.engine.properties.embed.enable")
           .defaultValue(false)
           .markAdvanced()
-          .sinceVersion("1.3.0")
+          .sinceVersion("1.2.1")
           .withDocumentation("When enabled, engine-specific properties (e.g. spark.application.id, "
               + "spark.user, java.version) are embedded into commit metadata for debugging. "
               + "hudi.version and engine name are always embedded regardless of this flag.");
@@ -101,7 +101,7 @@ public class CommitMetadataProperties {
           .key("hoodie.write.config.keys.to.serialize.to.commit.metadata")
           .defaultValue(DEFAULT_WRITE_CONFIG_KEYS)
           .markAdvanced()
-          .sinceVersion("1.3.0")
+          .sinceVersion("1.2.1")
           .withDocumentation("Comma-separated list of write-config keys whose values are "
               + "serialized into the extraMetadata map of every commit (under the 'config.' "
               + "prefix). Set to empty to skip config-key serialization entirely. Avoid adding "
