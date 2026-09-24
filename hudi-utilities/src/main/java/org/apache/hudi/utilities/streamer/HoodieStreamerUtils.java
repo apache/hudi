@@ -41,7 +41,6 @@ import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.exception.HoodieException;
@@ -70,7 +69,6 @@ import org.apache.spark.sql.types.StructType;
 
 import java.util.Arrays;
 import java.util.Iterator;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -137,7 +135,7 @@ public class HoodieStreamerUtils {
                       ? OrderingValues.create(orderingFieldsStr.split(","),
                          field -> (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, field, false, useConsistentLogicalTimestamp))
                       : null;
-                  if (requiresOrderingValue && isOrderingValueMissing(orderingValue)) {
+                  if (requiresOrderingValue && OrderingValues.isMissing(orderingValue)) {
                     throw new IllegalArgumentException(
                         "Ordering fields '" + orderingFieldsStr + "' resolved to a null value for record key '"
                             + hoodieKey.getRecordKey() + "'. Please ensure all records carry non-null values for "
@@ -196,20 +194,6 @@ public class HoodieStreamerUtils {
    * @return the representation of error record (empty {@link HoodieRecord} and the error record
    * String) for writing to error table.
    */
-  /**
-   * Whether a required ordering value is missing. A single ordering field resolves to the field value
-   * itself, so a null field yields a null ordering value; several fields resolve to an
-   * {@link ArrayComparable} that is non-null and holds the nulls, so its elements have to be checked
-   * too. Either shape fails later with a NullPointerException when the merger compares it.
-   */
-  private static boolean isOrderingValueMissing(Comparable orderingValue) {
-    if (orderingValue == null) {
-      return true;
-    }
-    return orderingValue instanceof ArrayComparable
-        && ((ArrayComparable) orderingValue).getValues().stream().anyMatch(Objects::isNull);
-  }
-
   private static Either<HoodieRecord, String> generateErrorRecordOrThrowException(GenericRecord genRec, Exception e, boolean shouldErrorTable) {
     if (!shouldErrorTable) {
       if (e instanceof HoodieKeyException) {
