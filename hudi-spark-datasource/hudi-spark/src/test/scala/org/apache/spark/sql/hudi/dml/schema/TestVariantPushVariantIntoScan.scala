@@ -37,9 +37,7 @@ import scala.util.{Failure, Success, Try}
  * (AVRO) and parquet (SPARK) log blocks on the MOR legs.
  *
  * Every leg runs to the end and its verdict is recorded, so one wrong result does not hide the
- * others; a leg that crashes the JVM ends the run, so the leg filter below lets a suspect leg run
- * in its own JVM. VARIANT_LEGS / VARIANT_SKIP_LEGS are comma-separated key prefixes over
- * "<scope>:<tableType>:<pushVariantIntoScan>:<recordType>", e.g. "nested:mor:true".
+ * others.
  */
 class TestVariantPushVariantIntoScan extends HoodieSparkSqlTestBase {
 
@@ -48,15 +46,6 @@ class TestVariantPushVariantIntoScan extends HoodieSparkSqlTestBase {
   // ids 0-2 keep their inserted value, id 3 is updated and id 4's variant is nulled by the update.
   private def merged(id: Int): String = if (id < 3) s"x$id" else if (id == 3) "y3" else null
   private def mergedJson(id: Int): String = Option(merged(id)).map(k => s"""{"k":"$k"}""").orNull
-
-  private def prefixes(name: String): Seq[String] =
-    sys.env.get(name).toSeq.flatMap(_.split(",")).map(_.trim).filter(_.nonEmpty)
-
-  private def legSelected(key: String): Boolean = {
-    val only = prefixes("VARIANT_LEGS")
-    val skip = prefixes("VARIANT_SKIP_LEGS")
-    (only.isEmpty || only.exists(key.startsWith)) && !skip.exists(key.startsWith)
-  }
 
   private def variantProjectionPushedIntoScan(sql: String): Boolean = {
     def containsProjection(dataType: DataType): Boolean = dataType match {
@@ -89,29 +78,26 @@ class TestVariantPushVariantIntoScan extends HoodieSparkSqlTestBase {
       Seq("false", "true").foreach { pushIntoScan =>
         Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK).foreach { recordType =>
           val key = s"$scope:$tableType:$pushIntoScan:$recordType"
-          if (legSelected(key)) {
-            ran += 1
-            withSQLConf("spark.sql.variant.pushVariantIntoScan" -> pushIntoScan) {
-              withRecordType(Seq(recordType))(withTempDir { tmp =>
-                val tableName = generateTableName
-                val leg = s"$key, $tableName"
-                // scalastyle:off println
-                println(s"LEG START $key")
-                Try(body(tableName, tmp.getCanonicalPath, tableType, pushIntoScan.toBoolean)) match {
-                  case Success(_) => println(s"LEG PASS $key")
-                  case Failure(e) =>
-                    val msg = Option(e.getMessage).getOrElse(e.toString).linesIterator.take(3).mkString(" | ")
-                    println(s"LEG FAIL $key: ${e.getClass.getSimpleName}: $msg")
-                    failures += s"[$leg] ${e.getClass.getSimpleName}: $msg"
-                }
-                // scalastyle:on println
-              })
-            }
+          ran += 1
+          withSQLConf("spark.sql.variant.pushVariantIntoScan" -> pushIntoScan) {
+            withRecordType(Seq(recordType))(withTempDir { tmp =>
+              val tableName = generateTableName
+              val leg = s"$key, $tableName"
+              // scalastyle:off println
+              println(s"LEG START $key")
+              Try(body(tableName, tmp.getCanonicalPath, tableType, pushIntoScan.toBoolean)) match {
+                case Success(_) => println(s"LEG PASS $key")
+                case Failure(e) =>
+                  val msg = Option(e.getMessage).getOrElse(e.toString).linesIterator.take(3).mkString(" | ")
+                  println(s"LEG FAIL $key: ${e.getClass.getSimpleName}: $msg")
+                  failures += s"[$leg] ${e.getClass.getSimpleName}: $msg"
+              }
+              // scalastyle:on println
+            })
           }
         }
       }
     }
-    assume(ran > 0, s"no $scope leg selected by VARIANT_LEGS / VARIANT_SKIP_LEGS")
     assert(failures.isEmpty, s"${failures.size} of $ran $scope legs failed:\n" + failures.mkString("\n"))
   }
 
