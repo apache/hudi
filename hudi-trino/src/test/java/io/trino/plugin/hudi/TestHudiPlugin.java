@@ -25,7 +25,7 @@ final class TestHudiPlugin
     @Test
     void testCreateConnector()
     {
-        ConnectorFactory factory = getOnlyElement(new HudiPlugin().getConnectorFactories());
+        ConnectorFactory factory = getOnlyElement(new HudiTestPlugin().getConnectorFactories());
         factory.create(
                         "test",
                         ImmutableMap.<String, String>builder()
