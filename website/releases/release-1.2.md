@@ -30,6 +30,10 @@ The Trino-Hudi connector now lives in the Hudi repo (RFC-105, [#18837](https://g
 * The `hudi-hadoop-trinobase-docker`, `hudi-hadoop-trinocoordinator-docker` and `hudi-hadoop-trinoworker-docker` test images are no longer published.
 * The connector config `hudi.table.resolve-column-name-casing.enabled` defaults to `false`, where the connector in the Trino repo defaulted to `true`. Set it to `true` for tables with mixed-case column names.
 
+## Behavior Changes
+
+* `hoodie.client.heartbeat.tolerable.misses` now defaults to `10` instead of `2` ([#18904](https://github.com/apache/hudi/pull/18904)). With the default 60-second heartbeat interval, a writer is deemed failed after 10 minutes without a heartbeat, up from 2. A healthy writer's commit is no longer aborted after a transient pause such as a GC or a slow storage write, but pending writes from a crashed writer are detected and rolled back later. Set it back to `2` to keep the previous behavior.
+
 ### Bug fixes
 
 1.2.1 is a bug-fix release with more than 300 fixes and improvements over 1.2.0. The fixes span many components, including:
