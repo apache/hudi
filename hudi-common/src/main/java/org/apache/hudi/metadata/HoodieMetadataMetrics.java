@@ -94,11 +94,7 @@ public class HoodieMetadataMetrics implements Serializable {
     this.detailedMetricsEnabled = detailedMetricsEnabled;
   }
 
-  public Map<String, String> getStats(boolean detailed, HoodieTableMetaClient metaClient, HoodieTableMetadata metadata, Set<String> metadataPartitions) {
-    return computeStats(detailed, metaClient, metadata, metadataPartitions);
-  }
-
-  static Map<String, String> computeStats(boolean detailed, HoodieTableMetaClient metaClient, HoodieTableMetadata metadata, Set<String> metadataPartitions) {
+  public static Map<String, String> getStats(boolean detailed, HoodieTableMetaClient metaClient, HoodieTableMetadata metadata, Set<String> metadataPartitions) {
     try {
       HoodieTableFileSystemView fileSystemView =
           HoodieTableFileSystemView.fileListingBasedFileSystemView(new HoodieLocalEngineContext(metaClient.getStorageConf()), metaClient, metaClient.getActiveTimeline());

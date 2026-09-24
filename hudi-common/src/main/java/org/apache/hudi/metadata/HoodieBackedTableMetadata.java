@@ -815,7 +815,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   public Map<String, String> stats() {
     MetadataPartitionType[] metadataPartitionTypes = MetadataPartitionType.getValidValues(metadataMetaClient.getTableConfig().getTableVersion());
     Set<String> allMetadataPartitionPaths = Arrays.stream(metadataPartitionTypes).map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
-    return HoodieMetadataMetrics.computeStats(true, metadataMetaClient, this, allMetadataPartitionPaths);
+    return HoodieMetadataMetrics.getStats(true, metadataMetaClient, this, allMetadataPartitionPaths);
   }
 
   @Override
