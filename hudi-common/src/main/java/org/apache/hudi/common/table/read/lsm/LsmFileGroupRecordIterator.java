@@ -179,9 +179,7 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
         addReader(sortedRunReaders, spec.mergeOrder, maybeSpillIterator(directLogMergeOrders.contains(spec.mergeOrder), iterator));
       }
     } catch (Throwable e) {
-      // Construction failed, so the caller cannot close this iterator. Release every reader
-      // registered so far, including spill iterators and the reader whose first advance failed.
-      // Catch Throwable to attempt cleanup even for Errors, then rethrow the original failure.
+      // Construction failed, so the caller cannot close the readers already opened.
       for (SortedRunReader<T> reader : sortedRunReaders) {
         CloseableUtils.closeSuppressing(reader::close, e);
       }
@@ -255,10 +253,16 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
    */
   private void addReader(List<SortedRunReader<T>> sortedRunReaders, int mergeOrder, ClosableIterator<BufferedRecord<T>> iterator) {
     SortedRunReader<T> sortedRunReader = new SortedRunReader<>(mergeOrder, iterator);
-    // Register before advancing so initialization cleanup also owns this reader if reading fails.
-    sortedRunReaders.add(sortedRunReader);
-    if (!sortedRunReader.advance()) {
-      sortedRunReaders.remove(sortedRunReaders.size() - 1);
+    boolean hasRecord;
+    try {
+      hasRecord = sortedRunReader.advance();
+    } catch (Throwable failure) {
+      CloseableUtils.closeSuppressing(sortedRunReader::close, failure);
+      throw failure;
+    }
+    if (hasRecord) {
+      sortedRunReaders.add(sortedRunReader);
+    } else {
       sortedRunReader.close();
     }
   }
