@@ -1511,7 +1511,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
 
     doInitTable(operationType, metaClient, instantTime);
-    if (keysRecords(operationType)) {
+    if (WriteOperationType.isInsert(operationType) || WriteOperationType.isChangingRecords(operationType)) {
       ensureComplexKeyGenEncodingRecorded(metaClient);
     }
     HoodieTable table = createTable(config, metaClient);
@@ -1543,25 +1543,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   protected boolean loadActiveTimelineOnTableInit() {
     return true;
-  }
-
-  /** Operations that key incoming records, unlike table services, partition deletes, rollbacks or restores. */
-  private static boolean keysRecords(WriteOperationType operationType) {
-    switch (operationType) {
-      case INSERT:
-      case INSERT_PREPPED:
-      case UPSERT:
-      case UPSERT_PREPPED:
-      case BULK_INSERT:
-      case BULK_INSERT_PREPPED:
-      case DELETE:
-      case DELETE_PREPPED:
-      case INSERT_OVERWRITE:
-      case INSERT_OVERWRITE_TABLE:
-        return true;
-      default:
-        return false;
-    }
   }
 
   /**
