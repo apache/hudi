@@ -41,7 +41,7 @@ Expand this to see Hudi Streamer's "--help" output describing its capabilities i
 
 ```shell
 [hoodie]$ spark-submit \
-  --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.1,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.1 \
+  --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.2.1,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.2.1 \
   --class org.apache.hudi.utilities.streamer.HoodieStreamer `ls packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle-*.jar` --help
 Usage: <main class> [options]
   Options:
@@ -259,7 +259,7 @@ and then ingest it as follows.
 
 ```java
 [hoodie]$ spark-submit \
-  --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.1,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.1 \
+  --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.2.1,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.2.1 \
   --class org.apache.hudi.utilities.streamer.HoodieStreamer `ls packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle-*.jar` \
   --props file://${PWD}/hudi-utilities/src/test/resources/streamer-config/kafka-source.properties \
   --schemaprovider-class org.apache.hudi.utilities.schema.SchemaRegistryProvider \
@@ -276,7 +276,7 @@ In some cases, you may want to migrate your existing table into Hudi beforehand.
 
 It is recommended to use `hudi-utilities-slim-bundle`, which should be used along with a Hudi Spark bundle
 corresponding the Spark version used to make utilities work with Spark, e.g.,
-`--packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.1,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.1`.
+`--packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.2.1,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.2.1`.
 
 ### Concurrency Control
 
@@ -294,7 +294,7 @@ A Hudi Streamer job can then be triggered as follows:
 
 ```java
 [hoodie]$ spark-submit \
-  --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.1,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.1 \
+  --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.2.1,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.2.1 \
   --class org.apache.hudi.utilities.streamer.HoodieStreamer `ls packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle-*.jar` \
   --props file://${PWD}/hudi-utilities/src/test/resources/streamer-config/kafka-source.properties \
   --schemaprovider-class org.apache.hudi.utilities.schema.SchemaRegistryProvider \
@@ -820,7 +820,7 @@ to how you run Hudi Streamer.
 
 ```java
 [hoodie]$ spark-submit \
-  --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.1,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.1 \
+  --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.2.1,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.2.1 \
   --class org.apache.hudi.utilities.streamer.HoodieMultiTableStreamer `ls packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle-*.jar` \
   --props file://${PWD}/hudi-utilities/src/test/resources/streamer-config/kafka-source.properties \
   --config-folder file://tmp/hudi-ingestion-config \
