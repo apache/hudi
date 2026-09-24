@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.io.storage.row.HoodieRowDataCreateHandle;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.DataTypeUtils;
@@ -47,6 +48,8 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.MockedStatic;
 
 import java.io.File;
 import java.io.IOException;
@@ -56,6 +59,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -63,7 +73,15 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * Test cases for {@link BulkInsertWriterHelper}.
@@ -198,6 +216,91 @@ public class TestBulkInsertWriteHelper {
         TestConfigurations.ROW_TYPE);
 
     assertThrows(IOException.class, () -> writerHelper.write(new GenericRowData(0)));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void testCloseFailureDoesNotSkipQueuedHandles(boolean runtimeFailure) throws Exception {
+    BulkInsertWriterHelper helper = newWriterHelper();
+    List<HoodieRowDataCreateHandle> handles = new ArrayList<>();
+    for (int i = 0; i < 11; i++) {
+      HoodieRowDataCreateHandle handle = mock(HoodieRowDataCreateHandle.class);
+      when(handle.close()).thenReturn(new WriteStatus());
+      helper.handles.put("partition-" + i, handle);
+      handles.add(handle);
+    }
+    HoodieRowDataCreateHandle failedHandle = helper.handles.values().iterator().next();
+    Exception failure = runtimeFailure ? new IllegalStateException("close failed") : new IOException("close failed");
+    when(failedHandle.close()).thenThrow(failure);
+
+    // Hold all close tasks in a queue until the helper is waiting for their results.
+    // This makes cancellation of not-yet-started closes deterministic.
+    ExecutorService executor = mock(ExecutorService.class);
+    BlockingQueue<Runnable> tasks = new LinkedBlockingQueue<>();
+    doAnswer(invocation -> {
+      tasks.add(invocation.getArgument(0));
+      return null;
+    }).when(executor).execute(any(Runnable.class));
+    FutureTask<CompletionException> closeTask = new FutureTask<>(() -> {
+      try (MockedStatic<Executors> executors = mockStatic(Executors.class)) {
+        executors.when(() -> Executors.newFixedThreadPool(10)).thenReturn(executor);
+        return assertThrows(CompletionException.class, helper::close);
+      }
+    });
+    Thread closingThread = new Thread(closeTask);
+    closingThread.setDaemon(true);
+    closingThread.start();
+    try {
+      List<Runnable> submitted = new ArrayList<>();
+      for (int i = 0; i < 11; i++) {
+        Runnable task = tasks.poll(10, TimeUnit.SECONDS);
+        assertTrue(task != null, "Every handle must be submitted for closing");
+        submitted.add(task);
+      }
+      long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+      while (closingThread.getState() != Thread.State.WAITING && System.nanoTime() < deadline) {
+        Thread.yield();
+      }
+      assertEquals(Thread.State.WAITING, closingThread.getState());
+      submitted.get(0).run();
+      assertFalse(closeTask.isDone(), "A failed close must not complete the helper before the remaining closes");
+      submitted.subList(1, submitted.size()).forEach(Runnable::run);
+      CompletionException thrown = closeTask.get(10, TimeUnit.SECONDS);
+      Throwable cause = thrown;
+      while (cause.getCause() != null) {
+        cause = cause.getCause();
+      }
+      assertSame(failure, cause);
+      assertEquals(0, thrown.getSuppressed().length);
+      verify(executor).shutdown();
+      for (HoodieRowDataCreateHandle handle : handles) {
+        verify(handle).close();
+      }
+    } finally {
+      closeTask.cancel(true);
+    }
+  }
+
+  @Test
+  void testSuccessfulCloseIsIdempotent() throws Exception {
+    BulkInsertWriterHelper helper = newWriterHelper();
+    HoodieRowDataCreateHandle handle = mock(HoodieRowDataCreateHandle.class);
+    WriteStatus status = new WriteStatus();
+    when(handle.close()).thenReturn(status);
+    helper.handles.put("par1", handle);
+
+    helper.close();
+    helper.close();
+
+    verify(handle).close();
+    assertTrue(helper.handles.isEmpty());
+    assertEquals(Arrays.asList(status), helper.getWriteStatuses(1));
+  }
+
+  private BulkInsertWriterHelper newWriterHelper() {
+    HoodieFlinkTable<?> table = FlinkTables.createTable(conf);
+    return new BulkInsertWriterHelper(conf, table, table.getConfig(), WriteClientTestUtils.createNewInstantTime(),
+        1, 1, 0, TestConfigurations.ROW_TYPE);
   }
 
   private void assertWriteStatus(List<WriteStatus> writeStatusList) {

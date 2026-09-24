@@ -51,10 +51,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-
-import static org.apache.hudi.common.util.FutureUtils.allOf;
 
 /**
  * Helper class for bulk insert used by Flink.
@@ -186,29 +183,31 @@ public class BulkInsertWriterHelper implements AutoCloseable {
     if (handles.isEmpty()) {
       return;
     }
-    int handsSize = Math.min(handles.size(), 10);
-    ExecutorService executorService = Executors.newFixedThreadPool(handsSize);
-    allOf(handles.values().stream()
-        .map(rowCreateHandle -> CompletableFuture.supplyAsync(() -> {
-          try {
-            log.info("Closing bulk insert file {}", rowCreateHandle.getFileName());
-            return rowCreateHandle.close();
-          } catch (IOException e) {
-            throw new HoodieIOException("IOE during rowCreateHandle.close()", e);
-          }
-        }, executorService))
-        .collect(Collectors.toList())
-    ).whenComplete((result, throwable) -> {
-      writeStatusList.addAll(result);
-    }).join();
+    ExecutorService executorService = Executors.newFixedThreadPool(Math.min(handles.size(), 10));
     try {
+      List<CompletableFuture<WriteStatus>> futures = handles.values().stream()
+          .map(rowCreateHandle -> closeAsync(rowCreateHandle, executorService))
+          .collect(Collectors.toList());
+      // Use JDK allOf instead of FutureUtils.allOf, which cancels unfinished futures on failure.
+      // Cancelling queued close tasks can leave handles unclosed and leak resources; wait for every close attempt instead.
+      CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+      writeStatusList.addAll(futures.stream().map(CompletableFuture::join).collect(Collectors.toList()));
+      handles.clear();
+      handle = null;
+    } finally {
       executorService.shutdown();
-      executorService.awaitTermination(10, TimeUnit.MINUTES);
-    } catch (InterruptedException e) {
-      throw new RuntimeException(e);
     }
-    handles.clear();
-    handle = null;
+  }
+
+  private CompletableFuture<WriteStatus> closeAsync(HoodieRowDataCreateHandle rowCreateHandle, ExecutorService executorService) {
+    return CompletableFuture.supplyAsync(() -> {
+      try {
+        log.info("Closing bulk insert file {}", rowCreateHandle.getFileName());
+        return rowCreateHandle.close();
+      } catch (IOException e) {
+        throw new HoodieIOException("IOE during rowCreateHandle.close()", e);
+      }
+    }, executorService);
   }
 
   private String getNextFileId() {
