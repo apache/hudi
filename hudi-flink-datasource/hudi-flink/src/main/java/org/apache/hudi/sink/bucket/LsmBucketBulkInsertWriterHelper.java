@@ -61,7 +61,6 @@ public class LsmBucketBulkInsertWriterHelper extends BucketBulkInsertWriterHelpe
 
   @Override
   public void write(RowData sortRow) throws IOException {
-    int fileIdOrdinal = isNonBlockingConcurrencyControl ? 1 : 0;
     String fileId = sortRow.getString(fileIdOrdinal).toString();
     String recordKey = sortRow.getString(fileIdOrdinal + 1).toString();
     RowData record = sortRow.getRow(fileIdOrdinal + 2, recordArity);
@@ -77,7 +76,7 @@ public class LsmBucketBulkInsertWriterHelper extends BucketBulkInsertWriterHelpe
       RowData record,
       List<String> indexKeyFields,
       NumBucketsFunction numBucketsFunction,
-      boolean needFixedFileIdSuffix) {
+      boolean isNonBlockingConcurrencyControl) {
     String recordKey = keyGen.getRecordKey(record);
     String partitionPath = keyGen.getPartitionPath(record);
     String fileId = getFileId(
@@ -86,8 +85,8 @@ public class LsmBucketBulkInsertWriterHelper extends BucketBulkInsertWriterHelpe
         partitionPath,
         indexKeyFields,
         numBucketsFunction,
-        needFixedFileIdSuffix);
-    return needFixedFileIdSuffix
+        isNonBlockingConcurrencyControl);
+    return isNonBlockingConcurrencyControl
         ? GenericRowData.of(
             StringData.fromString(partitionPath),
             StringData.fromString(fileId),
