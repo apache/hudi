@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 
 import javax.annotation.concurrent.Immutable;
@@ -1055,7 +1056,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     }
     // Only applicable for SI or EI
     checkArgument(indexName.startsWith(PARTITION_NAME_EXPRESSION_INDEX_PREFIX)
-        || indexName.startsWith(PARTITION_NAME_SECONDARY_INDEX_PREFIX), "Unexpected index name to drop: " + indexName);
+        || indexName.startsWith(PARTITION_NAME_SECONDARY_INDEX_PREFIX)
+        || indexName.startsWith(HoodieTableMetadataUtil.PARTITION_NAME_FULL_TEXT_INDEX_PREFIX), "Unexpected index name to drop: " + indexName);
     return subIndexNameToDrop.contains(indexName);
   }
 
