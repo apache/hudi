@@ -21,12 +21,10 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.index.vector.PostingBlockBuilder;
-import org.apache.hudi.common.index.vector.QuantizedVector;
 import org.apache.hudi.common.index.vector.RaBitQEncoder;
 import org.apache.hudi.common.index.vector.VectorDistanceMetric;
 import org.apache.hudi.common.index.vector.VectorIndexBootstrapUtils;
 import org.apache.hudi.common.index.vector.VectorIndexOptions;
-import org.apache.hudi.common.index.vector.VectorQuantizer;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -38,7 +36,6 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
-import org.apache.spark.Partitioner;
 import org.apache.spark.sql.SparkSession;
 
 import java.io.Serializable;
@@ -211,10 +208,10 @@ public final class SparkVectorIndexBootstrap {
 
         JavaRDD<HoodieRecord> dataRecords;
         if (storeInMdt) {
-          dataRecords = buildPostingRecords(
+          dataRecords = SparkVectorIndexPostingWriter.buildPostingRecords(
               assignedRows, bDimension, bVectorType, bCentroids,
               bShardCounts, quantizerSeed, rabitqBits, assumeNormalized, residualEncoding,
-              metric, vectorsPerBlock, generation, lastUpdatedTs, indexName);
+              metric, vectorsPerBlock, generation, indexName);
         } else {
           dataRecords = jsc.emptyRDD();
         }
@@ -371,113 +368,6 @@ public final class SparkVectorIndexBootstrap {
     }
   }
 
-  private static JavaRDD<HoodieRecord> buildPostingRecords(
-      JavaPairRDD<Integer, VectorRow> assignedRows,
-      Broadcast<Integer> bDimension,
-      Broadcast<HoodieSchema.Vector.VectorElementType> bVectorType,
-      Broadcast<float[][]> bCentroids,
-      Broadcast<Map<Integer, Integer>> bShardCounts,
-      long quantizerSeed,
-      int rabitqBits,
-      boolean assumeNormalized,
-      boolean residualEncoding,
-      VectorDistanceMetric metric,
-      int vectorsPerBlock,
-      int generation,
-      long lastUpdatedTs,
-      String indexName) {
-    boolean includeVectorNorm = metric == VectorDistanceMetric.COSINE && !assumeNormalized;
-    JavaPairRDD<ClusterShardSortKey, EncodedPostingRow> encodedRows = assignedRows.mapToPair(entry -> {
-      RaBitQEncoder encoder = new RaBitQEncoder(bDimension.value(), rabitqBits, quantizerSeed, assumeNormalized);
-      int clusterId = entry._1;
-      VectorRow row = entry._2;
-      int shardCount = bShardCounts.value().getOrDefault(clusterId, 1);
-      int shardId = computeShardId(row.recordKey, shardCount);
-      if (row.rowPosition < 0) {
-        throw new IllegalStateException("Vector index bootstrap requires file-absolute rowPosition for record "
-            + row.recordKey + "; enable parquet row-index extraction before packed MDT block emission");
-      }
-
-      float[] vector = toFloatArrayFromBytes(row.vectorBytes, bDimension.value(), bVectorType.value());
-      QuantizedVector quantized;
-      if (rabitqBits > 1 || residualEncoding) {
-        float[] center = residualEncoding ? bCentroids.value()[clusterId] : null;
-        quantized = encoder.encodeResidual(vector, center);
-      } else {
-        quantized = encoder.encode(vector);
-      }
-
-      int codeRowBytes = ((bDimension.value() + 63) / 64) * Long.BYTES;
-      EncodedPostingRow encoded = new EncodedPostingRow(
-          row.recordKey,
-          row.fileId,
-          row.partitionPath,
-          row.baseInstantTime,
-          row.rowPosition,
-          VectorIndexBootstrapUtils.padToRow(quantized.getCode(), codeRowBytes),
-          VectorIndexBootstrapUtils.splitExPlanes(quantized.getExtendedCode(), Math.max(0, rabitqBits - 1), bDimension.value(), codeRowBytes),
-          quantized.getAdditiveFactor1() == null ? 0.0f : quantized.getAdditiveFactor1(),
-          quantized.getRescaleFactor1() == null ? 0.0f : quantized.getRescaleFactor1(),
-          quantized.getError1() == null ? 0.0f : quantized.getError1(),
-          quantized.getAdditiveFactor() == null ? 0.0f : quantized.getAdditiveFactor(),
-          quantized.getRescaleFactor() == null ? 0.0f : quantized.getRescaleFactor(),
-          quantized.getScalar(),
-          includeVectorNorm ? quantized.getVectorNorm() : null);
-      return new Tuple2<>(new ClusterShardSortKey(clusterId, shardId, row.fileId, row.rowPosition, row.recordKey), encoded);
-    });
-
-    int shufflePartitions = Math.max(1, encodedRows.getNumPartitions());
-    return encodedRows
-        .repartitionAndSortWithinPartitions(new ClusterShardPartitioner(shufflePartitions))
-        .mapPartitions(iterator -> {
-          List<HoodieRecord> records = new ArrayList<>();
-          ClusterShardSortKey currentKey = null;
-          PostingBlockBuilder builder = null;
-          int blockId = 0;
-          int rowsInBlock = 0;
-          while (iterator.hasNext()) {
-            Tuple2<ClusterShardSortKey, EncodedPostingRow> entry = iterator.next();
-            ClusterShardSortKey key = entry._1;
-            EncodedPostingRow row = entry._2;
-            if (currentKey == null || !currentKey.sameClusterShard(key)) {
-              if (builder != null && rowsInBlock > 0) {
-                records.add(createPostingBlockRecord(generation, currentKey, blockId, builder, indexName));
-              }
-              currentKey = key;
-              builder = newPostingBlockBuilder(bDimension.value(), rabitqBits, includeVectorNorm);
-              blockId = 0;
-              rowsInBlock = 0;
-            }
-
-            builder.addRow(
-                row.recordKey,
-                row.signPlane,
-                row.exPlanes,
-                row.fAdd1,
-                row.fRescale1,
-                row.err1,
-                row.fAddEx,
-                row.fRescaleEx,
-                row.residualNorm,
-                row.vectorNorm,
-                row.fileGroupId,
-                row.baseInstantTime,
-                row.partitionPath,
-                row.rowPosition);
-            rowsInBlock++;
-            if (rowsInBlock == vectorsPerBlock) {
-              records.add(createPostingBlockRecord(generation, currentKey, blockId++, builder, indexName));
-              builder = newPostingBlockBuilder(bDimension.value(), rabitqBits, includeVectorNorm);
-              rowsInBlock = 0;
-            }
-          }
-          if (builder != null && rowsInBlock > 0) {
-            records.add(createPostingBlockRecord(generation, currentKey, blockId, builder, indexName));
-          }
-          return records.iterator();
-        });
-  }
-
   // ---- Vector conversion ----
 
   /**
@@ -552,17 +442,6 @@ public final class SparkVectorIndexBootstrap {
     return best;
   }
 
-  private static float[] subtract(float[] left, float[] right) {
-    if (left.length != right.length) {
-      throw new IllegalArgumentException("Vector length mismatch: " + left.length + " != " + right.length);
-    }
-    float[] residual = new float[left.length];
-    for (int i = 0; i < left.length; i++) {
-      residual[i] = left[i] - right[i];
-    }
-    return residual;
-  }
-
   // ---- Utilities ----
 
   private static int maxShardCount(Map<Integer, Integer> shardCounts) {
@@ -577,42 +456,13 @@ public final class SparkVectorIndexBootstrap {
     return metric == VectorDistanceMetric.DOT_PRODUCT ? "DOT" : metric.name();
   }
 
-  private static PostingBlockBuilder newPostingBlockBuilder(int dimension, int rabitqBits, boolean includeVectorNorm) {
-    return new PostingBlockBuilder(
-        ((dimension + 63) / 64) * Long.BYTES,
-        Math.max(0, rabitqBits - 1),
-        includeVectorNorm);
-  }
-
-  private static HoodieRecord createPostingBlockRecord(int generation,
-                                                       ClusterShardSortKey key,
-                                                       int blockId,
-                                                       PostingBlockBuilder builder,
-                                                       String indexName) {
-    return HoodieMetadataPayload.createVectorIndexPostingBlockRecord(
-        generation,
-        key.clusterId,
-        key.shardId,
-        blockId,
-        builder.build(),
-        indexName);
-  }
-
-  private static int computeShardCount(long clusterPopulation, int targetRowsPerShard, int maxShardsPerCluster) {
+  private static int computeShardCount(
+      long clusterPopulation, int targetRowsPerShard, int maxShardsPerCluster) {
     if (clusterPopulation <= 0) {
       return 1;
     }
     long computed = (clusterPopulation + targetRowsPerShard - 1L) / targetRowsPerShard;
     return (int) Math.min(Math.max(1L, computed), maxShardsPerCluster);
-  }
-
-  static int computeShardId(String recordKey, int shardCount) {
-    // Murmur3-style bit mixing for better distribution than String.hashCode()
-    int h = recordKey.hashCode();
-    h ^= (h >>> 16);
-    h *= 0x85ebca6b;
-    h ^= (h >>> 13);
-    return Math.floorMod(h, Math.max(1, shardCount));
   }
 
   private static float[][] toFloatCentroids(double[][] centroids) {
@@ -664,147 +514,6 @@ public final class SparkVectorIndexBootstrap {
       this.baseInstantTime = baseInstantTime;
       this.vectorBytes = vectorBytes;
       this.rowPosition = rowPosition;
-    }
-  }
-
-  private static final class ClusterShardSortKey implements Comparable<ClusterShardSortKey>, Serializable {
-    private static final long serialVersionUID = 1L;
-
-    private final int clusterId;
-    private final int shardId;
-    private final String fileGroupId;
-    private final long rowPosition;
-    private final String recordKey;
-
-    private ClusterShardSortKey(int clusterId, int shardId, String fileGroupId, long rowPosition, String recordKey) {
-      this.clusterId = clusterId;
-      this.shardId = shardId;
-      this.fileGroupId = fileGroupId == null ? "" : fileGroupId;
-      this.rowPosition = rowPosition;
-      this.recordKey = recordKey == null ? "" : recordKey;
-    }
-
-    private boolean sameClusterShard(ClusterShardSortKey other) {
-      return other != null && clusterId == other.clusterId && shardId == other.shardId;
-    }
-
-    @Override
-    public int compareTo(ClusterShardSortKey other) {
-      int comparison = Integer.compare(clusterId, other.clusterId);
-      if (comparison != 0) {
-        return comparison;
-      }
-      comparison = Integer.compare(shardId, other.shardId);
-      if (comparison != 0) {
-        return comparison;
-      }
-      comparison = fileGroupId.compareTo(other.fileGroupId);
-      if (comparison != 0) {
-        return comparison;
-      }
-      comparison = Long.compare(rowPosition, other.rowPosition);
-      if (comparison != 0) {
-        return comparison;
-      }
-      return recordKey.compareTo(other.recordKey);
-    }
-
-    @Override
-    public boolean equals(Object other) {
-      if (this == other) {
-        return true;
-      }
-      if (!(other instanceof ClusterShardSortKey)) {
-        return false;
-      }
-      ClusterShardSortKey that = (ClusterShardSortKey) other;
-      return clusterId == that.clusterId
-          && shardId == that.shardId
-          && rowPosition == that.rowPosition
-          && fileGroupId.equals(that.fileGroupId)
-          && recordKey.equals(that.recordKey);
-    }
-
-    @Override
-    public int hashCode() {
-      int result = clusterId;
-      result = 31 * result + shardId;
-      result = 31 * result + fileGroupId.hashCode();
-      result = 31 * result + Long.hashCode(rowPosition);
-      result = 31 * result + recordKey.hashCode();
-      return result;
-    }
-  }
-
-  private static final class ClusterShardPartitioner extends Partitioner {
-    private static final long serialVersionUID = 1L;
-
-    private final int numPartitions;
-
-    private ClusterShardPartitioner(int numPartitions) {
-      this.numPartitions = Math.max(1, numPartitions);
-    }
-
-    @Override
-    public int numPartitions() {
-      return numPartitions;
-    }
-
-    @Override
-    public int getPartition(Object key) {
-      ClusterShardSortKey sortKey = (ClusterShardSortKey) key;
-      int hash = 31 * sortKey.clusterId + sortKey.shardId;
-      hash ^= (hash >>> 16);
-      return Math.floorMod(hash, numPartitions);
-    }
-  }
-
-  private static final class EncodedPostingRow implements Serializable {
-    private static final long serialVersionUID = 1L;
-
-    private final String recordKey;
-    private final String fileGroupId;
-    private final String partitionPath;
-    private final String baseInstantTime;
-    private final long rowPosition;
-    private final byte[] signPlane;
-    private final byte[] exPlanes;
-    private final float fAdd1;
-    private final float fRescale1;
-    private final float err1;
-    private final float fAddEx;
-    private final float fRescaleEx;
-    private final float residualNorm;
-    private final Float vectorNorm;
-
-    private EncodedPostingRow(String recordKey,
-                              String fileGroupId,
-                              String partitionPath,
-                              String baseInstantTime,
-                              long rowPosition,
-                              byte[] signPlane,
-                              byte[] exPlanes,
-                              float fAdd1,
-                              float fRescale1,
-                              float err1,
-                              float fAddEx,
-                              float fRescaleEx,
-                              float residualNorm,
-                              Float vectorNorm) {
-      this.recordKey = recordKey;
-      this.fileGroupId = fileGroupId;
-      this.partitionPath = partitionPath;
-      this.baseInstantTime = baseInstantTime;
-      this.rowPosition = rowPosition;
-      this.signPlane = signPlane;
-      this.exPlanes = exPlanes;
-      this.fAdd1 = fAdd1;
-      this.fRescale1 = fRescale1;
-      this.err1 = err1;
-      this.fAddEx = fAddEx;
-      this.fRescaleEx = fRescaleEx;
-      this.residualNorm = residualNorm;
-      this.vectorNorm = vectorNorm;
     }
   }
 
