@@ -240,6 +240,10 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
     dataType.isInstanceOf[VariantType]
   }
 
+  override def isVariantProjectionStruct(structType: StructType): Boolean = {
+    VariantMetadata.isVariantStruct(structType)
+  }
+
   override def createVariantValueWriter(
     dataType: DataType,
     writeValue: Consumer[Array[Byte]],

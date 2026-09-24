@@ -291,6 +291,9 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                                               filters: Seq[Filter],
                                               options: Map[String, String],
                                               hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
+    // Driver side, once per scan: Spark 4.0 cannot read a PushVariantIntoScan projection struct and
+    // has to fail here rather than in the schema-change path (#20032).
+    sparkAdapter.validateVariantProjectionReadable(requiredSchema)
     val outputSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
     val isCount = requiredSchema.isEmpty && !isMOR && !isIncremental
     // Spark planner only adds the user-provided predicates (from `WHERE` clause or `.filter()`)

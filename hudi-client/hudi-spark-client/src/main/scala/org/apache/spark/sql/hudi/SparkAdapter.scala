@@ -506,10 +506,12 @@ trait SparkAdapter extends Serializable {
   def isVariantShreddingStruct(structType: StructType): Boolean
 
   /**
-   * Checks if a StructType is the result of Spark 4.1's PushVariantIntoScan rewriting — i.e.,
-   * every child field carries `VariantMetadata` describing a pushed-down variant extraction.
-   *
-   * Returns false on Spark versions earlier than 4.1 (the rewriting only happens there).
+   * Checks if a StructType is the result of PushVariantIntoScan rewriting, i.e. every child field
+   * carries `VariantMetadata` describing a pushed-down variant extraction. The rewrite exists on
+   * every Spark 4.x and runs whenever spark.sql.variant.pushVariantIntoScan is on (off by default
+   * on 4.0, on from 4.1), so every 4.x adapter recognises the shape; whether the version can read
+   * it is [[validateVariantProjectionReadable]]'s question. Returns false on Spark 3.x, which has
+   * no VariantType.
    */
   def isVariantProjectionStruct(structType: StructType): Boolean = false
 
@@ -524,6 +526,16 @@ trait SparkAdapter extends Serializable {
       isVariantProjectionStruct(st) || st.fields.exists(f => containsVariantProjection(f.dataType))
     case _ => false
   }
+
+  /**
+   * Fails the read when `requiredSchema` carries a variant projection struct this Spark version
+   * cannot evaluate. Spark 4.0 rewrites a variant column exactly as 4.1 does once the conf is on,
+   * but its readers do not evaluate the projection and Hudi does not align log records to it, so
+   * a read there would fall through to the schema-change path instead of failing. The Spark 4.0
+   * adapter overrides this to throw; every other version reads the shape (4.1+) or never sees it
+   * (3.x). See https://github.com/apache/hudi/issues/20032.
+   */
+  def validateVariantProjectionReadable(requiredSchema: StructType): Unit = ()
 
   /**
    * If `sparkRequiredSchema` contains any Spark 4.1 variant projection struct (i.e., the
