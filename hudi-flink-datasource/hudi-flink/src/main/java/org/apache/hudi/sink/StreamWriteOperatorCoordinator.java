@@ -412,12 +412,10 @@ public class StreamWriteOperatorCoordinator
   }
 
   private CompletableFuture<CoordinationResponse> handleInstantRequest(Correspondent.InstantTimeRequest request) {
-    if (instantRequestExecutor.hasRunningTasks()) {
-      return CompletableFuture.completedFuture(CoordinationResponseSerDe.wrap(Correspondent.InstantTimeResponse.getInstance(null)));
-    }
     long checkpointId = request.getCheckpointId();
+    // Existing instants must remain available while another checkpoint's creation is blocked.
     Pair<String, EventBuffer> instantTimeAndEventBuffer = this.eventBuffers.getInstantAndEventBuffer(checkpointId);
-    if (instantTimeAndEventBuffer == null) {
+    if (instantTimeAndEventBuffer == null && !instantRequestExecutor.hasRunningTasks()) {
       instantRequestExecutor.execute(() -> {
         if (this.eventBuffers.getInstantAndEventBuffer(checkpointId) == null) {
           // Wait until previous instants are committed.

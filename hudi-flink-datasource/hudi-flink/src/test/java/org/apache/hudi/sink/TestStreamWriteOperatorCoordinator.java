@@ -858,6 +858,31 @@ public class TestStreamWriteOperatorCoordinator {
     assertTrue(inflights.containsInstant(instant));
   }
 
+  @Test
+  void testReadyInstantRemainsAvailableWhileAnotherCreationIsBlocked() throws Exception {
+    String existingInstant = requestInstantTime(1L);
+    MockOperatorCoordinatorContext ctx = (MockOperatorCoordinatorContext) coordinator.getContext();
+    CountDownLatch gate = new CountDownLatch(1);
+    NonThrownExecutor worker = new GatedInstantRequestExecutor(
+        Mockito.mock(Logger.class),
+        (errMsg, t) -> ctx.failJob(new HoodieException(errMsg, t)), gate);
+    coordinator.setInstantRequestExecutor(worker);
+    try {
+      Correspondent.InstantTimeResponse pending = CoordinationResponseSerDe.unwrap(
+          coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(2L))
+              .get(1, TimeUnit.SECONDS));
+      assertNull(pending.getInstant());
+      assertTrue(worker.hasRunningTasks());
+      Correspondent.InstantTimeResponse ready = CoordinationResponseSerDe.unwrap(
+          coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(1L))
+              .get(1, TimeUnit.SECONDS));
+      assertEquals(existingInstant, ready.getInstant(),
+          "An existing instant must remain available while another checkpoint's creation is blocked");
+    } finally {
+      gate.countDown();
+    }
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
