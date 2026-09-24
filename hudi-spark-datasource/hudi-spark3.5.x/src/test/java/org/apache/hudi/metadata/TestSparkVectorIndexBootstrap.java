@@ -76,6 +76,7 @@ class TestSparkVectorIndexBootstrap extends SparkClientFunctionalTestHarness {
         .withSchema(vectorWriteSchemaJson(dim))
         .withProperties(tableProps)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
+        .withEmbeddedTimelineServerEnabled(false)
         .build();
 
     String instantTime;
@@ -97,7 +98,7 @@ class TestSparkVectorIndexBootstrap extends SparkClientFunctionalTestHarness {
         .withIndexType(HoodieTableMetadataUtil.PARTITION_NAME_VECTOR_INDEX)
         .withIndexFunction("ivfflat")
         .withSourceFields(Arrays.asList("embedding"))
-        .withIndexOptions(vectorIndexOptions(dim))
+        .withIndexOptions(vectorIndexOptions())
         .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), MetadataPartitionType.VECTOR_INDEX))
         .build();
 
@@ -106,7 +107,7 @@ class TestSparkVectorIndexBootstrap extends SparkClientFunctionalTestHarness {
     SparkIndexerSupport indexerSupport = new SparkIndexerSupport(context(), writeConfig);
     List<HoodieRecord> records = HoodieJavaRDD.getJavaRDD(
         indexerSupport.generateVectorIndexRecords(indexDefinition, metaClient, fileSlices, tableSchema, 1)).collect();
-List<String> recordKeys = records.stream()
+    List<String> recordKeys = records.stream()
         .map(record -> record.getKey().getRecordKey())
         .collect(Collectors.toList());
     List<Integer> families = recordKeys.stream().map(TestSparkVectorIndexBootstrap::family).collect(Collectors.toList());
@@ -186,10 +187,10 @@ List<String> recordKeys = records.stream()
     return buffer.array();
   }
 
-  private static Map<String, String> vectorIndexOptions(int dim) {
+  private static Map<String, String> vectorIndexOptions() {
     Map<String, String> opts = new HashMap<>();
-    opts.put("vector.dimension", Integer.toString(dim));
     opts.put("vector.num_clusters", "2");
+    opts.put("vector.query.nprobes", "2");
     opts.put("vector.metric", "l2");
     opts.put("vector.max_iter", "5");
     opts.put("vector.quantizer", "IVF_RABITQ");
