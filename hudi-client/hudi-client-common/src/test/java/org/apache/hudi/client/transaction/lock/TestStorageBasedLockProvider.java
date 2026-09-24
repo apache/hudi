@@ -409,6 +409,11 @@ class TestStorageBasedLockProvider {
     assertTrue(exception.getMessage().contains("FAILED_TO_RELEASE"));
     // A steal is a terminal expire-write failure, not an exhausted throttle budget.
     assertTrue(exception.getMessage().contains(StorageBasedLockProvider.CAUSE_EXPIRE_WRITE_FAILED), exception.getMessage());
+    verify(mockLockService, times(1)).tryUpsertLockFile(any(), eq(Option.of(realLockFile)));
+    // No retry ran, so the release-failure log must not claim one did.
+    verify(mockLogger).error(contains("Cannot release lock"), eq(ownerId), any(),
+        eq(StorageBasedLockProvider.ExpireLockResult.FAILED),
+        eq(StorageBasedLockProvider.CAUSE_EXPIRE_WRITE_FAILED), eq(0));
     when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(false);
   }
 
@@ -710,6 +715,136 @@ class TestStorageBasedLockProvider {
     verify(mockLockService, times(1)).tryUpsertLockFile(any(), eq(Option.of(lock1)));
     verify(mockLockService, never()).tryUpsertLockFile(any(), eq(Option.of(lock2)));
     when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(false);
+  }
+
+  @Test
+  void testUnlockSucceedsAfterUnknownErrorRetry() throws InterruptedException {
+    // A dropped connection on the expire write surfaces as UNKNOWN_ERROR. The expire retry
+    // reconciles a landed write, so it is retried rather than left to dangle.
+    when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, Option.empty()));
+    StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
+    StorageLockFile realLockFile = new StorageLockFile(data, "v1");
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.empty())))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(realLockFile)));
+    when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
+    assertTrue(lockProvider.tryLock());
+
+    when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(true);
+    when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(true).thenReturn(false);
+    doNothing().when(lockProvider).sleepBeforeRetry(anyLong());
+    StorageLockFile expiredLockFile =
+        new StorageLockFile(new StorageLockData(true, data.getValidUntil(), ownerId), "v2");
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(realLockFile))))
+        .thenReturn(Pair.of(LockUpsertResult.UNKNOWN_ERROR, Option.empty()))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(expiredLockFile)));
+
+    lockProvider.unlock();
+
+    assertNull(lockProvider.getLock(), "Lock should be released after the retry succeeds");
+    verify(mockLockService, times(2)).tryUpsertLockFile(any(), eq(Option.of(realLockFile)));
+  }
+
+  @Test
+  void testUnlockReconcilesWhenUnknownErrorMaskedALandedExpireWrite() throws InterruptedException {
+    // The connection dropped after storage applied the expire write, so the retry's precondition
+    // fails against our own expired lock. That is a release, not a steal.
+    when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, Option.empty()));
+    StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
+    StorageLockFile realLockFile = new StorageLockFile(data, "v1");
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.empty())))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(realLockFile)));
+    when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
+    assertTrue(lockProvider.tryLock());
+
+    when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(true);
+    when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(true).thenReturn(false);
+    doNothing().when(lockProvider).sleepBeforeRetry(anyLong());
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(realLockFile))))
+        .thenReturn(Pair.of(LockUpsertResult.UNKNOWN_ERROR, Option.empty()))
+        .thenReturn(Pair.of(LockUpsertResult.ACQUIRED_BY_OTHERS, Option.empty()));
+    StorageLockFile ourExpiredLock =
+        new StorageLockFile(new StorageLockData(true, data.getValidUntil(), ownerId), "v2");
+    when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.SUCCESS, Option.of(ourExpiredLock)));
+
+    lockProvider.unlock();
+
+    assertNull(lockProvider.getLock(), "Our landed expire write means the lock is released");
+    verify(mockLockService, times(2)).tryUpsertLockFile(any(), eq(Option.of(realLockFile)));
+  }
+
+  @Test
+  void testUnlockThrowsExceptionWhenStillUnknownAfterAllRetries() throws InterruptedException {
+    when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, Option.empty()));
+    StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
+    StorageLockFile realLockFile = new StorageLockFile(data, "v1");
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.empty())))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(realLockFile)));
+    when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
+    assertTrue(lockProvider.tryLock());
+
+    when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(true);
+    when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(true).thenReturn(false);
+    doNothing().when(lockProvider).sleepBeforeRetry(anyLong());
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(realLockFile))))
+        .thenReturn(Pair.of(LockUpsertResult.UNKNOWN_ERROR, Option.empty()));
+
+    HoodieLockException exception = assertThrows(HoodieLockException.class, () -> lockProvider.unlock());
+    assertTrue(exception.getMessage().contains(StorageBasedLockProvider.CAUSE_EXPIRE_WRITE_FAILED), exception.getMessage());
+    verify(mockLockService, times(1 + StorageBasedLockProvider.RELEASE_MAX_RETRIES))
+        .tryUpsertLockFile(any(), eq(Option.of(realLockFile)));
+    verify(mockLogger).error(contains("Cannot release lock"), eq(ownerId), any(),
+        eq(StorageBasedLockProvider.ExpireLockResult.UNKNOWN_ERROR),
+        eq(StorageBasedLockProvider.CAUSE_EXPIRE_WRITE_FAILED), eq(StorageBasedLockProvider.RELEASE_MAX_RETRIES));
+    when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(false);
+  }
+
+  @Test
+  void testUnlockStillFailsWhenLockTakenByOthersAfterUnknownError() throws InterruptedException {
+    when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, Option.empty()));
+    StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
+    StorageLockFile realLockFile = new StorageLockFile(data, "v1");
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.empty())))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(realLockFile)));
+    when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
+    assertTrue(lockProvider.tryLock());
+
+    when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(true);
+    when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(true).thenReturn(false);
+    doNothing().when(lockProvider).sleepBeforeRetry(anyLong());
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(realLockFile))))
+        .thenReturn(Pair.of(LockUpsertResult.UNKNOWN_ERROR, Option.empty()))
+        .thenReturn(Pair.of(LockUpsertResult.ACQUIRED_BY_OTHERS, Option.empty()));
+    StorageLockFile otherOwnersLock = new StorageLockFile(
+        new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, "other-owner"), "v3");
+    when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.SUCCESS, Option.of(otherOwnersLock)));
+
+    HoodieLockException exception = assertThrows(HoodieLockException.class, () -> lockProvider.unlock());
+    assertTrue(exception.getMessage().contains(StorageBasedLockProvider.CAUSE_EXPIRE_WRITE_FAILED), exception.getMessage());
+    verify(mockLockService, times(2)).tryUpsertLockFile(any(), eq(Option.of(realLockFile)));
+  }
+
+  @Test
+  void testUnlockFailsCleanlyWhenReconcileReadThrows() throws InterruptedException {
+    // Flaky storage can drop the reconcile read too. That must surface as a failed release, not
+    // leak the raw storage exception out of unlock().
+    when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, Option.empty()));
+    StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
+    StorageLockFile realLockFile = new StorageLockFile(data, "v1");
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.empty())))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(realLockFile)));
+    when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
+    assertTrue(lockProvider.tryLock());
+
+    when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(true);
+    when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(true).thenReturn(false);
+    doNothing().when(lockProvider).sleepBeforeRetry(anyLong());
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(realLockFile))))
+        .thenReturn(Pair.of(LockUpsertResult.UNKNOWN_ERROR, Option.empty()))
+        .thenReturn(Pair.of(LockUpsertResult.ACQUIRED_BY_OTHERS, Option.empty()));
+    when(mockLockService.readCurrentLockFile()).thenThrow(new RuntimeException("connection reset"));
+
+    HoodieLockException exception = assertThrows(HoodieLockException.class, () -> lockProvider.unlock());
+    assertTrue(exception.getMessage().contains(StorageBasedLockProvider.CAUSE_EXPIRE_WRITE_FAILED), exception.getMessage());
   }
 
   @Test

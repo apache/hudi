@@ -114,7 +114,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
   // Every expire-write attempt was throttled by storage; the retry budget ran out.
   @VisibleForTesting
   static final String CAUSE_THROTTLE_RETRIES_EXHAUSTED = "THROTTLE_RETRIES_EXHAUSTED";
-  // Terminal expire-write outcome: UNKNOWN_ERROR or ACQUIRED_BY_OTHERS.
+  // Terminal expire-write outcome: ACQUIRED_BY_OTHERS, or UNKNOWN_ERROR on every attempt.
   @VisibleForTesting
   static final String CAUSE_EXPIRE_WRITE_FAILED = "EXPIRE_WRITE_FAILED";
   // Every expire-write attempt hit a retriable server-side error (HTTP 5xx); budget ran out.
@@ -560,7 +560,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       expireResult = tryExpireCurrentLock(false);
     }
 
-    // If the write hit a retriable error (throttling, or a 5xx server-side error), retry up to
+    // If the write hit a retriable error (throttling, a 5xx, or an indeterminate outcome), retry up to
     // RELEASE_MAX_RETRIES times with exponential backoff. Each sleep happens outside the monitor
     // so other threads aren't blocked during the wait. Retries run with afterRetriableAttempt set,
     // so a precondition failure caused by our own earlier attempt having landed is recognised as a
@@ -568,6 +568,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     // Note: when unlock() is called via close() -> shutdown(), the outer synchronized caller still
     // holds the provider monitor through reentrant locking, so other threads remain blocked in
     // that scenario. This is acceptable since close() is a shutdown path, not the hot path.
+    int retries = 0;
     for (int attempt = 1; attempt <= RELEASE_MAX_RETRIES && expireResult.isRetriable(); attempt++) {
       long delaySeconds = retryDelaySeconds(attempt);
       logger.warn("Owner {}: Lock expiration hit a retriable error ({}) (retry {}/{}), backing off for {} seconds.",
@@ -593,13 +594,13 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
           return;
         }
         expireResult = tryExpireCurrentLock(false, true);
+        retries = attempt;
       }
     }
 
     if (expireResult != ExpireLockResult.SUCCESS) {
       // A still-retriable result here means the retries above were exhausted; FAILED means
-      // tryExpireCurrentLock already logged the specific storage outcome (UNKNOWN_ERROR vs
-      // ACQUIRED_BY_OTHERS).
+      // tryExpireCurrentLock already logged the specific storage outcome.
       String cause;
       if (expireResult == ExpireLockResult.THROTTLED) {
         cause = CAUSE_THROTTLE_RETRIES_EXHAUSTED;
@@ -610,7 +611,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       }
       logger.error("Owner {}: Cannot release lock {} - expire write ended as {} (cause={}) after {} "
               + "retries; lock left un-expired and will dangle until its lease elapses.",
-          ownerId, lockFilePath, expireResult, cause, RELEASE_MAX_RETRIES);
+          ownerId, lockFilePath, expireResult, cause, retries);
       hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockReleaseFailureMetric);
       throw new HoodieLockException(generateLockStateMessage(FAILED_TO_RELEASE, cause));
     }
@@ -642,13 +643,17 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     // identical conditional write. Unlike THROTTLED, the first write may still have landed, which
     // the retry reconciles (see tryExpireCurrentLock(boolean, boolean)).
     TRANSIENT_ERROR,
+    // Any other storage error, including indeterminate ones (e.g. the connection dropped
+    // mid-request). Retriable for the same reason as TRANSIENT_ERROR: the precondition makes the
+    // retry safe and a landed write is reconciled. A permanent error fails after the retry budget.
+    UNKNOWN_ERROR,
     FAILED;
 
     /**
      * Whether retrying the identical conditional write is safe and worth attempting.
      */
     boolean isRetriable() {
-      return this == THROTTLED || this == TRANSIENT_ERROR;
+      return this == THROTTLED || this == TRANSIENT_ERROR || this == UNKNOWN_ERROR;
     }
   }
 
@@ -669,9 +674,10 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
    *
    * @param fromShutdownHook whether this is called from the JVM shutdown hook
    * @param afterRetriableAttempt whether an earlier attempt at this same expire write ended in a
-   *     retriable error. A 5xx does not prove the write was rejected, so a precondition failure on
-   *     the retry may be our own earlier write having landed. When set, such a failure is checked
-   *     against storage before it is reported as the lock having been acquired by others.
+   *     retriable error. A 5xx or indeterminate error does not prove the write was rejected, so a
+   *     precondition failure on the retry may be our own earlier write having landed. When set,
+   *     such a failure is checked against storage before it is reported as the lock having been
+   *     acquired by others.
    * @return the outcome of the expire write
    */
   @VisibleForTesting
@@ -691,9 +697,9 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     switch (result.getLeft()) {
       case UNKNOWN_ERROR:
         // Here we do not know the state of the lock.
-        logErrorLockState(FAILED_TO_RELEASE, "Lock state is unknown.");
+        logWarnLockState(FAILED_TO_RELEASE, "Lock state is unknown.");
         hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockStateUnknownMetric);
-        return ExpireLockResult.FAILED;
+        return ExpireLockResult.UNKNOWN_ERROR;
       case THROTTLED:
         logWarnLockState(FAILED_TO_RELEASE, "Lock expiration write was throttled.");
         hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockThrottledMetric);
