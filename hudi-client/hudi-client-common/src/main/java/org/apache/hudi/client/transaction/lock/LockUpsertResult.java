@@ -33,9 +33,10 @@ public enum LockUpsertResult {
   // Request was throttled by the storage backend (e.g. HTTP 429) with code 3
   THROTTLED(3),
   // The storage backend returned a transient, retriable server-side error
-  // (e.g. HTTP 500/502/503/504) with code 4. Distinct from UNKNOWN_ERROR: the write
-  // is known to have been rejected by the service, so retrying the same conditional
-  // write is safe and is expected to converge.
+  // (e.g. HTTP 500/502/503/504) with code 4. Distinct from UNKNOWN_ERROR: retrying the
+  // same conditional write is safe, because its precondition means it cannot overwrite
+  // another writer. The first write may still have landed; callers reconcile a
+  // precondition failure on the retry.
   TRANSIENT_ERROR(4);
 
   private final int code;

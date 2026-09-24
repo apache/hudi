@@ -323,8 +323,8 @@ public class AzureStorageLockClient implements StorageLockClient {
     } else if (code == CONFLICT_ERROR_CODE) {
       logger.info("OwnerId: {}, Retriable conditional request conflict error: {}", ownerId, lockFileUri);
     } else if (code >= INTERNAL_SERVER_ERROR_CODE_MIN) {
-      // A 5xx means Azure rejected the write server-side, so the conditional write did not take
-      // effect. Retrying the same If-Match/If-None-Match write is safe and expected to converge.
+      // A 5xx is retriable: the If-Match/If-None-Match precondition means a retry cannot clobber
+      // another writer. It does not prove the write was rejected; the caller reconciles that.
       logger.warn("OwnerId: {}, Azure returned internal server error code for lock file: {}", ownerId, lockFileUri, e);
       return LockUpsertResult.TRANSIENT_ERROR;
     } else {

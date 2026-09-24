@@ -239,8 +239,8 @@ class TestS3StorageLockClient {
     Pair<LockUpsertResult, Option<StorageLockFile>> result =
             lockService.tryUpsertLockFile(lockData, Option.empty());
 
-    // A 5xx is a retriable server-side rejection, not an indeterminate state: the conditional
-    // write did not take effect, so the caller may safely retry the identical write.
+    // A 5xx is retriable, not an indeterminate state: the write's precondition means the caller
+    // may safely retry the identical write, and reconciles a retry that finds its own write landed.
     assertEquals(TRANSIENT_ERROR, result.getLeft());
     assertTrue(result.getRight().isEmpty());
     verify(mockLogger).warn(contains("internal server error"), eq(OWNER_ID), eq(LOCK_FILE_PATH), eq(ex503));
