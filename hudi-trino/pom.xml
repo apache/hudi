@@ -22,7 +22,7 @@
     <parent>
         <groupId>org.apache.hudi</groupId>
         <artifactId>hudi</artifactId>
-        <version>1.2.1-rc2</version>
+        <version>1.2.1</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
