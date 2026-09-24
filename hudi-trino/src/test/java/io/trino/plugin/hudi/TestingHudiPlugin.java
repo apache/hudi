@@ -23,7 +23,7 @@ import static com.google.common.base.Verify.verify;
 import static java.util.Objects.requireNonNull;
 
 public class TestingHudiPlugin
-        extends HudiPlugin
+        extends HudiTestPlugin
 {
     private final Path localFileSystemRootPath;
 
