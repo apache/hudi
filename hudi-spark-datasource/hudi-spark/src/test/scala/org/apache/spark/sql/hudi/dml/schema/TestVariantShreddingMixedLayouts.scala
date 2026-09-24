@@ -1401,8 +1401,7 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
     }
 
     def runLeg(tableName: String, tablePath: String, pushed: Boolean, nullElement: Boolean,
-               expectedBlock: Option[HoodieLogBlockType], legLabel: String): Unit = {
-      val leg = legLabel
+               expectedBlock: Option[HoodieLogBlockType], leg: String): Unit = {
       def secondOf(id: Int): String = second(id, nullElement)
       val secondElementSql = if (nullElement) {
         """case when id = 4 then null else parse_json(concat('{"k":"B', id, '"}')) end"""
@@ -1426,7 +1425,7 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
       // Every read below runs against the merged MOR row first and, on the MOR legs, once more
       // after compaction has rewritten the merged collections into a base file.
       def assertReads(phase: String): Unit = {
-        val leg = s"$legLabel, $phase"
+        val legPhase = s"$leg, $phase"
         // Extractions. get(arr, 1) rather than arr[1] only for symmetry with the shredded array test
         // above; every row here has two elements.
         val extractions = s"select id, variant_get(v, '$$.k', 'string'), " +
@@ -1435,7 +1434,7 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
           s"variant_get(items[0].inner, '$$.k', 'string') from $tableName order by id"
         checkAnswer(extractions)(
           (0 until 5).map(id => Seq(id, top(id), first(id), secondOf(id), 2, pVal(id), qVal(id), 2, item(id))): _*)
-        assertCollectionsNative(extractions, pushed, leg)
+        assertCollectionsNative(extractions, pushed, legPhase)
         // Casts of the whole element / value.
         checkAnswer(s"select id, cast(arr[0] as string), cast(get(arr, 1) as string), " +
           s"cast(m['p'] as string), cast(m['q'] as string), cast(items[0].inner as string) " +
@@ -1466,15 +1465,15 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
         // The whole collections: no extraction anywhere, so nothing is rewritten on either arm, and
         // the values come back as VariantVal (toString is the JSON) with the nulls in place.
         val whole = spark.sql(s"select id, arr, m, items from $tableName order by id").collect()
-        assert(whole.length == 5, s"[$leg] whole-collection read should return 5 rows")
+        assert(whole.length == 5, s"[$legPhase] whole-collection read should return 5 rows")
         whole.foreach { row =>
           val id = row.getInt(0)
           val arr = row.getSeq[Any](1).map(e => Option(e).map(_.toString).orNull)
-          assert(arr == Seq(json(first(id)), json(secondOf(id))), s"[$leg] arr of id $id: $arr")
+          assert(arr == Seq(json(first(id)), json(secondOf(id))), s"[$legPhase] arr of id $id: $arr")
           val m = row.getMap[String, Any](2).map { case (k, e) => k -> Option(e).map(_.toString).orNull }
-          assert(m == Map("p" -> json(pVal(id)), "q" -> json(qVal(id))), s"[$leg] m of id $id: $m")
+          assert(m == Map("p" -> json(pVal(id)), "q" -> json(qVal(id))), s"[$legPhase] m of id $id: $m")
           val items = row.getSeq[Row](3).map(s => Option(s.getAs[Any]("inner")).map(_.toString).orNull)
-          assert(items == Seq(json(item(id))), s"[$leg] items of id $id: $items")
+          assert(items == Seq(json(item(id))), s"[$legPhase] items of id $id: $items")
         }
       }
 
