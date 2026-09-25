@@ -48,7 +48,7 @@ import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{ArrayType, ByteType, DoubleType, FloatType, LongType, MetadataBuilder, StructField, StructType}
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 
-import java.util.function.{Function => JFunction, UnaryOperator}
+import java.util.function.{Function => JFunction}
 
 import scala.collection.JavaConverters._
 
@@ -150,21 +150,20 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
   // the output converter, so this is where the record context learns what shape its rows carry.
   // Base-file rows are ALWAYS read in the projected shape (getFileRecordIterator overlays it
   // unconditionally); log rows only when shouldProjectVariants rewrites them, so the payload-based
-  // exclusion applies only when there are log files to merge. Two consumers need the shape: the
-  // output converter, which projects the reader's required schema down to the requested one
-  // (FileGroupReaderSchemaHandler.getOutputConverter), and the bootstrap skeleton/data join
-  // (getBootstrapProjection). Without it both build a VariantType-typed row writer that re-encodes
-  // the projection struct through UnsafeRow.getVariant - byte-identical only while the struct's
-  // null bitset stays small, and a NegativeArraySizeException once enough pushed fields are null.
+  // exclusion applies only when there are log files to merge. Every row writer and field accessor
+  // the record context builds from an engine schema needs the shape: the output converter, which
+  // projects the reader's required schema down to the requested one
+  // (FileGroupReaderSchemaHandler.getOutputConverter), the bootstrap skeleton/data join
+  // (getBootstrapProjection), and the partial-update merges that rebuild a row field by field
+  // (SparkRecordMergingUtils.mergePartialRecords, mergeWithEngineRecord). Without it they read the
+  // projection struct through UnsafeRow.getVariant - byte-identical only while the struct's null
+  // bitset stays small, and a NegativeArraySizeException once enough pushed fields are null.
   override def setSchemaHandler(schemaHandler: FileGroupReaderSchemaHandler[InternalRow]): Unit = {
     super.setSchemaHandler(schemaHandler)
     if (hasVariantProjection && (!isPayloadBasedMerge || !getHasLogFiles)) {
       val requiredStruct = sparkRequiredSchema.get
       recordContext.asInstanceOf[BaseSparkInternalRecordContext].setRowShape(
-        new UnaryOperator[StructType] {
-          override def apply(structType: StructType): StructType =
-            overlayVariantProjections(structType, requiredStruct)
-        })
+        overlayVariantProjections(_, requiredStruct))
     }
   }
 

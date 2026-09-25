@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.common.table.log.HoodieLogFormat
+import org.apache.hudi.common.table.log.block.{HoodieDataBlock, HoodieLogBlock}
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.storage.StoragePath
@@ -743,7 +744,17 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
    * a log format assert on this rather than on file names: native logs carry a .log.parquet suffix,
    * but an inline log file is named the same whether its data blocks are avro or parquet.
    */
-  protected def listLogBlockTypes(tablePath: String): Seq[HoodieLogBlockType] = {
+  protected def listLogBlockTypes(tablePath: String): Seq[HoodieLogBlockType] =
+    mapLogBlocks(tablePath)(_.getBlockType)
+
+  /** Whether any data block in the table's log files carries a partial-update schema (IS_PARTIAL). */
+  protected def hasPartialLogBlock(tablePath: String): Boolean =
+    mapLogBlocks(tablePath) {
+      case dataBlock: HoodieDataBlock => dataBlock.containsPartialUpdates()
+      case _ => false
+    }.contains(true)
+
+  private def mapLogBlocks[T](tablePath: String)(f: HoodieLogBlock => T): Seq[T] = {
     val (metaClient, fsView) = getMetaClientAndFileSystemView(tablePath)
     val schema = new TableSchemaResolver(metaClient).getTableSchema
     val logFiles = fsView.getAllFileSlices("").iterator().asScala
@@ -752,11 +763,11 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
     logFiles.flatMap { path =>
       val reader = HoodieLogFormat.newReader(metaClient, new HoodieLogFile(path), schema)
       try {
-        val types = mutable.ArrayBuffer[HoodieLogBlockType]()
+        val results = mutable.ArrayBuffer[T]()
         while (reader.hasNext) {
-          types += reader.next().getBlockType
+          results += f(reader.next())
         }
-        types.toSeq
+        results.toSeq
       } finally {
         reader.close()
       }
