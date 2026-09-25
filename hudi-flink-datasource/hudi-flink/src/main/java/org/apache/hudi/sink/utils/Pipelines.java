@@ -182,7 +182,7 @@ public class Pipelines {
     Partitioner<HoodieKey> partitioner =
         BucketIndexPartitionerFactory.create(conf, indexKeyFieldList);
     RowDataKeyGen keyGen = RowDataKeyGens.instance(conf, rowType);
-    boolean needFixedFileIdSuffix =
+    boolean isNonBlockingConcurrencyControl =
         OptionsResolver.isNonBlockingConcurrencyControl(conf);
 
     Map<String, String> bucketIdToFileId = new HashMap<>();
@@ -191,7 +191,8 @@ public class Pipelines {
 
     if (isLsmTreeStorageLayout) {
       RowType sortRowType =
-          LsmBucketBulkInsertWriterHelper.rowTypeWithFileIdAndKey(rowType);
+          LsmBucketBulkInsertWriterHelper.rowTypeWithFileIdAndKey(
+              rowType, isNonBlockingConcurrencyControl);
       InternalTypeInfo<RowData> sortTypeInfo = InternalTypeInfo.of(sortRowType);
       DataStream<RowData> sortInput = routedDataStream
           .map(record -> LsmBucketBulkInsertWriterHelper.rowWithFileIdAndKey(
@@ -200,19 +201,21 @@ public class Pipelines {
               record,
               indexKeyFieldList,
               numBucketsFunction,
-              needFixedFileIdSuffix), sortTypeInfo)
+              isNonBlockingConcurrencyControl), sortTypeInfo)
           .name("lsm_bulk_insert_sort_keys")
           .setParallelism(writeTasks);
       return addBulkInsertSorter(
           conf,
           sortInput,
           sortTypeInfo,
-          LsmBucketBulkInsertWriterHelper.getFileIdAndKeySorterGen(sortRowType),
+          LsmBucketBulkInsertWriterHelper.getFileIdAndKeySorterGen(
+              sortRowType, isNonBlockingConcurrencyControl),
           "lsm_sorter:(file_group, record_key)",
           writeTasks);
     }
 
-    RowType rowTypeWithFileId = BucketBulkInsertWriterHelper.rowTypeWithFileId(rowType);
+    RowType rowTypeWithFileId =
+        BucketBulkInsertWriterHelper.rowTypeWithFileId(rowType, isNonBlockingConcurrencyControl);
     InternalTypeInfo<RowData> typeInfo = InternalTypeInfo.of(rowTypeWithFileId);
     DataStream<RowData> rowsWithFileId = routedDataStream
         .map(record -> BucketBulkInsertWriterHelper.rowWithFileId(
@@ -221,7 +224,7 @@ public class Pipelines {
             record,
             indexKeyFieldList,
             numBucketsFunction,
-            needFixedFileIdSuffix), typeInfo)
+            isNonBlockingConcurrencyControl), typeInfo)
         .setParallelism(writeTasks);
 
     if (!conf.get(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT)) {
@@ -232,7 +235,8 @@ public class Pipelines {
         conf,
         rowsWithFileId,
         typeInfo,
-        BucketBulkInsertWriterHelper.getFileIdSorterGen(rowTypeWithFileId),
+        BucketBulkInsertWriterHelper.getFileIdSorterGen(
+            rowTypeWithFileId, isNonBlockingConcurrencyControl),
         "file_sorter",
         writeTasks);
   }
