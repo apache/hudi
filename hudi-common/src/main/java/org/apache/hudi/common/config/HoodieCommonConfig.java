@@ -174,6 +174,19 @@ public class HoodieCommonConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("1.1.0")
       .withDocumentation("Amount of memory to be used in bytes for holding cachedAllInputFileSlices in org.apache.hudi.core.read.BaseHoodieTableFileIndex.");
+
+  public static final ConfigProperty<Integer> HOODIE_FILE_INDEX_MAX_CACHED_PARTITIONS = ConfigProperty
+      .key("hoodie.file.index.cache.max.partitions")
+      .defaultValue(10000)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Maximum number of partitions whose input file slices are retained in memory by "
+          + "org.apache.hudi.core.read.BaseHoodieTableFileIndex when partitions are listed lazily. Once the limit is "
+          + "exceeded, the least recently used partitions are evicted, which bounds the heap held by a file index that "
+          + "is reused across many queries in a long-lived session (for example, a Spark catalog table whose relation is "
+          + "cached for the lifetime of the session). Evicted partitions are re-listed on the next query that needs them. "
+          + "A value of 0 or less disables the bound. The bound does not apply when all partitions are listed eagerly, "
+          + "nor when hoodie.file.index.cache.use.spillable.map is enabled.");
   
   public static final long DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES = 1024 * 1024 * 1024L;
 

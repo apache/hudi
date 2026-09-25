@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieTableQueryType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -33,6 +34,7 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -40,8 +42,14 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getStorageConf;
 
@@ -122,6 +130,115 @@ class TestBaseHoodieTableFileIndex extends HoodieCommonTestHarness {
     Assertions.assertEquals(expectedEnabled, fileIndex.metadataConfig().isEnabled());
   }
 
+  /**
+   * Soak test for the unbounded growth of {@code BaseHoodieTableFileIndex.cachedAllInputFileSlices}.
+   *
+   * <p>With lazy listing the map was only ever inserted into, on the query path, and only ever emptied by
+   * {@code doRefresh()}, which runs in the constructor and in {@code refresh()} and not per query. A file index that
+   * survives for the lifetime of a session (as it does behind a cached Spark catalog relation) therefore retained one
+   * entry for every distinct partition it had ever been asked about: querying N distinct partitions left N entries.
+   *
+   * <p>This drives one single-partition lookup per distinct partition against one index instance, exactly as the
+   * reported reproduction does, and asserts both halves of the fix: the cache stays within its configured bound, and
+   * every lookup still returns a complete, non-null answer for the partition it asked about (i.e. a partition that
+   * was evicted is transparently re-listed rather than being served as a missing entry).
+   */
+  @Test
+  void testFileSliceCacheStaysBoundedAcrossManyDistinctPartitionLookups() throws Exception {
+    initMetaClient();
+    int cacheBound = 10;
+    int partitionsQueried = 200;
+
+    TypedProperties properties = new TypedProperties();
+    properties.put(HoodieCommonConfig.HOODIE_FILE_INDEX_MAX_CACHED_PARTITIONS.key(), cacheBound);
+
+    TestLocalIndex fileIndex = new TestLocalIndex(
+        new HoodieLocalEngineContext(getStorageConf()),
+        metaClient,
+        properties,
+        HoodieTableQueryType.SNAPSHOT,
+        Collections.emptyList(),
+        Option.empty(),
+        false,
+        false,
+        true,
+        new BaseHoodieTableFileIndex.NoopCache(),
+        // lazy listing: this is the mode the reported Spark SQL / catalog path runs in
+        true,
+        Option.empty(),
+        Option.empty()
+    );
+
+    List<Integer> observedCacheSizes = new ArrayList<>();
+    for (int i = 0; i < partitionsQueried; i++) {
+      String relativePartitionPath = "dt=" + i;
+      Files.createDirectories(Paths.get(basePath, relativePartitionPath));
+      BaseHoodieTableFileIndex.PartitionPath partition =
+          new BaseHoodieTableFileIndex.PartitionPath(relativePartitionPath, new Object[] {relativePartitionPath});
+
+      Map<BaseHoodieTableFileIndex.PartitionPath, List<FileSlice>> fileSlices =
+          fileIndex.getInputFileSlicesForTest(partition);
+
+      Assertions.assertTrue(fileSlices.containsKey(partition),
+          "Every queried partition must be present in the result for query " + i);
+      Assertions.assertNotNull(fileSlices.get(partition),
+          "A queried partition must never map to null, even once eviction is in play (query " + i + ")");
+
+      int cacheSize = cachedFileSliceCount(fileIndex);
+      observedCacheSizes.add(cacheSize);
+      Assertions.assertTrue(cacheSize <= cacheBound,
+          "File-slice cache grew to " + cacheSize + " entries after " + (i + 1)
+              + " distinct partitions, bound is " + cacheBound);
+    }
+
+    // Before the fix this would have been partitionsQueried; sanity-check the cache is actually being used at all
+    Assertions.assertEquals(cacheBound, observedCacheSizes.get(observedCacheSizes.size() - 1),
+        "A saturated cache should sit at exactly its bound");
+  }
+
+  /**
+   * Eager listing deliberately holds every partition of the table, and that set is rebuilt from scratch on each
+   * refresh rather than accumulating over the session, so the bound must not be applied there: doing so would force
+   * partitions the query provably needs to be re-listed.
+   */
+  @Test
+  void testEagerListingIsNotBounded() throws Exception {
+    initMetaClient();
+    TypedProperties properties = new TypedProperties();
+    properties.put(HoodieCommonConfig.HOODIE_FILE_INDEX_MAX_CACHED_PARTITIONS.key(), 1);
+
+    TestLocalIndex fileIndex = new TestLocalIndex(
+        new HoodieLocalEngineContext(getStorageConf()),
+        metaClient,
+        properties,
+        HoodieTableQueryType.SNAPSHOT,
+        Collections.emptyList(),
+        Option.empty(),
+        false,
+        false,
+        true,
+        new BaseHoodieTableFileIndex.NoopCache(),
+        false,
+        Option.empty(),
+        Option.empty()
+    );
+
+    // BoundedFileSliceCache is package-private in hudi-common, so identify it by name from here
+    Assertions.assertEquals(HashMap.class, rawFileSliceCache(fileIndex).getClass(),
+        "Eager listing must keep the plain unbounded map");
+  }
+
+  private static Object rawFileSliceCache(BaseHoodieTableFileIndex fileIndex) throws Exception {
+    Field field = BaseHoodieTableFileIndex.class.getDeclaredField("cachedAllInputFileSlices");
+    field.setAccessible(true);
+    return field.get(fileIndex);
+  }
+
+  @SuppressWarnings("unchecked")
+  private static int cachedFileSliceCount(BaseHoodieTableFileIndex fileIndex) throws Exception {
+    return ((Map<BaseHoodieTableFileIndex.PartitionPath, List<FileSlice>>) rawFileSliceCache(fileIndex)).size();
+  }
+
   private static class TestLocalIndex extends BaseHoodieTableFileIndex {
 
     public TestLocalIndex(HoodieEngineContext engineContext, HoodieTableMetaClient metaClient, TypedProperties configProperties, HoodieTableQueryType queryType,
@@ -134,6 +251,10 @@ class TestBaseHoodieTableFileIndex extends HoodieCommonTestHarness {
 
     HoodieMetadataConfig metadataConfig() {
       return metadataConfig;
+    }
+
+    Map<PartitionPath, List<FileSlice>> getInputFileSlicesForTest(PartitionPath... partitions) {
+      return getInputFileSlices(partitions);
     }
 
     @Override

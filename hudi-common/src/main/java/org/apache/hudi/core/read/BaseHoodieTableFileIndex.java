@@ -44,6 +44,7 @@ import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap.DiskMapType;
 import org.apache.hudi.common.util.collection.Pair;
@@ -67,6 +68,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -74,6 +76,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
+import static org.apache.hudi.common.config.HoodieCommonConfig.HOODIE_FILE_INDEX_MAX_CACHED_PARTITIONS;
 import static org.apache.hudi.common.config.HoodieCommonConfig.HOODIE_FILE_INDEX_SPILLABLE_MEMORY;
 import static org.apache.hudi.common.config.HoodieCommonConfig.HOODIE_FILE_INDEX_USE_SPILLABLE_MAP;
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
@@ -132,7 +135,12 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   private final transient FileStatusCache fileStatusCache;
 
   // NOTE: Individual partitions are always cached in full: meaning that if partition is cached
-  //       it will hold all the file-slices residing w/in the partition
+  //       it will hold all the file-slices residing w/in the partition.
+  //
+  //       The map's retention is bounded in the lazy-listing case (see {@link BoundedFileSliceCache}), because there
+  //       the resident set is an accumulation of the working sets of every query this index has ever served, and the
+  //       index itself can live for the whole session. In the eager-listing case the resident set is, by construction,
+  //       exactly the table's partitions as of the last refresh, so it does not grow with the session and is left alone.
   private transient volatile Map<PartitionPath, List<FileSlice>> cachedAllInputFileSlices = new HashMap<>();
 
   // NOTE: It always contains either all partition paths, or null if it is not initialized yet
@@ -239,24 +247,53 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
    * Returns all listed file-slices w/in the partition paths returned by {@link #getAllQueryPartitionPaths()}
    */
   protected Map<PartitionPath, List<FileSlice>> getAllInputFileSlices() {
-    if (!areAllFileSlicesCached()) {
-      ensurePreloadedPartitions(getAllQueryPartitionPaths());
+    List<PartitionPath> allQueryPartitionPaths = getAllQueryPartitionPaths();
+    if (areAllFileSlicesCached()) {
+      return cachedAllInputFileSlices;
     }
 
-    return cachedAllInputFileSlices;
+    // NOTE: We deliberately return the result assembled by [[getInputFileSlices]] rather than the cache itself,
+    //       so that the returned map covers every queried partition even if the cache evicted some of them
+    //       while the remainder was being loaded.
+    return getInputFileSlices(allQueryPartitionPaths.toArray(new PartitionPath[0]));
   }
 
   /**
    * Get input file slice for the given partition. Will use cache directly if it is computed before.
    */
   protected Map<PartitionPath, List<FileSlice>> getInputFileSlices(PartitionPath... partitions) {
-    ensurePreloadedPartitions(Arrays.asList(partitions));
-    return Arrays.stream(partitions).collect(
-        Collectors.toMap(Function.identity(), partition -> cachedAllInputFileSlices.get(partition))
-    );
+    Map<PartitionPath, List<FileSlice>> freshlyLoaded = ensurePreloadedPartitions(Arrays.asList(partitions));
+
+    Map<PartitionPath, List<FileSlice>> queriedFileSlices = new HashMap<>(partitions.length);
+    for (PartitionPath partition : partitions) {
+      // NOTE: Reading through the cache (as opposed to through [[freshlyLoaded]]) is what marks the partition as
+      //       recently used, so that the partitions a query actually touches are the last ones to be evicted.
+      List<FileSlice> fileSlices = cachedAllInputFileSlices.get(partition);
+      if (fileSlices == null) {
+        // The partition was evicted in between being loaded and being read back, which is only possible when a
+        // single query's working set exceeds the cache's bound. Serve it from what we have just loaded.
+        fileSlices = freshlyLoaded.get(partition);
+      }
+      if (fileSlices == null) {
+        // The partition was resident when we checked, and was evicted while the missing ones were being loaded,
+        // so it is in neither place. Re-list just this partition rather than return an incomplete map.
+        fileSlices = loadFileSlicesForPartitions(Collections.singletonList(partition))
+            .getOrDefault(partition, Collections.emptyList());
+        cachedAllInputFileSlices.put(partition, fileSlices);
+      }
+      queriedFileSlices.put(partition, fileSlices);
+    }
+    return queriedFileSlices;
   }
 
-  private void ensurePreloadedPartitions(List<PartitionPath> partitionPaths) {
+  /**
+   * Loads the file-slices of any of the given partitions that are not cached yet, and caches them.
+   *
+   * @return the file-slices that were loaded by this call (empty if every partition was already cached). The caller
+   *         has to consult this in addition to the cache, since a bounded cache may evict an entry right after it
+   *         has been inserted.
+   */
+  private Map<PartitionPath, List<FileSlice>> ensurePreloadedPartitions(List<PartitionPath> partitionPaths) {
     // Fetching file slices for partitions that have not been cached yet
     List<PartitionPath> missingPartitions = partitionPaths.stream()
         .filter(p -> !cachedAllInputFileSlices.containsKey(p))
@@ -264,7 +301,9 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
     // NOTE: Individual partitions are always cached in full, therefore if partition is cached
     //       it will hold all the file-slices residing w/in the partition
-    cachedAllInputFileSlices.putAll(loadFileSlicesForPartitions(missingPartitions));
+    Map<PartitionPath, List<FileSlice>> loadedFileSlices = loadFileSlicesForPartitions(missingPartitions);
+    cachedAllInputFileSlices.putAll(loadedFileSlices);
+    return loadedFileSlices;
   }
 
   private Map<PartitionPath, List<FileSlice>> loadFileSlicesForPartitions(List<PartitionPath> partitions) {
@@ -577,7 +616,13 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
             spillableMemory, spillablePath, new DefaultSizeEstimator<>(), new DefaultSizeEstimator<>(), diskMapType,
             new HoodieFileSliceSerializer(), isBitCaskCompressionEnabled, this.getClass().getName());
       } else {
-        this.cachedAllInputFileSlices = new HashMap<>();
+        int maxCachedPartitions = ConfigUtils.getIntWithAltKeys(configProperties, HOODIE_FILE_INDEX_MAX_CACHED_PARTITIONS);
+        // NOTE: The bound is only applied for lazy listing. With eager listing the map is (re-)populated with exactly
+        //       the table's partitions on every refresh, so it cannot grow with the lifetime of the index, and
+        //       bounding it would only force partitions the query provably needs to be re-listed.
+        this.cachedAllInputFileSlices = (shouldListLazily && maxCachedPartitions > 0)
+            ? new BoundedFileSliceCache(maxCachedPartitions)
+            : new HashMap<>();
       }
     } catch (IOException e) {
       throw new HoodieIOException("Failed to refresh file index", e);
@@ -659,6 +704,42 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   protected HoodieTableMetadata createMetadataTable(HoodieEngineContext engineContext) {
     return metaClient.getTableFormat().getMetadataFactory()
         .create(engineContext, metaClient.getStorage(), metadataConfig, basePath.toString(), true);
+  }
+
+  /**
+   * LRU-bounded holder for {@code cachedAllInputFileSlices}.
+   *
+   * <p>The file-slice cache is keyed by partition and every entry is correct for as long as it lives: the whole map is
+   * discarded and rebuilt by {@code doRefresh()}, so an entry can never outlive the timeline view the index is
+   * serving. What is unbounded is the <em>number</em> of keys: with lazy listing a partition is added the first time
+   * any query touches it and nothing ever removes it, so a file index that is reused for the lifetime of a session
+   * (as Spark does for a cached catalog relation) retains one entry per distinct partition ever queried.
+   *
+   * <p>Eviction is in least-recently-used order, so the partitions a workload keeps querying stay resident and only
+   * the long tail is dropped; a dropped partition is simply re-listed the next time it is needed.
+   *
+   * <p>NOTE: this extends {@link LinkedHashMap} in access order, which means {@code get} structurally modifies the
+   *       map. That does not make the field any less thread-safe than the {@link HashMap} it replaces, which was
+   *       already unsafe for the concurrent {@code putAll} on the loading path.
+   */
+  static class BoundedFileSliceCache extends LinkedHashMap<PartitionPath, List<FileSlice>> {
+
+    private static final long serialVersionUID = 1L;
+
+    private final int maxCachedPartitions;
+
+    BoundedFileSliceCache(int maxCachedPartitions) {
+      // NOTE: access-order, so that reads (and not just insertions) renew an entry's recency
+      super(16, 0.75f, true);
+      ValidationUtils.checkArgument(maxCachedPartitions > 0,
+          "Bounded file-slice cache requires a positive bound, got " + maxCachedPartitions);
+      this.maxCachedPartitions = maxCachedPartitions;
+    }
+
+    @Override
+    protected boolean removeEldestEntry(Map.Entry<PartitionPath, List<FileSlice>> eldest) {
+      return size() > maxCachedPartitions;
+    }
   }
 
   /**
