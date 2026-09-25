@@ -51,6 +51,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieSimpleIndex;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.KeyGenUtils;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
@@ -69,6 +70,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -77,7 +79,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
-import static org.apache.hudi.testutils.Assertions.assertComplexKeyGeneratorValidationThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -503,19 +504,77 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     BaseHoodieTableServiceClient<String, String, String> tableServiceClient = mock(BaseHoodieTableServiceClient.class);
     TestWriteClient writeClient = new TestWriteClient(writeConfigBuilder.build(), table, Option.empty(), tableServiceClient);
 
-    if (tableVersion <= 8 && enableComplexKeyGeneratorValidation
-        && (ComplexAvroKeyGenerator.class.getCanonicalName().equals(keyGeneratorClass)
+    // the encoding of a single-field complex keygen table is recorded on creation, on every table version and
+    // whatever the validation setting, so neither initTable nor startCommit has anything to object to
+    boolean singleFieldComplexKeygen = (ComplexAvroKeyGenerator.class.getCanonicalName().equals(keyGeneratorClass)
         || "org.apache.hudi.keygen.ComplexKeyGenerator".equals(keyGeneratorClass))
-        && KeyGenUtils.getRecordKeyFields(recordKeyFields).size() == 1) {
-      assertComplexKeyGeneratorValidationThrows(() -> writeClient.initTable(WriteOperationType.INSERT, Option.empty()), "ingestion");
-    } else {
-      writeClient.initTable(WriteOperationType.INSERT, Option.empty());
-      String requestedTime = writeClient.startCommit("commit");
+        && KeyGenUtils.getRecordKeyFields(recordKeyFields).size() == 1;
+    assertEquals(singleFieldComplexKeygen ? Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED) : Option.empty(),
+        metaClient.getTableConfig().getComplexKeyGenEncoding());
+    writeClient.initTable(WriteOperationType.INSERT, Option.empty());
+    String requestedTime = writeClient.startCommit("commit");
 
-      HoodieTimeline writeTimeline = metaClient.getActiveTimeline().getWriteTimeline();
-      assertTrue(writeTimeline.lastInstant().isPresent());
-      assertEquals("commit", writeTimeline.lastInstant().get().getAction());
-      assertEquals(requestedTime, writeTimeline.lastInstant().get().requestedTime());
+    HoodieTimeline writeTimeline = metaClient.getActiveTimeline().getWriteTimeline();
+    assertTrue(writeTimeline.lastInstant().isPresent());
+    assertEquals("commit", writeTimeline.lastInstant().get().getAction());
+    assertEquals(requestedTime, writeTimeline.lastInstant().get().requestedTime());
+  }
+
+  /** A write that keys records on a tracked table without the property is refused; table services, partition deletes and rollbacks are not. */
+  @Test
+  void testInitTableRequiresRecordedComplexKeygenEncoding() throws IOException {
+    initPath();
+    Properties tableProperties = new Properties();
+    tableProperties.setProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), ComplexAvroKeyGenerator.class.getName());
+    tableProperties.setProperty(HoodieTableConfig.RECORDKEY_FIELDS.key(), "id");
+    metaClient = HoodieTestUtils.init(getDefaultStorageConf(), basePath, getTableType(), tableProperties);
+    HoodieTableConfig.delete(metaClient.getStorage(), metaClient.getMetaPath(),
+        Collections.singleton(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()));
+
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    try (TestWriteClient writeClient = new TestWriteClient(writeConfig, mock(HoodieTable.class), Option.empty(),
+        mock(BaseHoodieTableServiceClient.class))) {
+      HoodieException e = assertThrows(HoodieException.class, () -> writeClient.initTable(WriteOperationType.UPSERT, Option.empty()));
+      assertTrue(e.getMessage().contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()), e.getMessage());
+      writeClient.initTable(WriteOperationType.COMPACT, Option.empty());
+      writeClient.initTable(WriteOperationType.DELETE_PARTITION, Option.empty());
+      writeClient.initTable(WriteOperationType.UNKNOWN, Option.empty());
+    }
+  }
+
+  @Test
+  void testComplexKeygenEncodingRecordedBeforeIngestionOnly() throws IOException {
+    initPath();
+    Properties tableProperties = new Properties();
+    tableProperties.setProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), ComplexAvroKeyGenerator.class.getName());
+    tableProperties.setProperty(HoodieTableConfig.RECORDKEY_FIELDS.key(), "id");
+    metaClient = HoodieTestUtils.init(getDefaultStorageConf(), basePath, getTableType(), tableProperties);
+    HoodieTableConfig.delete(metaClient.getStorage(), metaClient.getMetaPath(),
+        Collections.singleton(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()));
+    metaClient.reloadTableConfig();
+
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    try (TestWriteClient writeClient = new TestWriteClient(writeConfig, mock(HoodieTable.class), Option.empty(),
+        mock(BaseHoodieTableServiceClient.class))) {
+      KeyGenUtils.recordComplexKeygenEncodingIfMissing(metaClient, writeConfig);
+      assertEquals(Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED), metaClient.getTableConfig().getComplexKeyGenEncoding());
+      assertTrue(metaClient.getActiveTimeline().empty(), "Encoding must be recorded before the first commit");
+
+      writeClient.startCommit(Option.of("20260101000000001"), "commit", metaClient);
+      HoodieTableConfig.delete(metaClient.getStorage(), metaClient.getMetaPath(),
+          Collections.singleton(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()));
+      metaClient.reloadTableConfig();
+      writeClient.startCommit(Option.of("20260101000000002"), "commit", metaClient);
+      metaClient.reloadTableConfig();
+      assertFalse(metaClient.getTableConfig().getComplexKeyGenEncoding().isPresent(),
+          "Starting another commit must not run initialization again");
+    }
+
+    try (TestWriteClient ignored = new TestWriteClient(writeConfig, mock(HoodieTable.class), Option.empty(),
+        mock(BaseHoodieTableServiceClient.class))) {
+      KeyGenUtils.recordComplexKeygenEncodingIfMissing(metaClient, writeConfig);
+      assertEquals(Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED), metaClient.getTableConfig().getComplexKeyGenEncoding(),
+          "A restarted ingestion must initialize the encoding again");
     }
   }
 

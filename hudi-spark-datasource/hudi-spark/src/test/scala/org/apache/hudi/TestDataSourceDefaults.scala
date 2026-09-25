@@ -22,6 +22,7 @@ import org.apache.hudi.common.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.testutils.{OrderingFieldsTestUtils, SchemaTestUtil}
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH
@@ -487,6 +488,35 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
       assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(baseRow))
       assertEquals(UTF8String.fromString(expectedKey.getRecordKey), keyGen.getRecordKey(internalRow, structType))
       assertEquals(UTF8String.fromString(expectedKey.getPartitionPath), keyGen.getPartitionPath(internalRow, structType))
+    }
+
+    {
+      // The encoding persisted on an upgraded table wins over the version default: a VALUE_ONLY table at the
+      // current version (>= 9) keeps writing bare record keys.
+      val config = getKeyConfig("name,", "field1,", "false")
+      config.put(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key, "VALUE_ONLY")
+      val keyGen = new ComplexKeyGenerator(config)
+
+      val expectedKey = new HoodieKey("value1", "value2")
+
+      assertEquals(expectedKey, keyGen.getKey(baseRecord))
+      assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(baseRow))
+      assertEquals(UTF8String.fromString(expectedKey.getRecordKey), keyGen.getRecordKey(internalRow, structType))
+    }
+
+    {
+      // ... and a FIELD_PREFIXED property keeps the field name even where the config would drop it.
+      val config = getKeyConfig("name,", "field1,", "false")
+      config.put(HoodieWriteConfig.WRITE_TABLE_VERSION.key, "8")
+      config.put(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key, "true")
+      config.put(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key, "FIELD_PREFIXED")
+      val keyGen = new ComplexKeyGenerator(config)
+
+      val expectedKey = new HoodieKey("name:value1", "value2")
+
+      assertEquals(expectedKey, keyGen.getKey(baseRecord))
+      assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(baseRow))
+      assertEquals(UTF8String.fromString(expectedKey.getRecordKey), keyGen.getRecordKey(internalRow, structType))
     }
   }
 

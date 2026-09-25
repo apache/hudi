@@ -46,7 +46,8 @@ while [[ $# -gt 0 ]]; do
         *)
             echo "Unknown option: $1"
             echo "Usage: $0 [--version <version_list>] [--hudi-bundle-path <path>] [--script-name <script>]"
-            echo "  --version <version_list>          Comma-separated list of table versions to generate (e.g., 4,5,6)"
+            echo "  --version <version_list>          Comma-separated list of table versions to generate (e.g., 4,5,6);"
+            echo "                                    use 6-bare for the 0.14.1 bare record key complex keygen table"
             echo "  --hudi-bundle-path <path>         Path to locally built Hudi bundle JAR (required for version 9)"
             echo "  --script-name <script>            Scala script name from scala-templates folder (default: generate-fixture-mor.scala)"
             echo ""
@@ -54,6 +55,7 @@ while [[ $# -gt 0 ]]; do
             echo "  $0                                           # Generate all versions (except 9)"
             echo "  $0 --version 4,5                             # Generate versions 4 and 5"
             echo "  $0 --script-name generate-fixture-complex-keygen.scala  # Use complex keygen script"
+            echo "  $0 --version 6-bare --script-name generate-fixture-complex-keygen.scala  # 0.14.1 bare keys only"
             echo "  $0 --version 9 --hudi-bundle-path /path/to/hudi-spark3.5-bundle_2.12-1.1.0-SNAPSHOT.jar"
             echo ""
             echo "Note: Version 9 requires a locally built Hudi bundle from master branch"
@@ -340,6 +342,14 @@ if should_generate_version "6"; then
     generate_fixture "0.14.0" "6" "hudi-v6-table$SCRIPT_SUFFIX" "3.4" "2.12"
 fi
 
+# Hudi 0.14.1 (Table Version 6, bare record keys) -> Spark 3.4.x (default) -> Scala 2.12
+# 0.14.1 is the first release that stored the single-field ComplexKeyGenerator key as the bare value, so this
+# fixture is the version 6 counterpart of the 0.14.0 one and only makes sense for the complex keygen script.
+if [[ "$SCALA_SCRIPT_NAME" == *"complex-keygen"* ]] && should_generate_version "6-bare"; then
+    echo "   0.14.1 -> Spark 3.4 -> Scala 2.12 (bare record keys)"
+    generate_fixture "0.14.1" "6" "hudi-v6-table${SCRIPT_SUFFIX}-bare" "3.4" "2.12"
+fi
+
 # Hudi 1.0.2 (Table Version 8) -> Spark 3.5.x (default) -> Scala 2.12
 if should_generate_version "8"; then
     echo "   1.0.2 -> Spark 3.5 -> Scala 2.12"
@@ -380,12 +390,13 @@ if [[ "$SCALA_SCRIPT_NAME" == *"payload"* ]]; then
     done
 else
     # Handle regular tables (one table per script)
-    for fixture_dir in "$FIXTURES_DIR"/hudi-v*-table"$SCRIPT_SUFFIX"; do
+    for fixture_dir in "$FIXTURES_DIR"/hudi-v*-table"$SCRIPT_SUFFIX" "$FIXTURES_DIR"/hudi-v*-table"$SCRIPT_SUFFIX"-bare; do
         if [ -d "$fixture_dir" ]; then
             fixture_name=$(basename "$fixture_dir")
             echo "Compressing $fixture_name..."
             zip_name="${fixture_name}.zip"
-            (cd "$FIXTURES_DIR" && zip -r -q -X "$zip_name" "$fixture_name")
+            # replace rather than update: zip merges into an existing archive, which would keep stale entries
+            (cd "$FIXTURES_DIR" && rm -f "$zip_name" && zip -r -q -X "$zip_name" "$fixture_name")
             if [ $? -eq 0 ]; then
                 rm -rf "$fixture_dir"
                 echo "Created $zip_name"

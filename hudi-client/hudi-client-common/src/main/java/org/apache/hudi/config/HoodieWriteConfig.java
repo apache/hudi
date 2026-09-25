@@ -287,8 +287,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("1.1.0")
       .supportedVersions("0.14.2", "0.15.1", "1.0.3")
-      .withDocumentation("This config only takes effect for writing table version 8 and below. "
-          + "If set to false, the record key field name is encoded and prepended "
+      .withDocumentation("Only takes effect when the table property `hoodie.table.complex.keygenerator.encoding` is absent. "
+          + "That property is set on every new table and backfilled on an existing table by the next write or upgrade, "
+          + "from the encoding found in its data; once present it is authoritative and this config is ignored. When the "
+          + "encoding cannot be determined from the data and `hoodie.write.complex.keygen.validation.enable` is false, "
+          + "this config supplies the value that gets recorded. For writing table version 8 and below without the "
+          + "table property: if set to false, the record key field name is encoded and prepended "
           + "in the case where a single record key field is used in the complex key generator, "
           + "i.e., record keys stored in _hoodie_record_key meta field is in the format of "
           + "`<field_name>:<field_value>`, which conforms to the behavior "
@@ -303,8 +307,9 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("1.1.0")
       .supportedVersions("0.14.2", "0.15.1", "1.0.3")
-      .withDocumentation("This config only takes effect for writing table version 8 and below, "
-          + "upgrade or downgrade. If set to true, the writer enables the validation on whether the "
+      .withDocumentation("Only takes effect when the table property `hoodie.table.complex.keygenerator.encoding` is absent "
+          + "and the record key encoding cannot be determined from the table's data during a write, upgrade or "
+          + "downgrade. If set to true, the writer enables the validation on whether the "
           + "table uses the complex key generator with a single record key field, which can be affected "
           + "by a breaking change in 0.14.1, 0.15.0, 1.0.0, 1.0.1, 1.0.2 releases, causing key "
           + "encoding change and potential duplicates in the table. The validation fails the "
