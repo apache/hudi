@@ -39,7 +39,10 @@ import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.checkMessageContains
+import org.apache.spark.sql.connector.catalog.CatalogManager
+import org.apache.spark.sql.hudi.catalog.HoodieCatalog
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.{checkMessageContains, sharedSessionEnabled}
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructField
 import org.apache.spark.util.Utils
 import org.joda.time.DateTimeZone
@@ -58,7 +61,9 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   org.apache.log4j.Logger.getRootLogger.setLevel(org.apache.log4j.Level.WARN)
   private val LOG = LoggerFactory.getLogger(getClass)
 
-  private lazy val sparkWareHouse = {
+  private lazy val sparkWareHouse: File = if (sharedSessionEnabled) {
+    HoodieSparkSqlTestBase.sharedWarehouse
+  } else {
     val dir = Utils.createTempDir()
     Utils.deleteRecursively(dir)
     dir
@@ -71,23 +76,54 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   //       is consistent with the fixtures
   DateTimeZone.setDefault(DateTimeZone.UTC)
   TimeZone.setDefault(DateTimeUtils.getTimeZone("UTC"))
-  protected lazy val spark: SparkSession = SparkSession.builder()
-    .config("spark.sql.warehouse.dir", sparkWareHouse.getCanonicalPath)
-    .config("spark.sql.session.timeZone", "UTC")
-    .config("hoodie.insert.shuffle.parallelism", "4")
-    .config("hoodie.upsert.shuffle.parallelism", "4")
-    .config("hoodie.delete.shuffle.parallelism", "4")
-    .config(sparkConf())
-    .getOrCreate()
+  protected lazy val spark: SparkSession = if (sharedSessionEnabled) {
+    val session = HoodieSparkSqlTestBase.sharedBaseSession().newSession()
+    SparkSession.setActiveSession(session)
+    applySuiteConfToSharedSession(session)
+    session
+  } else {
+    HoodieSparkSqlTestBase.sessionBuilder(sparkWareHouse, sparkConf()).getOrCreate()
+  }
 
   private var tableId = new AtomicInteger(0)
 
   private var extraConf = Map[String, String]()
 
+  // Shared mode: spark.hadoop.* keys this suite set on the shared Hadoop conf, with the value they replaced.
+  private var hadoopConfOverrides: Seq[(String, String)] = Seq.empty
+
   def sparkConf(): SparkConf = {
     val conf = getSparkConfForTest("Hoodie SQL Test")
     conf.setAll(extraConf)
     conf
+  }
+
+  /**
+   * Shared mode: the context-level SparkConf is fixed, so the deltas a suite adds through extraConf or a
+   * sparkConf() override go to its session conf (hoodie.* and spark.sql.* keys), except spark.hadoop.*
+   * keys, which the write client reads from sparkContext.hadoopConfiguration and which are restored in
+   * afterAll. Any other spark.* key, and any static SQL conf, is a setting a child session cannot change,
+   * so it is rejected before anything is mutated: a partial apply would leave the shared Hadoop conf
+   * changed for every later suite in the JVM.
+   */
+  private def applySuiteConfToSharedSession(session: SparkSession): Unit = {
+    val defaults = getSparkConfForTest("Hoodie SQL Test").getAll.toMap
+    val deltas = sparkConf().getAll.filterNot { case (k, v) => defaults.get(k).contains(v) }
+    val (hadoopKeys, sessionKeys) = deltas.partition { case (k, _) => k.startsWith("spark.hadoop.") }
+    val rejected = sessionKeys.collect {
+      case (k, _) if (k.startsWith("spark.") && !k.startsWith("spark.sql.")) || SQLConf.isStaticConfigKey(k) => k
+    }
+    if (rejected.nonEmpty) {
+      throw new IllegalArgumentException(
+        s"${rejected.mkString(", ")}: SparkContext-level or static settings; shared session mode cannot apply them per suite")
+    }
+    val hadoopConf = session.sparkContext.hadoopConfiguration
+    hadoopKeys.foreach { case (k, v) =>
+      val key = k.stripPrefix("spark.hadoop.")
+      hadoopConfOverrides :+= (key -> hadoopConf.get(key))
+      hadoopConf.set(key, v)
+    }
+    sessionKeys.foreach { case (k, v) => session.conf.set(k, v) }
   }
 
   protected def initQueryIndexConf(): Unit = {
@@ -110,6 +146,9 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   override protected def test(testName: String, testTags: Tag*)(testFun: => Any /* Assertion */)(implicit pos: source.Position): Unit = {
     super.test(testName, testTags: _*)(
       try {
+        if (sharedSessionEnabled) {
+          bindSuiteSession()
+        }
         testFun
       } finally {
         // The INMEMORY index keeps a JVM-static record-location map; reset it after every test so
@@ -118,23 +157,68 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
         // it, so a throwing or non-withRecordType INMEMORY test would otherwise leak state here.
         // Runs before the catalog cleanup so it holds even if a drop throws.
         HoodieInMemoryHashIndex.clear()
-        val catalog = spark.sessionState.catalog
-        catalog.listDatabases().foreach { db =>
-          catalog.listTables(db).foreach { table =>
-            catalog.dropTable(table, true, true)
-          }
-        }
+        dropSuiteTables()
       }
     )
   }
 
+  /**
+   * Shared mode: scalatest runs each suite on its own thread and Hudi reads SparkSession.active in a few
+   * places (HoodieCatalog captures it when the session's catalog is first built, BaseProcedure per CALL),
+   * so pin this suite's child session to the test thread and fail fast if the session's HoodieCatalog was
+   * built against another session.
+   */
+  private def bindSuiteSession(): Unit = {
+    SparkSession.setActiveSession(spark)
+    spark.sessionState.catalogManager.catalog(CatalogManager.SESSION_CATALOG_NAME) match {
+      case hoodieCatalog: HoodieCatalog =>
+        assert(hoodieCatalog.spark eq spark,
+          s"HoodieCatalog of ${getClass.getSimpleName} is bound to another SparkSession")
+      case _ =>
+    }
+  }
+
+  /**
+   * Drops the tables a test left behind. Per-suite mode owns the whole catalog. Shared mode shares the
+   * external catalog with every other suite in the JVM, so it drops only this suite's generateTableName
+   * tables plus any table whose name is not of that form (fixed names and temp views); under serial
+   * execution those can only come from the test that just ran. Fixed names are renamed in a later step.
+   */
+  private def dropSuiteTables(): Unit = {
+    val catalog = spark.sessionState.catalog
+    catalog.listDatabases().foreach { db =>
+      val tables = catalog.listTables(db)
+      val toDrop = if (sharedSessionEnabled) tables.filter(table => ownsTable(table.table)) else tables
+      toDrop.foreach(table => catalog.dropTable(table, true, true))
+    }
+  }
+
+  /** Shared mode: a table is this suite's if generateTableName produced it, or if no suite's generateTableName could have. */
+  private def ownsTable(name: String): Boolean = {
+    name.startsWith(tableNamePrefix) || !HoodieSparkSqlTestBase.GENERATED_TABLE_NAME.matcher(name).matches()
+  }
+
+  private lazy val tableNamePrefix: String = s"h${getClass.getSimpleName.toLowerCase}_"
+
   protected def generateTableName: String = {
-    s"h${getClass.getSimpleName.toLowerCase}_${tableId.incrementAndGet()}"
+    s"$tableNamePrefix${tableId.incrementAndGet()}"
   }
 
   override protected def afterAll(): Unit = {
-    Utils.deleteRecursively(sparkWareHouse)
-    spark.stop()
+    if (sharedSessionEnabled) {
+      // The context and warehouse outlive the suite; only undo this suite's Hadoop conf overrides.
+      if (hadoopConfOverrides.nonEmpty) {
+        val hadoopConf = HoodieSparkSqlTestBase.sharedBaseSession().sparkContext.hadoopConfiguration
+        hadoopConfOverrides.reverse.foreach {
+          case (key, null) => hadoopConf.unset(key)
+          case (key, previous) => hadoopConf.set(key, previous)
+        }
+        hadoopConfOverrides = Seq.empty
+      }
+    } else {
+      Utils.deleteRecursively(sparkWareHouse)
+      spark.stop()
+    }
   }
 
   protected def checkAnswer(sql: String)(expects: Seq[Any]*): Unit = {
@@ -412,6 +496,53 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
 }
 
 object HoodieSparkSqlTestBase {
+
+  private val LOG = LoggerFactory.getLogger(classOf[HoodieSparkSqlTestBase])
+
+  /**
+   * System property forwarded by the scalatest plugin from the pom property of the same name
+   * (`-Dhudi.spark.test.sharedSession=true`). When set, every suite in the JVM shares one
+   * SparkContext and works in its own `newSession()` child; the context is never stopped by a suite.
+   * Default off: each suite builds and stops its own session, as before.
+   *
+   * Only for runs whose suites all extend HoodieSparkSqlTestBase: a suite that builds its own
+   * SparkContext (for example TestHoodieInternalRowUtils) fails with "Only one SparkContext
+   * should be running in this JVM" and aborts the run, so CI enables the property only on
+   * shards whose packages hold nothing else.
+   */
+  val SHARED_SESSION_PROPERTY = "hudi.spark.test.sharedSession"
+  val sharedSessionEnabled: Boolean = java.lang.Boolean.getBoolean(SHARED_SESSION_PROPERTY)
+
+  // Table names produced by generateTableName (without a database prefix).
+  private[common] val GENERATED_TABLE_NAME: Pattern = Pattern.compile("h[a-z0-9]+_[0-9]+")
+
+  private[common] lazy val sharedWarehouse: File = {
+    val dir = Utils.createTempDir()
+    Utils.deleteRecursively(dir)
+    dir
+  }
+
+  @volatile private var sharedBase: SparkSession = _
+
+  /** The JVM-wide base session; rebuilt if something stopped its context. Only its children are handed to suites. */
+  private[common] def sharedBaseSession(): SparkSession = synchronized {
+    if (sharedBase == null || sharedBase.sparkContext.isStopped) {
+      LOG.warn("Shared session mode on ({}=true): one SparkContext for this JVM, a child session per suite",
+        SHARED_SESSION_PROPERTY)
+      sharedBase = sessionBuilder(sharedWarehouse, getSparkConfForTest("Hoodie SQL Test")).getOrCreate()
+    }
+    sharedBase
+  }
+
+  private[common] def sessionBuilder(warehouse: File, conf: SparkConf): SparkSession.Builder = {
+    SparkSession.builder()
+      .config("spark.sql.warehouse.dir", warehouse.getCanonicalPath)
+      .config("spark.sql.session.timeZone", "UTC")
+      .config("hoodie.insert.shuffle.parallelism", "4")
+      .config("hoodie.upsert.shuffle.parallelism", "4")
+      .config("hoodie.delete.shuffle.parallelism", "4")
+      .config(conf)
+  }
 
   // the naming format of 0.x version
   final val NAME_FORMAT_0_X: Pattern = Pattern.compile("^(\\d+)(\\.\\w+)(\\.\\D+)?$")
