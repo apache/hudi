@@ -27,15 +27,14 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
@@ -101,73 +100,31 @@ public class BaseHoodieTableFileIndexTest {
   }
 
   /**
-   * {@code cachedAllInputFileSlices} used to be a plain {@link java.util.HashMap} that nothing ever removed from:
-   * it was only ever inserted into (via {@code ensurePreloadedPartitions}) and only ever discarded wholesale by
-   * {@code doRefresh()}, which is called from the constructor and from {@code refresh()} and never on the query path.
-   * With lazy listing and a file index reused for the lifetime of a session, it therefore accumulated one entry per
-   * distinct partition ever queried. This asserts the replacement retains at most the configured number of
-   * partitions no matter how many distinct partitions are looked up.
+   * {@code cachedAllInputFileSlices} is budgeted in bytes rather than in partitions, because a partition's file-slice
+   * list scales with the number of file groups (and, for MOR, log files) the partition holds. Measured with Hudi's own
+   * ObjectSizeCalculator, 10000 partitions hold 16 MiB at one file group each and 1205 MiB at a hundred -- so no single
+   * partition count can be a sane heap budget for both shapes. This pins that the weight of an entry actually tracks
+   * how much the entry holds.
    */
   @Test
-  public void testBoundedFileSliceCacheDoesNotGrowPastItsBound() {
-    int bound = 16;
-    BaseHoodieTableFileIndex.BoundedFileSliceCache cache =
-        new BaseHoodieTableFileIndex.BoundedFileSliceCache(bound);
+  public void testFileSliceCacheWeightGrowsWithTheEntryContents() {
+    PartitionPath partition = new PartitionPath("dt=2026-01-01", new Object[]{"2026-01-01"});
+    List<FileSlice> one = fileSlices(partition, 1);
+    List<FileSlice> many = fileSlices(partition, 50);
 
-    for (int i = 0; i < 2000; i++) {
-      PartitionPath partition = new PartitionPath("dt=" + i, new Object[]{String.valueOf(i)});
-      cache.put(partition, Collections.emptyList());
-      assertTrue(cache.size() <= bound,
-          "Cache grew to " + cache.size() + " entries after " + (i + 1) + " distinct partitions, bound is " + bound);
+    int weightOfOne = BaseHoodieTableFileIndex.estimateFileSliceCacheWeight(partition, one);
+    int weightOfMany = BaseHoodieTableFileIndex.estimateFileSliceCacheWeight(partition, many);
+
+    assertTrue(weightOfOne > 0, "An entry must have a positive weight");
+    assertTrue(weightOfMany > weightOfOne * 10,
+        "50 file slices (" + weightOfMany + " bytes) must weigh far more than one (" + weightOfOne + " bytes)");
+  }
+
+  private static List<FileSlice> fileSlices(PartitionPath partition, int count) {
+    List<FileSlice> slices = new ArrayList<>();
+    for (int i = 0; i < count; i++) {
+      slices.add(new FileSlice(partition.getPath(), "20260101000000001", "file-" + i));
     }
-
-    assertEquals(bound, cache.size(), "A saturated cache should hold exactly its bound");
-  }
-
-  /**
-   * Eviction has to be least-recently-*used*, not merely least-recently-inserted: a dashboard that keeps querying the
-   * same handful of partitions while a backfill sweeps the long tail must not have its hot partitions evicted.
-   */
-  @Test
-  public void testBoundedFileSliceCacheEvictsLeastRecentlyUsed() {
-    BaseHoodieTableFileIndex.BoundedFileSliceCache cache =
-        new BaseHoodieTableFileIndex.BoundedFileSliceCache(3);
-
-    PartitionPath hot = new PartitionPath("dt=hot", new Object[]{"hot"});
-    PartitionPath cold = new PartitionPath("dt=cold", new Object[]{"cold"});
-    PartitionPath other = new PartitionPath("dt=other", new Object[]{"other"});
-    cache.put(hot, Collections.emptyList());
-    cache.put(cold, Collections.emptyList());
-    cache.put(other, Collections.emptyList());
-
-    // Read the hot partition so it is the most recently used, then insert past the bound twice
-    assertNotNull(cache.get(hot));
-    cache.put(new PartitionPath("dt=new-1", new Object[]{"new-1"}), Collections.emptyList());
-    cache.put(new PartitionPath("dt=new-2", new Object[]{"new-2"}), Collections.emptyList());
-
-    assertEquals(3, cache.size());
-    assertTrue(cache.containsKey(hot), "The most recently read partition must survive eviction");
-    assertFalse(cache.containsKey(cold), "The least recently used partition must be the one evicted");
-    assertFalse(cache.containsKey(other), "The second least recently used partition must be evicted next");
-  }
-
-  /**
-   * A non-positive bound means "unbounded" at the call site in {@code doRefresh}, which picks a plain HashMap instead;
-   * constructing the bounded cache with such a bound would silently evict on every insert, so it is rejected.
-   */
-  @Test
-  public void testBoundedFileSliceCacheRejectsNonPositiveBound() {
-    assertThrows(IllegalArgumentException.class, () -> new BaseHoodieTableFileIndex.BoundedFileSliceCache(0));
-    assertThrows(IllegalArgumentException.class, () -> new BaseHoodieTableFileIndex.BoundedFileSliceCache(-1));
-  }
-
-  /**
-   * The bounded cache has to remain a {@link java.util.HashMap} subtype: {@code TestHoodieIncrSource} reads the
-   * private field by reflection and casts it to {@code HashMap} on the non-spillable path.
-   */
-  @Test
-  public void testBoundedFileSliceCacheIsAHashMap() {
-    assertTrue(new BaseHoodieTableFileIndex.BoundedFileSliceCache(4) instanceof java.util.HashMap,
-        "Bounded cache must stay assignable to HashMap for existing reflective consumers");
+    return slices;
   }
 }
