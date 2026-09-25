@@ -38,7 +38,7 @@ public enum ComplexKeyGenEncoding {
   FIELD_PREFIXED,
 
   @EnumFieldDescription("Record key is stored as the bare `<field_value>`. Written by Hudi 0.14.1, 0.15.0, 1.0.0, "
-      + "1.0.1 and 1.0.2.")
+      + "1.0.1 and 1.0.2, and kept by such a table across later upgrades.")
   VALUE_ONLY;
 
   /**

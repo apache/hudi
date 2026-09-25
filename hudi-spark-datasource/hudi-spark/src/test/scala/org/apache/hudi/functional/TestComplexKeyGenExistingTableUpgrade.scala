@@ -42,7 +42,7 @@ import scala.io.Source
  * Existing single-field ComplexKeyGenerator tables that predate hoodie.table.complex.keygenerator.encoding: the
  * next write or upgrade must deduce the encoding the data carries, record it, and keep matching the existing
  * keys. The legacy tables are the checked-in fixtures written by the actual releases, so the stored keys stay
- * what those releases produced even once no current writer can produce bare keys itself.
+ * what those releases produced rather than what a current writer would choose by default.
  */
 class TestComplexKeyGenExistingTableUpgrade extends HoodieSparkClientTestBase {
 

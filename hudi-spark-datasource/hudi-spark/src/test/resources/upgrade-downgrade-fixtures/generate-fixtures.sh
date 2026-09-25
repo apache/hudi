@@ -390,12 +390,13 @@ if [[ "$SCALA_SCRIPT_NAME" == *"payload"* ]]; then
     done
 else
     # Handle regular tables (one table per script)
-    for fixture_dir in "$FIXTURES_DIR"/hudi-v*-table"$SCRIPT_SUFFIX"*; do
+    for fixture_dir in "$FIXTURES_DIR"/hudi-v*-table"$SCRIPT_SUFFIX" "$FIXTURES_DIR"/hudi-v*-table"$SCRIPT_SUFFIX"-bare; do
         if [ -d "$fixture_dir" ]; then
             fixture_name=$(basename "$fixture_dir")
             echo "Compressing $fixture_name..."
             zip_name="${fixture_name}.zip"
-            (cd "$FIXTURES_DIR" && zip -r -q -X "$zip_name" "$fixture_name")
+            # replace rather than update: zip merges into an existing archive, which would keep stale entries
+            (cd "$FIXTURES_DIR" && rm -f "$zip_name" && zip -r -q -X "$zip_name" "$fixture_name")
             if [ $? -eq 0 ]; then
                 rm -rf "$fixture_dir"
                 echo "Created $zip_name"

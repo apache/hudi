@@ -134,7 +134,7 @@ class TestComplexKeyGenNewTableDefault extends HoodieSparkClientTestBase {
 
   /**
    * An explicitly requested encoding is honored on creation and by the keys written. VALUE_ONLY describes keys
-   * that only releases up to 1.0.2 wrote, so it is accepted for a table created at version 8 and refused above.
+   * that only releases up to 1.0.2 wrote, so it is declared on a table created at that version.
    */
   @Test
   def testNewTableHonorsExplicitEncoding(): Unit = {
