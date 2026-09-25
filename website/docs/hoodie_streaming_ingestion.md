@@ -605,7 +605,7 @@ hoodie.table.ordering.fields=ts
 
 ```bash
 spark-submit \
-  --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.2.0,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.2.0 \
+  --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.2.1,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.2.1 \
   --class org.apache.hudi.utilities.streamer.HoodieStreamer \
   hudi-utilities-slim-bundle-*.jar \
   --props kinesis-source.properties \
@@ -709,7 +709,7 @@ and the job that reads it:
 
 ```java
 [hoodie]$ spark-submit \
-  --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.2.0,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.2.0 \
+  --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.2.1,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.2.1 \
   --class org.apache.hudi.utilities.streamer.HoodieStreamer `ls packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle-*.jar` \
   --props file://${PWD}/debezium-source.properties \
   --schemaprovider-class org.apache.hudi.utilities.schema.SchemaRegistryProvider \
@@ -852,7 +852,7 @@ For detailed information on how to configure and use `HoodieMultiTableStreamer`,
 
 ```bash
 spark-submit \
-  --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.2.0,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.2.0 \
+  --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.2.1,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.2.1 \
   --class org.apache.hudi.utilities.HudiHiveSyncJob \
   hudi-utilities-slim-bundle-*.jar \
   --base-path s3://my-bucket/hudi/my-table \

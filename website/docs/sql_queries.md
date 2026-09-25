@@ -867,6 +867,8 @@ summarizes how the support for Hudi is achieved across different versions of Tri
 | > = 411           | NA | Snapshot querying on COW tables. Read optimized querying on MOR tables. Hudi tables can be **only** queried by [table redirection](https://trino.io/docs/current/connector/hive.html#table-redirection). |
 :::
 
+`hudi-trino-bundle` is no longer published after 1.2.0. From 1.2.1, the Trino connector is published as `org.apache.hudi:hudi-trino`, built against Trino 483 and JDK 25.
+
 For details on the Hudi connector, see the [connector documentation](https://trino.io/docs/current/connector/hudi.html).
 Both connectors offer 'Snapshot' queries for COW tables and 'Read Optimized' queries for MOR tables.
 Support for [MOR table snapshot queries](https://github.com/trinodb/trino/pull/14786) is anticipated shortly.

@@ -162,6 +162,7 @@ module.exports = {
           },
           {
             from: [
+              "/releases/release-1.2.1",
               "/releases/release-1.2.0",
             ],
             to: "/releases/release-1.2",
@@ -560,8 +561,8 @@ module.exports = {
               path: "next",
               banner: "unreleased",
             },
-            "1.2.0": {
-              label: "1.2.0",
+            "1.2.1": {
+              label: "1.2.1",
               path: "",
             },
           },

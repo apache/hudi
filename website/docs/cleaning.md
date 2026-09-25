@@ -265,7 +265,7 @@ existing table without enabling it on the writer:
 ```
 spark-submit --master local \
   --class org.apache.hudi.utilities.HoodieTTLJob \
-  hudi-utilities-bundle_2.12-1.2.0.jar \
+  hudi-utilities-bundle_2.12-1.2.1.jar \
   --base-path file:///tmp/events_table \
   --hoodie-conf hoodie.partition.ttl.strategy.days.retain=30
 ```

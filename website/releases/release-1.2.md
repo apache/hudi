@@ -2,14 +2,72 @@
 title: "Release 1.2"
 layout: releases
 toc: true
-last_modified_at: 2026-06-02T18:00:00-08:00
+last_modified_at: 2026-09-24T18:00:00-08:00
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 This page contains release notes for all Apache Hudi 1.2.x releases, including:
 
+- [Release 1.2.1](#release-121)
 - [Release 1.2.0](#release-120)
+
+---
+
+## [Release 1.2.1](https://github.com/apache/hudi/releases/tag/release-1.2.1) {#release-121}
+
+## Migration Guide
+
+* This release (1.2.1) keeps the same table version (`9`) as [1.2.0](#release-120), so no table upgrade is needed if you are on 1.2.0.
+* If migrating from an older release, please check the [1.2.0 release notes](#release-120) and the upgrade instructions from each older release in sequence.
+
+## Bundle Updates
+
+The Trino-Hudi connector now lives in the Hudi repo (RFC-105, [#18837](https://github.com/apache/hudi/pull/18837)). This changes which Trino artifacts are published:
+
+* `org.apache.hudi:hudi-trino-bundle` is no longer published. 1.2.0 is its last version.
+* The connector is now published as `org.apache.hudi:hudi-trino`, a regular (non-shaded) jar built against Trino 483 and JDK 25.
+* The `hudi-hadoop-trinobase-docker`, `hudi-hadoop-trinocoordinator-docker` and `hudi-hadoop-trinoworker-docker` test images are no longer published.
+* The connector config `hudi.table.resolve-column-name-casing.enabled` defaults to `false`, where the connector in the Trino repo defaulted to `true`. Set it to `true` for tables with mixed-case column names.
+
+## Behavior Changes
+
+* `hoodie.client.heartbeat.tolerable.misses` now defaults to `10` instead of `2` ([#18904](https://github.com/apache/hudi/pull/18904)). With the default 60-second heartbeat interval, a writer is deemed failed after 10 minutes without a heartbeat, up from 2. A healthy writer's commit is no longer aborted after a transient pause such as a GC or a slow storage write, but pending writes from a crashed writer are detected and rolled back later. Set it back to `2` to keep the previous behavior.
+
+### Bug fixes
+
+1.2.1 is a bug-fix release with more than 300 fixes and improvements over 1.2.0. The fixes span many components, including:
+
+* **Flink:** streaming reads and writes, including data-loss fixes for global failover and for streaming reads from the earliest commit.
+* **Spark:** datasource and Spark SQL fixes.
+* **Trino:** the connector, now maintained in the Hudi repo and built against Trino 483.
+* **Meta sync:** Hive and Glue sync fixes, including metastore connection and resource leak fixes.
+* **Metadata table and indexes.**
+* **Hudi Streamer and utilities.**
+* **Lock providers and table services.**
+* **Resource leaks:** fixes in log and file stream handling.
+* **Testing and CI:** unit, functional and integration tests.
+
+## Known Issues
+
+On Spark 4.1, `spark.sql.variant.pushVariantIntoScan` is on by default. With it on, snapshot reads of Merge-on-Read tables with `VARIANT` columns can go wrong when log files are merged:
+
+* A top-level `VARIANT` value set to null by an update is read back as a struct of nulls instead of `NULL`, so a filter such as `v IS NULL` misses the row.
+* A `VARIANT` nested inside a struct can crash the executor JVM.
+
+Copy-on-Write tables are not affected. Spark 4.0 is affected only if `spark.sql.variant.pushVariantIntoScan` is turned on, since it is off by default there. A fix is tracked in [#20039](https://github.com/apache/hudi/pull/20039).
+
+:::tip
+Until the fix is released, set `spark.sql.variant.pushVariantIntoScan=false` for Spark 4.1 reads of Merge-on-Read tables with `VARIANT` columns.
+:::
+
+## Raw Release Notes
+
+The full list of changes is available in the [GitHub release](https://github.com/apache/hudi/releases/tag/release-1.2.1).
+
+:::tip
+1.2.1 also contains all the new features and bug fixes from 1.2.0, whose release notes are [here](#release-120).
+:::
 
 ---
 

@@ -17,7 +17,7 @@
 # limitations under the License.
 #
 
-VERSION=1.2.0
+VERSION=1.2.1
 SCALA_VERSION=2.12
 
 JARS=(
@@ -27,7 +27,6 @@ JARS=(
 "$HOME/.m2/repository/org/apache/hudi/hudi-flink1.20-bundle/$VERSION/hudi-flink1.20-bundle-$VERSION.jar"
 "$HOME/.m2/repository/org/apache/hudi/hudi-kafka-connect-bundle/$VERSION/hudi-kafka-connect-bundle-$VERSION.jar"
 "$HOME/.m2/repository/org/apache/hudi/hudi-presto-bundle/$VERSION/hudi-presto-bundle-$VERSION.jar"
-"$HOME/.m2/repository/org/apache/hudi/hudi-trino-bundle/$VERSION/hudi-trino-bundle-$VERSION.jar"
 "$HOME/.m2/repository/org/apache/hudi/hudi-hadoop-mr-bundle/$VERSION/hudi-hadoop-mr-bundle-$VERSION.jar"
 "$HOME/.m2/repository/org/apache/hudi/hudi-hive-sync-bundle/$VERSION/hudi-hive-sync-bundle-$VERSION.jar"
 "$HOME/.m2/repository/org/apache/hudi/hudi-azure-bundle/$VERSION/hudi-azure-bundle-$VERSION.jar"
