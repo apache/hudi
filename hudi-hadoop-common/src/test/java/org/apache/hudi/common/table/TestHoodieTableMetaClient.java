@@ -386,9 +386,9 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   }
 
   /**
-   * A single-field complex keygen table records {@code FIELD_PREFIXED} on creation. {@code VALUE_ONLY} describes
-   * keys that only releases up to 1.0.2 wrote, so it can be declared for a table created at version 8 or below
-   * (test fixtures, migrations) and is rejected from version 9 on.
+   * A single-field complex keygen table records {@code FIELD_PREFIXED} on creation, or the encoding the caller
+   * declares, on every table version. Only that shape is tracked: a key generator that is not complex, several
+   * record key fields, or an unpopulated {@code _hoodie_record_key} leave the property off the table.
    */
   @Test
   void testComplexKeyGenEncodingOnTableCreation() throws IOException {
@@ -410,8 +410,27 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     // without a stored record key there is no encoding to record, whatever the version
     HoodieTableMetaClient virtualKeys = complexKeyGenTableBuilder(HoodieTableVersion.current(), null)
         .setPopulateMetaFields(false)
-        .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath() + Path.SEPARATOR + "ckg" + tableId);
+        .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath() + Path.SEPARATOR + "ckg" + tableId++);
     assertFalse(virtualKeys.getTableConfig().getComplexKeyGenEncoding().isPresent());
+
+    // a key generator that is not complex keys the record its own way, so there is no `<field>:` prefix to track
+    HoodieTableMetaClient simpleKeyGen = complexKeyGenTableBuilder(HoodieTableVersion.current(), null)
+        .setKeyGeneratorType(KeyGeneratorType.SIMPLE.name())
+        .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath() + Path.SEPARATOR + "ckg" + tableId++);
+    assertFalse(simpleKeyGen.getTableConfig().getComplexKeyGenEncoding().isPresent());
+
+    // several record key fields are always joined as `<field>:<value>,<field>:<value>`, the same on every release
+    HoodieTableMetaClient multiField = complexKeyGenTableBuilder(HoodieTableVersion.current(), null)
+        .setRecordKeyFields("id,name")
+        .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath() + Path.SEPARATOR + "ckg" + tableId++);
+    assertFalse(multiField.getTableConfig().getComplexKeyGenEncoding().isPresent());
+
+    // an encoding declared on an untracked shape describes nothing, so it is not recorded either
+    HoodieTableMetaClient multiFieldDeclared =
+        complexKeyGenTableBuilder(HoodieTableVersion.current(), ComplexKeyGenEncoding.VALUE_ONLY)
+            .setRecordKeyFields("id,name")
+            .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath() + Path.SEPARATOR + "ckg" + tableId);
+    assertFalse(multiFieldDeclared.getTableConfig().getComplexKeyGenEncoding().isPresent());
   }
 
   private static HoodieTableMetaClient.TableBuilder complexKeyGenTableBuilder(HoodieTableVersion version, ComplexKeyGenEncoding encoding) {

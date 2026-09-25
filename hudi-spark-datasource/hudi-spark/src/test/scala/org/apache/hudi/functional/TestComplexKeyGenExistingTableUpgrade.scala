@@ -120,8 +120,10 @@ class TestComplexKeyGenExistingTableUpgrade extends HoodieSparkClientTestBase {
   /** The bare-key 1.0.2 table brought to the current version, then stripped of the property again (e.g. a manual edit). */
   private def currentVersionBareTableWithoutProperty(): Map[String, String] = {
     val opts = loadFixture(HoodieTableVersion.EIGHT)
+    assertEquals((8L, 8L, 8L, 0L), keyStatsRaw())
     upsertFixtureRecords(opts, 10000L)
     assertEquals(HoodieTableVersion.current(), loadMetaClient().getTableConfig.getTableVersion)
+    assertEquals((8L, 8L, 8L, 0L), keyStatsRaw())
     removeEncodingProperty()
     opts
   }
@@ -191,6 +193,7 @@ class TestComplexKeyGenExistingTableUpgrade extends HoodieSparkClientTestBase {
   @Test
   def testUpgradeStoppingAtVersionEightRecordsEncoding(): Unit = {
     val opts = loadFixture(HoodieTableVersion.SIX, COMPLEX_KEYGEN_BARE_FIXTURE_SUFFIX)
+    assertEquals((8L, 8L, 8L, 0L), keyStatsRaw())
 
     upsertFixtureRecords(opts + (HoodieWriteConfig.WRITE_TABLE_VERSION.key -> "8"), 10000L)
 
@@ -203,6 +206,7 @@ class TestComplexKeyGenExistingTableUpgrade extends HoodieSparkClientTestBase {
   @Test
   def testDowngradeToEightKeepsProperty(): Unit = {
     val opts = loadFixture(HoodieTableVersion.EIGHT)
+    assertEquals((8L, 8L, 8L, 0L), keyStatsRaw())
     upsertFixtureRecords(opts, 10000L)
     assertEquals(Some(ComplexKeyGenEncoding.VALUE_ONLY.name), persistedEncoding())
 
@@ -223,6 +227,7 @@ class TestComplexKeyGenExistingTableUpgrade extends HoodieSparkClientTestBase {
   @Test
   def testAutoUpgradeDisabledBackfillsEncoding(): Unit = {
     val opts = loadFixture(HoodieTableVersion.EIGHT)
+    assertEquals((8L, 8L, 8L, 0L), keyStatsRaw())
 
     upsertFixtureRecords(opts + (HoodieWriteConfig.AUTO_UPGRADE_VERSION.key -> "false"), 10000L)
 
@@ -318,6 +323,7 @@ class TestComplexKeyGenExistingTableUpgrade extends HoodieSparkClientTestBase {
   @Test
   def testInsertOverwriteTableKeepsPersistedEncoding(): Unit = {
     val opts = loadFixture(HoodieTableVersion.EIGHT)
+    assertEquals((8L, 8L, 8L, 0L), keyStatsRaw())
     upsertFixtureRecords(opts, 10000L)
     assertEquals(Some(ComplexKeyGenEncoding.VALUE_ONLY.name), persistedEncoding())
 
@@ -335,6 +341,7 @@ class TestComplexKeyGenExistingTableUpgrade extends HoodieSparkClientTestBase {
   @Test
   def testDeleteAsUpgradingWriteRemovesRows(): Unit = {
     val opts = loadFixture(HoodieTableVersion.EIGHT)
+    assertEquals((8L, 8L, 8L, 0L), keyStatsRaw())
 
     rows(FIXTURE_IDS.take(3), 10000L).write.format("org.apache.hudi")
       .options(opts)
