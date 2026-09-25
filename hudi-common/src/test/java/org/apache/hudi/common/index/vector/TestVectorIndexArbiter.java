@@ -25,12 +25,48 @@ import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Unit tests for {@link VectorIndexArbiter} — the RFC-109 finalist arbiter decision table.
  */
 class TestVectorIndexArbiter {
+
+  @Test
+  void materializedArbitrationBucketsServeStaleAndDeletedCandidates() {
+    ScoredVectorPostingMatch served = candidate("served", "2024/01", "t100", "fg-1");
+    ScoredVectorPostingMatch stale = candidate("stale", "2024/01", "t100", "fg-1");
+    ScoredVectorPostingMatch deleted = candidate("deleted", "2024/01", "t100", "fg-1");
+    HoodieRecordGlobalLocation servedLocation = loc("2024/01", "t100", "fg-1");
+    HoodieRecordGlobalLocation staleLocation = loc("2024/02", "t200", "fg-9");
+    Map<String, HoodieRecordGlobalLocation> currentLocations = new HashMap<>();
+    currentLocations.put("served", servedLocation);
+    currentLocations.put("stale", staleLocation);
+
+    VectorIndexMdtSearchUtils.ArbitrationResult result =
+        VectorIndexMdtSearchUtils.arbitrateMaterializedFinalists(
+            Arrays.asList(served, stale, deleted), currentLocations);
+
+    assertEquals(1, result.serve().size());
+    assertEquals(Decision.SERVE, result.serve().get(0).getArbiterDecision());
+    assertEquals(served.getLocation(), result.serve().get(0).getLocation());
+    assertEquals(1, result.stale().size());
+    assertEquals(Decision.STALE, result.stale().get(0).getArbiterDecision());
+    assertEquals(staleLocation, result.stale().get(0).getLocation());
+    assertEquals(1L, result.staleCount());
+    assertEquals(1L, result.deletedCount());
+  }
+
+  private static ScoredVectorPostingMatch candidate(
+      String recordKey, String partition, String instant, String fileId) {
+    VectorPostingMatch posting = new VectorPostingMatch(
+        recordKey, 1, 0, fileId, partition, instant, 42L, new byte[] {1}, 1.0f);
+    return new ScoredVectorPostingMatch(posting, 0.5f, posting.toLocation().get());
+  }
 
   private static HoodieRecordGlobalLocation loc(String partition, String instant, String fileId) {
     return new HoodieRecordGlobalLocation(partition, instant, fileId, 42L);
