@@ -32,12 +32,13 @@ import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.broadcast.Broadcast;
-import scala.Tuple2;
 
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+
+import scala.Tuple2;
 
 /** Encodes assigned vector rows and writes sorted MDT posting blocks. */
 final class SparkVectorIndexPostingWriter {
