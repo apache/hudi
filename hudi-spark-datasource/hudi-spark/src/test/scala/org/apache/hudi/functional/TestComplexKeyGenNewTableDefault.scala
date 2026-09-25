@@ -20,6 +20,7 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
@@ -89,6 +90,21 @@ class TestComplexKeyGenNewTableDefault extends HoodieSparkClientTestBase {
       .save(basePath)
   }
 
+  /** Writes into an existing table, so its recorded configuration is what drives the key generation. */
+  private def appendToTable(): Unit = {
+    val dataGen = new HoodieTestDataGenerator(0xDEED)
+    val records = recordsToStrings(dataGen.generateInserts("001", 100)).asScala.toList
+    val inputDF = sparkSession.read.json(sparkSession.sparkContext.parallelize(records, 2))
+    inputDF.write.format("org.apache.hudi")
+      .options(commonOpts ++ Map(
+        DataSourceWriteOptions.RECORDKEY_FIELD.key -> recordKeyField,
+        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> partitionPathField,
+        DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.ComplexKeyGenerator"))
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+  }
+
   private def storedRecordKeys(): Array[String] = {
     val recordKeys = sparkSession.read.format("org.apache.hudi").load(basePath)
       .select("_hoodie_record_key").collect().map(_.getString(0))
@@ -130,16 +146,34 @@ class TestComplexKeyGenNewTableDefault extends HoodieSparkClientTestBase {
     assertEquals(HoodieTableVersion.EIGHT, loadMetaClient().getTableConfig.getTableVersion)
     assertEquals(Option.of(ComplexKeyGenEncoding.VALUE_ONLY), loadMetaClient().getTableConfig.getComplexKeyGenEncoding)
 
-    // the declared encoding is honoured at the current version too: it describes the keys the table stores,
-    // which is what an upgraded version 8 table carries as well
-    writeNewTable(Map(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key -> ComplexKeyGenEncoding.VALUE_ONLY.name))
-    assertTrue(storedRecordKeys().forall(!_.startsWith(recordKeyField + ":")))
-    assertEquals(HoodieTableVersion.current(), loadMetaClient().getTableConfig.getTableVersion)
-    assertEquals(Option.of(ComplexKeyGenEncoding.VALUE_ONLY), loadMetaClient().getTableConfig.getComplexKeyGenEncoding)
-
     writeNewTable(Map(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key -> ComplexKeyGenEncoding.FIELD_PREFIXED.name))
     assertTrue(storedRecordKeys().forall(_.startsWith(recordKeyField + ":")))
     assertEquals(Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED), loadMetaClient().getTableConfig.getComplexKeyGenEncoding)
+  }
+
+  /**
+   * The encoding is a table property, never a write option: a table already carrying VALUE_ONLY at the current
+   * version, the state an upgraded version 8 table is left in, keys its records bare without the writer asking.
+   */
+  @Test
+  def testWriterFollowsEncodingRecordedOnTheTable(): Unit = {
+    HoodieTableMetaClient.newTableBuilder()
+      .setTableType(HoodieTableType.COPY_ON_WRITE.name)
+      .setTableName(commonOpts(HoodieWriteConfig.TBL_NAME.key))
+      .setTableVersion(HoodieTableVersion.current())
+      .setRecordKeyFields(recordKeyField)
+      .setPartitionFields(partitionPathField)
+      .setKeyGeneratorClassProp("org.apache.hudi.keygen.ComplexKeyGenerator")
+      .setComplexKeyGenEncoding(ComplexKeyGenEncoding.VALUE_ONLY)
+      .initTable(HoodieTestUtils.getStorage(new StoragePath(basePath)).getConf.newInstance(), basePath)
+    assertEquals(Option.of(ComplexKeyGenEncoding.VALUE_ONLY), loadMetaClient().getTableConfig.getComplexKeyGenEncoding)
+
+    appendToTable()
+
+    assertTrue(storedRecordKeys().forall(!_.startsWith(recordKeyField + ":")),
+      "The writer must follow the encoding the table records, without being given it as a write option")
+    assertEquals(HoodieTableVersion.current(), loadMetaClient().getTableConfig.getTableVersion)
+    assertEquals(Option.of(ComplexKeyGenEncoding.VALUE_ONLY), loadMetaClient().getTableConfig.getComplexKeyGenEncoding)
   }
 
   /** Without a stored record key there is no encoding to track, so nothing is recorded. */
