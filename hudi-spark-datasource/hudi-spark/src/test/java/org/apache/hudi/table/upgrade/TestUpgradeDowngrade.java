@@ -60,6 +60,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -443,6 +444,37 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     assertEquals(Option.of(expectedEncoding), resultMetaClient.getTableConfig().getComplexKeyGenEncoding(),
         "The " + operation + " must persist the record key encoding found in the data");
     assertEquals(expectedEncoding, KeyGenUtils.resolveComplexKeyGenEncoding(resultMetaClient).get());
+  }
+
+  /**
+   * The upgrade procedure and hudi-cli build their meta client with the write config's timeline layout, which is
+   * newer than the layout of a version 6 table. The encoding must still be deduced from the data and recorded.
+   */
+  @ParameterizedTest
+  @CsvSource({"-complex-keygen,FIELD_PREFIXED", "-complex-keygen-bare,VALUE_ONLY"})
+  public void testUpgradeWithPinnedTimelineLayoutRecordsComplexKeygenEncoding(String fixtureSuffix,
+                                                                              ComplexKeyGenEncoding expectedEncoding) throws Exception {
+    String basePath = loadFixtureTable(HoodieTableVersion.SIX, fixtureSuffix).getBasePath().toString();
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withAutoUpgradeVersion(true)
+        .build();
+    HoodieTableMetaClient pinnedLayoutMetaClient = HoodieTableMetaClient.builder()
+        .setConf(storageConf().newInstance())
+        .setBasePath(basePath)
+        .setLoadActiveTimelineOnLoad(false)
+        .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
+        .build();
+
+    new UpgradeDowngrade(pinnedLayoutMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance())
+        .run(HoodieTableVersion.current(), null);
+
+    HoodieTableMetaClient resultMetaClient = HoodieTableMetaClient.builder()
+        .setConf(storageConf().newInstance())
+        .setBasePath(basePath)
+        .build();
+    assertEquals(HoodieTableVersion.current(), resultMetaClient.getTableConfig().getTableVersion());
+    assertEquals(Option.of(expectedEncoding), resultMetaClient.getTableConfig().getComplexKeyGenEncoding());
   }
 
   /**
