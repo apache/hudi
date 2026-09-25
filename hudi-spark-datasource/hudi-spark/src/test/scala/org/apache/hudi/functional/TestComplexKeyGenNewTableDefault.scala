@@ -32,7 +32,7 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -130,11 +130,12 @@ class TestComplexKeyGenNewTableDefault extends HoodieSparkClientTestBase {
     assertEquals(HoodieTableVersion.EIGHT, loadMetaClient().getTableConfig.getTableVersion)
     assertEquals(Option.of(ComplexKeyGenEncoding.VALUE_ONLY), loadMetaClient().getTableConfig.getComplexKeyGenEncoding)
 
-    val thrown = assertThrows(classOf[Throwable], () =>
-      writeNewTable(Map(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key -> ComplexKeyGenEncoding.VALUE_ONLY.name)))
-    val causes = Iterator.iterate(thrown)(_.getCause).takeWhile(_ != null).toList
-    assertTrue(causes.exists(t => scala.Option(t.getMessage).exists(_.contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key))),
-      s"A table at the current version cannot declare VALUE_ONLY, got: ${causes.map(_.getMessage).mkString(" | ")}")
+    // the declared encoding is honoured at the current version too: it describes the keys the table stores,
+    // which is what an upgraded version 8 table carries as well
+    writeNewTable(Map(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key -> ComplexKeyGenEncoding.VALUE_ONLY.name))
+    assertTrue(storedRecordKeys().forall(!_.startsWith(recordKeyField + ":")))
+    assertEquals(HoodieTableVersion.current(), loadMetaClient().getTableConfig.getTableVersion)
+    assertEquals(Option.of(ComplexKeyGenEncoding.VALUE_ONLY), loadMetaClient().getTableConfig.getComplexKeyGenEncoding)
 
     writeNewTable(Map(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key -> ComplexKeyGenEncoding.FIELD_PREFIXED.name))
     assertTrue(storedRecordKeys().forall(_.startsWith(recordKeyField + ":")))

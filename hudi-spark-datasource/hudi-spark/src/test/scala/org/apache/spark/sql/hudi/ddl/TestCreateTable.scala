@@ -1140,10 +1140,11 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
 
   test("Test Create Table with Complex Key Generator and Key Encoding") {
     withTempDir { tmp =>
-      // VALUE_ONLY keys were only ever written by releases up to 1.0.2, so a table can only be created with them at version 8 and below
+      // the declared encoding is recorded on every table version: it describes the keys the table stores, and a
+      // version 8 table carrying bare keys keeps VALUE_ONLY once it is upgraded
       Seq((ComplexKeyGenEncoding.VALUE_ONLY, 6), (ComplexKeyGenEncoding.FIELD_PREFIXED, 6),
         (ComplexKeyGenEncoding.VALUE_ONLY, 8), (ComplexKeyGenEncoding.FIELD_PREFIXED, 8),
-        (ComplexKeyGenEncoding.FIELD_PREFIXED, 9)).foreach { params =>
+        (ComplexKeyGenEncoding.VALUE_ONLY, 9), (ComplexKeyGenEncoding.FIELD_PREFIXED, 9)).foreach { params =>
         val tableName = generateTableName
         val tablePath = s"${tmp.getCanonicalPath}/$tableName"
         val encoding = params._1

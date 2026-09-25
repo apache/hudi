@@ -399,16 +399,12 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
           .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath() + Path.SEPARATOR + "ckg" + tableId++);
       assertEquals(Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED), created.getTableConfig().getComplexKeyGenEncoding());
 
+      // the encoding describes the stored keys, so a declared VALUE_ONLY is recorded on every table version:
+      // a version 8 table carrying bare keys keeps them once it is upgraded to 9 and above
       HoodieTableMetaClient.TableBuilder valueOnly = complexKeyGenTableBuilder(version, ComplexKeyGenEncoding.VALUE_ONLY);
       String valueOnlyPath = tempDir.toAbsolutePath() + Path.SEPARATOR + "ckg" + tableId++;
-      if (version.lesserThan(HoodieTableVersion.NINE)) {
-        assertEquals(Option.of(ComplexKeyGenEncoding.VALUE_ONLY),
-            valueOnly.initTable(this.metaClient.getStorageConf(), valueOnlyPath).getTableConfig().getComplexKeyGenEncoding());
-      } else {
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-            () -> valueOnly.initTable(this.metaClient.getStorageConf(), valueOnlyPath));
-        assertTrue(e.getMessage().contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()), e.getMessage());
-      }
+      assertEquals(Option.of(ComplexKeyGenEncoding.VALUE_ONLY),
+          valueOnly.initTable(this.metaClient.getStorageConf(), valueOnlyPath).getTableConfig().getComplexKeyGenEncoding());
     }
 
     // without a stored record key there is no encoding to record, whatever the version
