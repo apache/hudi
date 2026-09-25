@@ -168,7 +168,7 @@ public class TestHoodieHFileInputFormat {
   @Test
   public void testInputFormatLoadWithEmptyTable() throws IOException {
     // initial hoodie table
-    String bathPathStr = "/tmp/test_empty_table";
+    String bathPathStr = basePath.resolve("test_empty_table").toString();
     HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), bathPathStr, HoodieTableType.COPY_ON_WRITE,
         baseFileFormat);
     // Add the paths
