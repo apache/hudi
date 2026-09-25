@@ -43,8 +43,8 @@ import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap.DiskMapType;
 import org.apache.hudi.common.util.collection.Pair;
@@ -99,8 +99,13 @@ import static org.apache.hudi.common.table.timeline.TimelineUtils.validateTimest
 @Slf4j
 public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
-  private static final SizeEstimator<PartitionPath> KEY_SIZE_ESTIMATOR = new DefaultSizeEstimator<>();
-  private static final SizeEstimator<List<FileSlice>> VALUE_SIZE_ESTIMATOR = new DefaultSizeEstimator<>();
+  // NOTE: Constants of the structural weigher used for HOODIE_FILE_INDEX_MAX_MEMORY; see
+  //       [[estimateFileSliceCacheWeight]] for how they were calibrated.
+  private static final int FILE_SLICE_CACHE_ENTRY_OVERHEAD_BYTES = 256;
+  private static final int FILE_SLICE_CACHE_BYTES_PER_FILE = 960;
+  // NOTE: Every described file carries its own full path, and the path carries the partition path; the 2 is because
+  //       the path is held both as a String and inside the StoragePath's URI.
+  private static final int FILE_SLICE_CACHE_BYTES_PER_PATH_CHAR = 2;
 
   @Getter(AccessLevel.PROTECTED)
   private final String[] partitionColumns;
@@ -124,7 +129,8 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   //  - lazy listing (shouldListLazily=true): partitions listing will be done lazily with the knowledge from query predicate on partition
   //        columns. And file slices fetching only happens for partitions satisfying the given filter.
   //
-  // In SparkSQL, `shouldListLazily` is controlled by option `REFRESH_PARTITION_AND_FILES_IN_INITIALIZATION`.
+  // In SparkSQL, `shouldListLazily` is controlled by `HoodieFileIndex`'s listing mode, i.e. option
+  // `hoodie.datasource.read.file.index.listing.mode` (`DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE`).
   // In lazy listing case, if no predicate on partition is provided, all partitions will still be loaded.
   private final boolean shouldListLazily;
 
@@ -149,8 +155,14 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   //       last refresh, so it does not grow with the session and is left unbounded.
   private transient volatile Map<PartitionPath, List<FileSlice>> cachedAllInputFileSlices = new HashMap<>();
 
-  // NOTE: The cache backing [[cachedAllInputFileSlices]], or null when the spillable map is in use. Held so that
-  //       pending eviction work can be forced to completion (see [[cleanUpFileSliceCache]]).
+  // NOTE: The Caffeine cache that [[cachedAllInputFileSlices]] is the [[Cache#asMap]] view of. Nothing in production
+  //       reads it -- all use goes through that view -- but the view deliberately exposes no way back to the cache's
+  //       own API, which is what the tests need in order to assert on the eviction policy and its weighted size.
+  //       Null until the first refresh, and stale -- i.e. still referring to the previous Caffeine cache -- once a
+  //       refresh has switched this index over to the spillable map, since that branch replaces
+  //       [[cachedAllInputFileSlices]] without touching this field. So it is only meaningful alongside
+  //       [[cachedAllInputFileSlices]], never on its own.
+  @VisibleForTesting
   private transient volatile Cache<PartitionPath, List<FileSlice>> fileSliceCache = null;
 
   // NOTE: The total size (in bytes) of the files of each partition this index has listed since its last refresh,
@@ -161,11 +173,20 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   //       query.
   //
   //       This ledger is intentionally left unbounded, since bounding it is precisely what would make the figure
-  //       wrong again. What it holds is one boxed long per partition under a key it shares with the PartitionPath the
-  //       caller already holds, which is a fixed cost per partition rather than one that scales with the partition's
-  //       contents: measured with ObjectSizeCalculator over 10000 partitions, the ledger is 0.6-1.3 MiB whether a
-  //       partition holds one file group or a hundred, against 4.4 MiB and 173.7 MiB respectively for their
-  //       file-slice lists.
+  //       wrong again. Its cost is therefore worth stating plainly rather than waving away: it is O(distinct
+  //       partitions listed since the last refresh) -- [[doRefresh]] replaces it outright -- and holds one boxed long
+  //       per partition plus that partition's ConcurrentHashMap node and key reference. Measured with
+  //       ObjectSizeCalculator over a real ConcurrentHashMap, that is ~110 bytes per partition for short local
+  //       partition paths ("dt=1") and ~174 bytes for 66-character object-store paths: 1.05 MiB and 1.66 MiB at
+  //       10000 partitions, 114 MiB and 168 MiB at 1000000. So it is flat in how wide the table is -- against 4.4 MiB
+  //       and 173.7 MiB for the file-slice lists of those same 10000 partitions at one and at a hundred file groups
+  //       each -- but it does scale with how long the partition paths are, and it is not negligible for a table with
+  //       millions of partitions.
+  //
+  //       The key is the same String instance the caller's PartitionPath holds, so in the eager-listing path it costs
+  //       only the reference. In the lazy + partition-predicate path, though (see SparkHoodieTableFileIndex's pruning
+  //       of `cachedAllPartitionPaths`), the caller's PartitionPath may be dropped while this ledger keeps its entry,
+  //       and the ledger then becomes the sole holder of that String.
   private transient volatile Map<String, Long> cachedPartitionFileSizes = new ConcurrentHashMap<>();
 
   // NOTE: It always contains either all partition paths, or null if it is not initialized yet
@@ -730,30 +751,51 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
    * Estimates the heap held by one entry of {@code cachedAllInputFileSlices}, for the purposes of
    * {@link org.apache.hudi.common.config.HoodieCommonConfig#HOODIE_FILE_INDEX_MAX_MEMORY}.
    *
-   * <p>This deliberately uses the same {@link DefaultSizeEstimator} that the spillable-map flavour of this same cache
-   * is configured with, so that the two memory budgets for this map -- {@code hoodie.file.index.cache.max.mem} and
-   * {@code hoodie.file.index.cache.spillable.mem} -- are denominated in the same units and a given number means the
-   * same thing under either mode. Bounding by bytes rather than by a partition count matters because a partition's
-   * file-slice list scales with the number of file groups (and, for MOR, log files) it holds, which varies by orders
-   * of magnitude between tables: a fixed partition count that is generous for a narrow table is far past any
-   * reasonable heap budget for a wide one.
+   * <p>Bounding by bytes rather than by a partition count matters because a partition's file-slice list scales with
+   * the number of file groups (and, for MOR, log files) it holds, which varies by orders of magnitude between tables:
+   * a fixed partition count that is generous for a narrow table is far past any reasonable heap budget for a wide one.
+   *
+   * <p>This counts structure rather than walking the object graph, because Caffeine calls a weigher on every single
+   * insertion, lazy listing is the default and this budget defaults to 500 MB -- so an exact estimator here runs on
+   * every Spark read. Walking the graph with {@link org.apache.hudi.common.util.ObjectSizeCalculator} measured 374us
+   * per partition at 20 file groups and 2.6ms at 100, i.e. of the order of tens of seconds of driver CPU for one cold
+   * plan of a table with many partitions. (The spillable-map flavour of this same cache can afford that estimator only
+   * because {@code ExternalSpillableMap} samples it -- on the first insertion, then every hundredth.)
+   *
+   * <p>What is counted instead is what the exact size is nearly linear in: the number of files described, and the
+   * length of the partition path each of their paths embeds. Every file slice carries a {@code HoodieBaseFile}, every
+   * log file a {@code HoodieLogFile} and every bootstrapped base file an external source {@code BaseFile}, each
+   * wrapping a {@code StoragePathInfo} with its own {@code StoragePath}, {@code URI} and path {@code String}.
+   * Calibrated against {@code ObjectSizeCalculator} over 0-500 file slices x 0-10 log files each x partition paths of
+   * 4, 54 and 202 characters, this lands within 0.94x-1.14x of the exact figure on every non-empty point of that grid.
+   *
+   * <p>A proxy necessarily mis-charges, and it is worth being explicit about which way. It over-charges a file slice
+   * holding only log files and no base file (by one file's worth), and a partition holding nothing at all (a few
+   * hundred bytes against a true 136-336), both of which only make the bound tighter than asked. It under-charges
+   * whatever it cannot see from the partition path: file names longer than the uuid-plus-write-token ones this was
+   * calibrated on, and a bootstrap source file living under a path far longer than the Hudi partition's. So the
+   * resident set should be read as being within roughly 10% of {@code hoodie.file.index.cache.max.mem} for ordinary
+   * tables, and as a small multiple of it only for a table whose file names are themselves pathological. That is
+   * deliberate: the cache is a cache, so mis-charging trades heap against re-listing and cannot lose data either way,
+   * whereas an exact weigher costs the CPU above on every read.
+   *
+   * <p>Note that this makes {@code hoodie.file.index.cache.max.mem} and
+   * {@code hoodie.file.index.cache.spillable.mem} approximations of different shapes rather than one quantity: the
+   * budget here is a sum of per-entry estimates, whereas the spillable map's is its entry count times a single
+   * sampled average payload size, which on a skewed table is a different number again.
    */
   static int estimateFileSliceCacheWeight(PartitionPath partition, List<FileSlice> fileSlices) {
-    long weight = KEY_SIZE_ESTIMATOR.sizeEstimate(partition) + VALUE_SIZE_ESTIMATOR.sizeEstimate(fileSlices);
+    long files = 0;
+    for (FileSlice fileSlice : fileSlices) {
+      // The slice itself, its log files, and -- for a bootstrapped table -- the base file's external source file
+      files += 1 + fileSlice.getLogFileCnt() + (fileSlice.hasBootstrapBase() ? 1 : 0);
+    }
+    long pathCost = (long) FILE_SLICE_CACHE_BYTES_PER_PATH_CHAR * partition.getPath().length();
+    long weight = FILE_SLICE_CACHE_ENTRY_OVERHEAD_BYTES + pathCost
+        + files * (FILE_SLICE_CACHE_BYTES_PER_FILE + pathCost);
     // NOTE: Caffeine weights are ints. A single partition heavier than Integer.MAX_VALUE bytes cannot be expressed,
     //       and clamping it simply means such an entry is treated as "as heavy as an entry can be".
     return (int) Math.max(1L, Math.min(Integer.MAX_VALUE, weight));
-  }
-
-  /**
-   * Forces any eviction that {@code cachedAllInputFileSlices} still has pending to run. Only needed by callers that
-   * want to observe the cache's post-eviction state; the cache bounds itself without this.
-   */
-  protected void cleanUpFileSliceCache() {
-    Cache<PartitionPath, List<FileSlice>> cache = fileSliceCache;
-    if (cache != null) {
-      cache.cleanUp();
-    }
   }
 
   /**

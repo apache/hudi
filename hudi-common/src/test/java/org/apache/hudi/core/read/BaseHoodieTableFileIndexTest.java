@@ -19,6 +19,7 @@
 package org.apache.hudi.core.read;
 
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.core.read.BaseHoodieTableFileIndex.PartitionPath;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -104,26 +105,71 @@ public class BaseHoodieTableFileIndexTest {
    * list scales with the number of file groups (and, for MOR, log files) the partition holds. Measured with Hudi's own
    * ObjectSizeCalculator, 10000 partitions hold 16 MiB at one file group each and 1205 MiB at a hundred -- so no single
    * partition count can be a sane heap budget for both shapes. This pins that the weight of an entry actually tracks
-   * how much the entry holds.
+   * how much the entry holds, along both axes it varies along: file groups, and log files per file group.
    */
   @Test
   public void testFileSliceCacheWeightGrowsWithTheEntryContents() {
     PartitionPath partition = new PartitionPath("dt=2026-01-01", new Object[]{"2026-01-01"});
-    List<FileSlice> one = fileSlices(partition, 1);
-    List<FileSlice> many = fileSlices(partition, 50);
+    List<FileSlice> empty = Collections.emptyList();
+    List<FileSlice> one = fileSlices(partition, 1, 0);
+    List<FileSlice> many = fileSlices(partition, 50, 0);
+    List<FileSlice> oneWithLogs = fileSlices(partition, 1, 10);
 
+    int weightOfEmpty = BaseHoodieTableFileIndex.estimateFileSliceCacheWeight(partition, empty);
     int weightOfOne = BaseHoodieTableFileIndex.estimateFileSliceCacheWeight(partition, one);
     int weightOfMany = BaseHoodieTableFileIndex.estimateFileSliceCacheWeight(partition, many);
+    int weightOfOneWithLogs = BaseHoodieTableFileIndex.estimateFileSliceCacheWeight(partition, oneWithLogs);
 
-    assertTrue(weightOfOne > 0, "An entry must have a positive weight");
+    assertTrue(weightOfEmpty > 0, "Even an empty entry must have a positive weight");
+    assertTrue(weightOfOne > weightOfEmpty, "An entry holding a file slice must outweigh an empty one");
     assertTrue(weightOfMany > weightOfOne * 10,
         "50 file slices (" + weightOfMany + " bytes) must weigh far more than one (" + weightOfOne + " bytes)");
+    // MOR: one file group with a stack of log files holds (and must be charged for) far more than a bare one
+    assertTrue(weightOfOneWithLogs > weightOfOne * 5,
+        "A file slice with 10 log files (" + weightOfOneWithLogs + " bytes) must weigh far more than a bare one ("
+            + weightOfOne + " bytes)");
   }
 
-  private static List<FileSlice> fileSlices(PartitionPath partition, int count) {
+  /**
+   * The weigher runs on every single insertion into a cache that lazy listing populates one partition at a time, so it
+   * has to be cheap: walking the entry's object graph with {@code ObjectSizeCalculator} measured 374us per partition
+   * at 20 file groups and 2.6ms at 100, which is tens of seconds of driver CPU for one cold plan of a wide table.
+   * This pins that the weigher's cost does not grow with what the entry describes beyond the one unavoidable pass over
+   * the file-slice list: the per-slice work must be O(1), which rules out re-walking each slice's files.
+   */
+  @Test
+  public void testFileSliceCacheWeightIsLinearInSliceCountAndFreeOfLogFileCount() {
+    PartitionPath partition = new PartitionPath("dt=2026-01-01", new Object[]{"2026-01-01"});
+    // Same slice count, 100x the log files: an O(files) weigher would take ~100x longer, an O(slices) one the same
+    long fewLogs = timeWeigh(partition, fileSlices(partition, 200, 1));
+    long manyLogs = timeWeigh(partition, fileSlices(partition, 200, 100));
+
+    assertTrue(manyLogs < Math.max(fewLogs, 1_000L) * 20,
+        "Weighing 200 slices took " + fewLogs + "ns with 1 log file each and " + manyLogs
+            + "ns with 100, so the weigher is walking the files rather than counting them");
+  }
+
+  private static long timeWeigh(PartitionPath partition, List<FileSlice> slices) {
+    for (int i = 0; i < 1000; i++) {
+      BaseHoodieTableFileIndex.estimateFileSliceCacheWeight(partition, slices);
+    }
+    long start = System.nanoTime();
+    for (int i = 0; i < 1000; i++) {
+      BaseHoodieTableFileIndex.estimateFileSliceCacheWeight(partition, slices);
+    }
+    return (System.nanoTime() - start) / 1000;
+  }
+
+  private static List<FileSlice> fileSlices(PartitionPath partition, int count, int logFilesPerSlice) {
     List<FileSlice> slices = new ArrayList<>();
     for (int i = 0; i < count; i++) {
-      slices.add(new FileSlice(partition.getPath(), "20260101000000001", "file-" + i));
+      FileSlice slice = new FileSlice(partition.getPath(), "20260101000000001", "file-" + i);
+      for (int l = 0; l < logFilesPerSlice; l++) {
+        slice.addLogFile(new HoodieLogFile(new StoragePathInfo(
+            new StoragePath(partition.getPath() + "/.file-" + i + "_20260101000000001.log." + (l + 1) + "_0-1-2"),
+            1024L, false, (short) 1, 1024L, 1700000000000L)));
+      }
+      slices.add(slice);
     }
     return slices;
   }

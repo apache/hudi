@@ -171,14 +171,14 @@ class TestBaseHoodieTableFileIndex extends HoodieCommonTestHarness {
       Assertions.assertNotNull(fileSlices.get(partition),
           "A queried partition must never map to null, even once eviction is in play (query " + i + ")");
 
-      fileIndex.cleanUpFileSliceCacheForTest();
+      cleanUpFileSliceCache(fileIndex);
       Assertions.assertTrue(weightedSize(fileIndex) <= maxMemory,
           "File-slice cache grew to " + weightedSize(fileIndex) + " bytes after " + (i + 1)
               + " distinct partitions, budget is " + maxMemory);
     }
 
     // Before the fix this held all `partitionsQueried` entries, which is the leak being fixed
-    fileIndex.cleanUpFileSliceCacheForTest();
+    cleanUpFileSliceCache(fileIndex);
     int resident = cachedFileSliceCount(fileIndex);
     Assertions.assertTrue(resident < partitionsQueried,
         "The cache must not retain every partition ever queried, but held " + resident);
@@ -198,7 +198,7 @@ class TestBaseHoodieTableFileIndex extends HoodieCommonTestHarness {
   void testRepeatedWideQueryDoesNotAmplifyListing() throws Exception {
     initMetaClient();
     // A budget far below what 30 partitions need, so every round has to evict the query's own working set
-    long maxMemory = 256L;
+    long maxMemory = 1024L;
     int partitionCount = 30;
 
     ListingCountingIndex fileIndex = new ListingCountingIndex(
@@ -228,7 +228,7 @@ class TestBaseHoodieTableFileIndex extends HoodieCommonTestHarness {
               + "cost 1 + (partitions over the budget), forever.");
 
       // Guard against the test going vacuous: it only proves anything while the bound is really evicting
-      fileIndex.cleanUpFileSliceCacheForTest();
+      cleanUpFileSliceCache(fileIndex);
       Assertions.assertTrue(cachedFileSliceCount(fileIndex) < partitionCount,
           "Round " + round + " left all " + partitionCount + " partitions resident, so the budget never bound "
               + "and this test proved nothing");
@@ -261,7 +261,7 @@ class TestBaseHoodieTableFileIndex extends HoodieCommonTestHarness {
     long maxMemory = 4 * 1024L;
     TestLocalIndex bounded = newIndex(maxMemoryProps(maxMemory), true);
     bounded.getInputFileSlicesForTest(query);
-    bounded.cleanUpFileSliceCacheForTest();
+    cleanUpFileSliceCache(bounded);
 
     Assertions.assertTrue(cachedFileSliceCount(bounded) < partitionCount,
         "This test is only meaningful if the bound actually evicted something");
@@ -289,7 +289,7 @@ class TestBaseHoodieTableFileIndex extends HoodieCommonTestHarness {
   @Test
   void testConcurrentQueriesAreSafeAndKeepTheCacheBounded() throws Exception {
     initMetaClient();
-    long maxMemory = 8 * 1024L;
+    long maxMemory = 4 * 1024L;
     int threads = 8;
     int queriesPerThread = 200;
     int partitionCount = 64;
@@ -357,10 +357,85 @@ class TestBaseHoodieTableFileIndex extends HoodieCommonTestHarness {
       throw new AssertionError("Concurrent access to the file-slice cache failed", failure.get());
     }
 
-    fileIndex.cleanUpFileSliceCacheForTest();
+    cleanUpFileSliceCache(fileIndex);
+    // Guard against the test going vacuous: "the bound still holds" proves nothing unless the bound bound. The
+    // budget is a small fraction of what `partitionCount` entries weigh, so it must have evicted.
+    Assertions.assertTrue(cachedFileSliceCount(fileIndex) < partitionCount,
+        "All " + partitionCount + " partitions stayed resident under a " + maxMemory + " byte budget, so the bound "
+            + "never bound and this test would pass even with no bound at all");
     Assertions.assertTrue(weightedSize(fileIndex) <= maxMemory,
         "The bound must still hold after concurrent access, but the cache holds " + weightedSize(fileIndex)
             + " bytes against a budget of " + maxMemory);
+  }
+
+  /**
+   * Replaces the strict-LRU assertion this bound's first draft carried, which was wrong for the policy actually in
+   * use: Caffeine is W-TinyLFU, not LRU, and deliberately does not promise that the least recently used entry is the
+   * next one out. What it does promise is the property the bound was introduced for -- the dashboard-plus-backfill
+   * shape, where a handful of partitions are read by every query while a long tail of one-shot partitions sweeps
+   * through the cache. A frequency-aware policy converges on keeping the repeatedly read partition and spending the
+   * rest of the cache on the tail.
+   *
+   * <p>So this asserts the weakest true form of that, against a one-shot partition of exactly the same shape as a
+   * control: once the policy has warmed up, the repeatedly read partition is resident at the end of every round while
+   * the control that was read once is not. The warm-up is real and measured -- with this budget the repeatedly read
+   * partition is flushed by the first few sweeps before TinyLFU's frequency sketch starts admitting it over the tail
+   * -- so the steady-state half of the run is what gets asserted, not the whole of it. A cache with no eviction
+   * ordering, or one that simply dropped its oldest entry, fails this: the control shows what that looks like,
+   * because it is evicted by the same sweep that the hot partition survives.
+   */
+  @Test
+  void testRepeatedlyReadPartitionSurvivesALongTailSweep() throws Exception {
+    initMetaClient();
+    int rounds = 20;
+    int steadyStateFrom = rounds / 2;
+    int coldPerRound = 40;
+    // Room for ~16 of these entries, i.e. far less than one round's sweep, let alone all `rounds` of it
+    long maxMemory = 16 * 264L;
+
+    TestLocalIndex fileIndex = newIndex(maxMemoryProps(maxMemory), true);
+    PartitionPath hot = createPartition("dt=hot");
+    // Same shape, read exactly once, never again: the control for "would anything have survived this sweep?"
+    PartitionPath readOnce = createPartition("dt=once");
+    fileIndex.getInputFileSlicesForTest(hot);
+    fileIndex.getInputFileSlicesForTest(readOnce);
+
+    int hotSurvivedSteadyState = 0;
+    int readOnceSurvivedSteadyState = 0;
+    int coldSurvived = 0;
+    for (int round = 0; round < rounds; round++) {
+      for (int i = 0; i < coldPerRound; i++) {
+        fileIndex.getInputFileSlicesForTest(createPartition("dt=cold-" + round + "-" + i));
+      }
+      cleanUpFileSliceCache(fileIndex);
+      if (round >= steadyStateFrom) {
+        if (rawFileSliceCache(fileIndex).containsKey(hot)) {
+          hotSurvivedSteadyState++;
+        }
+        if (rawFileSliceCache(fileIndex).containsKey(readOnce)) {
+          readOnceSurvivedSteadyState++;
+        }
+      }
+      coldSurvived = cachedFileSliceCount(fileIndex);
+      // The read that makes it hot. It is issued after the residency check, so a `hot` that had been evicted is not
+      // credited with surviving just because this call re-listed it.
+      Assertions.assertNotNull(fileIndex.getInputFileSlicesForTest(hot).get(hot),
+          "Round " + round + " must still answer for the repeatedly read partition");
+    }
+
+    // Non-vacuity: the sweep has to have been evicting, or nothing was ever under pressure
+    Assertions.assertTrue(coldSurvived < coldPerRound,
+        "A round of " + coldPerRound + " one-shot partitions left " + coldSurvived + " entries resident under a "
+            + maxMemory + " byte budget, so the cache was never under pressure and this test proved nothing");
+    Assertions.assertEquals(0, readOnceSurvivedSteadyState,
+        "The control partition was read once and never again, so a long-tail sweep must flush it; it was still "
+            + "resident after " + readOnceSurvivedSteadyState + " of the last " + (rounds - steadyStateFrom)
+            + " sweeps, which means the cache was not really churning and the comparison below is meaningless");
+    Assertions.assertEquals(rounds - steadyStateFrom, hotSurvivedSteadyState,
+        "The partition read on every round survived only " + hotSurvivedSteadyState + " of the last "
+            + (rounds - steadyStateFrom) + " sweeps of " + coldPerRound + " one-shot partitions, while the control "
+            + "read once fared no worse; the eviction policy is spending the cache on the long tail instead of on "
+            + "what is actually being re-read");
   }
 
   /**
@@ -452,6 +527,14 @@ class TestBaseHoodieTableFileIndex extends HoodieCommonTestHarness {
     return (Cache<PartitionPath, List<FileSlice>>) field.get(fileIndex);
   }
 
+  /**
+   * Forces any eviction Caffeine still has pending, so that the cache's post-eviction state can be observed. Caffeine
+   * evicts inline here (the cache is built with {@code executor(Runnable::run)}), so this is belt and braces.
+   */
+  private static void cleanUpFileSliceCache(BaseHoodieTableFileIndex fileIndex) throws Exception {
+    fileSliceCache(fileIndex).cleanUp();
+  }
+
   private static long weightedSize(BaseHoodieTableFileIndex fileIndex) throws Exception {
     return fileSliceCache(fileIndex).policy().eviction().get().weightedSize().getAsLong();
   }
@@ -505,10 +588,6 @@ class TestBaseHoodieTableFileIndex extends HoodieCommonTestHarness {
 
     long getTotalCachedFilesSizeForTest() {
       return getTotalCachedFilesSize();
-    }
-
-    void cleanUpFileSliceCacheForTest() {
-      cleanUpFileSliceCache();
     }
 
     @Override
