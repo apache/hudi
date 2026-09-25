@@ -433,6 +433,31 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     assertFalse(multiFieldDeclared.getTableConfig().getComplexKeyGenEncoding().isPresent());
   }
 
+  /**
+   * TRUNCATE TABLE and ALTER TABLE RENAME re-create the table from its own properties, which carry both the
+   * table version and the recorded encoding. An upgraded table at version 9 or above holding VALUE_ONLY must
+   * survive that round trip.
+   */
+  @Test
+  void testReInitFromPropertiesOfUpgradedValueOnlyTable() throws IOException {
+    String path = tempDir.toAbsolutePath() + Path.SEPARATOR + "reinit";
+    HoodieTableMetaClient created = complexKeyGenTableBuilder(HoodieTableVersion.EIGHT, ComplexKeyGenEncoding.VALUE_ONLY)
+        .initTable(this.metaClient.getStorageConf(), path);
+    // the table is upgraded, the way the 8 to 9 hop leaves it: current version, encoding untouched
+    created.getTableConfig().setValue(HoodieTableConfig.VERSION, String.valueOf(HoodieTableVersion.current().versionCode()));
+    HoodieTableConfig.update(created.getStorage(), created.getMetaPath(), created.getTableConfig().getProps());
+    created.reloadTableConfig();
+    assertEquals(HoodieTableVersion.current(), created.getTableConfig().getTableVersion());
+    assertEquals(Option.of(ComplexKeyGenEncoding.VALUE_ONLY), created.getTableConfig().getComplexKeyGenEncoding());
+
+    HoodieTableMetaClient reInitialised = HoodieTableMetaClient.newTableBuilder()
+        .fromProperties(created.getTableConfig().getProps())
+        .initTable(this.metaClient.getStorageConf(), path);
+
+    assertEquals(HoodieTableVersion.current(), reInitialised.getTableConfig().getTableVersion());
+    assertEquals(Option.of(ComplexKeyGenEncoding.VALUE_ONLY), reInitialised.getTableConfig().getComplexKeyGenEncoding());
+  }
+
   private static HoodieTableMetaClient.TableBuilder complexKeyGenTableBuilder(HoodieTableVersion version, ComplexKeyGenEncoding encoding) {
     return HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE.name())
