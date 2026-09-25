@@ -66,7 +66,7 @@ services:
       - hudi-datalake
 
   minio:
-    image: 'cgr.dev/chainguard/minio@sha256:bd014394a80898e68c149f2311fdf8d5a2c2f3bb2c33b9327ae6d02b4b065ae1'
+    image: 'cgr.dev/chainguard/minio:latest'
     container_name: minio
     command: server /data --console-address ":9001"
     environment:
@@ -86,7 +86,7 @@ services:
           - warehouse.minio
 
   mc:
-    image: cgr.dev/chainguard/minio-client@sha256:f0dd93b48af1f8a641edcd3c64661c8dbe05189bd2ef2f8cea216eb18af10bf8
+    image: cgr.dev/chainguard/minio-client:latest-dev
     container_name: mc
     depends_on:
       minio:
