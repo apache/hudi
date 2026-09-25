@@ -47,8 +47,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.MockedStatic;
 
 import java.io.File;
@@ -73,13 +73,13 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -219,8 +219,8 @@ public class TestBulkInsertWriteHelper {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  void testCloseFailureDoesNotSkipQueuedHandles(boolean runtimeFailure) throws Exception {
+  @CsvSource({"false, false", "true, false", "false, true", "true, true"})
+  void testCloseFailureDoesNotSkipQueuedHandles(boolean runtimeFailure, boolean multipleFailures) throws Exception {
     BulkInsertWriterHelper helper = newWriterHelper();
     List<HoodieRowDataCreateHandle> handles = new ArrayList<>();
     for (int i = 0; i < 11; i++) {
@@ -232,6 +232,14 @@ public class TestBulkInsertWriteHelper {
     HoodieRowDataCreateHandle failedHandle = helper.handles.values().iterator().next();
     Exception failure = runtimeFailure ? new IllegalStateException("close failed") : new IOException("close failed");
     when(failedHandle.close()).thenThrow(failure);
+    List<Exception> failures = new ArrayList<>();
+    failures.add(failure);
+    if (multipleFailures) {
+      HoodieRowDataCreateHandle secondFailedHandle = helper.handles.values().stream().skip(1).findFirst().get();
+      Exception secondFailure = runtimeFailure ? new IOException("second close failed") : new IllegalStateException("second close failed");
+      when(secondFailedHandle.close()).thenThrow(secondFailure);
+      failures.add(secondFailure);
+    }
 
     // Hold all close tasks in a queue until the helper is waiting for their results.
     // This makes cancellation of not-yet-started closes deterministic.
@@ -250,8 +258,8 @@ public class TestBulkInsertWriteHelper {
     Thread closingThread = new Thread(closeTask);
     closingThread.setDaemon(true);
     closingThread.start();
+    List<Runnable> submitted = new ArrayList<>();
     try {
-      List<Runnable> submitted = new ArrayList<>();
       for (int i = 0; i < 11; i++) {
         Runnable task = tasks.poll(10, TimeUnit.SECONDS);
         assertTrue(task != null, "Every handle must be submitted for closing");
@@ -270,15 +278,44 @@ public class TestBulkInsertWriteHelper {
       while (cause.getCause() != null) {
         cause = cause.getCause();
       }
-      assertSame(failure, cause);
+      // allOf preserves a close failure, but does not guarantee which one when several handles fail.
+      assertTrue(failures.contains(cause));
       assertEquals(0, thrown.getSuppressed().length);
       verify(executor).shutdown();
       for (HoodieRowDataCreateHandle handle : handles) {
         verify(handle).close();
       }
     } finally {
-      closeTask.cancel(true);
+      // join() is uninterruptible: finish queued tasks even if an assertion failed before they ran.
+      submitted.forEach(Runnable::run);
+      long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+      while (closingThread.isAlive() && System.nanoTime() < deadline) {
+        Runnable task = tasks.poll(100, TimeUnit.MILLISECONDS);
+        if (task != null) {
+          task.run();
+        }
+      }
+      closingThread.join(1000);
+      assertFalse(closingThread.isAlive(), "The closing thread must terminate after cleanup");
     }
+  }
+
+  @Test
+  void testFailedCloseRetainsHandlesForCleanupRetry() throws Exception {
+    BulkInsertWriterHelper helper = newWriterHelper();
+    HoodieRowDataCreateHandle successfulHandle = mock(HoodieRowDataCreateHandle.class);
+    HoodieRowDataCreateHandle failedHandle = mock(HoodieRowDataCreateHandle.class);
+    when(successfulHandle.close()).thenReturn(new WriteStatus());
+    when(failedHandle.close()).thenThrow(new IOException("close failed"));
+    helper.handles.put("par1", successfulHandle);
+    helper.handles.put("par2", failedHandle);
+
+    assertThrows(CompletionException.class, helper::close);
+    assertEquals(2, helper.handles.size());
+    // A repeated status request must still fail, rather than returning an incomplete set of statuses.
+    assertThrows(CompletionException.class, () -> helper.getWriteStatuses(1));
+    verify(successfulHandle, times(2)).close();
+    verify(failedHandle, times(2)).close();
   }
 
   @Test

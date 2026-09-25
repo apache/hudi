@@ -190,8 +190,8 @@ public class BulkInsertWriterHelper implements AutoCloseable {
           .collect(Collectors.toList());
       // Use JDK allOf instead of FutureUtils.allOf, which cancels unfinished futures on failure.
       // Cancelling queued close tasks can leave handles unclosed and leak resources; wait for every close attempt instead.
-      CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-      writeStatusList.addAll(futures.stream().map(CompletableFuture::join).collect(Collectors.toList()));
+      CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0])).join();
+      futures.forEach(future -> writeStatusList.add(future.join()));
       handles.clear();
       handle = null;
     } finally {
