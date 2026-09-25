@@ -49,10 +49,8 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.PriorityQueue;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Shared helper for MDT-native vector posting lookup and approximate candidate reduction.
@@ -120,7 +118,7 @@ public final class VectorIndexMdtSearchUtils {
     return prefixes;
   }
 
-  public static HoodieData<VectorPostingMatch> readVectorPostingMatches(HoodieTableMetadata metadataTable,
+  public static HoodieData<VectorPostingMatch> readPostingMatches(HoodieTableMetadata metadataTable,
                                                             String indexPartition,
                                                             int generationId,
                                                             Map<Integer, Integer> clusterShardCounts,
@@ -242,7 +240,7 @@ public final class VectorIndexMdtSearchUtils {
 
     Set<String> partitionFilter =
         partitionPaths == null || partitionPaths.isEmpty() ? Collections.emptySet() : new HashSet<>(partitionPaths);
-    List<VectorPostingMatch> postingMatches = readVectorPostingMatches(
+    List<VectorPostingMatch> postingMatches = readPostingMatches(
         metadataTable, indexPartition, generationId, clusterShardCounts, shouldLoadInMemory).collectAsList();
     Map<Integer, Set<String>> clusterToFileGroups = new HashMap<>();
     for (VectorPostingMatch match : postingMatches) {
@@ -274,7 +272,7 @@ public final class VectorIndexMdtSearchUtils {
       int generationId,
       Map<Integer, Integer> clusterShardCounts,
       boolean shouldLoadInMemory) {
-    HoodieData<VectorPostingMatch> postings = readVectorPostingMatches(
+    HoodieData<VectorPostingMatch> postings = readPostingMatches(
         metadataTable, indexPartition, generationId, clusterShardCounts, shouldLoadInMemory);
     return postings.mapToPair(p -> Pair.of(p.getRecordKey(), p.getClusterId()));
   }
@@ -591,7 +589,7 @@ public final class VectorIndexMdtSearchUtils {
                                                                           float[][] centroids,
                                                                           int candidateHeapSize) {
     HoodieData<ScoredVectorPostingMatch> scored = scoreConfiguredPostings(
-        readVectorPostingMatches(metadataTable, indexPartition, generationId, clusterShardCounts, false),
+        readPostingMatches(metadataTable, indexPartition, generationId, clusterShardCounts, false),
         queryVector,
         dimension,
         randomSeed,
@@ -1088,99 +1086,16 @@ public final class VectorIndexMdtSearchUtils {
         .values();
   }
 
-  /**
-   * The RFC-109 RLI finalist arbiter. Resolves each finalist's current location from the
-   * record-level index (one batched {@code readRecordIndexLocationsWithKeys} over the distinct
-   * finalist keys) and tags it with a {@link VectorIndexArbiter.Decision} plus the resolved
-   * location.
-   *
-   * <p>Unlike {@link #attachRecordLocations}, this does <em>not</em> drop candidates: it tags all
-   * of them so callers can tally {@code arbiterExclusions.stale} / {@code .deleted} and apply the
-   * mode-specific action (approx: exclude STALE + DELETED; exact: key-fallback STALE, exclude
-   * DELETED, positional SERVE). Resolved location semantics:
-   *
-   * <ul>
-   *   <li>{@code SERVE}: the posting's own location when present (positional trust), else the RLI
-   *       location.</li>
-   *   <li>{@code STALE}: the RLI current location, so exact mode can key-fetch at the live slice.</li>
-   *   <li>{@code DELETED}: {@code null}.</li>
-   * </ul>
-   */
-  public static HoodieData<ScoredVectorPostingMatch> arbitrateFinalists(HoodieTableMetadata metadataTable,
-                                                                  HoodieData<ScoredVectorPostingMatch> finalists) {
-    return arbitrateFinalists(metadataTable, finalists, false);
+  public static HoodieData<ScoredVectorPostingMatch> arbitrateFinalists(
+      HoodieTableMetadata metadataTable, HoodieData<ScoredVectorPostingMatch> finalists) {
+    return VectorIndexRliArbitrator.arbitrateFinalists(metadataTable, finalists);
   }
 
   public static HoodieData<ScoredVectorPostingMatch> arbitrateFinalists(
       HoodieTableMetadata metadataTable,
       HoodieData<ScoredVectorPostingMatch> finalists,
       boolean partitionedRecordIndex) {
-    if (!partitionedRecordIndex) {
-      return arbitrateFinalistsForPartition(metadataTable, finalists, Option.empty());
-    }
-    List<String> partitions = finalists.map(ScoredVectorPostingMatch::getPartitionPath)
-        .distinct()
-        .collectAsList();
-    HoodieData<ScoredVectorPostingMatch> arbitrated = null;
-    for (String partition : partitions) {
-      HoodieData<ScoredVectorPostingMatch> partitionFinalists = finalists
-          .filter(candidate -> Objects.equals(partition, candidate.getPartitionPath()));
-      HoodieData<ScoredVectorPostingMatch> partitionResult = arbitrateFinalistsForPartition(
-          metadataTable, partitionFinalists, Option.ofNullable(partition));
-      arbitrated = arbitrated == null ? partitionResult : arbitrated.union(partitionResult);
-    }
-    return arbitrated == null ? HoodieListData.eager(Collections.emptyList()) : arbitrated;
-  }
-
-  private static HoodieData<ScoredVectorPostingMatch> arbitrateFinalistsForPartition(
-      HoodieTableMetadata metadataTable,
-      HoodieData<ScoredVectorPostingMatch> finalists,
-      Option<String> dataTablePartition) {
-    // Resolve current RLI locations for the finalist keys into a bounded driver-side map, then
-    // attach per candidate via map(...). The finalist set is a bounded candidate pool and
-    // {@code finalists} is already persisted upstream, so the two passes are cache hits.
-    //
-    // This deliberately avoids leftOuterJoin: HoodiePairData.leftOuterJoin requires both operands to
-    // share the same backing flavor, but readRecordIndexLocationsWithKeys returns list-backed pair
-    // data for a single-slice RLI (the common 1-file-group case) and RDD-backed for multi-slice.
-    // Joining an RDD-backed finalist set against list-backed locations throws ClassCastException.
-    // Attaching via map(...) preserves the finalists' backing (RDD stays RDD, list stays list).
-    List<String> distinctKeys = finalists.map(ScoredVectorPostingMatch::getRecordKey)
-        .distinct()
-        .collectAsList();
-    Map<String, HoodieRecordGlobalLocation> currentLocations = new HashMap<>();
-    if (!distinctKeys.isEmpty()) {
-      metadataTable.readRecordIndexLocationsWithKeys(
-              HoodieListData.eager(distinctKeys), dataTablePartition)
-          .collectAsList()
-          .forEach(pair -> currentLocations.put(pair.getKey(), pair.getValue()));
-    }
-    return finalists.map(candidate ->
-        arbitrateCandidate(candidate, currentLocations.get(candidate.getRecordKey())));
-  }
-
-  private static ScoredVectorPostingMatch arbitrateCandidate(
-      ScoredVectorPostingMatch candidate,
-      HoodieRecordGlobalLocation current) {
-    VectorIndexArbiter.Decision decision = VectorIndexArbiter.classify(
-        candidate.getPartitionPath(),
-        candidate.getFileGroupId(),
-        candidate.getBaseInstantTime(),
-        current);
-    HoodieRecordGlobalLocation resolved;
-    switch (decision) {
-      case SERVE:
-        resolved = candidate.getLocation() != null ? candidate.getLocation() : current;
-        break;
-      case STALE:
-        resolved = current;
-        break;
-      case DELETED:
-      default:
-        resolved = null;
-        break;
-    }
-    return candidate.withArbiterVerdict(decision, resolved);
+    return VectorIndexRliArbitrator.arbitrateFinalists(metadataTable, finalists, partitionedRecordIndex);
   }
 
   /**
@@ -1225,96 +1140,23 @@ public final class VectorIndexMdtSearchUtils {
     }
   }
 
-  /**
-   * Driver-side finalist arbiter core: classify each already-materialized finalist against a
-   * pre-resolved map of current RLI locations (record key -> location, or absent for an RLI miss).
-   * Pure and Spark-free so it is directly unit-testable; the {@link HoodieTableMetadata} overload
-   * performs the batched RLI lookup and delegates here.
-   *
-   * <p>Implements the RFC-109 arbiter output contract (see {@link VectorIndexArbiter}):
-   * hit+match -> SERVE (positional trust preserved via the posting's own location when present),
-   * hit+differ -> STALE (resolved to the live RLI location), miss -> DELETED (dropped).
-   */
   public static ArbitrationResult arbitrateMaterializedFinalists(
       List<ScoredVectorPostingMatch> finalists,
       Map<String, HoodieRecordGlobalLocation> currentLocations) {
-    List<ScoredVectorPostingMatch> serve = new ArrayList<>();
-    List<ScoredVectorPostingMatch> stale = new ArrayList<>();
-    long deleted = 0L;
-    for (ScoredVectorPostingMatch candidate : finalists) {
-      HoodieRecordGlobalLocation current = currentLocations.get(candidate.getRecordKey());
-      VectorIndexArbiter.Decision decision = VectorIndexArbiter.classify(
-          candidate.getPartitionPath(),
-          candidate.getFileGroupId(),
-          candidate.getBaseInstantTime(),
-          current);
-      switch (decision) {
-        case SERVE:
-          serve.add(candidate.withArbiterVerdict(
-              decision, candidate.getLocation() != null ? candidate.getLocation() : current));
-          break;
-        case STALE:
-          stale.add(candidate.withArbiterVerdict(decision, current));
-          break;
-        case DELETED:
-        default:
-          deleted++;
-          break;
-      }
-    }
-    return new ArbitrationResult(serve, stale, deleted);
+    return VectorIndexRliArbitrator.arbitrateMaterializedFinalists(finalists, currentLocations);
   }
 
-  /**
-   * Driver-side finalist arbiter: batched RLI lookup over the distinct finalist keys, then
-   * {@link #arbitrateMaterializedFinalists(List, Map)}. Used by the exact-rerank plan path, which
-   * already materializes finalists to the driver, so no distributed shuffle is incurred.
-   */
   public static ArbitrationResult arbitrateMaterializedFinalists(
-      HoodieTableMetadata metadataTable,
-      List<ScoredVectorPostingMatch> finalists) {
-    return arbitrateMaterializedFinalists(metadataTable, finalists, false);
+      HoodieTableMetadata metadataTable, List<ScoredVectorPostingMatch> finalists) {
+    return VectorIndexRliArbitrator.arbitrateMaterializedFinalists(metadataTable, finalists);
   }
 
   public static ArbitrationResult arbitrateMaterializedFinalists(
       HoodieTableMetadata metadataTable,
       List<ScoredVectorPostingMatch> finalists,
       boolean partitionedRecordIndex) {
-    if (finalists.isEmpty()) {
-      return new ArbitrationResult(Collections.emptyList(), Collections.emptyList(), 0L);
-    }
-    if (partitionedRecordIndex) {
-      List<ScoredVectorPostingMatch> serve = new ArrayList<>();
-      List<ScoredVectorPostingMatch> stale = new ArrayList<>();
-      long deleted = 0L;
-      Map<String, List<ScoredVectorPostingMatch>> byPartition = finalists.stream()
-          .collect(Collectors.groupingBy(ScoredVectorPostingMatch::getPartitionPath));
-      for (Map.Entry<String, List<ScoredVectorPostingMatch>> entry : byPartition.entrySet()) {
-        List<ScoredVectorPostingMatch> partitionFinalists = entry.getValue();
-        Set<String> partitionKeys = partitionFinalists.stream()
-            .map(ScoredVectorPostingMatch::getRecordKey)
-            .collect(Collectors.toSet());
-        Map<String, HoodieRecordGlobalLocation> partitionLocations = new HashMap<>();
-        metadataTable.readRecordIndexLocationsWithKeys(
-                HoodieListData.eager(new ArrayList<>(partitionKeys)), Option.of(entry.getKey()))
-            .collectAsList()
-            .forEach(pair -> partitionLocations.put(pair.getKey(), pair.getValue()));
-        ArbitrationResult result = arbitrateMaterializedFinalists(partitionFinalists, partitionLocations);
-        serve.addAll(result.serve());
-        stale.addAll(result.stale());
-        deleted += result.deletedCount();
-      }
-      return new ArbitrationResult(serve, stale, deleted);
-    }
-    Set<String> distinctKeys = new HashSet<>();
-    for (ScoredVectorPostingMatch candidate : finalists) {
-      distinctKeys.add(candidate.getRecordKey());
-    }
-    Map<String, HoodieRecordGlobalLocation> currentLocations = new HashMap<>();
-    metadataTable.readRecordIndexLocationsWithKeys(HoodieListData.eager(new ArrayList<>(distinctKeys)))
-        .collectAsList()
-        .forEach(pair -> currentLocations.put(pair.getKey(), pair.getValue()));
-    return arbitrateMaterializedFinalists(finalists, currentLocations);
+    return VectorIndexRliArbitrator.arbitrateMaterializedFinalists(
+        metadataTable, finalists, partitionedRecordIndex);
   }
 
   public static HoodieData<ScoredVectorPostingMatch> selectTopK(HoodieData<ScoredVectorPostingMatch> candidates, int topK) {
