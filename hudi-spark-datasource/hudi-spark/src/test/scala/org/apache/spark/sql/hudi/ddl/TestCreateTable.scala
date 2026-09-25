@@ -49,7 +49,7 @@ import scala.collection.JavaConverters._
 class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelpers {
 
   test("Test Create Managed Hoodie Table") {
-    val databaseName = "hudi_database"
+    val databaseName = generateTableName
     spark.sql(s"create database if not exists $databaseName")
     spark.sql(s"use $databaseName")
 
@@ -265,8 +265,8 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
       assertTrue(storage.exists(tableConfigPath))
       val tableConfigModificationTime = storage.getPathInfo(tableConfigPath).getModificationTime
       validateExternalTableCreation(storage, basePath, tableConfigModificationTime, Option.empty)
-      validateExternalTableCreation(storage, basePath, tableConfigModificationTime, Option("new_database"))
-      validateExternalTableCreation(storage, basePath, tableConfigModificationTime, Option("another_database"))
+      validateExternalTableCreation(storage, basePath, tableConfigModificationTime, Option(generateTableName))
+      validateExternalTableCreation(storage, basePath, tableConfigModificationTime, Option(generateTableName))
     }
   }
 
@@ -274,7 +274,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
                                             basePath: String,
                                             tableConfigModificationTime: Long,
                                             databaseName: Option[String]): Unit = {
-    val tableName = "table"
+    val tableName = generateTableName
     if (databaseName.isDefined) {
       spark.sql(
         s"""
@@ -987,7 +987,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
 
   test("Test Create Table From Existing Hoodie Table") {
     withTempDir { tmp =>
-      val databaseName = "hudi_database"
+      val databaseName = generateTableName
       spark.sql(s"create database if not exists $databaseName")
       spark.sql(s"use $databaseName")
 
@@ -1465,7 +1465,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
   }
 
   test("Test Create Non-Hudi Table(Parquet Table)") {
-    val databaseName = "test_database"
+    val databaseName = generateTableName
     spark.sql(s"create database if not exists $databaseName")
     spark.sql(s"use $databaseName")
 
@@ -2370,8 +2370,9 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
   // VECTOR type name.
 
   test("test create VECTOR table with CLUSTERED BY bucket spec parses (parser coverage)") {
+    val bucketTableName = generateTableName
     val plan = parseCreateTable(
-      "CREATE TABLE vec_bucket_tbl (id BIGINT, embedding VECTOR(4)) USING hudi " +
+      s"CREATE TABLE $bucketTableName (id BIGINT, embedding VECTOR(4)) USING hudi " +
         "CLUSTERED BY (id) INTO 4 BUCKETS")
     val bucket = transformByName(plan, "bucket")
     assertEquals("4", firstLiteralArg(bucket).value.toString)
@@ -2379,14 +2380,16 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
 
     // SORTED BY ... ASC is accepted by the bucket-spec visitor and yields a sorted_bucket
     // transform; a plain bucket transform here would mean the SORTED BY clause was dropped.
+    val sortedBucketTableName = generateTableName
     val sortedPlan = parseCreateTable(
-      "CREATE TABLE vec_sbucket_tbl (id BIGINT, ts BIGINT, embedding VECTOR(4)) USING hudi " +
+      s"CREATE TABLE $sortedBucketTableName (id BIGINT, ts BIGINT, embedding VECTOR(4)) USING hudi " +
         "CLUSTERED BY (id, ts) SORTED BY (id ASC) INTO 8 BUCKETS")
     assertEquals("sorted_bucket", sortedPlan.partitioning.head.name)
 
     // SORTED BY ... DESC is rejected by the bucket-spec visitor.
+    val badBucketTableName = generateTableName
     checkExceptionContain(
-      "CREATE TABLE vec_bad_bucket_tbl (id BIGINT, embedding VECTOR(4)) USING hudi " +
+      s"CREATE TABLE $badBucketTableName (id BIGINT, embedding VECTOR(4)) USING hudi " +
         "CLUSTERED BY (id) SORTED BY (id DESC) INTO 4 BUCKETS")(
       "Column ordering must be ASC")
   }
@@ -2397,40 +2400,44 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
     // tableSpec (location/comment/properties are stable across Spark 3.3 through 4.2; the parsed
     // options map is not exposed on the 3.5+ TableSpecBase, so OPTIONS is only asserted through
     // the path-folding case below).
+    val tableName = generateTableName
     val plan = parseCreateTable(
       s"""
-         |CREATE TABLE vec_clause_tbl (
+         |CREATE TABLE $tableName (
          |  id BIGINT,
          |  embedding VECTOR(4)
          |) USING hudi
          |COMMENT 'a vector table'
-         |LOCATION '/tmp/vec_clause_tbl'
+         |LOCATION '/tmp/$tableName'
          |OPTIONS ('opt_str' = 'v', 'opt_int' = 1, 'opt_bool' = true)
          |TBLPROPERTIES ('prop_str' = 'v', 'prop_int' = 2, 'prop_bool' = false)
          """.stripMargin)
     assertEquals(ArrayType(FloatType, containsNull = false), plan.tableSchema("embedding").dataType)
     assertEquals(Some("a vector table"), plan.tableSpec.comment)
-    assertEquals(Some("/tmp/vec_clause_tbl"), plan.tableSpec.location)
+    assertEquals(Some(s"/tmp/$tableName"), plan.tableSpec.location)
     assertEquals("v", plan.tableSpec.properties("prop_str"))
     assertEquals("2", plan.tableSpec.properties("prop_int"))
     assertEquals("false", plan.tableSpec.properties("prop_bool"))
 
     // A 'path' option with no LOCATION is folded into the table location by the option cleaner.
+    val pathTableName = generateTableName
     val pathPlan = parseCreateTable(
-      "CREATE TABLE vec_path_tbl (id BIGINT, embedding VECTOR(4)) USING hudi " +
-        "OPTIONS ('path' = '/tmp/vec_path_tbl')")
-    assertEquals(Some("/tmp/vec_path_tbl"), pathPlan.tableSpec.location)
+      s"CREATE TABLE $pathTableName (id BIGINT, embedding VECTOR(4)) USING hudi " +
+        s"OPTIONS ('path' = '/tmp/$pathTableName')")
+    assertEquals(Some(s"/tmp/$pathTableName"), pathPlan.tableSpec.location)
 
     // A 'path' option colliding with LOCATION is rejected by the option cleaner.
+    val dupPathTableName = generateTableName
     interceptParse(
-      "CREATE TABLE vec_dup_path_tbl (id BIGINT, embedding VECTOR(4)) USING hudi " +
+      s"CREATE TABLE $dupPathTableName (id BIGINT, embedding VECTOR(4)) USING hudi " +
         "OPTIONS ('path' = '/tmp/a') LOCATION '/tmp/b'")(
       "Duplicated table paths")
 
     // Each reserved table property (provider, location, owner) is rejected by the property cleaner.
     Seq("provider", "location", "owner").foreach { reserved =>
+      val reservedTableName = generateTableName
       interceptParse(
-        s"CREATE TABLE vec_reserved_$reserved (id BIGINT, embedding VECTOR(4)) USING hudi " +
+        s"CREATE TABLE $reservedTableName (id BIGINT, embedding VECTOR(4)) USING hudi " +
           s"TBLPROPERTIES ('$reserved' = 'x')")(
         "reserved table property")
     }
