@@ -186,7 +186,7 @@ public class CloudSourceConfig extends HoodieConfig {
       .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.include.source.path.field")
       .defaultValue(false)
       .markAdvanced()
-      .sinceVersion("1.3.0")
+      .sinceVersion("1.2.1")
       .withDocumentation("When enabled, appends a nullable string column named _hoodie_cloud_source_path holding the "
           + "fully-qualified URI of the source file each record was read from, as returned by Spark's "
           + "input_file_name() (percent-encoded, e.g. s3a://bucket/dir/file%20name.json). A same-named column "
@@ -213,7 +213,7 @@ public class CloudSourceConfig extends HoodieConfig {
       .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.check.file.exists.parallelism")
       .defaultValue(16)
       .markAdvanced()
-      .sinceVersion("1.3.0")
+      .sinceVersion("1.2.1")
       .withDocumentation("Number of threads per Spark task used to check cloud object existence concurrently when "
           + ENABLE_EXISTS_CHECK.key() + " is enabled. Must be >= 1; 1 checks sequentially. All tasks on an executor "
           + "share one cached FileSystem client, so keep executor cores x this value within the client's connection "
@@ -223,7 +223,7 @@ public class CloudSourceConfig extends HoodieConfig {
       .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.check.file.exists.partitions")
       .defaultValue(0)
       .markAdvanced()
-      .sinceVersion("1.3.0")
+      .sinceVersion("1.2.1")
       .withDocumentation("Number of Spark partitions the cloud object existence checks are spread over when "
           + ENABLE_EXISTS_CHECK.key() + " is enabled; each partition checks with " + EXISTS_CHECK_PARALLELISM.key()
           + " threads. The default 0 sizes to the cluster (spark default parallelism, i.e. the registered executor "
