@@ -57,6 +57,9 @@ import java.util.List;
 import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
+
 /**
  * Record reader for RFC-103 LSM file groups backed by native log files.
  *
@@ -142,10 +145,14 @@ public final class HoodieLsmFileGroupReader<T> implements HoodieRecordReader<T> 
         .sortOutputs(false)
         .inflightInstantsAllowed(allowInflightInstants)
         .build();
-    // filter log files by instant range.
-    if (logFiles != null && readerContext.getInstantRange().isPresent()) {
-      InstantRange instantRange = readerContext.getInstantRange().get();
-      logFiles = logFiles.filter(logFile -> instantRange.isInRange(logFile.getDeltaCommitTime()));
+    if (logFiles != null) {
+      // A file slice may contain logs newer than the query instant. Native logs each belong to
+      // one instant, so apply the same upper bound at file level.
+      logFiles = logFiles.filter(logFile -> compareTimestamps(logFile.getDeltaCommitTime(), LESSER_THAN_OR_EQUALS, latestCommitTime));
+      if (readerContext.getInstantRange().isPresent()) {
+        InstantRange instantRange = readerContext.getInstantRange().get();
+        logFiles = logFiles.filter(logFile -> instantRange.isInRange(logFile.getDeltaCommitTime()));
+      }
     }
     this.inputSplit = InputSplit.builder()
         .baseFileOption(baseFileOption)

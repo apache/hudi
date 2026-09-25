@@ -49,11 +49,14 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -63,9 +66,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class TestHoodieLsmFileGroupReader {
@@ -173,8 +179,65 @@ class TestHoodieLsmFileGroupReader {
         .withProps(props)
         .withPartitionPath("")
         .withStart(1L)
-        .withLogFiles(Collections.singletonList(mock(HoodieLogFile.class)).stream())
+        .withLogFiles(Collections.singletonList(logFile("file1_1-0-1_001_1.log.parquet")).stream())
         .build());
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void testLatestCommitTimeExcludesFutureDataAndDeleteLogs(boolean withInstantRange) throws IOException {
+    Option<InstantRange> instantRange = withInstantRange
+        ? Option.of(InstantRange.builder().rangeType(InstantRange.RangeType.EXACT_MATCH)
+            .explicitInstants(new HashSet<>(Arrays.asList("001", "002", "003", "004"))).build())
+        : Option.empty();
+    HoodieReaderContext<IndexedRecord> readerContext = spy(context(instantRange));
+    StoragePathInfo baseFilePathInfo = pathInfo("/tmp/file1_1-0-1_001.parquet");
+    doReturn(ClosableIterator.wrap(Arrays.asList(
+        recordWithCommitTime("001", "k", "base", 1),
+        recordWithCommitTime("001", "z", "deleted-at-boundary", 1)).iterator()))
+        .when(readerContext).getFileRecordIterator(
+            eq(baseFilePathInfo), anyLong(), anyLong(), any(HoodieSchema.class),
+            any(HoodieSchema.class), any(HoodieStorage.class));
+
+    HoodieLogFile olderDataLog = logFile("file1_1-0-1_001_1.log.parquet");
+    HoodieLogFile boundaryDataLog = logFile("file1_1-0-1_002_1.log.parquet");
+    HoodieLogFile boundaryDeleteLog = logFile("file1_1-0-1_002_2.deletes.parquet");
+    HoodieLogFile futureDataLog = logFile("file1_1-0-1_003_1.log.parquet");
+    HoodieLogFile futureDeleteLog = logFile("file1_1-0-1_004_1.deletes.parquet");
+    doAnswer(invocation -> {
+      StoragePath path = invocation.getArgument(0);
+      IndexedRecord record;
+      if (path.equals(boundaryDeleteLog.getPath()) || path.equals(futureDeleteLog.getPath())) {
+        HoodieSchema schema = invocation.getArgument(3);
+        GenericData.Record deleteRecord = new GenericData.Record(schema.toAvroSchema());
+        deleteRecord.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, path.equals(boundaryDeleteLog.getPath()) ? "z" : "k");
+        deleteRecord.put("ts", 4L);
+        record = deleteRecord;
+      } else if (path.equals(olderDataLog.getPath())) {
+        record = recordWithCommitTime("001", "a", "older-log", 1);
+      } else if (path.equals(boundaryDataLog.getPath())) {
+        record = recordWithCommitTime("002", "k", "at-boundary", 2);
+      } else {
+        record = recordWithCommitTime("003", "k", "future", 3);
+      }
+      return ClosableIterator.wrap(Collections.singletonList(record).iterator());
+    }).when(readerContext).getFileRecordIterator(
+        any(StoragePath.class), anyLong(), anyLong(), any(HoodieSchema.class),
+        any(HoodieSchema.class), any(HoodieStorage.class));
+
+    try (HoodieLsmFileGroupReader<IndexedRecord> reader = reader(
+        readerContext, Option.of(new HoodieBaseFile(baseFilePathInfo)),
+        Arrays.asList(olderDataLog, boundaryDataLog, boundaryDeleteLog, futureDataLog, futureDeleteLog), 0L, "002");
+         ClosableIterator<IndexedRecord> iterator = reader.getClosableIterator()) {
+      List<String> values = new ArrayList<>();
+      iterator.forEachRemaining(record -> values.add(record.get(1) + ":" + record.get(2)));
+      assertEquals(Arrays.asList("a:older-log", "k:at-boundary"), values);
+    }
+    for (HoodieLogFile futureLog : Arrays.asList(futureDataLog, futureDeleteLog)) {
+      verify(readerContext, never()).getFileRecordIterator(
+          eq(futureLog.getPath()), anyLong(), anyLong(), any(HoodieSchema.class),
+          any(HoodieSchema.class), any(HoodieStorage.class));
+    }
   }
 
   @Test
@@ -198,7 +261,7 @@ class TestHoodieLsmFileGroupReader {
       assertFalse(filteredContext.getHasLogFiles());
     }
 
-    // An absent instant range leaves the original log stream unchanged.
+    // Without an instant range, both logs remain within the latest commit time.
     assertThrows(IllegalArgumentException.class, () -> reader(
         context(Option.empty()), Option.empty(), logFiles, 1L));
   }
@@ -227,8 +290,9 @@ class TestHoodieLsmFileGroupReader {
     }
   }
 
-  @Test
-  void testBaseFileOnlyPathPreservesDuplicateRecordKeys() throws IOException {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void testBaseFileOnlyPathPreservesDuplicateRecordKeys(boolean withFutureLogs) throws IOException {
     HoodieReaderContext<IndexedRecord> readerContext = spy(context());
     StoragePathInfo baseFilePathInfo = pathInfo("/tmp/file1_1-0-1_001.parquet");
     doReturn(ClosableIterator.wrap(Arrays.asList(
@@ -238,9 +302,13 @@ class TestHoodieLsmFileGroupReader {
             eq(baseFilePathInfo), anyLong(), anyLong(), any(HoodieSchema.class),
             any(HoodieSchema.class), any(HoodieStorage.class));
 
+    List<HoodieLogFile> logs = withFutureLogs
+        ? Arrays.asList(logFile("file1_1-0-1_005_1.log.parquet"), logFile("file1_1-0-1_006_1.deletes.parquet"))
+        : Collections.emptyList();
     try (HoodieLsmFileGroupReader<IndexedRecord> reader = reader(
-        readerContext, Option.of(new HoodieBaseFile(baseFilePathInfo)), Collections.emptyList(), 0L);
+        readerContext, Option.of(new HoodieBaseFile(baseFilePathInfo)), logs, 0L);
          ClosableIterator<IndexedRecord> iterator = reader.getClosableIterator()) {
+      assertFalse(readerContext.getHasLogFiles());
       List<IndexedRecord> records = drain(iterator);
       assertEquals(2, records.size());
       assertEquals("a", records.get(0).get(1).toString());
@@ -299,10 +367,19 @@ class TestHoodieLsmFileGroupReader {
       Option<HoodieBaseFile> baseFileOption,
       List<HoodieLogFile> logFiles,
       long start) {
+    return reader(readerContext, baseFileOption, logFiles, start, "004");
+  }
+
+  private HoodieLsmFileGroupReader<IndexedRecord> reader(
+      HoodieReaderContext<IndexedRecord> readerContext,
+      Option<HoodieBaseFile> baseFileOption,
+      List<HoodieLogFile> logFiles,
+      long start,
+      String latestCommitTime) {
     return HoodieLsmFileGroupReader.<IndexedRecord>builder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metaClient)
-        .withLatestCommitTime("004")
+        .withLatestCommitTime(latestCommitTime)
         .withDataSchema(SCHEMA_WITH_COMMIT_TIME)
         .withRequestedSchema(SCHEMA_WITH_COMMIT_TIME)
         .withProps(props)
