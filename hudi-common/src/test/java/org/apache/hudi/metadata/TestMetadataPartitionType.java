@@ -106,6 +106,17 @@ public class TestMetadataPartitionType {
         metadataConfigBuilder.enable(true).withEnableGlobalRecordLevelIndex(true);
         expectedEnabledPartitions = 3;
         break;
+      case FULL_TEXT_INDEX:
+        String fullTextIndexName = HoodieTableMetadataUtil.PARTITION_NAME_FULL_TEXT_INDEX_PREFIX + "idx";
+        HoodieIndexDefinition fullTextIndexDefinition = HoodieIndexDefinition.newBuilder()
+            .withIndexName(fullTextIndexName)
+            .withIndexType(HoodieTableMetadataUtil.PARTITION_NAME_FULL_TEXT_INDEX)
+            .withSourceFields(Collections.singletonList("col1"))
+            .build();
+        Mockito.when(metaClient.getIndexMetadata()).thenReturn(Option.of(new HoodieIndexMetadata(Collections.singletonMap(fullTextIndexName, fullTextIndexDefinition))));
+        metadataConfigBuilder.enable(true);
+        expectedEnabledPartitions = tableVersionEightOrAbove ? 3 : 2;
+        break;
       default:
         metadataConfigBuilder.enable(true);
         expectedEnabledPartitions = 2; // by default, FILES, COLUMN_STATS are enabled
@@ -238,6 +249,12 @@ public class TestMetadataPartitionType {
       assertEquals(expressionIndexName, partitionType.getPartitionPath(metaClient, expressionIndexName));
     } else if (partitionType == MetadataPartitionType.SECONDARY_INDEX) {
       assertEquals(secondaryIndexName, partitionType.getPartitionPath(metaClient, secondaryIndexName));
+    } else if (partitionType == MetadataPartitionType.FULL_TEXT_INDEX) {
+      String fullTextIndexName = HoodieTableMetadataUtil.PARTITION_NAME_FULL_TEXT_INDEX_PREFIX + "idx";
+      when(metaClient.getIndexForMetadataPartition(fullTextIndexName)).thenReturn(Option.of(HoodieIndexDefinition.newBuilder()
+          .withIndexName(fullTextIndexName).withIndexType(HoodieTableMetadataUtil.PARTITION_NAME_FULL_TEXT_INDEX)
+          .withSourceFields(Collections.singletonList("name")).build()));
+      assertEquals(fullTextIndexName, partitionType.getPartitionPath(metaClient, fullTextIndexName));
     } else {
       assertEquals(partitionType.getPartitionPath(), partitionType.getPartitionPath(metaClient, null));
     }
