@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
@@ -607,6 +608,10 @@ public class TestHoodieTableSource {
     conf = TestConfigurations.getDefaultConf(path);
     conf.set(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
     conf.setString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), encoding.name());
+    if (encoding == ComplexKeyGenEncoding.VALUE_ONLY) {
+      // Bare record keys belong to legacy tables; new tables at version 9 and above must use FIELD_PREFIXED.
+      conf.set(FlinkOptions.WRITE_TABLE_VERSION, HoodieTableVersion.EIGHT.versionCode());
+    }
     conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
     conf.set(FlinkOptions.METADATA_ENABLED, true);
     conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
