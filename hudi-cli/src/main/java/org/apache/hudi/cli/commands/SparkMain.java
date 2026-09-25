@@ -59,6 +59,9 @@ import org.apache.hudi.utilities.HoodieCompactor;
 import org.apache.hudi.utilities.streamer.BootstrapExecutor;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
+import com.beust.jcommander.DynamicParameter;
+import com.beust.jcommander.JCommander;
+import com.beust.jcommander.Parameter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -71,10 +74,6 @@ import org.apache.spark.sql.functions;
 import org.apache.spark.sql.hudi.DeDupeType;
 import org.apache.spark.sql.hudi.DedupeSparkJob;
 import org.apache.spark.sql.types.StructType;
-
-import com.beust.jcommander.DynamicParameter;
-import com.beust.jcommander.JCommander;
-import com.beust.jcommander.Parameter;
 
 import java.io.IOException;
 import java.util.ArrayList;
