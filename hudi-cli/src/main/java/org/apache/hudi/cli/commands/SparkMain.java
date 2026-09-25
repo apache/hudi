@@ -60,6 +60,9 @@ import org.apache.hudi.utilities.HoodieCompactor;
 import org.apache.hudi.utilities.streamer.BootstrapExecutor;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
+import com.beust.jcommander.DynamicParameter;
+import com.beust.jcommander.JCommander;
+import com.beust.jcommander.Parameter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -98,17 +101,45 @@ public class SparkMain {
    * Commands.
    */
   enum SparkCommand {
-    BOOTSTRAP(21), ROLLBACK(6), DEDUPLICATE(8), ROLLBACK_TO_SAVEPOINT(6), SAVEPOINT(7),
-    IMPORT(13), UPSERT(13), COMPACT_SCHEDULE(6), COMPACT_RUN(10), COMPACT_SCHEDULE_AND_EXECUTE(9),
-    COMPACT_UNSCHEDULE_PLAN(9), COMPACT_UNSCHEDULE_FILE(10), COMPACT_VALIDATE(7), COMPACT_REPAIR(8),
-    CLUSTERING_SCHEDULE(6), CLUSTERING_RUN(9), CLUSTERING_SCHEDULE_AND_EXECUTE(8), CLEAN(5),
-    DELETE_MARKER(5), DELETE_SAVEPOINT(5), UPGRADE(5), DOWNGRADE(5),
-    REPAIR_DEPRECATED_PARTITION(4), RENAME_PARTITION(6), ARCHIVE(8);
+    BOOTSTRAP(21, "tableName", "tableType", "targetPath", "srcPath", "rowKeyField", "partitionPathField",
+        "parallelism", "schemaProviderClass", "bootstrapIndexClass", "selectorClass", "keyGeneratorClass",
+        "fullBootstrapInputProvider", "recordMergeMode", "payloadClass", "recordMergeStrategyId",
+        "recordMergeImplClasses", "enableHiveSync", "propsFilePath"),
+    ROLLBACK(6, "instantTime", "basePath", "rollbackUsingMarkers"),
+    DEDUPLICATE(8, "duplicatedPartitionPath", "repairedOutputPath", "basePath", "dryRun", "dedupeType"),
+    ROLLBACK_TO_SAVEPOINT(6, "savepointTime", "basePath", "lazyCleanPolicy"),
+    SAVEPOINT(7, "commitTime", "user", "comments", "basePath"),
+    IMPORT(13), UPSERT(13),
+    COMPACT_SCHEDULE(6, "basePath", "tableName", "propsFilePath"),
+    COMPACT_RUN(10, "basePath", "tableName", "compactionInstant", "parallelism", "schemaPath", "retry", "propsFilePath"),
+    COMPACT_SCHEDULE_AND_EXECUTE(9, "basePath", "tableName", "parallelism", "schemaPath", "retry", "propsFilePath"),
+    COMPACT_UNSCHEDULE_PLAN(9, "basePath", "compactionInstant", "outputPath", "parallelism", "skipValidation", "dryRun"),
+    COMPACT_UNSCHEDULE_FILE(10, "basePath", "fileId", "partitionPath", "outputPath", "parallelism", "skipValidation", "dryRun"),
+    COMPACT_VALIDATE(7, "basePath", "compactionInstant", "outputPath", "parallelism"),
+    COMPACT_REPAIR(8, "basePath", "compactionInstant", "outputPath", "parallelism", "dryRun"),
+    CLUSTERING_SCHEDULE(6, "basePath", "tableName", "propsFilePath"),
+    CLUSTERING_RUN(9, "basePath", "tableName", "clusteringInstant", "parallelism", "retry", "propsFilePath"),
+    CLUSTERING_SCHEDULE_AND_EXECUTE(8, "basePath", "tableName", "parallelism", "retry", "propsFilePath"),
+    CLEAN(5, "basePath", "propsFilePath"),
+    DELETE_MARKER(5, "instantTime", "basePath"),
+    DELETE_SAVEPOINT(5, "savepointTime", "basePath"),
+    UPGRADE(5, "basePath", "toVersionName"),
+    DOWNGRADE(5, "basePath", "toVersionName"),
+    REPAIR_DEPRECATED_PARTITION(4, "basePath"),
+    RENAME_PARTITION(6, "basePath", "oldPartition", "newPartition"),
+    ARCHIVE(8, "minCommits", "maxCommits", "commitsRetained", "enableMetadata", "basePath");
 
     private final int minArgsCount;
 
-    SparkCommand(int minArgsCount) {
+    /**
+     * Names of the positional command arguments (in order), used when assembling
+     * the positional form out of the named form ({@code -Dkey=value} pairs).
+     */
+    private final String[] paramNames;
+
+    SparkCommand(int minArgsCount, String... paramNames) {
       this.minArgsCount = minArgsCount;
+      this.paramNames = paramNames;
     }
 
     void assertEq(int factArgsCount) {
@@ -140,8 +171,96 @@ public class SparkMain {
     sparkLauncher.addAppArgs(args);
   }
 
-  public static void main(String[] args) {
-    ValidationUtils.checkArgument(args.length >= 4);
+  /**
+   * Adds the command invocation as fully named options: {@code --command X --master Y --memory Z}
+   * plus {@code -Dkey=value} pairs for every command argument. This makes the launcher command
+   * self-describing and removes the risk of mis-aligned positional arguments at call sites.
+   *
+   * @param namedArgs flat name/value pairs; {@code null} values are skipped, preserving the
+   *                  legacy semantics of absent trailing arguments (e.g. propsFilePath)
+   */
+  public static void addNamedAppArgs(SparkLauncher sparkLauncher, SparkMain.SparkCommand cmd, String master, String memory, String... namedArgs) {
+    ValidationUtils.checkArgument(namedArgs.length % 2 == 0, "namedArgs must be flat name/value pairs");
+    sparkLauncher.addAppArgs("--command", cmd.toString());
+    sparkLauncher.addAppArgs("--master", master);
+    sparkLauncher.addAppArgs("--memory", memory);
+    for (int i = 0; i < namedArgs.length; i += 2) {
+      if (namedArgs[i + 1] != null) {
+        sparkLauncher.addAppArgs("-D" + namedArgs[i] + "=" + namedArgs[i + 1]);
+      }
+    }
+  }
+
+  private static boolean isNamedInvocation(String[] argv) {
+    return argv.length > 0 && argv[0].startsWith("-");
+  }
+
+  /**
+   * Translates {@code --command X --master Y --memory Z -Dkey=value...} into the positional
+   * form {@code [X, Y, Z, arg1, arg2, ...]} expected by the legacy invocation path. The named
+   * -D arguments are mapped onto the command's positional argument names; unknown -D keys are
+   * passed through as trailing configs, matching {@link SparkCommand#makeConfigs(String[])}.
+   */
+  private static String[] namedArgsToPositional(String[] argv) {
+    NamedArgs namedArgs = new NamedArgs();
+    JCommander commander = JCommander.newBuilder()
+        .addObject(namedArgs)
+        .build();
+    commander.parse(argv);
+
+    SparkCommand command = SparkCommand.valueOf(namedArgs.command);
+    Map<String, String> params = namedArgs.params;
+    List<String> positionalArgs = new ArrayList<>(command.paramNames.length);
+    for (String paramName : command.paramNames) {
+      String value = params.get(paramName);
+      // absent named args map to empty strings to keep the positional slots aligned; trailing
+      // empty slots are handled by getPropsFilePath/makeConfigs exactly like the legacy form
+      positionalArgs.add(value != null ? value.trim() : "");
+    }
+    // extra -D keys are forwarded as trailing configs, mirroring makeConfigs behavior
+    List<String> extraConfigs = new ArrayList<>();
+    for (Map.Entry<String, String> entry : params.entrySet()) {
+      if (!Arrays.asList(command.paramNames).contains(entry.getKey())) {
+        extraConfigs.add(entry.getKey() + "=" + entry.getValue());
+      }
+    }
+
+    List<String> positional = new ArrayList<>();
+    positional.add(namedArgs.command);
+    positional.add(namedArgs.master);
+    positional.add(namedArgs.memory);
+    positional.addAll(positionalArgs);
+    positional.addAll(extraConfigs);
+    return positional.toArray(new String[0]);
+  }
+
+  /**
+   * Named-argument form of a SparkMain invocation. Kept separate from the legacy
+   * positional protocol so that existing call sites and scripts keep working unchanged:
+   * if the first argument does not look like a named option the legacy path is used.
+   */
+  private static class NamedArgs {
+    @Parameter(names = {"--command", "-command"}, description = "Name of the Spark command to run (e.g. ROLLBACK)", required = true)
+    private String command;
+
+    @Parameter(names = {"--master", "-master"}, description = "Spark master URL (was positional arg 2)", required = true)
+    private String master;
+
+    @Parameter(names = {"--memory", "-memory"}, description = "Spark driver memory (was positional arg 3)", required = true)
+    private String memory;
+
+    @DynamicParameter(names = "-D", description = "Command arguments and spark configs as -Dkey=value pairs")
+    private Map<String, String> params = new HashMap<>();
+  }
+
+  public static void main(String[] argv) {
+    ValidationUtils.checkArgument(argv.length >= 1, "Please specify the command to invoke");
+    // Soft transition: accept both the legacy positional form (command + master + memory + positional args)
+    // and the new named form (--command + --master + --memory + -Dkey=value). The named form is
+    // translated to the positional form upfront so the rest of the invocation logic is shared.
+    String[] args = isNamedInvocation(argv) ? namedArgsToPositional(argv) : argv;
+
+    ValidationUtils.checkArgument(args.length >= 4, "Positional invocation requires at least command, master and memory");
     final String commandString = args[0];
     log.info("Invoking SparkMain: {}", commandString);
     final SparkCommand cmd = SparkCommand.valueOf(commandString);
