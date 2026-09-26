@@ -61,11 +61,6 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
-import org.apache.hadoop.hive.ql.io.orc.OrcInputFormat;
-import org.apache.hadoop.hive.ql.io.orc.OrcOutputFormat;
-import org.apache.hadoop.hive.ql.io.orc.OrcSerde;
-import org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat;
-import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
 import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
@@ -151,6 +146,27 @@ public class HoodieInputFormatUtils {
     }
   }
 
+  // Class names are returned as literals rather than via Class#getName so that resolving them never
+  // loads the class. HiveSyncTool and the other catalog syncs only ever hand these to a metastore as
+  // strings, and loading them would pull in Hive: HoodieParquetInputFormat extends Hive's
+  // MapredParquetInputFormat, and the output-format and SerDe names are Hive classes outright. On a
+  // deployment without Hive on the classpath (for example the utilities bundle) that resolution is a
+  // ClassNotFoundException at sync time (HUDI-7321). TestHoodieInputFormatUtils pins each constant
+  // against the class it names, so a rename cannot silently break these.
+  static final String HOODIE_PARQUET_INPUT_FORMAT = "org.apache.hudi.hadoop.HoodieParquetInputFormat";
+  static final String HOODIE_PARQUET_REALTIME_INPUT_FORMAT = "org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat";
+  static final String HOODIE_HFILE_INPUT_FORMAT = "org.apache.hudi.hadoop.HoodieHFileInputFormat";
+  static final String HOODIE_HFILE_REALTIME_INPUT_FORMAT = "org.apache.hudi.hadoop.realtime.HoodieHFileRealtimeInputFormat";
+  static final String HOODIE_LANCE_INPUT_FORMAT = "org.apache.hudi.hadoop.HoodieLanceInputFormat";
+  static final String HOODIE_LANCE_REALTIME_INPUT_FORMAT = "org.apache.hudi.hadoop.realtime.HoodieLanceRealtimeInputFormat";
+  static final String HOODIE_VORTEX_INPUT_FORMAT = "org.apache.hudi.hadoop.HoodieVortexInputFormat";
+  static final String HOODIE_VORTEX_REALTIME_INPUT_FORMAT = "org.apache.hudi.hadoop.realtime.HoodieVortexRealtimeInputFormat";
+  static final String ORC_INPUT_FORMAT = "org.apache.hadoop.hive.ql.io.orc.OrcInputFormat";
+  static final String MAPRED_PARQUET_OUTPUT_FORMAT = "org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat";
+  static final String ORC_OUTPUT_FORMAT = "org.apache.hadoop.hive.ql.io.orc.OrcOutputFormat";
+  static final String PARQUET_HIVE_SERDE = "org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe";
+  static final String ORC_SERDE = "org.apache.hadoop.hive.ql.io.orc.OrcSerde";
+
   public static String getInputFormatClassName(HoodieFileFormat baseFileFormat, boolean realtime, boolean usePreApacheFormat) {
     return getInputFormatClassName(baseFileFormat, realtime);
   }
@@ -159,30 +175,30 @@ public class HoodieInputFormatUtils {
     switch (baseFileFormat) {
       case PARQUET:
         if (realtime) {
-          return HoodieParquetRealtimeInputFormat.class.getName();
+          return HOODIE_PARQUET_REALTIME_INPUT_FORMAT;
         } else {
-          return HoodieParquetInputFormat.class.getName();
+          return HOODIE_PARQUET_INPUT_FORMAT;
         }
       case HFILE:
         if (realtime) {
-          return HoodieHFileRealtimeInputFormat.class.getName();
+          return HOODIE_HFILE_REALTIME_INPUT_FORMAT;
         } else {
-          return HoodieHFileInputFormat.class.getName();
+          return HOODIE_HFILE_INPUT_FORMAT;
         }
       case LANCE:
         if (realtime) {
-          return HoodieLanceRealtimeInputFormat.class.getName();
+          return HOODIE_LANCE_REALTIME_INPUT_FORMAT;
         } else {
-          return HoodieLanceInputFormat.class.getName();
+          return HOODIE_LANCE_INPUT_FORMAT;
         }
       case VORTEX:
         if (realtime) {
-          return HoodieVortexRealtimeInputFormat.class.getName();
+          return HOODIE_VORTEX_REALTIME_INPUT_FORMAT;
         } else {
-          return HoodieVortexInputFormat.class.getName();
+          return HOODIE_VORTEX_INPUT_FORMAT;
         }
       case ORC:
-        return OrcInputFormat.class.getName();
+        return ORC_INPUT_FORMAT;
       default:
         throw new HoodieIOException("Hoodie InputFormat not implemented for base file format " + baseFileFormat);
     }
@@ -194,9 +210,9 @@ public class HoodieInputFormatUtils {
       case HFILE:
       case LANCE:
       case VORTEX:
-        return MapredParquetOutputFormat.class.getName();
+        return MAPRED_PARQUET_OUTPUT_FORMAT;
       case ORC:
-        return OrcOutputFormat.class.getName();
+        return ORC_OUTPUT_FORMAT;
       default:
         throw new HoodieIOException("No OutputFormat for base file format " + baseFileFormat);
     }
@@ -208,9 +224,9 @@ public class HoodieInputFormatUtils {
       case HFILE:
       case LANCE:
       case VORTEX:
-        return ParquetHiveSerDe.class.getName();
+        return PARQUET_HIVE_SERDE;
       case ORC:
-        return OrcSerde.class.getName();
+        return ORC_SERDE;
       default:
         throw new HoodieIOException("No SerDe for base file format " + baseFileFormat);
     }
