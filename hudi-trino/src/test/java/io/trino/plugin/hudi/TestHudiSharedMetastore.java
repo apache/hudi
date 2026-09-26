@@ -103,12 +103,14 @@ final class TestHudiSharedMetastore
     void testHiveSelectFromHudiTable()
     {
         String tableName = "test_hive_select_from_hudi_" + randomNameSuffix();
-        assertQueryFails("CREATE TABLE hudi.default." + tableName + "(a bigint)", "This connector does not support creating tables");
+        assertUpdate("CREATE TABLE hudi.default." + tableName + "(a bigint)");
 
-        // TODO should be "Cannot query Hudi table" once CREATE TABLE is supported
-        assertQueryFails("SELECT * FROM hive.default." + tableName, ".* Table .* does not exist");
+        assertQueryFails("SELECT * FROM hive.default." + tableName, "Cannot query Hudi table.*");
         assertQueryFails("SELECT * FROM hive.default.\"" + tableName + "$partitions\"", ".* Table .* does not exist");
-        assertQueryFails("SELECT * FROM hive.default.\"" + tableName + "$properties\"", "Table .* not found");
+        assertThat(computeActual("SELECT * FROM hive.default.\"" + tableName + "$properties\"").getRowCount())
+                .isGreaterThan(0);
+
+        assertUpdate("DROP TABLE hudi.default." + tableName);
     }
 
     @Test
@@ -126,8 +128,11 @@ final class TestHudiSharedMetastore
     void testHiveCannotCreateTableNamesakeToHudiTable()
     {
         String tableName = "test_hive_create_namesake_hudi_table_" + randomNameSuffix();
-        assertQueryFails("CREATE TABLE hudi.default." + tableName + "(a bigint)", "This connector does not support creating tables");
-        // TODO implement test like testHiveCannotCreateTableNamesakeToIcebergTable when CREATE TABLE supported
+        assertUpdate("CREATE TABLE hudi.default." + tableName + "(a bigint)");
+
+        assertQueryFails("CREATE TABLE hive.default." + tableName + "(a bigint)", ".*Table .* already exists.*");
+
+        assertUpdate("DROP TABLE hudi.default." + tableName);
     }
 
     @Test
@@ -148,9 +153,9 @@ final class TestHudiSharedMetastore
     void testHiveListsHudiTable()
     {
         String tableName = "test_hive_lists_hudi_table_" + randomNameSuffix();
-        assertQueryFails("CREATE TABLE hudi.default." + tableName + "(a bigint)", "This connector does not support creating tables");
-        // TODO change doesNotContain to contains once CREATE TABLE supported
-        assertThat(query("SHOW TABLES FROM hive.default")).result().onlyColumnAsSet().doesNotContain(tableName);
+        assertUpdate("CREATE TABLE hudi.default." + tableName + "(a bigint)");
+        assertThat(query("SHOW TABLES FROM hive.default")).result().onlyColumnAsSet().contains(tableName);
+        assertUpdate("DROP TABLE hudi.default." + tableName);
     }
 
     @Test

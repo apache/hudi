@@ -116,7 +116,8 @@ public final class HudiQueryRunner
                 queryRunner.loadBlobCacheManager("memory", Map.of("fs.memory-cache.max-size", "128MB"));
                 queryRunner.createCatalog("hudi", "hudi", connectorProperties);
 
-                // Hudi connector does not support creating schema or any other write operations
+                // Schemas are still provisioned directly because CREATE SCHEMA is not supported.
+                // The file metastore assigns its standard <catalog>/<schema> managed location.
                 ((HudiConnector) queryRunner.getCoordinator().getConnector("hudi")).getInjector()
                         .getInstance(HiveMetastoreFactory.class)
                         .createMetastore(Optional.empty())
