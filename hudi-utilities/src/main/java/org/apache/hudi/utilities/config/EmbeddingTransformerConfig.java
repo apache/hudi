@@ -108,11 +108,23 @@ public class EmbeddingTransformerConfig extends HoodieConfig {
       .key(PREFIX + "max.inflight.requests")
       .defaultValue(2)
       .markAdvanced()
-      .sinceVersion("1.2.0")
-      .withDocumentation("Number of embedding API requests kept in flight per Spark partition: "
-          + "the next batches are prefetched and sent while earlier ones stream out, hiding API "
-          + "latency. Rows resident per partition = batch.size x this value, so raise it only "
-          + "with the memory headroom to match.");
+      .sinceVersion("1.3.0")
+      .withDocumentation("Number of embedding batches staged per Spark partition, so the next "
+          + "batches are ready while earlier ones stream out, hiding API latency. Rows resident "
+          + "per partition = batch.size x this value, so raise it only with the memory headroom "
+          + "to match. This does not bound load on the endpoint: total concurrency is capped by "
+          + PREFIX + "max.concurrent.requests.");
+
+  public static final ConfigProperty<Integer> MAX_CONCURRENT_REQUESTS = ConfigProperty
+      .key(PREFIX + "max.concurrent.requests")
+      .defaultValue(4)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Maximum embedding API requests in flight at once across the whole JVM, "
+          + "shared by every Spark task on the executor. Bounds load on the endpoint: without it "
+          + "concurrency grows with the number of tasks, and an oversubscribed endpoint returns "
+          + "timeouts or HTTP 429 faster than it returns vectors. Local CPU-inference endpoints "
+          + "generally want 1; hosted APIs tolerate much more.");
 
   public static final ConfigProperty<Integer> INPUT_MAX_CHARS = ConfigProperty
       .key(PREFIX + "input.max.chars")
