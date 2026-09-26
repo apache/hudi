@@ -218,9 +218,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   /**
    * The base constructor has already returned, so its resources are live but close() is still
    * unreachable. Release the index this class had got as far as creating, then let the base release
-   * its own.
+   * its own. A subclass whose constructor fails after this one has returned passes {@link #getIndex()}.
    */
-  private void releaseAfterFailedInit(HoodieIndex<?, ?> createdIndex, Throwable initFailure) {
+  protected final void releaseAfterFailedInit(HoodieIndex<?, ?> createdIndex, Throwable initFailure) {
     if (createdIndex != null) {
       try {
         createdIndex.close();

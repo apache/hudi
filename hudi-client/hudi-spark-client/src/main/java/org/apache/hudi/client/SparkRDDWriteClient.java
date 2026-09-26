@@ -93,7 +93,7 @@ public class SparkRDDWriteClient<T> extends
           e.addSuppressed(closeFailure);
         }
       }
-      releaseAfterFailedInit(e);
+      releaseAfterFailedInit(getIndex(), e);
       throw e;
     }
   }
