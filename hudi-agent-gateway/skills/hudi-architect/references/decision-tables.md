@@ -21,7 +21,13 @@ Reference for each decision domain. Consult when deriving a design choice from w
 
 ## Engine
 
-Ask, don't default. If user picks Spark or Flink, proceed. If undecided:
+Ask, don't default. Route before selecting a writer:
+
+- Spark → continue with the shared writer decisions below.
+- Flink → load `flink-question-flow.md` and the other Flink-only references listed
+  there. In PR1, stop before the shared Writer section because it is Spark-specific.
+- Undecided → explain the tradeoff below, confirm the engine, and then route. Do not
+  load both sets of references speculatively.
 
 **Flink candidate:** append-only workloads with sub-5-minute visibility target AND continuous streaming source.
 

@@ -60,12 +60,23 @@ jobs:
           cache-dependency-path: hudi-agent-gateway/pyproject.toml
       - name: Install
         run: pip install -e ".[dev]"
+      - name: Fetch pinned Hudi Architect baseline
+        run: >-
+          git fetch --no-tags --depth=1 origin
+          refs/tags/release-1.2.0:refs/tags/release-1.2.0
+      - name: Validate Hudi Architect references
+        run: |
+          python skills/hudi-architect/validate_config_keys.py
+          python skills/hudi-architect/validate_flink_capabilities.py --verify-source
       - name: Test
         run: python -m pytest tests -q
       - name: Lint
-        run: ruff check src tests
+        run: >-
+          ruff check src tests
+          skills/hudi-architect/redact_sensitive_values.py
+          skills/hudi-architect/validate_flink_capabilities.py
       - name: Type-check
-        run: mypy src
+        run: mypy src skills/hudi-architect/validate_flink_capabilities.py
 
   chart-lint:
     name: helm lint + template

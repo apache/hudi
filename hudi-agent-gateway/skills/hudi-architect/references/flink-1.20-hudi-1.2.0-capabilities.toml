@@ -1,0 +1,143 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to you under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+schema_version = 1
+baseline_id = "hudi-1.2.0-flink-1.20"
+validation_surface = "initial-flink-sql-sink"
+
+[hudi]
+version = "1.2.0"
+source_revision = "f05c83f2b97732de7a558ff9b26959e1139c05f5"
+release_ref = "release-1.2.0"
+
+[flink]
+compatibility_line = "1.20"
+fixture_version = "1.20.1"
+
+[[source_anchors]]
+id = "root_pom"
+path = "pom.xml"
+sha256 = "d6685c98ff28b4881018086927eb33b12535d288f2f183d7faff7e3eba087810"
+purpose = "Flink 1.20.1 fixture version and flink1.20 build profile"
+
+[[source_anchors]]
+id = "flink_options"
+path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/configuration/FlinkOptions.java"
+sha256 = "090f69445ce8baa700b06356c0165a7d0dc35cf57c12052d91813af0427d2f71"
+purpose = "Flink DynamicTable option keys and defaults"
+
+[[source_anchors]]
+id = "options_resolver"
+path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/configuration/OptionsResolver.java"
+sha256 = "1a63ef88bbdf84cbcebb92f402557c21b6f84bdd0112726792ce22da635ad766"
+purpose = "Effective append-mode predicate"
+
+[[source_anchors]]
+id = "table_factory"
+path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/table/HoodieTableFactory.java"
+sha256 = "a029bd86cf1f2796c99c5639a69a495cf5fd16f06201f139023ecef93d1e678b"
+purpose = "Sink factory sanity checks and their append-mode boundary"
+
+[[source_anchors]]
+id = "catalog_options"
+path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/table/catalog/CatalogOptions.java"
+sha256 = "a2b3f87ad44e1475a6f4e06dfd7246436f035af256f28a4ebe2c622672a24aef"
+purpose = "Flink catalog option keys"
+
+[[source_anchors]]
+id = "key_generator_options"
+path = "hudi-common/src/main/java/org/apache/hudi/keygen/constant/KeyGeneratorOptions.java"
+sha256 = "2686e25676b4d59f8d5a30acb52326aeb74016ed35bb8e73b38757a36521b2cd"
+purpose = "Canonical record-key and partition-path option keys"
+
+[[source_anchors]]
+id = "table_factory_tests"
+path = "hudi-flink-datasource/hudi-flink/src/test/java/org/apache/hudi/table/TestHoodieTableFactory.java"
+sha256 = "ef0ae3752cc8ed63f9b6ae83a4aa34d61b30bc163282a658a2d52135154ff15a"
+purpose = "Release behavior exercised by the existing factory fixtures"
+
+# This is an allowlist for the first executable sink path, not a claim that it
+# enumerates every option available in Hudi 1.2.0.
+[[verified_options]]
+key = "hoodie.datasource.write.partitionpath.field"
+value_type = "string"
+source_anchors = ["flink_options", "key_generator_options"]
+source_symbol = "PARTITION_PATH_FIELD"
+
+[[verified_options]]
+key = "hoodie.datasource.write.recordkey.field"
+value_type = "string"
+source_anchors = ["flink_options", "key_generator_options"]
+source_symbol = "RECORD_KEY_FIELD"
+
+[[verified_options]]
+key = "ordering.fields"
+value_type = "string"
+source_anchors = ["flink_options"]
+source_symbol = "ORDERING_FIELDS"
+
+[[verified_options]]
+key = "path"
+value_type = "string"
+source_anchors = ["flink_options"]
+source_symbol = "PATH"
+
+[[verified_options]]
+key = "table.type"
+value_type = "string"
+source_anchors = ["flink_options"]
+source_symbol = "TABLE_TYPE"
+
+[[verified_options]]
+key = "write.insert.cluster"
+value_type = "boolean"
+source_anchors = ["flink_options", "options_resolver"]
+source_symbol = "INSERT_CLUSTER"
+
+[[verified_options]]
+key = "write.operation"
+value_type = "string"
+source_anchors = ["flink_options", "options_resolver"]
+source_symbol = "OPERATION"
+
+[[required_effective_settings]]
+key = "table.type"
+value = "COPY_ON_WRITE"
+applies_to = "pr2-append-only-cow"
+
+[[required_effective_settings]]
+key = "write.insert.cluster"
+value = false
+applies_to = "pr2-append-only-cow"
+
+[[required_effective_settings]]
+key = "write.operation"
+value = "insert"
+applies_to = "pr2-append-only-cow"
+
+[[deferred_acceptance_checks]]
+id = "FLINK_RECORD_KEY_FIELD_MISSING"
+target_pr = "PR2"
+requirement = "Reject an explicitly configured record-key field that is absent from the physical schema, including append mode."
+
+[[deferred_acceptance_checks]]
+id = "FLINK_APPEND_MODE_CLUSTERING_ENABLED"
+target_pr = "PR2"
+requirement = "Reject COW insert output whose effective write.insert.cluster value is not false."
+
+[[deferred_acceptance_checks]]
+id = "FLINK_SOURCE_CHANGELOG_NOT_APPEND_ONLY"
+target_pr = "PR2"
+requirement = "Validate generated INSERT INTO with a declared source schema and append-only changelog contract through a planner fixture."

@@ -1,0 +1,123 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to you under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+schema_version = 1
+status_precedence = ["INCOMPLETE", "REVIEW_REQUIRED", "BLOCKED"]
+
+[finding_status]
+FLINK_BASELINE_EVIDENCE_INVALID = "BLOCKED"
+FLINK_VERSION_UNVERIFIED = "REVIEW_REQUIRED"
+FLINK_VERSION_REQUIRED = "INCOMPLETE"
+FLINK_EXISTING_TABLE_DEFERRED = "BLOCKED"
+FLINK_TABLE_LIFECYCLE_REQUIRED = "INCOMPLETE"
+FLINK_MULTI_WRITER_REVIEW = "REVIEW_REQUIRED"
+FLINK_WRITER_MODEL_UNRESOLVED = "REVIEW_REQUIRED"
+FLINK_EXTERNAL_CATALOG_REVIEW = "REVIEW_REQUIRED"
+FLINK_CATALOG_REQUIREMENT_UNRESOLVED = "REVIEW_REQUIRED"
+FLINK_PHYSICAL_SCHEMA_REQUIRED = "INCOMPLETE"
+FLINK_MUTABLE_COW_DEFERRED = "BLOCKED"
+FLINK_MUTABILITY_REQUIRED = "INCOMPLETE"
+FLINK_RECORD_KEY_POSTURE_REQUIRED = "INCOMPLETE"
+FLINK_REPLAY_IDEMPOTENCE_DEFERRED = "BLOCKED"
+FLINK_REPLAY_BEHAVIOR_UNRESOLVED = "REVIEW_REQUIRED"
+FLINK_EXECUTABLE_PATH_DEFERRED = "BLOCKED"
+
+[[scenarios]]
+case_id = "F00_BASELINE"
+finding_codes = ["FLINK_BASELINE_EVIDENCE_INVALID"]
+expected_final_status = "BLOCKED"
+executable_eligible = false
+
+[[scenarios]]
+case_id = "F01_VERSION"
+finding_codes = ["FLINK_VERSION_UNVERIFIED"]
+expected_final_status = "REVIEW_REQUIRED"
+executable_eligible = false
+
+[[scenarios]]
+case_id = "F01_VERSION_UNKNOWN"
+finding_codes = ["FLINK_VERSION_REQUIRED"]
+expected_final_status = "INCOMPLETE"
+executable_eligible = false
+
+[[scenarios]]
+case_id = "F02_EXISTING"
+finding_codes = ["FLINK_EXISTING_TABLE_DEFERRED"]
+expected_final_status = "BLOCKED"
+executable_eligible = false
+
+[[scenarios]]
+case_id = "F03_MULTI_WRITER"
+finding_codes = ["FLINK_MULTI_WRITER_REVIEW"]
+expected_final_status = "REVIEW_REQUIRED"
+executable_eligible = false
+
+[[scenarios]]
+case_id = "F04_WRITER_UNKNOWN"
+finding_codes = ["FLINK_WRITER_MODEL_UNRESOLVED"]
+expected_final_status = "REVIEW_REQUIRED"
+executable_eligible = false
+
+[[scenarios]]
+case_id = "F05_CATALOG"
+finding_codes = ["FLINK_EXTERNAL_CATALOG_REVIEW"]
+expected_final_status = "REVIEW_REQUIRED"
+executable_eligible = false
+
+[[scenarios]]
+case_id = "F06_SCHEMA"
+finding_codes = ["FLINK_PHYSICAL_SCHEMA_REQUIRED"]
+expected_final_status = "INCOMPLETE"
+executable_eligible = false
+
+[[scenarios]]
+case_id = "F06_SCHEMA_POINTER"
+finding_codes = ["FLINK_PHYSICAL_SCHEMA_REQUIRED"]
+expected_final_status = "INCOMPLETE"
+executable_eligible = false
+
+[[scenarios]]
+case_id = "F07_MUTABLE"
+finding_codes = ["FLINK_MUTABLE_COW_DEFERRED"]
+expected_final_status = "BLOCKED"
+executable_eligible = false
+
+[[scenarios]]
+case_id = "F08_REPLAY_COLLAPSE"
+finding_codes = ["FLINK_REPLAY_IDEMPOTENCE_DEFERRED"]
+expected_final_status = "BLOCKED"
+executable_eligible = false
+
+[[scenarios]]
+case_id = "F09_REPLAY_UNKNOWN"
+finding_codes = ["FLINK_REPLAY_BEHAVIOR_UNRESOLVED"]
+expected_final_status = "REVIEW_REQUIRED"
+executable_eligible = false
+
+[[scenarios]]
+case_id = "F10_SAFE_APPEND"
+finding_codes = ["FLINK_EXECUTABLE_PATH_DEFERRED"]
+expected_final_status = "BLOCKED"
+executable_eligible = false
+
+[[scenarios]]
+case_id = "F11_COMBINED_GATES"
+finding_codes = [
+  "FLINK_WRITER_MODEL_UNRESOLVED",
+  "FLINK_PHYSICAL_SCHEMA_REQUIRED",
+  "FLINK_REPLAY_IDEMPOTENCE_DEFERRED",
+]
+expected_final_status = "BLOCKED"
+executable_eligible = false
