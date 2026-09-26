@@ -56,10 +56,12 @@ public class InternalSchema implements Serializable {
   private int maxColumnId;
   private long versionId;
 
-  private transient Map<Integer, Field> idToField = null;
-  private transient Map<String, Integer> nameToId = null;
-  private transient Map<Integer, String> idToName = null;
-  private transient Map<String, Integer> nameToPosition = null;
+  // A schema can be shared by concurrent readers, so the lazily built lookup maps use a benign racy single-check:
+  // each is built into a local and published through a volatile field.
+  private transient volatile Map<Integer, Field> idToField = null;
+  private transient volatile Map<String, Integer> nameToId = null;
+  private transient volatile Map<Integer, String> idToName = null;
+  private transient volatile Map<String, Integer> nameToPosition = null;
 
   public static InternalSchema getEmptyInternalSchema() {
     return EMPTY_SCHEMA;
@@ -97,38 +99,47 @@ public class InternalSchema implements Serializable {
   }
 
   private Map<Integer, String> getIdToName() {
-    if (idToName == null) {
-      idToName = buildIdToName(record);
+    Map<Integer, String> result = idToName;
+    if (result == null) {
+      result = buildIdToName(record);
+      idToName = result;
     }
-    return idToName;
+    return result;
   }
 
   private Map<String, Integer> buildNameToId() {
-    if (nameToId == null) {
-      if (idToName != null && !idToName.isEmpty()) {
-        nameToId = idToName.entrySet().stream().collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey));
-        return nameToId;
+    Map<String, Integer> result = nameToId;
+    if (result == null) {
+      Map<Integer, String> idToNameMap = idToName;
+      if (idToNameMap != null && !idToNameMap.isEmpty()) {
+        result = idToNameMap.entrySet().stream().collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey));
+      } else {
+        result = InternalSchemaBuilder.getBuilder().buildNameToId(record);
       }
-      nameToId = InternalSchemaBuilder.getBuilder().buildNameToId(record);
+      nameToId = result;
     }
-    return nameToId;
+    return result;
   }
 
   private Map<Integer, Field> buildIdToField() {
-    if (idToField == null) {
-      idToField = InternalSchemaBuilder.getBuilder().buildIdToField(record);
+    Map<Integer, Field> result = idToField;
+    if (result == null) {
+      result = InternalSchemaBuilder.getBuilder().buildIdToField(record);
+      idToField = result;
     }
-    return idToField;
+    return result;
   }
 
   /**
    * Get all columns full name.
    */
   public List<String> getAllColsFullName() {
-    if (nameToId == null) {
-      nameToId = InternalSchemaBuilder.getBuilder().buildNameToId(record);
+    Map<String, Integer> result = nameToId;
+    if (result == null) {
+      result = InternalSchemaBuilder.getBuilder().buildNameToId(record);
+      nameToId = result;
     }
-    return new ArrayList<>(nameToId.keySet());
+    return new ArrayList<>(result.keySet());
   }
 
   /**
@@ -265,10 +276,12 @@ public class InternalSchema implements Serializable {
    * @return a mapping from full field name to a position
    */
   public Map<String, Integer> getNameToPosition() {
-    if (nameToPosition == null) {
-      nameToPosition = InternalSchemaBuilder.getBuilder().buildNameToPosition(record);
+    Map<String, Integer> result = nameToPosition;
+    if (result == null) {
+      result = InternalSchemaBuilder.getBuilder().buildNameToPosition(record);
+      nameToPosition = result;
     }
-    return nameToPosition;
+    return result;
   }
 
   @Override

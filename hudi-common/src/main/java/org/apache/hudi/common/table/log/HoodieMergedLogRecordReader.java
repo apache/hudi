@@ -26,6 +26,7 @@ import org.apache.hudi.common.expression.Predicates;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.FileGroupReaderTableState;
 import org.apache.hudi.common.table.read.buffer.HoodieFileGroupRecordBuffer;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -65,12 +66,12 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
   private long totalTimeTakenToReadAndMergeBlocks;
 
   @SuppressWarnings("unchecked")
-  private HoodieMergedLogRecordReader(HoodieReaderContext<T> readerContext, HoodieTableMetaClient metaClient, HoodieStorage storage,
+  private HoodieMergedLogRecordReader(HoodieReaderContext<T> readerContext, FileGroupReaderTableState tableState, HoodieStorage storage,
                                       List<HoodieLogFile> logFiles, boolean reverseReader,
                                       int bufferSize, Option<InstantRange> instantRange, boolean withOperationField, boolean forceFullScan,
                                       Option<String> partitionName, Option<String> keyFieldOverride,
                                       HoodieFileGroupRecordBuffer<T> recordBuffer, boolean allowInflightInstants) {
-    super(readerContext, metaClient, storage, logFiles, reverseReader, bufferSize, instantRange, withOperationField,
+    super(readerContext, tableState, storage, logFiles, reverseReader, bufferSize, instantRange, withOperationField,
         forceFullScan, partitionName, keyFieldOverride, recordBuffer, allowInflightInstants);
 
     if (forceFullScan) {
@@ -171,7 +172,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
 
     private HoodieFileGroupRecordBuffer<T> recordBuffer;
     private boolean allowInflightInstants = false;
-    private HoodieTableMetaClient metaClient;
+    private FileGroupReaderTableState tableState;
 
     @Override
     public Builder<T> withHoodieReaderContext(HoodieReaderContext<T> readerContext) {
@@ -243,7 +244,12 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     }
 
     public Builder<T> withMetaClient(HoodieTableMetaClient metaClient) {
-      this.metaClient = metaClient;
+      this.tableState = FileGroupReaderTableState.fromMetaClient(metaClient);
+      return this;
+    }
+
+    public Builder<T> withTableState(FileGroupReaderTableState tableState) {
+      this.tableState = tableState;
       return this;
     }
 
@@ -257,7 +263,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
       }
 
       return new HoodieMergedLogRecordReader<>(
-          readerContext, metaClient, storage, logFiles,
+          readerContext, tableState, storage, logFiles,
           reverseReader, bufferSize, instantRange,
           withOperationField, forceFullScan,
           Option.ofNullable(partitionName),

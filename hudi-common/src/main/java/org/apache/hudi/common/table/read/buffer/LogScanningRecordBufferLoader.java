@@ -21,8 +21,8 @@ package org.apache.hudi.common.table.read.buffer;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
+import org.apache.hudi.common.table.read.FileGroupReaderTableState;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
@@ -36,7 +36,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 abstract class LogScanningRecordBufferLoader {
 
   protected <T> List<String> scanLogFiles(HoodieReaderContext<T> readerContext, HoodieStorage storage,
-                                          InputSplit inputSplit, HoodieTableMetaClient hoodieTableMetaClient,
+                                          InputSplit inputSplit, FileGroupReaderTableState tableState,
                                           TypedProperties props, ReaderParameters readerParameters,
                                           HoodieReadStats readStats, FileGroupRecordBuffer<T> recordBuffer) {
     try (HoodieMergedLogRecordReader<T> logRecordReader = HoodieMergedLogRecordReader.<T>newBuilder()
@@ -49,7 +49,7 @@ abstract class LogScanningRecordBufferLoader {
         .withPartition(inputSplit.getPartitionPath())
         .withRecordBuffer(recordBuffer)
         .withAllowInflightInstants(readerParameters.isInflightInstantsAllowed())
-        .withMetaClient(hoodieTableMetaClient)
+        .withTableState(tableState)
         .build()) {
       readStats.setTotalLogReadTimeMs(logRecordReader.getTotalTimeTakenToReadAndMergeBlocks());
       readStats.setTotalUpdatedRecordsCompacted(logRecordReader.getNumMergedRecordsInLog());

@@ -21,9 +21,9 @@ package org.apache.hudi.common.table.read.buffer;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.read.BaseFileUpdateCallback;
+import org.apache.hudi.common.table.read.FileGroupReaderTableState;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
@@ -53,24 +53,24 @@ public class ReusableFileGroupRecordBufferLoader<T> extends LogScanningRecordBuf
                                                                                          HoodieStorage storage,
                                                                                          InputSplit inputSplit,
                                                                                          List<String> orderingFieldNames,
-                                                                                         HoodieTableMetaClient hoodieTableMetaClient,
+                                                                                         FileGroupReaderTableState tableState,
                                                                                          TypedProperties props,
                                                                                          ReaderParameters readerParameters,
                                                                                          HoodieReadStats readStats,
                                                                                          Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
     UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.isEmitDeletes(), fileGroupUpdateCallback, props);
-    Option<PartialUpdateMode> partialUpdateModeOpt = hoodieTableMetaClient.getTableConfig().getPartialUpdateMode();
+    Option<PartialUpdateMode> partialUpdateModeOpt = tableState.getTableConfig().getPartialUpdateMode();
     if (cachedResults == null) {
       // Create an initial buffer to process the log files
       KeyBasedFileGroupRecordBuffer<T> initialBuffer = new KeyBasedFileGroupRecordBuffer<>(
-          readerContextWithoutFilters, hoodieTableMetaClient, readerContextWithoutFilters.getMergeMode(),
+          readerContextWithoutFilters, readerContextWithoutFilters.getMergeMode(),
           partialUpdateModeOpt, props, orderingFieldNames, updateProcessor);
-      List<String> validInstants = scanLogFiles(readerContextWithoutFilters, storage, inputSplit, hoodieTableMetaClient, props, readerParameters, readStats, initialBuffer);
+      List<String> validInstants = scanLogFiles(readerContextWithoutFilters, storage, inputSplit, tableState, props, readerParameters, readStats, initialBuffer);
       cachedResults = Pair.of(initialBuffer, validInstants);
     }
     // Create a reusable buffer with the results from the initial scan
     ReusableKeyBasedRecordBuffer<T> reusableBuffer = new ReusableKeyBasedRecordBuffer<>(
-        readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateModeOpt, props, orderingFieldNames, updateProcessor, cachedResults.getLeft().getLogRecords());
+        readerContext, readerContext.getMergeMode(), partialUpdateModeOpt, props, orderingFieldNames, updateProcessor, cachedResults.getLeft().getLogRecords());
     return Pair.of(reusableBuffer, cachedResults.getRight());
   }
 

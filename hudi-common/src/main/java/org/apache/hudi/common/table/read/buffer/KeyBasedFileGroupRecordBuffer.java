@@ -52,13 +52,26 @@ import java.util.List;
 public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
   public KeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
+                                       RecordMergeMode recordMergeMode,
+                                       Option<PartialUpdateMode> partialUpdateModeOpt,
+                                       TypedProperties props,
+                                       List<String> orderingFieldNames,
+                                       UpdateProcessor<T> updateProcessor) {
+    super(readerContext, recordMergeMode, partialUpdateModeOpt, props, orderingFieldNames, updateProcessor);
+  }
+
+  /**
+   * @deprecated the meta client is not used; use the constructor without it.
+   */
+  @Deprecated
+  public KeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                        HoodieTableMetaClient hoodieTableMetaClient,
                                        RecordMergeMode recordMergeMode,
                                        Option<PartialUpdateMode> partialUpdateModeOpt,
                                        TypedProperties props,
                                        List<String> orderingFieldNames,
                                        UpdateProcessor<T> updateProcessor) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateModeOpt, props, orderingFieldNames, updateProcessor);
+    this(readerContext, recordMergeMode, partialUpdateModeOpt, props, orderingFieldNames, updateProcessor);
   }
 
   @Override
