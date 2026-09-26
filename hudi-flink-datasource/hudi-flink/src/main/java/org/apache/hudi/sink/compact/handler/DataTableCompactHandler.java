@@ -72,6 +72,11 @@ public class DataTableCompactHandler implements CompactHandler {
    * InternalSchema manager used for handling schema evolution.
    */
   private transient InternalSchemaManager internalSchemaManager;
+  /**
+   * The compaction instant whose table schema is set in the write config. The timeline is only reloaded
+   * when the instant changes, so the schema resolved for the first file group holds for the others.
+   */
+  private transient String schemaInstantTime;
 
   public DataTableCompactHandler(HoodieFlinkWriteClient writeClient, int taskId) {
     this.table = writeClient.getHoodieTable();
@@ -134,11 +139,15 @@ public class DataTableCompactHandler implements CompactHandler {
     HoodieFlinkMergeOnReadTableCompactor<?> compactor = new HoodieFlinkMergeOnReadTableCompactor<>();
     HoodieTableMetaClient metaClient = table.getMetaClient();
     if (needReloadMetaClient) {
+      schemaInstantTime = null;
       // reload the timeline
       metaClient.reload();
     }
     // schema evolution
-    CompactionUtil.setAvroSchema(writeClient.getConfig(), metaClient);
+    if (!event.getCompactionInstantTime().equals(schemaInstantTime)) {
+      CompactionUtil.setAvroSchema(writeClient.getConfig(), metaClient);
+      schemaInstantTime = event.getCompactionInstantTime();
+    }
     List<WriteStatus> writeStatuses = compactor.compact(
         writeClient.getConfig(),
         event.getOperation(),

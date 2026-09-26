@@ -71,6 +71,16 @@ public abstract class HoodieFlinkTable<T>
     if (config.getSchemaEvolutionEnable()) {
       setLatestInternalSchema(config, metaClient);
     }
+    return createWithConfiguredInternalSchema(config, context, metaClient);
+  }
+
+  /**
+   * Creates the table like {@link #create(HoodieWriteConfig, HoodieEngineContext, HoodieTableMetaClient)} but keeps the
+   * internal schema already set in the write config instead of resolving the latest one from the timeline.
+   */
+  public static <T> HoodieFlinkTable<T> createWithConfiguredInternalSchema(HoodieWriteConfig config,
+                                                                           HoodieEngineContext context,
+                                                                           HoodieTableMetaClient metaClient) {
     final HoodieFlinkTable<T> hoodieFlinkTable;
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:

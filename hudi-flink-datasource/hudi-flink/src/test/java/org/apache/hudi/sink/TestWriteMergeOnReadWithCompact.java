@@ -29,7 +29,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieWriteConflictException;
+import org.apache.hudi.hadoop.fs.MetaFolderAccessRecordingFileSystem;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.sink.compact.handler.DataTableCompactHandler;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestUtils;
@@ -40,6 +42,7 @@ import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -393,6 +396,36 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
     TestData.checkWrittenData(tempFile, readOptimizedResult, 1);
     pipeline1.end();
     pipeline2.end();
+  }
+
+  /**
+   * The compaction task resolves the table schema once per compaction instant, not once per file group.
+   */
+  @Test
+  void testCompactionResolvesSchemaOncePerInstant() throws Exception {
+    conf.setString("hadoop.fs.file.impl", MetaFolderAccessRecordingFileSystem.class.getName());
+    conf.setString("hadoop.fs.file.impl.disable.cache", "true");
+    MetaFolderAccessRecordingFileSystem.setTaskScope(TestWriteMergeOnReadWithCompact::isCompacting);
+    try {
+      TestHarness harness = preparePipeline()
+          .consume(TestData.DATA_SET_INSERT)
+          .checkpoint(1)
+          .assertNextEvent(4, "par1,par2,par3,par4");
+      MetaFolderAccessRecordingFileSystem.reset();
+      // commits the instant, then schedules and executes a compaction of its four file groups
+      harness.checkpointComplete(1);
+      List<MetaFolderAccessRecordingFileSystem.Access> accesses = MetaFolderAccessRecordingFileSystem.getTaskAccesses();
+      assertEquals(1, accesses.stream().filter(a -> isCompletedCommitFile(a.getPath())).count(),
+          MetaFolderAccessRecordingFileSystem.describeTaskAccesses());
+      harness.checkWrittenData(EXPECTED1).end();
+    } finally {
+      MetaFolderAccessRecordingFileSystem.setTaskScope(() -> false);
+    }
+  }
+
+  private static boolean isCompacting() {
+    return Arrays.stream(Thread.currentThread().getStackTrace())
+        .anyMatch(e -> e.getClassName().equals(DataTableCompactHandler.class.getName()) && e.getMethodName().equals("doCompaction"));
   }
 
   @Override

@@ -22,16 +22,20 @@ package org.apache.hudi.client;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.TableServiceType;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
@@ -45,6 +49,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -53,6 +58,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestFlinkWriteClient extends HoodieFlinkClientTestHarness {
+
+  private static final String WRITE_SCHEMA = "{\"type\":\"record\",\"name\":\"rec\",\"fields\":["
+      + "{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"name\",\"type\":[\"null\",\"string\"],\"default\":null}]}";
+  private static final String WIDER_SCHEMA = "{\"type\":\"record\",\"name\":\"rec\",\"fields\":["
+      + "{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"name\",\"type\":[\"null\",\"string\"],\"default\":null},"
+      + "{\"name\":\"age\",\"type\":[\"null\",\"int\"],\"default\":null}]}";
 
   @BeforeEach
   void setup() throws IOException {
@@ -192,5 +203,64 @@ public class TestFlinkWriteClient extends HoodieFlinkClientTestHarness {
     writeClient.waitForCleaningFinish();
     writeClient.cleanHandles();
     assertNotNull(writeClient.getHoodieTable(false));
+  }
+
+  @Test
+  void testWriteSchemaRevalidatedWhenCommitCompletesWithinInstant() throws Exception {
+    HoodieTestTable.of(metaClient).addCommit("20260926000000001", Option.of("20260926000000002"), Option.of(commitMetadata(WRITE_SCHEMA)));
+    writeClient = new HoodieFlinkWriteClient(context, writeConfigWithSchema());
+    String instantTime = "20260926000000003";
+    writeClient.initTableForInstant(WriteOperationType.UPSERT, instantTime);
+    writeClient.initTableForInstant(WriteOperationType.UPSERT, instantTime);
+    // another writer commits a schema with an extra column, which the writer schema would drop
+    HoodieTestTable.of(metaClient).addCommit("20260926000000004", Option.of("20260926000000005"), Option.of(commitMetadata(WIDER_SCHEMA)));
+    assertThrows(HoodieUpsertException.class, () -> writeClient.initTableForInstant(WriteOperationType.UPSERT, instantTime));
+  }
+
+  @Test
+  void testFailedWriteSchemaValidationIsNotCached() throws Exception {
+    HoodieTestTable.of(metaClient).addCommit("20260926000000001", Option.of("20260926000000002"), Option.of(commitMetadata(WIDER_SCHEMA)));
+    writeClient = new HoodieFlinkWriteClient(context, writeConfigWithSchema());
+    String instantTime = "20260926000000003";
+    assertThrows(HoodieUpsertException.class, () -> writeClient.initTableForInstant(WriteOperationType.UPSERT, instantTime));
+    assertThrows(HoodieUpsertException.class, () -> writeClient.initTableForInstant(WriteOperationType.UPSERT, instantTime));
+  }
+
+  @Test
+  void testTableReinitializedForNewInstantOrOperation() {
+    AtomicInteger metaClientBuilds = new AtomicInteger();
+    writeClient = new HoodieFlinkWriteClient(context, writeConfigWithSchema()) {
+      @Override
+      protected HoodieTableMetaClient createMetaClient(boolean loadActiveTimelineOnLoad) {
+        metaClientBuilds.incrementAndGet();
+        return super.createMetaClient(loadActiveTimelineOnLoad);
+      }
+    };
+    metaClientBuilds.set(0);
+    String instantTime = "20260926000000001";
+    writeClient.initTableForInstant(WriteOperationType.UPSERT, instantTime);
+    writeClient.initTableForInstant(WriteOperationType.UPSERT, instantTime);
+    assertEquals(1, metaClientBuilds.get());
+    writeClient.initTableForInstant(WriteOperationType.INSERT, instantTime);
+    writeClient.initTableForInstant(WriteOperationType.INSERT, instantTime);
+    assertEquals(2, metaClientBuilds.get());
+    writeClient.initTableForInstant(WriteOperationType.INSERT, "20260926000000002");
+    assertEquals(3, metaClientBuilds.get());
+  }
+
+  private HoodieWriteConfig writeConfigWithSchema() {
+    return HoodieWriteConfig.newBuilder()
+        .withPath(metaClient.getBasePath())
+        .withEngineType(EngineType.FLINK)
+        .withEmbeddedTimelineServerEnabled(false)
+        .withSchema(WRITE_SCHEMA)
+        .build();
+  }
+
+  private static HoodieCommitMetadata commitMetadata(String schema) {
+    HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+    metadata.setOperationType(WriteOperationType.UPSERT);
+    metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schema);
+    return metadata;
   }
 }
