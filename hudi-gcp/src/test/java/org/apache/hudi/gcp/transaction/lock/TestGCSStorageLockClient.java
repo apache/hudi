@@ -202,9 +202,26 @@ public class TestGCSStorageLockClient {
 
     Pair<LockUpsertResult, Option<StorageLockFile>> result = lockService.tryUpsertLockFile(lockData, Option.empty());
 
-    assertEquals(LockUpsertResult.UNKNOWN_ERROR, result.getLeft());
+    // A 5xx is retriable, not an indeterminate state: the write's precondition means the caller
+    // may safely retry the identical write, and reconciles a retry that finds its own write landed.
+    assertEquals(LockUpsertResult.TRANSIENT_ERROR, result.getLeft());
     assertTrue(result.getRight().isEmpty(), "Should return empty when a 5xx error occurs");
     verify(mockLogger).warn(contains("GCS returned internal server error code"), eq(OWNER_ID), eq(LOCK_FILE_PATH), eq(exception));
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {500, 502, 503, 504})
+  void testTryCreateOrUpdateLockFile_allServerErrorsAreTransient(int statusCode) {
+    // The whole 5xx range must map to TRANSIENT_ERROR, not just the 503 seen in production.
+    StorageLockData lockData = new StorageLockData(false, 999L, "owner");
+    StorageException exception = new StorageException(statusCode, "Server error");
+    when(mockStorage.create(any(BlobInfo.class), any(byte[].class), any(Storage.BlobTargetOption.class)))
+        .thenThrow(exception);
+
+    Pair<LockUpsertResult, Option<StorageLockFile>> result = lockService.tryUpsertLockFile(lockData, Option.empty());
+
+    assertEquals(LockUpsertResult.TRANSIENT_ERROR, result.getLeft());
+    assertTrue(result.getRight().isEmpty(), "Should return empty when a 5xx error occurs");
   }
 
   @Test

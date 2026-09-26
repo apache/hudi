@@ -50,6 +50,7 @@ import java.io.IOException;
 import java.util.Properties;
 
 import static org.apache.hudi.client.transaction.lock.LockUpsertResult.THROTTLED;
+import static org.apache.hudi.client.transaction.lock.LockUpsertResult.TRANSIENT_ERROR;
 import static org.apache.hudi.client.transaction.lock.LockUpsertResult.UNKNOWN_ERROR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -238,7 +239,9 @@ class TestS3StorageLockClient {
     Pair<LockUpsertResult, Option<StorageLockFile>> result =
             lockService.tryUpsertLockFile(lockData, Option.empty());
 
-    assertEquals(UNKNOWN_ERROR, result.getLeft());
+    // A 5xx is retriable, not an indeterminate state: the write's precondition means the caller
+    // may safely retry the identical write, and reconciles a retry that finds its own write landed.
+    assertEquals(TRANSIENT_ERROR, result.getLeft());
     assertTrue(result.getRight().isEmpty());
     verify(mockLogger).warn(contains("internal server error"), eq(OWNER_ID), eq(LOCK_FILE_PATH), eq(ex503));
   }

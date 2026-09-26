@@ -195,7 +195,10 @@ public class S3StorageLockClient implements StorageLockClient {
       logger.warn("OwnerId: {}, Rate limit exceeded for: {}", ownerId, lockFilePath);
       return LockUpsertResult.THROTTLED;
     } else if (status >= INTERNAL_SERVER_ERROR_CODE_MIN) {
+      // A 5xx is retriable: the ifMatch/ifNoneMatch precondition means a retry cannot clobber
+      // another writer. It does not prove the write was rejected; the caller reconciles that.
       logger.warn("OwnerId: {}, internal server error for: {}", ownerId, lockFilePath, e);
+      return LockUpsertResult.TRANSIENT_ERROR;
     } else {
       logger.warn("OwnerId: {}, Error writing lock file: {}", ownerId, lockFilePath, e);
     }
