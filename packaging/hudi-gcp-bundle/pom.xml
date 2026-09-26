@@ -99,7 +99,24 @@
                   <include>org.apache.hudi:hudi-hive-sync</include>
                   <include>org.apache.hudi:hudi-gcp</include>
                   <include>org.apache.parquet:parquet-avro</include>
-                  <include>com.google.cloud:google-cloud-bigquery</include>
+                  <!-- Google Cloud SDK -->
+                  <include>com.google.cloud:*</include>
+                  <include>com.google.api:*</include>
+                  <include>com.google.apis:google-api-services-storage</include>
+                  <include>com.google.api-client:*</include>
+                  <include>com.google.api.grpc:*</include>
+                  <include>com.google.auth:*</include>
+                  <include>com.google.code.gson:gson</include>
+                  <include>com.google.http-client:*</include>
+                  <include>com.google.oauth-client:*</include>
+                  <include>com.google.protobuf:*</include>
+                  <include>io.grpc:*</include>
+                  <include>io.opencensus:*</include>
+                  <include>io.perfmark:*</include>
+                  <include>org.threeten:threetenbp</include>
+                  <include>com.google.guava:guava</include>
+                  <include>com.google.guava:failureaccess</include>
+                  <include>com.google.guava:listenablefuture</include>
                   <include>com.beust:jcommander</include>
                   <include>commons-io:commons-io</include>
                   <include>org.openjdk.jol:jol-core</include>
@@ -113,6 +130,10 @@
                 <relocation>
                   <pattern>org.openjdk.jol.</pattern>
                   <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.google.common.</pattern>
+                  <shadedPattern>org.apache.hudi.com.google.common.</shadedPattern>
                 </relocation>
               </relocations>
               <createDependencyReducedPom>true</createDependencyReducedPom>
