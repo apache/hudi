@@ -32,13 +32,11 @@ import org.apache.hudi.sink.partitioner.BucketAssigner;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.SmallFile;
-import org.apache.hudi.util.StreamerUtil;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.core.fs.Path;
-import org.apache.hadoop.conf.Configuration;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -117,8 +115,13 @@ public class WriteProfile {
     this.context = context;
     this.basePath = new Path(config.getBasePath());
     this.smallFilesMap = new HashMap<>();
-    this.metaClient = StreamerUtil.createMetaClient(
-        config.getBasePath(), context.getStorageConf().unwrapAs(Configuration.class));
+    this.metaClient = HoodieTableMetaClient.builder()
+        .setConf(context.getStorageConf().newInstance())
+        .setBasePath(config.getBasePath())
+        .setConsistencyGuardConfig(config.getConsistencyGuardConfig())
+        .setTimeGeneratorConfig(config.getTimeGeneratorConfig())
+        .setFileSystemRetryConfig(config.getFileSystemRetryConfig())
+        .build();
     this.metadataCache = new HashMap<>();
     this.fsView = getFileSystemView();
     // profile the record statistics on construction
@@ -126,7 +129,7 @@ public class WriteProfile {
   }
 
   protected HoodieTable<?, ?, ?, ?> getTable() {
-    return HoodieFlinkTable.create(config, context);
+    return HoodieFlinkTable.create(config, context, metaClient);
   }
 
   /**
@@ -255,7 +258,7 @@ public class WriteProfile {
       // already reloaded
       return;
     }
-    this.metaClient.reloadActiveTimeline();
+    this.metaClient.reload();
     // release the old fs view and create a new one
     SyncableFileSystemView oldFsView = this.fsView;
     this.fsView = getFileSystemView();

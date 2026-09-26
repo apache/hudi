@@ -36,6 +36,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.FlinkHoodieIndexFactory;
@@ -53,7 +54,9 @@ import org.apache.hudi.table.upgrade.FlinkUpgradeDowngradeHelper;
 
 import com.codahale.metrics.Timer;
 import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.Path;
 
@@ -64,6 +67,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
@@ -97,6 +101,11 @@ public class HoodieFlinkWriteClient<T>
    * Whether streaming write to metadata table is enabled.
    */
   private final boolean isStreamingWriteMetadataTable;
+
+  /**
+   * The table state of the instant being written, shared by the buckets written to it.
+   */
+  private InstantTableState instantTableState;
 
   public HoodieFlinkWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
     this(context, writeConfig, false);
@@ -230,8 +239,7 @@ public class HoodieFlinkWriteClient<T>
   @Override
   public List<WriteStatus> upsert(Iterator<HoodieRecord<T>> records, BucketInfo bucketInfo, String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
-        initTable(WriteOperationType.UPSERT, Option.ofNullable(instantTime));
-    table.validateUpsertSchema();
+        initTableForInstant(WriteOperationType.UPSERT, instantTime);
 
     preWrite(instantTime, WriteOperationType.UPSERT, table.getMetaClient());
     HoodieWriteMetadata<List<WriteStatus>> result;
@@ -272,8 +280,7 @@ public class HoodieFlinkWriteClient<T>
   @Override
   public List<WriteStatus> insert(Iterator<HoodieRecord<T>> records, BucketInfo bucketInfo, String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
-        initTable(WriteOperationType.INSERT, Option.ofNullable(instantTime));
-    table.validateInsertSchema();
+        initTableForInstant(WriteOperationType.INSERT, instantTime);
 
     preWrite(instantTime, WriteOperationType.INSERT, table.getMetaClient());
     HoodieWriteMetadata<List<WriteStatus>> result;
@@ -289,8 +296,7 @@ public class HoodieFlinkWriteClient<T>
   @Override
   public List<WriteStatus> insertOverwrite(Iterator<HoodieRecord<T>> records, BucketInfo bucketInfo, String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
-        initTable(WriteOperationType.INSERT_OVERWRITE, Option.ofNullable(instantTime));
-    table.validateInsertSchema();
+        initTableForInstant(WriteOperationType.INSERT_OVERWRITE, instantTime);
     preWrite(instantTime, WriteOperationType.INSERT_OVERWRITE, table.getMetaClient());
     // create the write handle if not exists
     HoodieWriteMetadata<List<WriteStatus>> result;
@@ -302,8 +308,7 @@ public class HoodieFlinkWriteClient<T>
 
   @Override
   public List<WriteStatus> insertOverwriteTable(Iterator<HoodieRecord<T>> records, BucketInfo bucketInfo, String instantTime) {
-    HoodieTable table = initTable(WriteOperationType.INSERT_OVERWRITE_TABLE, Option.ofNullable(instantTime));
-    table.validateInsertSchema();
+    HoodieTable table = initTableForInstant(WriteOperationType.INSERT_OVERWRITE_TABLE, instantTime);
     preWrite(instantTime, WriteOperationType.INSERT_OVERWRITE_TABLE, table.getMetaClient());
     // create the write handle if not exists
     HoodieWriteMetadata<List<WriteStatus>> result;
@@ -392,6 +397,56 @@ public class HoodieFlinkWriteClient<T>
 
     // Run pre-write validators
     runPreWriteValidators(instantTime, writeOperationType, metaClient, recordsOpt);
+  }
+
+  /**
+   * Returns the table to write a bucket of records to the given instant, with the write schema validated.
+   *
+   * <p>The buckets of an instant share its table config, so only the first bucket of the instant loads it. Every bucket
+   * reloads the timeline: it moves while the instant is written (the previous instant or a table service can complete
+   * meanwhile), and the file system view of the write handles, served by the timeline server, rejects a client timeline
+   * older than its own. The write schema is validated, and the internal schema resolved, again only when a commit has
+   * completed since the last validation, since only a commit can change the table schema.
+   */
+  @VisibleForTesting
+  HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> initTableForInstant(
+      WriteOperationType operationType, String instantTime) {
+    if (instantTableState != null && instantTableState.isFor(operationType, instantTime)) {
+      HoodieTableMetaClient metaClient = instantTableState.getMetaClient();
+      metaClient.reloadActiveTimeline();
+      String latestCommitCompletionTime = getLatestCommitCompletionTime(metaClient);
+      HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table;
+      if (Objects.equals(latestCommitCompletionTime, instantTableState.getValidatedCommitCompletionTime())) {
+        table = createTableAndValidate(config, metaClient, HoodieFlinkTable::createWithConfiguredInternalSchema);
+      } else {
+        table = createTable(config, metaClient);
+        validateWriteSchema(table, operationType);
+        instantTableState.setValidatedCommitCompletionTime(latestCommitCompletionTime);
+      }
+      setWriteTimer(metaClient.getCommitActionType());
+      return table;
+    }
+    instantTableState = null;
+    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
+        initTable(operationType, Option.ofNullable(instantTime));
+    validateWriteSchema(table, operationType);
+    if (instantTime != null) {
+      HoodieTableMetaClient metaClient = table.getMetaClient();
+      instantTableState = new InstantTableState(instantTime, operationType, metaClient, getLatestCommitCompletionTime(metaClient));
+    }
+    return table;
+  }
+
+  private static void validateWriteSchema(HoodieTable<?, ?, ?, ?> table, WriteOperationType operationType) {
+    if (operationType == WriteOperationType.UPSERT) {
+      table.validateUpsertSchema();
+    } else {
+      table.validateInsertSchema();
+    }
+  }
+
+  private static String getLatestCommitCompletionTime(HoodieTableMetaClient metaClient) {
+    return metaClient.getCommitsTimeline().filterCompletedInstants().getLatestCompletionTime().orElse(null);
   }
 
   /**
@@ -656,5 +711,24 @@ public class HoodieFlinkWriteClient<T>
    */
   @Override
   public void releaseResources(String instantTime) {
+  }
+
+  /**
+   * The table state of an instant: the meta client, whose table config the writes of the instant share, and the
+   * completion time of the latest commit when the write schema was last validated.
+   */
+  @AllArgsConstructor(access = AccessLevel.PRIVATE)
+  private static final class InstantTableState {
+    private final String instantTime;
+    private final WriteOperationType operationType;
+    @Getter
+    private final HoodieTableMetaClient metaClient;
+    @Getter
+    @Setter
+    private String validatedCommitCompletionTime;
+
+    boolean isFor(WriteOperationType operationType, String instantTime) {
+      return this.operationType == operationType && this.instantTime.equals(instantTime);
+    }
   }
 }

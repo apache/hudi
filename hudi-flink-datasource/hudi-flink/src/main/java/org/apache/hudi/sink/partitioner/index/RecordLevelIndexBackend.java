@@ -154,7 +154,6 @@ public class RecordLevelIndexBackend implements PartitionedIndexBackend {
   public void onCheckpointComplete(Correspondent correspondent, long completedCheckpointId) {
     Map<Long, String> inflightInstants = correspondent.requestInflightInstants();
     updateEvictableCkp(inflightInstants.keySet().stream().min(Long::compareTo).orElse(completedCheckpointId));
-    metaClient.reloadActiveTimeline();
     reloadMetadataTable();
   }
 

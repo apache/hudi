@@ -43,11 +43,14 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
+import org.apache.hudi.hadoop.fs.MetaFolderAccessRecordingFileSystem;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.sink.bootstrap.BootstrapOperator;
+import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.partitioner.index.IndexRowUtils;
 import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
 import org.apache.hudi.sink.utils.TestWriteBase;
@@ -487,6 +490,101 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .checkpointComplete(2)
         .checkWrittenData(EXPECTED2)
         .end();
+  }
+
+  /**
+   * The buckets of one instant share the table config and the write schema validation: the write task
+   * reads {@code hoodie.properties} and the latest commit once per instant, not once per bucket.
+   */
+  @Test
+  void testTableStateLoadedOncePerInstant() throws Exception {
+    conf.setString("hadoop.fs.file.impl", MetaFolderAccessRecordingFileSystem.class.getName());
+    conf.setString("hadoop.fs.file.impl.disable.cache", "true");
+    MetaFolderAccessRecordingFileSystem.setTaskScope(TestWriteCopyOnWrite::isWritingBucket);
+    try {
+      TestHarness harness = preparePipeline()
+          .consume(TestData.DATA_SET_INSERT)
+          .checkpoint(1)
+          .assertNextEvent()
+          .checkpointComplete(1)
+          .consume(TestData.DATA_SET_UPDATE_INSERT);
+      MetaFolderAccessRecordingFileSystem.reset();
+      // flushes one bucket per partition, four in all, to the second instant
+      harness.checkpoint(2).assertNextEvent(4, "par1,par2,par3,par4");
+      List<MetaFolderAccessRecordingFileSystem.Access> accesses = MetaFolderAccessRecordingFileSystem.getTaskAccesses();
+      String description = MetaFolderAccessRecordingFileSystem.describeTaskAccesses();
+      assertEquals(1, accesses.stream().filter(a -> a.getPath().endsWith(HoodieTableConfig.HOODIE_PROPERTIES_FILE)).count(), description);
+      assertEquals(1, accesses.stream().filter(a -> isCompletedCommitFile(a.getPath())).count(), description);
+      // every bucket reloads the timeline, so that the file system view of its write handles is not behind the timeline server
+      assertEquals(4, accesses.stream().filter(a -> a.getOperation().equals("listStatus") && a.getPath().endsWith("/.hoodie/timeline")).count(), description);
+      harness.checkpointComplete(2)
+          .checkWrittenData(EXPECTED2)
+          .end();
+    } finally {
+      MetaFolderAccessRecordingFileSystem.setTaskScope(() -> false);
+    }
+  }
+
+  /**
+   * The per-checkpoint refresh on the task managers lists the data table timeline once per refreshing component
+   * (the write profile of the bucket assigner, and the index bootstrap when enabled) and, without the record
+   * level index whose metadata table reader loads the table itself, reads {@code hoodie.properties} only for the
+   * write profile.
+   */
+  @ParameterizedTest
+  @EnumSource(value = HoodieIndex.IndexType.class, names = {"FLINK_STATE", "GLOBAL_RECORD_LEVEL_INDEX"})
+  void testCheckpointRefreshReusesMetaClient(HoodieIndex.IndexType indexType) throws Exception {
+    boolean isRecordLevelIndex = indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX;
+    conf.set(FlinkOptions.INDEX_TYPE, indexType.name());
+    if (isRecordLevelIndex) {
+      conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+      conf.setString(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "true");
+    } else {
+      conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+    }
+    conf.setString("hadoop.fs.file.impl", MetaFolderAccessRecordingFileSystem.class.getName());
+    conf.setString("hadoop.fs.file.impl.disable.cache", "true");
+    MetaFolderAccessRecordingFileSystem.setTaskScope(TestWriteCopyOnWrite::isRefreshingOnCheckpoint);
+    try {
+      TestHarness harness = preparePipeline(conf)
+          .consume(TestData.DATA_SET_INSERT)
+          .checkpoint(1)
+          .assertNextEvent()
+          .checkpointComplete(1)
+          .consume(TestData.DATA_SET_UPDATE_INSERT);
+      MetaFolderAccessRecordingFileSystem.reset();
+      harness.checkpoint(2)
+          .assertNextEvent()
+          .checkpointComplete(2);
+      String dataMetaFolder = tempFile.toURI().getPath().replaceAll("/$", "") + "/.hoodie/";
+      List<MetaFolderAccessRecordingFileSystem.Access> accesses = MetaFolderAccessRecordingFileSystem.getTaskAccesses();
+      String description = MetaFolderAccessRecordingFileSystem.describeTaskAccesses();
+      assertEquals(isRecordLevelIndex ? 1 : 2, accesses.stream()
+          .filter(a -> a.getOperation().equals("listStatus") && a.getPath().endsWith(dataMetaFolder + "timeline")).count(), description);
+      if (!isRecordLevelIndex) {
+        assertEquals(1, accesses.stream()
+            .filter(a -> a.getPath().endsWith(dataMetaFolder + HoodieTableConfig.HOODIE_PROPERTIES_FILE)).count(), description);
+      }
+      harness.checkWrittenData(EXPECTED2).end();
+    } finally {
+      MetaFolderAccessRecordingFileSystem.setTaskScope(() -> false);
+    }
+  }
+
+  private static boolean isRefreshingOnCheckpoint() {
+    return Arrays.stream(Thread.currentThread().getStackTrace())
+        .anyMatch(e -> (e.getClassName().equals(BucketAssignFunction.class.getName()) && e.getMethodName().equals("notifyCheckpointComplete"))
+            || (e.getClassName().equals(BootstrapOperator.class.getName()) && e.getMethodName().equals("snapshotState")));
+  }
+
+  private static boolean isWritingBucket() {
+    return Arrays.stream(Thread.currentThread().getStackTrace())
+        .anyMatch(e -> e.getClassName().equals(StreamWriteFunction.class.getName()) && e.getMethodName().equals("writeRecords"));
+  }
+
+  static boolean isCompletedCommitFile(String path) {
+    return path.contains("/.hoodie/timeline/")
+        && (path.endsWith("." + HoodieTimeline.COMMIT_ACTION) || path.endsWith("." + HoodieTimeline.DELTA_COMMIT_ACTION));
   }
 
   @Test
