@@ -19,6 +19,7 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import java.util.Comparator;
@@ -33,6 +34,18 @@ import java.util.List;
  */
 public class JavaGlobalSortPartitioner<T>
     implements BulkInsertPartitioner<List<HoodieRecord<T>>> {
+
+  public JavaGlobalSortPartitioner() {
+  }
+
+  /**
+   * Constructor for reflection-based instantiation via
+   * {@code HoodieWriteConfig.BULKINSERT_USER_DEFINED_PARTITIONER_CLASS_NAME}.
+   *
+   * @param config Write config, unused.
+   */
+  public JavaGlobalSortPartitioner(HoodieWriteConfig config) {
+  }
 
   @Override
   public List<HoodieRecord<T>> repartitionRecords(List<HoodieRecord<T>> records,

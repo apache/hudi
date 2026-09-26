@@ -18,10 +18,14 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
+import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -41,6 +45,29 @@ public class TestJavaBulkInsertInternalPartitionerFactory {
   void globalSortModeReturnsGlobalSortPartitioner() {
     BulkInsertPartitioner partitioner = JavaBulkInsertInternalPartitionerFactory.get(BulkInsertSortMode.GLOBAL_SORT);
     assertInstanceOf(JavaGlobalSortPartitioner.class, partitioner);
+  }
+
+  /**
+   * A partitioner named through
+   * {@code HoodieWriteConfig.BULKINSERT_USER_DEFINED_PARTITIONER_CLASS_NAME} is instantiated by
+   * reflection with only the write config, so every partitioner backing an out of the box sort
+   * mode has to expose a constructor taking only one. See HUDI-7526.
+   */
+  @ParameterizedTest
+  @ValueSource(classes = {JavaNonSortPartitioner.class, JavaGlobalSortPartitioner.class})
+  void sortModePartitionersTakeWriteConfig(Class<?> partitionerClass) {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/").build();
+    Object partitioner = ReflectionUtils.loadClass(partitionerClass.getName(), config);
+    assertInstanceOf(BulkInsertPartitioner.class, partitioner);
+  }
+
+  /**
+   * Declaring the write config constructor drops the implicit no-arg one, which the factory uses.
+   */
+  @ParameterizedTest
+  @ValueSource(classes = {JavaNonSortPartitioner.class, JavaGlobalSortPartitioner.class})
+  void sortModePartitionersKeepNoArgConstructor(Class<?> partitionerClass) {
+    assertInstanceOf(BulkInsertPartitioner.class, ReflectionUtils.loadClass(partitionerClass.getName()));
   }
 
   @Test
