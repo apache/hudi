@@ -50,6 +50,7 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorage
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
@@ -128,6 +129,16 @@ public class TestArchivedTimelineV2 extends HoodieCommonTestHarness {
     archivedTimeline.loadCompletedInstantDetailsInMemory(instantTime, instantTime);
 
     assertArrayEquals(commitMetadata, archivedTimeline.getInstantDetails(archivedInstant).get());
+  }
+
+  @Test
+  void testLoadingInstantsInClosedRange() throws Exception {
+    writeArchivedTimeline(10, 10000000);
+    // now we got 50 instants (10000001 to 10000050) spread in 5 parquets.
+    HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline("10000011", "10000020");
+    assertThat(archivedTimeline.firstInstant().map(HoodieInstant::requestedTime).orElse(""), is("10000011"));
+    assertThat(archivedTimeline.lastInstant().map(HoodieInstant::requestedTime).orElse(""), is("10000020"));
+    assertEquals(10, archivedTimeline.countInstants());
   }
 
   @Test
