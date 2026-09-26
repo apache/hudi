@@ -21,7 +21,6 @@ package org.apache.hudi.utilities.functional;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.exception.HoodieTransformException;
 import org.apache.hudi.utilities.transform.ErrorTableAwareChainedTransformer;
@@ -76,17 +75,62 @@ public class TestErrorTableAwareChainedTransformer extends SparkClientFunctional
   }
 
   @Test
-  public void testForErrorRecordColumn() {
+  void testCorruptRecordPreservedAfterTransformerDropsIt() {
+    // Regression for ENG-41958: t1 populates _corrupt_record with "true", t2 drops the
+    // column via select("foo"). The chain must preserve the populated values, not re-inject
+    // as null — otherwise error rows silently flow into the main write path instead of the
+    // error table.
     Dataset<Row> original = getTestDataset();
 
     Transformer t1 = getErrorEventHandlerTransformer();
     Transformer t2 = getErrorRecordColumnDropTransformer();
-    Transformer t3 = (jsc, sparkSession, dataset, properties) -> dataset.withColumn("foo",
+    Transformer t3 = (jsc, sparkSession, dataset, props) -> dataset.withColumn("foo",
         dataset.col("foo").cast(IntegerType));
     TypedProperties properties = new TypedProperties();
     properties.setProperty(ERROR_TABLE_ENABLED.key(), "true");
     ErrorTableAwareChainedTransformer transformer = new ErrorTableAwareChainedTransformer(Arrays.asList(t1, t2, t3));
-    assertThrows(HoodieValidationException.class, () -> transformer.apply(jsc(), spark(), original, properties));
+    Dataset<Row> transformed = transformer.apply(jsc(), spark(), original, properties);
+
+    assertArrayEquals(new String[]{"foo", ERROR_TABLE_CURRUPT_RECORD_COL_NAME}, transformed.columns());
+    assertEquals(2, transformed.count());
+    // Values populated by t1 must survive t2 dropping the column
+    assertEquals(0, transformed.filter(new Column(ERROR_TABLE_CURRUPT_RECORD_COL_NAME).isNull()).count());
+    assertEquals(2, transformed.filter(new Column(ERROR_TABLE_CURRUPT_RECORD_COL_NAME).equalTo("true")).count());
+  }
+
+  @Test
+  void testCustomColumnProjectionPreservesCorruptRecord() {
+    // Single custom transformer doing column projection — drops _corrupt_record.
+    Dataset<Row> original = getTestDataset();
+
+    Transformer columnFilter = (jsc, sparkSession, dataset, props) -> dataset.select("foo");
+    TypedProperties properties = new TypedProperties();
+    properties.setProperty(ERROR_TABLE_ENABLED.key(), "true");
+    ErrorTableAwareChainedTransformer transformer =
+        new ErrorTableAwareChainedTransformer(Arrays.asList(columnFilter));
+    Dataset<Row> transformed = transformer.apply(jsc(), spark(), original, properties);
+
+    assertArrayEquals(new String[]{"foo", ERROR_TABLE_CURRUPT_RECORD_COL_NAME}, transformed.columns());
+    assertEquals(2, transformed.count());
+    assertEquals(2, transformed.filter(new Column(ERROR_TABLE_CURRUPT_RECORD_COL_NAME).isNull()).count());
+  }
+
+  @Test
+  void testTransformerPreservingCorruptRecordIsNoOp() {
+    // Transformer that keeps all columns — re-injection is a no-op.
+    Dataset<Row> original = getTestDataset();
+
+    Transformer keepAll = (jsc, sparkSession, dataset, props) -> dataset.withColumn("foo",
+        dataset.col("foo").cast(IntegerType));
+    TypedProperties properties = new TypedProperties();
+    properties.setProperty(ERROR_TABLE_ENABLED.key(), "true");
+    ErrorTableAwareChainedTransformer transformer =
+        new ErrorTableAwareChainedTransformer(Arrays.asList(keepAll));
+    Dataset<Row> transformed = transformer.apply(jsc(), spark(), original, properties);
+
+    assertArrayEquals(new String[]{"foo", ERROR_TABLE_CURRUPT_RECORD_COL_NAME}, transformed.columns());
+    assertEquals(2, transformed.count());
+    assertEquals(2, transformed.filter(new Column(ERROR_TABLE_CURRUPT_RECORD_COL_NAME).isNull()).count());
   }
 
   private Dataset<Row> getTestDataset() {
