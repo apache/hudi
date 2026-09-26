@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.model.HoodieFullTextIndexInfo;
 import org.apache.hudi.avro.model.HoodieMetadataBloomFilter;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
@@ -75,6 +76,7 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.RECORD_INDEX_FIELD_
 import static org.apache.hudi.metadata.HoodieMetadataPayload.RECORD_INDEX_FIELD_POSITION;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_BLOOM_FILTER;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_FULL_TEXT_INDEX;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_RECORD_INDEX;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_SECONDARY_INDEX;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_NAME_METADATA;
@@ -242,6 +244,41 @@ public enum MetadataPartitionType {
     @Override
     public SerializableBiFunction<String, Integer, Integer> getFileGroupMappingFunction(HoodieIndexVersion indexVersion) {
       return HoodieTableMetadataUtil.getSecondaryKeyToFileGroupMappingFunction(indexVersion.greaterThanOrEquals(HoodieIndexVersion.V2));
+    }
+  },
+  FULL_TEXT_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_FULL_TEXT_INDEX_PREFIX, "full-text-index-", 8) {
+    @Override
+    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig, HoodieTableConfig tableConfig) {
+      // Enabled only through an index definition, see isMetadataPartitionAvailable.
+      return false;
+    }
+
+    @Override
+    public boolean isMetadataPartitionAvailable(HoodieTableMetaClient metaClient) {
+      if (metaClient.getIndexMetadata().isPresent()) {
+        return metaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
+            .anyMatch(indexDef -> indexDef.getIndexName().startsWith(HoodieTableMetadataUtil.PARTITION_NAME_FULL_TEXT_INDEX_PREFIX));
+      }
+      return false;
+    }
+
+    @Override
+    public void constructMetadataPayload(HoodieMetadataPayload payload, GenericRecord record) {
+      GenericRecord info = getNestedFieldValue(record, SCHEMA_FIELD_ID_FULL_TEXT_INDEX);
+      checkState(info != null, () -> "Valid FullTextIndexMetadata record expected for type: " + MetadataPartitionType.FULL_TEXT_INDEX.getRecordType());
+      payload.fullTextIndexMetadata = new HoodieFullTextIndexInfo(
+          (Boolean) info.get("isDeleted"),
+          ((Number) info.get("rowCount")).longValue(),
+          ((Number) info.get("cardinality")).longValue(),
+          (Boolean) info.get("dense"),
+          (ByteBuffer) info.get("positions"));
+    }
+
+    @Override
+    public String getPartitionPath(HoodieTableMetaClient metaClient, String indexName) {
+      return metaClient.getIndexForMetadataPartition(indexName)
+          .map(HoodieIndexDefinition::getIndexName)
+          .orElseThrow(() -> new IllegalArgumentException("Index definition is not present for index: " + indexName));
     }
   },
   PARTITION_STATS(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS, "partition-stats-", 6) {
@@ -468,6 +505,7 @@ public enum MetadataPartitionType {
         .stream()
         .filter(type -> type != SECONDARY_INDEX
             && type != EXPRESSION_INDEX
+            && type != FULL_TEXT_INDEX
             && type != PARTITION_STATS)
         .toArray(MetadataPartitionType[]::new);
   }

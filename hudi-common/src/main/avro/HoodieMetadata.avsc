@@ -554,6 +554,46 @@
                 }
             ],
             "default" : null
+        },
+        {
+            "name": "FullTextIndexMetadata",
+            "doc": "Full-text index entry for one (term, data file) pair: a presence entry, or the row positions of the term in the file",
+            "type": [
+                "null",
+                {
+                    "type": "record",
+                    "name": "HoodieFullTextIndexInfo",
+                    "fields": [
+                        {
+                            "name": "isDeleted",
+                            "type": "boolean",
+                            "doc": "True if this entry has been deleted"
+                        },
+                        {
+                            "name": "rowCount",
+                            "type": "long",
+                            "doc": "Number of rows in the data file"
+                        },
+                        {
+                            "name": "cardinality",
+                            "type": "long",
+                            "doc": "Number of rows in the data file that contain the term"
+                        },
+                        {
+                            "name": "dense",
+                            "type": "boolean",
+                            "doc": "True if the term is dense in the file; dense terms store no positions and match every row"
+                        },
+                        {
+                            "name": "positions",
+                            "type": ["null", "bytes"],
+                            "default": null,
+                            "doc": "Serialized roaring bitmap of row positions; only set on position entries"
+                        }
+                    ]
+                }
+            ],
+            "default" : null
         }
     ]
 }
