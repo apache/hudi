@@ -45,7 +45,7 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: mc
-          image: quay.io/minio/mc:RELEASE.2024-11-21T17-21-54Z
+          image: cgr.dev/chainguard/minio-client:latest-dev
           command:
             - /bin/sh
             - -c
