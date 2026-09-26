@@ -565,13 +565,15 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param instantTime Instant Time for scheduling rollback
    * @param instantToRollback instant to be rolled back
    * @param shouldRollbackUsingMarkers uses marker based rollback strategy when set to true. uses list based rollback when false.
+   * @param extraMetadata additional metadata to be stored in the rollback plan.
    * @return HoodieRollbackPlan containing info on rollback.
    */
   public abstract Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context,
                                                               String instantTime,
                                                               HoodieInstant instantToRollback,
                                                               boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers,
-                                                              boolean isRestore);
+                                                              boolean isRestore,
+                                                              Option<Map<String, String>> extraMetadata);
 
   /**
    * Rollback the (inflight/committed) record changes with the given commit time.
@@ -632,7 +634,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    */
   public abstract Option<HoodieRestorePlan> scheduleRestore(HoodieEngineContext context,
                                                     String restoreInstantTimestamp,
-                                                    String savepointToRestoreTimestamp);
+                                                    String savepointToRestoreTimestamp,
+                                                    Option<Map<String, String>> extraMetadata);
 
   public void rollbackInflightCompaction(HoodieInstant inflightInstant, TransactionManager transactionManager) {
     rollbackInflightCompaction(inflightInstant, s -> Option.empty(), transactionManager);
@@ -703,7 +706,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       transactionManager.beginStateChange(Option.empty(), Option.empty());
       try {
         instantTime = getMetaClient().createNewInstantTime(false);
-        scheduleRollback(context, instantTime, inflightInstant, false, config.shouldRollbackUsingMarkers(), false);
+        scheduleRollback(context, instantTime, inflightInstant, false, config.shouldRollbackUsingMarkers(), false, Option.empty());
       } finally {
         transactionManager.endStateChange(Option.empty());
       }
@@ -731,7 +734,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
               -> entry.getRollbackInstant().requestedTime())
           .orElseGet(() -> getMetaClient().createNewInstantTime(false));
       scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers(),
-          false);
+          false, Option.empty());
     } finally {
       transactionManager.endStateChange(Option.empty());
     }

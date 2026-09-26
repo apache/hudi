@@ -217,9 +217,10 @@ public class HoodieJavaCopyOnWriteTable<T>
 
   @Override
   public Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context, String instantTime, HoodieInstant instantToRollback,
-                                                     boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers, boolean isRestore) {
+                                                     boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers, boolean isRestore,
+                                                     Option<Map<String, String>> extraMetadata) {
     return new BaseRollbackPlanActionExecutor(context, config, this, instantTime, instantToRollback, skipTimelinePublish,
-        shouldRollbackUsingMarkers, isRestore).execute();
+        shouldRollbackUsingMarkers, isRestore, extraMetadata).execute();
   }
 
   @Override
@@ -263,8 +264,9 @@ public class HoodieJavaCopyOnWriteTable<T>
   }
 
   @Override
-  public Option<HoodieRestorePlan> scheduleRestore(HoodieEngineContext context, String restoreInstantTimestamp, String savepointToRestoreTimestamp) {
-    return new RestorePlanActionExecutor(context, config, this, restoreInstantTimestamp, savepointToRestoreTimestamp).execute();
+  public Option<HoodieRestorePlan> scheduleRestore(HoodieEngineContext context, String restoreInstantTimestamp, String savepointToRestoreTimestamp,
+                                                    Option<Map<String, String>> extraMetadata) {
+    return new RestorePlanActionExecutor(context, config, this, restoreInstantTimestamp, savepointToRestoreTimestamp, extraMetadata).execute();
   }
 
   @Override

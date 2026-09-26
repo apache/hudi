@@ -389,7 +389,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
         rollbackRequests.size());
     HoodieRollbackPlan rollbackPlan = new HoodieRollbackPlan(
         new HoodieInstantInfo(instantTime3, HoodieTimeline.DELTA_COMMIT_ACTION),
-        rollbackRequests, LATEST_ROLLBACK_PLAN_VERSION);
+        rollbackRequests, LATEST_ROLLBACK_PLAN_VERSION, null);
     EmbeddedTimelineService timelineServer =
         EmbeddedTimelineServerHelper.createEmbeddedTimelineService(context, writeConfig);
     writeConfig.setViewStorageConfig(timelineServer.getRemoteFileSystemViewConfig(writeConfig));
