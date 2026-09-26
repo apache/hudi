@@ -82,12 +82,8 @@ class ShowMetadataTableFilesProcedure() extends BaseProcedure with ProcedureBuil
     statuses.asScala.sortBy(p => p.getPath.getName).foreach((f: StoragePathInfo) => {
       rows.add(Row(f.getPath.getName))
     })
-    val results = if (limit.isDefined) {
-      rows.stream().limit(limit.get.asInstanceOf[Int]).toArray().map(r => r.asInstanceOf[Row]).toList
-    } else {
-      rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList
-    }
-    applyFilter(results, filter, outputType)
+    val results = rows.asScala.toList
+    applyFilterAndLimit(results, filter, outputType, resolveLimit(limit))
   }
 
   override def build: Procedure = new ShowMetadataTableFilesProcedure()

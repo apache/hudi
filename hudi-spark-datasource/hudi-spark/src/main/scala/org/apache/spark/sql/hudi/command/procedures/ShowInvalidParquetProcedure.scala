@@ -106,12 +106,14 @@ class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
         isInvalid
       }).map(status => Row(status.getPath.toString))
 
-      val results = if (limit.isDefined) {
+      // With a filter the bound has to come after it, so every invalid file is offered to the filter
+      // rather than only the first `limit` the scan happens to return.
+      val results = if (limit.isDefined && !hasFilter(filter)) {
         parquetRdd.take(limit.get.asInstanceOf[Int]).toSeq
       } else {
         parquetRdd.collect().toSeq
       }
-      applyFilter(results, filter, outputType)
+      applyFilterAndLimit(results, filter, outputType, resolveLimit(limit))
     }
   }
 
