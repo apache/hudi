@@ -422,21 +422,13 @@ public class UpgradeDowngrade {
    * does not carry {@link HoodieTableConfig#COMPLEX_KEYGEN_ENCODING} yet, and persists it with the version change.
    * The data has to be read up-front: the 7 to 8 hop rewrites the timeline on storage while
    * {@code hoodie.properties} still reports the old version.
-   *
-   * <p>The data is read through a meta client that takes the timeline layout from {@code hoodie.properties}:
-   * callers such as the upgrade procedure and hudi-cli pin the layout of the write config, which is newer than
-   * the layout a table below version 8 has on storage, so their meta client cannot load its timeline.
    */
   private void resolveComplexKeygenEncoding(Map<ConfigProperty, String> tablePropsToAdd, String operation) {
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
     if (!KeyGenUtils.requireComplexKeyGenEncodingTracked(tableConfig) || tableConfig.getComplexKeyGenEncoding().isPresent()) {
       return;
     }
-    HoodieTableMetaClient dataMetaClient = HoodieTableMetaClient.builder()
-        .setStorage(metaClient.getStorage())
-        .setBasePath(metaClient.getBasePath())
-        .build();
-    ComplexKeyGenEncoding encoding = KeyGenUtils.resolveComplexKeyGenEncodingForWrite(dataMetaClient, config)
+    ComplexKeyGenEncoding encoding = KeyGenUtils.resolveComplexKeyGenEncodingForWrite(metaClient, config)
         .orElseThrow(() -> new HoodieUpgradeDowngradeException(getComplexKeygenErrorMessage(operation)));
     tablePropsToAdd.put(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING, encoding.name());
     log.info("Recording complex keygen record key encoding {} on table {} as part of the {}",
