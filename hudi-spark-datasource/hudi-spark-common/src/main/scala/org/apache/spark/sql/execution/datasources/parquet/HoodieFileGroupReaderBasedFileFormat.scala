@@ -28,7 +28,7 @@ import org.apache.hudi.common.schema.HoodieSchemaUtils
 import org.apache.hudi.common.schema.internal.InternalSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.log.InstantRange
-import org.apache.hudi.common.table.read.HoodieFileGroupReader
+import org.apache.hudi.common.table.read.{FileGroupReaderTableState, HoodieFileGroupReader}
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.exception.HoodieNotSupportedException
 import org.apache.hudi.io.MergeUtils
@@ -349,6 +349,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     // format is used without a relation. The field is null rather than None on a deserialized format.
     val metaClient: HoodieTableMetaClient = Option(tableMetaClient).flatten.getOrElse(HoodieTableMetaClient
       .builder().setConf(augmentedStorageConf).setBasePath(tablePath).build)
+    val tableState = FileGroupReaderTableState.snapshotOf(metaClient, internalSchemaOpt.isPresent)
     val readerProps = TypedProperties.copy(metaClient.getTableConfig.getProps)
     options.foreach(kv => readerProps.setProperty(kv._1, kv._2))
     readerProps.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction))
@@ -362,7 +363,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       BaseFileReadSchemas(baseReadRequiredSchema, readVectorColumns, outputSchema, Map.empty, requestedStructType)
     }
 
-    val state = new HoodieFileGroupReadState(metaClient, tableSchema, queryTimestamp, readerProps, cdcProps,
+    val state = new HoodieFileGroupReadState(tableState, tableSchema, queryTimestamp, readerProps, cdcProps,
       dataSchema, requestedSchema, internalSchemaOpt, instantRangeOpt, shouldUseRecordPosition, isCount, filters,
       requiredFilters, requiredSchema, partitionSchema, remainingPartitionSchema, fixedPartitionIndexes, outputSchema,
       projectionInputSchema, baseFileReadSchemas)

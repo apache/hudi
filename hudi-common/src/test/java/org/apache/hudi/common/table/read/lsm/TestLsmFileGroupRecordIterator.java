@@ -41,6 +41,7 @@ import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
+import org.apache.hudi.common.table.read.FileGroupReaderTableState;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
@@ -150,7 +151,7 @@ class TestLsmFileGroupRecordIterator {
 
     HoodieReadStats readStats = new HoodieReadStats();
     LsmFileGroupRecordIterator<String> iterator = new LsmFileGroupRecordIterator<>(
-        readerContext, storage, inputSplit, orderingFields, metaClient, props,
+        readerContext, storage, inputSplit, orderingFields, FileGroupReaderTableState.fromMetaClient(metaClient), props,
         ReaderParameters.builder().build(), readStats, Option.empty());
 
     List<BufferedRecord<String>> records = new ArrayList<>();
@@ -264,7 +265,7 @@ class TestLsmFileGroupRecordIterator {
 
     List<String> actual = new ArrayList<>();
     try (LsmFileGroupRecordIterator<IndexedRecord> iterator = new LsmFileGroupRecordIterator<>(
-        context, mock(HoodieStorage.class), split, Collections.singletonList("ts"), metaClient,
+        context, mock(HoodieStorage.class), split, Collections.singletonList("ts"), FileGroupReaderTableState.fromMetaClient(metaClient),
         props, parameters, new HoodieReadStats(), Option.empty())) {
       assertTrue(iterator.hasNext());
       assertTrue(iterator.hasNext());
@@ -280,7 +281,7 @@ class TestLsmFileGroupRecordIterator {
 
     List<String> logOnly = new ArrayList<>();
     try (LsmFileGroupRecordIterator<IndexedRecord> iterator = new LsmFileGroupRecordIterator<>(
-        context, mock(HoodieStorage.class), split, Collections.singletonList("ts"), metaClient,
+        context, mock(HoodieStorage.class), split, Collections.singletonList("ts"), FileGroupReaderTableState.fromMetaClient(metaClient),
         props, parameters, new HoodieReadStats(), Option.empty(), false)) {
       while (iterator.hasNext()) {
         BufferedRecord<IndexedRecord> record = iterator.next();
@@ -444,7 +445,7 @@ class TestLsmFileGroupRecordIterator {
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
     return new LsmFileGroupRecordIterator<>(context, mock(HoodieStorage.class), split, Collections.singletonList("ts"),
-        metaClient, props, ReaderParameters.builder().emitDeletes(false).build(), new HoodieReadStats(), Option.empty());
+        FileGroupReaderTableState.fromMetaClient(metaClient), props, ReaderParameters.builder().emitDeletes(false).build(), new HoodieReadStats(), Option.empty());
   }
 
   private long spillFileCount() throws IOException {

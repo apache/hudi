@@ -23,9 +23,9 @@ import org.apache.hudi.common.config.{HoodieReaderConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.schema.internal.InternalSchema
-import org.apache.hudi.common.table.{HoodieTableMetaClient, ParquetTableSchemaResolver}
+import org.apache.hudi.common.table.ParquetTableSchemaResolver
 import org.apache.hudi.common.table.log.InstantRange
-import org.apache.hudi.common.table.read.{HoodieFileGroupReader, HoodieRecordReader}
+import org.apache.hudi.common.table.read.{FileGroupReaderTableState, HoodieFileGroupReader, HoodieRecordReader}
 import org.apache.hudi.common.table.read.lsm.{HoodieLsmFileGroupReader, LsmReaderUtils}
 import org.apache.hudi.common.util.{ConfigUtils, Option => HOption}
 import org.apache.hudi.common.util.collection.ClosableIterator
@@ -59,7 +59,7 @@ import scala.reflect.ClassTag
  * task of an executor through [[HoodieFileGroupReaderFunction]]. Executors only fill thread-safe lazy caches in it;
  * per-file state such as reader properties is copied before use.
  */
-private[parquet] class HoodieFileGroupReadState(val metaClient: HoodieTableMetaClient,
+private[parquet] class HoodieFileGroupReadState(val tableState: FileGroupReaderTableState,
                                                  val tableSchema: HoodieTableSchema,
                                                  val queryTimestamp: String,
                                                  val readerProps: TypedProperties,
@@ -102,7 +102,7 @@ private[parquet] case class BaseFileReadSchemas(readRequiredSchema: StructType,
  *
  * <p>Broadcasting this holder instead of the value keeps the broadcast independent of `spark.serializer`: Kryo
  * would otherwise serialize the value field by field and ignore the custom Java serialization of types such as
- * [[HoodieSchema]] and [[HadoopStorageConfiguration]].
+ * [[HoodieSchema]].
  */
 private[parquet] class JavaSerializedValue[T: ClassTag] private(bytes: Array[Byte]) extends Serializable {
 
@@ -146,7 +146,7 @@ private[parquet] class HoodieFileGroupReaderFunction(baseFileReader: Broadcast[S
           .getSparkPartitionedFileUtils.getPathFromPartitionedFile(file))
         fileSliceMapping.getSlice(fileGroupName) match {
           case Some(fileSlice) if !s.isCount && (s.requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
-            val tableConfig = s.metaClient.getTableConfig
+            val tableConfig = s.tableState.getTableConfig
             // requiredFilters preserve Spark's row-level filtering semantics, while instantRangeOpt
             // keeps out-of-range records from participating in the file-group merge itself.
             val readerContext = new SparkFileFormatInternalRowReaderContext(
@@ -165,7 +165,7 @@ private[parquet] class HoodieFileGroupReaderFunction(baseFileReader: Broadcast[S
                 ConfigUtils.getStringWithAltKeys(props, HoodieReaderConfig.MERGE_TYPE, true))) {
                 HoodieLsmFileGroupReader.builder[InternalRow]()
                   .withReaderContext(readerContext)
-                  .withHoodieTableMetaClient(s.metaClient)
+                  .withTableState(s.tableState)
                   .withLatestCommitTime(s.queryTimestamp)
                   .withBaseFileOption(fileSlice.getBaseFile)
                   .withLogFiles(fileSlice.getLogFiles)
@@ -180,7 +180,7 @@ private[parquet] class HoodieFileGroupReaderFunction(baseFileReader: Broadcast[S
               } else {
                 HoodieFileGroupReader.builder[InternalRow]()
                   .withReaderContext(readerContext)
-                  .withHoodieTableMetaClient(s.metaClient)
+                  .withTableState(s.tableState)
                   .withLatestCommitTime(s.queryTimestamp)
                   .withBaseFileOption(fileSlice.getBaseFile)
                   .withLogFiles(fileSlice.getLogFiles)
@@ -210,7 +210,7 @@ private[parquet] class HoodieFileGroupReaderFunction(baseFileReader: Broadcast[S
       case cdcFileGroupMapping: HoodiePartitionCDCFileGroupMapping =>
         new CDCFileGroupIterator(
           HoodieCDCFileGroupSplit(cdcFileGroupMapping.getFileSplits().toArray),
-          s.metaClient,
+          s.tableState,
           conf,
           fileGroupBaseFileReader.value,
           s.tableSchema,

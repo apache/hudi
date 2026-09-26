@@ -49,7 +49,16 @@ public class ParquetRowIndexBasedSchemaHandler<T> extends FileGroupReaderSchemaH
                                            Option<InternalSchema> internalSchemaOpt,
                                            TypedProperties properties,
                                            HoodieTableMetaClient metaClient) {
-    super(readerContext, dataSchema, requestedSchema, internalSchemaOpt, properties, metaClient);
+    this(readerContext, dataSchema, requestedSchema, internalSchemaOpt, properties, FileGroupReaderTableState.fromMetaClient(metaClient));
+  }
+
+  public ParquetRowIndexBasedSchemaHandler(HoodieReaderContext<T> readerContext,
+                                           HoodieSchema dataSchema,
+                                           HoodieSchema requestedSchema,
+                                           Option<InternalSchema> internalSchemaOpt,
+                                           TypedProperties properties,
+                                           FileGroupReaderTableState tableState) {
+    super(readerContext, dataSchema, requestedSchema, internalSchemaOpt, properties, tableState);
     if (!readerContext.getRecordContext().supportsParquetRowIndex()) {
       throw new IllegalStateException("Using " + this.getClass().getName() + " but context does not support parquet row index");
     }
