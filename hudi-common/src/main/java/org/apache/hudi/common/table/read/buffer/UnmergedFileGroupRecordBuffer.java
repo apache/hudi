@@ -40,6 +40,7 @@ import java.io.Serializable;
 import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.Map;
 
 class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
@@ -92,6 +93,13 @@ class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
   @Override
   public ClosableIterator<BufferedRecord<T>> getLogRecordIterator() {
+    throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
+  }
+
+  @Override
+  public Map<Serializable, BufferedRecord<T>> getLogRecords() {
+    // This buffer streams log blocks through without indexing them, so an empty map would be a
+    // wrong answer rather than an absent one. Fail the same way the iterator accessor does.
     throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
   }
 
