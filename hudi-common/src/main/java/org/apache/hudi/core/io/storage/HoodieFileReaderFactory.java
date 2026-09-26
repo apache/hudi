@@ -30,10 +30,7 @@ import org.apache.hudi.storage.StoragePathInfo;
 import java.io.IOException;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
-import static org.apache.hudi.common.model.HoodieFileFormat.LANCE;
-import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
-import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
-import static org.apache.hudi.common.model.HoodieFileFormat.VORTEX;
+import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
 
 /**
  * Factory methods to create Hudi file reader.
@@ -41,28 +38,14 @@ import static org.apache.hudi.common.model.HoodieFileFormat.VORTEX;
 public class HoodieFileReaderFactory {
 
   protected final HoodieStorage storage;
+
   public HoodieFileReaderFactory(HoodieStorage storage) {
     this.storage = storage;
   }
 
   public HoodieFileReader getFileReader(HoodieConfig hoodieConfig, StoragePath path) throws IOException {
     final String extension = FSUtils.getFileExtension(path.toString());
-    if (PARQUET.getFileExtension().equals(extension)) {
-      return getFileReader(hoodieConfig, path, PARQUET, Option.empty());
-    }
-    if (HFILE.getFileExtension().equals(extension)) {
-      return getFileReader(hoodieConfig, path, HFILE, Option.empty());
-    }
-    if (ORC.getFileExtension().equals(extension)) {
-      return getFileReader(hoodieConfig, path, ORC, Option.empty());
-    }
-    if (LANCE.getFileExtension().equals(extension)) {
-      return getFileReader(hoodieConfig, path, LANCE, Option.empty());
-    }
-    if (VORTEX.getFileExtension().equals(extension)) {
-      return getFileReader(hoodieConfig, path, VORTEX, Option.empty());
-    }
-    throw new UnsupportedOperationException(extension + " format not supported yet.");
+    return getFileReader(hoodieConfig, path, getFormatByFileExtension(extension), Option.empty());
   }
 
   public HoodieFileReader getFileReader(HoodieConfig hoodieConfig, StoragePath path, HoodieFileFormat format)
@@ -72,6 +55,49 @@ public class HoodieFileReaderFactory {
 
   public HoodieFileReader getFileReader(HoodieConfig hoodieConfig, StoragePath path, HoodieFileFormat format,
                                         Option<HoodieSchema> schemaOption) throws IOException {
+    return newReaderByFormat(hoodieConfig, format, path, schemaOption);
+  }
+
+  public HoodieFileReader getFileReader(HoodieConfig hoodieConfig, StoragePathInfo pathInfo, HoodieFileFormat format,
+                                        Option<HoodieSchema> schemaOption) throws IOException {
+    if (format == HFILE) {
+      // The HFile reader can leverage the file size available in StoragePathInfo,
+      // so dispatch to the StoragePathInfo-specific hook instead of the path-based one.
+      return newHFileFileReader(hoodieConfig, pathInfo, schemaOption);
+    }
+    return newReaderByFormat(hoodieConfig, format, pathInfo.getPath(), schemaOption);
+  }
+
+  public HoodieFileReader getContentReader(HoodieConfig hoodieConfig, StoragePath path, HoodieFileFormat format,
+                                           HoodieStorage storage, byte[] content,
+                                           Option<HoodieSchema> schemaOption) throws IOException {
+    switch (format) {
+      case HFILE:
+        return newHFileFileReader(hoodieConfig, path, storage, content, schemaOption);
+      default:
+        throw new UnsupportedOperationException(format + " format not supported yet.");
+    }
+  }
+
+  /**
+   * Single dispatch point mapping a {@link HoodieFileFormat} to the corresponding reader creation hook.
+   *
+   * <p>Support for a new file format must be added HERE, and only here, by adding a case that calls
+   * the corresponding {@code newXxxFileReader} hook; every {@code getFileReader} overload funnels
+   * through this switch. The only format-specific dispatch outside this method is the
+   * {@link #newHFileFileReader(HoodieConfig, StoragePathInfo, Option)} hook invoked from
+   * {@link #getFileReader(HoodieConfig, StoragePathInfo, HoodieFileFormat, Option)}, which exists
+   * because the HFile reader can leverage the file size in {@link StoragePathInfo}.
+   *
+   * @param hoodieConfig Hudi configs.
+   * @param format       the base file format to create a reader for.
+   * @param path         the file path.
+   * @param schemaOption schema to read the file with, if present.
+   * @return a new file reader for the given format.
+   * @throws IOException upon reader creation error.
+   */
+  private HoodieFileReader newReaderByFormat(HoodieConfig hoodieConfig, HoodieFileFormat format, StoragePath path,
+                                             Option<HoodieSchema> schemaOption) throws IOException {
     switch (format) {
       case PARQUET:
         return newParquetFileReader(path);
@@ -88,31 +114,20 @@ public class HoodieFileReaderFactory {
     }
   }
 
-  public HoodieFileReader getFileReader(HoodieConfig hoodieConfig, StoragePathInfo pathInfo, HoodieFileFormat format,
-                                        Option<HoodieSchema> schemaOption) throws IOException {
-    switch (format) {
-      case PARQUET:
-        return newParquetFileReader(pathInfo.getPath());
-      case HFILE:
-        return newHFileFileReader(hoodieConfig, pathInfo, schemaOption);
-      case ORC:
-        return newOrcFileReader(pathInfo.getPath());
-      case LANCE:
-        return newLanceFileReader(hoodieConfig, pathInfo.getPath());
-      default:
-        throw new UnsupportedOperationException(format + " format not supported yet.");
+  /**
+   * Maps a base file extension to its {@link HoodieFileFormat}. This mapping is format-agnostic,
+   * so new formats do not require any change here.
+   *
+   * @param extension the file extension including the leading dot, e.g. ".parquet".
+   * @return the matching base file format.
+   */
+  private static HoodieFileFormat getFormatByFileExtension(String extension) {
+    for (HoodieFileFormat format : HoodieFileFormat.values()) {
+      if (format != HOODIE_LOG && format.getFileExtension().equals(extension)) {
+        return format;
+      }
     }
-  }
-
-  public HoodieFileReader getContentReader(HoodieConfig hoodieConfig, StoragePath path, HoodieFileFormat format,
-                                           HoodieStorage storage, byte[] content,
-                                           Option<HoodieSchema> schemaOption) throws IOException {
-    switch (format) {
-      case HFILE:
-        return newHFileFileReader(hoodieConfig, path, storage, content, schemaOption);
-      default:
-        throw new UnsupportedOperationException(format + " format not supported yet.");
-    }
+    throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
 
   protected HoodieFileReader newParquetFileReader(StoragePath path) {
