@@ -732,9 +732,10 @@ public class Types {
 
     private final Field[] fields;
 
-    private transient Map<String, Field> nameToFields = null;
-    private transient Map<String, Field> lowercaseNameToFields = null;
-    private transient Map<Integer, Field> idToFields = null;
+    // Built lazily and published through volatile fields, since a record type can be shared by concurrent readers.
+    private transient volatile Map<String, Field> nameToFields = null;
+    private transient volatile Map<String, Field> lowercaseNameToFields = null;
+    private transient volatile Map<Integer, Field> idToFields = null;
 
     private RecordType(List<Field> fields, String name) {
       this.name = name;
@@ -750,34 +751,40 @@ public class Types {
      * Case-sensitive get field by name
      */
     public Field fieldByName(String name) {
-      if (nameToFields == null) {
-        nameToFields = Arrays.stream(fields)
+      Map<String, Field> result = nameToFields;
+      if (result == null) {
+        result = Arrays.stream(fields)
             .collect(Collectors.toMap(
                 Field::name,
                 field -> field));
+        nameToFields = result;
       }
-      return nameToFields.get(name);
+      return result.get(name);
     }
 
     public Field fieldByNameCaseInsensitive(String name) {
-      if (lowercaseNameToFields == null) {
-        lowercaseNameToFields = Arrays.stream(fields)
+      Map<String, Field> result = lowercaseNameToFields;
+      if (result == null) {
+        result = Arrays.stream(fields)
             .collect(Collectors.toMap(
                 field -> field.name.toLowerCase(Locale.ROOT),
                 field -> field));
+        lowercaseNameToFields = result;
       }
-      return lowercaseNameToFields.get(name.toLowerCase(Locale.ROOT));
+      return result.get(name.toLowerCase(Locale.ROOT));
     }
 
     @Override
     public Field field(int id) {
-      if (idToFields == null) {
-        idToFields = Arrays.stream(fields)
+      Map<Integer, Field> result = idToFields;
+      if (result == null) {
+        result = Arrays.stream(fields)
             .collect(Collectors.toMap(
                 Field::fieldId,
                 field -> field));
+        idToFields = result;
       }
-      return idToFields.get(id);
+      return result.get(id);
     }
 
     @Override
