@@ -21,18 +21,21 @@ package org.apache.hudi.functional.cdc
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions.{MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD_OPT_KEY, PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY}
 import org.apache.hudi.QuickstartUtils.getQuickstartWriteConfigs
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
-import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplementalLoggingMode}
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils.schemaBySupplementalLoggingMode
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.{deleteRecordsToStrings, recordsToStrings}
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.storage.StoragePath
 
 import org.apache.avro.generic.GenericRecord
-import org.apache.spark.sql.{Row, SaveMode}
+import org.apache.spark.sql.{DataFrame, Row, SaveMode}
+import org.apache.spark.sql.functions.{col, get_json_object}
 import org.apache.spark.sql.types.{ArrayType, IntegerType, LongType, MapType, StringType, StructField, StructType}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
@@ -648,6 +651,53 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val updatedCnt2 = 50 - insertedCnt2
     val cdcDataOnly2 = cdcDataFrame(instantBefore(commitTime2))
     assertCDCOpCnt(cdcDataOnly2, insertedCnt2, updatedCnt2, 0)
+  }
+
+  /**
+   * Changes of MERGE_ON_READ delta commits that only write log files, with before images spread over
+   * log files that, before table version 8, are named after the base instant of the file slice.
+   */
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableVersion], names = Array("SIX", "TEN"))
+  def testMORLogFileChangesAcrossTableVersions(tableVersion: HoodieTableVersion): Unit = {
+    val options = commonOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL,
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> tableVersion.versionCode.toString,
+      // routes the updates to log files instead of merging them into the small base files
+      HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key -> "0")
+    val inserts = dataGen.generateInserts("000", 100)
+    val updates1 = dataGen.generateUniqueUpdates("001", 30)
+    // updates records of the previous commit, so their before images come from its log files
+    val updates2 = dataGen.generateUpdatesWithTimestamp("002", updates1.subList(0, 20), System.currentTimeMillis() + 1000)
+    Seq((inserts, SaveMode.Overwrite), (updates1, SaveMode.Append), (updates2, SaveMode.Append)).foreach { case (records, saveMode) =>
+      spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records).asScala.toList, 2))
+        .write.format("org.apache.hudi").options(options).mode(saveMode).save(basePath)
+    }
+
+    metaClient = createMetaClient(spark, basePath)
+    assertEquals(tableVersion, metaClient.getTableConfig.getTableVersion)
+    val instants = metaClient.getActiveTimeline.getDeltaCommitTimeline.filterCompletedInstants.getInstants.asScala
+    assertEquals(3, instants.size)
+    instants.tail.foreach { instant =>
+      assertTrue(metaClient.getActiveTimeline.readCommitMetadata(instant).getWriteStats.asScala
+        .forall(stat => FSUtils.isLogFile(new StoragePath(stat.getPath))))
+    }
+    val Seq(_, commitTime2, commitTime3) = instants.map(_.requestedTime).toSeq
+
+    assertUpdateImages(cdcDataFrame(instantBefore(commitTime3)),
+      Set(Row(commitTime3, "rider-001", "rider-002", 20L)))
+    assertUpdateImages(cdcDataFrame(instantBefore(commitTime2)),
+      Set(Row(commitTime2, "rider-000", "rider-001", 30L), Row(commitTime3, "rider-001", "rider-002", 20L)))
+  }
+
+  private def assertUpdateImages(cdcData: DataFrame, expected: Set[Row]): Unit = {
+    assertEquals(0, cdcData.where("op != 'u'").count())
+    val actual = cdcData
+      .select(col("ts_ms"), get_json_object(col("before"), "$.rider").as("before_rider"),
+        get_json_object(col("after"), "$.rider").as("after_rider"))
+      .groupBy("ts_ms", "before_rider", "after_rider").count()
+      .collect().toSet
+    assertEquals(expected, actual)
   }
 
   @Test

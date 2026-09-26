@@ -160,6 +160,9 @@ class TestCdcIterators {
   @Test
   void testReplaceCommitIteratorReadsBeforeSlice() {
     FileSlice beforeSlice = fileSlice();
+    // a log file named after the base instant, as written by a later delta commit before table version 8
+    beforeSlice.addLogFile(new HoodieLogFile(
+        new StoragePath("/table/region=us/.file-id_001.log.2_1-0-1")));
     HoodieCDCFileSplit fileSplit = new HoodieCDCFileSplit(
         "002",
         HoodieCDCInferenceCase.REPLACE_COMMIT,
@@ -186,12 +189,31 @@ class TestCdcIterators {
             });
 
     assertEquals("/table", capturedSplit.get().getTablePath());
+    assertEquals("002", capturedSplit.get().getLatestCommit());
     assertTrue(iterator.hasNext());
     RowData projected = iterator.next();
     assertEquals(RowKind.DELETE, projected.getRowKind());
     assertEquals("selected", projected.getString(0).toString());
     iterator.close();
     verify(nested).close();
+
+    // from table version 8, a delta commit requested after the replace commit may complete before it
+    // under non-blocking concurrency control, and its log file bounds the read
+    FileSlice concurrentSlice = fileSlice();
+    concurrentSlice.addLogFile(new HoodieLogFile(
+        new StoragePath("/table/region=us/.file-id_003.log.1_1-0-1")));
+    new CdcIterators.ReplaceCommitIterator(
+        "/table",
+        rowType("selected"),
+        new int[] {1},
+        1024L,
+        new HoodieCDCFileSplit("002", HoodieCDCInferenceCase.REPLACE_COMMIT, Collections.emptyList(),
+            Option.of(concurrentSlice), Option.empty()),
+        split -> {
+          capturedSplit.set(split);
+          return nested;
+        }).close();
+    assertEquals("003", capturedSplit.get().getLatestCommit());
 
     HoodieCDCFileSplit missingBeforeSlice = new HoodieCDCFileSplit(
         "003",
@@ -227,14 +249,18 @@ class TestCdcIterators {
     assertEquals("file-id", split.getFileId());
     assertEquals("region=us", split.getPartitionPath());
     assertEquals(4096L, split.getMaxCompactionMemoryInBytes());
+    assertEquals("002", split.getLatestCommit());
+    assertEquals("004", CdcIterators.fileSlice2Split("/table", fileSlice, "004", 4096L).getLatestCommit());
 
+    // the log file name carries the base instant "001" while the blocks are written by the commit "003"
     MergeOnReadInputSplit logSplit = CdcIterators.singleLogFile2Split(
         "/table",
-        "/table/region=us/.file-id_003.log.1_1-0-1",
+        "/table/region=us/.file-id_001.log.2_1-0-1",
+        "003",
         8192L);
     assertFalse(logSplit.getBasePath().isPresent());
     assertEquals(
-        Collections.singletonList("/table/region=us/.file-id_003.log.1_1-0-1"),
+        Collections.singletonList("/table/region=us/.file-id_001.log.2_1-0-1"),
         logSplit.getLogPaths().get());
     assertEquals("003", logSplit.getLatestCommit());
     assertEquals("file-id", logSplit.getFileId());
