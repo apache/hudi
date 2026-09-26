@@ -50,7 +50,7 @@ import java.time.ZoneId
 
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 
-class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
+class ParquetSchemaEvolutionUtils(readConf: Configuration,
                                   filePath: Path,
                                   requiredSchema: StructType,
                                   partitionSchema: StructType,
@@ -62,14 +62,14 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
 
   private lazy val schemaUtils: HoodieSchemaUtils = sparkAdapter.getSchemaUtils
 
-  private lazy val tablePath: String = sharedConf.get(SparkInternalSchemaConverter.HOODIE_TABLE_PATH)
+  private lazy val tablePath: String = readConf.get(SparkInternalSchemaConverter.HOODIE_TABLE_PATH)
   private lazy val fileSchema: InternalSchema = if (shouldUseInternalSchema) {
     val commitInstantTime = FSUtils.getCommitTime(filePath.getName).toLong
     //TODO: HARDCODED TIMELINE OBJECT
-    val validCommits = sharedConf.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST)
+    val validCommits = readConf.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST)
     val layout = TimelineLayout.fromVersion(TimelineLayoutVersion.CURR_LAYOUT_VERSION)
     InternalSchemaCache.getInternalSchemaByVersionId(commitInstantTime, tablePath,
-      HoodieStorageUtils.getStorage(tablePath, HadoopFSUtils.getStorageConf(sharedConf)), if (validCommits == null) "" else validCommits, layout)
+      HoodieStorageUtils.getStorage(tablePath, HadoopFSUtils.getStorageConf(readConf)), if (validCommits == null) "" else validCommits, layout)
   } else {
     null
   }
@@ -80,9 +80,13 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
 
   protected var typeChangeInfos: java.util.Map[Integer, Pair[DataType, DataType]] = null
 
-  def getHadoopConfClone(footerFileMetaData: FileMetaData, enableVectorizedReader: Boolean): Configuration = {
-    // Clone new conf
-    val hadoopAttemptConf = new Configuration(sharedConf)
+  /**
+   * Sets the file's requested read schema on the read configuration and returns it for the task
+   * attempt context. The configuration belongs to this read only (see [[SparkParquetReaderBase.read]]),
+   * so it is updated in place.
+   */
+  def getHadoopAttemptConf(footerFileMetaData: FileMetaData, enableVectorizedReader: Boolean): Configuration = {
+    val hadoopAttemptConf = readConf
     typeChangeInfos = if (shouldUseInternalSchema) {
       // Empty projections (count(*), select 1) read no column data, so there is nothing to
       // reconstruct - and querySchemaOption is the UNPRUNED table schema in that case (see
@@ -255,7 +259,7 @@ object ParquetSchemaEvolutionUtils {
    * names both routes rather than blaming pushVariantIntoScan on a read that never set it.
    * Real support is #18285.
    *
-   * Shared by [[ParquetSchemaEvolutionUtils.getHadoopConfClone]] and the per-version legacy
+   * Shared by [[ParquetSchemaEvolutionUtils.getHadoopAttemptConf]] and the per-version legacy
    * file formats, which carry a copy of the same schema-merge block. Callers gate on a
    * non-empty projection: empty-projection queries (count(*), select 1) read no column data
    * and must keep working, and the query schema is unpruned in that case.

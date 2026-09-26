@@ -460,7 +460,7 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
    * spans a base-only int file (p2) and an int base file merged with a long log file (p1). The
    * top-level `age` promotion is atomic and is read with the vectorized parquet reader on. When the
    * same promotion is applied inside the `nested` struct the changed top-level column is no longer
-   * atomic: ParquetSchemaEvolutionUtils.getHadoopConfClone must reject it fast on the base slice
+   * atomic: ParquetSchemaEvolutionUtils.getHadoopAttemptConf must reject it fast on the base slice
    * instead of returning corrupt columns, and the workaround it advertises (disabling the vectorized
    * reader) must actually widen `nested.a` across both shapes. COW is covered by
    * TestLegacyParquetReadPath#testCowSnapshotReadWithNestedTypeChange.
