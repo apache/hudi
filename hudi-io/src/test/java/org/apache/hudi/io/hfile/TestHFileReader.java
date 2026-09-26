@@ -31,7 +31,10 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -71,6 +74,9 @@ public class TestHFileReader {
       + "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-";
   private static final Function<Integer, String> LARGE_KEY_CREATOR = i -> LARGE_KEY_PREFIX + String.format("%09d", i);
   private static final int SEEK_TO_THROW_EXCEPTION = -3;
+  private static final byte KEY_BUFFER_PADDING = (byte) 0xFF;
+  private static final int KEY_BUFFER_PREFIX_PADDING = 7;
+  private static final int KEY_BUFFER_SUFFIX_PADDING = 5;
 
   static Stream<Arguments> testArgsReadHFilePointAndPrefixLookup() {
     return Stream.of(
@@ -843,6 +849,87 @@ public class TestHFileReader {
     verifyHFileReadCompatibility(bootstrapIndexFile, 4, Option.empty());
   }
 
+  /**
+   * Validates {@link HFileDataBlock#seekTo} when a data block holds many entries, which is the
+   * case the optimization targets: the scan compares each entry key directly against the lookup
+   * key on the backing buffer instead of materializing a {@link KeyValue}/{@link Key} per entry.
+   *
+   * <p>The HFile is written with a small block size so that several entries land in each data
+   * block (and the file spans multiple blocks). Keys/values are zero-padded to a constant width,
+   * so the packing is deterministic (8 entries per block at this block size); the lookups below are
+   * chosen to land in the middle of a block so the scan must iterate past earlier entries before
+   * the comparison resolves. This exercises both the buffer-direct comparison / {@code readInt}
+   * based increment and the deferred-cursor path (the previous key-value is no longer cached for
+   * scanned-past entries, so an in-range result resolves the key lazily via {@code getKeyValue}).
+   */
+  @Test
+  public void testSeekToScanWithinMultiEntryBlocks() throws IOException {
+    int numEntries = 64;
+    // 59 bytes per entry (18-byte key + 20-byte value + 21 extra bytes), so a 512-byte block
+    // holds 8 entries and the 64 entries span 8 data blocks.
+    HFileContext context = HFileContext.builder().blockSize(512).build();
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    try (DataOutputStream outputStream = new DataOutputStream(baos);
+         HFileWriter writer = new HFileWriterImpl(context, outputStream)) {
+      for (int i = 0; i < numEntries; i++) {
+        writer.append(KEY_CREATOR.apply(i), VALUE_CREATOR.apply(i).getBytes(StandardCharsets.UTF_8));
+      }
+    }
+    byte[] content = baos.toByteArray();
+
+    List<KeyLookUpInfo> keyLookUpInfoList = Arrays.asList(
+        // Lookup smaller than the first key: cursor sits before the file's first key.
+        new KeyLookUpInfo("", SEEK_TO_BEFORE_FILE_FIRST_KEY, KEY_CREATOR.apply(0), VALUE_CREATOR.apply(0)),
+        // Exact match on the first entry of the first block (match on the first comparison).
+        new KeyLookUpInfo(KEY_CREATOR.apply(0), SEEK_TO_FOUND, KEY_CREATOR.apply(0), VALUE_CREATOR.apply(0)),
+        // Exact match on the last entry of a block: the scan walks past the earlier 7 entries.
+        new KeyLookUpInfo(KEY_CREATOR.apply(7), SEEK_TO_FOUND, KEY_CREATOR.apply(7), VALUE_CREATOR.apply(7)),
+        // Exact match mid-block.
+        new KeyLookUpInfo(KEY_CREATOR.apply(25), SEEK_TO_FOUND, KEY_CREATOR.apply(25), VALUE_CREATOR.apply(25)),
+        // Lookup strictly between two adjacent mid-block keys: in range, cursor resolves to the
+        // lower key via the deferred read (the scanned-past key-value is not cached).
+        new KeyLookUpInfo(KEY_CREATOR.apply(30) + "a", SEEK_TO_IN_RANGE, KEY_CREATOR.apply(30), VALUE_CREATOR.apply(30)),
+        // Exact match in a later block.
+        new KeyLookUpInfo(KEY_CREATOR.apply(50), SEEK_TO_FOUND, KEY_CREATOR.apply(50), VALUE_CREATOR.apply(50)),
+        // Exact match on the very last entry of the file.
+        new KeyLookUpInfo(KEY_CREATOR.apply(numEntries - 1), SEEK_TO_FOUND,
+            KEY_CREATOR.apply(numEntries - 1), VALUE_CREATOR.apply(numEntries - 1)),
+        // Lookup greater than the last key: end of file.
+        new KeyLookUpInfo(KEY_CREATOR.apply(numEntries - 1) + "a", SEEK_TO_EOF, "", ""));
+
+    try (HFileReader reader = new HFileReaderImpl(
+        new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(content)), content.length)) {
+      reader.initializeMetadata();
+      verifyHFileSeekToReads(reader, keyLookUpInfoList);
+    }
+
+    try (HFileReader reader = new HFileReaderImpl(
+        new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(content)), content.length)) {
+      reader.initializeMetadata();
+      verifyHFileSeekToReads(reader, keyLookUpInfoList, TestHFileReader::serializedKeyAtNonZeroOffset);
+    }
+  }
+
+  private static Key serializedKeyAtNonZeroOffset(String content) {
+    byte[] contentBytes = content.getBytes(StandardCharsets.UTF_8);
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    try (DataOutputStream outputStream = new DataOutputStream(baos)) {
+      outputStream.write(newPadding(KEY_BUFFER_PREFIX_PADDING));
+      HFileBlock.writeKey(outputStream, contentBytes, 0, contentBytes.length);
+      outputStream.write(newPadding(KEY_BUFFER_SUFFIX_PADDING));
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
+    return new Key(baos.toByteArray(), KEY_BUFFER_PREFIX_PADDING,
+        HFileBlock.keyValueKeyLength(contentBytes.length));
+  }
+
+  private static byte[] newPadding(int length) {
+    byte[] padding = new byte[length];
+    Arrays.fill(padding, KEY_BUFFER_PADDING);
+    return padding;
+  }
+
   public static byte[] readHFileFromResources(String filename) throws IOException {
     long size = TestHFileReader.class
         .getResource(filename).openConnection().getContentLength();
@@ -950,6 +1037,12 @@ public class TestHFileReader {
 
   private static void verifyHFileSeekToReads(HFileReader reader,
                                              List<KeyLookUpInfo> keyLookUpInfoList) throws IOException {
+    verifyHFileSeekToReads(reader, keyLookUpInfoList, UTF8StringKey::new);
+  }
+
+  private static void verifyHFileSeekToReads(HFileReader reader,
+                                             List<KeyLookUpInfo> keyLookUpInfoList,
+                                             Function<String, Key> lookUpKeyCreator) throws IOException {
     assertTrue(reader.seekTo());
 
     for (KeyLookUpInfo keyLookUpInfo : keyLookUpInfoList) {
@@ -957,11 +1050,11 @@ public class TestHFileReader {
       if (expectedSeekToResult == SEEK_TO_THROW_EXCEPTION) {
         assertThrows(
             IllegalStateException.class,
-            () -> reader.seekTo(new UTF8StringKey(keyLookUpInfo.getLookUpKey())));
+            () -> reader.seekTo(lookUpKeyCreator.apply(keyLookUpInfo.getLookUpKey())));
       } else {
         assertEquals(
             expectedSeekToResult,
-            reader.seekTo(new UTF8StringKey(keyLookUpInfo.getLookUpKey())),
+            reader.seekTo(lookUpKeyCreator.apply(keyLookUpInfo.getLookUpKey())),
             String.format("Unexpected seekTo result for lookup key %s", keyLookUpInfo.getLookUpKey()));
       }
       switch (expectedSeekToResult) {
