@@ -53,6 +53,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.column.statistics.Statistics;
+import org.apache.parquet.crypto.DecryptionPropertiesFactory;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetReader;
@@ -60,6 +61,7 @@ import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
+import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.schema.DecimalMetadata;
 import org.apache.parquet.schema.MessageType;
@@ -194,6 +196,23 @@ public class ParquetUtils extends FileFormatUtils {
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read row keys from Parquet " + filePath, e);
     }
+  }
+
+  /**
+   * Sets the Hadoop read options of a reader built with {@code ParquetReader.Builder(InputFile)} from the
+   * file's {@link Configuration}, as {@code ParquetReader.Builder(Path)} followed by {@code withConf} does,
+   * without creating a new {@link Configuration}. On parquet 1.15+ that constructor builds plain
+   * {@code ParquetReadOptions}, which never consult the {@code parquet.crypto.factory.class} decryption
+   * factory, and {@code withConf} drops the file path, so the decryption properties are resolved here with it.
+   */
+  public static <T> ParquetReader.Builder<T> withHadoopReadOptions(ParquetReader.Builder<T> builder, HadoopInputFile file) {
+    Configuration conf = file.getConfiguration();
+    builder.withConf(conf);
+    DecryptionPropertiesFactory decryptionFactory = DecryptionPropertiesFactory.loadFactory(conf);
+    if (decryptionFactory != null) {
+      builder.withDecryption(decryptionFactory.getFileDecryptionProperties(conf, file.getPath()));
+    }
+    return builder;
   }
 
   public static ParquetMetadata readMetadata(HoodieStorage storage, StoragePath parquetFilePath) {
