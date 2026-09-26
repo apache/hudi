@@ -382,7 +382,8 @@ public class ArchivedCommitsCommand {
     }
     if (legacyArchive) {
       // ArchivedTimelineV1 caches the JSON rendering of each archived entry, which is what the
-      // legacy reader printed, and the v1 serde cannot decode it back into the Avro classes
+      // legacy reader printed, and the v1 serde decodes JSON back into the Avro classes only for
+      // commit metadata
       return new String(details.get(), StandardCharsets.UTF_8);
     }
     try {

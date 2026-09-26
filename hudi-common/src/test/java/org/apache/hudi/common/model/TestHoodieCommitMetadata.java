@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCompatibility;
 import org.apache.hudi.common.schema.HoodieSchemaField;
@@ -32,6 +33,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.util.FileIOUtils;
 
 import lombok.extern.slf4j.Slf4j;
@@ -49,12 +51,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.convertMetadataToByteArray;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -129,7 +133,7 @@ public class TestHoodieCommitMetadata {
   }
 
   @Test
-  public void testGetDependentFileSliceForFileGroupFromDeltaCommit() throws IOException {
+  public void testGetDependentFileSliceForFileGroupFromDeltaCommit() {
     org.apache.hudi.avro.model.HoodieCommitMetadata commitMetadata = new org.apache.hudi.avro.model.HoodieCommitMetadata();
     org.apache.hudi.avro.model.HoodieWriteStat writeStat1 = createWriteStat("111", "111base", Arrays.asList("1.log", "2.log"));
     org.apache.hudi.avro.model.HoodieWriteStat writeStat2 = createWriteStat("111", "111base", Arrays.asList("3.log", "4.log"));
@@ -138,11 +142,9 @@ public class TestHoodieCommitMetadata {
     partitionToWriteStatsMap.put("partition1", Arrays.asList(writeStat2, writeStat3));
     partitionToWriteStatsMap.put("partition2", Collections.singletonList(writeStat1));
     commitMetadata.setPartitionToWriteStats(partitionToWriteStatsMap);
-    byte[] serializedCommitMetadata = TimelineMetadataUtils.serializeAvroMetadata(
-        commitMetadata, org.apache.hudi.avro.model.HoodieCommitMetadata.class).get();
 
     Option<Pair<String, List<String>>> result = HoodieCommitMetadata.getDependentFileSliceForFileGroupFromDeltaCommit(
-        new ByteArrayInputStream(serializedCommitMetadata), new HoodieFileGroupId("partition1", "111"), "4.log");
+        commitMetadata, new HoodieFileGroupId("partition1", "111"), "4.log");
 
     assertTrue(result.isPresent());
     assertEquals("111base", result.get().getKey());
@@ -150,32 +152,68 @@ public class TestHoodieCommitMetadata {
     assertEquals("3.log", result.get().getValue().get(0));
 
     result = HoodieCommitMetadata.getDependentFileSliceForFileGroupFromDeltaCommit(
-        new ByteArrayInputStream(serializedCommitMetadata), new HoodieFileGroupId("partition1", "222"), "5.log");
+        commitMetadata, new HoodieFileGroupId("partition1", "222"), "5.log");
     assertTrue(result.isPresent());
     assertTrue(result.get().getKey().isEmpty());
     assertEquals(0, result.get().getValue().size());
 
-    org.apache.hudi.avro.model.HoodieWriteStat writeStat4 = createWriteStat("111", null, Arrays.asList("1.log"));
-    org.apache.hudi.avro.model.HoodieWriteStat writeStat5 = createWriteStat("111", null, Arrays.asList("2.log"));
+    String logFile1 = FSUtils.makeInlineLogFileName("111", HoodieLogFile.DELTA_EXTENSION, "001", 1, "1-0-1");
+    String logFile2 = FSUtils.makeInlineLogFileName("111", HoodieLogFile.DELTA_EXTENSION, "001", 2, "1-0-1");
+    org.apache.hudi.avro.model.HoodieWriteStat writeStat4 = createWriteStat("111", null, Arrays.asList(logFile1));
+    org.apache.hudi.avro.model.HoodieWriteStat writeStat5 = createWriteStat("111", null, Arrays.asList(logFile2));
     partitionToWriteStatsMap = new HashMap<>();
     // simulate the scenario like eager flushing of MOR ingestion in flink writer.
     partitionToWriteStatsMap.put("partition1", Arrays.asList(writeStat4, writeStat5));
     commitMetadata.setPartitionToWriteStats(partitionToWriteStatsMap);
-    serializedCommitMetadata = TimelineMetadataUtils.serializeAvroMetadata(
-        commitMetadata, org.apache.hudi.avro.model.HoodieCommitMetadata.class).get();
 
     result = HoodieCommitMetadata.getDependentFileSliceForFileGroupFromDeltaCommit(
-        new ByteArrayInputStream(serializedCommitMetadata), new HoodieFileGroupId("partition1", "111"), "1.log");
+        commitMetadata, new HoodieFileGroupId("partition1", "111"), logFile1);
     assertTrue(result.isPresent());
     assertEquals("", result.get().getKey());
     assertEquals(0, result.get().getValue().size());
 
     result = HoodieCommitMetadata.getDependentFileSliceForFileGroupFromDeltaCommit(
-        new ByteArrayInputStream(serializedCommitMetadata), new HoodieFileGroupId("partition1", "111"), "2.log");
+        commitMetadata, new HoodieFileGroupId("partition1", "111"), logFile2);
     assertTrue(result.isPresent());
     assertEquals("", result.get().getKey());
     assertEquals(1, result.get().getValue().size());
-    assertEquals("1.log", result.get().getValue().get(0));
+    assertEquals(logFile1, result.get().getValue().get(0));
+  }
+
+  /**
+   * Before table version 8, all the log files of a file slice carry its base instant, so only the log version
+   * orders them, including from version 10 on.
+   */
+  @Test
+  void testGetDependentFileSliceOrdersLogFilesByLogVersion() {
+    List<String> logFiles = IntStream.rangeClosed(1, 11)
+        .mapToObj(version -> FSUtils.makeInlineLogFileName("111", HoodieLogFile.DELTA_EXTENSION, "001", version, "1-0-1"))
+        .collect(Collectors.toList());
+    // an eager flush writes two stats of the same file group in one commit, each listing the log files so far
+    org.apache.hudi.avro.model.HoodieCommitMetadata commitMetadata = new org.apache.hudi.avro.model.HoodieCommitMetadata();
+    commitMetadata.setPartitionToWriteStats(Collections.singletonMap("partition1", Arrays.asList(
+        createWriteStat("111", "111base", logFiles.subList(0, 10)),
+        createWriteStat("111", "111base", logFiles))));
+    HoodieFileGroupId fileGroupId = new HoodieFileGroupId("partition1", "111");
+
+    for (int version : new int[] {9, 10, 11}) {
+      Option<Pair<String, List<String>>> result = HoodieCommitMetadata.getDependentFileSliceForFileGroupFromDeltaCommit(
+          commitMetadata, fileGroupId, logFiles.get(version - 1));
+      assertEquals("111base", result.get().getKey());
+      assertEquals(logFiles.subList(0, version - 1), result.get().getValue());
+    }
+  }
+
+  @Test
+  void testGetDependentFileSliceWithoutLogFilesInWriteStat() {
+    org.apache.hudi.avro.model.HoodieCommitMetadata commitMetadata = new org.apache.hudi.avro.model.HoodieCommitMetadata();
+    commitMetadata.setPartitionToWriteStats(Collections.singletonMap("partition1",
+        Collections.singletonList(createWriteStat("111", null, null))));
+
+    HoodieException exception = assertThrows(HoodieException.class,
+        () -> HoodieCommitMetadata.getDependentFileSliceForFileGroupFromDeltaCommit(
+            commitMetadata, new HoodieFileGroupId("partition1", "111"), "1.log"));
+    assertTrue(exception.getMessage().contains("logFiles is null"), exception.getMessage());
   }
 
   @Test

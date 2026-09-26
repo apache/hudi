@@ -35,18 +35,16 @@ import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
-
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeAvroMetadata;
 
 /**
  * All the metadata that gets stored along with a commit.
@@ -238,47 +236,58 @@ public class HoodieCommitMetadata implements Serializable {
    * For a log file, get the dependent file slice from the commit metadata.
    * The file slice is utilized to infer the row-level changes from the given log file payloads.
    *
-   * @param inputStream    The commit metadata input stream
+   * @param commitMetadata The commit metadata of the delta commit
    * @param fileGroupId    The file group id
    * @param currentLogFile The log file
    */
   public static Option<Pair<String, List<String>>> getDependentFileSliceForFileGroupFromDeltaCommit(
-      InputStream inputStream, HoodieFileGroupId fileGroupId, String currentLogFile) {
-    try {
-      org.apache.hudi.avro.model.HoodieCommitMetadata commitMetadata = deserializeAvroMetadata(inputStream, org.apache.hudi.avro.model.HoodieCommitMetadata.class);
-      Map<String,List<org.apache.hudi.avro.model.HoodieWriteStat>> partitionToWriteStatsMap =
-              commitMetadata.getPartitionToWriteStats();
-      List<org.apache.hudi.avro.model.HoodieWriteStat> targetWriteStats = new ArrayList<>();
-      for (Map.Entry<String, List<org.apache.hudi.avro.model.HoodieWriteStat>> partitionToWriteStat: partitionToWriteStatsMap.entrySet()) {
-        for (org.apache.hudi.avro.model.HoodieWriteStat writeStat: partitionToWriteStat.getValue()) {
-          HoodieFileGroupId fgId = new HoodieFileGroupId(partitionToWriteStat.getKey(), writeStat.getFileId());
-          if (fgId.equals(fileGroupId)) {
-            targetWriteStats.add(writeStat);
-          }
+      org.apache.hudi.avro.model.HoodieCommitMetadata commitMetadata, HoodieFileGroupId fileGroupId, String currentLogFile) {
+    Map<String,List<org.apache.hudi.avro.model.HoodieWriteStat>> partitionToWriteStatsMap =
+            commitMetadata.getPartitionToWriteStats();
+    List<org.apache.hudi.avro.model.HoodieWriteStat> targetWriteStats = new ArrayList<>();
+    for (Map.Entry<String, List<org.apache.hudi.avro.model.HoodieWriteStat>> partitionToWriteStat: partitionToWriteStatsMap.entrySet()) {
+      for (org.apache.hudi.avro.model.HoodieWriteStat writeStat: partitionToWriteStat.getValue()) {
+        HoodieFileGroupId fgId = new HoodieFileGroupId(partitionToWriteStat.getKey(), writeStat.getFileId());
+        if (fgId.equals(fileGroupId)) {
+          targetWriteStats.add(writeStat);
         }
       }
-      if (targetWriteStats.isEmpty()) {
-        return Option.empty();
-      } else if (targetWriteStats.size() == 1) {
-        org.apache.hudi.avro.model.HoodieWriteStat writeStat = targetWriteStats.get(0);
-        return Option.of(Pair.of(writeStat.getBaseFile() == null ? "" : writeStat.getBaseFile(),
-            writeStat.getLogFiles().stream().filter(logFile -> !logFile.equals(currentLogFile)).collect(Collectors.toList())));
-      } else {
-        // There are two cases that multiple write-stats are generated for the same file group within one commit:
-        // 1). log file rolls over(the file size exceeds the upper threshold);
-        // 2). eager flush from flink memory buffer(when memory buffer reaches the limit).
-        String baseFile = "";
-        List<String> logFiles = new ArrayList<>();
-        for (org.apache.hudi.avro.model.HoodieWriteStat writeStat: targetWriteStats) {
-          baseFile = writeStat.getBaseFile() == null ? "" : writeStat.getBaseFile();
-          logFiles.addAll(writeStat.getLogFiles());
-        }
-        // filter out the log files written after the given log file.
-        return Option.of(Pair.of(baseFile, logFiles.stream().filter(f -> f.compareTo(currentLogFile) < 0).distinct().sorted().collect(Collectors.toList())));
-      }
-    } catch (Exception e) {
-      throw new HoodieException("Fail to parse the base file and log files from DeltaCommit", e);
     }
+    if (targetWriteStats.isEmpty()) {
+      return Option.empty();
+    } else if (targetWriteStats.size() == 1) {
+      org.apache.hudi.avro.model.HoodieWriteStat writeStat = targetWriteStats.get(0);
+      return Option.of(Pair.of(writeStat.getBaseFile() == null ? "" : writeStat.getBaseFile(),
+          getLogFiles(writeStat, fileGroupId, currentLogFile).stream().filter(logFile -> !logFile.equals(currentLogFile)).collect(Collectors.toList())));
+    } else {
+      // There are two cases that multiple write-stats are generated for the same file group within one commit:
+      // 1). log file rolls over(the file size exceeds the upper threshold);
+      // 2). eager flush from flink memory buffer(when memory buffer reaches the limit).
+      String baseFile = "";
+      List<String> logFiles = new ArrayList<>();
+      for (org.apache.hudi.avro.model.HoodieWriteStat writeStat: targetWriteStats) {
+        baseFile = writeStat.getBaseFile() == null ? "" : writeStat.getBaseFile();
+        logFiles.addAll(getLogFiles(writeStat, fileGroupId, currentLogFile));
+      }
+      // filter out the log files written after the given log file.
+      Comparator<HoodieLogFile> logFileComparator = HoodieLogFile.getLogFileComparator();
+      HoodieLogFile current = new HoodieLogFile(currentLogFile);
+      return Option.of(Pair.of(baseFile, logFiles.stream().distinct().map(HoodieLogFile::new)
+          .filter(logFile -> logFileComparator.compare(logFile, current) < 0)
+          .sorted(logFileComparator)
+          .map(HoodieLogFile::getFileName)
+          .collect(Collectors.toList())));
+    }
+  }
+
+  private static List<String> getLogFiles(
+      org.apache.hudi.avro.model.HoodieWriteStat writeStat, HoodieFileGroupId fileGroupId, String currentLogFile) {
+    if (writeStat.getLogFiles() == null) {
+      throw new HoodieException("Cannot infer the changes of log file " + currentLogFile + " of file group " + fileGroupId
+          + ": its delta commit write stat does not record the log files of the file slice (logFiles is null),"
+          + " for example because the commit metadata was rewritten by a table version upgrade or downgrade");
+    }
+    return writeStat.getLogFiles();
   }
 
   // Here the functions are named "fetch" instead of "get", to get avoid of the json conversion.

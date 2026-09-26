@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieInstantInfo;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -149,6 +150,51 @@ public abstract class BaseTestCommitMetadataSerDe {
     verifyReplaceCommitMetadata(deserialized);
     verifyWriteStat(deserialized.getPartitionToWriteStats().get(TEST_PARTITION_PATH).get(0));
     verifyReplaceFileIds(deserialized.getPartitionToReplaceFileIds());
+  }
+
+  /**
+   * Commit metadata read into its Avro model keeps the base file and log files of delta write stats.
+   */
+  @Test
+  protected void testCommitMetadataToAvroSerDe() throws Exception {
+    HoodieDeltaWriteStat writeStat = new HoodieDeltaWriteStat();
+    writeStat.setFileId(TEST_FILE_ID);
+    writeStat.setPath(TEST_PARTITION_PATH + "/.test-file-id_001.log.2_1-0-1");
+    writeStat.setPrevCommit(TEST_PREV_COMMIT);
+    writeStat.setBaseFile(TEST_BASE_FILE);
+    writeStat.setLogFiles(Arrays.asList(".test-file-id_001.log.1_1-0-1", ".test-file-id_001.log.2_1-0-1"));
+    HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+    metadata.addWriteStat(TEST_PARTITION_PATH, writeStat);
+    metadata.setOperationType(WriteOperationType.UPSERT);
+    HoodieReplaceCommitMetadata replaceMetadata = new HoodieReplaceCommitMetadata();
+    replaceMetadata.addWriteStat(TEST_PARTITION_PATH, writeStat);
+    replaceMetadata.addReplaceFileId(TEST_PARTITION_PATH, "replaced-file-1");
+    replaceMetadata.addReplaceFileId(TEST_PARTITION_PATH, "replaced-file-2");
+    replaceMetadata.addReplaceFileId("other-partition", "replaced-file-3");
+
+    CommitMetadataSerDe serDe = getSerDe();
+    org.apache.hudi.avro.model.HoodieCommitMetadata deserialized = serDe.deserialize(
+        createTestInstant(HoodieTimeline.DELTA_COMMIT_ACTION, "002"),
+        new ByteArrayInputStream(convertMetadataToByteArray(metadata, serDe)), () -> false,
+        org.apache.hudi.avro.model.HoodieCommitMetadata.class);
+    assertEquals(WriteOperationType.UPSERT.name(), deserialized.getOperationType());
+    verifyAvroDeltaWriteStat(writeStat, deserialized.getPartitionToWriteStats().get(TEST_PARTITION_PATH));
+
+    org.apache.hudi.avro.model.HoodieReplaceCommitMetadata deserializedReplace = serDe.deserialize(
+        createTestInstant(HoodieTimeline.REPLACE_COMMIT_ACTION, "003"),
+        new ByteArrayInputStream(convertMetadataToByteArray(replaceMetadata, serDe)), () -> false,
+        org.apache.hudi.avro.model.HoodieReplaceCommitMetadata.class);
+    verifyAvroDeltaWriteStat(writeStat, deserializedReplace.getPartitionToWriteStats().get(TEST_PARTITION_PATH));
+    verifyReplaceFileIds(deserializedReplace.getPartitionToReplaceFileIds());
+  }
+
+  private static void verifyAvroDeltaWriteStat(HoodieDeltaWriteStat expected, List<org.apache.hudi.avro.model.HoodieWriteStat> actual) {
+    assertEquals(1, actual.size());
+    assertEquals(expected.getFileId(), actual.get(0).getFileId());
+    assertEquals(expected.getPath(), actual.get(0).getPath());
+    assertEquals(expected.getPrevCommit(), actual.get(0).getPrevCommit());
+    assertEquals(expected.getBaseFile(), actual.get(0).getBaseFile());
+    assertEquals(expected.getLogFiles(), actual.get(0).getLogFiles());
   }
 
   private StoragePathInfo generateFileStatus(String filePath) {
