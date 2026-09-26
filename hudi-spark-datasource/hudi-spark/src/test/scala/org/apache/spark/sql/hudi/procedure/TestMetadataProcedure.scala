@@ -313,9 +313,12 @@ class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
 
       // collect metadata stats for table
       val metadataStats = spark.sql(s"""call show_metadata_table_stats(table => '$tableName')""").collect()
-      assertResult(0) {
-        metadataStats.length
-      }
+      assert(
+        metadataStats.exists(row =>
+          row.getString(0) == "partitionCount" && row.getString(1).toInt > 0
+        ),
+        metadataStats.mkString(", ")
+      )
     }
   }
 
