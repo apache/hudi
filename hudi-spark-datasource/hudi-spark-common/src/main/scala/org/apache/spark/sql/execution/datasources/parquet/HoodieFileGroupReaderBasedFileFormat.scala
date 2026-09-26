@@ -107,7 +107,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
 
   private lazy val hasTimestampMillisFieldInTableSchema = HoodieSchemaRepair.hasTimestampMillisField(schema)
   private lazy val supportBatchWithTableSchema = HoodieSparkUtils.gteqSpark3_5 || !hasTimestampMillisFieldInTableSchema
-  override def shortName(): String = "HudiFileGroup"
+  override def shortName(): String = "hoodiefilegroup"
 
   override def toString: String = "HoodieFileGroupReaderBasedFileFormat"
 
