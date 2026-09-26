@@ -94,19 +94,32 @@ class DefaultSource extends RelationProvider
     val path = optParams.get("path")
     val readPathsStr = optParams.get(DataSourceReadOptions.READ_PATHS.key)
 
-    if (path.isEmpty && readPathsStr.isEmpty) {
-      throw new HoodieException(s"'path' or '${READ_PATHS.key()}' or both must be specified.")
+    // These are three independent problems and each gets its own message. They used to share one
+    // condition, so a user passing plain partition paths through read.paths was told that their
+    // non-glob paths were unsupported glob paths, which is neither true nor actionable.
+    //
+    // Checked before any storage handle is built, so a doomed call does not open one first.
+    //
+    // read.paths is reported ahead of a glob in 'path' because it is the more fundamental of the
+    // two: the option is gone entirely, and its replacement resolves the glob case as well.
+    if (readPathsStr.isDefined) {
+      // Deliberately fires for an explicitly empty value too: setting the key at all is asking for
+      // an option that no longer exists. 1.2.0 already rejected "" here, since Some("") made the
+      // old readPaths.nonEmpty check true, so this keeps the rejection and only reworks the wording.
+      throw new HoodieException(
+        s"'${READ_PATHS.key()}' is no longer supported as of Hudi 1.2.0. ${DefaultSource.LOAD_BASE_PATH_INSTEAD}")
     }
-
-    val readPaths = readPathsStr.map(p => p.split(",").toSeq).getOrElse(Seq())
-    val allPaths = path.map(p => Seq(p)).getOrElse(Seq()) ++ readPaths
+    if (path.isEmpty) {
+      // Does not offer read.paths as an alternative: setting it throws above.
+      throw new HoodieException(s"'path' must be specified. ${DefaultSource.LOAD_BASE_PATH_INSTEAD}")
+    }
+    if (path.get.contains("*")) {
+      throw new HoodieException(
+        s"Glob paths are not supported as of Hudi 1.2.0. ${DefaultSource.LOAD_BASE_PATH_INSTEAD}")
+    }
 
     val storage = HoodieStorageUtils.getStorage(
-      allPaths.head, HadoopFSUtils.getStorageConf(sqlContext.sparkContext.hadoopConfiguration))
-
-    if (path.exists(_.contains("*")) || readPaths.nonEmpty) {
-      throw new HoodieException("Glob paths are not supported for read paths as of Hudi 1.2.0")
-    }
+      path.get, HadoopFSUtils.getStorageConf(sqlContext.sparkContext.hadoopConfiguration))
 
     // Add default options for unspecified read options keys.
     // Effective precedence (low -> high):
@@ -291,6 +304,18 @@ class DefaultSource extends RelationProvider
 object DefaultSource {
 
   private val log = LoggerFactory.getLogger(classOf[DefaultSource])
+
+  /**
+   * What to do instead, appended to every rejection in
+   * `createRelation(sqlContext, optParams, schema)` so the user is never told only what does not
+   * work. Predicates on the partition columns are pushed down and prune partitions before any file
+   * is listed, which is what selecting paths by hand was for.
+   * See HoodieFileIndex#prunePartitionsAndGetFileSlices.
+   */
+  private[hudi] val LOAD_BASE_PATH_INSTEAD: String =
+    "Load the table base path and filter on the partition columns instead, for example " +
+      "spark.read.format(\"hudi\").load(basePath).where(\"part = 'a'\"): such predicates are " +
+      "pushed down and prune partitions before files are listed."
 
   def createRelation(sqlContext: SQLContext,
                      metaClient: HoodieTableMetaClient,
