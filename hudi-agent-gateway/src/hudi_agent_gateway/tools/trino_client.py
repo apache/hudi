@@ -22,30 +22,26 @@ import asyncio
 import contextlib
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
 from typing import Any
 
 import trino
 
 from hudi_agent_gateway.config import GatewaySettings
+from hudi_agent_gateway.tools.common import (
+    LakehouseQueryError,
+    LakehouseTimeoutError,
+    QueryResult,
+)
+
+__all__ = ["QueryResult", "TrinoClient", "TrinoQueryError", "TrinoTimeoutError"]
 
 
-class TrinoQueryError(Exception):
+class TrinoQueryError(LakehouseQueryError):
     """A query failed on the Trino side; message is safe to surface to the model."""
 
 
-class TrinoTimeoutError(TrinoQueryError):
+class TrinoTimeoutError(TrinoQueryError, LakehouseTimeoutError):
     pass
-
-
-@dataclass
-class QueryResult:
-    columns: list[str]
-    rows: list[list[Any]]
-    row_count: int = field(init=False)
-
-    def __post_init__(self) -> None:
-        self.row_count = len(self.rows)
 
 
 class TrinoClient:
@@ -104,6 +100,11 @@ class TrinoClient:
             raise TrinoQueryError(f"{e.error_name}: {e.message}") from e
         except trino.exceptions.Error as e:
             raise TrinoQueryError(str(e)) from e
+
+    def close(self) -> None:
+        """Stop the worker pool; called on gateway shutdown. Trino's HTTP
+        protocol is stateless, so there are no connections to drain."""
+        self._executor.shutdown(wait=False, cancel_futures=True)
 
     async def ping(self, timeout: float = 5.0, cache_seconds: float = 10.0) -> bool:
         """Cached reachability check feeding ``/ready``.

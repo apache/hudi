@@ -46,7 +46,7 @@ async def test_mounted_mcp_serves_over_http(settings, fake_trino) -> None:
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as c, app.router.lifespan_context(app):
-        app.state.trino_client = fake_trino
+        app.state.lakehouse_client = fake_trino
         resp = await c.post(
             "/mcp/",
             json={
