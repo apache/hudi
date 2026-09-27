@@ -18,8 +18,11 @@
 
 package org.apache.hudi.index;
 
+import org.apache.hudi.common.config.HoodieMetaserverConfig;
 import org.apache.hudi.common.data.HoodieListData;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
@@ -52,16 +55,21 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP;
 import static org.apache.hudi.index.HoodieIndexUtils.isSecondaryIndexSupportedType;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -770,5 +778,41 @@ public class TestHoodieIndexUtils {
     verify(view).getLatestMergedFileSliceBeforeOrOn("p1", "002", "file1");
     verify(view).getLatestMergedFileSliceBeforeOrOn("p1", "002", "file2");
     verify(view, never()).getLatestMergedFileSlicesBeforeOrOn(anyString(), anyString());
+  }
+
+  /**
+   * With the metadata table the base files come from the table's view, loaded in batches: its requests
+   * sync the embedded timeline server to the timeline the write handles send later.
+   */
+  @Test
+  void testLatestBaseFilesForAllPartitionsReadTheTableView() {
+    HoodieWriteConfig config = mock(HoodieWriteConfig.class);
+    when(config.isMetadataTableEnabled()).thenReturn(true);
+    when(mockTableConfig.isMetadataTableAvailable()).thenReturn(true);
+    HoodieMetaserverConfig metaserverConfig = mock(HoodieMetaserverConfig.class);
+    when(mockMetaClient.getMetaserverConfig()).thenReturn(metaserverConfig);
+    HoodieInstant lastCompleted = mock(HoodieInstant.class);
+    when(lastCompleted.requestedTime()).thenReturn("002");
+    HoodieTimeline commitsTimeline = mock(HoodieTimeline.class);
+    HoodieTimeline completedCommitsTimeline = mock(HoodieTimeline.class);
+    when(mockMetaClient.getCommitsTimeline()).thenReturn(commitsTimeline);
+    when(commitsTimeline.filterCompletedInstants()).thenReturn(completedCommitsTimeline);
+    when(completedCommitsTimeline.lastInstant()).thenReturn(Option.of(lastCompleted));
+    HoodieBaseFile baseFile = mock(HoodieBaseFile.class);
+    SyncableFileSystemView view = mock(SyncableFileSystemView.class);
+    when(view.getLatestBaseFilesBeforeOrOn(anyString(), eq("002"))).thenAnswer(invocation -> Stream.of(baseFile));
+    HoodieTable table = mock(HoodieTable.class);
+    when(table.getConfig()).thenReturn(config);
+    when(table.getMetaClient()).thenReturn(mockMetaClient);
+    when(table.getHoodieView()).thenReturn(view);
+    List<String> partitions = IntStream.range(0, 150).mapToObj(i -> "p" + i).collect(Collectors.toList());
+
+    List<Pair<String, HoodieBaseFile>> baseFiles =
+        HoodieIndexUtils.getLatestBaseFilesForAllPartitions(partitions, mock(HoodieEngineContext.class), table);
+
+    assertEquals(partitions, baseFiles.stream().map(Pair::getKey).collect(Collectors.toList()));
+    verify(view).loadPartitions(partitions.subList(0, 100));
+    verify(view).loadPartitions(partitions.subList(100, 150));
+    verify(table, never()).refreshAndGetTableMetadata();
   }
 }

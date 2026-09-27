@@ -57,7 +57,7 @@ import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -109,6 +109,11 @@ import static org.apache.hudi.table.action.commit.HoodieDeleteHelper.createDelet
  */
 @Slf4j
 public class HoodieIndexUtils {
+
+  /**
+   * Partitions per load request, which keeps the partition list of a timeline server request short.
+   */
+  private static final int LOAD_PARTITIONS_BATCH_SIZE = 100;
 
   /**
    * Fetches Pair of partition path and {@link HoodieBaseFile}s for interested partitions.
@@ -183,8 +188,8 @@ public class HoodieIndexUtils {
   /**
    * Fetches Pair of partition path and {@link HoodieBaseFile}s for interested partitions.
    *
-   * <p>With the metadata table, the driver reads the files of all the partitions in one metadata table
-   * lookup into a view it builds and closes. Otherwise each partition is listed by its own task.
+   * <p>With the metadata table, the driver loads the partitions into the table's view in batched metadata
+   * table lookups and reads the base files from it. Otherwise each partition is listed by its own task.
    *
    * @param partitions  list of partitions of interest
    * @param context     instance of {@link HoodieEngineContext} to use
@@ -212,14 +217,17 @@ public class HoodieIndexUtils {
       return Collections.emptyList();
     }
     String maxCommitTime = latestCommitTime.get().requestedTime();
-    try (HoodieTableFileSystemView view = new HoodieTableFileSystemView(hoodieTable.refreshAndGetTableMetadata(), metaClient,
-        metaClient.getActiveTimeline().filterCompletedAndCompactionInstants())) {
-      view.loadPartitions(partitions);
-      return partitions.stream()
-          .flatMap(partitionPath -> view.getLatestBaseFilesBeforeOrOn(partitionPath, maxCommitTime)
-              .map(baseFile -> Pair.of(partitionPath, baseFile)))
-          .collect(toList());
+    // The table's view, not a new one: with the embedded timeline server these requests sync the server's
+    // view to this write's timeline, which the write handles send later. A server view synced only by
+    // the handles would reload a timeline that a table service may have moved on, and reject them.
+    SyncableFileSystemView view = hoodieTable.getHoodieView();
+    for (int start = 0; start < partitions.size(); start += LOAD_PARTITIONS_BATCH_SIZE) {
+      view.loadPartitions(partitions.subList(start, Math.min(start + LOAD_PARTITIONS_BATCH_SIZE, partitions.size())));
     }
+    return partitions.stream()
+        .flatMap(partitionPath -> view.getLatestBaseFilesBeforeOrOn(partitionPath, maxCommitTime)
+            .map(baseFile -> Pair.of(partitionPath, baseFile)))
+        .collect(toList());
   }
 
   /**
