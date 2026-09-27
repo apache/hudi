@@ -100,6 +100,24 @@ final class TestHudiSharedMetastore
     }
 
     @Test
+    void testHudiCannotUnregisterPlainHiveTable()
+    {
+        String tableName = "test_hudi_unregister_hive_" + randomNameSuffix();
+        assertUpdate(
+                "CREATE TABLE hive.default." + tableName + " AS SELECT BIGINT '1' value",
+                1);
+
+        assertQueryFails(
+                "CALL hudi.system.unregister_table('default', '" + tableName + "')",
+                ".*Location of table default\\." + tableName + " does not contain Hudi table metadata.*");
+
+        assertQuery(
+                "SELECT value FROM hive.default." + tableName,
+                "VALUES CAST(1 AS BIGINT)");
+        assertUpdate("DROP TABLE hive.default." + tableName);
+    }
+
+    @Test
     void testHiveSelectFromHudiTable()
     {
         String tableName = "test_hive_select_from_hudi_" + randomNameSuffix();
