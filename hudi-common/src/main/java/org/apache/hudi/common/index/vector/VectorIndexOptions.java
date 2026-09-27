@@ -48,7 +48,9 @@ public final class VectorIndexOptions {
   public static final String QUERY_NUM_PROBES = "vector.query.nprobes";
   public static final String QUERY_REFINE_FACTOR = "vector.query.refine_factor";
   public static final String QUERY_MODE = "vector.query.mode";
-  public static final String QUERY_STALE_POLICY = "vector.query.stale_policy";
+  public static final String FRESHNESS_POLICY = "vector.freshness.policy";
+  public static final String STALE_LOCATOR_POLICY = "vector.stale.locator.policy";
+  public static final String FETCH_VERIFY_KEYS = "vector.fetch.verify.keys";
 
   public static final VectorDistanceMetric DEFAULT_METRIC = VectorDistanceMetric.COSINE;
   public static final VectorQuantizer DEFAULT_QUANTIZER = VectorQuantizer.IVF_RABITQ;
@@ -59,7 +61,10 @@ public final class VectorIndexOptions {
   public static final int DEFAULT_NUM_PROBES = 32;
   public static final int DEFAULT_REFINE_FACTOR = 50;
   public static final VectorQueryMode DEFAULT_QUERY_MODE = VectorQueryMode.EXACT_RERANK;
-  public static final VectorStalePolicy DEFAULT_STALE_POLICY = VectorStalePolicy.FAIL;
+  public static final VectorStalePolicy DEFAULT_EXACT_FRESHNESS_POLICY = VectorStalePolicy.FAIL;
+  public static final VectorStalePolicy DEFAULT_APPROXIMATE_FRESHNESS_POLICY = VectorStalePolicy.WARN;
+  public static final VectorStalePolicy DEFAULT_STALE_LOCATOR_POLICY = VectorStalePolicy.FALLBACK;
+  public static final boolean DEFAULT_FETCH_VERIFY_KEYS = true;
 
   /** Parsed immutable view used by bootstrap and maintenance after aggregate validation. */
   public static final class ResolvedOptions {
@@ -99,7 +104,9 @@ public final class VectorIndexOptions {
           QUERY_NUM_PROBES,
           QUERY_REFINE_FACTOR,
           QUERY_MODE,
-          QUERY_STALE_POLICY)));
+          FRESHNESS_POLICY,
+          STALE_LOCATOR_POLICY,
+          FETCH_VERIFY_KEYS)));
 
   private VectorIndexOptions() {
   }
@@ -127,7 +134,9 @@ public final class VectorIndexOptions {
     int numProbes = getNumProbes(options);
     int refineFactor = getRefineFactor(options);
     VectorQueryMode queryMode = getQueryMode(options);
-    VectorStalePolicy stalePolicy = getStalePolicy(options);
+    VectorStalePolicy freshnessPolicy = getFreshnessPolicy(options);
+    VectorStalePolicy staleLocatorPolicy = getStaleLocatorPolicy(options);
+    boolean verifyFetchKeys = shouldVerifyFetchKeys(options);
 
     if (numProbes > numClusters) {
       throw new IllegalArgumentException(
@@ -146,11 +155,13 @@ public final class VectorIndexOptions {
     normalized.put(QUERY_NUM_PROBES, String.valueOf(numProbes));
     normalized.put(QUERY_REFINE_FACTOR, String.valueOf(refineFactor));
     normalized.put(QUERY_MODE, queryMode.name().toLowerCase(Locale.ROOT));
-    normalized.put(QUERY_STALE_POLICY, stalePolicy.name().toLowerCase(Locale.ROOT));
+    normalized.put(FRESHNESS_POLICY, freshnessPolicy.name().toLowerCase(Locale.ROOT));
+    normalized.put(STALE_LOCATOR_POLICY, staleLocatorPolicy.name().toLowerCase(Locale.ROOT));
+    normalized.put(FETCH_VERIFY_KEYS, String.valueOf(verifyFetchKeys));
     return Collections.unmodifiableMap(normalized);
   }
 
-  private static VectorDistanceMetric getMetric(Map<String, String> options) {
+  public static VectorDistanceMetric getMetric(Map<String, String> options) {
     String value = getOption(options, METRIC, DEFAULT_METRIC.name());
     try {
       return VectorDistanceMetric.fromString(value);
@@ -195,20 +206,14 @@ public final class VectorIndexOptions {
   }
 
   private static boolean shouldAssumeNormalizedVectors(Map<String, String> options) {
-    String value = getOption(
-        options, RABITQ_ASSUME_NORMALIZED, String.valueOf(false)).toLowerCase(Locale.ROOT);
-    if (!"true".equals(value) && !"false".equals(value)) {
-      throw new IllegalArgumentException(
-          "Option '" + RABITQ_ASSUME_NORMALIZED + "' must be either 'true' or 'false': " + value);
-    }
-    return Boolean.parseBoolean(value);
+    return getBoolean(options, RABITQ_ASSUME_NORMALIZED, false);
   }
 
-  private static int getNumProbes(Map<String, String> options) {
+  public static int getNumProbes(Map<String, String> options) {
     return getPositiveInt(options, QUERY_NUM_PROBES, DEFAULT_NUM_PROBES);
   }
 
-  private static int getRefineFactor(Map<String, String> options) {
+  public static int getRefineFactor(Map<String, String> options) {
     return getPositiveInt(options, QUERY_REFINE_FACTOR, DEFAULT_REFINE_FACTOR);
   }
 
@@ -221,13 +226,60 @@ public final class VectorIndexOptions {
     }
   }
 
-  private static VectorStalePolicy getStalePolicy(Map<String, String> options) {
-    String value = getOption(options, QUERY_STALE_POLICY, DEFAULT_STALE_POLICY.name());
+  public static VectorStalePolicy getFreshnessPolicy(Map<String, String> options) {
+    VectorStalePolicy defaultPolicy = getQueryMode(options) == VectorQueryMode.APPROXIMATE
+        ? DEFAULT_APPROXIMATE_FRESHNESS_POLICY : DEFAULT_EXACT_FRESHNESS_POLICY;
+    return getStalePolicy(options, FRESHNESS_POLICY, defaultPolicy);
+  }
+
+  public static VectorStalePolicy getStaleLocatorPolicy(Map<String, String> options) {
+    return getStalePolicy(options, STALE_LOCATOR_POLICY, DEFAULT_STALE_LOCATOR_POLICY);
+  }
+
+  private static VectorStalePolicy getStalePolicy(
+      Map<String, String> options, String key, VectorStalePolicy defaultPolicy) {
+    String value = getOption(options, key, defaultPolicy.name());
     try {
       return VectorStalePolicy.fromString(value);
     } catch (IllegalArgumentException e) {
-      throw unsupportedValue(QUERY_STALE_POLICY, value, e);
+      throw unsupportedValue(key, value, e);
     }
+  }
+
+  public static boolean isApproximateSearchMode(Map<String, String> options) {
+    return getQueryMode(options) == VectorQueryMode.APPROXIMATE;
+  }
+
+  /** The current posting format uses symmetric scoring. */
+  public static boolean isRaBitQAsymmetricScoring(Map<String, String> options) {
+    return false;
+  }
+
+  /** RLI arbitration is mandatory for correctness in both query modes. */
+  public static boolean isFinalistArbiterEnabled(Map<String, String> options) {
+    return true;
+  }
+
+  public static boolean isStaleLocatorPolicyFail(Map<String, String> options) {
+    return getStaleLocatorPolicy(options) == VectorStalePolicy.FAIL;
+  }
+
+  public static boolean shouldVerifyFetchKeys(Map<String, String> options) {
+    boolean verifyKeys = getBoolean(options, FETCH_VERIFY_KEYS, DEFAULT_FETCH_VERIFY_KEYS);
+    if (!verifyKeys) {
+      throw new IllegalArgumentException(
+          "Option '" + FETCH_VERIFY_KEYS + "' must be true: exact positional fetches require record-key validation");
+    }
+    return true;
+  }
+
+  private static boolean getBoolean(Map<String, String> options, String key, boolean defaultValue) {
+    String value = getOption(options, key, String.valueOf(defaultValue)).toLowerCase(Locale.ROOT);
+    if (!"true".equals(value) && !"false".equals(value)) {
+      throw new IllegalArgumentException(
+          "Option '" + key + "' must be either 'true' or 'false': " + value);
+    }
+    return Boolean.parseBoolean(value);
   }
 
   private static int getPositiveInt(Map<String, String> options, String key, int defaultValue) {
