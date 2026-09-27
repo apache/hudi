@@ -29,7 +29,7 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 public class SparkDeletePreppedCommitActionExecutor<T>
     extends BaseSparkCommitActionExecutor<T> {
-  private final HoodieData<HoodieRecord<T>> preppedRecords;
+  private final transient HoodieData<HoodieRecord<T>> preppedRecords;
 
   public SparkDeletePreppedCommitActionExecutor(HoodieSparkEngineContext context, HoodieWriteConfig config, HoodieTable table, String instantTime, HoodieData<HoodieRecord<T>> preppedRecords) {
     super(context, config, table, instantTime, WriteOperationType.DELETE_PREPPED);

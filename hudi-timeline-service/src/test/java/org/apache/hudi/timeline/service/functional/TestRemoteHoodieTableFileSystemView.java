@@ -35,6 +35,7 @@ import org.apache.hudi.common.table.view.TestHoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.MockHoodieTimeline;
 import org.apache.hudi.exception.HoodieRemoteException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.timeline.service.TimelineService;
 import org.apache.hudi.timeline.service.TimelineServiceTestHarness;
 
@@ -50,6 +51,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -110,6 +112,21 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
     getFileSystemView(metaClient.getActiveTimeline(), 3);
     RemoteHoodieTableFileSystemView viewWithRetries = initFsView(metaClient, server.getServerPort(), true);
     viewWithRetries.getLatestBaseFiles();
+  }
+
+  @Test
+  void testLoadManyPartitions() throws IOException {
+    // far more partition paths than fit in one request URL
+    List<String> partitionPaths = new ArrayList<>();
+    for (int i = 0; i < 1000; i++) {
+      String partitionPath = String.format("year=2024/month=%02d/day=%05d", i % 12 + 1, i);
+      metaClient.getStorage().createDirectory(new StoragePath(metaClient.getBasePath(), partitionPath));
+      partitionPaths.add(partitionPath);
+    }
+    view.loadPartitions(partitionPaths);
+    for (String partitionPath : partitionPaths) {
+      assertEquals(0, view.getLatestBaseFiles(partitionPath).count());
+    }
   }
 
   @Test

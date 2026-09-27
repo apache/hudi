@@ -18,16 +18,24 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.common.config.RecordMergeMode
-import org.apache.hudi.common.model.WriteOperationType
+import org.apache.hudi.common.config.{RecordMergeMode, TypedProperties}
+import org.apache.hudi.common.model.{HoodieRecordMerger, HoodieTableType, WriteOperationType}
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
+import org.apache.hudi.testutils.TaskPayloadTestUtils.serializedClasses
 
 import org.apache.spark.SparkException
-import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.{Dataset, Row, SparkSession}
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.{AfterAll, BeforeAll, Test}
-import org.junit.jupiter.api.Assertions.{assertNotNull, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.EnumSource
+
+import scala.collection.JavaConverters._
 
 /**
  * Test cases for {@link HoodieCreateRecordUtils}.
@@ -114,6 +122,47 @@ class TestHoodieCreateRecordUtils {
       HoodieWriteConfig.COMBINE_BEFORE_INSERT.key() -> "false",
       DataSourceWriteOptions.INSERT_DROP_DUPS.key() -> "false"
     )
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
+  def testRecordCreationTasksCaptureNoWriteState(recordType: HoodieRecordType): Unit = {
+    val df = createTestDataFrame(Row("id1", "Alice", 25, 1000L, "par1"), Row("id2", "Bob", 30, 2000L, "par2"))
+    val schema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(df.schema, RECORD_NAME, RECORD_NAMESPACE)
+    val parameters = createBaseParameters()
+    val mergerProps = if (recordType == HoodieRecordType.SPARK) {
+      Map(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key -> classOf[DefaultSparkRecordMerger].getName,
+        HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID)
+    } else {
+      Map.empty[String, String]
+    }
+    val basePath = TestHoodieCreateRecordUtils.tempDir + "/test_task_payload_" + recordType
+    val config = HoodieWriteConfig.newBuilder.withPath(basePath).withSchema(schema.toString).forTable(TEST_TABLE_NAME)
+      .withProps((parameters ++ mergerProps).asJava).build
+    assertEquals(recordType, config.getRecordMerger.getRecordType)
+    val tableConfig = HoodieTableMetaClient.newTableBuilder.setTableType(HoodieTableType.COPY_ON_WRITE)
+      .setTableName(TEST_TABLE_NAME).setRecordKeyFields(RECORD_KEY_FIELD).setPartitionFields(PARTITION_FIELD)
+      .initTable(HadoopFSUtils.getStorageConf(TestHoodieCreateRecordUtils.spark.sparkContext.hadoopConfiguration), basePath)
+      .getTableConfig
+
+    val records = HoodieCreateRecordUtils.createHoodieRecordRdd(HoodieCreateRecordUtils.createHoodieRecordRddArgs(
+      df, config, parameters, RECORD_NAME, RECORD_NAMESPACE, schema, schema, WriteOperationType.UPSERT, INSTANT_TIME,
+      preppedSparkSqlWrites = false, preppedSparkSqlMergeInto = false, preppedWriteOperation = false, tableConfig))
+
+    val heavy = serializedClasses(records.rdd).asScala
+      .filter(clazz => Seq(classOf[Dataset[_]], classOf[SparkSession], classOf[HoodieWriteConfig], classOf[HoodieTableConfig])
+        .exists(_.isAssignableFrom(clazz)))
+      .map(_.getName)
+    assertTrue(heavy.isEmpty, s"Record creation tasks carry $heavy")
+    assertEquals(Seq("id1" -> "par1", "id2" -> "par2"),
+      records.collect().asScala.map(record => record.getRecordKey -> record.getPartitionPath).sorted)
+
+    // prepped writes read the keys from the meta fields, so the tasks need no key generator properties
+    val preppedRecords = HoodieCreateRecordUtils.createHoodieRecordRdd(HoodieCreateRecordUtils.createHoodieRecordRddArgs(
+      df, config, parameters, RECORD_NAME, RECORD_NAMESPACE, schema, schema, WriteOperationType.UPSERT_PREPPED, INSTANT_TIME,
+      preppedSparkSqlWrites = false, preppedSparkSqlMergeInto = false, preppedWriteOperation = true, tableConfig))
+    assertTrue(!serializedClasses(preppedRecords.rdd).contains(classOf[TypedProperties]),
+      "Prepped record creation tasks carry the key generator properties")
   }
 
   @Test

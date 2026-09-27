@@ -25,16 +25,25 @@ import org.apache.spark.Partitioner;
 
 /**
  * Packs incoming records to be inserted into buckets (1 bucket = 1 RDD partition).
+ *
+ * <p>Spark serializes the partitioner into the tasks on both sides of the shuffle, which only call
+ * {@link #getPartition} and {@link #numPartitions}; these are the only methods that may run in a task.
+ * The workload profile, the table and any other state that {@link #getPartition} does not need are
+ * transient: they are only available on the driver and are null in the tasks.
  */
 public abstract class SparkHoodiePartitioner<T> extends Partitioner
     implements org.apache.hudi.table.action.commit.Partitioner {
 
   /**
    * Stat for the current workload. Helps in determining inserts, upserts etc.
+   * Driver only: null in the tasks.
    */
-  protected WorkloadProfile profile;
+  protected transient WorkloadProfile profile;
 
-  protected final HoodieTable table;
+  /**
+   * Driver only: null in the tasks.
+   */
+  protected final transient HoodieTable table;
 
   public SparkHoodiePartitioner(WorkloadProfile profile, HoodieTable table) {
     this.profile = profile;
