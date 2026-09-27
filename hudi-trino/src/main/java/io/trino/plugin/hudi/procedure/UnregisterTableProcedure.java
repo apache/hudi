@@ -99,11 +99,13 @@ public class UnregisterTableProcedure
         checkProcedureArgument(tableName != null, "table_name cannot be null");
 
         SchemaTableName schemaTableName = new SchemaTableName(schemaName, tableName);
-        HiveMetastore metastore = metastoreFactory.createMetastore(Optional.of(session.getIdentity()));
-        Table table = metastore.getTable(schemaName, tableName)
-                .orElseThrow(() -> new TableNotFoundException(schemaTableName));
-
         accessControl.checkCanDropTable(null, schemaTableName);
+
+        String normalizedSchemaName = schemaTableName.getSchemaName();
+        String normalizedTableName = schemaTableName.getTableName();
+        HiveMetastore metastore = metastoreFactory.createMetastore(Optional.of(session.getIdentity()));
+        Table table = metastore.getTable(normalizedSchemaName, normalizedTableName)
+                .orElseThrow(() -> new TableNotFoundException(schemaTableName));
 
         // A malformed input-format entry is precisely one reason this recovery procedure exists.
         // When the metastore no longer identifies the entry as Hudi, verify its storage instead of
@@ -116,6 +118,6 @@ public class UnregisterTableProcedure
         }
 
         // Never delete data. This is the semantic difference from DROP TABLE for a managed table.
-        metastore.dropTable(schemaName, tableName, false);
+        metastore.dropTable(normalizedSchemaName, normalizedTableName, false);
     }
 }

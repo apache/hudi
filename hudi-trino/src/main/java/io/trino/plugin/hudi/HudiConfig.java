@@ -56,6 +56,7 @@ public class HudiConfig
     private long perTransactionMetastoreCacheMaximumSize = 2000;
     private boolean queryPartitionFilterRequired;
     private boolean ignoreAbsentPartitions;
+    private boolean registerTableProcedureEnabled;
     private Duration dynamicFilteringWaitTimeout = new Duration(1, SECONDS);
     private boolean resolveColumnNameCasingEnabled;
 
@@ -319,6 +320,19 @@ public class HudiConfig
     public boolean isIgnoreAbsentPartitions()
     {
         return ignoreAbsentPartitions;
+    }
+
+    public boolean isRegisterTableProcedureEnabled()
+    {
+        return registerTableProcedureEnabled;
+    }
+
+    @Config("hudi.register-table-procedure.enabled")
+    @ConfigDescription("Allow users to call the register_table procedure")
+    public HudiConfig setRegisterTableProcedureEnabled(boolean registerTableProcedureEnabled)
+    {
+        this.registerTableProcedureEnabled = registerTableProcedureEnabled;
+        return this;
     }
 
     @Config("hudi.index.record-level-index-enabled")
