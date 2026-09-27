@@ -835,14 +835,21 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     upsertData(df2, tempRecordPath, tableType)
 
     // after implicit type change, read the table with vectorized read enabled
-    if (HoodieSparkUtils.gteqSpark3_4) {
-      assertThrows(classOf[SparkException]) {
-        withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "true") {
+    val expectedRows = Seq(
+      (1, Seq(Map("2022-12-01" -> 120L), Map("2022-12-02" -> 130L))),
+      (2, Seq(Map("2022-12-01" -> 220L), Map("2022-12-02" -> 230L))))
+    withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "true") {
+      if (tableType == "MERGE_ON_READ") {
+        // A MOR scan returns rows, so the file written before the type change is read row-based and its
+        // values are cast to the new type.
+        Assertions.assertEquals(expectedRows, readSalesMaps(tempRecordPath))
+      } else if (HoodieSparkUtils.gteqSpark3_4) {
+        // A COW scan returns batches, so that file has to be decoded vectorized, which cannot convert
+        // the nested type change.
+        assertThrows(classOf[SparkException]) {
           readTable(tempRecordPath)
         }
-      }
-    } else {
-      withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "true") {
+      } else {
         readTable(tempRecordPath)
       }
     }
@@ -852,6 +859,11 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     }
   }
 
+
+  private def readSalesMaps(path: String): Seq[(Int, Seq[Map[String, Long]])] =
+    spark.read.format("hudi").load(path).select("id", "salesMap").orderBy("id").collect()
+      .map(r => (r.getInt(0), r.getSeq[scala.collection.Map[String, Long]](1).map(_.toMap)))
+      .toSeq
 
   private def readTable(path: String): Unit = {
     // read out the table

@@ -89,13 +89,14 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
   def getHadoopConfClone(footerFileMetaData: FileMetaData, requireVectorizedRead: Boolean): Configuration = {
     // Clone new conf
     val hadoopAttemptConf = new Configuration(sharedConf)
-    typeChangeInfos = if (shouldUseInternalSchema) {
-      // Empty projections (count(*), select 1) read no column data, so there is nothing to
-      // reconstruct - and querySchemaOption is the UNPRUNED table schema in that case (see
-      // pruneInternalSchema), so running the guard would fail queries that work fine.
-      if (requiredSchema.nonEmpty) {
-        ParquetSchemaEvolutionUtils.validateNoShreddedVariants(requiredSchema, querySchemaOption.get(), footerFileMetaData)
-      }
+    typeChangeInfos = if (shouldUseInternalSchema && requiredSchema.isEmpty) {
+      // Empty projections (count(*), select 1) read no column data, so the requested schema stays
+      // empty. querySchemaOption is the UNPRUNED table schema in that case (see pruneInternalSchema);
+      // requesting it would decode every column, and the shredded variant guard or the vectorized
+      // reader would fail on columns the query never reads.
+      new java.util.HashMap[Integer, Pair[DataType, DataType]]()
+    } else if (shouldUseInternalSchema) {
+      ParquetSchemaEvolutionUtils.validateNoShreddedVariants(requiredSchema, querySchemaOption.get(), footerFileMetaData)
       val mergedInternalSchema = new InternalSchemaMerger(fileSchema, querySchemaOption.get(), true, true).mergeSchema()
       val mergedSchema = SparkInternalSchemaConverter.constructSparkSchemaFromInternalSchema(mergedInternalSchema)
 

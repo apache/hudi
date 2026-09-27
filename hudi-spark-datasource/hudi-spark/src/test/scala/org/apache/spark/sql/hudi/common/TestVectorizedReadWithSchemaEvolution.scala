@@ -130,4 +130,42 @@ class TestVectorizedReadWithSchemaEvolution extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  /**
+   * An empty projection reads no column data, so a count over a file written before a nested
+   * schema-on-read type change does not trip the nested type change check of a batch read.
+   */
+  Seq("cow", "mor").foreach { tableType =>
+    test(s"Test count over files written before a nested type change for $tableType table") {
+      withSQLConf(
+        "hoodie.schema.on.read.enable" -> "true",
+        "spark.sql.parquet.enableVectorizedReader" -> "true",
+        "spark.sql.parquet.enableNestedColumnVectorizedReader" -> "true",
+        "hoodie.parquet.small.file.limit" -> "0"
+      ) {
+        withTempDir { tmp =>
+          val tableName = generateTableName
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  s struct<a: int, b: string>,
+               |  ts long
+               |) using hudi
+               | location '${tmp.getCanonicalPath}/$tableName'
+               | tblproperties (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  orderingFields = 'ts'
+               | )
+       """.stripMargin)
+          spark.sql(s"insert into $tableName values (1, named_struct('a', 1, 'b', 'x'), 1000)")
+          spark.sql(s"alter table $tableName alter column s.a type bigint")
+          spark.sql(s"insert into $tableName values (2, named_struct('a', cast(2 as bigint), 'b', 'y'), 1000)")
+
+          checkAnswer(s"select count(*) from $tableName")(Seq(2))
+        }
+      }
+    }
+  }
 }
