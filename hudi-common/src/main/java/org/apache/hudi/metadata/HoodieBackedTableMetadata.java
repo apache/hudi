@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.data.HoodieBroadcast;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.data.HoodieListPairData;
@@ -244,18 +245,26 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, getMetadataFileSystemView(), partitionName));
     checkState(!partitionFileSlices.isEmpty(), () -> "Number of file slices for partition " + partitionName + " should be > 0");
 
-    return (shouldLoadInMemory ? HoodieListData.lazy(partitionFileSlices) :
-        getEngineContext().parallelize(partitionFileSlices))
-        .flatMap(
-            (SerializableFunction<FileSlice, Iterator<HoodieRecord<HoodieMetadataPayload>>>) fileSlice ->
-                readSliceAndFilterByKeysIntoList(partitionName, sortedKeyPrefixes, fileSlice,
-                    metadataRecord -> {
-                      HoodieMetadataPayload payload = new HoodieMetadataPayload(Option.of(metadataRecord));
-                      String rowKey = payload.key != null ? payload.key : metadataRecord.get(KEY_FIELD_NAME).toString();
-                      HoodieKey key = new HoodieKey(rowKey, partitionName);
-                      return new HoodieAvroRecord<>(key, payload);
-                    }, false))
-        .filter(r -> !r.getData().isDeleted());
+    HoodieData<HoodieRecord<HoodieMetadataPayload>> records;
+    if (shouldLoadInMemory) {
+      records = HoodieListData.lazy(partitionFileSlices).flatMap(fileSlice -> readSliceAndFilterByKeyPrefixes(partitionName, sortedKeyPrefixes, fileSlice));
+    } else {
+      // every file slice is read with all key prefixes, so the prefixes reach the tasks once per executor
+      HoodieBroadcast<List<String>> keyPrefixes = getEngineContext().broadcast(sortedKeyPrefixes);
+      records = getEngineContext().parallelize(partitionFileSlices)
+          .flatMap(fileSlice -> readSliceAndFilterByKeyPrefixes(partitionName, keyPrefixes.value(), fileSlice));
+    }
+    return records.filter(r -> !r.getData().isDeleted());
+  }
+
+  private Iterator<HoodieRecord<HoodieMetadataPayload>> readSliceAndFilterByKeyPrefixes(String partitionName, List<String> sortedKeyPrefixes, FileSlice fileSlice) {
+    return readSliceAndFilterByKeysIntoList(partitionName, sortedKeyPrefixes, fileSlice,
+        metadataRecord -> {
+          HoodieMetadataPayload payload = new HoodieMetadataPayload(Option.of(metadataRecord));
+          String rowKey = payload.key != null ? payload.key : metadataRecord.get(KEY_FIELD_NAME).toString();
+          HoodieKey key = new HoodieKey(rowKey, partitionName);
+          return new HoodieAvroRecord<>(key, payload);
+        }, false);
   }
 
   private static TreeSet<String> getDistinctSortedKeysForSingleSlice(HoodieData<String> keys) {

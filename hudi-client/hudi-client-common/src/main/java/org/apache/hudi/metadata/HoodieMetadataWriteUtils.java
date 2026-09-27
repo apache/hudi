@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.FailOnFirstErrorWriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -31,6 +32,11 @@ import org.apache.hudi.common.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.common.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.common.config.metrics.HoodieMetricsM3Config;
 import org.apache.hudi.common.config.metrics.HoodieMetricsPrometheusConfig;
+import org.apache.hudi.common.data.HoodieBroadcast;
+import org.apache.hudi.common.data.HoodieBroadcastScope;
+import org.apache.hudi.common.data.HoodieListData;
+import org.apache.hudi.common.data.HoodiePairData;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
@@ -67,6 +73,7 @@ import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -101,7 +108,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ASYNC_CLEAN;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_CLEANER_COMMITS_RETAINED;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_POPULATE_META_FIELDS;
@@ -109,13 +115,18 @@ import static org.apache.hudi.common.model.LogExtensions.DATA_LOG_EXTENSION;
 import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.translateWriteStatToFileStats;
 
 /**
  * Metadata table write utils.
  */
 @Slf4j
 public class HoodieMetadataWriteUtils {
+
+  /**
+   * Number of written partitions whose files to read column stats of are computed together.
+   */
+  private static final int FILES_TO_FETCH_COLUMN_STATS_PARTITION_BATCH_SIZE = 1000;
+
   // Virtual keys support for metadata table. This Field is
   // from the metadata payload schema.
   public static final String RECORD_KEY_FIELD_NAME = HoodieMetadataPayload.KEY_FIELD_NAME;
@@ -483,42 +494,157 @@ public class HoodieMetadataWriteUtils {
                                                        String partitionName,
                                                        String maxInstantTime,
                                                        String instantTime,
-                                                       Map<String, Set<String>> fileGroupIdsToReplaceMap,
-                                                       List<String> colsToIndex,
-                                                       HoodieIndexVersion partitionStatsIndexVersion) {
+                                                       Map<String, Set<String>> fileGroupIdsToReplaceMap) {
+    return getFilesToFetchColumnStats(Collections.singletonMap(partitionName, partitionedWriteStat), dataMetaClient, tableMetadata,
+        dataWriteConfig, maxInstantTime, instantTime, fileGroupIdsToReplaceMap).get(partitionName);
+  }
+
+  /**
+   * Returns, for each partition written by a commit, the names of the files in the latest merged file slices, including
+   * the files of the commit, whose column stats the write stats of the commit do not provide. The partitions are
+   * processed in batches of {@link #FILES_TO_FETCH_COLUMN_STATS_PARTITION_BATCH_SIZE}: the committed file slices of a
+   * batch are loaded at once, and the file system views of a batch are released before the next one.
+   *
+   * @param writeStatsByPartition    write stats of the commit by partition
+   * @param maxInstantTime           latest instant to include committed file slices of
+   * @param instantTime              instant of the commit
+   * @param fileGroupIdsToReplaceMap file group ids the commit replaces, by partition
+   */
+  public static Map<String, Set<String>> getFilesToFetchColumnStats(Map<String, List<HoodieWriteStat>> writeStatsByPartition,
+                                                                    HoodieTableMetaClient dataMetaClient,
+                                                                    HoodieTableMetadata tableMetadata,
+                                                                    HoodieWriteConfig dataWriteConfig,
+                                                                    String maxInstantTime,
+                                                                    String instantTime,
+                                                                    Map<String, Set<String>> fileGroupIdsToReplaceMap) {
+    return getFilesToFetchColumnStats(writeStatsByPartition, dataMetaClient, tableMetadata, dataWriteConfig, maxInstantTime, instantTime,
+        fileGroupIdsToReplaceMap, FILES_TO_FETCH_COLUMN_STATS_PARTITION_BATCH_SIZE);
+  }
+
+  @VisibleForTesting
+  static Map<String, Set<String>> getFilesToFetchColumnStats(Map<String, List<HoodieWriteStat>> writeStatsByPartition,
+                                                             HoodieTableMetaClient dataMetaClient,
+                                                             HoodieTableMetadata tableMetadata,
+                                                             HoodieWriteConfig dataWriteConfig,
+                                                             String maxInstantTime,
+                                                             String instantTime,
+                                                             Map<String, Set<String>> fileGroupIdsToReplaceMap,
+                                                             int partitionBatchSize) {
+    Map<String, Set<String>> filesToFetchColumnStats = new HashMap<>();
+    List<String> partitions = new ArrayList<>(writeStatsByPartition.keySet());
+    for (int start = 0; start < partitions.size(); start += partitionBatchSize) {
+      List<String> batch = partitions.subList(start, Math.min(start + partitionBatchSize, partitions.size()));
+      filesToFetchColumnStats.putAll(getFilesToFetchColumnStatsOfBatch(batch, writeStatsByPartition, dataMetaClient, tableMetadata, dataWriteConfig,
+          maxInstantTime, instantTime, fileGroupIdsToReplaceMap));
+    }
+    return filesToFetchColumnStats;
+  }
+
+  private static Map<String, Set<String>> getFilesToFetchColumnStatsOfBatch(List<String> partitions,
+                                                                            Map<String, List<HoodieWriteStat>> writeStatsByPartition,
+                                                                            HoodieTableMetaClient dataMetaClient,
+                                                                            HoodieTableMetadata tableMetadata,
+                                                                            HoodieWriteConfig dataWriteConfig,
+                                                                            String maxInstantTime,
+                                                                            String instantTime,
+                                                                            Map<String, Set<String>> fileGroupIdsToReplaceMap) {
     // Get the latest merged file slices based on the committed files part of the latest snapshot and the new files of the current commit metadata
     List<StoragePathInfo> consolidatedPathInfos = new ArrayList<>();
-    partitionedWriteStat.forEach(
+    partitions.forEach(partitionName -> writeStatsByPartition.get(partitionName).forEach(
         stat -> consolidatedPathInfos.add(
-            new StoragePathInfo(new StoragePath(dataMetaClient.getBasePath(), stat.getPath()), stat.getFileSizeInBytes(), false, (short) 0, 0, 0)));
+            new StoragePathInfo(new StoragePath(dataMetaClient.getBasePath(), stat.getPath()), stat.getFileSizeInBytes(), false, (short) 0, 0, 0))));
+    // the view is not closed, because closing it closes the table metadata it shares with the metadata writer
     SyncableFileSystemView fileSystemViewForCommittedFiles =
         FileSystemViewManager.createViewManager(new HoodieLocalEngineContext(dataMetaClient.getStorageConf()),
             dataWriteConfig.getMetadataConfig(), dataWriteConfig.getViewStorageConfig(), dataWriteConfig.getCommonConfig(),
             unused -> tableMetadata).getFileSystemView(dataMetaClient);
-    fileSystemViewForCommittedFiles.getLatestMergedFileSlicesBeforeOrOn(partitionName, maxInstantTime)
+    fileSystemViewForCommittedFiles.loadPartitions(partitions);
+    partitions.forEach(partitionName -> fileSystemViewForCommittedFiles.getLatestMergedFileSlicesBeforeOrOn(partitionName, maxInstantTime)
         .forEach(fileSlice -> {
           if (fileSlice.getBaseFile().isPresent()) {
             consolidatedPathInfos.add(getBaseFileStoragePathInfo(fileSlice.getBaseFile().get()));
           }
           fileSlice.getLogFiles().forEach(logFile -> consolidatedPathInfos.add(getLogFileStoragePathInfo(logFile)));
-        });
+        }));
     SpillableMapBasedFileSystemView consolidatedFileSystemView = new SpillableMapBasedFileSystemView(
-        tableMetadata, dataMetaClient, dataMetaClient.getActiveTimeline(),
-        consolidatedPathInfos, dataWriteConfig.getViewStorageConfig(), dataWriteConfig.getCommonConfig());
+        dataMetaClient, dataMetaClient.getActiveTimeline(), consolidatedPathInfos, dataWriteConfig.getViewStorageConfig(), dataWriteConfig.getCommonConfig());
+    try {
+      Map<String, Set<String>> filesToFetchColumnStats = new HashMap<>();
+      partitions.forEach(partitionName -> {
+        Set<String> fileGroupIdsToReplace = fileGroupIdsToReplaceMap.getOrDefault(partitionName, Collections.emptySet());
+        Set<String> filesWithColumnStats = writeStatsByPartition.get(partitionName).stream()
+            .map(stat -> new StoragePath(stat.getPath()).getName()).collect(Collectors.toSet());
+        // Collect column metadata of each file that does not have column stats provided by the write stat in the commit metadata
+        filesToFetchColumnStats.put(partitionName, consolidatedFileSystemView.getLatestMergedFileSlicesBeforeOrOnIncludingInflight(partitionName, maxInstantTime, instantTime)
+            .flatMap(fileSlice -> Stream.concat(
+                Stream.of(fileSlice.getBaseFile().map(HoodieBaseFile::getFileName).orElse(null)),
+                fileSlice.getLogFiles().map(HoodieLogFile::getFileName)))
+            .filter(e -> Objects.nonNull(e) && !filesWithColumnStats.contains(e) && !fileGroupIdsToReplace.contains(e))
+            .collect(Collectors.toSet()));
+      });
+      return filesToFetchColumnStats;
+    } finally {
+      consolidatedFileSystemView.close();
+    }
+  }
 
-    // Collect column metadata for each file part of the latest merged file slice before the current instant time
-    List<HoodieColumnRangeMetadata<Comparable>> fileColumnMetadata = partitionedWriteStat.stream()
-        .flatMap(writeStat -> translateWriteStatToFileStats(writeStat, dataMetaClient, colsToIndex, partitionStatsIndexVersion).stream()).collect(toList());
-    Set<String> fileGroupIdsToReplace = fileGroupIdsToReplaceMap.getOrDefault(partitionName, Collections.emptySet());
-    Set<String> filesWithColumnStats = partitionedWriteStat.stream()
-        .map(stat -> new StoragePath(stat.getPath()).getName()).collect(Collectors.toSet());
-    // Collect column metadata of each file that does not have column stats provided by the write stat in the commit metadata
-    return consolidatedFileSystemView.getLatestMergedFileSlicesBeforeOrOnIncludingInflight(partitionName, maxInstantTime, instantTime)
-        .flatMap(fileSlice -> Stream.concat(
-            Stream.of(fileSlice.getBaseFile().map(HoodieBaseFile::getFileName).orElse(null)),
-            fileSlice.getLogFiles().map(HoodieLogFile::getFileName)))
-        .filter(e -> Objects.nonNull(e) && !filesWithColumnStats.contains(e) && !fileGroupIdsToReplace.contains(e))
-        .collect(Collectors.toSet());
+  /**
+   * Reads the column stats of the given files from a column stats partition of the metadata table, with one lookup
+   * for all partitions.
+   *
+   * @param broadcastScope  scope to broadcast the file names in
+   * @param indexPartition  metadata table partition holding the column stats
+   * @param filesByPartition names of the files to read the column stats of, by data table partition
+   * @param columnsToIndex  columns to read the stats of
+   * @return pairs of the data table partition and the column stats of one column of one file
+   */
+  public static HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>> readColumnStatsOfFiles(HoodieEngineContext engineContext,
+                                                                                                      HoodieBroadcastScope broadcastScope,
+                                                                                                      HoodieTableMetadata tableMetadata,
+                                                                                                      String indexPartition,
+                                                                                                      Map<String, Set<String>> filesByPartition,
+                                                                                                      List<String> columnsToIndex) {
+    List<ColumnStatsIndexPrefixRawKey> keyPrefixes = new ArrayList<>();
+    Map<String, String> partitionByKeyPrefix = new HashMap<>();
+    filesByPartition.forEach((partition, files) -> {
+      if (!files.isEmpty()) {
+        HoodieTableMetadataUtil.generateColumnStatsKeys(columnsToIndex, partition).forEach(keyPrefix -> {
+          keyPrefixes.add(keyPrefix);
+          partitionByKeyPrefix.put(keyPrefix.encode(), partition);
+        });
+      }
+    });
+    if (keyPrefixes.isEmpty()) {
+      return engineContext.<Pair<String, HoodieColumnRangeMetadata<Comparable>>>emptyHoodieData().mapToPair(pair -> pair);
+    }
+    Set<Integer> keyPrefixLengths = partitionByKeyPrefix.keySet().stream().map(String::length).collect(Collectors.toSet());
+    HoodieBroadcast<Map<String, Set<String>>> filesByPartitionBroadcast = broadcastScope.broadcast(filesByPartition);
+    HoodieBroadcast<Map<String, String>> partitionByKeyPrefixBroadcast = broadcastScope.broadcast(partitionByKeyPrefix);
+    return tableMetadata.getRecordsByKeyPrefixes(HoodieListData.lazy(keyPrefixes), indexPartition, false)
+        .flatMap(record -> {
+          Option<HoodieMetadataColumnStats> columnStats = record.getData().getColumnStatMetadata();
+          if (!columnStats.isPresent()) {
+            return Collections.<Pair<String, HoodieColumnRangeMetadata<Comparable>>>emptyIterator();
+          }
+          String partition = getPartitionOfKey(record.getRecordKey(), keyPrefixLengths, partitionByKeyPrefixBroadcast.value());
+          if (partition == null || !filesByPartitionBroadcast.value().get(partition).contains(columnStats.get().getFileName())) {
+            return Collections.<Pair<String, HoodieColumnRangeMetadata<Comparable>>>emptyIterator();
+          }
+          return Collections.singletonList(Pair.of(partition, HoodieColumnRangeMetadata.fromColumnStats(columnStats.get()))).iterator();
+        })
+        .mapToPair(pair -> pair);
+  }
+
+  private static String getPartitionOfKey(String key, Set<Integer> keyPrefixLengths, Map<String, String> partitionByKeyPrefix) {
+    for (int keyPrefixLength : keyPrefixLengths) {
+      if (key.length() >= keyPrefixLength) {
+        String partition = partitionByKeyPrefix.get(key.substring(0, keyPrefixLength));
+        if (partition != null) {
+          return partition;
+        }
+      }
+    }
+    return null;
   }
 
   /**

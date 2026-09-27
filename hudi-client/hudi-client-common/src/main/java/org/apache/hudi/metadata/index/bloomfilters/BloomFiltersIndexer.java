@@ -21,6 +21,9 @@ package org.apache.hudi.metadata.index.bloomfilters;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.data.HoodieBroadcast;
+import org.apache.hudi.common.data.HoodieBroadcastScope;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -83,7 +86,7 @@ public class BloomFiltersIndexer extends BaseIndexer {
   public List<IndexPartitionAndRecords> buildUpdate(IndexUpdateContext context) {
     final HoodieData<HoodieRecord> records = convertMetadataToBloomFilterRecords(
         engineContext, dataTableWriteConfig, context.commitMetadata(), context.instantTime(), dataTableMetaClient,
-        dataTableWriteConfig.getBloomFilterType(), dataTableWriteConfig.getBloomIndexParallelism());
+        dataTableWriteConfig.getBloomFilterType(), dataTableWriteConfig.getBloomIndexParallelism(), broadcastScope(context));
     return Collections.singletonList(IndexPartitionAndRecords.of(BLOOM_FILTERS.getPartitionPath(), records));
   }
 
@@ -104,6 +107,7 @@ public class BloomFiltersIndexer extends BaseIndexer {
    * @param dataMetaClient          - HoodieTableMetaClient for data
    * @param bloomFilterType         - Type of generated bloom filter records
    * @param bloomIndexParallelism   - Parallelism for bloom filter record generation
+   * @param broadcastScope          - Scope to broadcast the meta client in
    * @return HoodieData of metadata table records
    */
   private static HoodieData<HoodieRecord> convertMetadataToBloomFilterRecords(
@@ -113,7 +117,8 @@ public class BloomFiltersIndexer extends BaseIndexer {
       String instantTime,
       HoodieTableMetaClient dataMetaClient,
       String bloomFilterType,
-      int bloomIndexParallelism) {
+      int bloomIndexParallelism,
+      HoodieBroadcastScope broadcastScope) {
     final List<HoodieWriteStat> allWriteStats = commitMetadata.getPartitionToWriteStats().values().stream()
         .flatMap(Collection::stream).collect(Collectors.toList());
     if (allWriteStats.isEmpty()) {
@@ -121,6 +126,9 @@ public class BloomFiltersIndexer extends BaseIndexer {
     }
 
     final int parallelism = Math.max(Math.min(allWriteStats.size(), bloomIndexParallelism), 1);
+    HoodieConfig readerConfig = new HoodieConfig(hoodieConfig.getProps());
+    HoodieRecord.HoodieRecordType recordType = hoodieConfig.getRecordMerger().getRecordType();
+    HoodieBroadcast<HoodieTableMetaClient> metaClientBroadcast = broadcastScope.broadcast(dataMetaClient);
     HoodieData<HoodieWriteStat> allWriteStatsRDD = context.parallelize(allWriteStats, parallelism);
     return allWriteStatsRDD.flatMap(hoodieWriteStat -> {
       final String partition = hoodieWriteStat.getPartitionPath();
@@ -142,10 +150,11 @@ public class BloomFiltersIndexer extends BaseIndexer {
         return Collections.emptyListIterator();
       }
 
-      final StoragePath writeFilePath = new StoragePath(dataMetaClient.getBasePath(), pathWithPartition);
-      try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(dataMetaClient.getStorage())
-          .getReaderFactory(hoodieConfig.getRecordMerger().getRecordType())
-          .getFileReader(hoodieConfig, writeFilePath)) {
+      final HoodieTableMetaClient metaClient = metaClientBroadcast.value();
+      final StoragePath writeFilePath = new StoragePath(metaClient.getBasePath(), pathWithPartition);
+      try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(metaClient.getStorage())
+          .getReaderFactory(recordType)
+          .getFileReader(readerConfig, writeFilePath)) {
         try {
           final BloomFilter fileBloomFilter = fileReader.readBloomFilter();
           if (fileBloomFilter == null) {

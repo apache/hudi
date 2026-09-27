@@ -427,7 +427,7 @@ public class SparkMetadataWriterUtils {
         // Collect Column Metadata for Each File part of active file system view of latest snapshot
         // Get all file names, including log files, in a set from the file slices
         Set<String> fileNames = HoodieMetadataWriteUtils.getFilesToFetchColumnStats(partitionedWriteStat, dataMetaClient, tableMetadata, dataWriteConfig, partitionName, maxInstantTime, instantTime,
-            fileGroupIdsToReplaceMap, validColumnsToIndex, indexVersion);
+            fileGroupIdsToReplaceMap);
         // Fetch EI column stat records for above files
         List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata =
             tableMetadata.getRecordsByKeyPrefixes(

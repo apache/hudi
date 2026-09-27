@@ -91,6 +91,17 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
     addFilesToView(pathInfoList);
   }
 
+  /**
+   * Create a file system view, as of the given timeline, with the provided file statuses only.
+   */
+  public SpillableMapBasedFileSystemView(HoodieTableMetaClient metaClient,
+                                         HoodieTimeline visibleActiveTimeline,
+                                         List<StoragePathInfo> pathInfoList,
+                                         FileSystemViewStorageConfig config,
+                                         HoodieCommonConfig commonConfig) {
+    this(new NoOpTableMetadata(), metaClient, visibleActiveTimeline, pathInfoList, config, commonConfig);
+  }
+
   @Override
   protected Map<String, List<HoodieFileGroup>> createPartitionToFileGroups() {
     try {

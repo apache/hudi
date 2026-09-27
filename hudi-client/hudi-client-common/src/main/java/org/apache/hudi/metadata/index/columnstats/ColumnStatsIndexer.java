@@ -21,6 +21,8 @@ package org.apache.hudi.metadata.index.columnstats;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.data.HoodieBroadcast;
+import org.apache.hudi.common.data.HoodieBroadcastScope;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -111,7 +113,8 @@ public class ColumnStatsIndexer extends BaseIndexer {
   @Override
   public List<IndexPartitionAndRecords> buildUpdate(IndexUpdateContext context) {
     final HoodieData<HoodieRecord> records = convertMetadataToColumnStatsRecords(context.commitMetadata(), engineContext,
-        dataTableMetaClient, dataTableWriteConfig.getMetadataConfig(), Option.of(dataTableWriteConfig.getRecordMerger().getRecordType()));
+        dataTableMetaClient, dataTableWriteConfig.getMetadataConfig(), Option.of(dataTableWriteConfig.getRecordMerger().getRecordType()),
+        broadcastScope(context));
     return Collections.singletonList(IndexPartitionAndRecords.of(COLUMN_STATS.getPartitionPath(), records));
   }
 
@@ -174,7 +177,8 @@ public class ColumnStatsIndexer extends BaseIndexer {
       HoodieEngineContext engineContext,
       HoodieTableMetaClient dataMetaClient,
       HoodieMetadataConfig metadataConfig,
-      Option<HoodieRecord.HoodieRecordType> recordTypeOpt) {
+      Option<HoodieRecord.HoodieRecordType> recordTypeOpt,
+      HoodieBroadcastScope broadcastScope) {
     List<HoodieWriteStat> allWriteStats = commitMetadata.getPartitionToWriteStats().values().stream()
         .flatMap(Collection::stream).collect(Collectors.toList());
 
@@ -190,9 +194,10 @@ public class ColumnStatsIndexer extends BaseIndexer {
       }
       List<String> columnsToIndex = new ArrayList<>(columnsToIndexSchemaMap.keySet());
       int parallelism = Math.max(Math.min(allWriteStats.size(), metadataConfig.getColumnStatsIndexParallelism()), 1);
+      HoodieBroadcast<HoodieTableMetaClient> metaClientBroadcast = broadcastScope.broadcast(dataMetaClient);
       return engineContext.parallelize(allWriteStats, parallelism)
           .flatMap(writeStat ->
-              translateWriteStatToColumnStats(writeStat, dataMetaClient, columnsToIndex).iterator());
+              translateWriteStatToColumnStats(writeStat, metaClientBroadcast.value(), columnsToIndex).iterator());
     } catch (Exception e) {
       throw new HoodieException("Failed to generate column stats records for metadata table", e);
     }
@@ -235,11 +240,12 @@ public class ColumnStatsIndexer extends BaseIndexer {
     }
 
     int parallelism = Math.max(Math.min(deleteFileList.size(), metadataConfig.getColumnStatsIndexParallelism()), 1);
+    HoodieBroadcast<HoodieTableMetaClient> metaClientBroadcast = engineContext.broadcast(dataMetaClient);
     return engineContext.parallelize(deleteFileList, parallelism)
         .flatMap(deleteFileInfoPair -> {
           String partitionPath = deleteFileInfoPair.getLeft();
           String fileName = deleteFileInfoPair.getRight();
-          return getColumnStatsRecords(partitionPath, fileName, dataMetaClient, columnsToIndex, true).iterator();
+          return getColumnStatsRecords(partitionPath, fileName, metaClientBroadcast.value(), columnsToIndex, true).iterator();
         });
   }
 
