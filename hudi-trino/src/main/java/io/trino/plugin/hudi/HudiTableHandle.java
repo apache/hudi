@@ -16,6 +16,7 @@ package io.trino.plugin.hudi;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import io.airlift.log.Logger;
 import io.trino.metastore.Table;
@@ -26,20 +27,31 @@ import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.predicate.TupleDomain;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.read.FileGroupReaderTableState;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.Lazy;
+import org.apache.hudi.storage.StoragePath;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.Properties;
 import java.util.Set;
 import java.util.function.Supplier;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkState;
+import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
 import static java.util.Objects.requireNonNull;
+import static java.util.Objects.requireNonNullElse;
+import static java.util.function.Function.identity;
 
 public class HudiTableHandle
         implements ConnectorTableHandle
@@ -57,6 +69,9 @@ public class HudiTableHandle
     private final TupleDomain<HiveColumnHandle> regularPredicates;
     private final OptionalLong limit;
     private final Optional<Lazy<HoodieSchema>> hudiTableSchema;
+    private final Lazy<Map<String, String>> lazyTableConfig;
+    private final Lazy<Optional<HudiCommittedInstants>> lazyCommittedInstants;
+    private final Lazy<FileGroupReaderTableState> lazyFileGroupReaderTableState;
     // Coordinator-only
     private final transient Optional<Table> table;
     private final transient Optional<Lazy<HoodieTableMetaClient>> lazyMetaClient;
@@ -74,10 +89,14 @@ public class HudiTableHandle
             @JsonProperty("regularPredicates") TupleDomain<HiveColumnHandle> regularPredicates,
             @JsonProperty("limit") OptionalLong limit,
             @JsonProperty("tableSchemaStr") String tableSchemaStr,
-            @JsonProperty("latestCommitTime") String latestCommitTime)
+            @JsonProperty("latestCommitTime") String latestCommitTime,
+            @JsonProperty("tableConfig") Map<String, String> tableConfig,
+            @JsonProperty("committedInstants") Optional<HudiCommittedInstants> committedInstants)
     {
         this(Optional.empty(), Optional.empty(), schemaName, tableName, basePath, tableType, partitionColumns, Lazy.eagerly(mergeRequiredColumns), ImmutableSet.of(),
-                partitionPredicates, regularPredicates, limit, buildTableSchema(tableSchemaStr), () -> latestCommitTime);
+                partitionPredicates, regularPredicates, limit, buildTableSchema(tableSchemaStr), () -> latestCommitTime,
+                Lazy.eagerly(ImmutableMap.copyOf(requireNonNullElse(tableConfig, ImmutableMap.of()))),
+                Lazy.eagerly(requireNonNullElse(committedInstants, Optional.empty())));
     }
 
     public HudiTableHandle(
@@ -96,6 +115,48 @@ public class HudiTableHandle
             Optional<Lazy<HoodieSchema>> hudiTableSchema)
     {
         this(
+                table,
+                lazyMetaClient,
+                schemaName,
+                tableName,
+                basePath,
+                tableType,
+                partitionColumns,
+                lazyMergeRequiredColumns,
+                constraintColumns,
+                partitionPredicates,
+                regularPredicates,
+                limit,
+                hudiTableSchema,
+                Lazy.lazily(() -> lazyMetaClient
+                        .get()
+                        .getActiveTimeline()
+                        .getCommitsTimeline()
+                        .filterCompletedInstants()
+                        .lastInstant()
+                        .map(HoodieInstant::requestedTime)
+                        .orElseThrow(() -> new TrinoException(
+                                HudiErrorCode.HUDI_NO_VALID_COMMIT,
+                                "Table has no valid commits"))));
+    }
+
+    private HudiTableHandle(
+            Table table,
+            Lazy<HoodieTableMetaClient> lazyMetaClient,
+            String schemaName,
+            String tableName,
+            String basePath,
+            HoodieTableType tableType,
+            List<HiveColumnHandle> partitionColumns,
+            Lazy<List<HiveColumnHandle>> lazyMergeRequiredColumns,
+            Set<HiveColumnHandle> constraintColumns,
+            TupleDomain<HiveColumnHandle> partitionPredicates,
+            TupleDomain<HiveColumnHandle> regularPredicates,
+            OptionalLong limit,
+            Optional<Lazy<HoodieSchema>> hudiTableSchema,
+            Lazy<String> lazyLatestCommitTime)
+    {
+        this(
                 Optional.of(table),
                 Optional.of(lazyMetaClient),
                 schemaName,
@@ -109,16 +170,9 @@ public class HudiTableHandle
                 regularPredicates,
                 limit,
                 hudiTableSchema,
-                () -> lazyMetaClient
-                        .get()
-                        .getActiveTimeline()
-                        .getCommitsTimeline()
-                        .filterCompletedInstants()
-                        .lastInstant()
-                        .map(HoodieInstant::requestedTime)
-                        .orElseThrow(() -> new TrinoException(
-                                HudiErrorCode.HUDI_NO_VALID_COMMIT,
-                                "Table has no valid commits")));
+                lazyLatestCommitTime::get,
+                Lazy.lazily(() -> toMap(lazyMetaClient.get().getTableConfig())),
+                Lazy.lazily(() -> captureCommittedInstants(lazyMetaClient.get(), tableType, lazyLatestCommitTime.get())));
     }
 
     HudiTableHandle(
@@ -135,7 +189,9 @@ public class HudiTableHandle
             TupleDomain<HiveColumnHandle> regularPredicates,
             OptionalLong limit,
             Optional<Lazy<HoodieSchema>> hudiTableSchema,
-            Supplier<String> latestCommitTimeSupplier)
+            Supplier<String> latestCommitTimeSupplier,
+            Lazy<Map<String, String>> lazyTableConfig,
+            Lazy<Optional<HudiCommittedInstants>> lazyCommittedInstants)
     {
         this.table = requireNonNull(table, "table is null");
         this.lazyMetaClient = requireNonNull(lazyMetaClient, "lazyMetaClient is null");
@@ -151,6 +207,48 @@ public class HudiTableHandle
         this.limit = requireNonNull(limit, "limit is null");
         this.hudiTableSchema = requireNonNull(hudiTableSchema, "hudiTableSchema is null");
         this.lazyLatestCommitTime = Lazy.lazily(latestCommitTimeSupplier);
+        this.lazyTableConfig = requireNonNull(lazyTableConfig, "lazyTableConfig is null");
+        this.lazyCommittedInstants = requireNonNull(lazyCommittedInstants, "lazyCommittedInstants is null");
+        this.lazyFileGroupReaderTableState = Lazy.lazily(() -> buildFileGroupReaderTableState(basePath, lazyTableConfig.get(), lazyCommittedInstants.get()));
+    }
+
+    /**
+     * The table properties workers need. The create schema is left out: it can be as large as the table schema, and
+     * workers read the schema from {@link #getTableSchemaStr()}.
+     */
+    private static Map<String, String> toMap(HoodieTableConfig tableConfig)
+    {
+        Properties properties = tableConfig.getProps();
+        return properties.stringPropertyNames().stream()
+                .filter(key -> !key.equals(HoodieTableConfig.CREATE_SCHEMA.key()))
+                .collect(toImmutableMap(identity(), properties::getProperty));
+    }
+
+    /**
+     * Only file groups with log files need the committed instants, and only for tables before version 8, whose log
+     * blocks the reader checks against the timeline.
+     */
+    private static Optional<HudiCommittedInstants> captureCommittedInstants(HoodieTableMetaClient metaClient, HoodieTableType tableType, String latestCommitTime)
+    {
+        if (tableType != HoodieTableType.MERGE_ON_READ || !metaClient.getTableConfig().getTableVersion().lesserThan(HoodieTableVersion.EIGHT)) {
+            return Optional.empty();
+        }
+        return Optional.of(HudiCommittedInstants.capture(metaClient.getCommitsTimeline(), latestCommitTime));
+    }
+
+    private static FileGroupReaderTableState buildFileGroupReaderTableState(
+            String basePath,
+            Map<String, String> tableConfigMap,
+            Optional<HudiCommittedInstants> committedInstants)
+    {
+        checkState(!tableConfigMap.isEmpty(), "Table handle for %s carries no table config", basePath);
+        HoodieTableConfig tableConfig = new HoodieTableConfig();
+        tableConfig.getProps().putAll(tableConfigMap);
+        return FileGroupReaderTableState.of(
+                new StoragePath(basePath),
+                tableConfig,
+                Option.fromJavaOptional(committedInstants.map(HudiCommittedInstants::toCommittedInstants)),
+                Option.empty());
     }
 
     /**
@@ -248,6 +346,28 @@ public class HudiTableHandle
         return hudiTableSchema.map(Lazy::get).orElse(null);
     }
 
+    @JsonProperty
+    public Map<String, String> getTableConfig()
+    {
+        return lazyTableConfig.get();
+    }
+
+    @JsonProperty
+    public Optional<HudiCommittedInstants> getCommittedInstants()
+    {
+        return lazyCommittedInstants.get();
+    }
+
+    /**
+     * The table state the file group reader needs, built from the table config and committed instants the coordinator
+     * captured, so reading a file group does not load the table metadata from storage.
+     */
+    @JsonIgnore
+    public FileGroupReaderTableState getFileGroupReaderTableState()
+    {
+        return lazyFileGroupReaderTableState.get();
+    }
+
     // do not serialize constraint columns as they are not needed on workers
     @JsonIgnore
     public Set<HiveColumnHandle> getConstraintColumns()
@@ -302,7 +422,9 @@ public class HudiTableHandle
                 regularPredicates.intersect(regularTupleDomain),
                 limit,
                 hudiTableSchema,
-                this::getLatestCommitTime);
+                this::getLatestCommitTime,
+                lazyTableConfig,
+                lazyCommittedInstants);
     }
 
     HudiTableHandle withLimit(long newLimit)
@@ -321,7 +443,9 @@ public class HudiTableHandle
                 regularPredicates,
                 OptionalLong.of(newLimit),
                 hudiTableSchema,
-                this::getLatestCommitTime);
+                this::getLatestCommitTime,
+                lazyTableConfig,
+                lazyCommittedInstants);
     }
 
     @Override

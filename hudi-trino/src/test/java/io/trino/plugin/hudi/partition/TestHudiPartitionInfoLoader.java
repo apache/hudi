@@ -14,6 +14,7 @@
 package io.trino.plugin.hudi.partition;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import io.airlift.units.DataSize;
 import io.trino.filesystem.Location;
 import io.trino.metastore.Partition;
@@ -42,6 +43,7 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.Executors;
@@ -166,7 +168,9 @@ public class TestHudiPartitionInfoLoader
                 TupleDomain.all(),
                 OptionalLong.empty(),
                 "",
-                "101");
+                "101",
+                ImmutableMap.of(),
+                Optional.empty());
         HudiSplitWeightProvider weightProvider = new SizeBasedSplitWeightProvider(0.05, DataSize.of(128, MEGABYTE));
         return new HudiSplitFactory(tableHandle, weightProvider, DataSize.of(128, MEGABYTE));
     }

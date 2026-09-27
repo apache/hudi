@@ -38,6 +38,8 @@ import io.trino.plugin.hive.HiveColumnProjectionInfo;
 import io.trino.plugin.hive.parquet.ParquetReaderConfig;
 import io.trino.plugin.hudi.file.HudiBaseFile;
 import io.trino.plugin.hudi.reader.HudiTrinoReaderContext;
+import io.trino.plugin.hudi.storage.HudiTrinoStorage;
+import io.trino.plugin.hudi.storage.TrinoStorageConfiguration;
 import io.trino.plugin.hudi.util.PrefilledColumnValues;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ColumnHandle;
@@ -60,7 +62,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.read.FileGroupReaderTableState;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.StoragePath;
@@ -107,10 +109,8 @@ import static io.trino.plugin.hudi.HudiSessionProperties.shouldUseParquetColumnN
 import static io.trino.plugin.hudi.HudiSessionProperties.useParquetBloomFilter;
 import static io.trino.plugin.hudi.HudiUtil.appendMissingMergeRequiredColumns;
 import static io.trino.plugin.hudi.HudiUtil.appendMissingSchemaColumns;
-import static io.trino.plugin.hudi.HudiUtil.buildTableMetaClient;
 import static io.trino.plugin.hudi.HudiUtil.constructSchema;
 import static io.trino.plugin.hudi.HudiUtil.convertToFileSlice;
-import static io.trino.plugin.hudi.HudiUtil.getLatestTableSchema;
 import static io.trino.plugin.hudi.HudiUtil.prependHudiMetaAndMergeRequiredColumns;
 import static io.trino.plugin.hudi.HudiUtil.resolveMergeModeAndStrategyId;
 import static io.trino.plugin.hudi.HudiUtil.usesNonProjectionCompatibleMerger;
@@ -229,20 +229,17 @@ public class HudiPageSourceProvider
                     + hudiSplit.getLogFiles().getFirst().getPath());
         }
 
-        // TODO: Move this into HudiTableHandle
-        HoodieTableMetaClient metaClient = buildTableMetaClient(
-                fileSystemFactory.create(session), hudiTableHandle.getSchemaTableName().toString(), hudiTableHandle.getBasePath());
-        HoodieSchema dataSchema =
-                Optional.ofNullable(hudiTableHandle.getTableSchema())
-                        .orElseGet(() -> getLatestTableSchema(metaClient, hudiTableHandle.getTableName()));
-        TypedProperties readerProps = buildReaderProperties(session, metaClient);
+        FileGroupReaderTableState tableState = hudiTableHandle.getFileGroupReaderTableState();
+        HoodieTableConfig tableConfig = tableState.getTableConfig();
+        HoodieSchema dataSchema = requireNonNull(hudiTableHandle.getTableSchema(), "table schema is not set on the table handle");
+        TypedProperties readerProps = buildReaderProperties(session, tableConfig);
 
         // A non-projection-compatible CUSTOM merger makes the file-group reader demand the FULL table
         // schema as requiredSchema for this split (it has log files), for the base and log reads alike.
         // Expand the read projection to the full schema up front so the base page source carries every
         // merge column; the log page sources resolve their columns from the same expanded handles.
         List<HiveColumnHandle> readColumnHandles;
-        if (requiresFullSchemaRead(metaClient.getTableConfig(), readerProps)) {
+        if (requiresFullSchemaRead(tableConfig, readerProps)) {
             log.debug("Expanding the read projection of %s to the full table schema: the resolved record merger is not projection compatible",
                     hudiTableHandle.getSchemaTableName());
             readColumnHandles = appendMissingSchemaColumns(dataSchema, hudiMetaAndDataColumnHandles);
@@ -251,7 +248,7 @@ public class HudiPageSourceProvider
             // The metastore may lack merge-required columns the table schema carries (e.g. hive sync with
             // omit_metadata_fields=true drops _hoodie_operation); recover them from the already-resolved
             // schema so the base read is not starved of them.
-            readColumnHandles = appendMissingMergeRequiredColumns(dataSchema, hudiMetaAndDataColumnHandles, metaClient.getTableConfig(), readerProps);
+            readColumnHandles = appendMissingMergeRequiredColumns(dataSchema, hudiMetaAndDataColumnHandles, tableConfig, readerProps);
         }
 
         ConnectorPageSource dataPageSource =
@@ -273,9 +270,10 @@ public class HudiPageSourceProvider
                         timeZone,
                         DynamicFilter.EMPTY,
                         false);
+        HudiTrinoStorage storage = new HudiTrinoStorage(fileSystem, new TrinoStorageConfiguration());
         HudiTrinoReaderContext readerContext = new HudiTrinoReaderContext(
-                metaClient.getStorageConf(),
-                metaClient.getTableConfig(),
+                storage.getConf(),
+                tableConfig,
                 dataPageSource,
                 readColumnHandles,
                 prefilledColumnValues,
@@ -286,7 +284,8 @@ public class HudiPageSourceProvider
         HoodieFileGroupReader<IndexedRecord> fileGroupReader =
                 HoodieFileGroupReader.<IndexedRecord>builder()
                         .withReaderContext(readerContext)
-                        .withHoodieTableMetaClient(metaClient)
+                        .withTableState(tableState)
+                        .withStorage(storage)
                         .withBaseFileOption(fileSlice.getBaseFile())
                         .withLogFiles(fileSlice.getLogFiles())
                         .withPartitionPath(fileSlice.getPartitionPath())
@@ -355,10 +354,10 @@ public class HudiPageSourceProvider
      * The merger impl classes are a read/write config and are not persisted in {@code hoodie.properties}, so they
      * must be supplied here for {@link HudiTrinoReaderContext#getRecordMerger} to resolve a CUSTOM record merger.
      */
-    private static TypedProperties buildReaderProperties(ConnectorSession session, HoodieTableMetaClient metaClient)
+    private static TypedProperties buildReaderProperties(ConnectorSession session, HoodieTableConfig tableConfig)
     {
         TypedProperties props = new TypedProperties();
-        TypedProperties.putAll(props, metaClient.getTableConfig().getProps());
+        TypedProperties.putAll(props, tableConfig.getProps());
         List<String> recordMergerImpls = getRecordMergerImpls(session);
         if (!recordMergerImpls.isEmpty()) {
             props.setProperty(RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY, String.join(",", recordMergerImpls));
