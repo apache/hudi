@@ -111,9 +111,10 @@ import static org.apache.hudi.table.action.commit.HoodieDeleteHelper.createDelet
 public class HoodieIndexUtils {
 
   /**
-   * Partitions per load request, which keeps the partition list of a timeline server request short.
+   * Characters of partition paths per load request. The list travels in the timeline server request
+   * line, where encoding can triple it, so this keeps the line under the server's 8 KB header limit.
    */
-  private static final int LOAD_PARTITIONS_BATCH_SIZE = 100;
+  private static final int LOAD_PARTITIONS_MAX_PATHS_LENGTH = 2000;
 
   /**
    * Fetches Pair of partition path and {@link HoodieBaseFile}s for interested partitions.
@@ -188,8 +189,8 @@ public class HoodieIndexUtils {
   /**
    * Fetches Pair of partition path and {@link HoodieBaseFile}s for interested partitions.
    *
-   * <p>With the metadata table, the driver loads the partitions into the table's view in batched metadata
-   * table lookups and reads the base files from it. Otherwise each partition is listed by its own task.
+   * <p>With the metadata table, the driver reads the base files from the table's view after loading the
+   * partitions into it in batched metadata table lookups. Otherwise each partition is listed by its own task.
    *
    * @param partitions  list of partitions of interest
    * @param context     instance of {@link HoodieEngineContext} to use
@@ -217,16 +218,32 @@ public class HoodieIndexUtils {
       return Collections.emptyList();
     }
     String maxCommitTime = latestCommitTime.get().requestedTime();
-    // The table's view, not a new one: with the embedded timeline server these requests sync the server's
-    // view to this write's timeline, which the write handles send later. A server view synced only by
-    // the handles would reload a timeline that a table service may have moved on, and reject them.
+    // The table's view, not a new one: with the embedded timeline server its reads sync the server's view
+    // to this write's timeline, which the write handles send later. A server view synced only by the
+    // handles would reload a timeline that a table service may have moved on, and reject them. The
+    // server does not sync on load requests, so the first read goes before the loads; a sync after them
+    // would drop the loaded partitions.
     SyncableFileSystemView view = hoodieTable.getHoodieView();
-    for (int start = 0; start < partitions.size(); start += LOAD_PARTITIONS_BATCH_SIZE) {
-      view.loadPartitions(partitions.subList(start, Math.min(start + LOAD_PARTITIONS_BATCH_SIZE, partitions.size())));
+    List<Pair<String, HoodieBaseFile>> baseFiles = new ArrayList<>(getLatestBaseFiles(view, partitions.get(0), maxCommitTime));
+    List<String> remaining = partitions.subList(1, partitions.size());
+    int start = 0;
+    while (start < remaining.size()) {
+      int end = start;
+      int length = 0;
+      do {
+        length += remaining.get(end).length() + 3;
+        end++;
+      } while (end < remaining.size() && length + remaining.get(end).length() + 3 <= LOAD_PARTITIONS_MAX_PATHS_LENGTH);
+      view.loadPartitions(remaining.subList(start, end));
+      start = end;
     }
-    return partitions.stream()
-        .flatMap(partitionPath -> view.getLatestBaseFilesBeforeOrOn(partitionPath, maxCommitTime)
-            .map(baseFile -> Pair.of(partitionPath, baseFile)))
+    remaining.forEach(partitionPath -> baseFiles.addAll(getLatestBaseFiles(view, partitionPath, maxCommitTime)));
+    return baseFiles;
+  }
+
+  private static List<Pair<String, HoodieBaseFile>> getLatestBaseFiles(SyncableFileSystemView view, String partitionPath, String maxCommitTime) {
+    return view.getLatestBaseFilesBeforeOrOn(partitionPath, maxCommitTime)
+        .map(baseFile -> Pair.of(partitionPath, baseFile))
         .collect(toList());
   }
 

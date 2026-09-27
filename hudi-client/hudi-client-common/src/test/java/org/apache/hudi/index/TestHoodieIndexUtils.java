@@ -43,6 +43,7 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockedConstruction;
 import org.mockito.Mockito;
@@ -70,9 +71,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -781,8 +784,8 @@ public class TestHoodieIndexUtils {
   }
 
   /**
-   * With the metadata table the base files come from the table's view, loaded in batches: its requests
-   * sync the embedded timeline server to the timeline the write handles send later.
+   * With the metadata table the base files come from the table's view, loaded in batches after a first read
+   * that syncs the embedded timeline server to the timeline the write handles send later.
    */
   @Test
   void testLatestBaseFilesForAllPartitionsReadTheTableView() {
@@ -805,14 +808,22 @@ public class TestHoodieIndexUtils {
     when(table.getConfig()).thenReturn(config);
     when(table.getMetaClient()).thenReturn(mockMetaClient);
     when(table.getHoodieView()).thenReturn(view);
-    List<String> partitions = IntStream.range(0, 150).mapToObj(i -> "p" + i).collect(Collectors.toList());
+    // 97 characters with the JSON quotes and separator, so 20 fit in one load request
+    List<String> partitions = IntStream.range(0, 31).mapToObj(i -> String.format("%094d", i)).collect(Collectors.toList());
+    HoodieEngineContext engineContext = mock(HoodieEngineContext.class);
 
     List<Pair<String, HoodieBaseFile>> baseFiles =
-        HoodieIndexUtils.getLatestBaseFilesForAllPartitions(partitions, mock(HoodieEngineContext.class), table);
+        HoodieIndexUtils.getLatestBaseFilesForAllPartitions(partitions, engineContext, table);
 
     assertEquals(partitions, baseFiles.stream().map(Pair::getKey).collect(Collectors.toList()));
-    verify(view).loadPartitions(partitions.subList(0, 100));
-    verify(view).loadPartitions(partitions.subList(100, 150));
+    // The first read syncs the timeline server before the loads, which it does not sync on.
+    InOrder inOrder = inOrder(view);
+    inOrder.verify(view).getLatestBaseFilesBeforeOrOn(partitions.get(0), "002");
+    inOrder.verify(view).loadPartitions(partitions.subList(1, 21));
+    inOrder.verify(view).loadPartitions(partitions.subList(21, 31));
+    inOrder.verify(view).getLatestBaseFilesBeforeOrOn(partitions.get(1), "002");
+    verify(view, never()).loadPartitions(Collections.singletonList(partitions.get(0)));
     verify(table, never()).refreshAndGetTableMetadata();
+    verifyNoInteractions(engineContext);
   }
 }
