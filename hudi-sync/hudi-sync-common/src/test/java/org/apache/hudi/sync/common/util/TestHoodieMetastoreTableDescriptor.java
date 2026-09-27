@@ -179,6 +179,19 @@ class TestHoodieMetastoreTableDescriptor {
   }
 
   @Test
+  void snapshotViewCarriesFieldDocsInTheSparkSchema() {
+    HoodieSchema schemaWithComment = HoodieSchemaUtils.addMetadataFields(HoodieSchema.createRecord(
+        "trips", "hoodie.test", null, Collections.singletonList(
+            HoodieSchemaField.of(
+                "id", HoodieSchema.create(HoodieSchemaType.LONG), "trip identifier", null))));
+    HoodieMetastoreTableDescriptor descriptor = HoodieMetastoreTableDescriptor.forSnapshotView(
+        schemaWithComment, Collections.emptyList(), HoodieTableType.COPY_ON_WRITE, BASE_PATH, true);
+
+    String reassembled = reassembleSparkSchema(descriptor);
+    assertTrue(reassembled.contains("\"metadata\":{\"comment\":\"trip identifier\"}"), reassembled);
+  }
+
+  @Test
   void anEmptySparkVersionOmitsTheCreateVersionProperty() {
     // hoodie.meta_sync.spark.version defaults to empty, so a hive-synced table has no
     // spark.sql.create.version either. Trino is not Spark and has no version to claim.

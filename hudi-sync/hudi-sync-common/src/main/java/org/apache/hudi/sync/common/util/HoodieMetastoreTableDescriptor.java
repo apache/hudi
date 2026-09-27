@@ -56,10 +56,10 @@ import java.util.Set;
  * rebuilt, since that class is already engine-neutral and its Spark compatibility is already
  * covered by round-tripping the schema JSON through Spark's own {@code StructType.fromJson}.
  *
- * <p>Only the Parquet base file format is described. Every engine that creates a table today creates
- * a Parquet one, and reproducing the ORC/HFile/Lance/Vortex branches of
- * {@code HoodieInputFormatUtils} without a caller for them would be speculative; a non-Parquet base
- * file format is rejected rather than guessed at.
+ * <p>Only the Parquet base file format is described. This class receives no table config, so callers
+ * must invoke it only for Parquet-backed views; callers that register existing tables must reject a
+ * different base file format before building the descriptor. Reproducing the ORC/HFile/Lance/Vortex
+ * branches of {@code HoodieInputFormatUtils} without a caller for them would be speculative.
  */
 public final class HoodieMetastoreTableDescriptor {
 
@@ -170,6 +170,9 @@ public final class HoodieMetastoreTableDescriptor {
         ViewOptions.builder()
             .setExternal(external)
             .setUseRealtimeInputFormat(useRealtimeInputFormat)
+            // Snapshot registrations expose schema docs as metastore column comments, so carry the
+            // same comments in Spark's serialized schema as hive-sync does when comment sync is on.
+            .setIncludeFieldDocs(true)
             .build());
   }
 
