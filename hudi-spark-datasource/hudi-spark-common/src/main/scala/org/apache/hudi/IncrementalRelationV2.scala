@@ -194,13 +194,16 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
           (regularFileIdToFullPath.values, metaBootstrapFileIdToFullPath.values)
         }
       }
-      // pass internalSchema to hadoopConf, so it can be used in executors.
-      val instantFileNameGenerator = metaClient.getTimelineLayout.getInstantFileNameGenerator;
-      val validCommits = metaClient
-        .getCommitsAndCompactionTimeline.filterCompletedInstants.getInstantsAsStream.toArray().map(a => instantFileNameGenerator.getFileName(a.asInstanceOf[HoodieInstant])).mkString(",")
-      sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
-      sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, metaClient.getBasePath.toString)
-      sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
+      // Schema-on-read settings travel as options of the base file read below, so they stay scoped to this query.
+      val schemaEvolutionReadOptions: Map[String, String] = if (internalSchema.isEmptySchema) {
+        Map.empty
+      } else {
+        val instantFileNameGenerator = metaClient.getTimelineLayout.getInstantFileNameGenerator;
+        val validCommits = metaClient
+          .getCommitsAndCompactionTimeline.filterCompletedInstants.getInstantsAsStream.toArray().map(a => instantFileNameGenerator.getFileName(a.asInstanceOf[HoodieInstant])).mkString(",")
+        SparkInternalSchemaConverter.getSchemaEvolutionReadConfigs(metaClient, validCommits).asScala.toMap +
+          (SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA -> SerDeHelper.toJson(internalSchema))
+      }
       val formatClassName = metaClient.getTableConfig.getBaseFileFormat match {
         case HoodieFileFormat.PARQUET => LegacyHoodieParquetFileFormat.FILE_FORMAT_ID
         case HoodieFileFormat.ORC => "orc"
@@ -275,7 +278,7 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
             if (regularFileIdToFullPath.nonEmpty) {
               try {
                 val commitTimesToReturn = commitsToReturn.map(_.requestedTime)
-                df = df.union(sqlContext.read.options(sOpts)
+                df = df.union(sqlContext.read.options(sOpts ++ schemaEvolutionReadOptions)
                   .schema(prunedSchema).format(formatClassName)
                   // Setting time to the END_INSTANT_TIME, to avoid pathFilter filter out files incorrectly.
                   .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key(), endInstantTime)

@@ -23,6 +23,8 @@ import org.apache.hudi.common.schema.internal.Type;
 import org.apache.hudi.common.schema.internal.Types;
 import org.apache.hudi.common.schema.internal.action.InternalSchemaMerger;
 import org.apache.hudi.common.schema.internal.utils.InternalSchemaUtils;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.InternalSchemaHistory;
 import org.apache.hudi.common.util.collection.Pair;
 
 import lombok.AccessLevel;
@@ -68,6 +70,7 @@ import org.apache.spark.sql.types.VarcharType;
 import java.sql.Date;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -85,6 +88,19 @@ public class SparkInternalSchemaConverter {
   // Mirrors Spark's VariantMetadata.METADATA_KEY (Spark 4.x only), referenced by literal
   // because the class does not exist on Spark 3 classpaths.
   private static final String SPARK_VARIANT_METADATA_KEY = "__VARIANT_METADATA_KEY";
+
+  /**
+   * Returns the configs a Spark base file reader needs to resolve each file's schema under schema-on-read:
+   * the table path and the table's schema history restricted to the valid commits.
+   *
+   * @param metaClient   meta client of the table
+   * @param validCommits comma-separated instant file names of the commits the reader may read
+   */
+  public static Map<String, String> getSchemaEvolutionReadConfigs(HoodieTableMetaClient metaClient, String validCommits) {
+    Map<String, String> configs = new HashMap<>(InternalSchemaHistory.load(metaClient, validCommits).toConfigs());
+    configs.put(HOODIE_TABLE_PATH, metaClient.getBasePath().toString());
+    return configs;
+  }
 
   public static Type buildTypeFromStructType(DataType sparkType, Boolean firstVisitRoot, AtomicInteger nextId) {
     if (sparkType instanceof StructType) {

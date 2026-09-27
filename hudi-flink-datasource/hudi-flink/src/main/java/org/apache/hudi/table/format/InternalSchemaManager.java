@@ -26,14 +26,10 @@ import org.apache.hudi.common.schema.internal.Types;
 import org.apache.hudi.common.schema.internal.action.InternalSchemaMerger;
 import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter;
 import org.apache.hudi.common.schema.internal.utils.InternalSchemaUtils;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
-import org.apache.hudi.common.table.timeline.TimelineLayout;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
-import org.apache.hudi.common.util.HoodieStorageUtils;
-import org.apache.hudi.common.util.InternalSchemaCache;
+import org.apache.hudi.common.util.InternalSchemaHistory;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -61,16 +57,11 @@ public class InternalSchemaManager implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
-  public static final InternalSchemaManager DISABLED = new InternalSchemaManager(null, InternalSchema.getEmptyInternalSchema(), null, null,
-      TimelineLayout.fromVersion(TimelineLayoutVersion.CURR_LAYOUT_VERSION), null);
+  public static final InternalSchemaManager DISABLED = new InternalSchemaManager(InternalSchema.getEmptyInternalSchema(), null);
 
   @Getter
   private final InternalSchema querySchema;
-  private final String validCommits;
-  private final String tablePath;
-  private final TimelineLayout layout;
-  private final HoodieTableConfig tableConfig;
-  private final StorageConfiguration<?> storageConf;
+  private final InternalSchemaHistory schemaHistory;
 
   public static InternalSchemaManager get(StorageConfiguration<?> conf, HoodieTableMetaClient metaClient) {
     if (!isSchemaEvolutionEnabled(conf)) {
@@ -88,17 +79,16 @@ public class InternalSchemaManager implements Serializable {
         .getInstantsAsStream()
         .map(factory::getFileName)
         .collect(Collectors.joining(","));
-    return new InternalSchemaManager(conf, internalSchema.get(), validCommits, metaClient.getBasePath().toString(), metaClient.getTimelineLayout(), metaClient.getTableConfig());
+    return new InternalSchemaManager(internalSchema.get(), InternalSchemaHistory.load(metaClient, validCommits));
   }
 
-  public InternalSchemaManager(StorageConfiguration<?> storageConf, InternalSchema querySchema, String validCommits, String tablePath,
-                               TimelineLayout layout, HoodieTableConfig tableConfig) {
-    this.storageConf = storageConf;
+  /**
+   * @param querySchema   the schema to read files with
+   * @param schemaHistory the table's schema history, used to find the schema each file was written with
+   */
+  public InternalSchemaManager(InternalSchema querySchema, InternalSchemaHistory schemaHistory) {
     this.querySchema = querySchema;
-    this.validCommits = validCommits;
-    this.tablePath = tablePath;
-    this.layout = layout;
-    this.tableConfig = tableConfig;
+    this.schemaHistory = schemaHistory;
   }
 
   /**
@@ -117,10 +107,7 @@ public class InternalSchemaManager implements Serializable {
       return querySchema;
     }
     long commitInstantTime = Long.parseLong(FSUtils.getCommitTime(fileName));
-    InternalSchema fileSchema = InternalSchemaCache.getInternalSchemaByVersionId(
-        commitInstantTime, tablePath,
-        HoodieStorageUtils.getStorage(tablePath, storageConf),
-        validCommits, layout, tableConfig);
+    InternalSchema fileSchema = schemaHistory.getSchemaByVersionId(commitInstantTime);
     if (querySchema.equals(fileSchema)) {
       return InternalSchema.getEmptyInternalSchema();
     }
