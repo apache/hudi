@@ -83,7 +83,8 @@ class Spark40ParquetReader(enableVectorizedReader: Boolean,
    * @param partitionSchema    schema of the partition columns. Partition values will be appended to the end of every row
    * @param internalSchemaOpt  option of internal schema for schema.on.read
    * @param filters            filters for data skipping. Not guaranteed to be used; the spark plan will also apply the filters.
-   * @param sharedConf         the hadoop conf
+   * @param sharedConf         the hadoop conf with the requested schema set; other files may share it, so it is
+   *                           copied, not modified, for keys of this file only
    * @return iterator of rows read from the file output type says [[InternalRow]] but could be [[ColumnarBatch]]
    */
   override protected def doRead(file: PartitionedFile,
@@ -91,7 +92,7 @@ class Spark40ParquetReader(enableVectorizedReader: Boolean,
                                 partitionSchema: StructType,
                                 internalSchemaOpt: org.apache.hudi.common.util.Option[InternalSchema],
                                 filters: scala.Seq[Filter],
-                                sharedConf: Configuration,
+                                sharedConf: ParquetReadConf,
                                 tableSchemaOpt: org.apache.hudi.common.util.Option[org.apache.parquet.schema.MessageType]): Iterator[InternalRow] = {
     assert(file.partitionValues.numFields == partitionSchema.size)
 
@@ -187,7 +188,7 @@ class Spark40ParquetReader(enableVectorizedReader: Boolean,
         int96RebaseSpec.mode.toString,
         int96RebaseSpec.timeZone,
         enableOffHeapColumnVector && taskContext.isDefined,
-        capacity)
+        SparkParquetReaderBase.vectorizedBatchCapacity(capacity, fileFooter))
       // SPARK-37089: We cannot register a task completion listener to close this iterator here
       // because downstream exec nodes have already registered their listeners. Since listeners
       // are executed in reverse order of registration, a listener registered here would close the

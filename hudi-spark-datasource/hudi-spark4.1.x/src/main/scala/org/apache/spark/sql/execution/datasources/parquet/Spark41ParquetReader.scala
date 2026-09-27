@@ -89,7 +89,8 @@ class Spark41ParquetReader(enableVectorizedReader: Boolean,
    * @param partitionSchema    schema of the partition columns. Partition values will be appended to the end of every row
    * @param internalSchemaOpt  option of internal schema for schema.on.read
    * @param filters            filters for data skipping. Not guaranteed to be used; the spark plan will also apply the filters.
-   * @param sharedConf         the hadoop conf
+   * @param sharedConf         the hadoop conf with the requested schema set; other files may share it, so it is
+   *                           copied, not modified, for keys of this file only
    * @return iterator of rows read from the file output type says [[InternalRow]] but could be [[ColumnarBatch]]
    */
   override protected def doRead(file: PartitionedFile,
@@ -97,7 +98,7 @@ class Spark41ParquetReader(enableVectorizedReader: Boolean,
                                 partitionSchema: StructType,
                                 internalSchemaOpt: HOption[InternalSchema],
                                 filters: scala.Seq[Filter],
-                                sharedConf: Configuration,
+                                sharedConf: ParquetReadConf,
                                 tableSchemaOpt: HOption[MessageType]): Iterator[InternalRow] = {
     assert(file.partitionValues.numFields == partitionSchema.size)
 
@@ -182,7 +183,8 @@ class Spark41ParquetReader(enableVectorizedReader: Boolean,
         buildVectorizedIterator(
           hadoopAttemptContext, split, file.partitionValues, partitionSchema, convertTz,
           datetimeRebaseSpec, int96RebaseSpec, enableOffHeapColumnVector, returningBatch,
-          capacity, openedFooter, shouldCloseInputStream, schemaEvolutionUtils)
+          SparkParquetReaderBase.vectorizedBatchCapacity(capacity, openedFooter.footer), openedFooter,
+          shouldCloseInputStream, schemaEvolutionUtils)
       } else {
         buildRowBasedIterator(
           hadoopAttemptContext, split, file.partitionValues, partitionSchema, convertTz,

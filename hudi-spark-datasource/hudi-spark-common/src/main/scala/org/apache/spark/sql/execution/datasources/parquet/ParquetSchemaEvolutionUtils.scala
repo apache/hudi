@@ -51,7 +51,7 @@ import java.time.ZoneId
 
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 
-class ParquetSchemaEvolutionUtils(readConf: Configuration,
+class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
                                   filePath: Path,
                                   requiredSchema: StructType,
                                   partitionSchema: StructType,
@@ -63,14 +63,14 @@ class ParquetSchemaEvolutionUtils(readConf: Configuration,
 
   private lazy val schemaUtils: HoodieSchemaUtils = sparkAdapter.getSchemaUtils
 
-  private lazy val tablePath: String = readConf.get(SparkInternalSchemaConverter.HOODIE_TABLE_PATH)
+  private lazy val tablePath: String = sharedConf.get(SparkInternalSchemaConverter.HOODIE_TABLE_PATH)
   private lazy val fileSchema: InternalSchema = if (shouldUseInternalSchema) {
     val commitInstantTime = FSUtils.getCommitTime(filePath.getName).toLong
     //TODO: HARDCODED TIMELINE OBJECT
-    val validCommits = readConf.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST)
+    val validCommits = sharedConf.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST)
     val layout = TimelineLayout.fromVersion(TimelineLayoutVersion.CURR_LAYOUT_VERSION)
     InternalSchemaCache.getInternalSchemaByVersionId(commitInstantTime, tablePath,
-      HoodieStorageUtils.getStorage(tablePath, HadoopFSUtils.getStorageConf(readConf)), if (validCommits == null) "" else validCommits, layout)
+      HoodieStorageUtils.getStorage(tablePath, HadoopFSUtils.getStorageConf(sharedConf)), if (validCommits == null) "" else validCommits, layout)
   } else {
     null
   }
@@ -82,19 +82,17 @@ class ParquetSchemaEvolutionUtils(readConf: Configuration,
   protected var typeChangeInfos: java.util.Map[Integer, Pair[DataType, DataType]] = null
 
   /**
-   * Returns the configuration to read the file with: the read configuration itself when the file needs no
-   * keys of its own, otherwise a copy with the file's requested schema. Pass `writable` when the caller sets
-   * keys on the returned configuration. The read configuration is never modified, since other readers may
-   * share it.
+   * Returns the conf to read the file with: `sharedConf` itself when the file needs no keys of its own, otherwise a
+   * copy with the file's requested schema. Other files may share `sharedConf`, so it is never modified; pass
+   * `writable` when the caller sets keys on the returned conf.
    */
   def getFileReadConf(footerFileMetaData: FileMetaData, enableVectorizedReader: Boolean, writable: Boolean): Configuration = {
-    // A JobConf, so the task attempt context built on it does not copy it again
-    var fileReadConf: Configuration = if (writable) new JobConf(readConf) else readConf
-    def setRequestedSchema(schema: StructType): Unit = {
-      if (fileReadConf eq readConf) {
-        fileReadConf = new JobConf(readConf)
+    var fileConf: Configuration = if (writable) new JobConf(sharedConf) else null
+    def hadoopAttemptConf: Configuration = {
+      if (fileConf == null) {
+        fileConf = new JobConf(sharedConf)
       }
-      fileReadConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, schema.json)
+      fileConf
     }
     typeChangeInfos = if (shouldUseInternalSchema) {
       // Empty projections (count(*), select 1) read no column data, so there is nothing to
@@ -106,14 +104,14 @@ class ParquetSchemaEvolutionUtils(readConf: Configuration,
       val mergedInternalSchema = new InternalSchemaMerger(fileSchema, querySchemaOption.get(), true, true).mergeSchema()
       val mergedSchema = SparkInternalSchemaConverter.constructSparkSchemaFromInternalSchema(mergedInternalSchema)
 
-      setRequestedSchema(mergedSchema)
+      hadoopAttemptConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, mergedSchema.json)
 
       SparkInternalSchemaConverter.collectTypeChangedCols(querySchemaOption.get(), mergedInternalSchema)
     } else {
-      val (implicitTypeChangeInfo, sparkRequestSchema) = HoodieParquetFileFormatHelper.buildImplicitSchemaChangeInfo(readConf, footerFileMetaData, requiredSchema)
+      val (implicitTypeChangeInfo, sparkRequestSchema) = HoodieParquetFileFormatHelper.buildImplicitSchemaChangeInfo(sharedConf, footerFileMetaData, requiredSchema)
       if (!implicitTypeChangeInfo.isEmpty) {
         shouldUseInternalSchema = true
-        setRequestedSchema(sparkRequestSchema)
+        hadoopAttemptConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, sparkRequestSchema.json)
       }
       implicitTypeChangeInfo
     }
@@ -125,7 +123,7 @@ class ParquetSchemaEvolutionUtils(readConf: Configuration,
           "To workaround this issue, set spark.sql.parquet.enableVectorizedReader=false.")
     }
 
-    fileReadConf
+    if (fileConf == null) sharedConf else fileConf
   }
 
   def generateUnsafeProjection(fullSchema: Seq[AttributeReference], timeZoneId: Option[String]): UnsafeProjection = {
@@ -315,6 +313,21 @@ object ParquetSchemaEvolutionUtils {
       parquetFieldIgnoreCase(fileParquetSchema, field.name)
         .foreach(validateNoShreddedVariantStruct(field.dataType, _, field.name))
     }
+  }
+
+  /**
+   * Whether any struct in `requiredSchema`, at any depth [[validateNoShreddedVariantStructs]] walks, has the unshredded
+   * variant shape. When there is none, that check cannot fail for any file, so readers skip it.
+   */
+  def containsUnshreddedVariantStruct(requiredSchema: StructType): Boolean =
+    requiredSchema.fields.exists(field => containsUnshreddedVariantStruct(field.dataType))
+
+  private def containsUnshreddedVariantStruct(dataType: DataType): Boolean = dataType match {
+    case struct: StructType if isUnshreddedVariantStruct(struct) => true
+    case struct: StructType => struct.fields.exists(field => containsUnshreddedVariantStruct(field.dataType))
+    case array: ArrayType => containsUnshreddedVariantStruct(array.elementType)
+    case map: MapType => containsUnshreddedVariantStruct(map.valueType)
+    case _ => false
   }
 
   /**
