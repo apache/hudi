@@ -97,7 +97,8 @@ class TestBaseFileReadPerScan extends HoodieSparkClientTestBase {
 
     assertEquals(30, rows)
     val confs = dataFileReadConfs(basePath)
-    assertTrue(confs.size >= 2 * files.size, s"Expected a footer read and a data read per file, got ${confs.size}")
+    // Spark 4.1+ vectorized reads reuse the footer's stream for the data, so a file may be opened only once.
+    assertTrue(confs.size >= files.size, s"Expected at least one open per file, got ${confs.size} for ${files.size} files")
     assertEquals(1, confs.map(System.identityHashCode).distinct.size,
       "All base files of the scan are read with one conf")
   }
