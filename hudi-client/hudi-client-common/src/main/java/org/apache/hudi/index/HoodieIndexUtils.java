@@ -57,6 +57,7 @@ import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -182,6 +183,9 @@ public class HoodieIndexUtils {
   /**
    * Fetches Pair of partition path and {@link HoodieBaseFile}s for interested partitions.
    *
+   * <p>With the metadata table, the driver reads the files of all the partitions in one metadata table
+   * lookup into a view it builds and closes. Otherwise each partition is listed by its own task.
+   *
    * @param partitions  list of partitions of interest
    * @param context     instance of {@link HoodieEngineContext} to use
    * @param hoodieTable instance of {@link HoodieTable} of interest
@@ -190,15 +194,32 @@ public class HoodieIndexUtils {
   public static List<Pair<String, HoodieBaseFile>> getLatestBaseFilesForAllPartitions(final List<String> partitions,
                                                                                       final HoodieEngineContext context,
                                                                                       final HoodieTable hoodieTable) {
-    context.setJobStatus(HoodieIndexUtils.class.getSimpleName(), "Load latest base files from all partitions: " + hoodieTable.getConfig().getTableName());
-    return context.flatMap(partitions, partitionPath -> {
-      List<Pair<String, HoodieBaseFile>> filteredFiles =
-          getLatestBaseFilesForPartition(partitionPath, hoodieTable).stream()
-              .map(baseFile -> Pair.of(partitionPath, baseFile))
-              .collect(toList());
+    HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
+    if (!hoodieTable.getConfig().isMetadataTableEnabled() || !metaClient.getTableConfig().isMetadataTableAvailable()
+        || metaClient.getMetaserverConfig().isMetaserverEnabled()) {
+      context.setJobStatus(HoodieIndexUtils.class.getSimpleName(), "Load latest base files from all partitions: " + hoodieTable.getConfig().getTableName());
+      return context.flatMap(partitions, partitionPath -> {
+        List<Pair<String, HoodieBaseFile>> filteredFiles =
+            getLatestBaseFilesForPartition(partitionPath, hoodieTable).stream()
+                .map(baseFile -> Pair.of(partitionPath, baseFile))
+                .collect(toList());
 
-      return filteredFiles.stream();
-    }, Math.max(partitions.size(), 1));
+        return filteredFiles.stream();
+      }, Math.max(partitions.size(), 1));
+    }
+    Option<HoodieInstant> latestCommitTime = metaClient.getCommitsTimeline().filterCompletedInstants().lastInstant();
+    if (partitions.isEmpty() || latestCommitTime.isEmpty()) {
+      return Collections.emptyList();
+    }
+    String maxCommitTime = latestCommitTime.get().requestedTime();
+    try (HoodieTableFileSystemView view = new HoodieTableFileSystemView(hoodieTable.refreshAndGetTableMetadata(), metaClient,
+        metaClient.getActiveTimeline().filterCompletedAndCompactionInstants())) {
+      view.loadPartitions(partitions);
+      return partitions.stream()
+          .flatMap(partitionPath -> view.getLatestBaseFilesBeforeOrOn(partitionPath, maxCommitTime)
+              .map(baseFile -> Pair.of(partitionPath, baseFile)))
+          .collect(toList());
+    }
   }
 
   /**
@@ -296,7 +317,8 @@ public class HoodieIndexUtils {
    *
    * @return {@link HoodieRecord}s that have the current location being set.
    */
-  private static <R> HoodieData<HoodieRecord<R>> getExistingRecords(
+  @VisibleForTesting
+  static <R> HoodieData<HoodieRecord<R>> getExistingRecords(
       HoodieData<Pair<String, String>> partitionLocations, HoodieWriteConfig config, HoodieTable hoodieTable, ReaderContextFactory<R> readerContextFactory, HoodieSchema dataSchema) {
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
     final Option<String> instantTime = metaClient
@@ -307,16 +329,13 @@ public class HoodieIndexUtils {
     if (instantTime.isEmpty()) {
       return hoodieTable.getContext().emptyHoodieData();
     }
+    Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
     return partitionLocations.flatMap(p -> {
-      Option<FileSlice> fileSliceOption = Option.fromJavaOptional(hoodieTable
-          .getHoodieView()
-          .getLatestMergedFileSlicesBeforeOrOn(p.getLeft(), instantTime.get())
-          .filter(fileSlice -> fileSlice.getFileId().equals(p.getRight()))
-          .findFirst());
+      Option<FileSlice> fileSliceOption = hoodieTable.getHoodieView()
+          .getLatestMergedFileSliceBeforeOrOn(p.getLeft(), instantTime.get(), p.getRight());
       if (fileSliceOption.isEmpty()) {
         return Collections.emptyIterator();
       }
-      Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
       FileSlice fileSlice = fileSliceOption.get();
       HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
       HoodieFileGroupReader<R> fileGroupReader = HoodieFileGroupReader.<R>builder()
