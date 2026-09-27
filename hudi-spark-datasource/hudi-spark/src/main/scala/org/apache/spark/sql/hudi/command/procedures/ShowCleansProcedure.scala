@@ -18,14 +18,21 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.{HoodieCLIUtils, SparkAdapterSupport}
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineLayout}
+import org.apache.hudi.common.avro.HoodieAvroUtils
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.{HoodieArchivedTimeline, HoodieInstant, HoodieInstantReader, HoodieTimeline, TimelineLayout}
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion
 
+import org.apache.avro.generic.IndexedRecord
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
+import java.io.ByteArrayInputStream
+import java.nio.ByteBuffer
 import java.util
 import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
 import java.util.function.Supplier
 
 import scala.collection.JavaConverters._
@@ -165,10 +172,13 @@ class ShowCleansProcedure(includePartitionMetadata: Boolean) extends BaseProcedu
       getCleans(metaClient.getActiveTimeline, limit)
     }
     val finalResults = if (showArchived) {
+      val archivedCleanLimit = if (includePartitionMetadata) Int.MaxValue else limit
+      val archivedTimeline = ShowCleansProcedure.getArchivedCleanTimeline(
+        metaClient, loadPlans = false, limit = archivedCleanLimit)
       val archivedResults = if (includePartitionMetadata) {
-        getCleansWithPartitionMetadata(metaClient.getArchivedTimeline, limit)
+        getCleansWithPartitionMetadata(archivedTimeline, limit)
       } else {
-        getCleans(metaClient.getArchivedTimeline, limit)
+        getCleans(archivedTimeline, limit)
       }
       (activeResults ++ archivedResults)
         .sortWith((a, b) => a.getString(0) > b.getString(0))
@@ -256,6 +266,48 @@ object ShowCleansProcedure {
   val NAME = "show_cleans"
 
   def builder: Supplier[ProcedureBuilder] = () => new ShowCleansProcedure(false)
+
+  private[procedures] def getArchivedCleanTimeline(metaClient: HoodieTableMetaClient,
+                                                  loadPlans: Boolean,
+                                                  limit: Int = Int.MaxValue): HoodieTimeline = {
+    val cleanInstants = metaClient.getArchivedTimeline.getCleanerTimeline.filterCompletedInstants
+      .getReverseOrderedInstants.iterator().asScala.take(limit).toList
+    val contents = new ConcurrentHashMap[String, Array[Byte]]()
+    val factory = metaClient.getTableFormat.getTimelineFactory
+    if (cleanInstants.nonEmpty) {
+      val legacy = metaClient.getTimelineLayoutVersion.getVersion < TimelineLayoutVersion.VERSION_2
+      val actionField = if (legacy) "actionType" else "action"
+      val contentField = if (legacy) {
+        if (loadPlans) "hoodieCleanerPlan" else "hoodieCleanMetadata"
+      } else {
+        if (loadPlans) "plan" else "metadata"
+      }
+      val loadMode = if (loadPlans) HoodieArchivedTimeline.LoadMode.PLAN else HoodieArchivedTimeline.LoadMode.METADATA
+      factory.createArchivedTimelineLoader().loadInstants(metaClient,
+        new HoodieArchivedTimeline.ClosedClosedTimeRangeFilter(
+          cleanInstants.last.requestedTime(), cleanInstants.head.requestedTime()),
+        loadMode,
+        record => HoodieTimeline.CLEAN_ACTION == record.get(actionField).toString,
+        (instantTime, record) => {
+          val content = record.get(contentField)
+          if (content != null) {
+            val bytes = if (legacy) {
+              HoodieAvroUtils.avroToFileBytes(content.asInstanceOf[IndexedRecord])
+            } else {
+              val buffer = content.asInstanceOf[ByteBuffer].duplicate()
+              val data = new Array[Byte](buffer.remaining())
+              buffer.get(data)
+              data
+            }
+            contents.put(instantTime, bytes)
+          }
+        })
+    }
+    factory.createDefaultTimeline(cleanInstants.asJava.stream(), new HoodieInstantReader {
+      override def getContentStream(instant: HoodieInstant): ByteArrayInputStream =
+        new ByteArrayInputStream(Option(contents.get(instant.requestedTime())).getOrElse(Array.empty[Byte]))
+    })
+  }
 }
 
 object ShowCleansPartitionMetadataProcedure {
