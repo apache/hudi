@@ -191,7 +191,8 @@ class TestMetadataTableLookupTasks extends SparkClientFunctionalTestHarnessScala
 
     val metadata = table.getTableMetadata
     assertShipsOnlyBroadcastState(PartitionedRecordIndexFileGroupLookupFunction.create(context(), metadata, HOption.empty[Registry]()))
-    val baseFileView = jsc().broadcast(new HoodieTableFileSystemView(metadata, table.getMetaClient, table.getMetaClient.getActiveTimeline))
+    // Only the broadcast handle is serialized with the function, so the view itself does not matter here.
+    val baseFileView = jsc().broadcast(null.asInstanceOf[HoodieTableFileSystemView])
     val bloomFilterReader = context().broadcast(metadata.getPartitionReader(MetadataPartitionType.BLOOM_FILTERS.getPartitionPath))
     assertShipsOnlyBroadcastState(new HoodieMetadataBloomFilterProbingFunction(baseFileView, bloomFilterReader))
   }
