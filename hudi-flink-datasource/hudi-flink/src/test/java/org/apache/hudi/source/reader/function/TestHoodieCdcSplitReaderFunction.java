@@ -24,6 +24,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase;
+import org.apache.hudi.common.table.read.FileGroupReaderTableState;
 import org.apache.hudi.common.table.read.HoodieRecordReader;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -77,6 +78,7 @@ import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
 /**
@@ -484,11 +486,40 @@ public class TestHoodieCdcSplitReaderFunction {
     }
   }
 
+  /**
+   * A streaming read reads all its splits with one reader function, so every split resolves the table state again
+   * rather than reusing a meta client whose timeline was loaded for an earlier split.
+   */
+  @Test
+  void testEachSplitResolvesTableState() throws Exception {
+    HoodieCDCFileSplit change = new HoodieCDCFileSplit(
+        "20230101000000000", HoodieCDCInferenceCase.BASE_FILE_DELETE,
+        Collections.emptyList(), Option.of(fileSlice("001")), Option.empty());
+    HoodieRecordReader<RowData> recordReader = mock(HoodieRecordReader.class);
+    when(recordReader.getClosableIterator()).thenAnswer(
+        invocation -> ClosableIterator.wrap(Collections.<RowData>emptyList().iterator()));
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    HoodieCdcSplitReaderFunction function = createFunction(mockWriteConfig());
+
+    try (MockedStatic<FormatUtils> mockedFormatUtils = mockStatic(FormatUtils.class);
+         MockedStatic<StreamerUtil> mockedStreamerUtil = mockStatic(StreamerUtil.class)) {
+      mockRecordReader(mockedFormatUtils, recordReader);
+      mockedStreamerUtil.when(() -> StreamerUtil.metaClientForReader(any(), any()))
+          .thenReturn(metaClient);
+      for (int i = 0; i < 2; i++) {
+        try (ClosableIterator<RowData> iterator = function.createRecordIterator(cdcSplit(change))) {
+          assertFalse(iterator.hasNext());
+        }
+      }
+      mockedStreamerUtil.verify(() -> StreamerUtil.metaClientForReader(any(), any()), times(2));
+    }
+  }
+
   private static void mockRecordReader(
       MockedStatic<FormatUtils> mockedFormatUtils,
       HoodieRecordReader<RowData> recordReader) {
     mockedFormatUtils.when(() -> FormatUtils.createRecordReader(
-        any(), any(), any(), any(), any(), any(), anyString(), anyString(),
+        any(FileGroupReaderTableState.class), any(), any(), any(), any(), any(), any(), anyString(), anyString(),
         anyBoolean(), anyList(), any())).thenReturn(recordReader);
   }
 

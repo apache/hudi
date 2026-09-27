@@ -20,6 +20,7 @@ package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.HiveReaderTableState;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.fs.Path;
@@ -94,6 +95,19 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
 
   void setVirtualKeyInfo(Option<HoodieVirtualKeyInfo> virtualKeyInfo);
 
+  /**
+   * Returns the table state captured when the split was listed, see {@link HiveReaderTableState}.
+   */
+  default Option<HiveReaderTableState> getReaderTableState() {
+    return Option.empty();
+  }
+
+  /**
+   * Sets the table state captured when the split was listed; splits that do not keep it ignore it.
+   */
+  default void setReaderTableState(Option<HiveReaderTableState> readerTableState) {
+  }
+
   default void writeToOutput(DataOutput out) throws IOException {
     writeString(getBasePath(), out);
     writeString(getMaxCommitTime(), out);
@@ -118,6 +132,7 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
         writeString(String.valueOf(virtualKeyInfoOpt.get().getPartitionPathFieldIndex()), out);
       }
     }
+    HiveReaderTableState.write(getReaderTableState(), out);
   }
 
   default void readFromInput(DataInput in) throws IOException {
@@ -143,6 +158,7 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
       Option<Integer> partitionPathIndex = isPartitionPathFieldPresent ? Option.of(Integer.parseInt(readString(in))) : Option.empty();
       setVirtualKeyInfo(Option.of(new HoodieVirtualKeyInfo(recordKeyField, partitionPathField, recordFieldIndex, partitionPathIndex)));
     }
+    setReaderTableState(HiveReaderTableState.read(in));
   }
 
   static void writeString(String str, DataOutput out) throws IOException {

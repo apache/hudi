@@ -31,7 +31,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.log.HoodieCDCEngineRecordAccessor;
@@ -58,8 +58,9 @@ import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.table.format.FlinkReaderContextFactory;
+import org.apache.hudi.table.format.FlinkRowDataReaderContext;
 import org.apache.hudi.table.format.HoodieRowDataFileReader;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
@@ -267,7 +268,9 @@ public final class CdcIterators {
         RowType requiredRowType,
         int[] requiredPositions,
         ClosableIterator<HoodieRecord<RowData>> logRecordIterator,
-        HoodieTableMetaClient metaClient,
+        HoodieTableConfig tableConfig,
+        StorageConfiguration<?> storageConf,
+        InternalSchemaManager internalSchemaManager,
         HoodieWriteConfig writeConfig) throws IOException {
       this.tableSchema = tableSchema;
       this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
@@ -275,7 +278,8 @@ public final class CdcIterators {
       this.projection = HoodieSchemaConverter.convertToRowType(tableSchema).equals(requiredRowType)
           ? null : RowDataProjection.instance(requiredRowType, requiredPositions);
       this.props = writeConfig.getProps();
-      this.readerContext = new FlinkReaderContextFactory(metaClient).getContext();
+      this.readerContext = new FlinkRowDataReaderContext(
+          storageConf, () -> internalSchemaManager, Collections.emptyList(), tableConfig, Option.empty());
       readerContext.initRecordMerger(props);
       this.orderingFields = ConfigUtils.getOrderingFields(props);
       this.recordMerger = BufferedRecordMergerFactory.create(
@@ -284,9 +288,9 @@ public final class CdcIterators {
           false,
           Option.of(writeConfig.getRecordMerger()),
           tableSchema,
-          Option.ofNullable(Pair.of(metaClient.getTableConfig().getPayloadClass(), writeConfig.getPayloadClass())),
+          Option.ofNullable(Pair.of(tableConfig.getPayloadClass(), writeConfig.getPayloadClass())),
           props,
-          metaClient.getTableConfig().getPartialUpdateMode());
+          tableConfig.getPartialUpdateMode());
       this.logRecordIterator = logRecordIterator;
       this.deleteContext = new DeleteContext(props, tableSchema).withReaderSchema(tableSchema);
       initImages(cdcFileSplit);

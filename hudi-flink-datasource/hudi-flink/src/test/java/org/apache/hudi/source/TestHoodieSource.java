@@ -18,6 +18,7 @@
 
 package org.apache.hudi.source;
 
+import org.apache.hudi.adapter.DataStreamScanProviderAdapter;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.function.SerializableSupplier;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -29,13 +30,16 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.hadoop.fs.MetaFolderAccessRecordingFileSystem;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.source.enumerator.HoodieSplitEnumeratorState;
 import org.apache.hudi.source.enumerator.HoodieStaticSplitEnumerator;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.source.prune.PartitionPruners;
+import org.apache.hudi.source.reader.BatchRecords;
 import org.apache.hudi.source.reader.HoodieRecordEmitter;
+import org.apache.hudi.source.reader.HoodieRecordWithPosition;
 import org.apache.hudi.source.reader.function.HoodieSplitReaderFunction;
 import org.apache.hudi.source.reader.function.SplitReaderFunction;
 import org.apache.hudi.source.split.HoodieSourceSplit;
@@ -43,8 +47,10 @@ import org.apache.hudi.source.split.HoodieSourceSplitComparator;
 import org.apache.hudi.source.split.SerializableComparator;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
+import org.apache.hudi.table.HoodieTableSource;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.util.HoodieSchemaConverter;
+import org.apache.hudi.util.SerializableSchema;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
@@ -53,7 +59,12 @@ import org.apache.flink.api.connector.source.Boundedness;
 import org.apache.flink.api.connector.source.SplitEnumerator;
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.core.fs.Path;
+import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.transformations.SourceTransformation;
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.connector.source.ScanTableSource;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.expressions.CallExpression;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
@@ -61,16 +72,22 @@ import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.apache.flink.table.functions.FunctionIdentifier;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.util.InstantiationUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
+import java.lang.reflect.Field;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -476,6 +493,90 @@ public class TestHoodieSource {
   }
 
   // Helper methods
+
+  /**
+   * The reader functions of the source read their splits without touching the table's .hoodie folder: the table state
+   * is captured when the source is created and shipped with the functions.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void testReadSplitsWithoutMetaFolderAccess(boolean streaming) throws Exception {
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+    conf.set(FlinkOptions.READ_AS_STREAMING, streaming);
+    conf.set(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
+    conf.setString("hadoop.fs.file.impl", MetaFolderAccessRecordingFileSystem.class.getName());
+    conf.setString("hadoop.fs.file.impl.disable.cache", "true");
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
+
+    Map<String, List<Integer>> ages = readAgesWithSourceV2(streaming, true);
+
+    assertTrue(MetaFolderAccessRecordingFileSystem.getTaskAccesses().isEmpty(),
+        MetaFolderAccessRecordingFileSystem.describeTaskAccesses());
+    assertEquals(Collections.singletonList(24), ages.get("id1"));
+  }
+
+  /**
+   * A bounded read of a merge-on-read table of version 6 skips the log block of a delta commit that did not complete
+   * and reads the one of a completed delta commit, through the committed instants captured when the source is created.
+   */
+  @Test
+  void testBoundedReadOfVersionSixSkipsUncommittedLogBlock() throws Exception {
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+    TestData.writeVersionSixWithUncommittedLogBlock(conf);
+
+    Map<String, List<Integer>> ages = readAgesWithSourceV2(false, false);
+    assertEquals(Collections.singletonList(24), ages.get("id1"));
+    assertEquals(Collections.singletonList(34), ages.get("id2"));
+  }
+
+  /**
+   * Plans the read with a table source wired as in a job, then reads every split with a copy of the reader function
+   * as shipped to a task, returning the ages read per record key.
+   */
+  private Map<String, List<Integer>> readAgesWithSourceV2(boolean streaming, boolean recordTaskAccesses) throws Exception {
+    HoodieTableSource tableSource = new HoodieTableSource(
+        SerializableSchema.create(TestConfigurations.TABLE_SCHEMA), tablePath,
+        Arrays.asList(conf.get(FlinkOptions.PARTITION_PATH_FIELD).split(",")), "default-par", conf);
+    DataStream<RowData> stream = ((DataStreamScanProviderAdapter) tableSource.getScanRuntimeProvider(
+        mock(ScanTableSource.ScanContext.class))).produceDataStream(StreamExecutionEnvironment.getExecutionEnvironment());
+    @SuppressWarnings("unchecked")
+    HoodieSource<RowData> source = (HoodieSource<RowData>) ((SourceTransformation<?, ?, ?>) stream.getTransformation()).getSource();
+    List<HoodieSourceSplit> splits = streaming
+        ? new ArrayList<>(IncrementalInputSplits.builder().conf(conf).path(new Path(tempDir.getAbsolutePath()))
+            .rowType(TestConfigurations.ROW_TYPE).build()
+            .inputHoodieSourceSplits(StreamerUtil.createMetaClient(conf), null, false).getSplits())
+        : source.createBatchHoodieSplits();
+    assertFalse(splits.isEmpty());
+    Field supplierField = HoodieSource.class.getDeclaredField("readerFunctionSupplier");
+    supplierField.setAccessible(true);
+    @SuppressWarnings("unchecked")
+    SerializableSupplier<SplitReaderFunction<RowData>> supplier = InstantiationUtil.clone(
+        (SerializableSupplier<SplitReaderFunction<RowData>>) supplierField.get(source), getClass().getClassLoader());
+    SplitReaderFunction<RowData> function = supplier.get();
+
+    MetaFolderAccessRecordingFileSystem.reset();
+    MetaFolderAccessRecordingFileSystem.setTaskScope(() -> recordTaskAccesses);
+    Map<String, List<Integer>> ages = new HashMap<>();
+    try {
+      for (HoodieSourceSplit split : splits) {
+        function.open(split);
+        BatchRecords<RowData> batch;
+        while ((batch = function.readBatch(split, 1024, () -> false)) != null) {
+          HoodieRecordWithPosition<RowData> record;
+          while ((record = batch.nextRecordFromSplit()) != null) {
+            ages.computeIfAbsent(record.record().getString(0).toString(), key -> new ArrayList<>()).add(record.record().getInt(2));
+          }
+        }
+        function.closeCurrentSplit();
+      }
+      function.close();
+    } finally {
+      MetaFolderAccessRecordingFileSystem.setTaskScope(() -> false);
+    }
+    return ages;
+  }
 
   private HoodieSource<RowData> createHoodieSource(Configuration conf, HoodieTableMetaClient metaClient) {
     return createHoodieSourceWithPruner(conf, metaClient, null);

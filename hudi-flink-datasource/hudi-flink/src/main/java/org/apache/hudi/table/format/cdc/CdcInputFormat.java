@@ -34,6 +34,7 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.table.format.ReaderTableStateProvider;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadTableState;
@@ -43,6 +44,8 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
 import org.apache.hadoop.fs.Path;
+
+import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.util.List;
@@ -62,8 +65,9 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
       List<DataType> fieldTypes,
       List<Predicate> predicates,
       long limit,
-      boolean emitDelete) {
-    super(conf, tableState, fieldTypes, predicates, limit, emitDelete, InternalSchemaManager.DISABLED);
+      boolean emitDelete,
+      @Nullable ReaderTableStateProvider tableStateProvider) {
+    super(conf, tableState, fieldTypes, predicates, limit, emitDelete, InternalSchemaManager.DISABLED, tableStateProvider);
   }
 
   @Override
@@ -164,7 +168,8 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
               maxCompactionMemoryInBytes, imageManager, fileSplit,
               HoodieSchema.parse(tableState.getTableSchema()),
               tableState.getRequiredRowType(), tableState.getRequiredPositions(),
-              recordIterator, metaClient, imageManager.getWriteConfig());
+              recordIterator, readerTableState.getTableConfig(), storageConf, internalSchemaManager,
+              imageManager.getWriteConfig());
         } catch (IOException | RuntimeException | Error e) {
           closeSuppressing(recordIterator, e);
           throw e;
@@ -228,8 +233,13 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
       return this;
     }
 
+    public Builder tableStateProvider(ReaderTableStateProvider tableStateProvider) {
+      this.tableStateProvider = tableStateProvider;
+      return this;
+    }
+
     public CdcInputFormat build() {
-      return new CdcInputFormat(conf, tableState, fieldTypes, predicates, limit, emitDelete);
+      return new CdcInputFormat(conf, tableState, fieldTypes, predicates, limit, emitDelete, tableStateProvider);
     }
   }
 }

@@ -23,21 +23,24 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.read.FileGroupReaderTableState;
 import org.apache.hudi.common.table.read.HoodieRecordReader;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.source.split.HoodieSourceSplit;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.table.format.ReaderTableStateProvider;
 import org.apache.hudi.util.HoodieSchemaConverter;
-import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
+
+import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -62,7 +65,19 @@ public class HoodieSplitReaderFunction extends AbstractSplitReaderFunction {
       String mergeType,
       List<ExpressionPredicates.Predicate> predicates,
       boolean emitDelete) {
-    super(configuration, predicates, internalSchemaManager, emitDelete);
+    this(configuration, tableSchema, requiredSchema, internalSchemaManager, mergeType, predicates, emitDelete, null);
+  }
+
+  public HoodieSplitReaderFunction(
+      Configuration configuration,
+      HoodieSchema tableSchema,
+      HoodieSchema requiredSchema,
+      InternalSchemaManager internalSchemaManager,
+      String mergeType,
+      List<ExpressionPredicates.Predicate> predicates,
+      boolean emitDelete,
+      @Nullable ReaderTableStateProvider tableStateProvider) {
+    super(configuration, predicates, internalSchemaManager, emitDelete, tableStateProvider);
     ValidationUtils.checkArgument(tableSchema != null, "tableSchema can't be null");
     ValidationUtils.checkArgument(requiredSchema != null, "requiredSchema can't be null");
     ValidationUtils.checkArgument(internalSchemaManager != null, "internalSchemaManager can't be null");
@@ -73,13 +88,12 @@ public class HoodieSplitReaderFunction extends AbstractSplitReaderFunction {
 
   @Override
   protected ClosableIterator<RowData> createRecordIterator(HoodieSourceSplit split) {
-    HoodieTableMetaClient metaClient = StreamerUtil.metaClientForReader(conf, getHadoopConf());
     // Closing the returned iterator cascade-closes the whole HoodieFileGroupReader, so the base
     // class only has to close the iterator in closeCurrentSplit(). But getClosableIterator() runs
     // initRecordIterators(), which opens the reader's base-file iterator / record buffer before the
     // wrapping iterator is returned; if it throws, the reader is only a local here and nothing else
     // would close it. Keep it in a local and close it in the failure path.
-    HoodieRecordReader<RowData> fileGroupReader = createRecordReader(split, metaClient);
+    HoodieRecordReader<RowData> fileGroupReader = createRecordReader(split, tableStateForSplit(), getStorageConf());
     try {
       return fileGroupReader.getClosableIterator();
     } catch (IOException e) {
@@ -99,11 +113,13 @@ public class HoodieSplitReaderFunction extends AbstractSplitReaderFunction {
   /**
    * Creates a {@link HoodieRecordReader} for the given split.
    *
-   * @param split      The source split to read
-   * @param metaClient The table meta client for schema and config resolution
+   * @param split       The source split to read
+   * @param tableState  The table state to read the split with
+   * @param storageConf The storage configuration to read the split with
    * @return A {@link HoodieRecordReader} instance
    */
-  protected HoodieRecordReader<RowData> createRecordReader(HoodieSourceSplit split, HoodieTableMetaClient metaClient) {
+  protected HoodieRecordReader<RowData> createRecordReader(
+      HoodieSourceSplit split, FileGroupReaderTableState tableState, StorageConfiguration<?> storageConf) {
     // Create FileSlice from split information
     FileSlice fileSlice = new FileSlice(
         new HoodieFileGroupId(split.getPartitionPath(), split.getFileId()),
@@ -115,7 +131,8 @@ public class HoodieSplitReaderFunction extends AbstractSplitReaderFunction {
     );
 
     return FormatUtils.createRecordReader(
-      metaClient,
+      tableState,
+      storageConf,
       getWriteConfig(),
       internalSchemaManager,
       fileSlice,

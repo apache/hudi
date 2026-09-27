@@ -104,6 +104,19 @@ public final class FileGroupReaderTableState implements Serializable {
         new MetaClientCommittedInstants(metaClient), new MetaClientSchemaResolver(metaClient));
   }
 
+  /**
+   * Creates the state from a table config and base path at hand, loading committed instants and schema versions on
+   * first use from a meta client built by {@code metaClientSupplier}. For readers that must see the timeline as of
+   * when they read rather than when the read was planned; a read that needs neither builds no meta client.
+   */
+  public static FileGroupReaderTableState withLazyTimeline(StoragePath basePath,
+                                                           HoodieTableConfig tableConfig,
+                                                           SerializableSupplier<HoodieTableMetaClient> metaClientSupplier) {
+    LazyMetaClient metaClient = new LazyMetaClient(metaClientSupplier);
+    return new FileGroupReaderTableState(basePath, tableConfig,
+        new LazyCommittedInstants(metaClient), new LazySchemaResolver(metaClient));
+  }
+
   public StoragePath getBasePath() {
     return basePath;
   }
@@ -208,6 +221,57 @@ public final class FileGroupReaderTableState implements Serializable {
         schemas = parsed;
       }
       return InternalSchemaUtils.searchSchema(versionId, parsed);
+    }
+  }
+
+  private static final class LazyMetaClient implements SerializableSupplier<HoodieTableMetaClient> {
+    private static final long serialVersionUID = 1L;
+
+    private final SerializableSupplier<HoodieTableMetaClient> metaClientSupplier;
+    private transient volatile HoodieTableMetaClient metaClient;
+
+    private LazyMetaClient(SerializableSupplier<HoodieTableMetaClient> metaClientSupplier) {
+      this.metaClientSupplier = metaClientSupplier;
+    }
+
+    @Override
+    public HoodieTableMetaClient get() {
+      HoodieTableMetaClient client = metaClient;
+      if (client == null) {
+        client = metaClientSupplier.get();
+        metaClient = client;
+      }
+      return client;
+    }
+  }
+
+  private static final class LazyCommittedInstants implements SerializableSupplier<CommittedInstants> {
+    private static final long serialVersionUID = 1L;
+
+    private final LazyMetaClient metaClient;
+
+    private LazyCommittedInstants(LazyMetaClient metaClient) {
+      this.metaClient = metaClient;
+    }
+
+    @Override
+    public CommittedInstants get() {
+      return CommittedInstants.fromCommitsTimeline(metaClient.get().getCommitsTimeline());
+    }
+  }
+
+  private static final class LazySchemaResolver implements InternalSchemaResolver {
+    private static final long serialVersionUID = 1L;
+
+    private final LazyMetaClient metaClient;
+
+    private LazySchemaResolver(LazyMetaClient metaClient) {
+      this.metaClient = metaClient;
+    }
+
+    @Override
+    public InternalSchema resolve(long versionId) {
+      return InternalSchemaCache.searchSchemaAndCache(versionId, metaClient.get());
     }
   }
 

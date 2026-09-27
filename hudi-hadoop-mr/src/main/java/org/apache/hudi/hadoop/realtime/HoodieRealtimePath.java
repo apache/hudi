@@ -20,6 +20,7 @@ package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.HiveReaderTableState;
 import org.apache.hudi.hadoop.PathWithBootstrapFileStatus;
 
 import org.apache.hadoop.fs.Path;
@@ -57,6 +58,10 @@ public class HoodieRealtimePath extends Path {
    * File status for the Bootstrap file (only relevant if this table is a bootstrapped table
    */
   private PathWithBootstrapFileStatus pathWithBootstrapFileStatus;
+  /**
+   * Table state captured when the path was listed
+   */
+  private Option<HiveReaderTableState> readerTableState = Option.empty();
 
   public HoodieRealtimePath(Path parent,
                             String child,
@@ -107,5 +112,13 @@ public class HoodieRealtimePath extends Path {
 
   public Option<HoodieVirtualKeyInfo> getVirtualKeyInfo() {
     return virtualKeyInfo;
+  }
+
+  public Option<HiveReaderTableState> getReaderTableState() {
+    return readerTableState;
+  }
+
+  public void setReaderTableState(Option<HiveReaderTableState> readerTableState) {
+    this.readerTableState = readerTableState;
   }
 }

@@ -68,6 +68,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.table.format.ReaderTableStateProvider;
 import org.apache.hudi.table.format.cdc.CdcInputFormat;
 import org.apache.hudi.table.format.cow.CopyOnWriteInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
@@ -313,14 +314,17 @@ public class HoodieTableSource extends FileIndexReader implements
             requiredHoodieSchema.toString(),
             new ArrayList<>());
     boolean emitDelete = tableType == HoodieTableType.MERGE_ON_READ && context.isStreaming();
+    final ReaderTableStateProvider tableStateProvider = context.isStreaming()
+        ? ReaderTableStateProvider.perSplit(metaClient)
+        : batchTableStateProvider();
     if (conf.get(FlinkOptions.CDC_ENABLED)) {
       List<DataType> fieldTypes = rowDataType.getChildren();
       splitReaderFunctionSupplier = () -> new HoodieCdcSplitReaderFunction(
-          conf, hoodieTableState, internalSchemaManager, fieldTypes, predicates, emitDelete);
+          conf, hoodieTableState, internalSchemaManager, fieldTypes, predicates, emitDelete, tableStateProvider);
     } else {
       splitReaderFunctionSupplier = () -> new HoodieSplitReaderFunction(
           conf, tableSchema, requiredHoodieSchema, internalSchemaManager,
-          conf.get(FlinkOptions.MERGE_TYPE), predicates, emitDelete);
+          conf.get(FlinkOptions.MERGE_TYPE), predicates, emitDelete, tableStateProvider);
     }
     return new HoodieSource<>(
         context, splitReaderFunctionSupplier, new HoodieSourceSplitComparator(), metaClient,
@@ -428,7 +432,7 @@ public class HoodieTableSource extends FileIndexReader implements
     int asyncThreadNumber = conf.get(LOOKUP_ASYNC_THREAD_NUMBER);
     return LookupRuntimeProviderFactory.create(
         new HoodieLookupFunction(
-            new HoodieLookupTableReader(this::getBatchInputFormat, conf),
+            new HoodieLookupTableReader(this::getLookupInputFormat, conf),
             (RowType) getProducedDataType().notNull().getLogicalType(),
             getLookupKeys(context.getKeys()),
             duration,
@@ -527,7 +531,7 @@ public class HoodieTableSource extends FileIndexReader implements
               return InputFormats.EMPTY_INPUT_FORMAT;
             }
             return mergeOnReadInputFormat(rowType, requiredRowType, tableSchema,
-                rowDataType, inputSplits, false);
+                rowDataType, inputSplits, false, batchTableStateProvider());
           case COPY_ON_WRITE:
             return baseFileOnlyInputFormat(tableSchema);
           default:
@@ -550,10 +554,11 @@ public class HoodieTableSource extends FileIndexReader implements
           log.info("No input splits generated for incremental read. Returning empty collection");
           return InputFormats.EMPTY_INPUT_FORMAT;
         } else if (cdcEnabled) {
-          return cdcInputFormat(rowType, requiredRowType, tableSchema, rowDataType, result.getInputSplits());
+          return cdcInputFormat(rowType, requiredRowType, tableSchema, rowDataType, result.getInputSplits(),
+              ReaderTableStateProvider.snapshotOf(metaClient, false));
         } else {
           return mergeOnReadInputFormat(rowType, requiredRowType, tableSchema,
-              rowDataType, result.getInputSplits(), false);
+              rowDataType, result.getInputSplits(), false, batchTableStateProvider());
         }
       default:
         String errMsg = String.format("Invalid query type : '%s', options ['%s', '%s', '%s'] are supported now", queryType,
@@ -575,17 +580,37 @@ public class HoodieTableSource extends FileIndexReader implements
       case FlinkOptions.QUERY_TYPE_INCREMENTAL:
         final HoodieTableType tableType = HoodieTableType.valueOf(this.conf.get(FlinkOptions.TABLE_TYPE));
         boolean emitDelete = tableType == HoodieTableType.MERGE_ON_READ;
+        // Without a table at planning time, every split builds its own meta client.
+        ReaderTableStateProvider tableStateProvider = metaClient == null ? null : ReaderTableStateProvider.perSplit(metaClient);
         if (this.conf.get(FlinkOptions.CDC_ENABLED)) {
-          return cdcInputFormat(rowType, requiredRowType, tableSchema, rowDataType, Collections.emptyList());
+          return cdcInputFormat(rowType, requiredRowType, tableSchema, rowDataType, Collections.emptyList(), tableStateProvider);
         } else {
           return mergeOnReadInputFormat(rowType, requiredRowType, tableSchema,
-              rowDataType, Collections.emptyList(), emitDelete);
+              rowDataType, Collections.emptyList(), emitDelete, tableStateProvider);
         }
       default:
         String errMsg = String.format("Invalid query type : '%s', options ['%s', '%s'] are supported now", queryType,
             FlinkOptions.QUERY_TYPE_SNAPSHOT, FlinkOptions.QUERY_TYPE_INCREMENTAL);
         throw new HoodieException(errMsg);
     }
+  }
+
+  /**
+   * Plans the lookup read against the latest timeline; the lookup function calls this on the task manager each time
+   * it reloads its cache.
+   */
+  private InputFormat<RowData, ?> getLookupInputFormat() {
+    if (metaClient != null) {
+      metaClient.reloadActiveTimeline();
+    }
+    return getBatchInputFormat();
+  }
+
+  /**
+   * Captures the table state for the splits of a bounded read, from the timeline the splits are planned with.
+   */
+  private ReaderTableStateProvider batchTableStateProvider() {
+    return ReaderTableStateProvider.snapshotOf(metaClient, !internalSchemaManager.getQuerySchema().isEmptySchema());
   }
 
   /**
@@ -602,7 +627,8 @@ public class HoodieTableSource extends FileIndexReader implements
       RowType requiredRowType,
       HoodieSchema tableSchema,
       DataType rowDataType,
-      List<MergeOnReadInputSplit> inputSplits) {
+      List<MergeOnReadInputSplit> inputSplits,
+      @Nullable ReaderTableStateProvider tableStateProvider) {
     final MergeOnReadTableState<MergeOnReadInputSplit> hoodieTableState = new MergeOnReadTableState(
         rowType,
         requiredRowType,
@@ -618,6 +644,7 @@ public class HoodieTableSource extends FileIndexReader implements
         .predicates(this.predicates)
         .limit(this.limit)
         .emitDelete(false) // the change logs iterator can handle the DELETE records
+        .tableStateProvider(tableStateProvider)
         .build();
   }
 
@@ -627,7 +654,8 @@ public class HoodieTableSource extends FileIndexReader implements
       HoodieSchema tableAvroSchema,
       DataType rowDataType,
       List<MergeOnReadInputSplit> inputSplits,
-      boolean emitDelete) {
+      boolean emitDelete,
+      @Nullable ReaderTableStateProvider tableStateProvider) {
     final MergeOnReadTableState<MergeOnReadInputSplit> hoodieTableState = new MergeOnReadTableState(
         rowType,
         requiredRowType,
@@ -644,6 +672,7 @@ public class HoodieTableSource extends FileIndexReader implements
         .limit(this.limit)
         .emitDelete(emitDelete)
         .internalSchemaManager(internalSchemaManager)
+        .tableStateProvider(tableStateProvider)
         .build();
   }
 

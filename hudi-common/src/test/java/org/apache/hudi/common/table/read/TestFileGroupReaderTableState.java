@@ -22,6 +22,7 @@ import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.schema.internal.Types;
 import org.apache.hudi.common.schema.internal.utils.SerDeHelper;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.DefaultInstantGenerator;
@@ -41,12 +42,15 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Tests {@link CommittedInstants} and {@link FileGroupReaderTableState}.
@@ -156,6 +160,25 @@ class TestFileGroupReaderTableState {
     FileGroupReaderTableState state = FileGroupReaderTableState.of(new StoragePath("/tmp/table"), new HoodieTableConfig(), Option.empty(), Option.empty());
     assertThrows(IllegalStateException.class, () -> state.isCommitted("20240201000000000"));
     assertThrows(IllegalStateException.class, () -> state.getInternalSchema(100L));
+  }
+
+  @Test
+  void lazyTimelineLoadsMetaClientOnFirstUseOnly() {
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    when(metaClient.getCommitsTimeline()).thenReturn(new MockHoodieTimeline(Arrays.asList(
+        completed("20240201000000000"), inflight("20240301000000000"))));
+    AtomicInteger builds = new AtomicInteger();
+    FileGroupReaderTableState state = FileGroupReaderTableState.withLazyTimeline(new StoragePath("/tmp/table"), new HoodieTableConfig(),
+        () -> {
+          builds.incrementAndGet();
+          return metaClient;
+        });
+
+    assertEquals("/tmp/table", state.getBasePath().toString());
+    assertEquals(0, builds.get());
+    assertTrue(state.isCommitted("20240201000000000"));
+    assertFalse(state.isCommitted("20240301000000000"));
+    assertEquals(1, builds.get());
   }
 
   private static HoodieInstant completed(String requestedTime) {

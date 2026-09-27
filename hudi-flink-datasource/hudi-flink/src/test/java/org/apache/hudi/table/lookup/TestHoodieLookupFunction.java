@@ -18,24 +18,33 @@
 
 package org.apache.hudi.table.lookup;
 
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.table.HoodieTableSource;
+import org.apache.hudi.util.SerializableSchema;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.connector.source.LookupTableSource;
+import org.apache.flink.table.connector.source.lookup.LookupFunctionProvider;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
+import org.apache.flink.util.InstantiationUtil;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -152,6 +161,46 @@ class TestHoodieLookupFunction {
         assertThrows(RuntimeException.class, () -> function.lookup(lookupKey()));
     assertInstanceOf(IOException.class, exception.getCause());
     function.close();
+  }
+
+  /**
+   * The lookup function shipped to a task manager reloads the table once a newer commit completes, so the reload
+   * has to plan against the timeline as of then, not the one captured when the job was planned.
+   */
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  void testCacheReloadReadsCommitsCompletedAfterFirstLoad(HoodieTableType tableType) throws Exception {
+    Configuration conf = getConf();
+    conf.set(FlinkOptions.TABLE_TYPE, tableType.name());
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    HoodieTableSource tableSource = new HoodieTableSource(
+        SerializableSchema.create(TestConfigurations.TABLE_SCHEMA),
+        new StoragePath(conf.get(FlinkOptions.PATH)),
+        Arrays.asList(conf.get(FlinkOptions.PARTITION_PATH_FIELD).split(",")),
+        "default-par",
+        conf);
+    LookupTableSource.LookupContext context = mock(LookupTableSource.LookupContext.class);
+    when(context.getKeys()).thenReturn(new int[][] {{0}});
+    LookupFunctionProvider provider = (LookupFunctionProvider) tableSource.getLookupRuntimeProvider(context);
+    HoodieLookupFunction function = InstantiationUtil.clone(
+        (HoodieLookupFunction) provider.createLookupFunction(), getClass().getClassLoader());
+    function.open(null);
+
+    try {
+      assertEquals(23, lookupAge(function));
+      TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
+      setNextLoadTime(function, 0L);
+      assertEquals(24, lookupAge(function), "The reload should read the commit completed after the first load");
+    } finally {
+      function.close();
+    }
+  }
+
+  private static int lookupAge(HoodieLookupFunction function) throws IOException {
+    Collection<RowData> rows = function.lookup(lookupKey());
+    assertNotNull(rows);
+    assertEquals(1, rows.size());
+    return rows.iterator().next().getInt(2);
   }
 
   private HoodieLookupFunction newLookupFunction(HoodieLookupTableReader reader, Configuration conf) {

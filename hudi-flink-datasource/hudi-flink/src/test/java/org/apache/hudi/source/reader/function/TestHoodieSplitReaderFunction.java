@@ -22,7 +22,9 @@ import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.internal.InternalSchema;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.read.FileGroupReaderTableState;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.read.HoodieRecordReader;
 import org.apache.hudi.common.util.Option;
@@ -30,6 +32,8 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.source.split.HoodieSourceSplit;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.util.HoodieSchemaConverter;
@@ -585,12 +589,14 @@ public class TestHoodieSplitReaderFunction {
 
     try (MockedStatic<FormatUtils> mockedFormatUtils = mockStatic(FormatUtils.class)) {
       mockedFormatUtils.when(() -> FormatUtils.createRecordReader(
-          any(), any(), any(), any(), any(), any(), any(), any(), anyBoolean(),
+          any(FileGroupReaderTableState.class), any(), any(), any(), any(), any(), any(), any(), any(), anyBoolean(),
           any(), any())).thenReturn(reader);
       HoodieSourceSplit split = new HoodieSourceSplit(
           1, null, Option.of(Collections.emptyList()), "/tbl", "/part",
           "read_optimized", "19700101000000000", "file1", Option.empty());
-      assertSame(reader, function.createRecordReader(split, mockMetaClient));
+      FileGroupReaderTableState tableState = FileGroupReaderTableState.of(
+          new StoragePath("/tbl"), new HoodieTableConfig(), Option.empty(), Option.empty());
+      assertSame(reader, function.createRecordReader(split, tableState, mock(StorageConfiguration.class)));
     }
   }
 
@@ -604,7 +610,8 @@ public class TestHoodieSplitReaderFunction {
         conf, tableSchema, requiredSchema, mockInternalSchemaManager,
         "AVRO_PAYLOAD", Collections.emptyList(), false) {
       @Override
-      protected HoodieRecordReader<RowData> createRecordReader(HoodieSourceSplit split, HoodieTableMetaClient metaClient) {
+      protected HoodieRecordReader<RowData> createRecordReader(
+          HoodieSourceSplit split, FileGroupReaderTableState tableState, StorageConfiguration<?> storageConf) {
         return reader;
       }
     };
