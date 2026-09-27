@@ -20,6 +20,7 @@ import com.google.common.collect.ImmutableSet;
 import io.airlift.log.Logger;
 import io.trino.metastore.Table;
 import io.trino.plugin.hive.HiveColumnHandle;
+import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ConnectorTableHandle;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.predicate.TupleDomain;
@@ -27,6 +28,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.Lazy;
 
@@ -109,19 +111,27 @@ public class HudiTableHandle
                 regularPredicates,
                 limit,
                 hudiTableSchema,
-                () -> lazyMetaClient
-                        .get()
-                        .getActiveTimeline()
-                        .getCommitsTimeline()
-                        .filterCompletedInstants()
-                        .lastInstant()
-                        .map(HoodieInstant::requestedTime)
-                        // An initialized table has a schema but intentionally has no data commit.
-                        // Hudi uses INIT_INSTANT_TS as the lower bound for this state. Passing it to
-                        // the file-system view produces no file slices, so empty native CREATE TABLE
-                        // and newly registered empty tables remain queryable without fabricating a
-                        // commit or entering the row-writing path.
-                        .orElse(INIT_INSTANT_TS));
+                () -> {
+                    HoodieTimeline activeTimeline = lazyMetaClient.get().getActiveTimeline();
+                    return activeTimeline
+                            .getCommitsTimeline()
+                            .filterCompletedInstants()
+                            .lastInstant()
+                            .map(HoodieInstant::requestedTime)
+                            .orElseGet(() -> {
+                                // An initialized table has a schema but intentionally has no data commit.
+                                // Hudi uses INIT_INSTANT_TS as the lower bound for this state. Passing it to
+                                // the file-system view produces no file slices, so empty native CREATE TABLE
+                                // and newly registered empty tables remain queryable without fabricating a
+                                // commit or entering the row-writing path.
+                                if (activeTimeline.empty()) {
+                                    return INIT_INSTANT_TS;
+                                }
+                                throw new TrinoException(
+                                        HudiErrorCode.HUDI_NO_VALID_COMMIT,
+                                        "Table has no valid commits");
+                            });
+                });
     }
 
     HudiTableHandle(

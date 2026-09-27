@@ -24,7 +24,6 @@ import io.trino.metastore.Column;
 import io.trino.metastore.Database;
 import io.trino.metastore.HiveMetastore;
 import io.trino.metastore.Table;
-import io.trino.metastore.TableAlreadyExistsException;
 import io.trino.metastore.TableInfo;
 import io.trino.plugin.base.classloader.ClassLoaderSafeSystemTable;
 import io.trino.plugin.hive.HiveColumnHandle;
@@ -66,6 +65,7 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.common.util.Lazy;
 
 import java.io.IOException;
+import java.nio.file.FileAlreadyExistsException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -81,12 +81,14 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
+import static com.google.common.base.Throwables.getCausalChain;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static io.trino.filesystem.Locations.appendPath;
 import static io.trino.metastore.PrincipalPrivileges.NO_PRIVILEGES;
 import static io.trino.metastore.Table.TABLE_COMMENT;
+import static io.trino.plugin.hive.HiveMetadata.TRINO_QUERY_ID_NAME;
 import static io.trino.plugin.hive.HiveTimestampPrecision.NANOSECONDS;
 import static io.trino.plugin.hive.TableType.EXTERNAL_TABLE;
 import static io.trino.plugin.hive.util.HiveUtil.columnMetadataGetter;
@@ -366,54 +368,50 @@ public class HudiMetadata
         // so the two cannot disagree (HUDI-9435).
         HoodieSchema tableSchema = HudiSchemaConverter.toTableSchema(
                 tableMetadata.getColumns(), schemaTableName.getTableName());
-        Table table = HudiMetastoreTables.buildTable(
-                schemaTableName,
-                basePath,
-                getTableType(properties),
-                tableSchema,
-                getPartitionedBy(properties),
-                external,
-                Optional.of(session.getUser()),
-                tableMetadata.getComment());
+        Table table = Table.builder(HudiMetastoreTables.buildTable(
+                        schemaTableName,
+                        basePath,
+                        getTableType(properties),
+                        tableSchema,
+                        getPartitionedBy(properties),
+                        external,
+                        Optional.of(session.getUser()),
+                        tableMetadata.getComment()))
+                .setParameter(TRINO_QUERY_ID_NAME, session.getQueryId())
+                .build();
         try {
             HudiTableInitializer.initializeTable(fileSystem, basePath, tableMetadata, tableSchema);
             metastore.createTable(table, NO_PRIVILEGES);
         }
-        catch (TableAlreadyExistsException e) {
-            // Another CREATE TABLE may have initialized the same managed location and won the
-            // metastore race. Its catalog entry now owns .hoodie, so deleting it would corrupt the
-            // live table. A different location still belongs to this failed attempt and is safe to
-            // clean up.
-            if (!isTableRegisteredAtLocation(schemaTableName, basePath, e)) {
-                cleanupTableMetadata(fileSystem, basePath, e);
-            }
-            throw e;
-        }
         catch (RuntimeException e) {
-            // Initialization may have written some or all of .hoodie, but no catalog entry from
-            // this call references it. Left there it would make a retry fail the emptiness check.
-            //
-            // Only .hoodie is removed, never the base path: the base path may have been created by
-            // someone else, and this connector did not create it. On object storage there is no
-            // directory to delete in any case -- deleteDirectory removes the objects under the
-            // prefix, which is exactly the set initTable wrote or may have partially written.
+            Optional<Table> registeredTable;
+            try {
+                registeredTable = metastore.getTable(schemaTableName.getSchemaName(), schemaTableName.getTableName());
+            }
+            catch (RuntimeException lookupFailure) {
+                // An orphan is recoverable, but deleting metadata owned by a committed table is not.
+                e.addSuppressed(lookupFailure);
+                throw e;
+            }
+            if (registeredTable.isPresent()) {
+                // The metastore may commit the table and then report a transient failure. A matching
+                // query ID identifies that ambiguous result as this CREATE having succeeded. Any
+                // other registered table owns the name, so preserve storage but report the conflict.
+                if (session.getQueryId().equals(registeredTable.get().getParameters().get(TRINO_QUERY_ID_NAME))) {
+                    return;
+                }
+                throw e;
+            }
+            if (getCausalChain(e).stream().anyMatch(FileAlreadyExistsException.class::isInstance)) {
+                // A concurrent initializer can create hoodie.properties after the emptiness check
+                // but before it registers the table. The existing metadata belongs to that CREATE.
+                throw e;
+            }
+
+            // The metastore confirmed that no table owns the initialized metadata. Remove only
+            // .hoodie so a retry is not rejected as non-empty; never remove the base path itself.
             cleanupTableMetadata(fileSystem, basePath, e);
             throw e;
-        }
-    }
-
-    private boolean isTableRegisteredAtLocation(SchemaTableName tableName, String basePath, RuntimeException failure)
-    {
-        try {
-            return metastore.getTable(tableName.getSchemaName(), tableName.getTableName())
-                    .map(table -> table.getStorage().getLocation().equals(basePath))
-                    .orElse(false);
-        }
-        catch (RuntimeException lookupFailure) {
-            // When ownership cannot be established, leave storage intact. An orphan is recoverable;
-            // deleting metadata that a successful concurrent CREATE references is not.
-            failure.addSuppressed(lookupFailure);
-            return true;
         }
     }
 

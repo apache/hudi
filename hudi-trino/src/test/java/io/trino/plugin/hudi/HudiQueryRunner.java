@@ -20,6 +20,7 @@ import io.airlift.log.Logging;
 import io.trino.blob.cache.memory.MemoryBlobCachePlugin;
 import io.trino.filesystem.Location;
 import io.trino.metastore.Database;
+import io.trino.metastore.HiveMetastore;
 import io.trino.metastore.HiveMetastoreFactory;
 import io.trino.plugin.base.util.Closables;
 import io.trino.plugin.hive.containers.Hive3FlociDataLake;
@@ -66,6 +67,13 @@ public final class HudiQueryRunner
                 .addConnectorProperty("s3.region", FLOCI_REGION)
                 .addConnectorProperty("s3.endpoint", hiveFlociDataLake.floci().endpoint().toString())
                 .addConnectorProperty("s3.path-style-access", "true");
+    }
+
+    public static HiveMetastore getMetastore(QueryRunner queryRunner)
+    {
+        return ((HudiConnector) queryRunner.getCoordinator().getConnector("hudi")).getInjector()
+                .getInstance(HiveMetastoreFactory.class)
+                .createMetastore(Optional.empty());
     }
 
     public static class Builder
@@ -118,10 +126,7 @@ public final class HudiQueryRunner
 
                 // Schemas are still provisioned directly because CREATE SCHEMA is not supported.
                 // The file metastore assigns its standard <catalog>/<schema> managed location.
-                ((HudiConnector) queryRunner.getCoordinator().getConnector("hudi")).getInjector()
-                        .getInstance(HiveMetastoreFactory.class)
-                        .createMetastore(Optional.empty())
-                        .createDatabase(Database.builder()
+                getMetastore(queryRunner).createDatabase(Database.builder()
                                 .setDatabaseName(SCHEMA_NAME)
                                 .setOwnerName(Optional.of("public"))
                                 .setOwnerType(Optional.of(PrincipalType.ROLE))

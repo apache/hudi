@@ -18,8 +18,10 @@ import io.trino.plugin.hudi.storage.TrinoStorageConfiguration;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ConnectorTableMetadata;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.storage.StoragePath;
 
 import java.io.IOException;
@@ -48,8 +50,8 @@ public final class HudiTableInitializer
      * <p>
      * Pinned rather than inherited from {@link HoodieTableVersion#current()} so that a future bump of
      * {@code current()} cannot silently change what the connector emits. Raising this should be a
-     * deliberate change with a test diff, not a side effect of upgrading Hudi; the assertion in
-     * {@code TestHudiDdl} fails when the two drift.
+     * deliberate change with a test diff, not a side effect of upgrading Hudi; the literal assertion
+     * in {@code TestHudiTableInitializer} guards this value.
      */
     public static final HoodieTableVersion CREATED_TABLE_VERSION = HoodieTableVersion.TEN;
 
@@ -58,8 +60,8 @@ public final class HudiTableInitializer
     /**
      * Initializes storage for an empty table.
      *
-     * @param tableSchema the schema that also produces the metastore column list, so the two cannot
-     *         disagree
+     * @param tableSchema the schema that also produces the metastore column list; Hudi metadata
+     *         fields are removed only from the persisted table create schema
      */
     public static void initializeTable(
             TrinoFileSystem fileSystem,
@@ -73,7 +75,7 @@ public final class HudiTableInitializer
                 .setTableName(tableMetadata.getTable().getTableName())
                 .setDatabaseName(tableMetadata.getTable().getSchemaName())
                 .setTableVersion(CREATED_TABLE_VERSION)
-                .setTableCreateSchema(tableSchema.toAvroSchema().toString());
+                .setTableCreateSchema(HoodieSchemaUtils.removeMetadataFields(tableSchema).toAvroSchema().toString());
 
         List<String> primaryKey = getPrimaryKey(properties);
         if (!primaryKey.isEmpty()) {
@@ -87,12 +89,11 @@ public final class HudiTableInitializer
         if (!orderingFields.isEmpty()) {
             builder.setOrderingFields(String.join(",", orderingFields));
         }
-        // Each of the following is written only when the user asked for it. Left unset, Hudi applies
-        // its own default at write time, which keeps a Trino-created table indistinguishable from
-        // one another engine created with the same DDL.
         getRecordMergeMode(properties).ifPresent(builder::setRecordMergeMode);
-        getKeyGeneratorClass(properties).ifPresent(builder::setKeyGeneratorClassProp);
-        getHiveStylePartitioning(properties).ifPresent(builder::setHiveStylePartitioningEnable);
+        getKeyGeneratorClass(properties).ifPresentOrElse(
+                builder::setKeyGeneratorClassProp,
+                () -> builder.setKeyGeneratorType(inferKeyGeneratorType(primaryKey, partitionedBy).name()));
+        builder.setHiveStylePartitioningEnable(getHiveStylePartitioning(properties));
 
         Map<String, String> passthrough = getHoodieProperties(properties);
         if (!passthrough.isEmpty()) {
@@ -112,5 +113,20 @@ public final class HudiTableInitializer
                     "Failed to initialize Hudi table metadata for %s at %s",
                     tableMetadata.getTable(), basePath), e);
         }
+    }
+
+    /**
+     * Mirrors {@code KeyGenUtils.inferKeyGeneratorType} for Trino's plain column-name lists without
+     * taking a runtime dependency on hudi-client-common.
+     */
+    private static KeyGeneratorType inferKeyGeneratorType(List<String> primaryKey, List<String> partitionedBy)
+    {
+        if (partitionedBy.isEmpty()) {
+            return KeyGeneratorType.NON_PARTITION;
+        }
+        if (partitionedBy.size() == 1 && primaryKey.size() <= 1) {
+            return KeyGeneratorType.SIMPLE;
+        }
+        return KeyGeneratorType.COMPLEX;
     }
 }

@@ -19,17 +19,21 @@ import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ColumnMetadata;
 import io.trino.spi.connector.ConnectorTableMetadata;
 import io.trino.spi.connector.SchemaTableName;
+import io.trino.spi.type.RowType;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.List;
 import java.util.Map;
 
 import static io.trino.plugin.hudi.HudiTableProperties.ORDERING_FIELDS_PROPERTY;
 import static io.trino.plugin.hudi.HudiTableProperties.PARTITIONED_BY_PROPERTY;
-import static io.trino.plugin.hudi.HudiTableProperties.PRECOMBINE_FIELD_PROPERTY;
 import static io.trino.plugin.hudi.HudiTableProperties.PRIMARY_KEY_PROPERTY;
+import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.VarcharType.VARCHAR;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -57,6 +61,35 @@ final class TestHudiTableValidation
                 columns("id", "_hoodie_record_key"), ImmutableMap.of())))
                 .isInstanceOf(TrinoException.class)
                 .hasMessageContaining("reserved");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"a-b", "a b", "1a"})
+    void testRejectsColumnNamesThatAreNotValidAvroNames(String columnName)
+    {
+        assertThatThrownBy(() -> HudiTableValidation.validateCreateTable(metadata(
+                columns(columnName), ImmutableMap.of())))
+                .isInstanceOf(TrinoException.class)
+                .satisfies(failure -> assertThat(((TrinoException) failure).getErrorCode())
+                        .isEqualTo(NOT_SUPPORTED.toErrorCode()))
+                .hasMessageContaining("Column name '" + columnName + "'")
+                .hasMessageContaining("Avro names must match [A-Za-z_][A-Za-z0-9_]*");
+    }
+
+    @Test
+    void testRejectsRowFieldNamesThatAreNotValidAvroNames()
+    {
+        List<ColumnMetadata> columns = ImmutableList.of(ColumnMetadata.builder()
+                .setName("payload")
+                .setType(RowType.rowType(RowType.field("a-b", BIGINT)))
+                .build());
+
+        assertThatThrownBy(() -> HudiTableValidation.validateCreateTable(metadata(columns, ImmutableMap.of())))
+                .isInstanceOf(TrinoException.class)
+                .satisfies(failure -> assertThat(((TrinoException) failure).getErrorCode())
+                        .isEqualTo(NOT_SUPPORTED.toErrorCode()))
+                .hasMessageContaining("Column name 'payload.a-b'")
+                .hasMessageContaining("Avro names must match [A-Za-z_][A-Za-z0-9_]*");
     }
 
     @Test
@@ -97,13 +130,6 @@ final class TestHudiTableValidation
                 ImmutableMap.of(ORDERING_FIELDS_PROPERTY, ImmutableList.of("missing")))))
                 .isInstanceOf(TrinoException.class)
                 .hasMessageContaining("Column 'missing' in ordering_fields");
-        assertThatThrownBy(() -> HudiTableValidation.validateCreateTable(metadata(
-                columns("id", "event_time"),
-                ImmutableMap.of(
-                        ORDERING_FIELDS_PROPERTY, ImmutableList.of("event_time"),
-                        PRECOMBINE_FIELD_PROPERTY, "event_time"))))
-                .isInstanceOf(TrinoException.class)
-                .hasMessageContaining("Cannot set both ordering_fields and precombine_field");
     }
 
     private static ConnectorTableMetadata metadata(List<ColumnMetadata> columns, Map<String, Object> properties)

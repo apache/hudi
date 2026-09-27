@@ -144,9 +144,9 @@ public class HudiTableProperties
                         RecordMergeMode.class,
                         null,
                         false))
-                // Also left unset: when absent, the engine that first writes to the table picks its
-                // own default key generator from the partition fields. Writing a value here would
-                // pin a choice Trino cannot itself act on, since Stage 1 never writes records.
+                // Optional explicit override. When absent, table initialization infers and persists
+                // the same built-in key generator type as Hudi's writers, so every later writer
+                // produces compatible record keys.
                 .add(stringProperty(
                         KEY_GENERATOR_CLASS_PROPERTY,
                         "Fully qualified key generator class name",
@@ -155,7 +155,7 @@ public class HudiTableProperties
                 .add(booleanProperty(
                         HIVE_STYLE_PARTITIONING_PROPERTY,
                         "Use Hive-style partition paths (key=value)",
-                        null,
+                        true,
                         false))
                 .add(new PropertyMetadata<>(
                         HOODIE_PROPERTIES_PROPERTY,
@@ -251,9 +251,9 @@ public class HudiTableProperties
         return Optional.ofNullable((String) tableProperties.get(KEY_GENERATOR_CLASS_PROPERTY));
     }
 
-    public static Optional<Boolean> getHiveStylePartitioning(Map<String, Object> tableProperties)
+    public static boolean getHiveStylePartitioning(Map<String, Object> tableProperties)
     {
-        return Optional.ofNullable((Boolean) tableProperties.get(HIVE_STYLE_PARTITIONING_PROPERTY));
+        return (Boolean) tableProperties.getOrDefault(HIVE_STYLE_PARTITIONING_PROPERTY, true);
     }
 
     @SuppressWarnings("unchecked")

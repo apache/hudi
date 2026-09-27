@@ -31,8 +31,11 @@ import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.List;
+import java.util.stream.Stream;
 
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
@@ -53,6 +56,7 @@ import static org.apache.hudi.common.model.HoodieRecord.COMMIT_TIME_METADATA_FIE
 import static org.apache.hudi.common.model.HoodieRecord.FILENAME_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.PARTITION_PATH_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
+import static org.apache.hudi.common.schema.HoodieSchemaUtils.getRecordQualifiedName;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -136,21 +140,13 @@ final class TestHudiSchemaConverter
         assertThat(logicalTypeOf(DATE)).isEqualTo(LogicalTypes.date());
     }
 
-    @Test
-    void testRejectsTypesTheMetastoreCannotHold()
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("unsupportedTypes")
+    void testRejectsUnsupportedType(UnsupportedType unsupportedType)
     {
-        // Avro can represent both faithfully, but HiveTypeTranslator has no mapping for either, so the
-        // column could never be registered -- and getColumnHandles reads columns from the metastore, so
-        // it would be unreadable too. Rejecting here points at the offending column instead of failing
-        // later inside trino-hive.
-        assertThatThrownBy(() -> tableSchema(column("id", UUID)))
+        assertThatThrownBy(() -> tableSchema(unsupportedType.column()))
                 .isInstanceOf(TrinoException.class)
-                .hasMessageContaining("column 'id' of type uuid")
-                .hasMessageContaining("no UUID type")
-                .hasMessageContaining("use VARCHAR");
-        assertThatThrownBy(() -> tableSchema(column("t", TimeType.createTimeType(6))))
-                .isInstanceOf(TrinoException.class)
-                .hasMessageContaining("no TIME type");
+                .hasMessageContaining(unsupportedType.expectedMessage());
     }
 
     @Test
@@ -221,6 +217,16 @@ final class TestHudiSchemaConverter
     }
 
     @Test
+    void testTableRecordNameUsesHudiConvention()
+    {
+        Schema schema = HudiSchemaConverter.toTableSchema(
+                ImmutableList.of(column("id", BIGINT)),
+                "test-table").toAvroSchema();
+
+        assertThat(schema.getFullName()).isEqualTo(getRecordQualifiedName("test-table"));
+    }
+
+    @Test
     void testNestedRecordNamesRemainUniqueWhenSanitizedPathsCollide()
     {
         Type nestedRow = RowType.rowType(RowType.field(
@@ -238,47 +244,19 @@ final class TestHudiSchemaConverter
         assertThat(nestedPathRecord.getFullName()).isNotEqualTo(topLevelPathRecord.getFullName());
     }
 
-    @Test
-    void testRejectsCharBecausePaddingWouldBeLost()
+    private static Stream<UnsupportedType> unsupportedTypes()
     {
-        assertThatThrownBy(() -> tableSchema(column("c", CharType.createCharType(5))))
-                .isInstanceOf(TrinoException.class)
-                .hasMessageContaining("column 'c' of type char(5)")
-                .hasMessageContaining("use VARCHAR");
-    }
-
-    @Test
-    void testRejectsTimestampWithTimeZone()
-    {
-        assertThatThrownBy(() -> tableSchema(column("ts", createTimestampWithTimeZoneType(6))))
-                .isInstanceOf(TrinoException.class)
-                .hasMessageContaining("time zone would be lost");
-    }
-
-    @Test
-    void testRejectsPrecisionBeyondMicroseconds()
-    {
-        assertThatThrownBy(() -> tableSchema(column("ts", TimestampType.createTimestampType(9))))
-                .isInstanceOf(TrinoException.class)
-                .hasMessageContaining("TIMESTAMP(6) or narrower");
-    }
-
-    @Test
-    void testRejectsNonVarcharMapKey()
-    {
-        assertThatThrownBy(() -> tableSchema(column("m", new MapType(BIGINT, BIGINT, TYPE_OPERATORS))))
-                .isInstanceOf(TrinoException.class)
-                .hasMessageContaining("Avro map keys are always strings");
-    }
-
-    @Test
-    void testErrorNamesTheOffendingNestedField()
-    {
-        // The failing type is nested two levels down; the message must still point at it.
-        Type nested = RowType.rowType(RowType.field("inner", new ArrayType(CharType.createCharType(3))));
-        assertThatThrownBy(() -> tableSchema(column("outer", nested)))
-                .isInstanceOf(TrinoException.class)
-                .hasMessageContaining("outer_inner_element");
+        return Stream.of(
+                new UnsupportedType("UUID", column("id", UUID), "column 'id' of type uuid"),
+                new UnsupportedType("TIME", column("t", TimeType.createTimeType(6)), "no TIME type"),
+                new UnsupportedType("CHAR", column("c", CharType.createCharType(5)), "column 'c' of type char(5)"),
+                new UnsupportedType("TIMESTAMP WITH TIME ZONE", column("ts", createTimestampWithTimeZoneType(6)), "time zone would be lost"),
+                new UnsupportedType("TIMESTAMP precision", column("ts", TimestampType.createTimestampType(9)), "TIMESTAMP(6) or narrower"),
+                new UnsupportedType("non-VARCHAR map key", column("m", new MapType(BIGINT, BIGINT, TYPE_OPERATORS)), "Avro map keys are always strings"),
+                new UnsupportedType(
+                        "nested field",
+                        column("outer", RowType.rowType(RowType.field("inner", new ArrayType(CharType.createCharType(3))))),
+                        "outer_inner_element"));
     }
 
     private static ColumnMetadata column(String name, Type type)
@@ -307,6 +285,15 @@ final class TestHudiSchemaConverter
     private static LogicalType logicalTypeOf(Type type)
     {
         return fieldSchema(type).getLogicalType();
+    }
+
+    private record UnsupportedType(String description, ColumnMetadata column, String expectedMessage)
+    {
+        @Override
+        public String toString()
+        {
+            return description;
+        }
     }
 
     private static Schema unwrapNullable(Schema schema)

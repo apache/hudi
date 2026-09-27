@@ -34,7 +34,6 @@ import org.apache.hudi.common.schema.HoodieSchemaUtils;
 
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
@@ -48,6 +47,8 @@ import static io.trino.spi.type.SmallintType.SMALLINT;
 import static io.trino.spi.type.TinyintType.TINYINT;
 import static io.trino.spi.type.UuidType.UUID;
 import static java.lang.String.format;
+import static org.apache.hudi.common.schema.HoodieSchemaUtils.getRecordQualifiedName;
+import static org.apache.hudi.common.schema.HoodieSchemaUtils.sanitizeName;
 
 /**
  * Converts a Trino column list into the {@link HoodieSchema} that becomes a table's
@@ -111,17 +112,21 @@ public final class HudiSchemaConverter
      * Builds the table schema, with Hudi's five meta fields prepended exactly as
      * {@link HoodieSchemaUtils#addMetadataFields} would for any other engine.
      * <p>
-     * The returned schema is the single source of truth for both {@code hoodie.table.create.schema}
-     * and the Hive Metastore column list. Deriving those two from separate inputs is what produces a
-     * table whose metastore descriptor and Hudi schema disagree (HUDI-9435).
+     * The returned schema is the single source of truth for the Hive Metastore column list and the
+     * data-only {@code hoodie.table.create.schema} derived from it. Deriving those two from separate
+     * inputs is what produces a table whose metastore descriptor and Hudi schema disagree
+     * (HUDI-9435).
      *
      * @param columns all table columns in declaration order, partition columns included
      * @param tableName used to name the Avro record
      */
     public static HoodieSchema toTableSchema(List<ColumnMetadata> columns, String tableName)
     {
-        String recordName = sanitizeName(tableName);
-        RecordNameAllocator recordNames = new RecordNameAllocator(recordName);
+        String recordQualifiedName = getRecordQualifiedName(tableName);
+        int namespaceSeparator = recordQualifiedName.lastIndexOf('.');
+        String recordNamespace = recordQualifiedName.substring(0, namespaceSeparator);
+        String recordName = recordQualifiedName.substring(namespaceSeparator + 1);
+        RecordNameAllocator recordNames = new RecordNameAllocator(recordNamespace, recordName);
         ImmutableList.Builder<HoodieSchemaField> fields = ImmutableList.builder();
         for (ColumnMetadata column : columns) {
             HoodieSchema fieldSchema = toHoodieSchema(column.getType(), column.getName(), recordNames);
@@ -137,7 +142,7 @@ public final class HudiSchemaConverter
             }
         }
         HoodieSchema record = HoodieSchema.createRecord(
-                recordName, NAMESPACE, null, fields.build());
+                recordName, recordNamespace, null, fields.build());
         return HoodieSchemaUtils.addMetadataFields(record);
     }
 
@@ -149,7 +154,7 @@ public final class HudiSchemaConverter
      */
     public static HoodieSchema toHoodieSchema(Type type, String path)
     {
-        return toHoodieSchema(type, path, new RecordNameAllocator());
+        return toHoodieSchema(type, path, new RecordNameAllocator(NAMESPACE));
     }
 
     private static HoodieSchema toHoodieSchema(Type type, String path, RecordNameAllocator recordNames)
@@ -231,7 +236,7 @@ public final class HudiSchemaConverter
                         null,
                         HoodieSchema.NULL_VALUE));
             }
-            return HoodieSchema.createRecord(recordNames.allocate(path), NAMESPACE, null, fields.build());
+            return HoodieSchema.createRecord(recordNames.allocate(path), recordNames.getNamespace(), null, fields.build());
         }
         throw unsupported(type, path, "the Hudi connector has no Avro mapping for this type");
     }
@@ -243,31 +248,20 @@ public final class HudiSchemaConverter
                 path, type.getDisplayName(), reason));
     }
 
-    /**
-     * Avro names must match {@code [A-Za-z_][A-Za-z0-9_]*}. Trino identifiers are already
-     * lower-cased and permit characters Avro does not, so anything else becomes an underscore.
-     */
-    private static String sanitizeName(String name)
-    {
-        StringBuilder sanitized = new StringBuilder(name.length());
-        for (int i = 0; i < name.length(); i++) {
-            char character = name.charAt(i);
-            boolean valid = character == '_'
-                    || (character >= 'a' && character <= 'z')
-                    || (character >= 'A' && character <= 'Z')
-                    || (i > 0 && character >= '0' && character <= '9');
-            sanitized.append(valid ? character : '_');
-        }
-        return sanitized.toString().toLowerCase(Locale.ROOT);
-    }
-
     private static final class RecordNameAllocator
     {
+        private final String namespace;
         private final Set<String> allocatedNames = new HashSet<>();
 
-        private RecordNameAllocator(String... reservedNames)
+        private RecordNameAllocator(String namespace, String... reservedNames)
         {
+            this.namespace = namespace;
             allocatedNames.addAll(List.of(reservedNames));
+        }
+
+        private String getNamespace()
+        {
+            return namespace;
         }
 
         private String allocate(String path)
