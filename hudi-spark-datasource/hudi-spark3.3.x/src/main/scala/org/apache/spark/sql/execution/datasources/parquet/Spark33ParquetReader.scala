@@ -224,16 +224,16 @@ class Spark33ParquetReader(enableVectorizedReader: Boolean,
       try {
         reader.initialize(split, hadoopAttemptContext)
 
-        val fullSchema = requiredSchema.toAttributes ++ partitionSchema.toAttributes
-        val unsafeProjection = schemaEvolutionUtils.generateUnsafeProjection(fullSchema, timeZoneId)
-
-        if (partitionSchema.length == 0) {
+        // Leased for this iterator: files that need the same projection reuse one generation
+        val unsafeProjection = schemaEvolutionUtils.leaseRowProjection(timeZoneId, iter)
+        val projected = if (partitionSchema.length == 0) {
           // There is no partition columns
-          iter.map(unsafeProjection)
+          iter.map(unsafeProjection(_))
         } else {
           val joinedRow = new JoinedRow()
           iter.map(d => unsafeProjection(joinedRow(d, file.partitionValues)))
         }
+        unsafeProjection.releaseWhenExhausted(projected)
       } catch {
         case e: Throwable =>
           // SPARK-23457: In case there is an exception in initialization, close the iterator to

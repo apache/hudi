@@ -35,7 +35,6 @@ import org.apache.parquet.schema.{MessageType, SchemaRepair}
 import org.apache.spark.TaskContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
-import org.apache.spark.sql.catalyst.types.DataTypeUtils.toAttributes
 import org.apache.spark.sql.catalyst.util.{DateTimeUtils, RebaseDateTime}
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils, FileFormat, PartitionedFile, RecordReaderIterator, SparkColumnarFileReader}
 import org.apache.spark.sql.execution.datasources.parquet.Spark42ParquetReader.repairFooterSchema
@@ -289,16 +288,16 @@ class Spark42ParquetReader(enableVectorizedReader: Boolean,
     try {
       readerWithRowIndexes.initialize(split, hadoopAttemptContext)
 
-      val fullSchema = toAttributes(requiredSchema) ++ toAttributes(partitionSchema)
-      val unsafeProjection = schemaEvolutionUtils.generateUnsafeProjection(fullSchema, timeZoneId)
-
-      if (partitionSchema.length == 0) {
+      // Leased for this iterator: files that need the same projection reuse one generation
+      val unsafeProjection = schemaEvolutionUtils.leaseRowProjection(timeZoneId, iter)
+      val projected = if (partitionSchema.length == 0) {
         // There is no partition columns
-        iter.map(unsafeProjection)
+        iter.map(unsafeProjection(_))
       } else {
         val joinedRow = new JoinedRow()
         iter.map(d => unsafeProjection(joinedRow(d, partitionValues)))
       }
+      unsafeProjection.releaseWhenExhaustedCloseable(projected)
     } catch {
       case e: Throwable =>
         // SPARK-23457: In case there is an exception in initialization, close the iterator to
