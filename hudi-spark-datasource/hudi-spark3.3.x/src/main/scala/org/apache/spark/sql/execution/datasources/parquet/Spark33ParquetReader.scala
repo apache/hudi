@@ -164,7 +164,7 @@ class Spark33ParquetReader(enableVectorizedReader: Boolean,
 
     val attemptId = new TaskAttemptID(new TaskID(new JobID(), TaskType.MAP, 0), 0)
     val hadoopAttemptContext =
-      new TaskAttemptContextImpl(schemaEvolutionUtils.getHadoopConfClone(footerFileMetaData, enableVectorizedReader), attemptId)
+      new TaskAttemptContextImpl(schemaEvolutionUtils.getHadoopConfClone(footerFileMetaData, enableVectorizedReader && returningBatch), attemptId)
 
     // Try to push down filters when filter push-down is enabled.
     // Notice: This push-down is RowGroups level, not individual records.
@@ -172,7 +172,9 @@ class Spark33ParquetReader(enableVectorizedReader: Boolean,
       ParquetInputFormat.setFilterPredicate(hadoopAttemptContext.getConfiguration, pushed.get)
     }
     val taskContext = Option(TaskContext.get())
-    if (enableVectorizedReader) {
+    // Batch output decodes vectorized (a nested type change failed above). Row output reads a file
+    // with a type change row-based, where Cast converts it; that file's footer is read again.
+    if (enableVectorizedReader && (returningBatch || !schemaEvolutionUtils.hasTypeChange)) {
       val vectorizedReader = schemaEvolutionUtils.buildVectorizedReader(
         convertTz.orNull,
         datetimeRebaseSpec.mode.toString,
@@ -273,9 +275,9 @@ object Spark33ParquetReader extends SparkParquetReaderBuilder {
     )
 
     val enableLogicalTimestampRepair = hadoopConf.getBoolean(ENABLE_LOGICAL_TIMESTAMP_REPAIR, true)
-    // Should always be set by FileSourceScanExec while creating this.
-    // Check conf before checking the option, to allow working around an issue by changing conf.
-    val returningBatch = vectorized && sqlConf.parquetVectorizedReaderEnabled &&
+    // Should always be set by FileSourceScanExec while creating this. Batches follow the
+    // plan-time decision in the option, not the conf at execution time.
+    val returningBatch = vectorized &&
       options.get(FileFormat.OPTION_RETURNING_BATCH)
         .getOrElse {
           throw new IllegalArgumentException(
