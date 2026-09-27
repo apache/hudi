@@ -214,6 +214,46 @@ class TestVectorizedParquetReadPerScan extends HoodieSparkClientTestBase with Sc
   }
 
   /**
+   * Spark copies the rows of a row-based Parquet scan into UnsafeRows while the vectorized reader
+   * conf is on, which the rows decoded vectorized need. With the conf off when the scan runs, Spark
+   * makes no copy and the reader returns UnsafeRows itself: wide MOR scans, merged slices included,
+   * and wide COW scans return UnsafeRows and the rows written either way.
+   */
+  @Test
+  def testWideRowScansReturnUnsafeRowsWithAndWithoutSparkCopy(): Unit = {
+    writeHudi(wideSource(0 until 30, i => s"$i"), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL, morWriteOpts)
+    writeHudi(wideSource((0 until 30).filter(_ % 3 == 0), i => s"${i + 1000}"),
+      DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL, morWriteOpts)
+    val morExpected = wideSource(0 until 30, i => if (i % 3 == 0) s"${i + 1000}" else s"$i")
+    val cowPath = tempDir.resolve("wide_cow").toAbsolutePath.toString
+    val cowExpected = wideSource(0 until 20, i => s"$i")
+    cowExpected.write.format("hudi").options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite).save(cowPath)
+
+    Seq("true", "false").foreach { vectorized =>
+      spark.conf.set(vectorizedKey, vectorized)
+      try {
+        Seq("MOR" -> (basePath, morExpected), "COW" -> (cowPath, cowExpected)).foreach { case (table, (path, expected)) =>
+          val wide = spark.read.format("hudi").load(path).select(expected.columns.map(col): _*)
+          assertWide(wide)
+          val scan = fileScan(wide)
+          assertFalse(scan.supportsColumnar, s"The wide $table scan is row-based")
+          val scanRowClasses = scan.execute().map(_.getClass.getSimpleName).distinct().collect().toSet
+          assertEquals(Set(unsafeRow), scanRowClasses, s"$table scan with $vectorizedKey=$vectorized")
+          if (vectorized == "false") {
+            assertEquals(Set(unsafeRow), rowClassesByPartition(wide).values.flatten.toSet,
+              s"The $table reader returns UnsafeRows when Spark makes no copy")
+          }
+          assertSameRows(expected, wide)
+        }
+      } finally {
+        spark.conf.set(vectorizedKey, "true")
+      }
+    }
+  }
+
+  /**
    * Vector columns need row access to turn their binary values back into arrays, so a wide scan
    * over them stays row-based even though it returns rows.
    */
