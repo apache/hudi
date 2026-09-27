@@ -83,7 +83,7 @@ public class SparkMetadataTableRecordLevelIndex extends SparkMetadataTableGlobal
     // Lookup the keys in the record index. Resolved on the driver so the closure carries it to executors.
     Option<Registry> lookupMetrics = RecordIndexLookupMetrics.resolveRegistry(context, hoodieTable.getConfig());
     return HoodieJavaPairRDD.of(partitionedKeyRDD.mapPartitionsToPair(
-        new PartitionedRecordIndexFileGroupLookupFunction(hoodieTable.getTableMetadata(), lookupMetrics)));
+        PartitionedRecordIndexFileGroupLookupFunction.create(context, hoodieTable.getTableMetadata(), lookupMetrics)));
   }
 
   @Override

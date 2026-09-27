@@ -19,6 +19,7 @@
 package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.data.HoodieBroadcast;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
@@ -29,8 +30,7 @@ import org.apache.hudi.common.util.collection.FlatteningIterator;
 import org.apache.hudi.common.util.collection.LazyIterableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIndexException;
-import org.apache.hudi.metadata.HoodieBackedTableMetadata;
-import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.metadata.MetadataPartitionReader;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
@@ -60,22 +60,18 @@ public class HoodieMetadataBloomFilterProbingFunction implements
   // Assuming each file bloom filter takes up 512K, sizing the max file count
   // per batch so that the total fetched bloom filters would not cross 128 MB.
   private static final long BLOOM_FILTER_CHECK_MAX_FILE_COUNT_PER_BATCH = 256;
-  private final HoodieTable hoodieTable;
-
   private final Broadcast<HoodieTableFileSystemView> baseFileOnlyViewBroadcast;
 
+  private final HoodieBroadcast<MetadataPartitionReader> bloomFilterReader;
+
   /**
-   * NOTE: It's critical for this ctor to accept {@link HoodieTable} to make sure that it uses
-   *       broadcast-ed instance of {@link HoodieBackedTableMetadata} internally, instead of
-   *       one being serialized and deserialized for _every_ task individually
-   *
-   * NOTE: We pass in broadcasted {@link HoodieTableFileSystemView} to make sure it's materialized
-   *       on executor once
+   * NOTE: We pass in broadcasted {@link HoodieTableFileSystemView} and bloom filter index reader to make sure
+   *       they are materialized on executor once
    */
   public HoodieMetadataBloomFilterProbingFunction(Broadcast<HoodieTableFileSystemView> baseFileOnlyViewBroadcast,
-                                                  HoodieTable hoodieTable) {
+                                                  HoodieBroadcast<MetadataPartitionReader> bloomFilterReader) {
     this.baseFileOnlyViewBroadcast = baseFileOnlyViewBroadcast;
-    this.hoodieTable = hoodieTable;
+    this.bloomFilterReader = bloomFilterReader;
   }
 
   @Override
@@ -124,7 +120,7 @@ public class HoodieMetadataBloomFilterProbingFunction implements
 
       List<Pair<String, String>> partitionNameFileNameList = fileToKeysMap.keySet().stream().map(pair -> Pair.of(pair.getLeft(), pair.getRight().getFileName())).collect(Collectors.toList());
       Map<Pair<String, String>, BloomFilter> fileToBloomFilterMap =
-          hoodieTable.getTableMetadata().getBloomFilters(partitionNameFileNameList);
+          bloomFilterReader.value().getBloomFilters(partitionNameFileNameList);
 
       return fileToKeysMap.entrySet().stream()
           .map(entry -> {
