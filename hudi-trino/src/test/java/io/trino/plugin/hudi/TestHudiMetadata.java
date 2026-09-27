@@ -13,33 +13,48 @@
  */
 package io.trino.plugin.hudi;
 
+import io.trino.filesystem.FileIterator;
 import io.trino.filesystem.Location;
+import io.trino.filesystem.TrinoFileSystem;
 import io.trino.filesystem.TrinoFileSystemFactory;
 import io.trino.filesystem.local.LocalFileSystemFactory;
 import io.trino.metastore.Database;
 import io.trino.metastore.HiveMetastore;
 import io.trino.metastore.Table;
 import io.trino.metastore.TableAlreadyExistsException;
+import io.trino.plugin.hudi.util.HudiSchemaConverter;
+import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ColumnMetadata;
 import io.trino.spi.connector.ConnectorTableMetadata;
 import io.trino.spi.connector.SaveMode;
 import io.trino.spi.connector.SchemaTableName;
+import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.security.PrincipalType;
 import io.trino.spi.type.TypeManager;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalLong;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.UnaryOperator;
 
+import static com.google.common.base.Throwables.getCausalChain;
 import static com.google.common.util.concurrent.MoreExecutors.newDirectExecutorService;
+import static io.trino.plugin.hive.HiveMetadata.TRINO_QUERY_ID_NAME;
+import static io.trino.plugin.hive.TableType.EXTERNAL_TABLE;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.testing.TestingConnectorSession.SESSION;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 final class TestHudiMetadata
@@ -50,7 +65,7 @@ final class TestHudiMetadata
     @Test
     void testCreateTableRaceDoesNotDeleteWinningTableMetadata()
     {
-        CreateRace race = createRace(UnaryOperator.identity(), false);
+        CreateRace race = createRace(TestHudiMetadata::asTableCreatedByAnotherQuery, false);
 
         assertThatThrownBy(() -> race.metadata().createTable(SESSION, race.tableMetadata(), SaveMode.FAIL))
                 .isInstanceOf(TableAlreadyExistsException.class);
@@ -61,9 +76,28 @@ final class TestHudiMetadata
     }
 
     @Test
-    void testCreateTableRaceCleansMetadataWhenWinnerUsesDifferentLocation()
+    void testCreateTableRetryRecognizesCommittedTableAfterLocationNormalization()
     {
         CreateRace race = createRace(table -> Table.builder(table)
+                .withStorage(storage -> storage.setLocation(
+                        table.getStorage().getLocation().replace("local:///", "local:/")))
+                .build(), false);
+
+        assertThatCode(() -> race.metadata().createTable(SESSION, race.tableMetadata(), SaveMode.FAIL))
+                .doesNotThrowAnyException();
+
+        assertThat(race.attemptedTable().get()).isNotNull();
+        assertThat(race.attemptedTable().get().getParameters())
+                .containsEntry(TRINO_QUERY_ID_NAME, SESSION.getQueryId());
+        assertThat(metadataExists(race, race.attemptedTable().get()))
+                .isTrue();
+    }
+
+    @Test
+    void testCreateTableRacePreservesMetadataWhenWinnerUsesDifferentLocation()
+    {
+        CreateRace race = createRace(table -> Table.builder(table)
+                .setParameter(TRINO_QUERY_ID_NAME, "another_query")
                 .withStorage(storage -> storage.setLocation("local:///other_table"))
                 .build(), false);
 
@@ -75,13 +109,13 @@ final class TestHudiMetadata
         assertThat(race.winningTable().get().getStorage().getLocation())
                 .isNotEqualTo(race.attemptedTable().get().getStorage().getLocation());
         assertThat(metadataExists(race, race.attemptedTable().get()))
-                .isFalse();
+                .isTrue();
     }
 
     @Test
     void testCreateTableRacePreservesMetadataWhenWinnerLookupFails()
     {
-        CreateRace race = createRace(UnaryOperator.identity(), true);
+        CreateRace race = createRace(TestHudiMetadata::asTableCreatedByAnotherQuery, true);
 
         assertThatThrownBy(() -> race.metadata().createTable(SESSION, race.tableMetadata(), SaveMode.FAIL))
                 .isInstanceOf(TableAlreadyExistsException.class)
@@ -92,7 +126,142 @@ final class TestHudiMetadata
                 .isTrue();
     }
 
+    @Test
+    void testCreateTableFailureCleansMetadataWhenNoTableWasRegistered()
+    {
+        CreateRace race = createRace(UnaryOperator.identity(), false, false);
+
+        assertThatThrownBy(() -> race.metadata().createTable(SESSION, race.tableMetadata(), SaveMode.FAIL))
+                .isInstanceOf(TableAlreadyExistsException.class);
+
+        assertThat(race.attemptedTable().get()).isNotNull();
+        assertThat(race.winningTable().get()).isNull();
+        assertThat(metadataExists(race, race.attemptedTable().get()))
+                .isFalse();
+    }
+
+    @Test
+    void testCreateTableInitializationConflictPreservesExistingMetadata()
+    {
+        SchemaTableName tableName = new SchemaTableName("test_schema", "concurrent_create");
+        ConnectorTableMetadata tableMetadata = createTableMetadata(tableName);
+        String basePath = "local:///test_schema/concurrent_create";
+        LocalFileSystemFactory localFileSystemFactory = new LocalFileSystemFactory(temporaryDirectory);
+        TrinoFileSystem localFileSystem = localFileSystemFactory.create(SESSION);
+        HoodieSchema tableSchema = HudiSchemaConverter.toTableSchema(tableMetadata.getColumns(), tableName.getTableName());
+        AtomicBoolean winnerInitialized = new AtomicBoolean();
+        TrinoFileSystem racingFileSystem = (TrinoFileSystem) Proxy.newProxyInstance(
+                TrinoFileSystem.class.getClassLoader(),
+                new Class<?>[] {TrinoFileSystem.class},
+                (proxy, method, arguments) -> {
+                    if (method.getName().equals("listFiles") && winnerInitialized.compareAndSet(false, true)) {
+                        HudiTableInitializer.initializeTable(localFileSystem, basePath, tableMetadata, tableSchema);
+                        return FileIterator.empty();
+                    }
+                    try {
+                        return method.invoke(localFileSystem, arguments);
+                    }
+                    catch (InvocationTargetException e) {
+                        throw e.getCause();
+                    }
+                });
+        TrinoFileSystemFactory racingFileSystemFactory = identity -> racingFileSystem;
+        HiveMetastore metastore = (HiveMetastore) Proxy.newProxyInstance(
+                HiveMetastore.class.getClassLoader(),
+                new Class<?>[] {HiveMetastore.class},
+                (proxy, method, arguments) -> switch (method.getName()) {
+                    case "getDatabase" -> Optional.of(Database.builder()
+                            .setDatabaseName(tableName.getSchemaName())
+                            .setLocation(Optional.of("local:///test_schema"))
+                            .setOwnerName(Optional.of("public"))
+                            .setOwnerType(Optional.of(PrincipalType.ROLE))
+                            .build());
+                    case "getTable" -> Optional.empty();
+                    default -> throw new AssertionError("Unexpected metastore call: " + method);
+                });
+        HudiMetadata metadata = new HudiMetadata(
+                metastore,
+                racingFileSystemFactory,
+                unusedTypeManager(),
+                newDirectExecutorService());
+
+        assertThatThrownBy(() -> metadata.createTable(SESSION, tableMetadata, SaveMode.FAIL))
+                .isInstanceOf(TrinoException.class)
+                .satisfies(failure -> assertThat(getCausalChain(failure))
+                        .anyMatch(FileAlreadyExistsException.class::isInstance));
+
+        assertThat(winnerInitialized).isTrue();
+        assertThat(HudiUtil.hudiMetadataExists(localFileSystem, Location.of(basePath)))
+                .isTrue();
+    }
+
+    @Test
+    void testDropTreatsExternalTableTypeAsSufficientToPreserveStorage()
+    {
+        SchemaTableName tableName = new SchemaTableName("test_schema", "external_by_type");
+        ConnectorTableMetadata tableMetadata = createTableMetadata(tableName);
+        String basePath = "local:///test_schema/external_by_type";
+        LocalFileSystemFactory fileSystemFactory = new LocalFileSystemFactory(temporaryDirectory);
+        TrinoFileSystem fileSystem = fileSystemFactory.create(SESSION);
+        HoodieSchema tableSchema = HudiSchemaConverter.toTableSchema(
+                tableMetadata.getColumns(), tableName.getTableName());
+        HudiTableInitializer.initializeTable(fileSystem, basePath, tableMetadata, tableSchema);
+
+        Table table = Table.builder(HudiMetastoreTables.buildTable(
+                        tableName,
+                        basePath,
+                        HoodieTableType.COPY_ON_WRITE,
+                        tableSchema,
+                        List.of(),
+                        false,
+                        Optional.empty(),
+                        Optional.empty()))
+                // Some metastores use only the type signal for external tables.
+                .setTableType(EXTERNAL_TABLE.name())
+                .build();
+        AtomicReference<Boolean> deleteData = new AtomicReference<>();
+        HiveMetastore metastore = (HiveMetastore) Proxy.newProxyInstance(
+                HiveMetastore.class.getClassLoader(),
+                new Class<?>[] {HiveMetastore.class},
+                (proxy, method, arguments) -> switch (method.getName()) {
+                    case "getTable" -> Optional.of(table);
+                    case "dropTable" -> {
+                        deleteData.set((Boolean) arguments[2]);
+                        yield null;
+                    }
+                    default -> throw new AssertionError("Unexpected metastore call: " + method);
+                });
+        HudiMetadata metadata = new HudiMetadata(
+                metastore,
+                fileSystemFactory,
+                unusedTypeManager(),
+                newDirectExecutorService());
+        HudiTableHandle tableHandle = new HudiTableHandle(
+                tableName.getSchemaName(),
+                tableName.getTableName(),
+                basePath,
+                HoodieTableType.COPY_ON_WRITE,
+                List.of(),
+                List.of(),
+                TupleDomain.all(),
+                TupleDomain.all(),
+                OptionalLong.empty(),
+                tableSchema.toAvroSchema().toString(),
+                "0");
+
+        metadata.dropTable(SESSION, tableHandle);
+
+        assertThat(table.getParameters()).doesNotContainKey("EXTERNAL");
+        assertThat(deleteData).hasValue(false);
+        assertThat(HudiUtil.hudiMetadataExists(fileSystem, Location.of(basePath))).isTrue();
+    }
+
     private CreateRace createRace(UnaryOperator<Table> winningTableFactory, boolean failWinnerLookup)
+    {
+        return createRace(winningTableFactory, failWinnerLookup, true);
+    }
+
+    private CreateRace createRace(UnaryOperator<Table> winningTableFactory, boolean failWinnerLookup, boolean registerWinner)
     {
         SchemaTableName tableName = new SchemaTableName("test_schema", "concurrent_create");
         AtomicReference<Table> attemptedTable = new AtomicReference<>();
@@ -116,30 +285,48 @@ final class TestHudiMetadata
                     case "createTable" -> {
                         Table table = (Table) arguments[0];
                         attemptedTable.set(table);
-                        winningTable.set(winningTableFactory.apply(table));
+                        if (registerWinner) {
+                            winningTable.set(winningTableFactory.apply(table));
+                        }
                         throw new TableAlreadyExistsException(tableName);
                     }
                     default -> throw new AssertionError("Unexpected metastore call: " + method);
                 });
         TrinoFileSystemFactory fileSystemFactory = new LocalFileSystemFactory(temporaryDirectory);
-        TypeManager unusedTypeManager = (TypeManager) Proxy.newProxyInstance(
-                TypeManager.class.getClassLoader(),
-                new Class<?>[] {TypeManager.class},
-                (proxy, method, arguments) -> {
-                    throw new AssertionError("Unexpected type manager call: " + method);
-                });
         HudiMetadata metadata = new HudiMetadata(
                 metastore,
                 fileSystemFactory,
-                unusedTypeManager,
+                unusedTypeManager(),
                 newDirectExecutorService());
-        ConnectorTableMetadata tableMetadata = new ConnectorTableMetadata(
+        ConnectorTableMetadata tableMetadata = createTableMetadata(tableName);
+        return new CreateRace(metadata, fileSystemFactory, tableMetadata, attemptedTable, winningTable);
+    }
+
+    private static ConnectorTableMetadata createTableMetadata(SchemaTableName tableName)
+    {
+        return new ConnectorTableMetadata(
                 tableName,
                 List.of(ColumnMetadata.builder()
                         .setName("id")
                         .setType(BIGINT)
                         .build()));
-        return new CreateRace(metadata, fileSystemFactory, tableMetadata, attemptedTable, winningTable);
+    }
+
+    private static TypeManager unusedTypeManager()
+    {
+        return (TypeManager) Proxy.newProxyInstance(
+                TypeManager.class.getClassLoader(),
+                new Class<?>[] {TypeManager.class},
+                (proxy, method, arguments) -> {
+                    throw new AssertionError("Unexpected type manager call: " + method);
+                });
+    }
+
+    private static Table asTableCreatedByAnotherQuery(Table table)
+    {
+        return Table.builder(table)
+                .setParameter(TRINO_QUERY_ID_NAME, "another_query")
+                .build();
     }
 
     private static boolean metadataExists(CreateRace race, Table table)

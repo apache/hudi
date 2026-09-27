@@ -18,12 +18,17 @@ import com.google.common.collect.ImmutableSet;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ColumnMetadata;
 import io.trino.spi.connector.ConnectorTableMetadata;
+import io.trino.spi.type.ArrayType;
+import io.trino.spi.type.MapType;
+import io.trino.spi.type.RowType;
+import io.trino.spi.type.Type;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static io.trino.plugin.hudi.HudiTableProperties.ORDERING_FIELDS_PROPERTY;
@@ -33,10 +38,12 @@ import static io.trino.plugin.hudi.HudiTableProperties.getOrderingFields;
 import static io.trino.plugin.hudi.HudiTableProperties.getPartitionedBy;
 import static io.trino.plugin.hudi.HudiTableProperties.getPrimaryKey;
 import static io.trino.spi.StandardErrorCode.INVALID_TABLE_PROPERTY;
+import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static java.lang.String.format;
 
 /**
- * Checks that a {@code CREATE TABLE} statement's properties cohere with its column list.
+ * Checks that a {@code CREATE TABLE} statement can be represented by Hudi's Avro schema and that
+ * its properties cohere with its column list.
  * <p>
  * Trino has already type-checked each property individually through {@code PropertyMetadata} by the
  * time this runs -- {@code table_type} is an enum and cannot hold an unsupported value, for
@@ -47,6 +54,8 @@ import static java.lang.String.format;
  */
 public final class HudiTableValidation
 {
+    private static final Pattern AVRO_NAME_PATTERN = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
+
     private HudiTableValidation() {}
 
     public static void validateCreateTable(ConnectorTableMetadata tableMetadata)
@@ -60,7 +69,8 @@ public final class HudiTableValidation
                 .map(ColumnMetadata::getName)
                 .collect(toImmutableList());
         Set<String> uniqueColumnNames = new LinkedHashSet<>();
-        for (String columnName : columnNames) {
+        for (ColumnMetadata column : columns) {
+            String columnName = column.getName();
             if (!uniqueColumnNames.add(columnName)) {
                 throw new TrinoException(INVALID_TABLE_PROPERTY, "Duplicate column name: " + columnName);
             }
@@ -71,6 +81,8 @@ public final class HudiTableValidation
                 throw new TrinoException(INVALID_TABLE_PROPERTY, format(
                         "Column name '%s' is reserved: Hudi adds its own meta fields to every table", columnName));
             }
+            validateAvroName(columnName, columnName);
+            validateNestedAvroNames(column.getType(), columnName);
         }
 
         Map<String, Object> properties = tableMetadata.getProperties();
@@ -79,6 +91,39 @@ public final class HudiTableValidation
         // precombine_field alias, since the two write the same Hudi config.
         validateColumnsExist(uniqueColumnNames, getOrderingFields(properties), ORDERING_FIELDS_PROPERTY);
         validateColumnsExist(uniqueColumnNames, getPrimaryKey(properties), PRIMARY_KEY_PROPERTY);
+    }
+
+    static boolean isValidAvroName(String name)
+    {
+        return AVRO_NAME_PATTERN.matcher(name).matches();
+    }
+
+    private static void validateAvroName(String name, String path)
+    {
+        if (!isValidAvroName(name)) {
+            throw new TrinoException(NOT_SUPPORTED, format(
+                    "Column name '%s' is not supported for Hudi tables: Avro names must match [A-Za-z_][A-Za-z0-9_]*",
+                    path));
+        }
+    }
+
+    private static void validateNestedAvroNames(Type type, String path)
+    {
+        if (type instanceof RowType rowType) {
+            for (RowType.Field field : rowType.getFields()) {
+                field.getName().ifPresent(fieldName -> {
+                    String fieldPath = path + "." + fieldName;
+                    validateAvroName(fieldName, fieldPath);
+                    validateNestedAvroNames(field.getType(), fieldPath);
+                });
+            }
+        }
+        else if (type instanceof ArrayType arrayType) {
+            validateNestedAvroNames(arrayType.getElementType(), path + ".element");
+        }
+        else if (type instanceof MapType mapType) {
+            validateNestedAvroNames(mapType.getValueType(), path + ".value");
+        }
     }
 
     private static void validatePartitionColumns(List<String> columnNames, List<String> partitionedBy)

@@ -17,26 +17,31 @@ import io.trino.filesystem.Location;
 import io.trino.filesystem.TrinoFileSystem;
 import io.trino.filesystem.TrinoFileSystemFactory;
 import io.trino.metastore.HiveMetastore;
-import io.trino.metastore.HiveMetastoreFactory;
 import io.trino.plugin.hudi.storage.TrinoStorageConfiguration;
 import io.trino.plugin.hudi.testing.HudiTablesInitializer;
 import io.trino.spi.security.ConnectorIdentity;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.QueryRunner;
+import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.storage.StoragePath;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 
@@ -50,6 +55,7 @@ final class TestHudiDdl
             throws Exception
     {
         return HudiQueryRunner.builder()
+                .addConnectorProperty("hudi.register-table-procedure.enabled", "true")
                 .setDataLoader(initializer)
                 .build();
     }
@@ -99,6 +105,99 @@ final class TestHudiDdl
     }
 
     @Test
+    void testRegisterRejectsNonParquetTable()
+            throws Exception
+    {
+        String tableName = "unregistered_orc_table";
+        Location tableLocation = initializer.getExternalLocation().appendPath(tableName);
+        initializer.initializeTable(tableName, tableLocation, "tests", HoodieFileFormat.ORC);
+
+        assertQueryFails(
+                "CALL hudi.system.register_table('tests', '" + tableName + "', '" + tableLocation + "')",
+                ".*Cannot register Hudi table tests\\." + tableName + " with base file format ORC; only PARQUET is supported.*");
+        assertThat(initializer.getMetastore().getTable("tests", tableName)).isEmpty();
+    }
+
+    @Test
+    void testCreateRejectsNonEmptyLocationWithoutChangingStorage()
+            throws Exception
+    {
+        String tableName = "create_at_non_empty_location";
+        Location tableLocation = initializer.getExternalLocation().appendPath(tableName);
+        Location existingFile = tableLocation.appendPath("existing.txt");
+        initializer.getFileSystem().newOutputFile(existingFile).createOrOverwrite(new byte[] {1});
+
+        assertQueryFails(
+                "CREATE TABLE " + tableName + " (id bigint) WITH (location = '" + tableLocation + "')",
+                ".*already contains files.*Use the register_table procedure.*");
+
+        assertThat(initializer.getFileSystem().newInputFile(existingFile).exists()).isTrue();
+        assertThat(HudiUtil.hudiMetadataExists(initializer.getFileSystem(), tableLocation)).isFalse();
+        assertThat(initializer.getMetastore().getTable("tests", tableName)).isEmpty();
+    }
+
+    @Test
+    void testCreatePersistsAdvancedTableProperties()
+    {
+        String tableName = "created_with_advanced_properties";
+        Location tableLocation = initializer.getExternalLocation().appendPath(tableName);
+
+        assertUpdate("""
+                CREATE TABLE %s (
+                    id bigint,
+                    event_time timestamp(6),
+                    city varchar
+                )
+                WITH (
+                    location = '%s',
+                    table_type = 'MERGE_ON_READ',
+                    partitioned_by = ARRAY['city'],
+                    primary_key = ARRAY['id'],
+                    ordering_fields = ARRAY['event_time'],
+                    record_merge_mode = 'EVENT_TIME_ORDERING',
+                    key_generator_class = 'org.apache.hudi.keygen.SimpleKeyGenerator',
+                    hive_style_partitioning = false,
+                    hoodie_properties = MAP(
+                        ARRAY['hoodie.keygen.timebased.timestamp.type'],
+                        ARRAY['EPOCHMILLISECONDS'])
+                )
+                """.formatted(tableName, tableLocation));
+
+        assertThat(initializer.loadMetaClient(tableName, tableLocation).getTableConfig())
+                .satisfies(config -> {
+                    assertThat(config.getRecordMergeMode()).isEqualTo(RecordMergeMode.EVENT_TIME_ORDERING);
+                    assertThat(config.getKeyGeneratorClassName())
+                            .isEqualTo("org.apache.hudi.keygen.SimpleKeyGenerator");
+                    assertThat(config.getProps())
+                            .containsEntry(HoodieTableConfig.KEY_GENERATOR_TYPE.key(), KeyGeneratorType.SIMPLE.name())
+                            .containsEntry(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key(), "false")
+                            .containsEntry("hoodie.keygen.timebased.timestamp.type", "EPOCHMILLISECONDS");
+                });
+
+        assertUpdate("DROP TABLE " + tableName);
+        assertThat(HudiUtil.hudiMetadataExists(initializer.getFileSystem(), tableLocation)).isTrue();
+    }
+
+    @Test
+    void testCreateRejectsHoodiePropertyThatWouldNotBePersisted()
+    {
+        String tableName = "created_with_invalid_hoodie_property";
+        Location tableLocation = initializer.getExternalLocation().appendPath(tableName);
+
+        assertQueryFails("""
+                CREATE TABLE %s (id bigint)
+                WITH (
+                    location = '%s',
+                    hoodie_properties = MAP(ARRAY['hoodie.unsupported'], ARRAY['value'])
+                )
+                """.formatted(tableName, tableLocation),
+                ".*Hudi does not persist 'hoodie.unsupported' in hoodie.properties.*");
+
+        assertThat(HudiUtil.hudiMetadataExists(initializer.getFileSystem(), tableLocation)).isFalse();
+        assertThat(initializer.getMetastore().getTable("tests", tableName)).isEmpty();
+    }
+
+    @Test
     void testCreateAndDropExternalMergeOnReadTablePreservesStorage()
     {
         String tableName = "created_external_mor";
@@ -134,6 +233,10 @@ final class TestHudiDdl
                     assertThat(config.getPartitionFields().get()).containsExactly("city");
                     assertThat(config.getRecordKeyFields().get()).containsExactly("id");
                     assertThat(config.getOrderingFields()).containsExactly("id");
+                    assertThat(config.getProps()).containsEntry(
+                            HoodieTableConfig.KEY_GENERATOR_TYPE.key(), KeyGeneratorType.SIMPLE.name());
+                    assertThat(config.getProps()).containsEntry(
+                            HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key(), "true");
                 });
 
         assertUpdate("DROP TABLE " + tableName);
@@ -162,19 +265,35 @@ final class TestHudiDdl
                 .satisfies(config -> {
                     assertThat(config.getTableType()).isEqualTo(COPY_ON_WRITE);
                     assertThat(config.getTableVersion()).isEqualTo(HudiTableInitializer.CREATED_TABLE_VERSION);
+                    assertThat(config.getProps()).containsEntry(
+                            HoodieTableConfig.KEY_GENERATOR_TYPE.key(), KeyGeneratorType.NON_PARTITION.name());
                 });
-
-        assertQueryFails(
-                "INSERT INTO " + tableName + " (id, name) VALUES (1, 'one')",
-                ".*This connector does not support inserts.*");
-        assertQueryFails(
-                "CREATE TABLE out_of_scope_ctas AS SELECT 1 id",
-                ".*This connector does not support creating tables with data.*");
 
         assertUpdate("DROP TABLE " + tableName);
 
         assertThat(initializer.getMetastore().getTable("tests", tableName)).isEmpty();
         assertThat(HudiUtil.hudiMetadataExists(initializer.getFileSystem(), tableLocation)).isFalse();
+    }
+
+    @Test
+    void testInflightOnlyTableHasNoValidCommit()
+    {
+        String tableName = "inflight_only_table";
+        Location tableLocation = initializer.getExternalLocation().appendPath(tableName);
+        assertUpdate("CREATE TABLE " + tableName + " (id bigint) WITH (location = '" + tableLocation + "')");
+
+        HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+                .setConf(new TrinoStorageConfiguration(initializer.getFileSystem()))
+                .setBasePath(tableLocation.toString())
+                .build();
+        metaClient.getActiveTimeline().createNewInstant(
+                metaClient.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "001"));
+
+        assertThatThrownBy(() -> getQueryRunner().execute(getSession(), "SELECT * FROM " + tableName))
+                .rootCause()
+                .hasMessage("Table has no valid commits");
+
+        assertUpdate("DROP TABLE " + tableName);
     }
 
     @Test
@@ -214,12 +333,16 @@ final class TestHudiDdl
             fileSystem = connector.getInjector()
                     .getInstance(TrinoFileSystemFactory.class)
                     .create(ConnectorIdentity.ofUser("test"));
-            metastore = connector.getInjector()
-                    .getInstance(HiveMetastoreFactory.class)
-                    .createMetastore(Optional.empty());
+            metastore = HudiQueryRunner.getMetastore(queryRunner);
             this.externalLocation = externalLocation;
             tableLocation = externalLocation.appendPath(tableName);
 
+            initializeTable(tableName, tableLocation, schemaName, HoodieFileFormat.PARQUET);
+        }
+
+        private void initializeTable(String tableName, Location tableLocation, String schemaName, HoodieFileFormat baseFileFormat)
+                throws Exception
+        {
             HoodieSchema userSchema = HoodieSchema.createRecord(
                     tableName,
                     "hoodie.trino.test",
@@ -234,6 +357,7 @@ final class TestHudiDdl
                     .setTableName(tableName)
                     .setDatabaseName(schemaName)
                     .setTableVersion(HoodieTableVersion.EIGHT)
+                    .setBaseFileFormat(baseFileFormat.name())
                     .setPartitionFields("city")
                     .setTableCreateSchema(tableSchema.toAvroSchema().toString())
                     .initTable(new TrinoStorageConfiguration(fileSystem), new StoragePath(tableLocation.toString()));

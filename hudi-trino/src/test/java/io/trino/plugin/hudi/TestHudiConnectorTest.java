@@ -17,11 +17,14 @@ import io.trino.plugin.hudi.testing.TpchHudiTablesInitializer;
 import io.trino.testing.BaseConnectorTest;
 import io.trino.testing.QueryRunner;
 import io.trino.testing.TestingConnectorBehavior;
+import io.trino.testing.sql.TestTable;
 import org.junit.jupiter.api.Test;
 
 import java.util.OptionalInt;
 
 import static io.trino.plugin.hudi.testing.HudiTestUtils.COLUMNS_TO_HIDE;
+import static io.trino.testing.QueryAssertions.getTrinoExceptionCause;
+import static io.trino.testing.TestingConnectorBehavior.SUPPORTS_CREATE_TABLE;
 import static io.trino.testing.TestingNames.randomNameSuffix;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -118,9 +121,36 @@ public class TestHudiConnectorTest
     @Override
     public void testColumnName()
     {
-        // The inherited test creates an empty table and then inserts rows into it.
-        skipTestUnless(hasBehavior(TestingConnectorBehavior.SUPPORTS_INSERT));
-        super.testColumnName();
+        skipTestUnless(hasBehavior(SUPPORTS_CREATE_TABLE));
+
+        for (String columnName : testColumnNameDataProvider()) {
+            testCreateTableColumnName(columnName, requiresDelimiting(columnName));
+        }
+    }
+
+    private void testCreateTableColumnName(String columnName, boolean delimited)
+    {
+        String nameInSql = delimited ? '"' + columnName.replace("\"", "\"\"") + '"' : columnName;
+        try (TestTable ignored = newTrinoTable("test_column_name", "(" + nameInSql + " varchar(50))")) {
+            // Empty CREATE TABLE is the only write operation supported in Stage 1.
+        }
+        catch (RuntimeException failure) {
+            if (isColumnNameRejected(failure, columnName, delimited)) {
+                return;
+            }
+            throw failure;
+        }
+    }
+
+    @Override
+    protected boolean isColumnNameRejected(Exception exception, String columnName, boolean delimited)
+    {
+        if (HudiTableValidation.isValidAvroName(columnName)) {
+            return false;
+        }
+        return getTrinoExceptionCause(exception).getMessage().equals(
+                "Column name '%s' is not supported for Hudi tables: Avro names must match [A-Za-z_][A-Za-z0-9_]*"
+                        .formatted(columnName));
     }
 
     @Test
