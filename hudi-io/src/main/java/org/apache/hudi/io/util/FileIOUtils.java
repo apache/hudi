@@ -269,6 +269,11 @@ public class FileIOUtils {
       // created the directories already, and that they are secured so that only the
       // user has access to them.
       return getYarnLocalDirs().split(",");
+    } else if (System.getenv("SPARK_LOCAL_DIRS") != null) {
+      // Kubernetes provides no scheduler-side local-dir contract like YARN's, so Spark itself
+      // publishes the mounted scratch paths here. Without this we fall through to
+      // java.io.tmpdir, i.e. /tmp inside the container rather than the mounted disk.
+      return System.getenv("SPARK_LOCAL_DIRS").split(",");
     } else if (System.getProperty("java.io.tmpdir") != null) {
       return System.getProperty("java.io.tmpdir").split(",");
     } else {
