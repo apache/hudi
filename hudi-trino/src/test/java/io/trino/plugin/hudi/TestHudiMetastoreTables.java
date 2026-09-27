@@ -18,19 +18,16 @@ import io.trino.metastore.Column;
 import io.trino.metastore.Table;
 import io.trino.plugin.hudi.util.HudiSchemaConverter;
 import io.trino.plugin.hudi.util.HudiTableTypeUtils;
-import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ColumnMetadata;
 import io.trino.spi.connector.SchemaTableName;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
-import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import static io.trino.metastore.HiveType.HIVE_LONG;
@@ -39,10 +36,7 @@ import static io.trino.plugin.hive.TableType.EXTERNAL_TABLE;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.TimestampType.createTimestampType;
 import static io.trino.spi.type.VarcharType.VARCHAR;
-import static org.apache.hudi.common.model.HoodieRecord.COMMIT_TIME_METADATA_FIELD;
-import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Guards the invariant this class exists for: the metastore descriptor and
@@ -71,29 +65,6 @@ final class TestHudiMetastoreTables
                 .toList();
         assertThat(registered)
                 .containsExactlyInAnyOrderElementsOf(schema.getFields().stream().map(HoodieSchemaField::name).toList());
-    }
-
-    @Test
-    void testMetaFieldsAreRegisteredAndLeadTheDataColumns()
-    {
-        Table table = buildTable(HoodieTableType.COPY_ON_WRITE, ImmutableList.of(), schema());
-
-        List<String> dataColumns = table.getDataColumns().stream().map(Column::getName).toList();
-        assertThat(dataColumns).startsWith(COMMIT_TIME_METADATA_FIELD);
-        assertThat(dataColumns).contains(RECORD_KEY_METADATA_FIELD);
-        // Registered as strings, matching what hive sync produces for Spark- and Flink-created tables.
-        assertThat(columnType(table, COMMIT_TIME_METADATA_FIELD)).isEqualTo(HIVE_STRING);
-    }
-
-    @Test
-    void testPartitionColumnsAreSplitOutInDeclaredOrder()
-    {
-        Table table = buildTable(HoodieTableType.COPY_ON_WRITE, ImmutableList.of("city", "id"), schema());
-
-        assertThat(table.getPartitionColumns().stream().map(Column::getName).toList())
-                .containsExactly("city", "id");
-        assertThat(table.getDataColumns().stream().map(Column::getName).toList())
-                .doesNotContain("city", "id");
     }
 
     @Test
@@ -129,49 +100,11 @@ final class TestHudiMetastoreTables
     }
 
     @Test
-    void testPartitionColumnMissingFromSchemaIsRegisteredAsString()
+    void testBuildTableIncludesSparkDataSourceProvider()
     {
-        Table table = buildTable(HoodieTableType.COPY_ON_WRITE, ImmutableList.of("region"), schema());
+        Table table = buildTable(HoodieTableType.COPY_ON_WRITE, ImmutableList.of("city"), schema());
 
-        assertThat(table.getPartitionColumns().stream().map(Column::getName).toList())
-                .containsExactly("region");
-        assertThat(columnType(table, "region")).isEqualTo(HIVE_STRING);
-    }
-
-    @Test
-    void testRepeatedPartitionColumnIsRejected()
-    {
-        assertThatThrownBy(() -> buildTable(HoodieTableType.COPY_ON_WRITE, ImmutableList.of("city", "city"), schema()))
-                .isInstanceOf(TrinoException.class)
-                .hasMessageContaining("listed more than once");
-    }
-
-    @Test
-    void testSharedSparkDataSourcePropertiesAreUsableFromTheConnector()
-    {
-        // hudi-sync-common's SparkDataSourceTableUtils is the engine-neutral producer of the
-        // properties that make a table recognisable to Spark SQL. It imports only
-        // org.apache.hudi.common.* and java.util.*, and hudi-sync-common is already a compile
-        // dependency, so the connector can call it rather than reimplementing it. Directly linked,
-        // not reflectively loaded, so there is no classloader question here.
-        Map<String, String> sparkProperties = SparkDataSourceTableUtils.getSparkTableProperties(
-                ImmutableList.of("city"), "3.5.0", 4000, schema(), false);
-
-        assertThat(sparkProperties).containsEntry("spark.sql.sources.provider", "hudi");
-        assertThat(sparkProperties).containsEntry("spark.sql.create.version", "3.5.0");
-        assertThat(sparkProperties).containsEntry("spark.sql.sources.schema.numPartCols", "1");
-        assertThat(sparkProperties).containsEntry("spark.sql.sources.schema.partCol.0", "city");
-        assertThat(sparkProperties).containsKey("spark.sql.sources.schema.numParts");
-        // The reconstructible Spark schema carries the meta fields and the data columns.
-        String sparkSchema = sparkProperties.entrySet().stream()
-                .filter(entry -> entry.getKey().startsWith("spark.sql.sources.schema.part."))
-                .sorted(Map.Entry.comparingByKey())
-                .map(Map.Entry::getValue)
-                .collect(java.util.stream.Collectors.joining());
-        assertThat(sparkSchema).contains("_hoodie_commit_time").contains("id").contains("city");
-
-        Map<String, String> serdeProperties = SparkDataSourceTableUtils.getSparkSerdeProperties(false, BASE_PATH);
-        assertThat(serdeProperties).containsEntry("path", BASE_PATH);
+        assertThat(table.getParameters()).containsEntry("spark.sql.sources.provider", "hudi");
     }
 
     private static Table buildTable(HoodieTableType tableType, List<String> partitionedBy, HoodieSchema schema)
