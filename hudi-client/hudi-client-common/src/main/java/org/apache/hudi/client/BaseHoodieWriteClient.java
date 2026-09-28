@@ -1451,10 +1451,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
-   * Performs necessary bootstrapping operations (for ex, validating whether Metadata Table has to be bootstrapped).
+   * Performs necessary bootstrapping operations and validates the table properties.
    *
-   * <p>NOTE: THIS OPERATION IS EXECUTED UNDER LOCK, THEREFORE SHOULD AVOID ANY OPERATIONS
-   *          NOT REQUIRING EXTERNAL SYNCHRONIZATION
+   * <p>Upgrade and metadata table initialization execute under lock. Table properties are validated afterward.
    *
    * @param metaClient instance of {@link HoodieTableMetaClient}
    * @param instantTime current inflight instant time
@@ -1466,14 +1465,14 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
           metaClient.getTableType()), instantTime.get()));
     }
     boolean requiresInitTable = needsUpgrade(metaClient) || config.isMetadataTableEnabled();
-    if (!requiresInitTable) {
-      return;
+    if (requiresInitTable) {
+      executeUsingTxnManager(ownerInstant, () -> {
+        tryUpgrade(metaClient, instantTime);
+        // TODO: this also does MT table management..
+        initMetadataTable(instantTime, metaClient);
+      });
     }
-    executeUsingTxnManager(ownerInstant, () -> {
-      tryUpgrade(metaClient, instantTime);
-      // TODO: this also does MT table management..
-      initMetadataTable(instantTime, metaClient);
-    });
+    validateAgainstTableProperties(metaClient, config, operationType);
   }
 
   /**
@@ -1511,13 +1510,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
 
     doInitTable(operationType, metaClient, instantTime);
-    if (WriteOperationType.isInsert(operationType) || WriteOperationType.isChangingRecords(operationType)) {
-      ensureComplexKeyGenEncodingRecorded(metaClient);
-    }
     HoodieTable table = createTable(config, metaClient);
-
-    // Validate table properties
-    validateAgainstTableProperties(table.getMetaClient().getTableConfig(), config);
 
     switch (operationType) {
       case INSERT:
@@ -1558,7 +1551,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
-   * Pure validation: this method reads both configs and throws, and never modifies either.
+   * Validates the write configuration against the table properties. For writes that key records,
+   * ensures the complex key generator encoding is recorded; engines may record a missing encoding.
    *
    * <p>Nothing reconciles the write config against the table beforehand. That is deliberate: the mode
    * is read further down the write path by handles and writer factories, some of which hold no table
@@ -1566,7 +1560,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * in. This gate is what makes that true, by refusing writes whose meta-field settings do not already
    * agree with the table.
    */
-  public void validateAgainstTableProperties(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
+  public void validateAgainstTableProperties(HoodieTableMetaClient metaClient, HoodieWriteConfig writeConfig, WriteOperationType operationType) {
+    if (WriteOperationType.isInsert(operationType) || WriteOperationType.isChangingRecords(operationType)) {
+      ensureComplexKeyGenEncodingRecorded(metaClient);
+    }
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
     // mismatch of table versions.
     CommonClientUtils.validateTableVersion(tableConfig, writeConfig);
 
