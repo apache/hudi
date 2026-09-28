@@ -27,6 +27,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.util.List;
 import java.util.Map;
 
+import static io.trino.plugin.hudi.HudiTableProperties.KEY_GENERATOR_CLASS_PROPERTY;
 import static io.trino.plugin.hudi.HudiTableProperties.ORDERING_FIELDS_PROPERTY;
 import static io.trino.plugin.hudi.HudiTableProperties.PARTITIONED_BY_PROPERTY;
 import static io.trino.plugin.hudi.HudiTableProperties.PRIMARY_KEY_PROPERTY;
@@ -130,6 +131,33 @@ final class TestHudiTableValidation
                 ImmutableMap.of(ORDERING_FIELDS_PROPERTY, ImmutableList.of("missing")))))
                 .isInstanceOf(TrinoException.class)
                 .hasMessageContaining("Column 'missing' in ordering_fields");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "org.apache.hudi.keygen.CustomKeyGenerator",
+            "org.apache.hudi.keygen.CustomAvroKeyGenerator"})
+    void testRejectsCustomKeyGenerators(String keyGeneratorClass)
+    {
+        assertThatThrownBy(() -> HudiTableValidation.validateCreateTable(metadata(
+                columns("id", "city"), ImmutableMap.of(
+                        KEY_GENERATOR_CLASS_PROPERTY, keyGeneratorClass,
+                        PARTITIONED_BY_PROPERTY, ImmutableList.of("city")))))
+                .isInstanceOf(TrinoException.class)
+                .satisfies(failure -> assertThat(((TrinoException) failure).getErrorCode())
+                        .isEqualTo(NOT_SUPPORTED.toErrorCode()))
+                .hasMessageContaining(keyGeneratorClass)
+                .hasMessageContaining("requires partition field types");
+    }
+
+    @Test
+    void testSimpleKeyGeneratorIsAllowed()
+    {
+        assertThatCode(() -> HudiTableValidation.validateCreateTable(metadata(
+                columns("id", "city"), ImmutableMap.of(
+                        KEY_GENERATOR_CLASS_PROPERTY, "org.apache.hudi.keygen.SimpleKeyGenerator",
+                        PARTITIONED_BY_PROPERTY, ImmutableList.of("city")))))
+                .doesNotThrowAnyException();
     }
 
     private static ConnectorTableMetadata metadata(List<ColumnMetadata> columns, Map<String, Object> properties)
