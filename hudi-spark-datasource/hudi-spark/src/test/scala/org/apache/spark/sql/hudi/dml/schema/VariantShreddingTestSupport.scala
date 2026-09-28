@@ -24,6 +24,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieLogFile
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.WriteOperationType
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.common.table.log.HoodieLogFormat
 import org.apache.hudi.common.table.log.block.{HoodieDataBlock, HoodieLogBlock}
@@ -746,6 +747,14 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
    */
   protected def listLogBlockTypes(tablePath: String): Seq[HoodieLogBlockType] =
     mapLogBlocks(tablePath)(_.getBlockType)
+
+  /** The writer schema in the header of every data block in the table's log files, in log order. */
+  protected def logBlockSchemas(tablePath: String): Seq[HoodieSchema] =
+    mapLogBlocks(tablePath) {
+      case dataBlock: HoodieDataBlock =>
+        Some(HoodieSchema.parse(dataBlock.getLogBlockHeader.get(HoodieLogBlock.HeaderMetadataType.SCHEMA)))
+      case _ => None
+    }.flatten
 
   /** Whether any data block in the table's log files carries a partial-update schema (IS_PARTIAL). */
   protected def hasPartialLogBlock(tablePath: String): Boolean =
