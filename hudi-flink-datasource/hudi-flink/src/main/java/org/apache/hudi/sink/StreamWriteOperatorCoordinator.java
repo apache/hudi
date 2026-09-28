@@ -490,9 +490,9 @@ public class StreamWriteOperatorCoordinator
   }
 
   private String startInstant() {
-    // refresh the meta client which is reused
-    metaClient.reloadActiveTimeline();
-    // refresh the last txn metadata
+    // Refresh table properties and index definitions as well as the timeline before validating the new write.
+    this.metaClient = HoodieTableMetaClient.reload(this.metaClient);
+    // Validate the write and refresh the last txn metadata.
     this.writeClient.preTxn(tableState.operationType, this.metaClient);
     // put the assignment in front of metadata generation,
     // because the instant request from write task is asynchronous.
