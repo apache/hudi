@@ -44,12 +44,10 @@ class HoodieIncrementalFileIndex(override val spark: SparkSession,
   ) with FileIndex {
 
   override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
-    val fileSlices = mergeOnReadIncrementalRelation.listFileSplits(partitionFilters, dataFilters).toSeq.flatMap(
-      {
-        case (partitionValues, fileSlices) =>
-          fileSlices.filter(!_.isEmpty).map(fs => ( partitionValues, fs.withLogFiles(includeLogFiles)))
-      }
-    )
+    val fileSlices = mergeOnReadIncrementalRelation.listFileSplits(partitionFilters, dataFilters).toSeq.map {
+      case (partitionValues, fileSlices) =>
+        (partitionValues, fileSlices.filter(!_.isEmpty).map(_.withLogFiles(includeLogFiles)))
+    }
     prepareFileSlices(fileSlices)
   }
 
