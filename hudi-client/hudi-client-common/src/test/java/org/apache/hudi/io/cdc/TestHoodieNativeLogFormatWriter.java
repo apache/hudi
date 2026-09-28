@@ -52,6 +52,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -60,6 +61,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
@@ -125,6 +127,14 @@ public class TestHoodieNativeLogFormatWriter {
     assertEquals("001", parsedHeader.get(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS));
     assertEquals(Arrays.asList(2L, 7L),
         LogReaderUtils.decodeRecordPositionsLongList(parsedHeader.get(HeaderMetadataType.RECORD_POSITIONS)));
+  }
+
+  @Test
+  public void testSkipsDataRecordPositionsWithoutBaseFileInstant() throws Exception {
+    Map<HeaderMetadataType, String> parsedHeader = writeDataLogFooterWithPositions(Option.empty(), 2L, 7L);
+
+    assertFalse(parsedHeader.containsKey(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS));
+    assertFalse(parsedHeader.containsKey(HeaderMetadataType.RECORD_POSITIONS));
   }
 
   @Test
@@ -265,6 +275,11 @@ public class TestHoodieNativeLogFormatWriter {
   }
 
   private static Map<HeaderMetadataType, String> writeDataLogFooterWithPositions(long... positions) throws Exception {
+    return writeDataLogFooterWithPositions(Option.of("001"), positions);
+  }
+
+  private static Map<HeaderMetadataType, String> writeDataLogFooterWithPositions(
+      Option<String> baseFileInstantTimeOfPositions, long... positions) throws Exception {
     String instantTime = "100";
     String schemaString = "{\"type\":\"record\",\"name\":\"test\",\"fields\":[]}";
     HoodieStorage storage = mock(HoodieStorage.class);
@@ -305,16 +320,21 @@ public class TestHoodieNativeLogFormatWriter {
           mock(TaskContextSupplier.class),
           mock(RecordContext.class),
           new ArrayList<>(),
-          Option.of("001"));
+          baseFileInstantTimeOfPositions);
 
       for (int i = 0; i < positions.length; i++) {
         writer.appendRecord(recordWithPosition("key-" + i, positions[i], schema),
             schema);
       }
 
+      if (!baseFileInstantTimeOfPositions.isPresent()) {
+        assertNoBufferedRecordPositions(writer, "dataRecordPositions");
+      }
+
       Map<HeaderMetadataType, String> header = new HashMap<>();
       header.put(HeaderMetadataType.SCHEMA, schemaString);
-      header.put(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS, "001");
+      baseFileInstantTimeOfPositions.ifPresent(baseInstantTime ->
+          header.put(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS, baseInstantTime));
       writer.flushAppend(header);
     }
 
@@ -381,6 +401,11 @@ public class TestHoodieNativeLogFormatWriter {
 
       writer.appendDeleteRecord(record, schema);
 
+      if (!baseFileInstantTimeOfPositions.isPresent()) {
+        assertNoBufferedRecordPositions(writer, "deleteRecordPositions");
+        verify(record, never()).getCurrentPosition();
+      }
+
       Map<HeaderMetadataType, String> header = new HashMap<>();
       header.put(HeaderMetadataType.SCHEMA, schemaString);
       baseFileInstantTimeOfPositions.ifPresent(baseInstantTime ->
@@ -391,6 +416,12 @@ public class TestHoodieNativeLogFormatWriter {
     ArgumentCaptor<Map<String, String>> footerCaptor = ArgumentCaptor.forClass(Map.class);
     verify(fileWriter).addFooterMetadata(footerCaptor.capture());
     return NativeLogFooterMetadata.fromFooterMetadata(footerCaptor.getValue());
+  }
+
+  private static void assertNoBufferedRecordPositions(HoodieNativeLogFormatWriter writer, String fieldName) throws Exception {
+    Field field = HoodieNativeLogFormatWriter.class.getDeclaredField(fieldName);
+    field.setAccessible(true);
+    assertTrue(((List<?>) field.get(writer)).isEmpty(), "Positions should not be buffered without a base file instant");
   }
 
   private static HoodieRecord recordWithPosition(String key, long position, HoodieSchema schema) throws Exception {
