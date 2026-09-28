@@ -18,14 +18,19 @@ import io.trino.metastore.Column;
 import io.trino.metastore.Table;
 import io.trino.plugin.hudi.util.HudiSchemaConverter;
 import io.trino.plugin.hudi.util.HudiTableTypeUtils;
+import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ColumnMetadata;
 import io.trino.spi.connector.SchemaTableName;
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.Schema;
+import org.apache.avro.SchemaBuilder;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.List;
 import java.util.Optional;
@@ -33,10 +38,12 @@ import java.util.Optional;
 import static io.trino.metastore.HiveType.HIVE_LONG;
 import static io.trino.metastore.HiveType.HIVE_STRING;
 import static io.trino.plugin.hive.TableType.EXTERNAL_TABLE;
+import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.TimestampType.createTimestampType;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Guards the invariant this class exists for: the metastore descriptor and
@@ -105,6 +112,26 @@ final class TestHudiMetastoreTables
         Table table = buildTable(HoodieTableType.COPY_ON_WRITE, ImmutableList.of("city"), schema());
 
         assertThat(table.getParameters()).containsEntry("spark.sql.sources.provider", "hudi");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"time-millis", "uuid"})
+    void testRejectsLogicalTypesWithoutHiveCounterpart(String logicalType)
+    {
+        Schema fieldType = switch (logicalType) {
+            case "time-millis" -> LogicalTypes.timeMillis().addToSchema(Schema.create(Schema.Type.INT));
+            case "uuid" -> LogicalTypes.uuid().addToSchema(Schema.create(Schema.Type.STRING));
+            default -> throw new AssertionError("Unexpected logical type: " + logicalType);
+        };
+        HoodieSchema schema = HoodieSchema.fromAvroSchema(SchemaBuilder.record("trips").fields()
+                .name("value").type(fieldType).noDefault()
+                .endRecord());
+
+        assertThatThrownBy(() -> buildTable(HoodieTableType.COPY_ON_WRITE, ImmutableList.of(), schema))
+                .isInstanceOf(TrinoException.class)
+                .satisfies(failure -> assertThat(((TrinoException) failure).getErrorCode())
+                        .isEqualTo(NOT_SUPPORTED.toErrorCode()))
+                .hasMessageContaining("Unsupported Hive type");
     }
 
     private static Table buildTable(HoodieTableType tableType, List<String> partitionedBy, HoodieSchema schema)
