@@ -85,6 +85,10 @@ public class BootstrapOperator
 
   private transient ListState<String> instantState;
   private transient HoodieTableMetaClient metaClient;
+  /**
+   * The meta client that finds the last completed instant for the checkpoints.
+   */
+  private transient HoodieTableMetaClient snapshotMetaClient;
   private transient InternalSchemaManager internalSchemaManager;
 
   private final Pattern pattern;
@@ -97,7 +101,12 @@ public class BootstrapOperator
 
   @Override
   public void snapshotState(StateSnapshotContext context) throws Exception {
-    lastInstantTime = StreamerUtil.getLastCompletedInstant(StreamerUtil.createMetaClient(this.conf));
+    if (snapshotMetaClient == null) {
+      snapshotMetaClient = StreamerUtil.createMetaClient(this.conf);
+    } else {
+      snapshotMetaClient.reloadActiveTimeline();
+    }
+    lastInstantTime = StreamerUtil.getLastCompletedInstant(snapshotMetaClient);
     if (null != lastInstantTime) {
       instantState.update(Collections.singletonList(lastInstantTime));
     }
