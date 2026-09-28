@@ -66,5 +66,44 @@ class TestVectorizedReadWithSchemaEvolution extends HoodieSparkSqlTestBase {
         }
       }
     }
+
+    test(s"Test INT to DECIMAL schema evolution with precision overflow for $tableType table") {
+      if (HoodieSparkUtils.isSpark3) {
+        withSQLConf(
+          "hoodie.schema.on.read.enable" -> "true",
+          "spark.sql.ansi.enabled" -> "false",
+          "spark.sql.parquet.enableVectorizedReader" -> "true",
+          "hoodie.parquet.small.file.limit" -> "0"
+        ) {
+          withTempDir { tmp =>
+            val tableName = generateTableName
+            val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+
+            spark.sql(
+              s"""
+                 |create table $tableName (
+                 |  id int,
+                 |  price int,
+                 |  ts long
+                 |) using hudi
+                 | location '$tablePath'
+                 | tblproperties (
+                 |  type = '$tableType',
+                 |  primaryKey = 'id',
+                 |  orderingFields = 'ts'
+                 | )
+                 |""".stripMargin)
+
+            spark.sql(s"insert into $tableName values (1, 12345, 1000)")
+
+            spark.sql(s"alter table $tableName alter column price type decimal(4, 2)")
+
+            checkAnswer(s"select id, price from $tableName")(
+              Seq(1, null)
+            )
+          }
+        }
+      }
+    }
   }
 }

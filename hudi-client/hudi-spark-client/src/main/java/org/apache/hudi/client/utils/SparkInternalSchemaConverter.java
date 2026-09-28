@@ -349,9 +349,13 @@ public class SparkInternalSchemaConverter {
         } else if (newType instanceof StringType) {
           newV.putByteArray(i, getUTF8Bytes((isInt ? oldV.getInt(i) : oldV.getLong(i)) + ""));
         } else if (newType instanceof DecimalType) {
+          DecimalType decimalType = (DecimalType) newType;
           Decimal oldDecimal = Decimal.apply(isInt ? oldV.getInt(i) : oldV.getLong(i));
-          oldDecimal.changePrecision(((DecimalType) newType).precision(), ((DecimalType) newType).scale());
-          newV.putDecimal(i, oldDecimal, ((DecimalType) newType).precision());
+          if (oldDecimal.changePrecision(decimalType.precision(), decimalType.scale())) {
+            newV.putDecimal(i, oldDecimal, decimalType.precision());
+          } else {
+            newV.putNull(i);
+          }
         }
       }
       return true;
