@@ -270,7 +270,15 @@ class HoodieSparkSqlWriterInternal {
       (false, common.util.Option.empty(), common.util.Option.empty(), common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
     } else {
       // Handle various save modes
-      handleSaveModes(sparkSession, mode, basePath, tableConfig, tblName, operation, fs)
+      val saveModeOperation =
+        if (operation == WriteOperationType.BULK_INSERT
+          && hoodieConfig.getStringOrDefault(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE, "") ==
+          WriteOperationType.INSERT_OVERWRITE_TABLE.value()) {
+          WriteOperationType.INSERT_OVERWRITE_TABLE
+        } else {
+          operation
+        }
+      handleSaveModes(sparkSession, mode, basePath, tableConfig, tblName, saveModeOperation, fs)
       val partitionColumns = SparkKeyGenUtils.getPartitionColumns(keyGenerator, toProperties(parameters), false)
       val partitionColumnsForKeyGenerator = SparkKeyGenUtils.getPartitionColumnsForKeyGenerator(toProperties(parameters), HoodieTableVersion.fromVersionCode(tableVersion))
       val timelineTimeZone = HoodieTimelineTimeZone.valueOf(hoodieConfig.getStringOrDefault(HoodieTableConfig.TIMELINE_TIMEZONE))
