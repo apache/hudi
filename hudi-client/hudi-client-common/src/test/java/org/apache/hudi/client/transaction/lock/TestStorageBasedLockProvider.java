@@ -845,6 +845,9 @@ class TestStorageBasedLockProvider {
 
     HoodieLockException exception = assertThrows(HoodieLockException.class, () -> lockProvider.unlock());
     assertTrue(exception.getMessage().contains(StorageBasedLockProvider.CAUSE_EXPIRE_WRITE_FAILED), exception.getMessage());
+    // The failure must come from a retry whose reconcile read threw, not from giving up on the first attempt.
+    verify(mockLockService, times(2)).tryUpsertLockFile(any(), eq(Option.of(realLockFile)));
+    verify(mockLockService, atLeastOnce()).readCurrentLockFile();
   }
 
   @Test
