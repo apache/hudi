@@ -20,6 +20,7 @@ import io.trino.metastore.StorageFormat;
 import io.trino.metastore.Table;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.SchemaTableName;
+import org.apache.avro.Schema;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
@@ -32,6 +33,7 @@ import static io.trino.plugin.hive.TableType.EXTERNAL_TABLE;
 import static io.trino.plugin.hive.TableType.MANAGED_TABLE;
 import static io.trino.plugin.hudi.HudiUtil.toColumnHandle;
 import static io.trino.spi.StandardErrorCode.INVALID_TABLE_PROPERTY;
+import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 
 /**
  * Translates {@link HoodieMetastoreTableDescriptor} into a Trino {@link Table}.
@@ -122,6 +124,7 @@ public final class HudiMetastoreTables
     {
         ImmutableList.Builder<Column> columns = ImmutableList.builderWithExpectedSize(fields.size());
         for (HoodieSchemaField field : fields) {
+            rejectLocalTimestamp(field.schema().toAvroSchema(), field.name());
             columns.add(new Column(
                     field.name(),
                     toColumnHandle(field).getHiveType(),
@@ -129,5 +132,23 @@ public final class HudiMetastoreTables
                     ImmutableMap.of()));
         }
         return columns.build();
+    }
+
+    private static void rejectLocalTimestamp(Schema schema, String columnPath)
+    {
+        if (schema.getLogicalType() != null && schema.getLogicalType().getName().startsWith("local-timestamp-")) {
+            // The Trino Avro mapping treats these as bigint, while hive-sync writes TIMESTAMP.
+            // Refuse a metastore schema that would disagree with other Hudi readers.
+            throw new TrinoException(NOT_SUPPORTED,
+                    "Cannot map Hudi column " + columnPath + " with Avro logical type " + schema.getLogicalType().getName()
+                            + " to a consistent Hive type");
+        }
+        switch (schema.getType()) {
+            case RECORD -> schema.getFields().forEach(field -> rejectLocalTimestamp(field.schema(), columnPath + "." + field.name()));
+            case ARRAY -> rejectLocalTimestamp(schema.getElementType(), columnPath + ".element");
+            case MAP -> rejectLocalTimestamp(schema.getValueType(), columnPath + ".value");
+            case UNION -> schema.getTypes().forEach(type -> rejectLocalTimestamp(type, columnPath));
+            default -> {}
+        }
     }
 }

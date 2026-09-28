@@ -17,12 +17,17 @@ import io.trino.filesystem.Location;
 import io.trino.filesystem.TrinoFileSystem;
 import io.trino.filesystem.TrinoFileSystemFactory;
 import io.trino.metastore.HiveMetastore;
+import io.trino.metastore.HiveType;
 import io.trino.plugin.hudi.storage.TrinoStorageConfiguration;
 import io.trino.plugin.hudi.testing.HudiTablesInitializer;
 import io.trino.spi.security.ConnectorIdentity;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.QueryRunner;
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.Schema;
+import org.apache.avro.SchemaBuilder;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -34,16 +39,17 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.storage.StoragePath;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 final class TestHudiDdl
         extends AbstractTestQueryFramework
@@ -116,6 +122,56 @@ final class TestHudiDdl
                 "CALL hudi.system.register_table('tests', '" + tableName + "', '" + tableLocation + "')",
                 ".*Cannot register Hudi table tests\\." + tableName + " with base file format ORC; only PARQUET is supported.*");
         assertThat(initializer.getMetastore().getTable("tests", tableName)).isEmpty();
+    }
+
+    @Test
+    void testRegisterCommittedTableWithLogicalAndNestedColumns()
+            throws Exception
+    {
+        String tableName = "committed_complex_table";
+        Location tableLocation = initializer.getExternalLocation().appendPath(tableName);
+        initializer.initializeTable(tableName, tableLocation, "tests", HoodieFileFormat.PARQUET);
+        Schema details = SchemaBuilder.record("details").fields().requiredLong("count").endRecord();
+        Schema committedSchema = SchemaBuilder.record(tableName).fields()
+                .requiredLong("id")
+                .name("event_time").type(LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG))).noDefault()
+                .name("amount").type(LogicalTypes.decimal(10, 2).addToSchema(Schema.create(Schema.Type.BYTES))).noDefault()
+                .name("details").type(details).noDefault()
+                .requiredString("city")
+                .endRecord();
+        initializer.addCompletedSchemaCommit(tableName, tableLocation, committedSchema);
+
+        assertUpdate("CALL hudi.system.register_table('tests', '" + tableName + "', '" + tableLocation + "')");
+        assertThat(initializer.getMetastore().getTable("tests", tableName)).get().satisfies(table -> {
+            assertThat(table.getDataColumns()).extracting(column -> column.getType().toString())
+                    .containsSequence("bigint", "timestamp", "decimal(10,2)", "struct<count:bigint>");
+            assertThat(table.getPartitionColumns()).extracting(column -> column.getType())
+                    .containsExactly(HiveType.HIVE_STRING);
+        });
+        assertQuery("SELECT count(*) FROM " + tableName, "VALUES CAST(0 AS BIGINT)");
+        assertUpdate("DROP TABLE " + tableName);
+        assertThat(HudiUtil.hudiMetadataExists(initializer.getFileSystem(), tableLocation)).isTrue();
+    }
+
+    @Test
+    void testRegisterRejectsCommittedLocalTimestampWithoutCatalogEntry()
+            throws Exception
+    {
+        String tableName = "committed_local_timestamp";
+        Location tableLocation = initializer.getExternalLocation().appendPath(tableName);
+        initializer.initializeTable(tableName, tableLocation, "tests", HoodieFileFormat.PARQUET);
+        Schema committedSchema = SchemaBuilder.record(tableName).fields()
+                .requiredLong("id")
+                .name("local_time").type(LogicalTypes.localTimestampMicros().addToSchema(Schema.create(Schema.Type.LONG))).noDefault()
+                .requiredString("city")
+                .endRecord();
+        initializer.addCompletedSchemaCommit(tableName, tableLocation, committedSchema);
+
+        assertQueryFails(
+                "CALL hudi.system.register_table('tests', '" + tableName + "', '" + tableLocation + "')",
+                ".*Cannot map Hudi column local_time with Avro logical type local-timestamp-micros.*");
+        assertThat(initializer.getMetastore().getTable("tests", tableName)).isEmpty();
+        assertThat(HudiUtil.hudiMetadataExists(initializer.getFileSystem(), tableLocation)).isTrue();
     }
 
     @Test
@@ -361,6 +417,20 @@ final class TestHudiDdl
                     .setPartitionFields("city")
                     .setTableCreateSchema(tableSchema.toAvroSchema().toString())
                     .initTable(new TrinoStorageConfiguration(fileSystem), new StoragePath(tableLocation.toString()));
+        }
+
+        private void addCompletedSchemaCommit(String tableName, Location tableLocation, Schema schema)
+        {
+            HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+                    .setConf(new TrinoStorageConfiguration(fileSystem))
+                    .setBasePath(tableLocation.toString())
+                    .build();
+            HoodieInstant inflight = metaClient.createNewInstant(
+                    HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "001");
+            metaClient.getActiveTimeline().createNewInstant(inflight);
+            HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+            commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schema.toString());
+            metaClient.getActiveTimeline().saveAsComplete(inflight, Option.of(commitMetadata));
         }
 
         public String getTableName()
