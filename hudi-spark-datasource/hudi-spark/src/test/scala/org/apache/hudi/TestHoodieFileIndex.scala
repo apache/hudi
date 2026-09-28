@@ -919,7 +919,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.START_COMMIT.key, "000")
       .load(basePath)
-      .queryExecution.logical.collectFirst { case relation: LogicalRelation => relation.relation.asInstanceOf[HadoopFsRelation] }.get
+      .queryExecution.analyzed.collectFirst { case relation: LogicalRelation => relation.relation.asInstanceOf[HadoopFsRelation] }.get
     assertEquals(partitionCount, incrementalRelation.location.listFiles(Nil, Nil).size)
 
     if (tableType == HoodieTableType.MERGE_ON_READ) {
