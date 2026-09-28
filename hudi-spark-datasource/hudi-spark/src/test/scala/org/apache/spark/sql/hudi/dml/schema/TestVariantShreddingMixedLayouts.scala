@@ -19,13 +19,16 @@
 
 package org.apache.spark.sql.hudi.dml.schema
 
-import org.apache.hudi.{HoodieSchemaConversionUtils, HoodieSparkUtils, HoodieTableSchema, SparkAdapterSupport}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSchemaConversionUtils, HoodieSparkUtils, HoodieTableSchema, SparkAdapterSupport}
+import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaField, HoodieSchemaType}
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
+import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieWriteConfig}
 import org.apache.hudi.core.io.storage.VariantShreddingInferenceFileWriter
+import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.apache.hudi.testutils.DataSourceTestUtils
 
 import org.apache.hadoop.fs.{Path => HadoopPath}
@@ -664,6 +667,227 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
             s"select count(*) from $tableName where try_variant_get(v, '$$.a', 'bigint') > 100")(Seq(2))
           checkAnswer(
             s"select id from $tableName where variant_get(v, '$$.b', 'string') = 'b7'")(Seq(7))
+
+          // A MERGE INTO that assigns ts alone writes a partial log block
+          // (hoodie.spark.sql.merge.into.partial.updates defaults to true on MOR), so the read
+          // rebuilds id 4 field by field (SparkRecordMergingUtils.mergePartialRecords) with v taken
+          // from the base-file record, which carries the projection struct on the pushed arm. Eight
+          // pushed paths of which the row holds one make seven of its fields null, as in the read
+          // paths legs below.
+          spark.sql(s"merge into $tableName t using (select 4 as id, 1003L as ts) s on t.id = s.id " +
+            "when matched then update set ts = s.ts")
+          assert(hasPartialLogBlock(tablePath), s"[$leg] expected the MERGE INTO to write a partial log block")
+          checkAnswer(s"select id, variant_get(v, '$$.a', 'bigint'), ts from $tableName where id = 4")(
+            Seq(4, 4L, 1003L))
+          val widePaths = ('a' to 'h').map(c => s"try_variant_get(v, '$$.$c', 'bigint')").mkString(", ")
+          checkAnswer(s"select $widePaths from $tableName where id = 4")(
+            Seq(4L, null, null, null, null, null, null, null))
+        }
+      }
+    }
+  }
+
+  test("Time travel and incremental V1/V2 reads carry the variant projection on both pushVariantIntoScan arms") {
+    assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
+
+    // PushVariantIntoScan matches every LogicalRelation whose HadoopFsRelation carries a
+    // ParquetFileFormat, and each Hudi read relation - snapshot, time travel, incremental V1 and
+    // V2 - is exactly that over HoodieFileGroupReaderBasedFileFormat, so all of them get the
+    // projection struct pushed into the scan. The legs above pin the snapshot relation only.
+    // Read-mode test; SPARK pinned (see the mixed-files test above).
+    Seq("true", "false").foreach { pushIntoScan =>
+      withSQLConf("spark.sql.variant.pushVariantIntoScan" -> pushIntoScan) {
+        withVariantTable(s"read paths pushVariantIntoScan=$pushIntoScan", "mor",
+          props = Seq("hoodie.compact.inline = 'false'"), recordTypes = Seq(HoodieRecordType.SPARK)) {
+          (tableName, tablePath, leg) =>
+          withWriteLayout(Forced("a bigint")) {
+            spark.sql(s"insert into $tableName ${variantSourceSql(Seq((0 until 10, ObjA)))}")
+          }
+          val baseInstant = latestCompletedInstant(tablePath)
+          // One unshredded log over the shredded base: ids 0-4 stay in the base file's typed slot,
+          // ids 5-8 come out of the log's residual and id 9's variant is nulled out by the log.
+          withWriteLayout(Unshredded) {
+            spark.sql(s"update $tableName set " +
+              s"""v = case when id = 9 then null else parse_json(concat('{"a":', 100 + id, '}')) end, """ +
+              "ts = 1001 where id >= 5")
+          }
+
+          // Every leg below expects the same rows on both arms, so the plan assertions are what
+          // tell them apart.
+          val pushed = pushIntoScan.toBoolean
+          val verdict = if (pushed) "should have" else "must not have"
+          val projectedA = s"id, variant_get(v, '$$.a', 'bigint')"
+          val latestRows: Seq[Seq[Any]] =
+            (0 until 9).map(id => Seq(id, if (id < 5) id.toLong else 100L + id)) :+ Seq(9, null)
+          val preLogRows: Seq[Seq[Any]] = (0 until 10).map(id => Seq(id, id.toLong))
+
+          // Time travel builds its own relation, at an instant before the log existed.
+          val asOfSql = s"select $projectedA from $tableName timestamp as of '$baseInstant' order by id"
+          checkAnswer(asOfSql)(preLogRows: _*)
+          checkAnswer(s"select count(*) from $tableName timestamp as of '$baseInstant' where v is null")(Seq(0))
+          assert(variantProjectionPushedIntoScan(asOfSql) == pushed,
+            s"[$leg] PushVariantIntoScan $verdict rewritten v into a projection struct (time travel)")
+
+          // The latest snapshot is the reference both incremental relations have to reproduce.
+          checkAnswer(s"select $projectedA from $tableName order by id")(latestRows: _*)
+          checkAnswer(s"select id from $tableName where v is null")(Seq(9))
+          // Eight pushed paths of which the row holds one, so seven fields of the projection struct
+          // are null. Before the record context typed its row writers over the projected shape, the
+          // output converter (the reader's required schema down to the requested one) rebuilt that
+          // struct through a VariantType-typed writer, which read the null bitset as a variant
+          // length and threw NegativeArraySizeException.
+          val widePaths = ('a' to 'h').map(c => s"try_variant_get(v, '$$.$c', 'bigint')").mkString(", ")
+          checkAnswer(s"select $widePaths from $tableName where id = 2")(
+            Seq(2L, null, null, null, null, null, null, null))
+
+          // Incremental V2 is the completion-time relation used on table version 8+, and over the
+          // whole timeline it returns the latest state of every key. V1 is the requested-time
+          // relation, which DefaultSource selects on this same table once the read option asks
+          // for a table version below 8: it is bounded at the base instant's REQUESTED time and
+          // must come back with the pre-log rows. Both relations feed the same file format, the
+          // V1 one through required filters on _hoodie_commit_time that the format adds back as
+          // filter-only read columns beside the projected variant.
+          Seq(
+            ("v2", Map.empty[String, String], latestRows, 1),
+            ("v1", Map(DataSourceReadOptions.INCREMENTAL_READ_TABLE_VERSION.key -> "6",
+              DataSourceReadOptions.END_COMMIT.key -> baseInstant), preLogRows, 0)
+          ).foreach { case (version, versionOpts, expectedRows, nullCount) =>
+            val view = s"${tableName}_inc_$version"
+            spark.read.format("hudi")
+              .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+              .option(DataSourceReadOptions.START_COMMIT.key, "000")
+              .options(versionOpts)
+              .load(tablePath)
+              .createOrReplaceTempView(view)
+            val incSql = s"select $projectedA from $view order by id"
+            checkAnswer(incSql)(expectedRows: _*)
+            checkAnswer(s"select count(*) from $view where v is null")(Seq(nullCount))
+            assert(variantProjectionPushedIntoScan(incSql) == pushed,
+              s"[$leg] PushVariantIntoScan $verdict rewritten v into a projection struct " +
+                s"(incremental $version)")
+            spark.catalog.dropTempView(view)
+          }
+
+          // What proves the read option really selected V1 rather than falling through to V2:
+          // the same END_COMMIT bound read by V2 is a COMPLETION time, and the base commit
+          // completed after its own requested time, so that read selects nothing.
+          val v2AtRequestedTime = spark.read.format("hudi")
+            .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+            .option(DataSourceReadOptions.START_COMMIT.key, "000")
+            .option(DataSourceReadOptions.END_COMMIT.key, baseInstant)
+            .load(tablePath)
+          assert(v2AtRequestedTime.count() == 0,
+            s"[$leg] V2 reads END_COMMIT as a completion time, which the base commit's requested time precedes")
+        }
+      }
+    }
+  }
+
+  test("Bootstrapped tables read the variant projection through the skeleton and data file join") {
+    assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
+
+    // A METADATA_ONLY bootstrap leaves the data in the source parquet file and writes a skeleton
+    // base file holding the meta columns only, so HoodieFileGroupReader joins the two
+    // (mergeBootstrapReaders) whenever a meta column is required beside the data columns: always
+    // on MOR, where the record key drives the log merge, and on COW whenever the query asks for
+    // one. The bootstrap relation is a HadoopFsRelation over the same file format, so it receives
+    // the PushVariantIntoScan projection struct too, and the variant then has to survive that
+    // skeleton/data join rather than a plain single-file read.
+    Seq("cow", "mor").foreach { tableType =>
+      Seq("true", "false").foreach { pushIntoScan =>
+        withSQLConf("spark.sql.variant.pushVariantIntoScan" -> pushIntoScan) {
+          withTempDir { tmp =>
+            val tableName = generateTableName
+            val leg = s"bootstrap $tableType pushVariantIntoScan=$pushIntoScan, $tableName"
+            val srcPath = s"${tmp.getCanonicalPath}/source"
+            val tablePath = s"${tmp.getCanonicalPath}/hudi"
+
+            // The source is written by Spark's own parquet writer: a plain unshredded variant
+            // column that no Hudi write path ever touched.
+            spark.sql("""select cast(id as int) as id, parse_json(concat('{"a":', id, '}')) as v, """ +
+              "1000L as ts from range(0, 10, 1, 1)")
+              .write.parquet(srcPath)
+
+            // The leg runs on the default record type, like TestDataSourceForBootstrap's own
+            // metadata-only legs: a METADATA_ONLY bootstrap on the SPARK record type fails in the
+            // skeleton-file write (HUDI-5807 - HoodieRowParquetWriteSupport cannot resolve the
+            // meta-only schema), which is not a variant matter, so the record type is not swept
+            // here. On the default write version the MOR upsert below writes a native parquet log
+            // file either way (pinned below), so the log side is projected natively like a base
+            // file; the avro rewrite path is owned by the avro-block legs elsewhere in this suite.
+            val writeOpts = Map(
+              DataSourceWriteOptions.TABLE_TYPE.key ->
+                (if (tableType == "mor") DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL
+                 else DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL),
+              HoodieWriteConfig.TBL_NAME.key -> tableName,
+              DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
+              DataSourceWriteOptions.ORDERING_FIELDS.key -> "ts",
+              DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getName,
+              // The writer's default column-stats index is rejected by the bootstrap commit
+              // ("col stats is not supported with bootstrap operation"), as in TestDataSourceForBootstrap.
+              HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false")
+
+            // METADATA_ONLY is the default bootstrap mode selector, so the data stays in srcPath.
+            spark.emptyDataFrame.write.format("hudi")
+              .options(writeOpts)
+              .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL)
+              .option(HoodieBootstrapConfig.BASE_PATH.key, srcPath)
+              .mode(SaveMode.Overwrite)
+              .save(tablePath)
+
+            if (tableType == "mor") {
+              // A log over the bootstrapped file group, so the merged read joins skeleton, source
+              // file and log. COW stays read-only: an upsert there would rewrite the file group
+              // into a regular base file and the bootstrap read path would be gone.
+              spark.sql("""select cast(id as int) as id, case when id = 9 then null """ +
+                """else parse_json(concat('{"a":', 100 + id, '}')) end as v, """ +
+                "1001L as ts from range(5, 10, 1, 1)")
+                .write.format("hudi")
+                .options(writeOpts)
+                .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+                .mode(SaveMode.Append)
+                .save(tablePath)
+              assert(listDataParquetFiles(tablePath).exists(_.endsWith(".log.parquet")),
+                s"[$leg] expected the upsert to write a native parquet log file")
+            }
+
+            // The data is still served out of the source file: every base file the table itself
+            // wrote is a skeleton, meta columns only. Log files are left out - the MOR upsert's
+            // log block carries the whole record, variant included.
+            val skeletonFiles = listDataParquetFiles(tablePath)
+              .filter(f => FSUtils.isBaseFile(new HadoopPath(f).getName))
+            assert(skeletonFiles.nonEmpty, s"[$leg] expected at least one skeleton base file")
+            skeletonFiles.foreach(f => assert(!readParquetSchema(f).containsField("v"),
+              s"[$leg] skeleton file must not carry the data column: $f"))
+
+            val view = s"${tableName}_view"
+            spark.read.format("hudi").load(tablePath).createOrReplaceTempView(view)
+            val pushed = pushIntoScan.toBoolean
+            val verdict = if (pushed) "should have" else "must not have"
+            val expected: Seq[Seq[Any]] = if (tableType == "mor") {
+              (0 until 9).map(id => Seq(id, if (id < 5) id.toLong else 100L + id)) :+ Seq(9, null)
+            } else {
+              (0 until 10).map(id => Seq(id, id.toLong))
+            }
+            val projectedSql = s"select id, variant_get(v, '$$.a', 'bigint') from $view order by id"
+            checkAnswer(projectedSql)(expected: _*)
+            // A meta column beside the variant forces the skeleton/data join on COW as well; on
+            // MOR the record key is already required for the log merge.
+            checkAnswer(s"select _hoodie_record_key, variant_get(v, '$$.a', 'bigint') from $view " +
+              "where id in (2, 7) order by id")(
+              Seq("2", 2L), Seq("7", if (tableType == "mor") 107L else 7L))
+            checkAnswer(s"select count(*) from $view where v is null")(Seq(if (tableType == "mor") 1 else 0))
+            // Eight pushed paths of which the row holds one, so seven fields of the projection
+            // struct are null. Before the record context typed its row writers over the projected
+            // shape, the bootstrap skeleton/data join rebuilt that struct through a VariantType-typed
+            // writer, which read the null bitset as a variant length and threw NegativeArraySizeException.
+            val widePaths = ('a' to 'h').map(c => s"try_variant_get(v, '$$.$c', 'bigint')").mkString(", ")
+            checkAnswer(s"select _hoodie_record_key, $widePaths from $view where id = 2")(
+              Seq("2", 2L, null, null, null, null, null, null, null))
+            assert(variantProjectionPushedIntoScan(projectedSql) == pushed,
+              s"[$leg] PushVariantIntoScan $verdict rewritten v into a projection struct")
+            spark.catalog.dropTempView(view)
+          }
         }
       }
     }
