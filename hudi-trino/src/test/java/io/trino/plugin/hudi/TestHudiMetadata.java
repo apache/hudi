@@ -36,11 +36,14 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -51,8 +54,11 @@ import static com.google.common.base.Throwables.getCausalChain;
 import static com.google.common.util.concurrent.MoreExecutors.newDirectExecutorService;
 import static io.trino.plugin.hive.HiveMetadata.TRINO_QUERY_ID_NAME;
 import static io.trino.plugin.hive.TableType.EXTERNAL_TABLE;
+import static io.trino.plugin.hudi.HudiTableProperties.TABLE_TYPE_PROPERTY;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.testing.TestingConnectorSession.SESSION;
+import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
+import static org.apache.hudi.common.util.ConfigUtils.IS_QUERY_AS_RO_TABLE;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -88,7 +94,8 @@ final class TestHudiMetadata
 
         assertThat(race.attemptedTable().get()).isNotNull();
         assertThat(race.attemptedTable().get().getParameters())
-                .containsEntry(TRINO_QUERY_ID_NAME, SESSION.getQueryId());
+                .containsEntry(TRINO_QUERY_ID_NAME, SESSION.getQueryId())
+                .containsEntry(HudiMetadata.TRINO_MANAGED_TABLE_PARAMETER, "true");
         assertThat(metadataExists(race, race.attemptedTable().get()))
                 .isTrue();
     }
@@ -254,6 +261,66 @@ final class TestHudiMetadata
         assertThat(table.getParameters()).doesNotContainKey("EXTERNAL");
         assertThat(deleteData).hasValue(false);
         assertThat(HudiUtil.hudiMetadataExists(fileSystem, Location.of(basePath))).isTrue();
+    }
+
+    @Test
+    void testDropManagedHiveSyncViewsPreservesSharedStorage()
+            throws IOException
+    {
+        String basePath = "local:///test_schema/shared_mor";
+        LocalFileSystemFactory fileSystemFactory = new LocalFileSystemFactory(temporaryDirectory);
+        TrinoFileSystem fileSystem = fileSystemFactory.create(SESSION);
+        SchemaTableName physicalName = new SchemaTableName("test_schema", "shared_mor");
+        ConnectorTableMetadata tableMetadata = new ConnectorTableMetadata(
+                physicalName, createTableMetadata(physicalName).getColumns(), Map.of(TABLE_TYPE_PROPERTY, MERGE_ON_READ));
+        HoodieSchema tableSchema = HudiSchemaConverter.toTableSchema(tableMetadata.getColumns(), physicalName.getTableName());
+        HudiTableInitializer.initializeTable(fileSystem, basePath, tableMetadata, tableSchema);
+        Location dataFile = Location.of(basePath).appendPath("existing.parquet");
+        fileSystem.newOutputFile(dataFile).createOrOverwrite(new byte[] {1});
+
+        Map<String, Table> tables = new HashMap<>();
+        for (String viewName : List.of("shared_mor_ro", "shared_mor_rt")) {
+            SchemaTableName name = new SchemaTableName("test_schema", viewName);
+            Table table = HudiMetastoreTables.buildTable(name, basePath, MERGE_ON_READ, tableSchema,
+                    List.of(), false, Optional.empty(), Optional.empty());
+            tables.put(viewName, table);
+        }
+        // Even a copied ownership marker must not let a read-optimized alias delete the base path.
+        tables.put("shared_mor_ro", Table.builder(tables.get("shared_mor_ro"))
+                .setParameter(HudiMetadata.TRINO_MANAGED_TABLE_PARAMETER, "true")
+                .withStorage(storage -> storage.setSerdeParameters(Map.of(IS_QUERY_AS_RO_TABLE, "true")))
+                .build());
+        tables.put("shared_mor_rt", Table.builder(tables.get("shared_mor_rt"))
+                .setParameter(HudiMetadata.TRINO_MANAGED_TABLE_PARAMETER, "true")
+                .build());
+
+        AtomicReference<Boolean> deleteData = new AtomicReference<>();
+        HiveMetastore metastore = (HiveMetastore) Proxy.newProxyInstance(
+                HiveMetastore.class.getClassLoader(),
+                new Class<?>[] {HiveMetastore.class},
+                (proxy, method, arguments) -> switch (method.getName()) {
+                    case "getTable" -> Optional.ofNullable(tables.get(arguments[1]));
+                    case "dropTable" -> {
+                        deleteData.set((Boolean) arguments[2]);
+                        tables.remove(arguments[1]);
+                        yield null;
+                    }
+                    default -> throw new AssertionError("Unexpected metastore call: " + method);
+                });
+        HudiMetadata metadata = new HudiMetadata(metastore, fileSystemFactory, unusedTypeManager(), newDirectExecutorService());
+
+        for (String viewName : List.of("shared_mor_ro", "shared_mor_rt")) {
+            metadata.dropTable(SESSION, new HudiTableHandle(
+                    "test_schema", viewName, basePath, MERGE_ON_READ, List.of(), List.of(),
+                    TupleDomain.all(), TupleDomain.all(), OptionalLong.empty(), tableSchema.toAvroSchema().toString(), "0"));
+            assertThat(deleteData).hasValue(false);
+            assertThat(HudiUtil.hudiMetadataExists(fileSystem, Location.of(basePath))).isTrue();
+            assertThat(fileSystem.newInputFile(dataFile).exists()).isTrue();
+            assertThat(tables).doesNotContainKey(viewName);
+            if (viewName.equals("shared_mor_ro")) {
+                assertThat(tables).containsKey("shared_mor_rt");
+            }
+        }
     }
 
     private CreateRace createRace(UnaryOperator<Table> winningTableFactory, boolean failWinnerLookup)

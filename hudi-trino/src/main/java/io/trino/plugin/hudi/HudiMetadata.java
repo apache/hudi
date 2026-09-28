@@ -128,11 +128,13 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.INDEXING_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
+import static org.apache.hudi.common.util.ConfigUtils.IS_QUERY_AS_RO_TABLE;
 
 public class HudiMetadata
         implements ConnectorMetadata
 {
     private static final Logger log = Logger.get(HudiMetadata.class);
+    static final String TRINO_MANAGED_TABLE_PARAMETER = "hudi.trino.managed";
     private static final Map<TableStatisticsCacheKey, HudiTableStatistics> tableStatisticsCache = new ConcurrentHashMap<>();
     private static final Set<TableStatisticsCacheKey> refreshingKeysInProgress = ConcurrentHashMap.newKeySet();
     private final HiveMetastore metastore;
@@ -378,6 +380,7 @@ public class HudiMetadata
                         Optional.of(session.getUser()),
                         tableMetadata.getComment()))
                 .setParameter(TRINO_QUERY_ID_NAME, session.getQueryId())
+                .setParameter(TRINO_MANAGED_TABLE_PARAMETER, Boolean.toString(!external))
                 .build();
         try {
             HudiTableInitializer.initializeTable(fileSystem, basePath, tableMetadata, tableSchema);
@@ -426,11 +429,13 @@ public class HudiMetadata
     }
 
     /**
-     * Drops the catalog entry, and the data too when the table is managed.
+     * Drops the catalog entry, and the data only when this connector can establish storage ownership.
      * <p>
      * A table registered with an explicit location is external and its data outlives the catalog
      * entry; {@code register_table} always produces such a table. Trino's {@code DROP TABLE} has no
      * {@code PURGE} clause, so there is no way to ask for an external table's data to be deleted.
+     * Other engines can register managed aliases for the same physical table, so an unmarked managed
+     * catalog entry also retains its storage when dropped.
      */
     @Override
     public void dropTable(ConnectorSession session, ConnectorTableHandle tableHandle)
@@ -438,12 +443,12 @@ public class HudiMetadata
         SchemaTableName schemaTableName = ((HudiTableHandle) tableHandle).getSchemaTableName();
         Table table = metastore.getTable(schemaTableName.getSchemaName(), schemaTableName.getTableName())
                 .orElseThrow(() -> new TableNotFoundException(schemaTableName));
-        boolean managed = !isExternalTable(table);
+        boolean deleteData = ownsManagedTableStorage(session, schemaTableName, table);
         Optional<String> location = table.getStorage().getOptionalLocation();
 
-        metastore.dropTable(schemaTableName.getSchemaName(), schemaTableName.getTableName(), managed);
+        metastore.dropTable(schemaTableName.getSchemaName(), schemaTableName.getTableName(), deleteData);
 
-        if (managed && location.isPresent()) {
+        if (deleteData && location.isPresent()) {
             // Done explicitly as well as through the metastore's deleteData flag, as the Delta Lake
             // connector does: whether a metastore acts on that flag varies by implementation, and a
             // managed table that keeps its data behind is a table whose name cannot be reused.
@@ -454,6 +459,29 @@ public class HudiMetadata
                 throw new TrinoException(HUDI_FILESYSTEM_ERROR, format(
                         "Failed to delete directory %s of the dropped table %s", location.get(), schemaTableName), e);
             }
+        }
+    }
+
+    private boolean ownsManagedTableStorage(ConnectorSession session, SchemaTableName tableName, Table table)
+    {
+        if (isExternalTable(table) || !Boolean.parseBoolean(table.getParameters().get(TRINO_MANAGED_TABLE_PARAMETER))
+                || Boolean.parseBoolean(table.getStorage().getSerdeParameters().get(IS_QUERY_AS_RO_TABLE))) {
+            return false;
+        }
+
+        Optional<String> location = table.getStorage().getOptionalLocation();
+        if (location.isEmpty()) {
+            return false;
+        }
+        try {
+            HoodieTableMetaClient metaClient = buildTableMetaClient(
+                    fileSystemFactory.create(session), tableName.toString(), location.get());
+            return tableName.getTableName().equals(metaClient.getTableConfig().getTableName());
+        }
+        catch (RuntimeException e) {
+            // Without the physical table identity, storage ownership cannot be established.
+            log.warn(e, "Preserving storage for %s because its Hudi table identity could not be read", tableName);
+            return false;
         }
     }
 
