@@ -34,8 +34,9 @@ class TestVectorIndexBootstrapUtils {
     byte[] planes = VectorIndexBootstrapUtils.splitExPlanes(interleaved, 2, 4, 8);
 
     byte[] expected = new byte[16];
-    expected[0] = 0x05;
-    expected[8] = 0x06;
+    // Plane 0 is the highest-weight lower bit consumed by RaBitQByteLutScorer.
+    expected[0] = 0x06;
+    expected[8] = 0x05;
     assertArrayEquals(expected, planes);
   }
 

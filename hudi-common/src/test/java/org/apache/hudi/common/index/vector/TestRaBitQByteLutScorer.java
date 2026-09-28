@@ -45,7 +45,8 @@ class TestRaBitQByteLutScorer {
       RaBitQEncoder encoder = new RaBitQEncoder(DIMENSION, bits, 17L, false);
       QuantizedVector encoded = encoder.encodeResidual(vector(), center());
       byte[] signRow = padded(encoded.code);
-      byte[] extendedPlanes = toMsbFirstPlanes(encoded.extendedCode, bits - 1);
+      byte[] extendedPlanes = VectorIndexBootstrapUtils.splitExPlanes(
+          encoded.extendedCode, bits - 1, DIMENSION, CODE_ROW_BYTES);
 
       HoodieVectorIndexPostingBlock block = new PostingBlockBuilder(CODE_ROW_BYTES, bits - 1)
           .addRow("first", new byte[CODE_ROW_BYTES], new byte[(bits - 1) * CODE_ROW_BYTES],
@@ -107,31 +108,6 @@ class TestRaBitQByteLutScorer {
     assertEquals(RaBitQEncoder.dotPackedBinary(code, QUERY, DIMENSION),
         scorer.planeDot(buffer, 3), 1e-6);
     assertThrows(IllegalArgumentException.class, () -> scorer.planeDot(buffer, 4));
-  }
-
-  private static byte[] toMsbFirstPlanes(byte[] packedLevels, int exBits) {
-    byte[] planes = new byte[exBits * CODE_ROW_BYTES];
-    for (int dimension = 0; dimension < DIMENSION; dimension++) {
-      int level = unpack(packedLevels, dimension * exBits, exBits);
-      for (int plane = 0; plane < exBits; plane++) {
-        int sourceBit = exBits - 1 - plane;
-        if ((level & (1 << sourceBit)) != 0) {
-          planes[plane * CODE_ROW_BYTES + (dimension >> 3)] |= (byte) (1 << (dimension & 7));
-        }
-      }
-    }
-    return planes;
-  }
-
-  private static int unpack(byte[] packed, int bitOffset, int bitCount) {
-    int value = 0;
-    for (int bit = 0; bit < bitCount; bit++) {
-      int absoluteBit = bitOffset + bit;
-      if ((packed[absoluteBit >> 3] & (1 << (absoluteBit & 7))) != 0) {
-        value |= 1 << bit;
-      }
-    }
-    return value;
   }
 
   private static byte[] padded(byte[] code) {
