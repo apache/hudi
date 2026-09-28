@@ -19,6 +19,7 @@
 package org.apache.hudi.gcp.bundle;
 
 import com.google.cloud.NoCredentials;
+import com.google.cloud.bigquery.BigQueryOptions;
 import com.google.cloud.storage.StorageOptions;
 import org.junit.jupiter.api.Test;
 
@@ -107,5 +108,18 @@ class ITGcpBundleCompatibility {
             .build())
         .build();
     options.getService();
+
+    BigQueryOptions.newBuilder()
+        .setProjectId("review")
+        .setCredentials(NoCredentials.getInstance())
+        .build()
+        .getService();
+
+    Class<?> periodDurationClass = Class.forName("org.threeten.extra.PeriodDuration");
+    Object periodDuration = periodDurationClass.getMethod("parse", CharSequence.class)
+        .invoke(null, "P1D");
+    if (!"P1D".equals(periodDuration.toString())) {
+      throw new AssertionError("Unexpected period duration: " + periodDuration);
+    }
   }
 }

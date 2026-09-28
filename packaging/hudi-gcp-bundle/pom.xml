@@ -101,6 +101,7 @@
                   <!-- Google Cloud SDK -->
                   <include>com.google.cloud:*</include>
                   <include>com.google.api:*</include>
+                  <include>com.google.apis:google-api-services-bigquery</include>
                   <include>com.google.apis:google-api-services-storage</include>
                   <include>com.google.api-client:*</include>
                   <include>com.google.api.grpc:*</include>
@@ -114,6 +115,7 @@
                   <include>io.perfmark:*</include>
                   <include>com.lmax:disruptor</include>
                   <include>org.threeten:threetenbp</include>
+                  <include>org.threeten:threeten-extra</include>
                   <include>com.google.guava:guava</include>
                   <include>com.google.guava:failureaccess</include>
                   <include>com.google.guava:listenablefuture</include>
