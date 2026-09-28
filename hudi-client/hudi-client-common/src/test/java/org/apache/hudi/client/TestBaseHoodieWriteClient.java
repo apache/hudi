@@ -61,6 +61,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
@@ -103,6 +104,12 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
   private static BaseHoodieWriteClient<?, ?, ?, ?> validatorClient(HoodieWriteConfig writeConfig) {
     return new TestWriteClient(writeConfig, mock(HoodieTable.class), Option.empty(),
         mock(BaseHoodieTableServiceClient.class));
+  }
+
+  private static HoodieTableMetaClient metaClientWithTableConfig(HoodieTableConfig tableConfig) {
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    return metaClient;
   }
 
   @Test
@@ -518,6 +525,23 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     assertTrue(writeTimeline.lastInstant().isPresent());
     assertEquals("commit", writeTimeline.lastInstant().get().getAction());
     assertEquals(requestedTime, writeTimeline.lastInstant().get().requestedTime());
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = WriteOperationType.class, names = {"INSERT", "INSERT_PREPPED", "UPSERT", "UPSERT_PREPPED",
+      "BULK_INSERT", "BULK_INSERT_PREPPED", "INSERT_OVERWRITE", "INSERT_OVERWRITE_TABLE", "DELETE", "DELETE_PREPPED"})
+  void testValidateAgainstTablePropertiesRequiresRecordedComplexKeygenEncoding(WriteOperationType operationType) throws IOException {
+    initMetaClient();
+    HoodieTableConfig tableConfig = tableConfigWithMode(MetaFieldsMode.ALL);
+    tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
+    tableConfig.setValue(HoodieTableConfig.RECORDKEY_FIELDS, "id");
+    HoodieTableMetaClient tableMetaClient = metaClientWithTableConfig(tableConfig);
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    try (BaseHoodieWriteClient<?, ?, ?, ?> writeClient = validatorClient(writeConfig)) {
+      HoodieException e = assertThrows(HoodieException.class,
+          () -> writeClient.validateAgainstTableProperties(tableMetaClient, writeConfig, operationType));
+      assertTrue(e.getMessage().contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()), e.getMessage());
+    }
   }
 
   /** A write that keys records on a tracked table without the property is refused; table services, partition deletes and rollbacks are not. */
