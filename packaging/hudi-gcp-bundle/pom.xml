@@ -32,7 +32,6 @@
   <properties>
     <checkstyle.skip>true</checkstyle.skip>
     <main.basedir>${project.parent.basedir}</main.basedir>
-    <skipTests>true</skipTests>
   </properties>
   <dependencyManagement>
     <dependencies>
@@ -113,6 +112,7 @@
                   <include>io.grpc:*</include>
                   <include>io.opencensus:*</include>
                   <include>io.perfmark:*</include>
+                  <include>com.lmax:disruptor</include>
                   <include>org.threeten:threetenbp</include>
                   <include>com.google.guava:guava</include>
                   <include>com.google.guava:failureaccess</include>
@@ -135,6 +135,18 @@
                   <pattern>com.google.common.</pattern>
                   <shadedPattern>org.apache.hudi.com.google.common.</shadedPattern>
                 </relocation>
+                <relocation>
+                  <pattern>com.google.thirdparty.</pattern>
+                  <shadedPattern>org.apache.hudi.com.google.thirdparty.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.google.protobuf.</pattern>
+                  <shadedPattern>org.apache.hudi.gcp.shaded.com.google.protobuf.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>io.grpc.</pattern>
+                  <shadedPattern>org.apache.hudi.gcp.shaded.io.grpc.</shadedPattern>
+                </relocation>
               </relocations>
               <createDependencyReducedPom>true</createDependencyReducedPom>
               <!-- Keep dependencies that are not absorbed into the shaded jar, so the reduced POM still
@@ -154,6 +166,58 @@
               </filters>
               <finalName>${project.artifactId}-${project.version}</finalName>
             </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>copy-compatibility-fixtures</id>
+            <phase>pre-integration-test</phase>
+            <goals>
+              <goal>copy</goal>
+            </goals>
+            <configuration>
+              <artifactItems>
+                <artifactItem>
+                  <groupId>com.google.protobuf</groupId>
+                  <artifactId>protobuf-java</artifactId>
+                  <version>2.5.0</version>
+                  <outputDirectory>${project.build.directory}/compatibility-libs</outputDirectory>
+                </artifactItem>
+                <artifactItem>
+                  <groupId>com.google.guava</groupId>
+                  <artifactId>guava</artifactId>
+                  <version>27.0-jre</version>
+                  <outputDirectory>${project.build.directory}/compatibility-libs</outputDirectory>
+                </artifactItem>
+              </artifactItems>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <configuration>
+          <skipTests>${skipITs}</skipTests>
+          <includes>
+            <include>**/ITGcpBundleCompatibility.java</include>
+          </includes>
+          <systemPropertyVariables>
+            <gcp.bundle.jar>${project.build.directory}/${project.build.finalName}.jar</gcp.bundle.jar>
+            <host.protobuf.jar>${project.build.directory}/compatibility-libs/protobuf-java-2.5.0.jar</host.protobuf.jar>
+            <host.guava.jar>${project.build.directory}/compatibility-libs/guava-27.0-jre.jar</host.guava.jar>
+          </systemPropertyVariables>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
           </execution>
         </executions>
       </plugin>
@@ -194,6 +258,19 @@
     <dependency>
       <groupId>com.google.cloud</groupId>
       <artifactId>google-cloud-bigquery</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.platform</groupId>
+      <artifactId>junit-platform-launcher</artifactId>
+      <version>${junit.platform.version}</version>
+      <scope>test</scope>
     </dependency>
 
     <!-- Parquet -->
