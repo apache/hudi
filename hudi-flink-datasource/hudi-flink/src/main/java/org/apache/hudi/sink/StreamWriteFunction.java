@@ -560,7 +560,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
         rowItr, rowData -> recordConverter.convert(rowData, rowDataBucket.getBucketInfo()));
 
     List<WriteStatus> statuses = writeFunction.write(
-        deduplicateRecordsIfNeeded(recordItr), rowDataBucket.getBucketInfo(), instant);
+        deduplicateRecordsIfNeeded(recordItr, recordKeyComputer != null), rowDataBucket.getBucketInfo(), instant);
     writeMetrics.endFileFlush();
     writeMetrics.increaseNumOfFilesWritten();
     return statuses;
@@ -596,9 +596,14 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
   }
 
   protected Iterator<HoodieRecord> deduplicateRecordsIfNeeded(Iterator<HoodieRecord> records) {
+    // Other write paths can call this method without sorting their input first.
+    return deduplicateRecordsIfNeeded(records, false);
+  }
+
+  private Iterator<HoodieRecord> deduplicateRecordsIfNeeded(Iterator<HoodieRecord> records, boolean isSortedByRecordKey) {
     if (config.get(FlinkOptions.PRE_COMBINE)) {
-      return FlinkWriteHelper.newInstance().deduplicateRecords(
-          records, null, -1, this.writeClient.getConfig().getSchema(),
+      return FlinkWriteHelper.newInstance().deduplicateSortedRecords(
+          records, isSortedByRecordKey, this.writeClient.getConfig().getSchema(),
           this.writeClient.getConfig().getProps(),
           recordMerger, readerContext, orderingFieldNames.toArray(new String[0]));
     } else {

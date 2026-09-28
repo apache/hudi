@@ -40,6 +40,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -110,5 +111,55 @@ public class FlinkWriteHelper<T, R> extends BaseWriteHelper<T, Iterator<HoodieRe
     return keyedRecords.values().stream().map(x -> x.stream().reduce((previous, next) ->
       reduceRecords(props, recordMerger, orderingFieldNames, previous, next, schema, readerContext.getRecordContext(), deleteContext)
     ).orElse(null)).filter(Objects::nonNull).iterator();
+  }
+
+  /**
+   * Deduplicates records using streaming reduction when {@code isSortedByRecordKey} is true,
+   * otherwise delegates to {@link #deduplicateRecords}. For sorted input, equal record keys must
+   * be contiguous, and records must remain valid after advancing the input iterator.
+   *
+   * <p>For sorted input, uses the same left-to-right reduction as {@link #deduplicateRecords},
+   * retaining only the current reduction and one record from the next key group.
+   */
+  public Iterator<HoodieRecord<T>> deduplicateSortedRecords(Iterator<HoodieRecord<T>> records,
+                                                          boolean isSortedByRecordKey,
+                                                          String schemaStr,
+                                                          TypedProperties props,
+                                                          BufferedRecordMerger<T> recordMerger,
+                                                          HoodieReaderContext<T> readerContext,
+                                                          String[] orderingFieldNames) {
+    if (!isSortedByRecordKey) {
+      return deduplicateRecords(records, null, -1, schemaStr, props, recordMerger, readerContext, orderingFieldNames);
+    }
+    final HoodieSchema schema = HoodieSchema.parse(schemaStr);
+    final DeleteContext deleteContext = DeleteContext.fromRecordSchema(props, schema);
+    return new Iterator<HoodieRecord<T>>() {
+      private HoodieRecord<T> pending;
+
+      @Override
+      public boolean hasNext() {
+        return pending != null || records.hasNext();
+      }
+
+      @Override
+      public HoodieRecord<T> next() {
+        if (!hasNext()) {
+          throw new NoSuchElementException();
+        }
+        HoodieRecord<T> reduced = pending != null ? pending : records.next();
+        pending = null;
+        String recordKey = reduced.getKey().getRecordKey();
+        while (records.hasNext()) {
+          HoodieRecord<T> next = records.next();
+          if (!recordKey.equals(next.getKey().getRecordKey())) {
+            pending = next;
+            break;
+          }
+          reduced = reduceRecords(props, recordMerger, orderingFieldNames, reduced, next,
+              schema, readerContext.getRecordContext(), deleteContext);
+        }
+        return reduced;
+      }
+    };
   }
 }
