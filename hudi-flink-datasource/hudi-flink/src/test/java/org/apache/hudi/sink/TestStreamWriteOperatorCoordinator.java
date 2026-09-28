@@ -18,24 +18,34 @@
 
 package org.apache.hudi.sink;
 
+import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.MissingSchemaFieldException;
+import org.apache.hudi.exception.SchemaCompatibilityException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
@@ -70,7 +80,9 @@ import org.slf4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.util.Collections;
+import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -125,6 +137,107 @@ public class TestStreamWriteOperatorCoordinator {
     assertThat("Instant should be complete", lastCompleted, is(instant));
     assertNotEquals("", inflight, "Should start a new instant");
     assertNotEquals(instant, inflight, "Should start a new instant");
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"upsert", "insert", "bulk_insert", "insert_overwrite", "insert_overwrite_table", "delete"})
+  void testValidationOncePerInstant(String operation) throws Exception {
+    coordinator.close();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.OPERATION, operation);
+    coordinator = startCoordinator(conf, 2);
+    HoodieFlinkWriteClient writeClient = Mockito.spy(coordinator.getWriteClient());
+    Field writeClientField = StreamWriteOperatorCoordinator.class.getDeclaredField("writeClient");
+    writeClientField.setAccessible(true);
+    writeClientField.set(coordinator, writeClient);
+
+    String firstInstant = requestInstantTime(1);
+    assertEquals(firstInstant, requestInstantTime(1));
+    Mockito.verify(writeClient, Mockito.times(1)).preTxn(Mockito.eq(WriteOperationType.fromValue(operation)), Mockito.any());
+    Mockito.verify(writeClient, Mockito.times(1)).validateAgainstTableProperties(Mockito.any(), Mockito.any());
+
+    // Complete the first checkpoint so the next request can create a new instant.
+    coordinator.handleEventFromOperator(0, createOperatorEvent(0, 1, firstInstant, "par1", false, true, 0.1));
+    coordinator.handleEventFromOperator(1, createOperatorEvent(1, 1, firstInstant, "par2", false, true, 0.2));
+    coordinator.notifyCheckpointComplete(2);
+    assertNull(coordinator.getEventBuffer(1));
+    String nextInstant = requestInstantTime(2);
+    assertNotEquals(firstInstant, nextInstant);
+    Mockito.verify(writeClient, Mockito.times(2)).preTxn(Mockito.eq(WriteOperationType.fromValue(operation)), Mockito.any());
+    Mockito.verify(writeClient, Mockito.times(2)).validateAgainstTableProperties(Mockito.any(), Mockito.any());
+    assertFalse(((MockOperatorCoordinatorContext) coordinator.getContext()).isJobFailed());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"upsert", "insert", "bulk_insert", "insert_overwrite", "insert_overwrite_table", "delete"})
+  void testColumnDropFailsBeforeInstantIsPublished(String operation) throws Exception {
+    coordinator.close();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.OPERATION, operation);
+    coordinator = startCoordinator(conf, 2);
+    HoodieWriteConfig writeConfig = coordinator.getWriteClient().getConfig();
+    assertFalse(writeConfig.shouldValidateAvroSchema());
+    assertFalse(writeConfig.shouldAllowAutoEvolutionColumnDrop());
+
+    // Complete an instant using the original schema, then drop a column for the next instant.
+    HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+    metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, writeConfig.getSchema());
+    HoodieTestTable.of(StreamerUtil.createMetaClient(conf)).addCommit("001", Option.of(metadata));
+    conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH,
+        getClass().getClassLoader().getResource("test_read_schema_dropped_age.avsc").toString());
+    writeConfig.setSchema(StreamerUtil.getSourceSchema(conf).toString());
+
+    assertInstantCreationFails(conf, MissingSchemaFieldException.class, "age");
+  }
+
+  @Test
+  void testTablePropertyChangesAreValidatedBeforeInstantIsPublished() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    Properties updatedProperties = new Properties();
+    updatedProperties.setProperty(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
+    HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), updatedProperties);
+
+    assertInstantCreationFails(conf, HoodieException.class, HoodieTableConfig.POPULATE_META_FIELDS.key());
+  }
+
+  @Test
+  void testNewSecondaryIndexIsValidatedBeforeInstantIsPublished() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    HoodieWriteConfig writeConfig = coordinator.getWriteClient().getConfig();
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+    metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, writeConfig.getSchema());
+    HoodieTestTable.of(metaClient).addCommit("001", Option.of(metadata));
+    // Simulate an index created after the coordinator has loaded its meta client.
+    metaClient.buildIndexDefinition(HoodieIndexDefinition.newBuilder()
+        .withIndexName("secondary_index_age")
+        .withIndexType("secondary_index")
+        .withSourceFields(Collections.singletonList("age"))
+        .withVersion(HoodieIndexVersion.V1)
+        .build());
+    String evolvedSchema = writeConfig.getSchema().replace("\"int\"", "\"long\"");
+    assertNotEquals(writeConfig.getSchema(), evolvedSchema);
+    writeConfig.setSchema(evolvedSchema);
+
+    assertInstantCreationFails(conf, SchemaCompatibilityException.class, "secondary_index_age");
+  }
+
+  private void assertInstantCreationFails(Configuration conf, Class<? extends Throwable> causeType, String message) throws Exception {
+    Correspondent.InstantTimeResponse response = CoordinationResponseSerDe.unwrap(
+        coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(1))
+            .get(1, TimeUnit.SECONDS));
+    assertNull(response.getInstant());
+    assertNull(coordinator.getEventBuffer(1));
+    MockOperatorCoordinatorContext context = (MockOperatorCoordinatorContext) coordinator.getContext();
+    assertTrue(context.isJobFailed());
+    Throwable cause = context.getJobFailureReason();
+    while (cause != null && !(causeType.isInstance(cause) && cause.getMessage() != null && cause.getMessage().contains(message))) {
+      cause = cause.getCause();
+    }
+    assertNotNull(cause, "Expected " + causeType.getSimpleName() + " containing: " + message);
+    HoodieTimeline pending = StreamerUtil.createMetaClient(conf).reloadActiveTimeline().filterPendingExcludingCompaction();
+    assertTrue(pending.empty(), "Validation must fail before a new instant is created");
   }
 
   @Test
