@@ -23,6 +23,7 @@ import io.trino.spi.type.MapType;
 import io.trino.spi.type.RowType;
 import io.trino.spi.type.Type;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -31,9 +32,11 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
+import static io.trino.plugin.hudi.HudiTableProperties.KEY_GENERATOR_CLASS_PROPERTY;
 import static io.trino.plugin.hudi.HudiTableProperties.ORDERING_FIELDS_PROPERTY;
 import static io.trino.plugin.hudi.HudiTableProperties.PARTITIONED_BY_PROPERTY;
 import static io.trino.plugin.hudi.HudiTableProperties.PRIMARY_KEY_PROPERTY;
+import static io.trino.plugin.hudi.HudiTableProperties.getKeyGeneratorClass;
 import static io.trino.plugin.hudi.HudiTableProperties.getOrderingFields;
 import static io.trino.plugin.hudi.HudiTableProperties.getPartitionedBy;
 import static io.trino.plugin.hudi.HudiTableProperties.getPrimaryKey;
@@ -86,6 +89,14 @@ public final class HudiTableValidation
         }
 
         Map<String, Object> properties = tableMetadata.getProperties();
+        getKeyGeneratorClass(properties).ifPresent(keyGeneratorClass -> {
+            KeyGeneratorType type = KeyGeneratorType.fromClassName(keyGeneratorClass);
+            if (type == KeyGeneratorType.CUSTOM || type == KeyGeneratorType.CUSTOM_AVRO) {
+                throw new TrinoException(NOT_SUPPORTED, format(
+                        "%s '%s' requires partition field types, which CREATE TABLE cannot declare",
+                        KEY_GENERATOR_CLASS_PROPERTY, keyGeneratorClass));
+            }
+        });
         validatePartitionColumns(columnNames, getPartitionedBy(properties));
         // getOrderingFields also rejects setting both ordering_fields and the deprecated
         // precombine_field alias, since the two write the same Hudi config.
