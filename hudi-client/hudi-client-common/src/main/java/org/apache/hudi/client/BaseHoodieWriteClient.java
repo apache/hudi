@@ -1553,16 +1553,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   /**
    * Validates the write configuration against the table properties. For writes that key records,
    * ensures the complex key generator encoding is recorded; engines may record a missing encoding.
-   */
-  public void validateAgainstTableProperties(HoodieTableMetaClient metaClient, HoodieWriteConfig writeConfig, WriteOperationType operationType) {
-    if (WriteOperationType.isInsert(operationType) || WriteOperationType.isChangingRecords(operationType)) {
-      ensureComplexKeyGenEncodingRecorded(metaClient);
-    }
-    validateAgainstTableProperties(metaClient.getTableConfig(), writeConfig);
-  }
-
-  /**
-   * Pure validation: this method reads both configs and throws, and never modifies either.
    *
    * <p>Nothing reconciles the write config against the table beforehand. That is deliberate: the mode
    * is read further down the write path by handles and writer factories, some of which hold no table
@@ -1570,7 +1560,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * in. This gate is what makes that true, by refusing writes whose meta-field settings do not already
    * agree with the table.
    */
-  public void validateAgainstTableProperties(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
+  public void validateAgainstTableProperties(HoodieTableMetaClient metaClient, HoodieWriteConfig writeConfig, WriteOperationType operationType) {
+    if (WriteOperationType.isInsert(operationType) || WriteOperationType.isChangingRecords(operationType)) {
+      ensureComplexKeyGenEncodingRecorded(metaClient);
+    }
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
     // mismatch of table versions.
     CommonClientUtils.validateTableVersion(tableConfig, writeConfig);
 
