@@ -62,6 +62,7 @@ import org.apache.hudi.utilities.streamer.HoodieStreamer;
 import com.beust.jcommander.DynamicParameter;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import com.beust.jcommander.Parameters;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -230,6 +231,9 @@ public class SparkMain {
     positional.add(namedArgs.memory);
     positional.addAll(positionalArgs);
     positional.addAll(extraConfigs);
+    // callers append extra spark/hoodie configs (key=value) right after the named block; keep them
+    // as trailing configs so they land in makeConfigs exactly like in the positional form
+    positional.addAll(namedArgs.trailingConfigs);
     return positional.toArray(new String[0]);
   }
 
@@ -238,6 +242,7 @@ public class SparkMain {
    * positional protocol so that existing call sites and scripts keep working unchanged:
    * if the first argument does not look like a named option the legacy path is used.
    */
+  @Parameters
   private static class NamedArgs {
     @Parameter(names = {"--command", "-command"}, description = "Name of the Spark command to run (e.g. ROLLBACK)", required = true)
     private String command;
@@ -250,6 +255,14 @@ public class SparkMain {
 
     @DynamicParameter(names = "-D", description = "Command arguments and spark configs as -Dkey=value pairs")
     private Map<String, String> params = new HashMap<>();
+
+    /**
+     * Trailing configs appended by the caller after the named block ({@code key=value} strings,
+     * see {@link org.apache.hudi.utilities.UtilHelpers#validateAndAddProperties}); they are
+     * forwarded as trailing configs to mirror the positional form.
+     */
+    @Parameter(description = "Trailing spark/hoodie configs appended after the named block")
+    private List<String> trailingConfigs = new ArrayList<>();
   }
 
   public static void main(String[] argv) {
