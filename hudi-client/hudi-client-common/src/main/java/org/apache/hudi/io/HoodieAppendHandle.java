@@ -46,9 +46,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.ExceptionUtil;
+import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieLogFlushException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -404,7 +404,7 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
       log.error("Error writing record {}", hoodieRecord, e);
       // A failed log flush affects the entire buffered batch, not just the current record.
       if (!config.getIgnoreWriteFailed()
-          || ExceptionUtil.isCausedBy(e, HoodieLogFlushException.class)
+          || ExceptionUtil.isCausedBy(e, HoodieAppendException.class)
           || ExceptionUtil.isCausedBy(e, HoodieEarlyConflictDetectionException.class)) {
         closeLogWriterQuietly(e);
         throw new HoodieException(e.getMessage(), e);

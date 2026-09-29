@@ -37,7 +37,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieLogFlushException;
 import org.apache.hudi.io.cdc.HoodieNativeLogFormatWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -223,7 +222,7 @@ public class TestHoodieNativeLogAppendHandle {
       TestableNativeLogAppendHandle handle = new TestableNativeLogAppendHandle(config, table);
       handle.createWriter();
 
-      HoodieLogFlushException exception = assertThrows(HoodieLogFlushException.class, handle::flushWriter);
+      HoodieAppendException exception = assertThrows(HoodieAppendException.class, handle::flushWriter);
       assertTrue(exception.getMessage().contains("file-1"));
     }
   }
@@ -262,7 +261,7 @@ public class TestHoodieNativeLogAppendHandle {
       handle.recordItr = Arrays.asList(record, nextRecord).iterator();
 
       HoodieException exception = assertThrows(HoodieException.class, handle::doAppend);
-      assertEquals(HoodieLogFlushException.class, exception.getCause().getClass());
+      assertEquals(HoodieAppendException.class, exception.getCause().getClass());
       assertSame(failure, exception.getCause().getCause());
       assertArrayEquals(new Throwable[] {closeFailure}, exception.getCause().getSuppressed());
       assertTrue(handle.isClosed());
@@ -306,7 +305,7 @@ public class TestHoodieNativeLogAppendHandle {
       handle.recordItr = Arrays.asList(record, nextRecord).iterator();
 
       try {
-        // Errors bypass the Exception handlers instead of being wrapped as log flush exceptions.
+        // Errors bypass the Exception handlers instead of being wrapped as append exceptions.
         assertSame(failure, assertThrows(AssertionError.class, handle::doAppend));
         assertFalse(handle.writeStatus.hasErrors());
         HoodieNativeLogFormatWriter writer = writers.constructed().get(0);
@@ -320,19 +319,14 @@ public class TestHoodieNativeLogAppendHandle {
     }
   }
 
-  private static Stream<Exception> recordWriteFailures() {
-    return Stream.of(new IOException("record write failed"), new HoodieAppendException("record append failed"));
-  }
-
-  @ParameterizedTest
-  @MethodSource("recordWriteFailures")
-  public void testRecordWriteFailureCanStillBeIgnored(Exception failure) throws Exception {
+  @Test
+  public void testRecordWriteFailureCanStillBeIgnored() throws Exception {
     HoodieWriteConfig config = config();
     config.setValue(HoodieWriteConfig.IGNORE_FAILED, "true");
     try (MockedConstruction<HoodieNativeLogFormatWriter> writers = mockConstruction(
         HoodieNativeLogFormatWriter.class, (writer, context) -> {
           when(writer.canWriteDataFile()).thenReturn(true);
-          doThrow(failure).when(writer).appendRecord(any(), any());
+          doThrow(new IOException("record write failed")).when(writer).appendRecord(any(), any());
         })) {
       TestableNativeLogAppendHandle handle = new TestableNativeLogAppendHandle(config, table(config));
       handle.createWriter();

@@ -34,7 +34,6 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieLogFlushException;
 import org.apache.hudi.io.cdc.HoodieNativeLogFormatWriter;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
@@ -164,7 +163,7 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
         processAppendResults(writer.getLastAppendResults());
       }
     } catch (Exception e) {
-      throw new HoodieLogFlushException("Failed while flushing records to native log for fileId " + fileId, e);
+      throw new HoodieAppendException("Failed while flushing records to native log for fileId " + fileId, e);
     }
   }
 
