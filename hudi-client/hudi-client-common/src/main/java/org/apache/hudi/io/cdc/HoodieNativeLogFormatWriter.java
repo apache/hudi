@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.log.LogReaderUtils;
 import org.apache.hudi.common.table.log.NativeLogFooterMetadata;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
+import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ArrayComparable;
@@ -280,6 +281,20 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
   }
 
   private void closeFileWriters() throws IOException {
+    try {
+      closeDataFileWriter();
+    } catch (Throwable e) {
+      // A failure closing the data writer or reading its metadata must not skip closing the delete writer.
+      CloseableUtils.closeSuppressing(this::closeDeleteFileWriter, e);
+      throw e;
+    } finally {
+      dataFileWriter = null;
+      dataRecordPositions.clear();
+    }
+    closeDeleteFileWriter();
+  }
+
+  private void closeDataFileWriter() throws IOException {
     if (dataFileWriter != null) {
       dataFileWriter.close();
       if (writeConfig.isMetadataColumnStatsIndexEnabled()) {
@@ -293,14 +308,18 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
       } else {
         lastDataFileFormatMetadata = Option.empty();
       }
-      dataFileWriter = null;
     }
-    if (deleteFileWriter != null) {
-      deleteFileWriter.close();
+  }
+
+  private void closeDeleteFileWriter() throws IOException {
+    try {
+      if (deleteFileWriter != null) {
+        deleteFileWriter.close();
+      }
+    } finally {
       deleteFileWriter = null;
+      deleteRecordPositions.clear();
     }
-    dataRecordPositions.clear();
-    deleteRecordPositions.clear();
   }
 
   private HoodieLogFile createNativeLogFile(int version, String logExtension) throws IOException {
