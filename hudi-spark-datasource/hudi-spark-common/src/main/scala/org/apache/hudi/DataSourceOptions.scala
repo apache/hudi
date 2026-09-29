@@ -185,7 +185,7 @@ object DataSourceReadOptions {
     .key("hoodie.datasource.read.incr.reportMaxFileSize")
     .defaultValue(true)
     .markAdvanced()
-    .sinceVersion("1.2.0")
+    .sinceVersion("1.3.0")
     .withDocumentation("When enabled, the incremental file index reports Long.MaxValue as its sizeInBytes "
       + "to the Spark planner, preventing Spark from choosing BroadcastHashJoin for any "
       + "subexpression that includes the incremental source. This matches the behavior of the "

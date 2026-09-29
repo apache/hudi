@@ -163,7 +163,8 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
     if (fullTableScan) queryContext.getInstantRange else HOption.empty()
 
   override def getIncrementalFilesSize: Long = {
-    affectedFilesInCommits.asScala.map(_.getLength).sum
+    // A full table scan lists the whole table, so the affected files would underestimate its size.
+    if (fullTableScan) Long.MaxValue else affectedFilesInCommits.asScala.map(_.getLength).sum
   }
 
   override def shouldIncludeLogFiles(): Boolean = fullTableScan
