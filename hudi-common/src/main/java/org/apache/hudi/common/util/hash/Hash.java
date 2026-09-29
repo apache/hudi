@@ -40,11 +40,15 @@ public abstract class Hash {
    * Constant to denote {@link MurmurHash}.
    */
   public static final int MURMUR_HASH = 1;
+  /**
+   * Constant to denote {@link XxHash}.
+   */
+  public static final int XX_HASH = 2;
 
   /**
    * This utility method converts String representation of hash function name
-   * to a symbolic constant. Currently two function types are supported,
-   * "jenkins" and "murmur".
+   * to a symbolic constant. Currently three function types are supported,
+   * "jenkins", "murmur", and "xxhash".
    *
    * @param name hash function name
    * @return one of the predefined constants
@@ -54,6 +58,8 @@ public abstract class Hash {
       return JENKINS_HASH;
     } else if ("murmur".equalsIgnoreCase(name)) {
       return MURMUR_HASH;
+    } else if ("xxhash".equalsIgnoreCase(name)) {
+      return XX_HASH;
     } else {
       return INVALID_HASH;
     }
@@ -71,6 +77,8 @@ public abstract class Hash {
         return JenkinsHash.getInstance();
       case MURMUR_HASH:
         return MurmurHash.getInstance();
+      case XX_HASH:
+        return XxHash.getInstance();
       default:
         return null;
     }
