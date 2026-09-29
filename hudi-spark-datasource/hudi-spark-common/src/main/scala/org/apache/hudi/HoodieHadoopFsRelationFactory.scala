@@ -27,8 +27,10 @@ import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.schema.internal.InternalSchema
 import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.log.InstantRange
 import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.{CustomAvroKeyGenerator, CustomKeyGenerator, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
@@ -236,13 +238,16 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
 
   protected def getRequiredFilters: Seq[Filter]
 
+  /** Requested-time range to apply before file-group record merging, when required by the query. */
+  protected def getInstantRange: HOption[InstantRange] = HOption.empty()
+
   override def buildFileFormat(): FileFormat = {
     val tableConfig = metaClient.getTableConfig
     new HoodieFileGroupReaderBasedFileFormat(basePath.toString,
       HoodieTableSchema(tableStructSchema, tableSchema, internalSchemaOpt),
       tableConfig.getTableName, queryTimestamp.get, getMandatoryFields, isMOR, isBootstrap,
       isIncremental, validCommits, shouldUseRecordPosition, getRequiredFilters,
-      tableConfig.isMultipleBaseFileFormatsEnabled, tableConfig.getBaseFileFormat)
+      tableConfig.isMultipleBaseFileFormatsEnabled, tableConfig.getBaseFileFormat, getInstantRange)
   }
 
   override def buildBucketSpec(): Option[BucketSpec] = None
@@ -315,6 +320,8 @@ abstract class HoodieMergeOnReadIncrementalHadoopFsRelationFactory(override val 
   override def buildFileIndex(): HoodieFileIndex = incrementalFileIndex
 
   override protected def getRequiredFilters: Seq[Filter] = incrementalFileIndex.getRequiredFilters
+
+  override protected def getInstantRange: HOption[InstantRange] = mergeOnReadIncrementalRelation.getInstantRange
 
   override def buildPartitionSchema(): StructType = incrementalFileIndex.partitionSchema
 
@@ -471,5 +478,3 @@ class HoodieCopyOnWriteCDCHadoopFsRelationFactory(override val sqlContext: SQLCo
 
   override protected def getRequiredFilters: Seq[Filter] = Seq.empty
 }
-
-

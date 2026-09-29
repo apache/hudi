@@ -36,6 +36,8 @@ import org.apache.parquet.io.OutputFile;
 
 import java.io.IOException;
 
+import static org.apache.hudi.io.util.FileIOUtils.closeQuietly;
+
 /**
  * Hudi log block writer for parquet format.
  * <p>
@@ -49,16 +51,21 @@ public class HoodieParquetStreamWriter implements HoodieAvroFileWriter, AutoClos
   public HoodieParquetStreamWriter(FSDataOutputStream outputStream,
                                    HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig) throws IOException {
     this.writeSupport = parquetConfig.getWriteSupport();
-    this.writer = new Builder<IndexedRecord>(new OutputStreamBackedOutputFile(outputStream), writeSupport)
-        .withWriteMode(ParquetFileWriter.Mode.CREATE)
-        .withCompressionCodec(parquetConfig.getCompressionCodecName())
-        .withRowGroupSize(parquetConfig.getBlockSize())
-        .withPageSize(parquetConfig.getPageSize())
-        .withDictionaryPageSize(parquetConfig.getPageSize())
-        .withDictionaryEncoding(parquetConfig.isDictionaryEnabled())
-        .withWriterVersion(ParquetWriter.DEFAULT_WRITER_VERSION)
-        .withConf(parquetConfig.getStorageConf().unwrapAs(Configuration.class))
-        .build();
+    try {
+      this.writer = new Builder<IndexedRecord>(new OutputStreamBackedOutputFile(outputStream), writeSupport)
+          .withWriteMode(ParquetFileWriter.Mode.CREATE)
+          .withCompressionCodec(parquetConfig.getCompressionCodecName())
+          .withRowGroupSize(parquetConfig.getBlockSize())
+          .withPageSize(parquetConfig.getPageSize())
+          .withDictionaryPageSize(parquetConfig.getPageSize())
+          .withDictionaryEncoding(parquetConfig.isDictionaryEnabled())
+          .withWriterVersion(ParquetWriter.DEFAULT_WRITER_VERSION)
+          .withConf(parquetConfig.getStorageConf().unwrapAs(Configuration.class))
+          .build();
+    } catch (IOException | RuntimeException e) {
+      closeQuietly(outputStream);
+      throw e;
+    }
   }
 
   @Override

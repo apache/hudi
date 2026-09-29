@@ -59,7 +59,6 @@ import org.apache.hudi.common.schema.internal.utils.SchemaChangeUtils;
 import org.apache.hudi.common.schema.internal.utils.SerDeHelper;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -86,6 +85,7 @@ import org.apache.hudi.exception.HoodieRestoreException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
@@ -122,8 +122,6 @@ import java.util.function.BiFunction;
 
 import static org.apache.hudi.common.model.HoodieCommitMetadata.SCHEMA_KEY;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
-import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
-import static org.apache.hudi.keygen.KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
 
 /**
@@ -1453,10 +1451,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
-   * Performs necessary bootstrapping operations (for ex, validating whether Metadata Table has to be bootstrapped).
+   * Performs necessary bootstrapping operations and validates the table properties.
    *
-   * <p>NOTE: THIS OPERATION IS EXECUTED UNDER LOCK, THEREFORE SHOULD AVOID ANY OPERATIONS
-   *          NOT REQUIRING EXTERNAL SYNCHRONIZATION
+   * <p>Upgrade and metadata table initialization execute under lock. Table properties are validated afterward.
    *
    * @param metaClient instance of {@link HoodieTableMetaClient}
    * @param instantTime current inflight instant time
@@ -1468,14 +1465,14 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
           metaClient.getTableType()), instantTime.get()));
     }
     boolean requiresInitTable = needsUpgrade(metaClient) || config.isMetadataTableEnabled();
-    if (!requiresInitTable) {
-      return;
+    if (requiresInitTable) {
+      executeUsingTxnManager(ownerInstant, () -> {
+        tryUpgrade(metaClient, instantTime);
+        // TODO: this also does MT table management..
+        initMetadataTable(instantTime, metaClient);
+      });
     }
-    executeUsingTxnManager(ownerInstant, () -> {
-      tryUpgrade(metaClient, instantTime);
-      // TODO: this also does MT table management..
-      initMetadataTable(instantTime, metaClient);
-    });
+    validateAgainstTableProperties(metaClient, config, operationType);
   }
 
   /**
@@ -1515,9 +1512,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     doInitTable(operationType, metaClient, instantTime);
     HoodieTable table = createTable(config, metaClient);
 
-    // Validate table properties
-    validateAgainstTableProperties(table.getMetaClient().getTableConfig(), config);
-
     switch (operationType) {
       case INSERT:
       case INSERT_PREPPED:
@@ -1545,7 +1539,20 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
-   * Pure validation: this method reads both configs and throws, and never modifies either.
+   * A write that keys records needs {@link HoodieTableConfig#COMPLEX_KEYGEN_ENCODING} recorded before it keys them.
+   * Engines that key records outside the client (Spark, the streamer) record it when ingestion is set up, before
+   * this client exists, so the default only checks; a client whose callers hand it keyed records may record it here.
+   */
+  protected void ensureComplexKeyGenEncodingRecorded(HoodieTableMetaClient metaClient) {
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    if (KeyGenUtils.requireComplexKeyGenEncodingTracked(tableConfig) && !tableConfig.getComplexKeyGenEncoding().isPresent()) {
+      throw new HoodieException(KeyGenUtils.getComplexKeygenEncodingMissingMessage());
+    }
+  }
+
+  /**
+   * Validates the write configuration against the table properties. For writes that key records,
+   * ensures the complex key generator encoding is recorded; engines may record a missing encoding.
    *
    * <p>Nothing reconciles the write config against the table beforehand. That is deliberate: the mode
    * is read further down the write path by handles and writer factories, some of which hold no table
@@ -1553,7 +1560,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * in. This gate is what makes that true, by refusing writes whose meta-field settings do not already
    * agree with the table.
    */
-  public void validateAgainstTableProperties(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
+  public void validateAgainstTableProperties(HoodieTableMetaClient metaClient, HoodieWriteConfig writeConfig, WriteOperationType operationType) {
+    if (WriteOperationType.isInsert(operationType) || WriteOperationType.isChangingRecords(operationType)) {
+      ensureComplexKeyGenEncodingRecorded(metaClient);
+    }
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
     // mismatch of table versions.
     CommonClientUtils.validateTableVersion(tableConfig, writeConfig);
 
@@ -1614,11 +1625,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
             indexType, HoodieRecord.RECORD_KEY_METADATA_FIELD,
             HoodieTableConfig.META_FIELDS_MODE.key(), tableConfig.getMetaFieldsMode()));
       }
-    }
-    if (tableConfig.getTableVersion().lesserThan(HoodieTableVersion.NINE)
-            && config.enableComplexKeygenValidation()
-            && isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig)) {
-      throw new HoodieException(getComplexKeygenErrorMessage("ingestion"));
     }
     //Check to make sure it's not a COW table with consistent hashing bucket index
     if (tableConfig.getTableType() == HoodieTableType.COPY_ON_WRITE) {

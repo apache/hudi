@@ -17,12 +17,13 @@
 
 package org.apache.spark.sql.adapter
 
-import org.apache.hudi.{HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, Spark40HoodiePartitionCDCFileGroupMapping, Spark40HoodiePartitionFileSliceMapping}
+import org.apache.hudi.{HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieSparkUtils, Spark40HoodiePartitionCDCFileGroupMapping, Spark40HoodiePartitionFileSliceMapping}
 import org.apache.hudi.client.model.{HoodieInternalRow, Spark40HoodieInternalRow}
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
 import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.exception.HoodieNotSupportedException
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.parquet.schema.MessageType
@@ -116,6 +117,20 @@ class Spark4_0Adapter extends BaseSpark4Adapter {
 
   override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
     Some(new Spark40LegacyHoodieParquetFileFormat(appendPartitionValues))
+  }
+
+  // Spark 4.0 rewrites a variant column into a projection struct once
+  // spark.sql.variant.pushVariantIntoScan is on (off by default there), but its readers do not
+  // evaluate the projection and Hudi does not align log records to it, so fail here instead of
+  // falling through to the schema-change path (#20032).
+  override def validateVariantProjectionReadable(requiredSchema: StructType): Unit = {
+    requiredSchema.fields.find(f => containsVariantProjection(f.dataType)).foreach { field =>
+      throw new HoodieNotSupportedException(
+        s"Column '${field.name}' was rewritten by spark.sql.variant.pushVariantIntoScan into a variant " +
+          s"projection struct, which Hudi does not support on Spark ${HoodieSparkUtils.getSparkVersion}. " +
+          "Set spark.sql.variant.pushVariantIntoScan=false (the Spark 4.0 default) or read the table " +
+          "with Spark 4.1+.")
+    }
   }
 
   override def createInternalRow(metaFields: Array[UTF8String],

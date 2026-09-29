@@ -34,6 +34,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.JavaHoodieIndexFactory;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.JavaHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.BulkInsertPartitioner;
@@ -60,6 +61,16 @@ public class HoodieJavaWriteClient<T> extends
   @Override
   protected void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
     // no op
+  }
+
+  /**
+   * The Java client has no ingestion setup of its own: callers key their records and hand them over, so the
+   * client records the encoding of a table that predates it from the table's data, on the meta client that
+   * {@code initTable} has already loaded for the write.
+   */
+  @Override
+  protected void ensureComplexKeyGenEncodingRecorded(HoodieTableMetaClient metaClient) {
+    KeyGenUtils.recordComplexKeygenEncodingIfMissing(metaClient, config);
   }
 
   public HoodieJavaWriteClient(HoodieEngineContext context,

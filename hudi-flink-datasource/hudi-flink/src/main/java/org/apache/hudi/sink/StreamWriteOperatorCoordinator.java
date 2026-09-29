@@ -412,22 +412,21 @@ public class StreamWriteOperatorCoordinator
   }
 
   private CompletableFuture<CoordinationResponse> handleInstantRequest(Correspondent.InstantTimeRequest request) {
-    CompletableFuture<CoordinationResponse> response = new CompletableFuture<>();
-    instantRequestExecutor.execute(() -> {
-      long checkpointId = request.getCheckpointId();
-      Pair<String, EventBuffer> instantTimeAndEventBuffer = this.eventBuffers.getInstantAndEventBuffer(checkpointId);
-      final String instantTime;
-      if (instantTimeAndEventBuffer == null) {
-        // wait until previous instants are committed.
-        eventBuffers.awaitAllInstantsToCompleteIfNecessary();
-        instantTime = startInstant();
-        this.eventBuffers.initNewEventBuffer(checkpointId, instantTime);
-      } else {
-        instantTime = instantTimeAndEventBuffer.getLeft();
-      }
-      response.complete(CoordinationResponseSerDe.wrap(Correspondent.InstantTimeResponse.getInstance(instantTime)));
-    }, "request instant time");
-    return response;
+    long checkpointId = request.getCheckpointId();
+    // Existing instants must remain available while another checkpoint's creation is blocked.
+    Pair<String, EventBuffer> instantTimeAndEventBuffer = this.eventBuffers.getInstantAndEventBuffer(checkpointId);
+    if (instantTimeAndEventBuffer == null && !instantRequestExecutor.hasRunningTasks()) {
+      instantRequestExecutor.execute(() -> {
+        if (this.eventBuffers.getInstantAndEventBuffer(checkpointId) == null) {
+          // Wait until previous instants are committed.
+          eventBuffers.awaitAllInstantsToCompleteIfNecessary();
+          this.eventBuffers.initNewEventBuffer(checkpointId, startInstant());
+        }
+      }, "request instant time");
+      instantTimeAndEventBuffer = this.eventBuffers.getInstantAndEventBuffer(checkpointId);
+    }
+    String instantTime = instantTimeAndEventBuffer == null ? null : instantTimeAndEventBuffer.getLeft();
+    return CompletableFuture.completedFuture(CoordinationResponseSerDe.wrap(Correspondent.InstantTimeResponse.getInstance(instantTime)));
   }
 
   private CompletableFuture<CoordinationResponse> handleInFlightInstantsRequest(Correspondent.InflightInstantsRequest request) {
@@ -519,9 +518,9 @@ public class StreamWriteOperatorCoordinator
   }
 
   private String startInstant() {
-    // refresh the meta client which is reused
-    metaClient.reloadActiveTimeline();
-    // refresh the last txn metadata
+    // Refresh table properties and the timeline before validating the new write.
+    this.metaClient.reload();
+    // Validate the write and refresh the last txn metadata.
     this.writeClient.preTxn(tableState.operationType, this.metaClient);
     // put the assignment in front of metadata generation,
     // because the instant request from write task is asynchronous.

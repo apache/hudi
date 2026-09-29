@@ -276,7 +276,7 @@ public class SparkMain {
       HoodieWriteConfig config = client.getConfig();
       HoodieEngineContext context = client.getEngineContext();
       HoodieSparkTable table = HoodieSparkTable.create(config, context);
-      client.validateAgainstTableProperties(table.getMetaClient().getTableConfig(), config);
+      client.validateAgainstTableProperties(table.getMetaClient(), config, WriteOperationType.UNKNOWN);
       WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
       return 0;

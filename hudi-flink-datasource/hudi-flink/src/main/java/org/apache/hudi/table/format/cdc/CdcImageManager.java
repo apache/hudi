@@ -119,7 +119,7 @@ public class CdcImageManager implements AutoCloseable {
       RowKind rowKind) {
     byte[] bytes = imageCache.get(recordKey);
     ValidationUtils.checkState(bytes != null,
-        "Key " + recordKey + " does not exist in current file group image");
+        () -> "Key " + recordKey + " does not exist in current file group image");
     try {
       RowData row = serializer.deserialize(new BytesArrayInputView(bytes));
       row.setRowKind(rowKind);

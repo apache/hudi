@@ -20,6 +20,7 @@ package org.apache.spark.sql.adapter
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
+import org.apache.hudi.exception.HoodieNotSupportedException
 
 import org.apache.parquet.schema.PrimitiveType
 import org.apache.parquet.schema.Type.Repetition
@@ -288,6 +289,42 @@ class TestBaseSpark4AdapterVariantMethods extends SparkAdapterSupport {
     val args: Seq[AnyRef] = UTF8String.fromString(json) +:
       Seq.fill(method.getParameterCount - 1)(Boolean.box(false))
     method.invoke(module, args: _*)
+  }
+
+  @Test
+  def testValidateVariantProjectionReadableRejectsOnlySpark40(): Unit = {
+    assumeTrue(HoodieSparkUtils.isSpark4, "Only applies to Spark 4.x")
+    val projectionStruct = StructType(Seq(
+      StructField("0", StringType, metadata = variantProjectionMetadata("$.k"))))
+    assertTrue(sparkAdapter.isVariantProjectionStruct(projectionStruct),
+      "every Spark 4.x adapter must recognise the projection struct shape")
+
+    // The projection sits at the root of the relation output or below a struct member, the two
+    // places PushVariantIntoScan puts it, so the guard has to look in both.
+    val rootSchema = StructType(Seq(
+      StructField("id", IntegerType),
+      StructField("v", projectionStruct)))
+    val nestedSchema = StructType(Seq(
+      StructField("id", IntegerType),
+      StructField("s", StructType(Seq(
+        StructField("inner", projectionStruct),
+        StructField("other", IntegerType))))))
+    val plainSchema = StructType(Seq(
+      StructField("id", IntegerType),
+      StructField("v", sparkAdapter.getVariantDataType.get)))
+
+    // A native variant request is readable everywhere.
+    sparkAdapter.validateVariantProjectionReadable(plainSchema)
+    if (HoodieSparkUtils.isSpark4_0) {
+      Seq(rootSchema, nestedSchema).foreach { schema =>
+        val e = assertThrows(classOf[HoodieNotSupportedException],
+          () => sparkAdapter.validateVariantProjectionReadable(schema))
+        assertTrue(e.getMessage.contains("spark.sql.variant.pushVariantIntoScan"), e.getMessage)
+      }
+    } else {
+      sparkAdapter.validateVariantProjectionReadable(rootSchema)
+      sparkAdapter.validateVariantProjectionReadable(nestedSchema)
+    }
   }
 
   @Test

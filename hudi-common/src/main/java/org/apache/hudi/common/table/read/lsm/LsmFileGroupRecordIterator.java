@@ -38,6 +38,7 @@ import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
 import org.apache.hudi.common.table.read.UpdateProcessor;
+import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -153,28 +154,36 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
    */
   private List<SortedRunReader<T>> initializeReaders() throws IOException {
     List<SortedRunReader<T>> sortedRunReaders = new ArrayList<>();
-    int mergeOrder = 0;
-    if (readBaseFile) {
-      addReader(sortedRunReaders, mergeOrder++, LsmFileIterators.createBaseFileIterator(
-          readerContext, storage, inputSplit.getBaseFileOption().get(),
-          inputSplit.getStart(), inputSplit.getLength(), orderingFieldNames, false));
-    }
-
-    if (inputSplit.hasRecordIterator()) {
-      addReader(sortedRunReaders, mergeOrder++, createRecordIterator(inputSplit.getRecordIterator()));
-    }
-
-    List<LogReaderSpec> logReaderSpecs = new ArrayList<>();
-    if (!inputSplit.hasRecordIterator()) {
-      for (HoodieLogFile logFile : inputSplit.getLogFiles()) {
-        logReaderSpecs.add(new LogReaderSpec(mergeOrder++, logFile));
+    try {
+      int mergeOrder = 0;
+      if (readBaseFile) {
+        addReader(sortedRunReaders, mergeOrder++, LsmFileIterators.createBaseFileIterator(
+            readerContext, storage, inputSplit.getBaseFileOption().get(),
+            inputSplit.getStart(), inputSplit.getLength(), orderingFieldNames, false));
       }
-    }
-    Set<Integer> directLogMergeOrders = selectDirectLogMergeOrders(logReaderSpecs, readBaseFile);
-    for (LogReaderSpec spec : logReaderSpecs) {
-      ClosableIterator<BufferedRecord<T>> iterator = LsmFileIterators.createLogFileIterator(
-          readerContext, metaClient, storage, spec.logFile, orderingFieldNames);
-      addReader(sortedRunReaders, spec.mergeOrder, maybeSpillIterator(directLogMergeOrders.contains(spec.mergeOrder), iterator));
+
+      if (inputSplit.hasRecordIterator()) {
+        addReader(sortedRunReaders, mergeOrder++, createRecordIterator(inputSplit.getRecordIterator()));
+      }
+
+      List<LogReaderSpec> logReaderSpecs = new ArrayList<>();
+      if (!inputSplit.hasRecordIterator()) {
+        for (HoodieLogFile logFile : inputSplit.getLogFiles()) {
+          logReaderSpecs.add(new LogReaderSpec(mergeOrder++, logFile));
+        }
+      }
+      Set<Integer> directLogMergeOrders = selectDirectLogMergeOrders(logReaderSpecs, readBaseFile);
+      for (LogReaderSpec spec : logReaderSpecs) {
+        ClosableIterator<BufferedRecord<T>> iterator = LsmFileIterators.createLogFileIterator(
+            readerContext, metaClient, storage, spec.logFile, orderingFieldNames);
+        addReader(sortedRunReaders, spec.mergeOrder, maybeSpillIterator(directLogMergeOrders.contains(spec.mergeOrder), iterator));
+      }
+    } catch (Throwable e) {
+      // Construction failed, so the caller cannot close the readers already opened.
+      for (SortedRunReader<T> reader : sortedRunReaders) {
+        CloseableUtils.closeSuppressing(reader::close, e);
+      }
+      throw e;
     }
     return sortedRunReaders;
   }
@@ -244,7 +253,14 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
    */
   private void addReader(List<SortedRunReader<T>> sortedRunReaders, int mergeOrder, ClosableIterator<BufferedRecord<T>> iterator) {
     SortedRunReader<T> sortedRunReader = new SortedRunReader<>(mergeOrder, iterator);
-    if (sortedRunReader.advance()) {
+    boolean hasRecord;
+    try {
+      hasRecord = sortedRunReader.advance();
+    } catch (Throwable failure) {
+      CloseableUtils.closeSuppressing(sortedRunReader::close, failure);
+      throw failure;
+    }
+    if (hasRecord) {
       sortedRunReaders.add(sortedRunReader);
     } else {
       sortedRunReader.close();
@@ -486,7 +502,16 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
     }
 
     private void close() {
-      leaves.forEach(SortedRunReader::close);
+      Iterator<SortedRunReader<T>> iterator = leaves.iterator();
+      try {
+        while (iterator.hasNext()) {
+          iterator.next().close();
+        }
+      } catch (Throwable e) {
+        // Attempt to close every remaining reader before propagating the first failure.
+        iterator.forEachRemaining(reader -> CloseableUtils.closeSuppressing(reader::close, e));
+        throw e;
+      }
     }
 
     private static int nextPowerOfTwo(int value) {

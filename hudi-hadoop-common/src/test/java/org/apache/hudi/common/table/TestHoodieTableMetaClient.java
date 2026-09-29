@@ -31,6 +31,8 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.util.FileIOUtils;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieInstantWriter;
@@ -381,6 +383,90 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     String randomDefinitionPath = "/a/b/c";
     metaClient.getTableConfig().setValue(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH.key(), "/a/b/c");
     assertEquals(randomDefinitionPath, metaClient.getIndexDefinitionPath());
+  }
+
+  /**
+   * A single-field complex keygen table records {@code FIELD_PREFIXED} on creation, or the encoding the caller
+   * declares, on every table version. Only that shape is tracked: a key generator that is not complex, several
+   * record key fields, or an unpopulated {@code _hoodie_record_key} leave the property off the table.
+   */
+  @Test
+  void testComplexKeyGenEncodingOnTableCreation() throws IOException {
+    int tableId = 0;
+    for (HoodieTableVersion version : Arrays.asList(HoodieTableVersion.SIX, HoodieTableVersion.EIGHT,
+        HoodieTableVersion.NINE, HoodieTableVersion.current())) {
+      HoodieTableMetaClient created = complexKeyGenTableBuilder(version, null)
+          .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath() + Path.SEPARATOR + "ckg" + tableId++);
+      assertEquals(Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED), created.getTableConfig().getComplexKeyGenEncoding());
+
+      // the encoding describes the stored keys, so a declared VALUE_ONLY is recorded on every table version:
+      // a version 8 table carrying bare keys keeps them once it is upgraded to 9 and above
+      HoodieTableMetaClient.TableBuilder valueOnly = complexKeyGenTableBuilder(version, ComplexKeyGenEncoding.VALUE_ONLY);
+      String valueOnlyPath = tempDir.toAbsolutePath() + Path.SEPARATOR + "ckg" + tableId++;
+      assertEquals(Option.of(ComplexKeyGenEncoding.VALUE_ONLY),
+          valueOnly.initTable(this.metaClient.getStorageConf(), valueOnlyPath).getTableConfig().getComplexKeyGenEncoding());
+    }
+
+    // without a stored record key there is no encoding to record, whatever the version
+    HoodieTableMetaClient virtualKeys = complexKeyGenTableBuilder(HoodieTableVersion.current(), null)
+        .setPopulateMetaFields(false)
+        .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath() + Path.SEPARATOR + "ckg" + tableId++);
+    assertFalse(virtualKeys.getTableConfig().getComplexKeyGenEncoding().isPresent());
+
+    // a key generator that is not complex keys the record its own way, so there is no `<field>:` prefix to track
+    HoodieTableMetaClient simpleKeyGen = complexKeyGenTableBuilder(HoodieTableVersion.current(), null)
+        .setKeyGeneratorType(KeyGeneratorType.SIMPLE.name())
+        .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath() + Path.SEPARATOR + "ckg" + tableId++);
+    assertFalse(simpleKeyGen.getTableConfig().getComplexKeyGenEncoding().isPresent());
+
+    // several record key fields are always joined as `<field>:<value>,<field>:<value>`, the same on every release
+    HoodieTableMetaClient multiField = complexKeyGenTableBuilder(HoodieTableVersion.current(), null)
+        .setRecordKeyFields("id,name")
+        .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath() + Path.SEPARATOR + "ckg" + tableId++);
+    assertFalse(multiField.getTableConfig().getComplexKeyGenEncoding().isPresent());
+
+    // an encoding declared on an untracked shape describes nothing, so it is not recorded either
+    HoodieTableMetaClient multiFieldDeclared =
+        complexKeyGenTableBuilder(HoodieTableVersion.current(), ComplexKeyGenEncoding.VALUE_ONLY)
+            .setRecordKeyFields("id,name")
+            .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath() + Path.SEPARATOR + "ckg" + tableId);
+    assertFalse(multiFieldDeclared.getTableConfig().getComplexKeyGenEncoding().isPresent());
+  }
+
+  /**
+   * TRUNCATE TABLE and ALTER TABLE RENAME re-create the table from its own properties, which carry both the
+   * table version and the recorded encoding. An upgraded table at version 9 or above holding VALUE_ONLY must
+   * survive that round trip.
+   */
+  @Test
+  void testReInitFromPropertiesOfUpgradedValueOnlyTable() throws IOException {
+    String path = tempDir.toAbsolutePath() + Path.SEPARATOR + "reinit";
+    HoodieTableMetaClient created = complexKeyGenTableBuilder(HoodieTableVersion.EIGHT, ComplexKeyGenEncoding.VALUE_ONLY)
+        .initTable(this.metaClient.getStorageConf(), path);
+    // the table is upgraded, the way the 8 to 9 hop leaves it: current version, encoding untouched
+    created.getTableConfig().setValue(HoodieTableConfig.VERSION, String.valueOf(HoodieTableVersion.current().versionCode()));
+    HoodieTableConfig.update(created.getStorage(), created.getMetaPath(), created.getTableConfig().getProps());
+    created.reloadTableConfig();
+    assertEquals(HoodieTableVersion.current(), created.getTableConfig().getTableVersion());
+    assertEquals(Option.of(ComplexKeyGenEncoding.VALUE_ONLY), created.getTableConfig().getComplexKeyGenEncoding());
+
+    HoodieTableMetaClient reInitialised = HoodieTableMetaClient.newTableBuilder()
+        .fromProperties(created.getTableConfig().getProps())
+        .initTable(this.metaClient.getStorageConf(), path);
+
+    assertEquals(HoodieTableVersion.current(), reInitialised.getTableConfig().getTableVersion());
+    assertEquals(Option.of(ComplexKeyGenEncoding.VALUE_ONLY), reInitialised.getTableConfig().getComplexKeyGenEncoding());
+  }
+
+  private static HoodieTableMetaClient.TableBuilder complexKeyGenTableBuilder(HoodieTableVersion version, ComplexKeyGenEncoding encoding) {
+    return HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+        .setTableName("table")
+        .setTableVersion(version)
+        .setRecordKeyFields("id")
+        .setPartitionFields("dt")
+        .setKeyGeneratorType(KeyGeneratorType.COMPLEX.name())
+        .setComplexKeyGenEncoding(encoding);
   }
 
   @Test

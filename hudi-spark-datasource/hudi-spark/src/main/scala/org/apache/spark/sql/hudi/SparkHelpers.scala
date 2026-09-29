@@ -24,7 +24,7 @@ import org.apache.hudi.common.config.{HoodieParquetConfig, HoodieStorageConfig}
 import org.apache.hudi.common.config.HoodieStorageConfig.{BLOOM_FILTER_DYNAMIC_MAX_ENTRIES, BLOOM_FILTER_FPP_VALUE, BLOOM_FILTER_NUM_ENTRIES_VALUE, BLOOM_FILTER_TYPE}
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.common.util.Option
+import org.apache.hudi.common.util.{CloseableUtils, Option}
 import org.apache.hudi.core.io.storage.HoodieIOFactory
 import org.apache.hudi.io.storage.hadoop.HoodieAvroParquetWriter
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
@@ -72,14 +72,20 @@ object SparkHelpers {
     conf.unwrap().setClassLoader(Thread.currentThread.getContextClassLoader)
 
     val writer = new HoodieAvroParquetWriter(destinationFile, parquetConfig, instantTime, new SparkTaskContextSupplier(), true)
-    for (rec <- sourceRecords) {
-      val key: String = rec.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString
-      if (!keysToSkip.contains(key)) {
+    try {
+      for (rec <- sourceRecords) {
+        val key: String = rec.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString
+        if (!keysToSkip.contains(key)) {
 
-        writer.writeAvro(key, rec)
+          writer.writeAvro(key, rec)
+        }
       }
+    } catch {
+      case t: Throwable =>
+        CloseableUtils.closeSuppressing(writer, t)
+        throw t
     }
-    writer.close
+    writer.close()
   }
 }
 

@@ -26,7 +26,7 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
-import org.apache.spark.sql.functions.{col, lit, struct}
+import org.apache.spark.sql.functions.{broadcast, col, lit, struct}
 import org.apache.spark.sql.types.{IntegerType, LongType}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
@@ -43,6 +43,11 @@ private case class LegacyTestRow(id: String,
                                  partition: String,
                                  nested: LegacyNested,
                                  tags: Seq[Int])
+
+/** Flat, all-atomic-type row shape, used where a nested schema (see [[LegacyTestRow]]) is not
+ * needed. Must stay top-level: a case class local to a method has no TypeTag, and
+ * `spark.createDataFrame` needs one. */
+private case class FlatTestRow(id: String, name: String, partition: String)
 
 /**
  * Functional tests for the legacy (pre-file-group-reader) Spark read path:
@@ -299,6 +304,39 @@ class TestLegacyParquetReadPath extends HoodieSparkClientTestBase with ScalaAsse
     } finally {
       spark.conf.set(vectorizedKey, previous)
     }
+  }
+
+  @Test
+  def testBroadcastJoinHonorsPlanTimeBatchingDecision(): Unit = {
+    // Regression test: broadcast joins used to crash with a ColumnarBatch/InternalRow cast error
+    // because the reader ignored the plan's OPTION_RETURNING_BATCH and recomputed its own batching
+    // decision -- a wide schema (>spark.sql.codegen.maxFields) makes FileSourceScanExec go
+    // row-based while supportBatch, lacking a field-count check, still says batchable.
+    val numExtraColumns = 150 // comfortably over spark.sql.codegen.maxFields's default of 100
+    val baseDf = spark.createDataFrame(Seq(FlatTestRow("1", "a", "p0"), FlatTestRow("2", "b", "p0")))
+    val extraCols = (1 to numExtraColumns).map(i => lit(i.toLong).as(s"col$i"))
+    val wideDf = baseDf.select((baseDf.columns.map(col) ++ extraCols): _*)
+    assertTrue(wideDf.schema.fields.length > 100, "Test setup must produce a >100 column schema")
+
+    wideDf.write.format("hudi")
+      .options(Map(
+        DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
+        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
+        DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
+        DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key -> "true",
+        HoodieWriteConfig.TBL_NAME.key -> "legacy_read_path_tbl"))
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    assertTrue(legacyFormatSupportsBatch,
+      "Wide, all-atomic-type schema must look batchable to the legacy reader on its own")
+
+    val small = legacyFileFormatDf()
+    val big = spark.range(2).toDF("n")
+    val joined = big.join(broadcast(small), col("n") === col("id").cast("long"), "left")
+    // Must collect, not count() (which prunes the schema back under the threshold).
+    assertEquals(2L, joined.collect().length)
   }
 
   @Test

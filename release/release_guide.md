@@ -283,7 +283,7 @@ Here is how to go about a bug fix release.
 
 - Create a branch in your repo (<user>/hudi).
 - Cherry-pick commits from master that needs to be part of this release. (git cherry-pick commit-hash). You need to manually resolve the conflicts. For eg, a file might have been moved to a diff class in master where as in your release branch, it could be in older place. You need to take a call where to place it. Similar things like file addition, file deletion, etc.
-- Update the release version by running `mvn versions:set -DnewVersion=${RELEASE_VERSION}-rc${RC_NUM}`, with "RELEASE" as the version and "RC_NUM" as the RC number.  Make sure the version changes are intended.  Then git commit the changes.
+- Update the release version by running `mvn versions:set -DnewVersion=${RELEASE_VERSION}-rc${RC_NUM}`, with "RELEASE" as the version and "RC_NUM" as the RC number. `versions:set` does not reach `docker/trino/shim/pom.xml` (outside the reactor, parent is `trino-root`), so also bump its `dep.hudi.version` with `sed -i.bak "s#<dep.hudi.version>[^<]*</dep.hudi.version>#<dep.hudi.version>${RELEASE_VERSION}-rc${RC_NUM}</dep.hudi.version>#" docker/trino/shim/pom.xml && rm docker/trino/shim/pom.xml.bak`. `git grep -n '<old-version>' -- '*pom.xml'` must return nothing.  Make sure the version changes are intended.  Then git commit the changes.
 - Ensure both compilation and tests are good.
 - If apache/hudi is not set as upstream, then add it as upstream: `git remote add upstream https://github.com/apache/hudi.git`
 - Once the branch is ready with all commits, go ahead and push your branch to upstream.
@@ -375,6 +375,9 @@ Set up a few environment variables to simplify Maven commands that follow. This 
 1. git checkout ${RELEASE_BRANCH} 
 2. Run mvn version to set the proper rc number in all artifacts 
    1. mvn versions:set -DnewVersion=${RELEASE_VERSION}-rc${RC_NUM}
+   2. `versions:set` does not reach `docker/trino/shim/pom.xml` (outside the reactor, parent is `trino-root`). Bump its `dep.hudi.version` by hand:
+      `sed -i.bak "s#<dep.hudi.version>[^<]*</dep.hudi.version>#<dep.hudi.version>${RELEASE_VERSION}-rc${RC_NUM}</dep.hudi.version>#" docker/trino/shim/pom.xml && rm docker/trino/shim/pom.xml.bak`
+   3. Check that `git grep -n '<old-version>' -- '*pom.xml'` returns nothing.
 3. Run Unit tests  and ensure they succeed 
    1. mvn test -DskipITs=true 
 4. Run Integration Tests and ensure they succeed
@@ -654,6 +657,9 @@ Once the release candidate has been reviewed and approved by the community, the 
 
 1. Drop all RC orgapachehudi-XXX in [Apache Nexus Staging Repositories](https://repository.apache.org/#stagingRepositories).
 2. change the version from ${RELEASE_VERSION}-rc${RC_NUM} to ${RELEASE_VERSION} against release branch, use command `mvn versions:set -DnewVersion=${RELEASE_VERSION}`, e.g. change 0.5.1-rc1 to 0.5.1.
+   1. `versions:set` does not reach `docker/trino/shim/pom.xml`. Bump its `dep.hudi.version` by hand:
+      `sed -i.bak "s#<dep.hudi.version>[^<]*</dep.hudi.version>#<dep.hudi.version>${RELEASE_VERSION}</dep.hudi.version>#" docker/trino/shim/pom.xml && rm docker/trino/shim/pom.xml.bak`
+   2. Check that `git grep -n "${RELEASE_VERSION}-rc" -- '*pom.xml'` returns nothing.
 3. Commit and push the version change to release branch.
     1. git commit -am "chore: Update release version to reflect published version  ${RELEASE_VERSION}"
    2. git push origin release-${RELEASE_VERSION}

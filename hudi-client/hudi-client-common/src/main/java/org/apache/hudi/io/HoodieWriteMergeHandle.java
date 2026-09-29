@@ -34,6 +34,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
+import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
@@ -473,17 +474,10 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       }
 
       markClosed();
-      writeIncomingRecords();
-
-      if (keyToNewRecords instanceof Closeable) {
-        ((Closeable) keyToNewRecords).close();
+      try (Closeable records = keyToNewRecords instanceof Closeable ? (Closeable) keyToNewRecords : null) {
+        writeIncomingRecords();
       }
-
-      keyToNewRecords = null;
-      writtenRecordKeys = null;
-
-      fileWriter.close();
-      fileWriter = null;
+      closeFileWriter();
 
       long fileSizeInBytes = storage.getPathInfo(newFilePath).getLength();
       HoodieWriteStat stat = writeStatus.getStat();
@@ -506,8 +500,30 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
 
       return Collections.singletonList(writeStatus);
     } catch (IOException e) {
+      closeFileWriterQuietly(e);
       throw new HoodieUpsertException("Failed to close UpdateHandle", e);
+    } catch (RuntimeException e) {
+      closeFileWriterQuietly(e);
+      throw e;
+    } finally {
+      keyToNewRecords = null;
+      writtenRecordKeys = null;
     }
+  }
+
+  private void closeFileWriter() throws IOException {
+    try {
+      if (fileWriter != null) {
+        fileWriter.close();
+      }
+    } finally {
+      fileWriter = null;
+    }
+  }
+
+  protected void closeFileWriterQuietly(Throwable failure) {
+    CloseableUtils.closeSuppressing(fileWriter, failure);
+    fileWriter = null;
   }
 
   public void performMergeDataValidationCheck(WriteStatus writeStatus) {

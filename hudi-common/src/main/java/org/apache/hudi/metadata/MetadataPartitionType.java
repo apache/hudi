@@ -146,7 +146,7 @@ public enum MetadataPartitionType {
       //       Otherwise, it has to be present or the record would be considered invalid
       if (bloomFilterRecord == null) {
         checkArgument(record.getSchema().getField(SCHEMA_FIELD_ID_BLOOM_FILTER) == null,
-            String.format("Valid %s record expected for type: %s", SCHEMA_FIELD_ID_BLOOM_FILTER, MetadataPartitionType.BLOOM_FILTERS.getRecordType()));
+            () -> String.format("Valid %s record expected for type: %s", SCHEMA_FIELD_ID_BLOOM_FILTER, MetadataPartitionType.BLOOM_FILTERS.getRecordType()));
       } else {
         payload.bloomFilterMetadata = new HoodieMetadataBloomFilter(
             bloomFilterRecord.get(BLOOM_FILTER_FIELD_TYPE).toString(),
@@ -228,7 +228,7 @@ public enum MetadataPartitionType {
     @Override
     public void constructMetadataPayload(HoodieMetadataPayload payload, GenericRecord record) {
       GenericRecord secondaryIndexRecord = getNestedFieldValue(record, SCHEMA_FIELD_ID_SECONDARY_INDEX);
-      checkState(secondaryIndexRecord != null, "Valid SecondaryIndexMetadata record expected for type: " + MetadataPartitionType.SECONDARY_INDEX.getRecordType());
+      checkState(secondaryIndexRecord != null, () -> "Valid SecondaryIndexMetadata record expected for type: " + MetadataPartitionType.SECONDARY_INDEX.getRecordType());
       payload.secondaryIndexMetadata = new HoodieSecondaryIndexInfo((Boolean) secondaryIndexRecord.get(SECONDARY_INDEX_FIELD_IS_DELETED));
     }
 
@@ -315,7 +315,7 @@ public enum MetadataPartitionType {
     //       Otherwise, it has to be present or the record would be considered invalid
     if (columnStatsRecord == null) {
       checkArgument(record.getSchema().getField(SCHEMA_FIELD_ID_COLUMN_STATS) == null,
-          String.format("Valid %s record expected for type: %s", SCHEMA_FIELD_ID_COLUMN_STATS, MetadataPartitionType.COLUMN_STATS.getRecordType()));
+          () -> String.format("Valid %s record expected for type: %s", SCHEMA_FIELD_ID_COLUMN_STATS, MetadataPartitionType.COLUMN_STATS.getRecordType()));
     } else {
       ValueMetadata valueMetadata = ValueMetadata.getValueMetadata(columnStatsRecord);
       HoodieMetadataColumnStats.Builder columnStatsBuilder = HoodieMetadataColumnStats.newBuilder(METADATA_COLUMN_STATS_BUILDER_STUB.get())

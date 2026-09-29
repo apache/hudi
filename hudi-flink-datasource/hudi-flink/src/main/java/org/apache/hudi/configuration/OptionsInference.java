@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.util.ClientIds;
 import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.util.StreamerUtil;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.FlinkVersion;
@@ -152,5 +153,14 @@ public class OptionsInference {
         log.info("Loaded Latest Hashing Config {}. Reset hoodie.bucket.index.num.buckets to {}", hashingConfig, hashingConfig.getDefaultBucketNumber());
       }
     }
+  }
+
+  /**
+   * Apply key generator defaults from the job configuration, as in HoodieTableFactory.
+   */
+  public static void setupComplexKeygenEncoding(Configuration conf) {
+    boolean complexHoodieKey = OptionsResolver.getRecordKeys(conf).length > 1
+        || conf.get(FlinkOptions.PARTITION_PATH_FIELD).split(",").length > 1;
+    StreamerUtil.checkKeygenGenerator(complexHoodieKey, conf);
   }
 }

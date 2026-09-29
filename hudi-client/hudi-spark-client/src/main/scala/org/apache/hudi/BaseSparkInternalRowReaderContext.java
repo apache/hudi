@@ -25,6 +25,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
@@ -44,7 +45,6 @@ import java.util.stream.Collectors;
 import scala.Function1;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
-import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
 
 /**
  * An abstract class implementing {@link HoodieReaderContext} to handle {@link InternalRow}s.
@@ -54,8 +54,9 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
 
   protected BaseSparkInternalRowReaderContext(StorageConfiguration<?> storageConfig,
                                               HoodieTableConfig tableConfig,
+                                              Option<InstantRange> instantRangeOpt,
                                               BaseSparkInternalRecordContext recordContext) {
-    super(storageConfig, tableConfig, Option.empty(), Option.empty(), recordContext);
+    super(storageConfig, tableConfig, instantRangeOpt, Option.empty(), recordContext);
   }
 
   @Override
@@ -81,6 +82,8 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   /**
    * Constructs a transformation that will take a row and convert it to a new row with the given schema and adds in the values for the partition columns if they are missing in the returned row.
    * It is assumed that the `to` schema will contain the partition fields.
+   * The data-file rows arrive in the shape {@link #getFileRecordIterator} read them in, so the writer is typed over
+   * the record context's row shape rather than over the plain engine-schema conversion.
    * @param from the original schema
    * @param to the schema the row will be converted to
    * @param partitionFieldAndValues the partition fields and their values, if any are required by the reader
@@ -89,8 +92,10 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   protected UnaryOperator<InternalRow> getBootstrapProjection(HoodieSchema from, HoodieSchema to, List<Pair<String, Object>> partitionFieldAndValues) {
     Map<Integer, Object> partitionValuesByIndex = partitionFieldAndValues.stream()
         .collect(Collectors.toMap(pair -> to.getField(pair.getKey()).orElseThrow(() -> new IllegalArgumentException("Missing field: " + pair.getKey())).pos(), Pair::getRight));
+    BaseSparkInternalRecordContext sparkRecordContext = (BaseSparkInternalRecordContext) recordContext;
     Function1<InternalRow, UnsafeRow> unsafeRowWriter =
-        HoodieInternalRowUtils.getCachedUnsafeRowWriter(getCachedSchema(from), getCachedSchema(to), Collections.emptyMap(), partitionValuesByIndex);
+        HoodieInternalRowUtils.getCachedUnsafeRowWriter(sparkRecordContext.getRowStructType(from),
+            sparkRecordContext.getRowStructType(to), Collections.emptyMap(), partitionValuesByIndex);
     return row -> (InternalRow) unsafeRowWriter.apply(row);
   }
 

@@ -35,12 +35,16 @@ import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
+import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.cdc.HoodieNativeLogFormatWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InOrder;
 import org.mockito.MockedConstruction;
 
@@ -50,7 +54,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -211,6 +219,60 @@ public class TestHoodieNativeLogAppendHandle {
 
       HoodieAppendException exception = assertThrows(HoodieAppendException.class, handle::flushWriter);
       assertTrue(exception.getMessage().contains("file-1"));
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testWriteFailureClosesNativeWriter(boolean useRecordMap) throws Exception {
+    HoodieWriteConfig config = config();
+    // Conflict detection must fail the handle even when individual write failures may be ignored.
+    config.setValue(HoodieWriteConfig.IGNORE_FAILED, "true");
+    HoodieTable table = table(config);
+    HoodieEarlyConflictDetectionException failure = new HoodieEarlyConflictDetectionException("conflict");
+    RuntimeException closeFailure = new IllegalStateException("close failed");
+    try (MockedConstruction<HoodieNativeLogFormatWriter> writers = mockConstruction(
+        HoodieNativeLogFormatWriter.class, (writer, context) -> {
+          when(writer.canWriteDataFile()).thenReturn(true);
+          doThrow(failure).when(writer).appendRecord(any(), any());
+          doThrow(closeFailure).when(writer).close();
+        })) {
+      TestableNativeLogAppendHandle handle = new TestableNativeLogAppendHandle(config, table);
+      handle.createWriter();
+      handle.doInit = false;
+      HoodieRecord record = mock(HoodieRecord.class);
+      when(record.getPartitionPath()).thenReturn("partition");
+      when(record.getMetadata()).thenReturn(Option.empty());
+      when(record.prependMetaFields(any(), any(), any(), any())).thenReturn(record);
+
+      assertThrows(HoodieException.class, () -> {
+        if (useRecordMap) {
+          handle.write(Collections.singletonMap("key", record));
+        } else {
+          handle.writeRecord(record);
+        }
+      });
+      assertTrue(handle.isClosed());
+      assertNull(handle.getWriter());
+      assertDoesNotThrow(handle::close);
+      assertArrayEquals(new Throwable[] {closeFailure}, failure.getSuppressed());
+      verify(writers.constructed().get(0)).close();
+    }
+  }
+
+  @Test
+  public void testCloseFailureClearsNativeWriter() throws Exception {
+    HoodieWriteConfig config = config();
+    RuntimeException failure = new IllegalStateException("close failed");
+    try (MockedConstruction<HoodieNativeLogFormatWriter> writers = mockConstruction(
+        HoodieNativeLogFormatWriter.class, (writer, context) -> doThrow(failure).when(writer).close())) {
+      TestableNativeLogAppendHandle handle = new TestableNativeLogAppendHandle(config, table(config));
+      handle.createWriter();
+      assertSame(failure, assertThrows(IllegalStateException.class, handle::close));
+      assertTrue(handle.isClosed());
+      assertNull(handle.getWriter());
+      assertDoesNotThrow(handle::close);
+      verify(writers.constructed().get(0)).close();
     }
   }
 

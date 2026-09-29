@@ -76,7 +76,7 @@ public class ConditionalRangePartitioner<S extends Comparable<S>, V extends Comp
     S key = compositeKey._1();
     V value = compositeKey._2();
     ValidationUtils.checkArgument(startIndex.containsKey(key),
-        "ConditionalRangePartitioner does not expect key " + key);
+        () -> "ConditionalRangePartitioner does not expect key " + key);
 
     List<V> splits = splitPoints.getOrDefault(key, Collections.emptyList());
     // binary search to find the right bucket id.

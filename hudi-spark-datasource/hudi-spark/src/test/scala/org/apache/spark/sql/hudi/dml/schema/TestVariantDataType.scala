@@ -198,6 +198,34 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
     })
   }
 
+  test("Test Spark 4.0 rejects reads rewritten by pushVariantIntoScan") {
+    // The conf is off by default on Spark 4.0 and on from 4.1 (SPARK-54454). Spark 4.0 still runs
+    // the rewrite once it is set but cannot read the projection struct it produces, so Hudi fails
+    // the scan up front instead of falling through to schema-change handling (#20032).
+    assume(HoodieSparkUtils.isSpark4_0, "Guards the Spark 4.0 read path only")
+
+    Seq("cow", "mor").foreach { tableType =>
+      withVariantTable(s"pushVariantIntoScan $tableType", tableType) { (tableName, _, _) =>
+        spark.sql(s"""insert into $tableName values (1, parse_json('{"key": "v1"}'), 1000)""")
+        // A second write so the MOR leg reads a log file too.
+        spark.sql(s"""update $tableName set v = parse_json('{"key": "v2"}') where id = 1""")
+
+        withSQLConf("spark.sql.variant.pushVariantIntoScan" -> "true") {
+          // An extraction and a whole-variant read are both rewritten into a projection struct.
+          Seq(s"select id, variant_get(v, '$$.key', 'string') from $tableName",
+            s"select id, cast(v as string) from $tableName").foreach { sql =>
+            checkNestedExceptionContains(() => spark.sql(sql).collect())(
+              "spark.sql.variant.pushVariantIntoScan")
+          }
+          // A query that does not touch the variant column is not rewritten and still reads.
+          checkAnswer(s"select id, ts from $tableName")(Seq(1, 1000))
+        }
+        // Back on the default the same reads work.
+        checkAnswer(s"select id, cast(v as string) from $tableName")(Seq(1, "{\"key\":\"v2\"}"))
+      }
+    }
+  }
+
   test("Test Query Log Only MOR Table With VARIANT column triggers compaction") {
     // Gated on Spark >= 4.1. Compaction writes the base file via the AVRO shredding writer, which
     // lays the variant group out as [metadata, value, typed_value]. Hudi's Spark 4.0 reader does not

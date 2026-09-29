@@ -79,7 +79,7 @@ public class KinesisSourceConfig extends HoodieConfig {
   public static final ConfigProperty<String> KINESIS_ROLE_ARN = ConfigProperty
       .key(PREFIX + "role.arn")
       .noDefaultValue()
-      .sinceVersion("1.3.0")
+      .sinceVersion("1.2.1")
       .markAdvanced()
       .withDocumentation("IAM role ARN to assume via STS when the Kinesis stream lives in a different AWS "
           + "account than the application. When set, and no static access/secret key is configured (static keys "
@@ -93,7 +93,7 @@ public class KinesisSourceConfig extends HoodieConfig {
   public static final ConfigProperty<String> KINESIS_ROLE_EXTERNAL_ID = ConfigProperty
       .key(PREFIX + "role.external.id")
       .noDefaultValue()
-      .sinceVersion("1.3.0")
+      .sinceVersion("1.2.1")
       .markAdvanced()
       .withDocumentation("External ID passed to sts:AssumeRole when assuming " + PREFIX + "role.arn, for roles "
           + "whose trust policy carries an sts:ExternalId condition. Ignored when the role ARN is not set.");
@@ -101,7 +101,7 @@ public class KinesisSourceConfig extends HoodieConfig {
   public static final ConfigProperty<String> KINESIS_ROLE_SESSION_NAME = ConfigProperty
       .key(PREFIX + "role.session.name")
       .defaultValue("hudi-kinesis-source")
-      .sinceVersion("1.3.0")
+      .sinceVersion("1.2.1")
       .markAdvanced()
       .withDocumentation("STS role session name used when assuming " + PREFIX + "role.arn. Shows up in the "
           + "target account's CloudTrail, so set it per pipeline when several jobs share one role.");

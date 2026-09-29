@@ -230,10 +230,6 @@ class Spark4_1Adapter extends BaseSpark4Adapter {
     RebaseDateTime.RebaseSpec(LegacyBehaviorPolicy.withName(policy))
   }
 
-  override def isVariantProjectionStruct(structType: StructType): Boolean = {
-    VariantMetadata.isVariantStruct(structType)
-  }
-
   // Spark 4.1 reconstructs shredded variants on read (SPARK-54410), so opt in to the
   // shared rewrite; Spark 4.0 stays on the default None.
   override def buildFullVariantReadSchema(schema: StructType): Option[StructType] =

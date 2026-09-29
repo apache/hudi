@@ -126,7 +126,7 @@ public class HiveSyncConfigHolder {
       .key("hoodie.datasource.hive_sync.batching.enabled")
       .defaultValue(false)
       .markAdvanced()
-      .sinceVersion("1.3.0")
+      .sinceVersion("1.2.1")
       .withDocumentation("Only applies to HiveQL sync mode; has no effect in HMS or JDBC mode. When true, "
           + "ADD, TOUCH, and SET_LOCATION partition statements are dispatched in parallel across a pool of "
           + "Hive Driver workers, with ADD and TOUCH additionally split into batches of "
@@ -145,7 +145,7 @@ public class HiveSyncConfigHolder {
       .key("hoodie.datasource.hive_sync.batching.threads")
       .defaultValue(4)
       .markAdvanced()
-      .sinceVersion("1.3.0")
+      .sinceVersion("1.2.1")
       .withDocumentation("Number of worker threads used for parallel HiveQL partition dispatch when "
           + "`hoodie.datasource.hive_sync.batching.enabled` is true. The same value sizes both pools: the "
           + "Hive Driver workers used for ADD/TOUCH/SET_LOCATION and the metastore (Thrift) clients used "

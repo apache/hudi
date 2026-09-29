@@ -87,7 +87,7 @@ public class HoodieCommonConfig extends HoodieConfig {
       .key("hoodie.write.timestamp.logical.type.overrides")
       .defaultValue("")
       .markAdvanced()
-      .sinceVersion("1.3.0")
+      .sinceVersion("1.2.1")
       .withDocumentation("Per-field authority for the timestamp logical type, taking precedence over the "
           + "auto-inferred schema. Comma-separated 'field:type' pairs, where type is one of timestamp-micros, "
           + "timestamp-millis, local-timestamp-micros, local-timestamp-millis (case-insensitive). A field with an "

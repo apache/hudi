@@ -18,18 +18,24 @@
 
 package org.apache.hudi.sink;
 
+import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SerializationUtils;
@@ -39,6 +45,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.MissingSchemaFieldException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -48,6 +55,7 @@ import org.apache.hudi.sink.muttley.AthenaIngestionGateway;
 import org.apache.hudi.sink.utils.CoordinationResponseSerDe;
 import org.apache.hudi.sink.utils.EventBuffers;
 import org.apache.hudi.sink.utils.MockCoordinatorExecutor;
+import org.apache.hudi.sink.utils.MockCorrespondent;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -64,6 +72,7 @@ import org.apache.flink.runtime.operators.coordination.MockOperatorCoordinatorCo
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.util.FileUtils;
+import org.apache.flink.util.function.ThrowingRunnable;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
@@ -85,7 +94,9 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
@@ -139,6 +150,86 @@ public class TestStreamWriteOperatorCoordinator {
     assertThat("Instant should be complete", lastCompleted, is(instant));
     assertNotEquals("", inflight, "Should start a new instant");
     assertNotEquals(instant, inflight, "Should start a new instant");
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"upsert", "insert", "bulk_insert", "insert_overwrite", "insert_overwrite_table", "delete"})
+  void testValidationOncePerInstant(String operation) throws Exception {
+    coordinator.close();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.OPERATION, operation);
+    coordinator = startCoordinator(conf, 2);
+    HoodieFlinkWriteClient writeClient = Mockito.spy(coordinator.getWriteClient());
+    Field writeClientField = StreamWriteOperatorCoordinator.class.getDeclaredField("writeClient");
+    writeClientField.setAccessible(true);
+    writeClientField.set(coordinator, writeClient);
+
+    String firstInstant = requestInstantTime(1);
+    assertEquals(firstInstant, requestInstantTime(1));
+    Mockito.verify(writeClient, Mockito.times(1)).preTxn(Mockito.eq(WriteOperationType.fromValue(operation)), Mockito.any());
+    Mockito.verify(writeClient, Mockito.times(1)).validateAgainstTableProperties(Mockito.any(), Mockito.any(), Mockito.eq(WriteOperationType.fromValue(operation)));
+
+    // Complete the first checkpoint so the next request can create a new instant.
+    coordinator.handleEventFromOperator(0, createOperatorEvent(0, 1, firstInstant, "par1", false, true, 0.1));
+    coordinator.handleEventFromOperator(1, createOperatorEvent(1, 1, firstInstant, "par2", false, true, 0.2));
+    coordinator.notifyCheckpointComplete(2);
+    assertNull(coordinator.getEventBuffer(1));
+    String nextInstant = requestInstantTime(2);
+    assertNotEquals(firstInstant, nextInstant);
+    Mockito.verify(writeClient, Mockito.times(2)).preTxn(Mockito.eq(WriteOperationType.fromValue(operation)), Mockito.any());
+    Mockito.verify(writeClient, Mockito.times(2)).validateAgainstTableProperties(Mockito.any(), Mockito.any(), Mockito.eq(WriteOperationType.fromValue(operation)));
+    assertFalse(((MockOperatorCoordinatorContext) coordinator.getContext()).isJobFailed());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"upsert", "insert", "bulk_insert", "insert_overwrite", "insert_overwrite_table", "delete"})
+  void testColumnDropFailsBeforeInstantIsPublished(String operation) throws Exception {
+    coordinator.close();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.OPERATION, operation);
+    coordinator = startCoordinator(conf, 2);
+    HoodieWriteConfig writeConfig = coordinator.getWriteClient().getConfig();
+    assertFalse(writeConfig.shouldValidateAvroSchema());
+    assertFalse(writeConfig.shouldAllowAutoEvolutionColumnDrop());
+
+    // Complete an instant using the original schema, then drop a column for the next instant.
+    HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+    metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, writeConfig.getSchema());
+    HoodieTestTable.of(StreamerUtil.createMetaClient(conf)).addCommit("001", Option.of(metadata));
+    conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH,
+        getClass().getClassLoader().getResource("test_read_schema_dropped_age.avsc").toString());
+    writeConfig.setSchema(StreamerUtil.getSourceSchema(conf).toString());
+
+    assertInstantCreationFails(conf, MissingSchemaFieldException.class, "age");
+  }
+
+  @Test
+  void testTablePropertyChangesAreValidatedBeforeInstantIsPublished() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    Properties updatedProperties = new Properties();
+    updatedProperties.setProperty(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.NONE.name());
+    updatedProperties.setProperty(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
+    HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), updatedProperties);
+
+    assertInstantCreationFails(conf, HoodieException.class, HoodieTableConfig.META_FIELDS_MODE.key());
+  }
+
+  private void assertInstantCreationFails(Configuration conf, Class<? extends Throwable> causeType, String message) throws Exception {
+    Correspondent.InstantTimeResponse response = CoordinationResponseSerDe.unwrap(
+        coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(1))
+            .get(1, TimeUnit.SECONDS));
+    assertNull(response.getInstant());
+    assertNull(coordinator.getEventBuffer(1));
+    MockOperatorCoordinatorContext context = (MockOperatorCoordinatorContext) coordinator.getContext();
+    assertTrue(context.isJobFailed());
+    Throwable cause = context.getJobFailureReason();
+    while (cause != null && !(causeType.isInstance(cause) && cause.getMessage() != null && cause.getMessage().contains(message))) {
+      cause = cause.getCause();
+    }
+    assertNotNull(cause, "Expected " + causeType.getSimpleName() + " containing: " + message);
+    HoodieTimeline pending = StreamerUtil.createMetaClient(conf).reloadActiveTimeline().filterPendingExcludingCompaction();
+    assertTrue(pending.empty(), "Validation must fail before a new instant is created");
   }
 
   @Test
@@ -382,8 +473,8 @@ public class TestStreamWriteOperatorCoordinator {
         coordinator.getEventBuffer().getDataWriteEventBuffer()[0].getWriteStatuses().size(), is(1));
 
     long nextCkpId = 1;
-    coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(nextCkpId));
-    OperatorEvent event4 = createOperatorEvent(0, nextCkpId, "002", "par1", false, false, 0.1);
+    String instant2 = requestInstantTime(nextCkpId);
+    OperatorEvent event4 = createOperatorEvent(0, nextCkpId, instant2, "par1", false, false, 0.1);
     coordinator.handleEventFromOperator(0, event4);
     assertThat("First instant is not committed yet, new event should not override the old event",
         coordinator.getEventBuffer(0).getDataWriteEventBuffer()[0].getWriteStatuses().size(), is(1));
@@ -821,6 +912,65 @@ public class TestStreamWriteOperatorCoordinator {
     assertEquals(instant2, inflightInstants.get(2L));
   }
 
+  @Test
+  void testInstantRequestPollsWhileCreationBlockedThenSucceeds() throws Exception {
+    MockOperatorCoordinatorContext ctx = (MockOperatorCoordinatorContext) coordinator.getContext();
+    CountDownLatch lockHeld = new CountDownLatch(1);
+    NonThrownExecutor gatedWorker = Mockito.spy(new GatedInstantRequestExecutor(
+        Mockito.mock(Logger.class),
+        (errMsg, t) -> ctx.failJob(new HoodieException(errMsg, t)),
+        lockHeld));
+    coordinator.setInstantRequestExecutor(gatedWorker);
+
+    try {
+      // The first request starts creation; subsequent requests must not queue more work while it is blocked.
+      for (long checkpointId : new long[] {1L, 1L, 2L}) {
+        Correspondent.InstantTimeResponse pending = CoordinationResponseSerDe.unwrap(
+            coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(checkpointId))
+                .get(1, TimeUnit.SECONDS));
+        assertNull(pending.getInstant());
+      }
+      assertTrue(gatedWorker.hasRunningTasks());
+      Mockito.verify(gatedWorker, Mockito.times(1)).execute(Mockito.any(), Mockito.eq("request instant time"));
+    } finally {
+      lockHeld.countDown();
+    }
+
+    String instant = requestInstantTime(1L);
+    assertNotNull(instant);
+    assertEquals(instant, requestInstantTime(1L), "Repeated requests must reuse the instant");
+    assertFalse(ctx.isJobFailed());
+    HoodieTimeline inflights = StreamerUtil.createMetaClient(TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()))
+        .reloadActiveTimeline().filterInflights();
+    assertEquals(1, inflights.countInstants());
+    assertTrue(inflights.containsInstant(instant));
+  }
+
+  @Test
+  void testReadyInstantRemainsAvailableWhileAnotherCreationIsBlocked() throws Exception {
+    String existingInstant = requestInstantTime(1L);
+    MockOperatorCoordinatorContext ctx = (MockOperatorCoordinatorContext) coordinator.getContext();
+    CountDownLatch gate = new CountDownLatch(1);
+    NonThrownExecutor worker = new GatedInstantRequestExecutor(
+        Mockito.mock(Logger.class),
+        (errMsg, t) -> ctx.failJob(new HoodieException(errMsg, t)), gate);
+    coordinator.setInstantRequestExecutor(worker);
+    try {
+      Correspondent.InstantTimeResponse pending = CoordinationResponseSerDe.unwrap(
+          coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(2L))
+              .get(1, TimeUnit.SECONDS));
+      assertNull(pending.getInstant());
+      assertTrue(worker.hasRunningTasks());
+      Correspondent.InstantTimeResponse ready = CoordinationResponseSerDe.unwrap(
+          coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(1L))
+              .get(1, TimeUnit.SECONDS));
+      assertEquals(existingInstant, ready.getInstant(),
+          "An existing instant must remain available while another checkpoint's creation is blocked");
+    } finally {
+      gate.countDown();
+    }
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
@@ -830,12 +980,8 @@ public class TestStreamWriteOperatorCoordinator {
   }
 
   private String requestInstantTime(StreamWriteOperatorCoordinator coordinator, long checkpointId) {
-    try {
-      Correspondent.InstantTimeResponse response = CoordinationResponseSerDe.unwrap(coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(checkpointId)).get());
-      return response.getInstant();
-    } catch (Exception e) {
-      throw new HoodieException("Error requesting the instant time from the coordinator", e);
-    }
+    return new MockCorrespondent(coordinator)
+        .requestInstantTime(checkpointId, TimeUnit.SECONDS.toMillis(10));
   }
 
   private void resetToMergeOnRead(Configuration conf) throws Exception {
@@ -861,6 +1007,27 @@ public class TestStreamWriteOperatorCoordinator {
   private static StreamWriteOperatorCoordinator createCoordinator(Configuration conf, int subTasks) {
     MockOperatorCoordinatorContext coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), subTasks);
     return new StreamWriteOperatorCoordinator(conf, coordinatorContext);
+  }
+
+  /**
+   * A real single-thread instant-request worker whose submitted creation task blocks on a latch before
+   * running, to deterministically delay instant creation (simulating a held table lock).
+   */
+  private static final class GatedInstantRequestExecutor extends NonThrownExecutor {
+    private final CountDownLatch gate;
+
+    private GatedInstantRequestExecutor(Logger logger, ExceptionHook exceptionHook, CountDownLatch gate) {
+      super(logger, null, exceptionHook, true);
+      this.gate = gate;
+    }
+
+    @Override
+    public void execute(ThrowingRunnable<Throwable> action, String actionName, Object... actionParams) {
+      super.execute(() -> {
+        gate.await();
+        action.run();
+      }, actionName, actionParams);
+    }
   }
 
   private String mockWriteWithMetadata(long checkpointId) {

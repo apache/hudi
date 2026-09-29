@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieException;
@@ -61,6 +62,11 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_CO
 public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<T, I, K, O> {
 
   private HoodieNativeLogFormatWriter writer;
+
+  @VisibleForTesting
+  HoodieNativeLogFormatWriter getWriter() {
+    return writer;
+  }
 
   public HoodieNativeLogAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                      String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr,
@@ -163,8 +169,11 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
 
   @Override
   protected void closeLogWriter() {
-    if (writer != null) {
-      writer.close();
+    try {
+      if (writer != null) {
+        writer.close();
+      }
+    } finally {
       writer = null;
     }
   }

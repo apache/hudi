@@ -29,8 +29,10 @@ import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 /**
@@ -46,6 +48,8 @@ public class NonThrownExecutor implements AutoCloseable {
    * A single-thread executor to handle all the asynchronous jobs.
    */
   private final ExecutorService executor;
+
+  private final AtomicInteger pendingTasks = new AtomicInteger();
 
   /**
    * Exception hook for post-exception handling.
@@ -88,7 +92,12 @@ public class NonThrownExecutor implements AutoCloseable {
       final ExceptionHook hook,
       final String actionName,
       final Object... actionParams) {
-    executor.execute(wrapAction(action, hook, actionName, actionParams));
+    try {
+      executor.execute(wrapAction(action, hook, actionName, actionParams));
+    } catch (RejectedExecutionException e) {
+      pendingTasks.decrementAndGet();
+      handleException(e, hook, getActionString(actionName, actionParams));
+    }
   }
 
   /**
@@ -97,12 +106,22 @@ public class NonThrownExecutor implements AutoCloseable {
   public void executeSync(ThrowingRunnable<Throwable> action, String actionName, Object... actionParams) {
     try {
       executor.submit(wrapAction(action, this.exceptionHook, actionName, actionParams)).get();
+    } catch (RejectedExecutionException e) {
+      pendingTasks.decrementAndGet();
+      handleException(e, this.exceptionHook, getActionString(actionName, actionParams));
     } catch (InterruptedException e) {
       handleException(e, this.exceptionHook, getActionString(actionName, actionParams));
     } catch (ExecutionException e) {
       // nonfatal exceptions are handled by wrapAction
       ExceptionUtils.rethrowIfFatalErrorOrOOM(e.getCause());
     }
+  }
+
+  /**
+   * Returns whether any task is queued or running.
+   */
+  public boolean hasRunningTasks() {
+    return pendingTasks.get() > 0;
   }
 
   @Override
@@ -125,6 +144,7 @@ public class NonThrownExecutor implements AutoCloseable {
       final String actionName,
       final Object... actionParams) {
 
+    pendingTasks.incrementAndGet();
     return () -> {
       final Supplier<String> actionString = getActionString(actionName, actionParams);
       try {
@@ -132,6 +152,8 @@ public class NonThrownExecutor implements AutoCloseable {
         logger.info("Executor executes action [{}] success!", actionString.get());
       } catch (Throwable t) {
         handleException(t, hook, actionString);
+      } finally {
+        pendingTasks.decrementAndGet();
       }
     };
   }

@@ -29,6 +29,7 @@ import org.apache.hudi.common.schema.HoodieSchemaRepair
 import org.apache.hudi.common.schema.HoodieSchemaUtils
 import org.apache.hudi.common.schema.internal.InternalSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, ParquetTableSchemaResolver}
+import org.apache.hudi.common.table.log.InstantRange
 import org.apache.hudi.common.table.read.{HoodieFileGroupReader, HoodieRecordReader}
 import org.apache.hudi.common.table.read.lsm.{HoodieLsmFileGroupReader, LsmReaderUtils}
 import org.apache.hudi.common.util.{ConfigUtils, Option => HOption}
@@ -75,6 +76,10 @@ trait HoodieFormatTrait {
 /**
  * This class utilizes {@link HoodieFileGroupReader} and its related classes to support reading
  * from Parquet or ORC formatted base files and their log files.
+ *
+ * @param instantRangeOpt optional requested-time range applied before file-group record merging;
+ *                        unlike Spark's required filters, this prevents a later out-of-range log
+ *                        record from masking an earlier in-range version of the same key
  */
 class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                                            tableSchema: HoodieTableSchema,
@@ -88,7 +93,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                                            shouldUseRecordPosition: Boolean,
                                            requiredFilters: Seq[Filter],
                                            isMultipleBaseFileFormatsEnabled: Boolean,
-                                           hoodieFileFormat: HoodieFileFormat)
+                                           hoodieFileFormat: HoodieFileFormat,
+                                           instantRangeOpt: HOption[InstantRange] = HOption.empty())
   extends ParquetFileFormat with SparkAdapterSupport with HoodieFormatTrait with Logging with Serializable {
 
   private lazy val schema = tableSchema.schema
@@ -285,6 +291,9 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                                               filters: Seq[Filter],
                                               options: Map[String, String],
                                               hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
+    // Driver side, once per scan: Spark 4.0 cannot read a PushVariantIntoScan projection struct and
+    // has to fail here rather than in the schema-change path (#20032).
+    sparkAdapter.validateVariantProjectionReadable(requiredSchema)
     val outputSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
     val isCount = requiredSchema.isEmpty && !isMOR && !isIncremental
     // Spark planner only adds the user-provided predicates (from `WHERE` clause or `.filter()`)
@@ -366,9 +375,11 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
             .getSparkPartitionedFileUtils.getPathFromPartitionedFile(file))
           fileSliceMapping.getSlice(fileGroupName) match {
             case Some(fileSlice) if !isCount && (requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
+              // requiredFilters preserve Spark's row-level filtering semantics, while instantRangeOpt
+              // keeps out-of-range records from participating in the file-group merge itself.
               val readerContext = new SparkFileFormatInternalRowReaderContext(
                 fileGroupBaseFileReader.value, filters, requiredFilters, storageConf, metaClient.getTableConfig,
-                sparkRequiredSchema = Some(requiredSchema))
+                sparkRequiredSchema = Some(requiredSchema), instantRangeOpt = instantRangeOpt)
               readerContext.enableLogicalTimestampFieldRepair(storageConf.getBoolean(ENABLE_LOGICAL_TIMESTAMP_REPAIR, true))
               val props = metaClient.getTableConfig.getProps
               options.foreach(kv => props.setProperty(kv._1, kv._2))

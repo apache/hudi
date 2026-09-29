@@ -113,7 +113,8 @@ public class HoodieStreamerUtils {
                 props.setProperty(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, String.valueOf(TaskContext.getPartitionId()));
                 props.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime);
               }
-              BuiltinKeyGenerator builtinKeyGenerator = (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+              BuiltinKeyGenerator builtinKeyGenerator = (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(
+                  KeyGenUtils.withComplexKeyGenEncoding(TypedProperties.copy(props), tableConfig));
               DeleteContext deleteContext = new DeleteContext(props, processedSchema).withReaderSchema(processedSchema);
               return new CloseableMappingIterator<>(ClosableIterator.wrap(genericRecordIterator), genRec -> {
                 try {
@@ -147,7 +148,8 @@ public class HoodieStreamerUtils {
             props.setProperty(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, String.valueOf(TaskContext.getPartitionId()));
             props.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime);
           }
-          BuiltinKeyGenerator builtinKeyGenerator = (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+          BuiltinKeyGenerator builtinKeyGenerator = (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(
+              KeyGenUtils.withComplexKeyGenEncoding(TypedProperties.copy(props), tableConfig));
           StructType baseStructType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(processedSchema);
           StructType targetStructType = isDropPartitionColumns(props) ? HoodieSchemaConversionUtils
               .convertHoodieSchemaToStructType(HoodieSchemaUtils.removeFields(processedSchema, partitionColumns)) : baseStructType;
