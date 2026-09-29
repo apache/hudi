@@ -31,6 +31,8 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -60,6 +62,7 @@ import java.util.Set;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.reload;
+import static org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
 import static org.apache.hudi.config.HoodieWriteConfig.CLIENT_HEARTBEAT_INTERVAL_IN_MS;
 import static org.apache.hudi.config.HoodieWriteConfig.CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES;
@@ -684,5 +687,84 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     return HoodieMetadataConfig.newBuilder()
         .enable(enable)
         .withAsyncIndex(asyncIndex);
+  }
+
+  /**
+   * Test to reproduce the issue where dropping an index that failed mid-way does not clean
+   * up the inflight MDT partition from table config.
+   */
+  @Test
+  public void testDropIndexMidwayDoesNotCleanTableConfig() throws IOException {
+    String tableName = "indexer_test_drop_midway";
+    // Step 1: Write some data to initialize the table with metadata enabled
+    HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(true, false)
+        .withMetadataIndexColumnStats(false);
+    upsertToTable(metadataConfigBuilder.build(), tableName);
+
+    // Verify that record index is not yet built
+    metaClient = reload(metaClient);
+    Set<String> initialCompletedPartitions = metaClient.getTableConfig().getMetadataPartitions();
+    assertFalse(initialCompletedPartitions.contains(RECORD_INDEX.getPartitionPath()),
+        "Record index partition should not be completed initially");
+
+    // Step 2: Start async index building for RLI - schedule it first
+    HoodieIndexer.Config config = getHoodieIndexConfig(RECORD_INDEX.name(), SCHEDULE,
+        "streamer-config/indexer-record-index.properties", tableName);
+    HoodieIndexer indexer = new HoodieIndexer(jsc(), config);
+    assertEquals(0, indexer.start(0));
+
+    // Verify that the indexing instant is in requested state
+    metaClient = reload(metaClient);
+    Option<HoodieInstant> requestedIndexingInstant = metaClient.getActiveTimeline()
+        .filterPendingIndexTimeline()
+        .lastInstant();
+    assertTrue(requestedIndexingInstant.isPresent(), "Indexing instant should be scheduled");
+    assertEquals(REQUESTED, requestedIndexingInstant.get().getState());
+
+    String indexingInstantTime = requestedIndexingInstant.get().requestedTime();
+
+    // Step 3: Transition requested instant to inflight to simulate indexing started but crashed mid-way
+    metaClient.getActiveTimeline().transitionIndexRequestedToInflight(requestedIndexingInstant.get());
+    metaClient = reload(metaClient);
+    
+    // Manually update table config to reflect inflight state (simulating the state before crash)
+    // When indexing is in progress, the partition is in inflight state in table config
+    metaClient.getTableConfig().setMetadataPartitionsInflight(metaClient, RECORD_INDEX);
+    // Remove from completed partitions since we're simulating it never completed
+    Set<String> completedPartitions = new java.util.HashSet<>(metaClient.getTableConfig().getMetadataPartitions());
+    completedPartitions.remove(RECORD_INDEX.getPartitionPath());
+    metaClient.getTableConfig().setValue(
+        org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS.key(),
+        completedPartitions.isEmpty() ? "" : String.join(",", completedPartitions));
+    org.apache.hudi.common.table.HoodieTableConfig.update(
+        metaClient.getStorage(), metaClient.getMetaPath(), metaClient.getTableConfig().getProps());
+    // Reload metaClient and table config to ensure changes are reflected
+    metaClient = reload(metaClient);
+    metaClient.reloadTableConfig();
+
+    // Verify that inflight MDT partition is set in table config
+    Set<String> inflightPartitionsBeforeDrop = metaClient.getTableConfig().getMetadataPartitionsInflight();
+    assertTrue(inflightPartitionsBeforeDrop.contains(RECORD_INDEX.getPartitionPath()),
+        "Record index partition should be in inflight state in table config (simulating crash mid-way)");
+    
+    // Verify instant is still in INFLIGHT state (dropIndex only works on REQUESTED instants)
+    Option<HoodieInstant> pendingInstant = metaClient.getActiveTimeline()
+        .filterPendingIndexTimeline()
+        .filter(instant -> instant.requestedTime().equals(requestedIndexingInstant.get().requestedTime()))
+        .lastInstant();
+    assertTrue(pendingInstant.isPresent(), "Indexing instant should still be in timeline");
+    assertEquals(INFLIGHT, pendingInstant.get().getState(), "Indexing instant should be in REQUESTED state for drop to work");
+
+    // Step 4: Run HoodieIndexer to drop the RLI index which failed mid-way
+    dropIndexAndAssert(RECORD_INDEX, "streamer-config/indexer-record-index.properties", Option.empty(), tableName);
+
+    // Step 5: inflight MDT partition is still in table config?
+    metaClient = reload(metaClient);
+    metaClient.reloadTableConfig();
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+    HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
+    Set<String> inflightPartitionsAfterDrop = metaClient.getTableConfig().getMetadataPartitionsInflight();
+    assertFalse(inflightPartitionsAfterDrop.contains(RECORD_INDEX.getPartitionPath()),
+        "BUG: Inflight MDT partition should be cleaned from table config after dropping index, but it's still present");
   }
 }
