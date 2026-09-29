@@ -128,6 +128,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -401,6 +402,37 @@ public class TestHiveSyncTool {
     reSyncHiveTable();
     assertEquals(partitionCount + 4, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
         "Incremental add via parallel HiveQL batching should sync the new partitions");
+  }
+
+  /**
+   * Hive's Driver reports a rejected statement through its response code rather than by throwing.
+   * A table registered with a different partition column than the one the sync is configured with
+   * rejects every ADD PARTITION, and the sync must fail instead of recording the commit as synced.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void testHiveQLSyncFailsWhenHiveRejectsAStatement(boolean batchingEnabled) throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), HiveSyncMode.HIVEQL.name());
+    hiveSyncProps.setProperty(HIVE_SYNC_BATCHING_ENABLED.key(), String.valueOf(batchingEnabled));
+    hiveSyncProps.setProperty(META_SYNC_PARTITION_FIELDS.key(), HoodieRecord.PARTITION_PATH_METADATA_FIELD);
+    HiveTestUtil.createCOWTable("100", 1, true);
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+    assertEquals("100", hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get());
+
+    hiveSyncProps.setProperty(META_SYNC_PARTITION_FIELDS.key(), "datestr");
+    HiveTestUtil.addCOWPartition("2050/01/01", true, true, "101");
+    reInitHiveSyncClient();
+
+    HoodieException ex = assertThrows(HoodieException.class, this::reSyncHiveTable);
+    Throwable rejection = ex;
+    while (rejection != null && !(rejection.getMessage() != null && rejection.getMessage().contains("Hive rejected the statement"))) {
+      rejection = rejection.getCause();
+    }
+    assertNotNull(rejection, "The sync must fail with Hive's rejection of the ADD PARTITION");
+    assertTrue(rejection.getMessage().contains("datestr"), rejection.getMessage());
+    assertEquals("100", hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get(),
+        "A commit whose partitions Hive rejected must not be recorded as synced");
   }
 
   /**
