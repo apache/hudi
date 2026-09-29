@@ -25,7 +25,6 @@ import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
-import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.MetaFieldsMode;
@@ -47,9 +46,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.MissingSchemaFieldException;
-import org.apache.hudi.exception.SchemaCompatibilityException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.sink.event.Correspondent;
@@ -216,28 +213,6 @@ public class TestStreamWriteOperatorCoordinator {
     HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), updatedProperties);
 
     assertInstantCreationFails(conf, HoodieException.class, HoodieTableConfig.META_FIELDS_MODE.key());
-  }
-
-  @Test
-  void testNewSecondaryIndexIsValidatedBeforeInstantIsPublished() throws Exception {
-    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-    HoodieWriteConfig writeConfig = coordinator.getWriteClient().getConfig();
-    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
-    HoodieCommitMetadata metadata = new HoodieCommitMetadata();
-    metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, writeConfig.getSchema());
-    HoodieTestTable.of(metaClient).addCommit("001", Option.of(metadata));
-    // Simulate an index created after the coordinator has loaded its meta client.
-    metaClient.buildIndexDefinition(HoodieIndexDefinition.newBuilder()
-        .withIndexName("secondary_index_age")
-        .withIndexType("secondary_index")
-        .withSourceFields(Collections.singletonList("age"))
-        .withVersion(HoodieIndexVersion.V1)
-        .build());
-    String evolvedSchema = writeConfig.getSchema().replace("\"int\"", "\"long\"");
-    assertNotEquals(writeConfig.getSchema(), evolvedSchema);
-    writeConfig.setSchema(evolvedSchema);
-
-    assertInstantCreationFails(conf, SchemaCompatibilityException.class, "secondary_index_age");
   }
 
   private void assertInstantCreationFails(Configuration conf, Class<? extends Throwable> causeType, String message) throws Exception {
