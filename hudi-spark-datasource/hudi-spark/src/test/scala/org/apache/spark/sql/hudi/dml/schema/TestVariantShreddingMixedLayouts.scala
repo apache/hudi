@@ -955,6 +955,84 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
     }
   }
 
+  test("Rename of the variant column under schema-on-read fails fast on both pushVariantIntoScan arms") {
+    assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
+
+    // A rename is the schema-on-read DDL whose file and query disagree on the variant's NAME: the
+    // footer keeps `v`, the internal schema maps it to `w` by field id. Nothing reconstructs a
+    // variant under schema-on-read until #18285, so what is pinned is how each read of the renamed
+    // column fails - loudly, never with silent nulls - and that reads without it still work. Every
+    // failure below, and what unblocks it, is tracked in #20141. The legs cover a shredded COW base,
+    // an unshredded one, and a shredded MOR base merged with a log block through the file group
+    // reader.
+    Seq(("cow", Forced("a bigint")), ("cow", Unshredded), ("mor", Forced("a bigint"))).foreach {
+      case (tableType, layout) =>
+      withVariantTable(s"rename under schema-on-read, $tableType, $layout", tableType,
+        recordTypes = Seq(HoodieRecordType.SPARK)) { (tableName, tablePath, leg) =>
+        withWriteLayout(layout) {
+          spark.sql(s"""insert into $tableName values (1, parse_json('{"a":1}'), 1000), (2, parse_json('{"a":2}'), 1000)""")
+          if (tableType == "mor") {
+            // An update puts a log block under the base file so the read merges through the file
+            // group reader.
+            spark.sql(s"""update $tableName set v = parse_json('{"a":22}') where id = 2""")
+          }
+        }
+        assertVariantLayout(tablePath, shredded = layout != Unshredded, leg)
+        if (tableType == "mor") {
+          assert(logBlockSchemas(tablePath).nonEmpty, s"[$leg] the update must have written a log block")
+        }
+
+        withSQLConf("hoodie.schema.on.read.enable" -> "true") {
+          val instantBefore = latestCompletedInstant(tablePath)
+          val filesBefore = listDataParquetFiles(tablePath)
+          // Under default configs the rename itself is refused (#19766, its own pin; a failed attempt
+          // leaves a REQUESTED instant behind). The column-drop knob short-circuits that check, so
+          // it is set around the DDL only.
+          withSQLConf("hoodie.datasource.write.schema.allow.auto.evolution.column.drop" -> "true") {
+            spark.sql(s"alter table $tableName rename column v to w")
+          }
+          assert(latestCompletedInstant(tablePath) != instantBefore,
+            s"[$leg] the rename must commit on its own instant")
+          assert(listDataParquetFiles(tablePath) == filesBefore, s"[$leg] a rename rewrites no data file")
+          assert(variantGroupOf(filesBefore.head, "v").containsField("metadata"),
+            s"[$leg] the file keeps the old column name")
+          val columns = spark.sql(s"describe $tableName").collect()
+            .map(r => r.getString(0) -> r.getString(1)).toMap
+          assert(columns.get("w").contains("variant") && !columns.contains("v"),
+            s"[$leg] catalog columns: $columns")
+
+          // Pushdown on (the default): both full-variant-shape reads fail through the guard
+          // (ParquetSchemaEvolutionUtils.validateNoShreddedVariants). On COW it fires from the
+          // base-file reader, on MOR from SparkFileFormatInternalRowReaderContext through the file
+          // group reader; matching on `w` also pins that the guard resolved the renamed name.
+          checkNestedExceptionContains(() => spark.sql(s"select id, w from $tableName").collect())(
+            "Column 'w' is a variant requested in Spark's full-variant projection shape")
+          checkNestedExceptionContains(
+            () => spark.sql(s"select id, variant_get(w, '$$.a', 'int') from $tableName").collect())(
+            "Column 'w' is a variant requested in Spark's full-variant projection shape")
+
+          // Pushdown off: the guard's shredded-file arm skips a renamed column (it resolves footer
+          // columns by the query-schema name), so the read goes on and dies in the generated
+          // projection's variant cast. Loud, engine-internal, on every leg; see #20141, item 3.
+          withSQLConf("spark.sql.variant.pushVariantIntoScan" -> "false") {
+            checkNestedExceptionContains(
+              () => spark.sql(s"select id, cast(w as string) from $tableName").collect())(
+              "cannot be cast to class org.apache.spark.unsafe.types.VariantVal")
+          }
+
+          // A projection without the variant still reads correctly after the rename, on both arms.
+          checkAnswer(s"select id, ts from $tableName order by id")(Seq(1, 1000), Seq(2, 1000))
+          withSQLConf("spark.sql.variant.pushVariantIntoScan" -> "false") {
+            checkAnswer(s"select id, ts from $tableName order by id")(Seq(1, 1000), Seq(2, 1000))
+          }
+          // count(*) is deliberately not pinned: it fails on any schema-on-read variant table once
+          // an internal schema is committed, rename or not (#20139), and the existing pin in
+          // "Schema-on-read reads of shredded variant files fail fast" is green only through #20140.
+        }
+      }
+    }
+  }
+
   test("Inline compaction and clustering under schema-on-read fail fast on the variant column") {
     assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
 
