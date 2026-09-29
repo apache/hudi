@@ -314,9 +314,10 @@ public class HoodieMetadataWriteUtils {
             .allowDuplicatesWithHfileWrites(writeConfig.allowDuplicatesWithHfileWrites())
             .logFileMaxSize(maxLogFileSizeBytes)
             .parquetCompressionCodec(writeConfig.getParquetCompressionCodec())
+            // Keep the metadata table's HFile block size consistent with the main table's setting.
+            .hfileBlockSize(writeConfig.getHFileBlockSize())
             // Keeping the log blocks as large as the log files themselves reduces the number of HFile blocks to be checked for
             // presence of keys
-            .hfileBlockSize(writeConfig.getHFileBlockSize())
             .logFileDataBlockMaxSize(maxLogFileSizeBytes)
             .hfileBloomFilterEnable(writeConfig.hfileBloomFilterEnabled())
             .withBloomFilterType(writeConfig.getMetadataConfig().getBloomFilterType())
