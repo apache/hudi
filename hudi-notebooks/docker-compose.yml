@@ -66,7 +66,7 @@ services:
       - hudi-datalake
 
   minio:
-    image: 'quay.io/minio/minio:latest'
+    image: 'cgr.dev/chainguard/minio:latest'
     container_name: minio
     command: server /data --console-address ":9001"
     environment:
@@ -86,7 +86,7 @@ services:
           - warehouse.minio
 
   mc:
-    image: quay.io/minio/mc:latest
+    image: cgr.dev/chainguard/minio-client:latest-dev
     container_name: mc
     depends_on:
       minio:
@@ -96,7 +96,7 @@ services:
       until (/usr/bin/mc alias set minio http://minio:9000 admin password --api S3v4) do echo '...waiting...' && sleep 1; done; 
       /usr/bin/mc rm -r --force minio/warehouse;
       /usr/bin/mc mb minio/warehouse;
-      /usr/bin/mc policy set public minio/warehouse;
+      /usr/bin/mc anonymous set public minio/warehouse;
       tail -f /dev/null
       "
     networks:
