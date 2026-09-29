@@ -98,21 +98,70 @@
                   <include>org.apache.hudi:hudi-hive-sync</include>
                   <include>org.apache.hudi:hudi-gcp</include>
                   <include>org.apache.parquet:parquet-avro</include>
-                  <!-- Google Cloud SDK -->
-                  <include>com.google.cloud:*</include>
-                  <include>com.google.api:*</include>
+                  <!-- GCS lock client and BigQuery sync SDK dependencies -->
+                  <include>com.google.cloud:google-cloud-bigquery</include>
+                  <include>com.google.cloud:google-cloud-bigquerystorage</include>
+                  <include>com.google.cloud:google-cloud-core</include>
+                  <include>com.google.cloud:google-cloud-core-http</include>
+                  <include>com.google.cloud:google-cloud-core-grpc</include>
+                  <include>com.google.cloud:google-cloud-storage</include>
+                  <include>com.google.cloud:google-cloud-monitoring</include>
+                  <include>com.google.api:api-common</include>
+                  <include>com.google.api:gax</include>
+                  <include>com.google.api:gax-grpc</include>
+                  <include>com.google.api:gax-httpjson</include>
                   <include>com.google.apis:google-api-services-bigquery</include>
                   <include>com.google.apis:google-api-services-storage</include>
-                  <include>com.google.api-client:*</include>
-                  <include>com.google.api.grpc:*</include>
-                  <include>com.google.auth:*</include>
+                  <include>com.google.api-client:google-api-client</include>
+                  <include>com.google.api.grpc:proto-google-common-protos</include>
+                  <include>com.google.api.grpc:proto-google-iam-v1</include>
+                  <include>com.google.api.grpc:proto-google-cloud-storage-v2</include>
+                  <include>com.google.api.grpc:grpc-google-cloud-storage-v2</include>
+                  <include>com.google.api.grpc:gapic-google-cloud-storage-v2</include>
+                  <include>com.google.api.grpc:proto-google-cloud-bigquerystorage-v1</include>
+                  <include>com.google.api.grpc:proto-google-cloud-bigquerystorage-v1beta1</include>
+                  <include>com.google.api.grpc:proto-google-cloud-bigquerystorage-v1beta2</include>
+                  <include>com.google.api.grpc:grpc-google-cloud-bigquerystorage-v1</include>
+                  <include>com.google.api.grpc:grpc-google-cloud-bigquerystorage-v1beta1</include>
+                  <include>com.google.api.grpc:grpc-google-cloud-bigquerystorage-v1beta2</include>
+                  <include>com.google.api.grpc:proto-google-cloud-monitoring-v3</include>
+                  <include>com.google.auth:google-auth-library-credentials</include>
+                  <include>com.google.auth:google-auth-library-oauth2-http</include>
                   <include>com.google.code.gson:gson</include>
-                  <include>com.google.http-client:*</include>
-                  <include>com.google.oauth-client:*</include>
-                  <include>com.google.protobuf:*</include>
-                  <include>io.grpc:*</include>
-                  <include>io.opencensus:*</include>
-                  <include>io.perfmark:*</include>
+                  <include>com.google.http-client:google-http-client</include>
+                  <include>com.google.http-client:google-http-client-apache-v2</include>
+                  <include>com.google.http-client:google-http-client-appengine</include>
+                  <include>com.google.http-client:google-http-client-gson</include>
+                  <include>com.google.http-client:google-http-client-jackson2</include>
+                  <include>com.google.oauth-client:google-oauth-client</include>
+                  <include>com.google.protobuf:protobuf-java</include>
+                  <include>com.google.protobuf:protobuf-java-util</include>
+                  <include>io.grpc:grpc-api</include>
+                  <include>io.grpc:grpc-context</include>
+                  <include>io.grpc:grpc-core</include>
+                  <include>io.grpc:grpc-stub</include>
+                  <include>io.grpc:grpc-protobuf</include>
+                  <include>io.grpc:grpc-protobuf-lite</include>
+                  <include>io.grpc:grpc-auth</include>
+                  <include>io.grpc:grpc-alts</include>
+                  <include>io.grpc:grpc-grpclb</include>
+                  <include>io.grpc:grpc-netty-shaded</include>
+                  <include>io.grpc:grpc-googleapis</include>
+                  <include>io.grpc:grpc-xds</include>
+                  <include>io.grpc:grpc-services</include>
+                  <include>io.grpc:grpc-rls</include>
+                  <!-- Keep the OpenCensus implementation with its exporter and Disruptor dependencies. -->
+                  <include>io.opencensus:opencensus-api</include>
+                  <include>io.opencensus:opencensus-contrib-http-util</include>
+                  <include>io.opencensus:opencensus-impl</include>
+                  <include>io.opencensus:opencensus-impl-core</include>
+                  <include>io.opencensus:opencensus-exporter-stats-stackdriver</include>
+                  <include>io.opencensus:opencensus-exporter-metrics-util</include>
+                  <include>io.opencensus:opencensus-contrib-exemplar-util</include>
+                  <include>io.opencensus:opencensus-contrib-resource-util</include>
+                  <include>io.opencensus:opencensus-contrib-grpc-metrics</include>
+                  <include>io.opencensus:opencensus-proto</include>
+                  <include>io.perfmark:perfmark-api</include>
                   <include>com.lmax:disruptor</include>
                   <include>org.threeten:threetenbp</include>
                   <include>org.threeten:threeten-extra</include>
@@ -195,6 +244,13 @@
                   <version>27.0-jre</version>
                   <outputDirectory>${project.build.directory}/compatibility-libs</outputDirectory>
                 </artifactItem>
+                <!-- Jackson Core is supplied by the host in this deployment scenario. -->
+                <artifactItem>
+                  <groupId>com.fasterxml.jackson.core</groupId>
+                  <artifactId>jackson-core</artifactId>
+                  <version>${fasterxml.version}</version>
+                  <outputDirectory>${project.build.directory}/compatibility-libs</outputDirectory>
+                </artifactItem>
               </artifactItems>
             </configuration>
           </execution>
@@ -210,8 +266,10 @@
           </includes>
           <systemPropertyVariables>
             <gcp.bundle.jar>${project.build.directory}/${project.build.finalName}.jar</gcp.bundle.jar>
+            <gcp.test.classes>${project.build.testOutputDirectory}</gcp.test.classes>
             <host.protobuf.jar>${project.build.directory}/compatibility-libs/protobuf-java-2.5.0.jar</host.protobuf.jar>
             <host.guava.jar>${project.build.directory}/compatibility-libs/guava-27.0-jre.jar</host.guava.jar>
+            <host.jackson.core.jar>${project.build.directory}/compatibility-libs/jackson-core-${fasterxml.version}.jar</host.jackson.core.jar>
           </systemPropertyVariables>
         </configuration>
         <executions>

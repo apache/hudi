@@ -32,38 +32,40 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class ITGcpBundleCompatibility {
 
+  private enum ClasspathOrder {
+    HOST_FIRST,
+    BUNDLE_FIRST
+  }
+
   @Test
   void testHostDependenciesBeforeBundle() throws Exception {
-    runSmokeTest(true);
+    runSmokeTest(ClasspathOrder.HOST_FIRST);
   }
 
   @Test
   void testBundleBeforeHostDependencies() throws Exception {
-    runSmokeTest(false);
+    runSmokeTest(ClasspathOrder.BUNDLE_FIRST);
   }
 
-  private static void runSmokeTest(boolean hostFirst) throws Exception {
-    String testClasspath = System.getProperty("surefire.test.class.path");
+  private static void runSmokeTest(ClasspathOrder order) throws Exception {
     String bundleJar = System.getProperty("gcp.bundle.jar");
+    String testClasses = System.getProperty("gcp.test.classes");
     String hostProtobuf = System.getProperty("host.protobuf.jar");
     String hostGuava = System.getProperty("host.guava.jar");
-    List<String> classpath = new ArrayList<>();
-    for (String entry : testClasspath.split(File.pathSeparator)) {
-      classpath.add(entry);
-    }
-    classpath.remove(bundleJar);
+    String hostJacksonCore = System.getProperty("host.jackson.core.jar");
 
     List<String> orderedClasspath = new ArrayList<>();
-    if (hostFirst) {
+    orderedClasspath.add(testClasses);
+    if (order == ClasspathOrder.HOST_FIRST) {
       orderedClasspath.add(hostProtobuf);
       orderedClasspath.add(hostGuava);
     }
     orderedClasspath.add(bundleJar);
-    if (!hostFirst) {
+    if (order == ClasspathOrder.BUNDLE_FIRST) {
       orderedClasspath.add(hostProtobuf);
       orderedClasspath.add(hostGuava);
     }
-    orderedClasspath.addAll(classpath);
+    orderedClasspath.add(hostJacksonCore);
 
     Process process = new ProcessBuilder(
         new File(System.getProperty("java.home"), "bin/java").getAbsolutePath(),
@@ -98,6 +100,15 @@ class ITGcpBundleCompatibility {
     Object publicSuffix = domainNameClass.getMethod("publicSuffix").invoke(domainName);
     if (!"com".equals(publicSuffix.toString())) {
       throw new AssertionError("Unexpected public suffix: " + publicSuffix);
+    }
+
+    Class<?> hostDomainNameClass = Class.forName("com.google.common.net.InternetDomainName");
+    Object hostDomainName = hostDomainNameClass.getMethod("from", String.class)
+        .invoke(null, "example.com");
+    Object hostPublicSuffix = hostDomainNameClass.getMethod("publicSuffix")
+        .invoke(hostDomainName);
+    if (!"com".equals(hostPublicSuffix.toString())) {
+      throw new AssertionError("Unexpected host public suffix: " + hostPublicSuffix);
     }
 
     StorageOptions options = StorageOptions.newBuilder()
