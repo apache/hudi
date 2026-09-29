@@ -561,6 +561,32 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .end();
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = {"DEFAULT", "LSM_TREE"})
+  public void testDeduplicationWithInterleavedKeys(String storageLayout) throws Exception {
+    conf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(), storageLayout);
+    conf.set(FlinkOptions.PRE_COMBINE, true);
+    List<RowData> records = Arrays.asList(
+        TestData.insertRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 34,
+            TimestampData.fromEpochMillis(4), StringData.fromString("par1")),
+        TestData.insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 24,
+            TimestampData.fromEpochMillis(3), StringData.fromString("par1")),
+        TestData.insertRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 33,
+            TimestampData.fromEpochMillis(2), StringData.fromString("par1")),
+        TestData.insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+            TimestampData.fromEpochMillis(1), StringData.fromString("par1")),
+        TestData.insertRow(StringData.fromString("id3"), StringData.fromString("Julian"), 53,
+            TimestampData.fromEpochMillis(5), StringData.fromString("par1")));
+    preparePipeline(conf)
+        .consume(records)
+        .checkpoint(1)
+        .assertNextEvent()
+        .checkpointComplete(1)
+        .checkWrittenData(Collections.singletonMap("par1",
+            "[id1,par1,id1,Danny,24,3,par1, id2,par1,id2,Stephen,34,4,par1, id3,par1,id3,Julian,53,5,par1]"), 1)
+        .end();
+  }
+
   @Test
   public void testInsertAppendMode() throws Exception {
     conf.set(FlinkOptions.OPERATION, "insert");
