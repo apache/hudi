@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import org.apache.spark.sql.execution.vectorized.WritableColumnVector;
+import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.types.ArrayType;
 import org.apache.spark.sql.types.ArrayType$;
 import org.apache.spark.sql.types.BinaryType;
@@ -325,6 +326,22 @@ public class SparkInternalSchemaConverter {
     }
   }
 
+  private static void putDecimalOrNull(
+      WritableColumnVector newV, int rowId, Decimal decimal, DecimalType decimalType) {
+    if (decimal.changePrecision(decimalType.precision(), decimalType.scale())) {
+      newV.putDecimal(rowId, decimal, decimalType.precision());
+    } else if (SQLConf.get().ansiEnabled()) {
+      throw new ArithmeticException(
+          String.format(
+              "%s cannot be represented as Decimal(%d, %d)",
+              decimal,
+              decimalType.precision(),
+              decimalType.scale()));
+    } else {
+      newV.putNull(rowId);
+    }
+  }
+
   /**
    * Convert Int/long type to other Type.
    * Now only support int/long -> long/float/double/string/Decimal
@@ -351,11 +368,7 @@ public class SparkInternalSchemaConverter {
         } else if (newType instanceof DecimalType) {
           DecimalType decimalType = (DecimalType) newType;
           Decimal oldDecimal = Decimal.apply(isInt ? oldV.getInt(i) : oldV.getLong(i));
-          if (oldDecimal.changePrecision(decimalType.precision(), decimalType.scale())) {
-            newV.putDecimal(i, oldDecimal, decimalType.precision());
-          } else {
-            newV.putNull(i);
-          }
+          putDecimalOrNull(newV, i, oldDecimal, decimalType);
         }
       }
       return true;
@@ -381,9 +394,9 @@ public class SparkInternalSchemaConverter {
         } else if (newType instanceof StringType) {
           newV.putByteArray(i, getUTF8Bytes(oldV.getFloat(i) + ""));
         } else if (newType instanceof DecimalType) {
+          DecimalType decimalType = (DecimalType) newType;
           Decimal oldDecimal = Decimal.apply(oldV.getFloat(i));
-          oldDecimal.changePrecision(((DecimalType) newType).precision(), ((DecimalType) newType).scale());
-          newV.putDecimal(i, oldDecimal, ((DecimalType) newType).precision());
+          putDecimalOrNull(newV, i, oldDecimal, decimalType);
         }
       }
       return true;
@@ -405,9 +418,9 @@ public class SparkInternalSchemaConverter {
         }
         // double -> decimal/string
         if (newType instanceof DecimalType) {
+          DecimalType decimalType = (DecimalType) newType;
           Decimal oldDecimal = Decimal.apply(oldV.getDouble(i));
-          oldDecimal.changePrecision(((DecimalType) newType).precision(), ((DecimalType) newType).scale());
-          newV.putDecimal(i, oldDecimal, ((DecimalType) newType).precision());
+          putDecimalOrNull(newV, i, oldDecimal, decimalType);
         } else if (newType instanceof StringType) {
           newV.putByteArray(i, getUTF8Bytes(oldV.getDouble(i) + ""));
         }
@@ -485,8 +498,7 @@ public class SparkInternalSchemaConverter {
           DecimalType decimalType = (DecimalType) newType;
           java.math.BigDecimal bigDecimal = new java.math.BigDecimal(oldV.getUTF8String(i).toString().trim());
           Decimal sparkDecimal = Decimal.apply(bigDecimal);
-          sparkDecimal.changePrecision(decimalType.precision(), decimalType.scale());
-          newV.putDecimal(i, sparkDecimal, decimalType.precision());
+          putDecimalOrNull(newV, i, sparkDecimal, decimalType);
         }
       }
       return true;
