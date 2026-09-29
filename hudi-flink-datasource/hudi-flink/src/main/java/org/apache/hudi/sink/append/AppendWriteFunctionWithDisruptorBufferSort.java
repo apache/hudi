@@ -26,6 +26,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.buffer.BufferType;
+import org.apache.hudi.sink.buffer.RowDataSortBuffer;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
 import org.apache.hudi.sink.utils.BufferUtils;
 import org.apache.hudi.util.MutableIteratorWrapperIterator;
@@ -37,7 +38,6 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
 import org.apache.flink.table.runtime.generated.GeneratedNormalizedKeyComputer;
 import org.apache.flink.table.runtime.generated.GeneratedRecordComparator;
-import org.apache.flink.table.runtime.operators.sort.BinaryInMemorySortBuffer;
 import org.apache.flink.table.runtime.util.MemorySegmentPool;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
@@ -52,7 +52,7 @@ import java.util.function.Function;
  * Sink function to write the data to the underneath filesystem using LMAX Disruptor
  * as a lock-free ring buffer for better throughput.
  *
- * <p>Uses Flink's native {@link BinaryInMemorySortBuffer} with code-generated comparators
+ * <p>Uses {@link RowDataSortBuffer} with code-generated comparators
  * for efficient sorting.
  *
  * <p>The function writes base files directly for each checkpoint,
@@ -75,7 +75,7 @@ public class AppendWriteFunctionWithDisruptorBufferSort<T> extends AppendWriteFu
   private transient GeneratedNormalizedKeyComputer keyComputer;
   private transient GeneratedRecordComparator recordComparator;
   private transient DisruptorMessageQueue<RowData, RowData> disruptorQueue;
-  private transient BinaryInMemorySortBuffer sortBuffer;
+  private transient RowDataSortBuffer sortBuffer;
   private transient SortingConsumer sortingConsumer;
 
   public AppendWriteFunctionWithDisruptorBufferSort(Configuration config, RowType rowType) {
@@ -178,7 +178,7 @@ public class AppendWriteFunctionWithDisruptorBufferSort<T> extends AppendWriteFu
     sortingConsumer.finish();
   }
 
-  private void sortAndSend(BinaryInMemorySortBuffer buffer) throws IOException {
+  private void sortAndSend(RowDataSortBuffer buffer) throws IOException {
     if (buffer.isEmpty()) {
       return;
     }

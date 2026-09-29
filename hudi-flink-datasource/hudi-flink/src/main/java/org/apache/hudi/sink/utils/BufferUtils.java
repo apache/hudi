@@ -18,11 +18,11 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.sink.buffer.RowDataSortBuffer;
 import org.apache.hudi.sink.exception.MemoryPagesExhaustedException;
 
 import org.apache.flink.table.runtime.generated.NormalizedKeyComputer;
 import org.apache.flink.table.runtime.generated.RecordComparator;
-import org.apache.flink.table.runtime.operators.sort.BinaryInMemorySortBuffer;
 import org.apache.flink.table.runtime.typeutils.BinaryRowDataSerializer;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.runtime.util.MemorySegmentPool;
@@ -33,19 +33,19 @@ import org.apache.flink.table.types.logical.RowType;
  * Utilities to create binary buffer for writing functions.
  */
 public class BufferUtils {
-  // minimum pages for a BinaryInMemorySortBuffer
+  // minimum pages for a RowDataSortBuffer
   private static final int MIN_REQUIRED_BUFFERS = 3;
 
-  public static BinaryInMemorySortBuffer createBuffer(RowType rowType, MemorySegmentPool memorySegmentPool) {
+  public static RowDataSortBuffer createBuffer(RowType rowType, MemorySegmentPool memorySegmentPool) {
     return createBuffer(rowType, memorySegmentPool,  new NaturalOrderKeyComputer(), new NaturalOrderRecordComparator());
   }
 
-  public static BinaryInMemorySortBuffer createBuffer(RowType rowType, MemorySegmentPool memorySegmentPool, NormalizedKeyComputer keyComputer, RecordComparator recordComparator) {
+  public static RowDataSortBuffer createBuffer(RowType rowType, MemorySegmentPool memorySegmentPool, NormalizedKeyComputer keyComputer, RecordComparator recordComparator) {
     if (memorySegmentPool.freePages() < MIN_REQUIRED_BUFFERS) {
       // there is no enough free pages to create a binary buffer, may need flush first.
-      throw new MemoryPagesExhaustedException("Free pages are not enough to create a BinaryInMemorySortBuffer.");
+      throw new MemoryPagesExhaustedException("Free pages are not enough to create a RowDataSortBuffer.");
     }
-    return BinaryInMemorySortBuffer.createBuffer(
+    return RowDataSortBuffer.createBuffer(
         keyComputer,
         new RowDataSerializer(rowType),
         new BinaryRowDataSerializer(rowType.getFieldCount()),

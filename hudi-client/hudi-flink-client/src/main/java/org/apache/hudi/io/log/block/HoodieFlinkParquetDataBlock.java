@@ -50,7 +50,7 @@ import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 
 /**
  * HoodieFlinkParquetDataBlock employs an HoodieRecord iterator rather than a HoodieRecord list for
- * parquet data block, aiming to better utilize the optimizations of {@code BinaryInMemorySortBuffer},
+ * parquet data block, aiming to better utilize the optimizations of {@code RowDataSortBuffer},
  * for example, object reusing to decrease GC costs.
  */
 public class HoodieFlinkParquetDataBlock extends HoodieParquetDataBlock implements ColumnRangeMetadataProvider {

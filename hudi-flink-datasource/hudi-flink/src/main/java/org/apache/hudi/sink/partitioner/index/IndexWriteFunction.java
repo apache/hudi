@@ -28,6 +28,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
+import org.apache.hudi.sink.buffer.RowDataSortBuffer;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.utils.BufferUtils;
@@ -39,7 +40,6 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
-import org.apache.flink.table.runtime.operators.sort.BinaryInMemorySortBuffer;
 import org.apache.flink.table.runtime.util.MemorySegmentPool;
 import org.apache.flink.util.Collector;
 import org.apache.flink.util.IOUtils;
@@ -78,7 +78,7 @@ public class IndexWriteFunction extends AbstractStreamWriteFunction<RowData> {
 
   private transient MemorySegmentPool memorySegmentPool;
 
-  private transient BinaryInMemorySortBuffer indexDataBuffer;
+  private transient RowDataSortBuffer indexDataBuffer;
 
   /**
    * Hoodie Flink table.
@@ -155,7 +155,7 @@ public class IndexWriteFunction extends AbstractStreamWriteFunction<RowData> {
     }
   }
 
-  private Pair<List<HoodieRecord>, Set<String>> prepareIndexRecordsAndPartitions(BinaryInMemorySortBuffer indexDataBuffer) {
+  private Pair<List<HoodieRecord>, Set<String>> prepareIndexRecordsAndPartitions(RowDataSortBuffer indexDataBuffer) {
     BinaryRowData reusedRow = new BinaryRowData(IndexRowUtils.INDEX_ROW_TYPE.getFieldCount());
     Iterator<BinaryRowData> rowItr = new MutableIteratorWrapperIterator<>(indexDataBuffer.getIterator(), () -> reusedRow);
     Set<String> dataPartitions = new HashSet<>();
