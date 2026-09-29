@@ -175,7 +175,16 @@ class TestVectorizedReadWithSchemaEvolution extends HoodieSparkSqlTestBase {
           spark.sql(s"select id, price from $tableName").collect()
         }
 
-        assert(exception.getMessage.contains("12345 cannot be represented as Decimal(4, 2)"))
+        val messages = Iterator
+          .iterate[Throwable](exception)(_.getCause)
+          .takeWhile(_ != null)
+          .flatMap(e => Option(e.getMessage))
+          .mkString("\n")
+
+        assert(
+          messages.contains("12345 cannot be represented as Decimal(4, 2)"),
+          s"Unexpected Spark error chain:\n$messages"
+        )
       }
     }
   }
