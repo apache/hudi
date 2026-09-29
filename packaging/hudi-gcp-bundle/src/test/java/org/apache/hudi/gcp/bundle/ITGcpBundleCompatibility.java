@@ -83,6 +83,15 @@ class ITGcpBundleCompatibility {
       throw new IllegalArgumentException("Expected smoke mode");
     }
 
+    verifyShadedProtobuf();
+    verifyShadedGuava();
+    verifyHostGuava();
+    verifyStorageClient();
+    verifyBigQueryClient();
+    verifyThreeTenExtra();
+  }
+
+  private static void verifyShadedProtobuf() throws Exception {
     Class<?> timestampClass = Class.forName(
         "org.apache.hudi.gcp.shaded.com.google.protobuf.Timestamp");
     Object timestampBuilder = timestampClass.getMethod("newBuilder").invoke(null);
@@ -93,7 +102,9 @@ class ITGcpBundleCompatibility {
     if (timestampBytes.length == 0) {
       throw new AssertionError("Protobuf serialization returned no bytes");
     }
+  }
 
+  private static void verifyShadedGuava() throws Exception {
     Class<?> domainNameClass = Class.forName(
         "org.apache.hudi.com.google.common.net.InternetDomainName");
     Object domainName = domainNameClass.getMethod("from", String.class).invoke(null, "example.com");
@@ -101,7 +112,9 @@ class ITGcpBundleCompatibility {
     if (!"com".equals(publicSuffix.toString())) {
       throw new AssertionError("Unexpected public suffix: " + publicSuffix);
     }
+  }
 
+  private static void verifyHostGuava() throws Exception {
     Class<?> hostDomainNameClass = Class.forName("com.google.common.net.InternetDomainName");
     Object hostDomainName = hostDomainNameClass.getMethod("from", String.class)
         .invoke(null, "example.com");
@@ -110,7 +123,9 @@ class ITGcpBundleCompatibility {
     if (!"com".equals(hostPublicSuffix.toString())) {
       throw new AssertionError("Unexpected host public suffix: " + hostPublicSuffix);
     }
+  }
 
+  private static void verifyStorageClient() {
     StorageOptions options = StorageOptions.newBuilder()
         .setProjectId("review")
         .setCredentials(NoCredentials.getInstance())
@@ -119,13 +134,17 @@ class ITGcpBundleCompatibility {
             .build())
         .build();
     options.getService();
+  }
 
+  private static void verifyBigQueryClient() {
     BigQueryOptions.newBuilder()
         .setProjectId("review")
         .setCredentials(NoCredentials.getInstance())
         .build()
         .getService();
+  }
 
+  private static void verifyThreeTenExtra() throws Exception {
     Class<?> periodDurationClass = Class.forName("org.threeten.extra.PeriodDuration");
     Object periodDuration = periodDurationClass.getMethod("parse", CharSequence.class)
         .invoke(null, "P1D");

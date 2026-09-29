@@ -190,6 +190,8 @@
                   <pattern>com.google.thirdparty.</pattern>
                   <shadedPattern>org.apache.hudi.com.google.thirdparty.</shadedPattern>
                 </relocation>
+                <!-- hudi-io already uses org.apache.hudi.com.google.protobuf, so keep the GCP
+                     protobuf and gRPC copies in a separate namespace. -->
                 <relocation>
                   <pattern>com.google.protobuf.</pattern>
                   <shadedPattern>org.apache.hudi.gcp.shaded.com.google.protobuf.</shadedPattern>
