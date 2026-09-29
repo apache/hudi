@@ -661,6 +661,29 @@ class TestStorageBasedLockProvider {
   }
 
   @Test
+  void testUnlockClearsLocalLockWhenReconcileReadThrows() throws InterruptedException {
+    when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, Option.empty()));
+    StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
+    StorageLockFile realLockFile = new StorageLockFile(data, "v1");
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.empty())))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(realLockFile)));
+    when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
+    assertTrue(lockProvider.tryLock());
+
+    when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(true);
+    when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(true).thenReturn(false);
+    doNothing().when(lockProvider).sleepBeforeRetry(anyLong());
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(realLockFile))))
+        .thenReturn(Pair.of(LockUpsertResult.TRANSIENT_ERROR, Option.empty()))
+        .thenReturn(Pair.of(LockUpsertResult.ACQUIRED_BY_OTHERS, Option.empty()));
+    doThrow(new RuntimeException("reconcile read failed")).when(mockLockService).readCurrentLockFile();
+
+    HoodieLockException exception = assertThrows(HoodieLockException.class, () -> lockProvider.unlock());
+    assertTrue(exception.getMessage().contains(StorageBasedLockProvider.CAUSE_EXPIRE_WRITE_FAILED), exception.getMessage());
+    assertNull(lockProvider.getLock(), "Failed reconciliation must still clear the released provider's local lock");
+  }
+
+  @Test
   void testUnlockBailsOutWhenLockReplacedDuringTransientRetrySleep() throws InterruptedException {
     // Same concurrency guard as the throttled path: if our lock was replaced by a concurrent
     // tryLock() while we slept, the retry must not expire the lock someone else now holds.
@@ -805,7 +828,7 @@ class TestStorageBasedLockProvider {
     verify(mockLockService, times(1 + StorageBasedLockProvider.RENEW_MAX_RETRIES))
         .tryUpsertLockFile(any(), eq(Option.of(lockFile)));
     verify(mockLogger, atLeastOnce())
-        .warn("Owner {}: Unable to renew lock due to throttling, will retry on next heartbeat.", this.ownerId);
+        .warn("Owner {}: Unable to renew lock due to throttling, will retry after backoff.", this.ownerId);
   }
 
   @Test
@@ -824,7 +847,7 @@ class TestStorageBasedLockProvider {
     verify(mockLockService, times(1 + StorageBasedLockProvider.RENEW_MAX_RETRIES))
         .tryUpsertLockFile(any(), eq(Option.of(lockFile)));
     verify(mockLogger, atLeastOnce()).warn(
-        "Owner {}: Unable to renew lock due to a retriable storage error, will retry on next heartbeat.",
+        "Owner {}: Unable to renew lock due to a retriable storage error, will retry after backoff.",
         this.ownerId);
   }
 
@@ -842,6 +865,30 @@ class TestStorageBasedLockProvider {
 
     assertTrue(lockProvider.renewLock());
 
+    verify(mockLockService, times(2)).tryUpsertLockFile(any(), eq(Option.of(lockFile)));
+  }
+
+  @Test
+  void testRenewLockReconcilesWhenTransientErrorMaskedLandedRenewal() throws InterruptedException {
+    long oldExpiration = System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS;
+    StorageLockFile lockFile = new StorageLockFile(new StorageLockData(false, oldExpiration, ownerId), "v1");
+    StorageLockFile renewedLockFile = new StorageLockFile(
+        new StorageLockData(false, oldExpiration + DEFAULT_LOCK_VALIDITY_MS, ownerId), "v2");
+    when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, Option.empty()));
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.empty())))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(lockFile)));
+    when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
+    assertTrue(lockProvider.tryLock());
+
+    doNothing().when(lockProvider).sleepBeforeRetry(anyLong());
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(lockFile))))
+        .thenReturn(Pair.of(LockUpsertResult.TRANSIENT_ERROR, Option.empty()))
+        .thenReturn(Pair.of(LockUpsertResult.ACQUIRED_BY_OTHERS, Option.empty()));
+    when(mockLockService.readCurrentLockFile())
+        .thenReturn(Pair.of(LockGetResult.SUCCESS, Option.of(renewedLockFile)));
+
+    assertTrue(lockProvider.renewLock(), "A landed renewal for this owner must keep the heartbeat alive");
+    assertTrue(renewedLockFile == lockProvider.getLock(), "Adopt the renewed lock token from storage");
     verify(mockLockService, times(2)).tryUpsertLockFile(any(), eq(Option.of(lockFile)));
   }
 

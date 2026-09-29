@@ -744,7 +744,16 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
    * earlier expire attempt that was answered with an error actually landed.
    */
   private boolean earlierExpireWriteLanded() {
-    Pair<LockGetResult, Option<StorageLockFile>> current = storageLockClient.readCurrentLockFile();
+    final Pair<LockGetResult, Option<StorageLockFile>> current;
+    try {
+      current = storageLockClient.readCurrentLockFile();
+    } catch (RuntimeException e) {
+      // A failed reconcile read does not change the original precondition failure. Let the
+      // normal ACQUIRED_BY_OTHERS handling clear our local lock and report release failure.
+      logger.warn("Owner {}: Failed to reconcile lock expiration after a retriable write error for {}.",
+          ownerId, lockFilePath, e);
+      return false;
+    }
     if (current.getLeft() != LockGetResult.SUCCESS || !current.getRight().isPresent()) {
       return false;
     }
@@ -781,7 +790,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
         hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockInterruptedMetric);
         return true;
       }
-      outcome = renewLockOnce();
+      outcome = renewLockOnce(true);
     }
     // RETRY here means the in-cycle budget ran out. The lease is still ours, so keep the
     // heartbeat alive and let the next cycle try again.
@@ -805,6 +814,15 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
    */
   @VisibleForTesting
   synchronized RenewAttemptOutcome renewLockOnce() {
+    return renewLockOnce(false);
+  }
+
+  /**
+   * Performs one renewal attempt, optionally reconciling an earlier ambiguous write if the
+   * conditional retry reports that the lock changed.
+   */
+  @VisibleForTesting
+  synchronized RenewAttemptOutcome renewLockOnce(boolean afterRetriableAttempt) {
     try {
       // If we don't hold the lock, no-op.
       if (!believesLockMightBeHeld()) {
@@ -832,6 +850,13 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
           Option.of(getLock()));
       switch (currentLock.getLeft()) {
         case ACQUIRED_BY_OTHERS:
+          if (afterRetriableAttempt) {
+            StorageLockFile renewedLock = earlierRenewalWriteLanded(oldExpirationMs);
+            if (renewedLock != null) {
+              recordSuccessfulRenewal(renewedLock, oldExpirationMs, acquisitionTimestamp);
+              return RenewAttemptOutcome.KEEP_HEARTBEAT;
+            }
+          }
           logger.error("Owner {}: Unable to renew lock as it is acquired by others.", ownerId);
           hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockAcquiredByOthersErrorMetric);
           // No need to extend lock lease anymore.
@@ -846,14 +871,14 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
           // immediate identical retry could act on state we cannot reason about.
           return RenewAttemptOutcome.KEEP_HEARTBEAT;
         case THROTTLED:
-          // Throttling is transient, let the heartbeat retry on its next cycle.
-          logger.warn("Owner {}: Unable to renew lock due to throttling, will retry on next heartbeat.", ownerId);
+          // Throttling is transient; renewLock() makes one bounded in-cycle retry.
+          logger.warn("Owner {}: Unable to renew lock due to throttling, will retry after backoff.", ownerId);
           hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockThrottledMetric);
           return RenewAttemptOutcome.RETRY;
         case TRANSIENT_ERROR:
           // HTTP 5xx on the renew write. Keep the heartbeat alive and try again shortly.
           logger.warn("Owner {}: Unable to renew lock due to a retriable storage error, "
-              + "will retry on next heartbeat.", ownerId);
+              + "will retry after backoff.", ownerId);
           hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockTransientErrorMetric);
           return RenewAttemptOutcome.RETRY;
         case SUCCESS: {
@@ -861,14 +886,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
           // returned by the storage client (same as the acquisition path), not the locally
           // computed expiration, so both callers agree on where the deadline comes from.
           StorageLockFile renewedLock = currentLock.getRight().get();
-          this.setLock(renewedLock);
-          // Read the clock once so the metric and the log line below report the same deadline.
-          long renewalCompletionMs = getCurrentEpochMs();
-          long remainingLeaseMs = renewedLock.getValidUntilMs() - renewalCompletionMs;
-          hoodieLockMetrics.ifPresent(metrics -> metrics.updateLockExpirationDeadlineMetric((int) remainingLeaseMs));
-          logger.info("Owner {}: Lock renewal successful. The renewal completes {} ms before old expiration. The lock will expire in {} ms for lock {}.",
-              ownerId, oldExpirationMs - renewalCompletionMs, remainingLeaseMs, lockFilePath);
-          recordAuditOperation(AuditOperationState.RENEW, acquisitionTimestamp);
+          recordSuccessfulRenewal(renewedLock, oldExpirationMs, acquisitionTimestamp);
           // Let heartbeat continue to renew lock lease again later.
           return RenewAttemptOutcome.KEEP_HEARTBEAT;
         }
@@ -880,6 +898,39 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockProviderFatalErrorMetric);
       return RenewAttemptOutcome.STOP_HEARTBEAT;
     }
+  }
+
+  /**
+   * Reads back a renewal after a retry's precondition failure. A newer, unexpired lock for this
+   * owner proves that the earlier conditional renewal landed despite its error response.
+   */
+  private StorageLockFile earlierRenewalWriteLanded(long previousExpirationMs) {
+    final Pair<LockGetResult, Option<StorageLockFile>> current;
+    try {
+      current = storageLockClient.readCurrentLockFile();
+    } catch (RuntimeException e) {
+      logger.warn("Owner {}: Failed to reconcile lock renewal after a retriable write error for {}.",
+          ownerId, lockFilePath, e);
+      return null;
+    }
+    if (current.getLeft() != LockGetResult.SUCCESS || !current.getRight().isPresent()) {
+      return null;
+    }
+    StorageLockFile stored = current.getRight().get();
+    return !stored.isExpired()
+        && ownerId.equals(stored.getOwner())
+        && stored.getValidUntilMs() > previousExpirationMs ? stored : null;
+  }
+
+  private void recordSuccessfulRenewal(StorageLockFile renewedLock, long oldExpirationMs, long acquisitionTimestamp) {
+    this.setLock(renewedLock);
+    // Read the clock once so the metric and the log line below report the same deadline.
+    long renewalCompletionMs = getCurrentEpochMs();
+    long remainingLeaseMs = renewedLock.getValidUntilMs() - renewalCompletionMs;
+    hoodieLockMetrics.ifPresent(metrics -> metrics.updateLockExpirationDeadlineMetric((int) remainingLeaseMs));
+    logger.info("Owner {}: Lock renewal successful. The renewal completes {} ms before old expiration. The lock will expire in {} ms for lock {}.",
+        ownerId, oldExpirationMs - renewalCompletionMs, remainingLeaseMs, lockFilePath);
+    recordAuditOperation(AuditOperationState.RENEW, acquisitionTimestamp);
   }
 
   // ---------
