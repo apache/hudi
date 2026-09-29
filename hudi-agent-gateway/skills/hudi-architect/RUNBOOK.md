@@ -139,8 +139,8 @@ A session ends with three artifacts:
 
 For a Flink request in the current PR1 scope, the session instead ends with an ADR-shaped safety
 assessment, explicit gate findings, and one of `INCOMPLETE`, `BLOCKED`, or `REVIEW_REQUIRED`.
-Executable output is withheld even when every safety gate passes; that path is implemented and
-validated in the follow-up PR. The assessment includes the immutable Hudi 1.2.0 source revision
+Executable output is withheld even when every safety gate passes; that path will be implemented
+and validated in PR2. The assessment includes the immutable Hudi 1.2.0 source revision
 and Flink 1.20.1 fixture version reported by the checked-in capability manifest.
 
 Then: land a first commit in a staging path, run your real read patterns against it, and check the ADR's operational playbook section for what to monitor from day one (commit duration, pending compactions, active timeline size, small-file ratio).

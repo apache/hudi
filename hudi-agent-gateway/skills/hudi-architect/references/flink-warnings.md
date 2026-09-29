@@ -17,8 +17,8 @@ limitations under the License.
 -->
 # Flink warnings — PR1
 
-Load these warnings only for the Flink route. Each warning has a deterministic trigger and action.
-Surface it when the triggering answer lands rather than batching warnings at the end.
+Load these findings and advisories only for the Flink route. Each code has a deterministic trigger
+and action. Surface it when the triggering answer lands rather than batching messages at the end.
 
 ## FLINK_BASELINE_EVIDENCE_INVALID
 
@@ -41,6 +41,15 @@ needs a version-specific capability review; the baseline will not be silently re
 
 **Action:** `REVIEW_REQUIRED`; withhold executable output.
 
+## FLINK_VERSION_REQUIRED
+
+**Trigger:** The supplied Hudi or Flink version remains ambiguous after clarification.
+
+**Message:** The deployed version is required before the checked-in Hudi 1.2.0 / Flink 1.20
+baseline can be reused or rejected.
+
+**Action:** `INCOMPLETE`; withhold version-specific capability claims and executable output.
+
 ## FLINK_EXISTING_TABLE_DEFERRED
 
 **Trigger:** The target is an existing table.
@@ -49,6 +58,15 @@ needs a version-specific capability review; the baseline will not be silently re
 with a new-table recommendation. Evidence comparison is deferred to PR5.
 
 **Action:** `BLOCKED`; request only non-secret evidence if the user wants it recorded for later.
+
+## FLINK_TABLE_LIFECYCLE_REQUIRED
+
+**Trigger:** The user cannot confirm whether the target is a new or existing Hudi table.
+
+**Message:** New-table design must not overwrite or substitute for facts from an existing table.
+The table lifecycle must be known before choosing a path.
+
+**Action:** `INCOMPLETE`; do not route through the new-table flow.
 
 ## FLINK_MULTI_WRITER_REVIEW
 
@@ -60,12 +78,32 @@ lock-provider, index, or table-service combination is safe.
 
 **Action:** `REVIEW_REQUIRED`; withhold concurrency-sensitive configuration.
 
+## FLINK_WRITER_MODEL_UNRESOLVED
+
+**Trigger:** The user cannot confirm whether another writer or standalone table service can commit
+to the table.
+
+**Message:** The single-writer assumption is unresolved, so concurrency-sensitive design cannot
+be treated as safe.
+
+**Action:** `REVIEW_REQUIRED`; do not infer `SINGLE_WRITER` or recommend concurrency settings.
+
 ## FLINK_EXTERNAL_CATALOG_REVIEW
 
 **Trigger:** An external engine or BI tool must discover the table through a catalog or metastore.
 
 **Message:** Flink table resolution and external metastore synchronization are separate
 responsibilities that must be composed together. That composition is deferred to PR6.
+
+**Action:** `REVIEW_REQUIRED`; generate no catalog or sync configuration.
+
+## FLINK_CATALOG_REQUIREMENT_UNRESOLVED
+
+**Trigger:** The user cannot determine whether anything outside the Flink application requires
+catalog or metastore visibility.
+
+**Message:** External discovery requirements are unresolved and cannot be replaced with an
+assumption that path-based access is sufficient.
 
 **Action:** `REVIEW_REQUIRED`; generate no catalog or sync configuration.
 
@@ -80,16 +118,65 @@ ordering, and partition references can eventually be checked.
 
 **Action:** `INCOMPLETE`; withhold DDL.
 
+## FLINK_MUTABLE_COW_DEFERRED
+
+**Trigger:** Existing logical records can be updated or deleted.
+
+**Message:** Mutable COW requires identity, ordering, and an upsert-capable path that is deferred
+to PR3.
+
+**Action:** `BLOCKED`; collect independent facts but generate no executable configuration.
+
+## FLINK_MUTABILITY_REQUIRED
+
+**Trigger:** The user cannot confirm whether logical records are append-only or mutable.
+
+**Message:** Mutation behavior is required before the record-key and write path can be assessed.
+
+**Action:** `INCOMPLETE`; do not infer append-only behavior.
+
+## FLINK_RECORD_KEY_POSTURE_REQUIRED
+
+**Trigger:** An append-only workload cannot confirm whether a stable business key exists.
+
+**Message:** Record-key posture must be known before the skill can assess replay behavior and the
+auto-generated-key trade-off.
+
+**Action:** `INCOMPLETE`; withhold the record-key path.
+
 ## FLINK_AUTO_KEY_DURABILITY
 
-**Trigger:** An append-only workload has no stable business key and the user accepts an
-auto-generated-key posture.
+**Trigger:** An append-only workload has no stable business key and replay behavior permits the
+auto-generated-key path to be considered.
 
 **Message:** Reprocessing the same business record can create another Hudi record with a different
 generated key. A later move to upsert requires stable identity and may require migration or table
 recreation.
 
-**Action:** Record this as a durable decision. This warning alone does not change status.
+**Action:** Explain the trade-off before asking for explicit acceptance. Record it as a durable
+decision only after acceptance. This advisory alone does not change status.
+
+## FLINK_AUTO_KEY_ACCEPTANCE_REQUIRED
+
+**Trigger:** An eligible append-only workload has no stable business key, but auto-key acceptance
+is not decided, is unanswered, or the session ends before acceptance.
+
+**Message:** Auto-generated record keys require an explicit durability decision. Eligibility for
+that path must not be implied while the decision is pending.
+
+**Action:** `INCOMPLETE`; retain this finding in the final assessment and do not add
+`FLINK_EXECUTABLE_PATH_DEFERRED`.
+
+## FLINK_AUTO_KEY_DECLINED
+
+**Trigger:** An eligible append-only workload has no stable business key and the user explicitly
+declines auto-generated record keys.
+
+**Message:** The request has neither a stable business key nor an accepted auto-generated-key
+posture, so no record-key path is available.
+
+**Action:** `BLOCKED`; retain this finding in the final assessment and do not add
+`FLINK_EXECUTABLE_PATH_DEFERRED`.
 
 ## FLINK_STABLE_KEY_NOT_IDEMPOTENT
 
@@ -109,6 +196,16 @@ status.
 insert path cannot be presented as deduplicating.
 
 **Action:** `BLOCKED` until the mutable COW path is implemented.
+
+## FLINK_REPLAY_BEHAVIOR_UNRESOLVED
+
+**Trigger:** The user cannot determine whether retries, replays, or backfills can repeat logical
+records or whether repeated copies must collapse.
+
+**Message:** Replay safety is unresolved, so the append-only insert path cannot be presented as
+idempotent.
+
+**Action:** `REVIEW_REQUIRED`; retain the uncertainty and withhold executable output.
 
 ## FLINK_EXECUTABLE_PATH_DEFERRED
 

@@ -60,6 +60,24 @@ def _load_toml(path: Path) -> dict:
         return tomllib.load(toml_file)
 
 
+def _scenario_finding_codes(contract: dict, scenario: dict) -> list[str]:
+    finding_codes = list(scenario.get("finding_codes", []))
+    inputs = scenario.get("inputs", {})
+    auto_key_contract = contract["auto_key_acceptance"]
+    if (
+        inputs.get("stable_business_key") is False
+        and inputs.get("replay_behavior") in auto_key_contract["eligible_replay_answers"]
+    ):
+        answer = inputs["auto_key_acceptance"]
+        transition = auto_key_contract[answer]
+        if finding_code := transition.get("finding_code"):
+            finding_codes.append(finding_code)
+
+    if scenario.get("all_other_gates_pass") and not finding_codes:
+        finding_codes.append("FLINK_EXECUTABLE_PATH_DEFERRED")
+    return finding_codes
+
+
 def _run_flink_validator(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, str(FLINK_VALIDATOR), *args],
@@ -212,6 +230,7 @@ def test_pinned_source_hashes_match_when_release_object_is_available() -> None:
 
 def test_pr1_scenarios_have_deterministic_status_and_are_non_executable() -> None:
     contract = _load_toml(GATE_FIXTURE)
+    assert contract["schema_version"] == 2
     assert contract["status_precedence"] == ["INCOMPLETE", "REVIEW_REQUIRED", "BLOCKED"]
     precedence = {
         status: priority for priority, status in enumerate(contract["status_precedence"])
@@ -224,7 +243,9 @@ def test_pr1_scenarios_have_deterministic_status_and_are_non_executable() -> Non
 
     for scenario in contract["scenarios"]:
         assert f"`{scenario['case_id']}`" in decisions
-        statuses = [finding_status[code] for code in scenario["finding_codes"]]
+        statuses = [
+            finding_status[code] for code in _scenario_finding_codes(contract, scenario)
+        ]
         resolved_status = max(statuses, key=precedence.__getitem__)
         assert resolved_status == scenario["expected_final_status"], scenario["case_id"]
         assert scenario["executable_eligible"] is False
@@ -245,6 +266,48 @@ def test_combined_gate_fixture_preserves_all_reasons_and_blocked_wins() -> None:
     ]
     assert combined["expected_final_status"] == "BLOCKED"
     assert combined["executable_eligible"] is False
+
+
+def test_auto_key_acceptance_scenarios_derive_findings_from_answers() -> None:
+    contract = _load_toml(GATE_FIXTURE)
+    scenarios = {scenario["case_id"]: scenario for scenario in contract["scenarios"]}
+    finding_status = contract["finding_status"]
+
+    pending = scenarios["F12_AUTO_KEY_PENDING"]
+    declined = scenarios["F13_AUTO_KEY_DECLINED"]
+    accepted = scenarios["F14_AUTO_KEY_ACCEPTED"]
+
+    assert "finding_codes" not in pending
+    assert "finding_codes" not in declined
+    assert _scenario_finding_codes(contract, pending) == [
+        "FLINK_AUTO_KEY_ACCEPTANCE_REQUIRED"
+    ]
+    assert _scenario_finding_codes(contract, declined) == ["FLINK_AUTO_KEY_DECLINED"]
+    assert _scenario_finding_codes(contract, accepted) == ["FLINK_EXECUTABLE_PATH_DEFERRED"]
+    assert contract["auto_key_acceptance"]["accepted"] == {
+        "warning_code": "FLINK_AUTO_KEY_DURABILITY"
+    }
+    for answer in ("pending", "declined"):
+        transition = contract["auto_key_acceptance"][answer]
+        assert transition["status"] == finding_status[transition["finding_code"]]
+
+
+def test_flink_code_inventory_covers_findings_and_advisories() -> None:
+    contract = _load_toml(GATE_FIXTURE)
+    decisions = _read(REFERENCES_DIR / "flink-decision-overrides.md")
+    warnings = _read(REFERENCES_DIR / "flink-warnings.md")
+    codes = set(contract["finding_status"])
+    codes.update(
+        {
+            "FLINK_AUTO_KEY_DURABILITY",
+            "FLINK_STABLE_KEY_NOT_IDEMPOTENT",
+            "FLINK_SECRET_REDACTED",
+        }
+    )
+
+    for code in codes:
+        assert f"`{code}`" in decisions
+        assert f"## {code}" in warnings
 
 
 def test_safety_gate_order_is_stable() -> None:
@@ -314,3 +377,49 @@ private-key-material
     ):
         assert secret not in result.stdout
     assert "<redacted-private-key>" in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("evidence", "expected"),
+    [
+        (
+            "CREATE TABLE src (id INT) WITH ('connector'='jdbc', "
+            "'password'='test-secret');",
+            "CREATE TABLE src (id INT) WITH ('connector'='jdbc', "
+            "'password'='<redacted>');",
+        ),
+        (
+            'command --password "first second third" --table orders',
+            'command --password "<redacted>" --table orders',
+        ),
+        (
+            r'{"password":"first\"second-suffix","table":"orders"}',
+            '{"password":"<redacted>","table":"orders"}',
+        ),
+        (
+            "WITH ('password'='first''second', 'table'='orders')",
+            "WITH ('password'='<redacted>', 'table'='orders')",
+        ),
+    ],
+)
+def test_redactor_consumes_complete_inline_and_quoted_values(
+    evidence: str, expected: str
+) -> None:
+    result = subprocess.run(
+        [sys.executable, str(SKILL_DIR / "redact_sensitive_values.py")],
+        input=evidence,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert result.stdout == expected
+
+    repeated = subprocess.run(
+        [sys.executable, str(SKILL_DIR / "redact_sensitive_values.py")],
+        input=result.stdout,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    assert repeated.stdout == expected

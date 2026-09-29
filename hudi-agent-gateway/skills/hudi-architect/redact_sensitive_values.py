@@ -40,13 +40,8 @@ SENSITIVE_KEY = re.compile(
 )
 
 ASSIGNMENT = re.compile(
-    r"^(?P<prefix>\s*[\"']?(?P<key>[A-Za-z0-9_.-]+)[\"']?\s*(?:=|:)\s*)"
-    r"(?P<value>.*)$"
-)
-
-JSON_ASSIGNMENT = re.compile(
-    r"(?P<prefix>[\"'](?P<key>[^\"']+)[\"']\s*:\s*)"
-    r"(?P<quote>[\"'])(?P<value>.*?)(?P=quote)"
+    r"(?P<prefix>(?P<key_quote>[\"']?)(?P<key>[A-Za-z0-9_.-]+)"
+    r"(?P=key_quote)\s*(?:=|:)\s*)"
 )
 
 URI_USERINFO = re.compile(
@@ -60,7 +55,11 @@ SENSITIVE_QUERY_PARAMETER = re.compile(
 
 SENSITIVE_CLI_FLAG = re.compile(
     r"(?i)(?P<prefix>--(?:access[-_]?key|api[-_]?key|client[-_]?secret|password|"
-    r"secret|secret[-_]?key|token)(?:=|\s+))(?P<value>[^\s]+)"
+    r"secret|secret[-_]?key|token)(?:=|\s+))"
+)
+
+AUTHORIZATION_HEADER = re.compile(
+    r"(?im)(?P<prefix>^[ \t]*authorization[ \t]*:[ \t]*)[^\r\n]*"
 )
 
 PRIVATE_KEY_BLOCK = re.compile(
@@ -72,48 +71,90 @@ PRIVATE_KEY_BLOCK = re.compile(
 AWS_ACCESS_KEY_ID = re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b")
 
 
-def _redact_assignment(line: str) -> str:
-    match = ASSIGNMENT.match(line)
-    if match is None or SENSITIVE_KEY.search(match.group("key")) is None:
-        return line
+def _consume_quoted_value(text: str, start: int) -> tuple[int, str]:
+    """Consume one complete quoted value, including escapes and SQL doubled quotes."""
+    quote = text[start]
+    index = start + 1
+    while index < len(text):
+        character = text[index]
+        if character in "\r\n":
+            # Fail closed for malformed input without swallowing unrelated later lines.
+            return index, f"{quote}{REDACTED}"
+        if character == "\\":
+            index = min(index + 2, len(text))
+            continue
+        if character == quote:
+            if index + 1 < len(text) and text[index + 1] == quote:
+                index += 2
+                continue
+            return index + 1, f"{quote}{REDACTED}{quote}"
+        index += 1
+    return index, f"{quote}{REDACTED}"
 
-    value = match.group("value")
-    stripped = value.rstrip()
-    suffix = "," if stripped.endswith(",") else ""
-    return f"{match.group('prefix')}{REDACTED}{suffix}"
+
+def _consume_assignment_value(text: str, start: int) -> tuple[int, str]:
+    if start < len(text) and text[start] in "\"'":
+        return _consume_quoted_value(text, start)
+
+    index = start
+    while index < len(text) and text[index] not in ",;)}]&\r\n":
+        index += 1
+    return index, REDACTED
 
 
-def _redact_json_assignment(match: re.Match[str]) -> str:
-    if SENSITIVE_KEY.search(match.group("key")) is None:
-        return match.group(0)
-    quote = match.group("quote")
-    return f"{match.group('prefix')}{quote}{REDACTED}{quote}"
+def _consume_cli_value(text: str, start: int) -> tuple[int, str]:
+    if start < len(text) and text[start] in "\"'":
+        return _consume_quoted_value(text, start)
+
+    index = start
+    while index < len(text) and not text[index].isspace():
+        index += 1
+    return index, REDACTED
+
+
+def _redact_cli_values(text: str) -> str:
+    output: list[str] = []
+    position = 0
+    while match := SENSITIVE_CLI_FLAG.search(text, position):
+        output.append(text[position : match.end("prefix")])
+        value_end, replacement = _consume_cli_value(text, match.end("prefix"))
+        output.append(replacement)
+        position = value_end
+    output.append(text[position:])
+    return "".join(output)
+
+
+def _redact_assignments(text: str) -> str:
+    output: list[str] = []
+    position = 0
+    while match := ASSIGNMENT.search(text, position):
+        if SENSITIVE_KEY.search(match.group("key")) is None:
+            output.append(text[position : match.end("prefix")])
+            position = match.end("prefix")
+            continue
+
+        output.append(text[position : match.end("prefix")])
+        value_end, replacement = _consume_assignment_value(text, match.end("prefix"))
+        output.append(replacement)
+        position = value_end
+    output.append(text[position:])
+    return "".join(output)
 
 
 def redact_sensitive_text(text: str) -> str:
     """Return text with common secret-bearing forms replaced."""
     redacted = PRIVATE_KEY_BLOCK.sub("<redacted-private-key>", text)
-    redacted = JSON_ASSIGNMENT.sub(_redact_json_assignment, redacted)
     redacted = URI_USERINFO.sub(lambda match: f"{match.group('scheme')}{REDACTED}@", redacted)
     redacted = SENSITIVE_QUERY_PARAMETER.sub(
         lambda match: f"{match.group('prefix')}{REDACTED}", redacted
     )
-    redacted = SENSITIVE_CLI_FLAG.sub(
+    redacted = AUTHORIZATION_HEADER.sub(
         lambda match: f"{match.group('prefix')}{REDACTED}", redacted
     )
+    redacted = _redact_cli_values(redacted)
+    redacted = _redact_assignments(redacted)
     redacted = AWS_ACCESS_KEY_ID.sub(REDACTED, redacted)
-
-    lines = redacted.splitlines(keepends=True)
-    output: list[str] = []
-    for line in lines:
-        ending = ""
-        content = line
-        if line.endswith("\r\n"):
-            content, ending = line[:-2], "\r\n"
-        elif line.endswith("\n"):
-            content, ending = line[:-1], "\n"
-        output.append(_redact_assignment(content) + ending)
-    return "".join(output)
+    return redacted
 
 
 def _read_input(path: str | None) -> str:

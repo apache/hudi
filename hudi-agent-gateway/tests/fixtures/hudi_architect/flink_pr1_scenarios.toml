@@ -13,8 +13,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-schema_version = 1
+schema_version = 2
 status_precedence = ["INCOMPLETE", "REVIEW_REQUIRED", "BLOCKED"]
+
+[auto_key_acceptance]
+eligible_replay_answers = ["cannot_occur", "duplicates_acceptable"]
+
+[auto_key_acceptance.accepted]
+warning_code = "FLINK_AUTO_KEY_DURABILITY"
+
+[auto_key_acceptance.pending]
+finding_code = "FLINK_AUTO_KEY_ACCEPTANCE_REQUIRED"
+status = "INCOMPLETE"
+
+[auto_key_acceptance.declined]
+finding_code = "FLINK_AUTO_KEY_DECLINED"
+status = "BLOCKED"
 
 [finding_status]
 FLINK_BASELINE_EVIDENCE_INVALID = "BLOCKED"
@@ -30,6 +44,8 @@ FLINK_PHYSICAL_SCHEMA_REQUIRED = "INCOMPLETE"
 FLINK_MUTABLE_COW_DEFERRED = "BLOCKED"
 FLINK_MUTABILITY_REQUIRED = "INCOMPLETE"
 FLINK_RECORD_KEY_POSTURE_REQUIRED = "INCOMPLETE"
+FLINK_AUTO_KEY_ACCEPTANCE_REQUIRED = "INCOMPLETE"
+FLINK_AUTO_KEY_DECLINED = "BLOCKED"
 FLINK_REPLAY_IDEMPOTENCE_DEFERRED = "BLOCKED"
 FLINK_REPLAY_BEHAVIOR_UNRESOLVED = "REVIEW_REQUIRED"
 FLINK_EXECUTABLE_PATH_DEFERRED = "BLOCKED"
@@ -119,5 +135,26 @@ finding_codes = [
   "FLINK_PHYSICAL_SCHEMA_REQUIRED",
   "FLINK_REPLAY_IDEMPOTENCE_DEFERRED",
 ]
+expected_final_status = "BLOCKED"
+executable_eligible = false
+
+[[scenarios]]
+case_id = "F12_AUTO_KEY_PENDING"
+all_other_gates_pass = true
+inputs = { stable_business_key = false, replay_behavior = "duplicates_acceptable", auto_key_acceptance = "pending" }
+expected_final_status = "INCOMPLETE"
+executable_eligible = false
+
+[[scenarios]]
+case_id = "F13_AUTO_KEY_DECLINED"
+all_other_gates_pass = true
+inputs = { stable_business_key = false, replay_behavior = "duplicates_acceptable", auto_key_acceptance = "declined" }
+expected_final_status = "BLOCKED"
+executable_eligible = false
+
+[[scenarios]]
+case_id = "F14_AUTO_KEY_ACCEPTED"
+all_other_gates_pass = true
+inputs = { stable_business_key = false, replay_behavior = "duplicates_acceptable", auto_key_acceptance = "accepted" }
 expected_final_status = "BLOCKED"
 executable_eligible = false

@@ -159,9 +159,28 @@ For append-only input:
 - Stable key → record the field names when available and prefer this posture in PR2. Also surface
   `FLINK_STABLE_KEY_NOT_IDEMPOTENT`: a stable key does not make `write.operation = insert`
   deduplicate an independent replay.
-- Confirm that no stable key exists → assess replay and deduplication requirements → surface 
-  `FLINK_AUTO_KEY_DURABILITY` and explain the implications of auto-generated record keys → ask 
-  for explicit acceptance → persist the decision only after acceptance.
+- Confirm that no stable key exists → assess replay and deduplication requirements in F6. If F6
+  confirms that repeated records cannot occur or that duplicates are acceptable, surface
+  `FLINK_AUTO_KEY_DURABILITY`, explain the implications of auto-generated record keys, and ask:
+
+  > "This append-only path will use auto-generated record keys. Reprocessing a business record
+  > can therefore create another table record, and a future move to upsert may require migration
+  > or table recreation. Do you accept that durability trade-off?"
+  >
+  > - **Yes — accept the auto-key posture**
+  > - **No — do not use auto-generated keys**
+  > - **Not decided**
+
+  - Accepted → persist the decision and continue. `FLINK_AUTO_KEY_DURABILITY` is advisory and
+    does not contribute a status.
+  - Declined → add `FLINK_AUTO_KEY_DECLINED` with a `BLOCKED` contribution. The request has no
+    accepted record-key path.
+  - Not decided, unanswered, or the session ends before acceptance → add
+    `FLINK_AUTO_KEY_ACCEPTANCE_REQUIRED` with an `INCOMPLETE` contribution.
+
+  Do not add `FLINK_EXECUTABLE_PATH_DEFERRED` for a pending or declined decision. If F6 says
+  replay copies must collapse or replay behavior is unknown, retain that F6 finding and do not
+  ask for acceptance of an ineligible auto-key path.
 - Not sure → `INCOMPLETE` with `FLINK_RECORD_KEY_POSTURE_REQUIRED`.
 
 ## F6 — Replay and backfill idempotence

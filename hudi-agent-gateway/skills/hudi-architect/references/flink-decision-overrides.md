@@ -55,6 +55,8 @@ do not replace the shared table-design rules and do not form a standalone planne
 | Mutable workload | `FLINK_MUTABLE_COW_DEFERRED` | `BLOCKED` | No |
 | Mutability unknown | `FLINK_MUTABILITY_REQUIRED` | `INCOMPLETE` | No |
 | Record-key posture unknown | `FLINK_RECORD_KEY_POSTURE_REQUIRED` | `INCOMPLETE` | No |
+| No stable key and auto-key acceptance is pending or unanswered | `FLINK_AUTO_KEY_ACCEPTANCE_REQUIRED` | `INCOMPLETE` | No |
+| No stable key and the auto-key posture is explicitly declined | `FLINK_AUTO_KEY_DECLINED` | `BLOCKED` | No |
 | Replay copies must collapse | `FLINK_REPLAY_IDEMPOTENCE_DEFERRED` | `BLOCKED` | No |
 | Replay behavior unknown | `FLINK_REPLAY_BEHAVIOR_UNRESOLVED` | `REVIEW_REQUIRED` | No |
 | All PR1 gates pass | `FLINK_EXECUTABLE_PATH_DEFERRED` | `BLOCKED` | No |
@@ -88,8 +90,8 @@ eligible only after a later PR adds executable generation and static validation.
 | Append-only | Yes | Replays impossible | Continue safety gates; stable key preferred |
 | Append-only | Yes | Duplicates acceptable | Continue; record duplicate tolerance |
 | Append-only | Yes | Copies must collapse | `BLOCKED` — upsert-capable design required |
-| Append-only | No | Replays impossible | Continue with auto-key durability warning |
-| Append-only | No | Duplicates acceptable | Continue with auto-key durability warning and duplicate tolerance |
+| Append-only | No | Replays impossible | Explain auto-key durability; accepted continues, pending is `INCOMPLETE`, declined is `BLOCKED` |
+| Append-only | No | Duplicates acceptable | Explain auto-key durability and duplicate tolerance; accepted continues, pending is `INCOMPLETE`, declined is `BLOCKED` |
 | Append-only | No | Copies must collapse | `BLOCKED` — stable identity and upsert required |
 | Append-only | Unknown | Any | `INCOMPLETE` |
 | Append-only | Any | Replay behavior unknown | `REVIEW_REQUIRED` |
@@ -97,6 +99,17 @@ eligible only after a later PR adds executable generation and static validation.
 Stable identity expresses which events refer to the same business record. It does not change the
 semantics of an insert operation into an indexed upsert. Keep identity and replay idempotence as
 separate facts in the ADR.
+
+## Advisory and evidence codes
+
+These codes do not contribute a final status and therefore do not appear in the gate-outcome
+table. They remain part of the deterministic code inventory:
+
+| Condition | Code | Effect |
+|---|---|---|
+| Stable business key on the append-only insert path | `FLINK_STABLE_KEY_NOT_IDEMPOTENT` | Explain that insert does not deduplicate independent replay |
+| Eligible no-stable-key path reaches the acceptance question | `FLINK_AUTO_KEY_DURABILITY` | Explain durability before recording acceptance |
+| Credential material is removed from supplied evidence | `FLINK_SECRET_REDACTED` | Continue with sanitized evidence or mark an obscured fact incomplete |
 
 ## PR1 deterministic scenario matrix
 
@@ -117,12 +130,20 @@ and executable eligibility, not exact natural-language wording.
 | `F07_MUTABLE` | Updates or deletes occur | `BLOCKED` | No |
 | `F08_REPLAY_COLLAPSE` | Independent replay must deduplicate | `BLOCKED` | No |
 | `F09_REPLAY_UNKNOWN` | Replay behavior is unknown | `REVIEW_REQUIRED` | No |
-| `F10_SAFE_APPEND` | Baseline new-table single-writer append-only path passes every gate | `BLOCKED` | No |
+| `F10_SAFE_APPEND` | Baseline new-table single-writer append-only path with a stable key passes every gate | `BLOCKED` | No |
 | `F11_COMBINED_GATES` | Writer model unknown, physical schema missing, and replay copies must collapse | `BLOCKED` | No |
+| `F12_AUTO_KEY_PENDING` | Otherwise-safe no-stable-key path has no explicit auto-key decision | `INCOMPLETE` | No |
+| `F13_AUTO_KEY_DECLINED` | Otherwise-safe no-stable-key path explicitly rejects auto-generated keys | `BLOCKED` | No |
+| `F14_AUTO_KEY_ACCEPTED` | Otherwise-safe no-stable-key path explicitly accepts auto-generated keys | `BLOCKED` | No |
 
 For `F11_COMBINED_GATES`, retain `FLINK_WRITER_MODEL_UNRESOLVED`,
 `FLINK_PHYSICAL_SCHEMA_REQUIRED`, and `FLINK_REPLAY_IDEMPOTENCE_DEFERRED`. `BLOCKED` wins by
 precedence, but the `REVIEW_REQUIRED` and `INCOMPLETE` reasons remain visible.
+
+For `F12_AUTO_KEY_PENDING` and `F13_AUTO_KEY_DECLINED`, derive the finding from the recorded
+auto-key answer and retain it in the final assessment. `F14_AUTO_KEY_ACCEPTED` records the
+`FLINK_AUTO_KEY_DURABILITY` advisory and, because no status-contributing finding remains, ends
+with `FLINK_EXECUTABLE_PATH_DEFERRED` like every otherwise-safe PR1 request.
 
 ## Evidence and secret handling
 

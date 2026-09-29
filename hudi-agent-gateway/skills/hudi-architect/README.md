@@ -88,6 +88,9 @@ The Skill itself is defined in `SKILL.md`.
 
 ### Config-key validation
 
+The validation utilities require Python 3.11 or newer, matching the Agent Gateway project
+baseline.
+
 Every `hoodie.*` key mentioned in `SKILL.md` and `references/` is checked against the actual `ConfigProperty` definitions in the Hudi source tree:
 
 ```bash
