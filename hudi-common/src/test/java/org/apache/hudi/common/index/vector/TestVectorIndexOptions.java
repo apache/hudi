@@ -19,6 +19,8 @@
 
 package org.apache.hudi.common.index.vector;
 
+import org.apache.hudi.exception.HoodieMetadataIndexException;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -34,7 +36,7 @@ class TestVectorIndexOptions {
   void testDefaultsAreCanonicalAndComplete() {
     assertEquals(
         opts(
-            VectorIndexOptions.METRIC, "cosine",
+            VectorIndexOptions.METRIC, "l2",
             VectorIndexOptions.QUANTIZER, "IVF_RABITQ",
             VectorIndexOptions.NUM_CLUSTERS, "256",
             VectorIndexOptions.MAX_ITER, "20",
@@ -54,6 +56,7 @@ class TestVectorIndexOptions {
   void testValuesAreNormalizedForPersistence() {
     Map<String, String> normalized = VectorIndexOptions.validateAndNormalize(opts(
         VectorIndexOptions.METRIC, "DOT-PRODUCT",
+        VectorIndexOptions.RABITQ_BITS, "1",
         VectorIndexOptions.QUANTIZER, "ivf-rabitq",
         VectorIndexOptions.RABITQ_ASSUME_NORMALIZED, "TRUE",
         VectorIndexOptions.QUERY_MODE, "EXACT-RERANK",
@@ -75,9 +78,13 @@ class TestVectorIndexOptions {
 
   @Test
   void testEveryMetricQueryModeAndStalePolicyIsAccepted() {
-    assertCanonical(VectorIndexOptions.METRIC, "cosine", "cosine");
+    assertCanonical(
+        opts(VectorIndexOptions.METRIC, "cosine", VectorIndexOptions.RABITQ_BITS, "1"),
+        VectorIndexOptions.METRIC, "cosine");
     assertCanonical(VectorIndexOptions.METRIC, "l2", "l2");
-    assertCanonical(VectorIndexOptions.METRIC, "dot_product", "dot_product");
+    assertCanonical(
+        opts(VectorIndexOptions.METRIC, "dot_product", VectorIndexOptions.RABITQ_BITS, "1"),
+        VectorIndexOptions.METRIC, "dot_product");
     assertCanonical(VectorIndexOptions.QUERY_MODE, "approximate", "approximate");
     assertCanonical(VectorIndexOptions.QUERY_MODE, "exact_rerank", "exact_rerank");
     assertCanonical(VectorIndexOptions.FRESHNESS_POLICY, "fail", "fail");
@@ -168,8 +175,8 @@ class TestVectorIndexOptions {
         VectorIndexOptions.QUERY_NUM_PROBES,
         "32");
 
-    IllegalArgumentException error = assertThrows(
-        IllegalArgumentException.class,
+    HoodieMetadataIndexException error = assertThrows(
+        HoodieMetadataIndexException.class,
         () -> VectorIndexOptions.validateAndNormalize(opts(
             VectorIndexOptions.NUM_CLUSTERS, "4",
             VectorIndexOptions.QUERY_NUM_PROBES, "5")));
@@ -187,15 +194,15 @@ class TestVectorIndexOptions {
   }
 
   private static void assertInvalidOption(String key, String value) {
-    IllegalArgumentException error = assertThrows(
-        IllegalArgumentException.class,
+    HoodieMetadataIndexException error = assertThrows(
+        HoodieMetadataIndexException.class,
         () -> VectorIndexOptions.validateAndNormalize(opts(key, value)));
     assertTrue(error.getMessage().contains(key));
   }
 
   private static void assertInvalidValueContainsKey(String key, String value) {
-    IllegalArgumentException error = assertThrows(
-        IllegalArgumentException.class,
+    HoodieMetadataIndexException error = assertThrows(
+        HoodieMetadataIndexException.class,
         () -> VectorIndexOptions.validateAndNormalize(opts(key, value)));
     assertTrue(error.getMessage().contains(key));
   }

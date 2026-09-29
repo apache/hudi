@@ -19,6 +19,8 @@
 
 package org.apache.hudi.common.index.vector;
 
+import org.apache.hudi.exception.HoodieMetadataIndexException;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -35,6 +37,10 @@ import java.util.Set;
  * implementations must call {@link #validateAndNormalize(Map)} before persisting an index
  * definition; individual parsing helpers are intentionally private so aggregate validation cannot
  * be bypassed.
+ *
+ * <p>Every validation failure is a {@link HoodieMetadataIndexException} whose message names the
+ * offending option, so {@code CREATE INDEX} fails before the index definition is registered in
+ * {@code hoodie.properties} or any metadata-table partition is created.
  */
 public final class VectorIndexOptions {
 
@@ -52,7 +58,7 @@ public final class VectorIndexOptions {
   public static final String STALE_LOCATOR_POLICY = "vector.stale.locator.policy";
   public static final String FETCH_VERIFY_KEYS = "vector.fetch.verify.keys";
 
-  public static final VectorDistanceMetric DEFAULT_METRIC = VectorDistanceMetric.COSINE;
+  public static final VectorDistanceMetric DEFAULT_METRIC = VectorDistanceMetric.L2;
   public static final VectorQuantizer DEFAULT_QUANTIZER = VectorQuantizer.IVF_RABITQ;
   public static final int DEFAULT_NUM_CLUSTERS = 256;
   public static final int DEFAULT_MAX_ITER = 20;
@@ -121,7 +127,8 @@ public final class VectorIndexOptions {
     Set<String> unknownOptions = new HashSet<>(options.keySet());
     unknownOptions.removeAll(SUPPORTED_OPTIONS);
     if (!unknownOptions.isEmpty()) {
-      throw new IllegalArgumentException("Unsupported vector index options: " + unknownOptions);
+      throw new HoodieMetadataIndexException("Unsupported vector index options: " + unknownOptions
+          + ". Supported options: " + SUPPORTED_OPTIONS);
     }
 
     VectorDistanceMetric metric = getMetric(options);
@@ -139,8 +146,10 @@ public final class VectorIndexOptions {
     VectorStalePolicy staleLocatorPolicy = getStaleLocatorPolicy(options);
     boolean verifyFetchKeys = shouldVerifyFetchKeys(options);
 
+    validateMetricAndBits(quantizer, metric, bits);
+
     if (numProbes > numClusters) {
-      throw new IllegalArgumentException(
+      throw new HoodieMetadataIndexException(
           "Option '" + QUERY_NUM_PROBES + "' must not exceed '" + NUM_CLUSTERS + "': "
               + numProbes + " > " + numClusters);
     }
@@ -160,6 +169,22 @@ public final class VectorIndexOptions {
     normalized.put(STALE_LOCATOR_POLICY, staleLocatorPolicy.name().toLowerCase(Locale.ROOT));
     normalized.put(FETCH_VERIFY_KEYS, String.valueOf(verifyFetchKeys));
     return Collections.unmodifiableMap(normalized);
+  }
+
+  /**
+   * Multi-bit RaBitQ ({@code bits > 1}) stores extended codes whose estimator is defined for L2
+   * only; the bootstrap cannot encode them for cosine or dot product. Single-bit RaBitQ supports
+   * every metric.
+   */
+  private static void validateMetricAndBits(VectorQuantizer quantizer, VectorDistanceMetric metric, int bits) {
+    if (quantizer == VectorQuantizer.IVF_RABITQ && bits > 1 && metric != VectorDistanceMetric.L2) {
+      String metricName = metric.name().toLowerCase(Locale.ROOT);
+      throw new HoodieMetadataIndexException(String.format(
+          "Unsupported combination of options '%s' = '%s' and '%s' = '%d': multi-bit RaBitQ supports "
+              + "only the l2 metric. Set '%s' = 'l2' (for unit-norm embeddings, l2 ranks results in the same "
+              + "order as cosine), or set '%s' = '1' to keep '%s'.",
+          METRIC, metricName, RABITQ_BITS, bits, METRIC, RABITQ_BITS, metricName));
+    }
   }
 
   public static VectorDistanceMetric getMetric(Map<String, String> options) {
@@ -191,7 +216,7 @@ public final class VectorIndexOptions {
   private static int getRaBitQBits(Map<String, String> options) {
     int bits = getInt(options, RABITQ_BITS, DEFAULT_RABITQ_BITS);
     if (bits < 1 || bits > 8) {
-      throw new IllegalArgumentException(
+      throw new HoodieMetadataIndexException(
           "Option '" + RABITQ_BITS + "' must be between 1 and 8: " + bits);
     }
     return bits;
@@ -268,7 +293,7 @@ public final class VectorIndexOptions {
   public static boolean shouldVerifyFetchKeys(Map<String, String> options) {
     boolean verifyKeys = getBoolean(options, FETCH_VERIFY_KEYS, DEFAULT_FETCH_VERIFY_KEYS);
     if (!verifyKeys) {
-      throw new IllegalArgumentException(
+      throw new HoodieMetadataIndexException(
           "Option '" + FETCH_VERIFY_KEYS + "' must be true: exact positional fetches require record-key validation");
     }
     return true;
@@ -277,7 +302,7 @@ public final class VectorIndexOptions {
   private static boolean getBoolean(Map<String, String> options, String key, boolean defaultValue) {
     String value = getOption(options, key, String.valueOf(defaultValue)).toLowerCase(Locale.ROOT);
     if (!"true".equals(value) && !"false".equals(value)) {
-      throw new IllegalArgumentException(
+      throw new HoodieMetadataIndexException(
           "Option '" + key + "' must be either 'true' or 'false': " + value);
     }
     return Boolean.parseBoolean(value);
@@ -286,7 +311,7 @@ public final class VectorIndexOptions {
   private static int getPositiveInt(Map<String, String> options, String key, int defaultValue) {
     int value = getInt(options, key, defaultValue);
     if (value <= 0) {
-      throw new IllegalArgumentException("Option '" + key + "' must be greater than 0: " + value);
+      throw new HoodieMetadataIndexException("Option '" + key + "' must be greater than 0: " + value);
     }
     return value;
   }
@@ -300,22 +325,22 @@ public final class VectorIndexOptions {
     }
   }
 
-  private static IllegalArgumentException invalidNumber(
+  private static HoodieMetadataIndexException invalidNumber(
       String key, String value, NumberFormatException cause) {
-    return new IllegalArgumentException(
+    return new HoodieMetadataIndexException(
         "Option '" + key + "' must be a valid number: " + value, cause);
   }
 
-  private static IllegalArgumentException unsupportedValue(
+  private static HoodieMetadataIndexException unsupportedValue(
       String key, String value, IllegalArgumentException cause) {
-    return new IllegalArgumentException(
+    return new HoodieMetadataIndexException(
         "Unsupported value for option '" + key + "': " + value, cause);
   }
 
   private static String getOption(Map<String, String> options, String key, String defaultValue) {
     String value = options.getOrDefault(key, defaultValue);
     if (value == null || value.isEmpty()) {
-      throw new IllegalArgumentException("Option '" + key + "' must not be empty");
+      throw new HoodieMetadataIndexException("Option '" + key + "' must not be empty");
     }
     return value;
   }

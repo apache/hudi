@@ -97,7 +97,7 @@ class TestVectorIndexDefinition {
   void rejectsUnknownOptions() {
     try (MockedConstruction<TableSchemaResolver> ignored = schemaResolverFor(
         HoodieSchemaField.of("embedding", HoodieSchema.createVector(128)))) {
-      assertThrows(IllegalArgumentException.class,
+      assertThrows(HoodieMetadataIndexException.class,
           () -> HoodieIndexUtils.getVectorIndexDefinition(
               metaClient,
               "embedding_idx",
