@@ -192,8 +192,6 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
           HiveDriverUtil.runOrThrow(hiveDriver, sql);
         }
       }
-    } catch (HoodieHiveSyncException e) {
-      throw e;
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed in executing SQL", e);
     } finally {

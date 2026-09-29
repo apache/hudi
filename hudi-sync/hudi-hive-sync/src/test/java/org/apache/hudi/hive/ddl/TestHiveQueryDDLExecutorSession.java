@@ -222,8 +222,9 @@ class TestHiveQueryDDLExecutorSession {
     HoodieHiveSyncException ex = assertThrows(HoodieHiveSyncException.class,
         () -> executor.runSQLs(Arrays.asList(rejected, "ALTER TABLE `tbl` SET TBLPROPERTIES ('k'='v')")));
 
-    assertTrue(ex.getMessage().contains("contains non-partition columns"), ex.getMessage());
-    assertTrue(ex.getMessage().contains(rejected), "The error must name the statement; was " + ex.getMessage());
+    String message = ex.getCause().getMessage();
+    assertTrue(message.contains("contains non-partition columns"), message);
+    assertTrue(message.contains(rejected), "The error must name the statement; was " + message);
     verify(driver, times(1)).run(anyString());
     assertSame(otherSession, SessionState.get(), "The session held before the statements must be put back");
     assertSame(callerLoader, Thread.currentThread().getContextClassLoader(),
