@@ -49,7 +49,11 @@ class HoodieParquetReadSupport(
     } else {
       readContext.getRequestedSchema
     }
-    val trimmedParquetSchema = HoodieParquetReadSupport.trimParquetSchema(requestedParquetSchema, context.getFileSchema)
+    // Same condition as Spark's own intersectParquetGroups: only the row-based reader wants a
+    // requested schema restricted to what the file has; the vectorized reader null-fills a missing
+    // column itself and matches columns by position.
+    val trimmedParquetSchema = HoodieParquetReadSupport.trimParquetSchema(requestedParquetSchema,
+      context.getFileSchema, dropMissingTopLevelFields = !enableVectorizedReader)
     new ReadContext(trimmedParquetSchema, readContext.getReadSupportMetadata)
   }
 }
@@ -62,12 +66,26 @@ object HoodieParquetReadSupport {
    *
    * @param requestedSchema the initial parquet schema requested by Spark
    * @param fileSchema the actual parquet schema of the file
+   * @param dropMissingTopLevelFields whether a top-level field the file does not have is dropped as
+   *                                  well (the row-based reader) or kept (the vectorized reader)
    * @return a potentially updated schema with empty struct fields removed
    */
-  def trimParquetSchema(requestedSchema: MessageType, fileSchema: MessageType): MessageType = {
+  def trimParquetSchema(requestedSchema: MessageType,
+                        fileSchema: MessageType,
+                        dropMissingTopLevelFields: Boolean): MessageType = {
     val trimmedFields = requestedSchema.getFields.asScala.map(field => {
       if (fileSchema.containsField(field.getName)) {
         trimParquetType(field, fileSchema.asGroupType().getType(field.getName))
+      } else if (dropMissingTopLevelFields) {
+        // A top-level column the file does not have (added by DDL, or by a later write) is dropped
+        // from the parquet read schema like a nested one is below: ParquetRowConverter builds its
+        // converters per PARQUET field and leaves the catalyst columns it never sees null, which is
+        // what Spark's own reader gets from intersectParquetGroups when nested schema pruning is on
+        // (Hudi's readers switch it off). Keeping the field instead hands the converter a group
+        // synthesised from the catalyst type, and for a Spark 4.1 variant column requested as the
+        // PushVariantIntoScan projection struct that is a plain group the variant converter rejects
+        // (INVALID_VARIANT_SHREDDING_SCHEMA, #20135).
+        None
       } else {
         Some(field)
       }

@@ -22,7 +22,7 @@ package org.apache.spark.sql.hudi.dml.schema
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieSchemaConversionUtils, HoodieSparkUtils, HoodieTableSchema, SparkAdapterSupport}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieFileFormat}
+import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieCommitMetadata, HoodieFileFormat, WriteOperationType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaField, HoodieSchemaType}
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
@@ -30,6 +30,7 @@ import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieWriteConfig}
 import org.apache.hudi.core.io.storage.VariantShreddingInferenceFileWriter
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.apache.hudi.testutils.DataSourceTestUtils
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.hadoop.fs.{Path => HadoopPath}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
@@ -2134,6 +2135,208 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
         Seq(3, """{"c":3,"d":true}""", "n3")
       )
     }
+  }
+
+  test("A second variant column added by DDL reads through old and new files") {
+    assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
+
+    // Without hoodie.schema.on.read.enable, `alter table add columns` takes the v1 route:
+    // HoodieCatalog.loadTable hands back a V1Table, Spark plans AlterTableAddColumnsCommand, and
+    // HoodiePostAnalysisRule swaps in AlterHoodieTableAddColumnsCommand, which writes an EMPTY
+    // ALTER_SCHEMA commit carrying the new schema and touches no data file. A VARIANT column added
+    // that way is its own case: the table has v2 before any file does, so every read of an old
+    // file has to yield a null v2 and, with PushVariantIntoScan on, a null projection struct that
+    // variant_get turns into null rather than an error. Hudi's readers switch Spark's nested schema
+    // pruning off, so the missing column has to leave the parquet read schema through
+    // HoodieParquetReadSupport.trimParquetSchema; kept there it becomes a plain group over which
+    // Spark builds its variant converter and fails (INVALID_VARIANT_SHREDDING_SCHEMA, #20135). The
+    // same base-file read sits under the COW merge handle and under MOR compaction. New files
+    // shred v2 under the forced layout (which applies to every variant column), a COW update
+    // rewrites an old file group with v2 added, and on MOR a log block carrying v2 merges over a
+    // base file without it until compaction folds them together.
+    def rowsSql(lo: Int, hi: Int, kPrefix: String, ts: Long, v2Prefix: Option[String]): String = {
+      val v2Col = v2Prefix.map(p => s""", parse_json(concat('{"k":"$p', id, '"}')) as v2""").getOrElse("")
+      s"""select cast(id as int) as id,
+         | parse_json(concat('{"k":"$kPrefix', id, '"}')) as v,
+         | ${ts}L as ts$v2Col from range($lo, $hi, 1, 1)""".stripMargin
+    }
+    // ids 0-2 come from commit 1, ids 3-5 from the insert after the DDL.
+    def vOf(id: Int): String = if (id < 3) s"a$id" else s"b$id"
+
+    // The reads every state is checked with; `v2Of` gives the expected $.k of v2 per id, null
+    // where the row has no v2. Each non-null v2 slot gets its own filter, so a slot that reads
+    // back through the wrong file or block cannot hide behind the others.
+    def assertReads(tableName: String, leg: String, pushed: Boolean, ids: Range, v2Of: Int => String): Unit = {
+      checkAnswer(s"select id, variant_get(v, '$$.k', 'string'), variant_get(v2, '$$.k', 'string') " +
+        s"from $tableName order by id")(ids.map(id => Seq(id, vOf(id), v2Of(id))): _*)
+      checkAnswer(s"select id from $tableName where v2 is null order by id")(
+        ids.filter(v2Of(_) == null).map(Seq(_)): _*)
+      checkAnswer(s"select id from $tableName where variant_get(v, '$$.k', 'string') = 'a1'")(Seq(1))
+      ids.filter(v2Of(_) != null).foreach { id =>
+        checkAnswer(s"select id from $tableName where variant_get(v2, '$$.k', 'string') = '${v2Of(id)}'")(Seq(id))
+      }
+      checkAnswer(s"select id, cast(v2 as string) from $tableName order by id")(
+        ids.map(id => Seq(id, Option(v2Of(id)).map(k => s"""{"k":"$k"}""").orNull)): _*)
+      // Both arms expect the very same rows; only the plan tells them apart.
+      val verdict = if (pushed) "should have" else "must not have"
+      Seq("v", "v2").foreach { column =>
+        assert(variantProjectionPushedIntoScan(
+          s"select id, variant_get($column, '$$.k', 'string') from $tableName") == pushed,
+          s"[$leg] PushVariantIntoScan $verdict rewritten $column into a projection struct")
+      }
+    }
+
+    def runLeg(label: String, tableType: String, recordTypes: Seq[HoodieRecordType], tableProps: Seq[String],
+               expectLogBlockType: Option[HoodieLogBlockType]): Unit = {
+      Seq("true", "false").foreach { pushIntoScan =>
+        withSQLConf("spark.sql.variant.pushVariantIntoScan" -> pushIntoScan) {
+          withVariantTable(s"$label pushVariantIntoScan=$pushIntoScan", tableType, props = tableProps,
+            recordTypes = recordTypes) { (tableName, tablePath, leg) =>
+            val pushed = pushIntoScan.toBoolean
+
+            // Commit 1: v only, shredded.
+            withWriteLayout(Forced("k string")) {
+              spark.sql(s"insert into $tableName ${rowsSql(0, 3, "a", 1000L, None)}")
+            }
+            assertVariantLayout(tablePath, shredded = true, leg)
+            assert(!spark.table(tableName).schema.fieldNames.contains("v2"),
+              s"[$leg] the table must not have v2 before the DDL")
+            val commit1 = latestCompletedInstant(tablePath)
+            val firstFileIds = baseLayouts(tablePath).filter(_.instantTime == commit1).map(_.fileId).distinct
+            assert(firstFileIds.size == 1, s"[$leg] commit 1 should write one file group, got $firstFileIds")
+            val firstFileId = firstFileIds.head
+            val filesBeforeDdl = listDataParquetFiles(tablePath).sorted
+
+            // The DDL: an empty ALTER_SCHEMA commit whose metadata carries v2 as a VARIANT.
+            spark.sql(s"alter table $tableName add columns (v2 variant)")
+            val alterInstant = latestCompletedInstant(tablePath)
+            assert(alterInstant != commit1, s"[$leg] the DDL should have completed its own commit")
+            val metaClient = createMetaClient(spark, tablePath)
+            val alterMetadata = metaClient.getActiveTimeline.readCommitMetadata(
+              metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants.lastInstant.get)
+            assert(alterMetadata.getOperationType == WriteOperationType.ALTER_SCHEMA,
+              s"[$leg] the DDL commit should be ALTER_SCHEMA, got ${alterMetadata.getOperationType}")
+            assert(alterMetadata.getPartitionToWriteStats.isEmpty,
+              s"[$leg] the DDL commit must not write data files: ${alterMetadata.getPartitionToWriteStats}")
+            assert(listDataParquetFiles(tablePath).sorted == filesBeforeDdl,
+              s"[$leg] the DDL must not add or rewrite data files")
+            val committedV2 = HoodieSchema.parse(alterMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY))
+              .getField("v2").get.schema().getNonNullType.getType
+            assert(committedV2 == HoodieSchemaType.VARIANT,
+              s"[$leg] the committed table schema should carry v2 as a VARIANT, got $committedV2")
+            val catalogSchema = spark.table(tableName).schema
+            assert(catalogSchema("v2").dataType.simpleString == "variant",
+              s"[$leg] the catalog should report v2 as variant, got ${catalogSchema("v2").dataType}")
+            val dataColumns = catalogSchema.fieldNames.filterNot(_.startsWith("_hoodie")).toSeq
+            assert(dataColumns == Seq("id", "v", "ts", "v2"),
+              s"[$leg] the DDL appends v2 after the data columns, got $dataColumns")
+
+            // Old files only: every row reads v2 through a file that lacks the column.
+            assertReads(tableName, leg, pushed, 0 until 3, _ => null)
+            checkAnswer(s"select id from $tableName where variant_get(v2, '$$.k', 'string') = 'z3'")()
+
+            // Commit 3: rows that carry v2. The small-file limit of 0 keeps them out of the old
+            // file group, so they land in a second file group whose base file has v2.
+            withSQLConf("hoodie.parquet.small.file.limit" -> "0") {
+              withWriteLayout(Forced("k string")) {
+                spark.sql(s"insert into $tableName ${rowsSql(3, 6, "b", 1000L, Some("z"))}")
+              }
+            }
+            val commit3 = latestCompletedInstant(tablePath)
+            val v2Bases = baseLayouts(tablePath, "v2")
+            assert(v2Bases.map(_.fileId).distinct.size == 2,
+              s"[$leg] expected the old and the new file group, got ${v2Bases.map(_.path)}")
+            val oldBase = v2Bases.filter(_.instantTime == commit1)
+            assert(oldBase.size == 1 && !oldBase.head.hasColumn,
+              s"[$leg] the commit-1 base file must not have v2: ${oldBase.map(_.path)}")
+            val newBase = v2Bases.filter(_.instantTime == commit3)
+            assert(newBase.size == 1 && newBase.head.hasColumn && newBase.head.typedFields.contains("k"),
+              s"[$leg] the commit-3 base file should carry v2 shredded on k: ${newBase.map(_.path)}")
+            assertAllShredded(baseLayouts(tablePath), shredded = true, s"$leg v in both base files")
+
+            assertReads(tableName, leg, pushed, 0 until 6, id => if (id < 3) null else s"z$id")
+
+            // Commit 4: an update of v2 on one row of each file group.
+            withWriteLayout(Forced("k string")) {
+              spark.sql(s"update $tableName set " +
+                """v2 = parse_json(concat('{"k":"u', id, '"}')), ts = 1002 where id in (2, 4)""")
+            }
+            val commit4 = latestCompletedInstant(tablePath)
+            expectLogBlockType match {
+              case None =>
+                // COW rewrites both groups; the old group's new version gains v2 while the
+                // version it replaces (kept until clean) still lacks it.
+                val firstGroup = baseLayouts(tablePath, "v2").filter(_.fileId == firstFileId)
+                assert(firstGroup.map(_.instantTime).toSet == Set(commit1, commit4),
+                  s"[$leg] the update should rewrite the commit-1 file group: ${firstGroup.map(_.path)}")
+                firstGroup.foreach { layout =>
+                  if (layout.instantTime == commit1) {
+                    assert(!layout.hasColumn, s"[$leg] the replaced version must not have v2: ${layout.path}")
+                  } else {
+                    assert(layout.hasColumn && layout.typedFields.contains("k"),
+                      s"[$leg] the rewritten version should carry v2 shredded on k: ${layout.path}")
+                  }
+                }
+                val rewritten = baseLayouts(tablePath, "v2").filter(_.instantTime == commit4)
+                assert(rewritten.map(_.fileId).distinct.size == 2,
+                  s"[$leg] the update should rewrite both file groups: ${rewritten.map(_.path)}")
+                assertAllShredded(rewritten, shredded = true, s"$leg v2 in the rewritten base files")
+                assertAllShredded(baseLayouts(tablePath).filter(_.instantTime == commit4), shredded = true,
+                  s"$leg v in the rewritten base files")
+              case Some(blockType) =>
+                // MOR: one log block per file group; the base files stay as they were.
+                val blockTypes = listLogBlockTypes(tablePath)
+                assert(blockTypes.count(_ == blockType) == 2 && blockTypes.forall(_ == blockType),
+                  s"[$leg] expected exactly two $blockType blocks, found: $blockTypes")
+                if (blockType == HoodieLogBlockType.PARQUET_DATA_BLOCK) {
+                  val logs = nativeLogLayouts(tablePath, "v2")
+                  assert(logs.size == 2 && logs.forall(_.hasColumn),
+                    s"[$leg] both native log files should carry v2: ${logs.map(_.path)}")
+                  assertAllShredded(logs, shredded = true, s"$leg v2 in the native log files")
+                }
+            }
+
+            def updatedV2(id: Int): String = id match {
+              case 2 | 4 => s"u$id"
+              case _ if id < 3 => null
+              case _ => s"z$id"
+            }
+            assertReads(tableName, leg, pushed, 0 until 6, updatedV2)
+
+            if (expectLogBlockType.isDefined) {
+              // Compaction folds each log block into a base file without v2 (old group) or with it.
+              withWriteLayout(Forced("k string")) {
+                runCompaction(tableName)
+              }
+              assertCompactionCount(tablePath, 1, leg)
+              val compactionInstant = latestCompletedInstant(tablePath)
+              val compacted = baseLayouts(tablePath, "v2").filter(_.instantTime == compactionInstant)
+              assert(compacted.map(_.fileId).distinct.size == 2 && compacted.forall(_.hasColumn),
+                s"[$leg] compaction should write both file groups with v2: ${compacted.map(_.path)}")
+              assertAllShredded(compacted, shredded = true, s"$leg v2 in the compacted base files")
+              assertAllShredded(baseLayouts(tablePath).filter(_.instantTime == compactionInstant),
+                shredded = true, s"$leg v in the compacted base files")
+              assertReads(tableName, leg, pushed, 0 until 6, updatedV2)
+            }
+          }
+        }
+      }
+    }
+
+    // COW, both record types: the update goes through each record type's merge handle, which has
+    // to add a null v2 for the untouched rows while keeping v shredded.
+    runLeg("cow, second variant by DDL", "cow", Seq(HoodieRecordType.SPARK, HoodieRecordType.AVRO),
+      Seq.empty, expectLogBlockType = None)
+    // MOR, SPARK records on the current table version: native parquet log files.
+    runLeg("mor, parquet log blocks", "mor", Seq(HoodieRecordType.SPARK),
+      Seq("hoodie.compact.inline = 'false'"), expectLogBlockType = Some(HoodieLogBlockType.PARQUET_DATA_BLOCK))
+    // MOR, avro data blocks: table version 9 is the only way to get them; SQL DML and the DDL both
+    // pick the version and block format up from the tblproperties.
+    runLeg("mor, avro data blocks", "mor", Seq(HoodieRecordType.AVRO),
+      Seq("hoodie.compact.inline = 'false'",
+        "hoodie.write.table.version = '9'",
+        "hoodie.logfile.data.block.format = 'avro'"),
+      expectLogBlockType = Some(HoodieLogBlockType.AVRO_DATA_BLOCK))
   }
 
   // -----------------------------------------------------------------------------------------------
