@@ -418,42 +418,41 @@ public final class RaBitQEncoder implements Serializable {
    */
   static float[][] buildRotationMatrix(int d, long seed) {
     Random rng = new Random(seed);
-    // Gaussian random matrix
-    double[][] randMatrix = new double[d][d];
+    // Generate the transposed Gaussian matrix so MGS traverses contiguous rows.
+    double[][] rows = new double[d][d];
     for (int i = 0; i < d; i++) {
       for (int j = 0; j < d; j++) {
-        randMatrix[i][j] = rng.nextGaussian();
+        rows[j][i] = rng.nextGaussian();
       }
     }
-    // Modified Gram-Schmidt orthogonalization (column-wise)
+    // Orthogonalize rows in the same order as the original columns.
     for (int j = 0; j < d; j++) {
-      // Orthogonalize column j against all previous columns
+      double[] row = rows[j];
       for (int k = 0; k < j; k++) {
+        double[] previous = rows[k];
         double dot = 0.0;
         for (int i = 0; i < d; i++) {
-          dot += randMatrix[i][k] * randMatrix[i][j];
+          dot += previous[i] * row[i];
         }
         for (int i = 0; i < d; i++) {
-          randMatrix[i][j] -= dot * randMatrix[i][k];
+          row[i] -= dot * previous[i];
         }
       }
-      // Normalize column j
-      double colNorm = 0.0;
+      double norm = 0.0;
       for (int i = 0; i < d; i++) {
-        colNorm += randMatrix[i][j] * randMatrix[i][j];
+        norm += row[i] * row[i];
       }
-      colNorm = Math.sqrt(colNorm);
-      if (colNorm > 1e-10) {
+      norm = Math.sqrt(norm);
+      if (norm > 1e-10) {
         for (int i = 0; i < d; i++) {
-          randMatrix[i][j] /= colNorm;
+          row[i] /= norm;
         }
       }
     }
-    // Transpose to row-major for efficient row-vector multiply
     float[][] rotMat = new float[d][d];
     for (int i = 0; i < d; i++) {
       for (int j = 0; j < d; j++) {
-        rotMat[i][j] = (float) randMatrix[j][i];
+        rotMat[i][j] = (float) rows[i][j];
       }
     }
     return rotMat;
