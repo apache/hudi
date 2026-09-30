@@ -212,13 +212,16 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
 
         withSQLConf("spark.sql.variant.pushVariantIntoScan" -> "true") {
           // An extraction and a whole-variant read are both rewritten into a projection struct.
+          // So is a query that never reads v: the rule rewrites every variant column of the
+          // relation, and one no expression asks for becomes a placeholder struct in the data
+          // schema of the scan. Without the guard that read dies on the placeholder's field name
+          // ("Illegal initial character: 0") instead of naming the conf.
           Seq(s"select id, variant_get(v, '$$.key', 'string') from $tableName",
-            s"select id, cast(v as string) from $tableName").foreach { sql =>
+            s"select id, cast(v as string) from $tableName",
+            s"select id, ts from $tableName").foreach { sql =>
             checkNestedExceptionContains(() => spark.sql(sql).collect())(
               "spark.sql.variant.pushVariantIntoScan")
           }
-          // A query that does not touch the variant column is not rewritten and still reads.
-          checkAnswer(s"select id, ts from $tableName")(Seq(1, 1000))
         }
         // Back on the default the same reads work.
         checkAnswer(s"select id, cast(v as string) from $tableName")(Seq(1, "{\"key\":\"v2\"}"))
