@@ -486,12 +486,18 @@ public class StreamWriteOperatorCoordinator
    */
   public void doSyncHive() {
     HoodieTimer timer = HoodieTimer.start();
+    HoodieTimer initTimer = HoodieTimer.start();
     try (HiveSyncTool syncTool = hiveSyncContext.hiveSyncTool()) {
+      hiveSyncMetrics.updateInitDuration(initTimer.endTimer());
       if (!syncTool.isSyncClientInitialized()) {
         hiveSyncMetrics.markSyncFailed(timer.endTimer());
         return;
       }
-      syncTool.syncHoodieTable();
+      try {
+        syncTool.syncHoodieTable();
+      } finally {
+        hiveSyncMetrics.updateSyncStats(syncTool.getSyncStats());
+      }
     } catch (Throwable t) {
       hiveSyncMetrics.markSyncFailed(timer.endTimer());
       throw t;

@@ -25,6 +25,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieException;
@@ -110,6 +111,8 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
 
   private String hiveSyncTableStrategy;
 
+  private HiveSyncStats syncStats = new HiveSyncStats();
+
   public HiveSyncTool(Properties props, Configuration hadoopConf) {
     this(props, hadoopConf, Option.empty());
   }
@@ -174,6 +177,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
 
   @Override
   public void syncHoodieTable() {
+    syncStats = new HiveSyncStats();
     try {
       if (syncClient != null) {
         log.info("Syncing target hoodie table with hive table({}). Hive metastore URL from HiveConf:{}). "
@@ -181,7 +185,12 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
             tableId(databaseName, tableName), config.getHiveConf().get(HiveConf.ConfVars.METASTOREURIS.varname),
             config.getString(METASTORE_URIS), config.getString(META_SYNC_BASE_PATH));
 
-        doSync();
+        HoodieTimer timer = HoodieTimer.start();
+        try {
+          doSync();
+        } finally {
+          syncStats.setTotalMs(timer.endTimer());
+        }
       }
     } catch (RuntimeException re) {
       throw new HoodieException("Got runtime exception when hive syncing " + tableName, re);
@@ -196,6 +205,13 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
    */
   public boolean isSyncClientInitialized() {
     return syncClient != null;
+  }
+
+  /**
+   * Returns what the last {@link #syncHoodieTable()} did, including when it failed.
+   */
+  public HiveSyncStats getSyncStats() {
+    return syncStats;
   }
 
   protected void doSync() {
@@ -271,7 +287,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       return;
     }
     // Get the parquet schema for this table looking at the latest commit
-    HoodieSchema schema = syncClient.getStorageSchema(!config.getBoolean(HIVE_SYNC_OMIT_METADATA_FIELDS));
+    HoodieSchema schema = readStorageSchema();
 
     boolean schemaChanged;
     boolean propertiesChanged;
@@ -323,6 +339,15 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     }
     String midpointInstantTime = completedCommits.get(completedCommits.size() / 2).requestedTime();
     return compareTimestamps(lastCommitTimeSynced.get(), LESSER_THAN, midpointInstantTime);
+  }
+
+  private HoodieSchema readStorageSchema() {
+    HoodieTimer timer = HoodieTimer.start();
+    try {
+      return syncClient.getStorageSchema(!config.getBoolean(HIVE_SYNC_OMIT_METADATA_FIELDS));
+    } finally {
+      syncStats.addSchemaReadMs(timer.endTimer());
+    }
   }
 
   private boolean isAlreadySynced(String tableName) {
@@ -382,13 +407,20 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
           config.getString(META_SYNC_BASE_PATH), config.getHadoopFileSystem());
       partitionsChanged = syncAllPartitions(tableName);
     } else {
-      List<String> writtenPartitionsSince = syncClient.getWrittenPartitionsSince(lastCommitTimeSynced, lastCommitCompletionTimeSynced);
-      log.info("Storage partitions scan complete. Found {}", writtenPartitionsSince.size());
+      HoodieTimer scanTimer = HoodieTimer.start();
+      List<String> writtenPartitionsSince;
+      Set<String> droppedPartitions;
+      try {
+        writtenPartitionsSince = syncClient.getWrittenPartitionsSince(lastCommitTimeSynced, lastCommitCompletionTimeSynced);
+        log.info("Storage partitions scan complete. Found {}", writtenPartitionsSince.size());
 
-      // Sync the partitions if needed
-      // find dropped partitions, if any, in the latest commit
-      Set<String> droppedPartitions = syncClient.getDroppedPartitionsSince(lastCommitTimeSynced, lastCommitCompletionTimeSynced);
-      log.info("Partitions dropped since last sync: {}", droppedPartitions.size());
+        // Sync the partitions if needed
+        // find dropped partitions, if any, in the latest commit
+        droppedPartitions = syncClient.getDroppedPartitionsSince(lastCommitTimeSynced, lastCommitCompletionTimeSynced);
+        log.info("Partitions dropped since last sync: {}", droppedPartitions.size());
+      } finally {
+        syncStats.addPartitionScanMs(scanTimer.endTimer());
+      }
       partitionsChanged = syncPartitions(tableName, writtenPartitionsSince, droppedPartitions);
     }
     return partitionsChanged;
@@ -422,7 +454,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   private void recreateAndSyncHiveTable(String tableName, boolean useRealtimeInputFormat, boolean readAsOptimized) {
     log.info("recreating and syncing the table {}", tableName);
     Timer.Context timerContext = metrics.getRecreateAndSyncTimer();
-    HoodieSchema schema = syncClient.getStorageSchema(!config.getBoolean(HIVE_SYNC_OMIT_METADATA_FIELDS));
+    HoodieSchema schema = readStorageSchema();
     try {
       createOrReplaceTable(tableName, useRealtimeInputFormat, readAsOptimized, schema);
       syncAllPartitions(tableName);
@@ -498,6 +530,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     } else {
       log.info("Schema difference found for {}. Updated schema: {}", tableName, schema);
       syncClient.updateTableSchema(tableName, schema, schemaDiff);
+      syncStats.markSchemaEvolved();
       schemaChanged = true;
     }
 
@@ -552,7 +585,13 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       }
 
       List<Partition> allPartitionsInMetastore = syncClient.getAllPartitions(tableName);
-      List<String> allPartitionsOnStorage = syncClient.getAllPartitionPathsOnStorage();
+      HoodieTimer scanTimer = HoodieTimer.start();
+      List<String> allPartitionsOnStorage;
+      try {
+        allPartitionsOnStorage = syncClient.getAllPartitionPathsOnStorage();
+      } finally {
+        syncStats.addPartitionScanMs(scanTimer.endTimer());
+      }
       return syncPartitions(
           tableName,
           syncClient.getPartitionEvents(allPartitionsInMetastore, allPartitionsOnStorage));
@@ -600,6 +639,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     if (!newPartitions.isEmpty()) {
       log.info("New Partitions {}", newPartitions);
       syncClient.addPartitionsToTable(tableName, newPartitions);
+      syncStats.recordPartitionsAdded(newPartitions.size());
     }
 
     List<String> updatePartitions = filterPartitions(partitionEventList, PartitionEventType.UPDATE);
