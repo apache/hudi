@@ -148,6 +148,50 @@ This check does not attribute the cause. A stalled archival is most often a save
 
 Governing property: `hoodie.keep.max.commits`.
 
+### `record-index`
+
+Whether the record-level index has enough file groups for the table it serves. Skipped when the
+table's metadata table has no `record_index` partition.
+
+The file-group count of the record index is decided once, at initialization, from the record count
+at that moment and the writer's sizing configuration, and it never changes afterwards. A table that
+has since grown well past that point has index file groups far larger than intended: every index
+lookup reads a larger file, and every index write concentrates on the same few file groups.
+
+The check re-runs the writer's own sizing estimate against the table as it is now and compares the
+result against the file-group count the index actually has. The record count is *estimated* from
+the index's own footprint on storage divided by the same average record size the writer sizes with,
+so no data file is scanned; index files are compressed, so the estimate runs low. Two signals are
+reported:
+
+- **Undersized.** The actual count is below half the ideal. The ideal already carries the writer's
+  growth factor, so an index initialized on a smaller table routinely sits somewhat below it; the
+  0.5 ratio keeps ordinary growth from alerting while a table that has doubled past its sizing
+  still does.
+- **Oversized file group.** The largest file group is past the configured maximum size with 1.5x
+  slack. Log files push a group past the maximum transiently between metadata compactions, so
+  alerting at exactly the maximum would fire on healthy tables.
+
+A partitioned record index is sized per data partition, so for that layout the count comparison is
+made per data partition and the worst one is reported (`observed.worst.data.partition`). The layout
+the writer sizes for is read from its configuration and the layout on storage from the index's
+file-group names; if they disagree, the count comparison is skipped, `effective.count.comparison`
+says why, and only the file-group size rule runs.
+
+Both share one remedy, and it is disruptive: the index must be re-bootstrapped. Drop it with
+`metadata delete-record-index` in `hudi-cli` (or `HoodieIndexer --mode dropindex --index-types
+RECORD_INDEX`), correct the sizing configuration, then rebuild with `HoodieIndexer --mode
+scheduleAndExecute --index-types RECORD_INDEX`. The record index is unavailable until the rebuild
+completes and the drop cannot be undone in place, so plan it as a maintenance window.
+
+Governing properties: `hoodie.metadata.global.record.level.index.min.filegroup.count`,
+`hoodie.metadata.global.record.level.index.max.filegroup.count`,
+`hoodie.metadata.record.index.max.filegroup.size`, `hoodie.metadata.record.index.growth.factor`.
+When `hoodie.metadata.record.level.index.enable` is `true` the partitioned keys
+`hoodie.metadata.record.level.index.min.filegroup.count` and
+`hoodie.metadata.record.level.index.max.filegroup.count` govern instead. The pre-rename spellings
+of the count keys are accepted.
+
 ## Exit codes
 
 | Code | Meaning |
