@@ -188,9 +188,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
     try {
       SessionState.setCurrentSessionState(sessionState);
       for (String sql : sqls) {
-        if (hiveDriver != null) {
-          HiveStatementExecutor.executeOrThrow(hiveDriver, sql);
-        }
+        HiveStatementExecutor.executeOrThrow(hiveDriver, sql);
       }
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed in executing SQL", e);
