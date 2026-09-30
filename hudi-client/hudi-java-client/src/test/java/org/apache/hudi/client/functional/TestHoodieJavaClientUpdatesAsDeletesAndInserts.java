@@ -308,6 +308,38 @@ public class TestHoodieJavaClientUpdatesAsDeletesAndInserts extends HoodieJavaCl
     }
   }
 
+  @Test
+  public void testIndexWithoutPositionsRejectedInDeleteInsertMode() throws Exception {
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
+        HoodieIndex.IndexType.INMEMORY)
+        .withWriteUpdatesAsDeletesAndInserts(true)
+        .build();
+    assertUpsertRejected(config, "produces record positions");
+  }
+
+  @Test
+  public void testDisabledRecordPositionsRejectedInDeleteInsertMode() throws Exception {
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
+        HoodieIndex.IndexType.SIMPLE)
+        .withWriteRecordPositionsEnabled(false)
+        .withWriteUpdatesAsDeletesAndInserts(true)
+        .build();
+    assertUpsertRejected(config, HoodieWriteConfig.WRITE_RECORD_POSITIONS.key());
+  }
+
+  private void assertUpsertRejected(HoodieWriteConfig config, String expectedMessage) {
+    try (HoodieJavaWriteClient client =
+        new HoodieJavaWriteClient<>(new HoodieJavaEngineContext(storageConf), config)) {
+      String writeTime = WriteClientTestUtils.createNewInstantTime();
+      WriteClientTestUtils.startCommitWithTime(client, writeTime);
+      List<HoodieRecord> records = (List<HoodieRecord>) (List<?>) dataGen.generateInserts(writeTime, 10);
+      Exception exception =
+          assertThrows(Exception.class, () -> client.upsert(records, writeTime));
+      assertTrue(exceptionChainContains(exception, expectedMessage),
+          "upsert must be rejected in this write mode but got: " + exception);
+    }
+  }
+
   private static boolean exceptionChainContains(Throwable throwable, String text) {
     while (throwable != null) {
       if (throwable.getMessage() != null && throwable.getMessage().contains(text)) {

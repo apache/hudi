@@ -49,6 +49,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.io.IOException;
+import java.util.EnumSet;
 import java.util.List;
 
 public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I> {
@@ -91,6 +92,14 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
     }
   }
 
+  /**
+   * Index types that tag a record with its row position in the base file, which the
+   * update-as-delete-insert write mode needs for the delete half of every update.
+   */
+  private static final EnumSet<HoodieIndex.IndexType> POSITION_PRODUCING_INDEX_TYPES = EnumSet.of(
+      HoodieIndex.IndexType.BLOOM, HoodieIndex.IndexType.GLOBAL_BLOOM,
+      HoodieIndex.IndexType.SIMPLE, HoodieIndex.IndexType.GLOBAL_SIMPLE);
+
   protected abstract I tag(
       I dedupedRecords, HoodieEngineContext context, HoodieTable<T, I, K, O> table);
 
@@ -107,6 +116,20 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
       throw new HoodieNotSupportedException(
           HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key()
               + " requires commit-time ordering merge semantics but the table uses " + mergeMode);
+    }
+    HoodieIndex.IndexType indexType = table.getConfig().getIndexType();
+    if (!POSITION_PRODUCING_INDEX_TYPES.contains(indexType)) {
+      // Without a base file position the delete half cannot be represented as a positional delete,
+      // and an index that routes by key hash would append the delete and the insert to the same log
+      throw new HoodieNotSupportedException(
+          HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key()
+              + " requires an index that produces record positions " + POSITION_PRODUCING_INDEX_TYPES
+              + " but the index type is " + indexType);
+    }
+    if (!table.getConfig().shouldWriteRecordPositions()) {
+      throw new HoodieNotSupportedException(
+          HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key()
+              + " requires " + HoodieWriteConfig.WRITE_RECORD_POSITIONS.key() + " to be enabled");
     }
     return true;
   }
