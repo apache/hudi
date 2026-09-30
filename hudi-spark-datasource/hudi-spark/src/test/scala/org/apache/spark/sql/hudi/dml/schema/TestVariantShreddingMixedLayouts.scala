@@ -594,6 +594,18 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
   test("variant_get filters and projections resolve per file across mixed layouts") {
     assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
 
+    // Both arms of a leg expect the very same rows, so the scan is what tells them apart: with the
+    // rule on, its ReadSchema carries v as a projection struct with one member per pushed path. A
+    // true arm that silently fell back to reading the whole variant would show `v:variant` there.
+    def assertScanReadsV(sql: String, pushIntoScan: String, pushedPaths: Int, leg: String): Unit = {
+      val readV = if (pushIntoScan.toBoolean) {
+        (0 until pushedPaths).map(i => s"$i:bigint").mkString("struct<", ",", ">")
+      } else {
+        "variant"
+      }
+      assert(scanReadSchema(sql) == s"struct<id:int,v:$readV>", s"[$leg] ReadSchema of the scan of: $sql")
+    }
+
     // Read-mode test; SPARK pinned (see the mixed-files test above).
     Seq("true", "false").foreach { pushIntoScan =>
       withSQLConf("spark.sql.variant.pushVariantIntoScan" -> pushIntoScan) {
@@ -629,6 +641,8 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
           checkAnswer(s"select count(*) from $tableName where v is null")(Seq(0))
           assertVariantSegments(tableName, leg, Seq(("v", Seq(
             (0 until 20, ObjA), (20 until 30, ObjAConflict), (30 until 40, ObjB)))))
+          assertScanReadsV(s"select id, try_variant_get(v, '$$.a', 'bigint') from $tableName",
+            pushIntoScan, pushedPaths = 1, leg)
         }
       }
     }
@@ -667,6 +681,8 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
             s"select count(*) from $tableName where try_variant_get(v, '$$.a', 'bigint') > 100")(Seq(2))
           checkAnswer(
             s"select id from $tableName where variant_get(v, '$$.b', 'string') = 'b7'")(Seq(7))
+          assertScanReadsV(s"select id, try_variant_get(v, '$$.a', 'bigint') from $tableName",
+            pushIntoScan, pushedPaths = 1, leg)
 
           // A MERGE INTO that assigns ts alone writes a partial log block
           // (hoodie.spark.sql.merge.into.partial.updates defaults to true on MOR), so the read
@@ -682,6 +698,8 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
           val widePaths = ('a' to 'h').map(c => s"try_variant_get(v, '$$.$c', 'bigint')").mkString(", ")
           checkAnswer(s"select $widePaths from $tableName where id = 4")(
             Seq(4L, null, null, null, null, null, null, null))
+          // The eight paths are what the scan was asked for, not what the row happens to hold.
+          assertScanReadsV(s"select $widePaths from $tableName where id = 4", pushIntoScan, pushedPaths = 8, leg)
         }
       }
     }
