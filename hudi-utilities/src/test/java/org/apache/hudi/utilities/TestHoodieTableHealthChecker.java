@@ -215,7 +215,7 @@ public class TestHoodieTableHealthChecker {
     JsonNode root = MAPPER.readTree(result.output);
     assertEquals("UNHEALTHY", root.get("overallStatus").asText());
     assertEquals(HoodieTableType.MERGE_ON_READ.name(), root.get("tableType").asText());
-    assertEquals(4, root.get("checks").size());
+    assertEquals(6, root.get("checks").size());
 
     JsonNode compaction = root.get("checks").get(0);
     assertEquals("compaction", compaction.get("name").asText());
