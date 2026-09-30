@@ -426,6 +426,13 @@ object SparkSchemaTransformUtils {
     case (ArrayType(rt, _), ArrayType(ft, _)) => ArrayType(addMissingFields(rt, ft))
     case (MapType(requiredKey, requiredValue, _), MapType(fileKey, fileValue, _)) =>
       MapType(addMissingFields(requiredKey, fileKey), addMissingFields(requiredValue, fileValue))
+    // A Spark 4.1 variant projection struct requested over a file VariantType is the pair
+    // isDataTypeEqual declares equal through the adapter, and the reader has to be handed the
+    // projection struct, not the file's VariantType: parquet-mr decodes into the projected shape
+    // natively, while the type-change Cast applied afterwards would cast the variant VALUE to that
+    // struct. Without this arm a type change on a SIBLING member of the enclosing struct rewrote
+    // the projection back to VariantType (#19775).
+    case (requiredStruct: StructType, _) if isVariantProjectionOverVariant(requiredStruct, fileType) => requiredStruct
     case (StructType(requiredFields), StructType(fileFields)) =>
       val fileFieldMap = fileFields.map(f => f.name -> f).toMap
       StructType(requiredFields.map(f => {
@@ -436,4 +443,10 @@ object SparkSchemaTransformUtils {
       }))
     case _ => fileType
   }
+
+  // Same Try as in isDataTypeEqual: the adapter module may be absent from the classpath
+  // (hudi-spark-client tests), in which case there is no projection struct to recognise anyway.
+  private def isVariantProjectionOverVariant(requiredType: StructType, fileType: DataType): Boolean =
+    Try(HoodieSparkUtils.sparkAdapter.isVariantProjectionStruct(requiredType)
+      && HoodieSparkUtils.sparkAdapter.isVariantType(fileType)).getOrElse(false)
 }

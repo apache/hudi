@@ -32,7 +32,7 @@ import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, ResolvedTable}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.expressions.{BoundReference, CreateNamedStruct, Expression, Literal, UnsafeProjection}
+import org.apache.spark.sql.catalyst.expressions.{BoundReference, CreateNamedStruct, Expression, GetStructField, If, IsNull, Literal, UnsafeProjection}
 import org.apache.spark.sql.catalyst.expressions.variant.VariantGet
 import org.apache.spark.sql.catalyst.parser.{ParseException, ParserInterface}
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
@@ -230,39 +230,65 @@ class Spark4_1Adapter extends BaseSpark4Adapter {
 
   override def buildVariantProjector(sparkDataSchema: StructType,
                                      sparkRequiredSchema: StructType): Option[InternalRow => InternalRow] = {
-    // Quick check: any required field a variant projection struct?
-    if (!sparkRequiredSchema.fields.exists(f => VariantMetadata.isVariantStruct(f.dataType))) {
+    // Quick check: does any required field carry a variant projection struct, at any depth?
+    if (!sparkRequiredSchema.fields.exists(f => containsVariantProjection(f.dataType))) {
       None
     } else {
       // Surface mismatched schemas with both field lists rather than Spark's bare
-      // IllegalArgumentException from fieldIndex.
-      def lookupDataField(name: String): (Int, StructField) = {
-        val idx = sparkDataSchema.getFieldIndex(name).getOrElse(
+      // IllegalArgumentException from fieldIndex. `path` is the dotted field path of `name`.
+      def lookupDataField(dataStruct: StructType, requiredStruct: StructType,
+                          name: String, path: String): (Int, StructField) = {
+        val idx = dataStruct.getFieldIndex(name).getOrElse(
           throw new IllegalStateException(
-            s"Required field '$name' is absent from sparkDataSchema; " +
-              s"required=${sparkRequiredSchema.fieldNames.mkString("[", ",", "]")}, " +
-              s"data=${sparkDataSchema.fieldNames.mkString("[", ",", "]")}"))
-        (idx, sparkDataSchema.fields(idx))
+            s"Required field '$path' is absent from sparkDataSchema; " +
+              s"required=${requiredStruct.fieldNames.mkString("[", ",", "]")}, " +
+              s"data=${dataStruct.fieldNames.mkString("[", ",", "]")}"))
+        (idx, dataStruct.fields(idx))
       }
+
+      // `ref` reads the data-schema value of type `dataType`; the result has type `requiredType`.
+      def projectionExpr(ref: Expression, dataType: DataType, requiredType: DataType,
+                         path: String): Expression = requiredType match {
+        case projectedStruct: StructType if VariantMetadata.isVariantStruct(projectedStruct) =>
+          require(isVariantType(dataType),
+            s"Expected VariantType for field '$path' in data schema, got $dataType")
+          val childExprs: Seq[Expression] = projectedStruct.fields.toSeq.flatMap { child =>
+            val vm = VariantMetadata.fromMetadata(child.metadata)
+            val pathLit = Literal(UTF8String.fromString(vm.path), DataTypes.StringType)
+            val variantGet: Expression =
+              VariantGet(ref, pathLit, child.dataType, vm.failOnError, Option(vm.timeZoneId))
+            Seq(Literal(UTF8String.fromString(child.name), DataTypes.StringType), variantGet)
+          }
+          val projected = CreateNamedStruct(childExprs)
+          // A null variant has to come out as a NULL struct, not a struct of nulls: CreateNamedStruct
+          // is never null, the parquet paths leave the field null, and PushVariantIntoScan rewrites
+          // IsNull(v) / IsNotNull(v) onto this struct directly.
+          If(IsNull(ref), Literal(null, projected.dataType), projected)
+        case requiredStruct: StructType =>
+          dataType match {
+            // Rebuild the struct member by member only when something below it is projected;
+            // otherwise the reference is already in the required shape and is cheaper untouched.
+            case dataStruct: StructType if containsVariantProjection(requiredStruct) =>
+              val childExprs: Seq[Expression] = requiredStruct.fields.toSeq.flatMap { rf =>
+                val childPath = s"$path.${rf.name}"
+                val (childIdx, childField) = lookupDataField(dataStruct, requiredStruct, rf.name, childPath)
+                val childRef = GetStructField(ref, childIdx, Some(rf.name))
+                Seq(Literal(UTF8String.fromString(rf.name), DataTypes.StringType),
+                  projectionExpr(childRef, childField.dataType, rf.dataType, childPath))
+              }
+              val rebuilt = CreateNamedStruct(childExprs)
+              // CreateNamedStruct is never null, so a null struct would come back as a struct of
+              // nulls without this guard.
+              If(IsNull(ref), Literal(null, rebuilt.dataType), rebuilt)
+            case _ => ref
+          }
+        case _ => ref
+      }
+
       val exprs: Array[Expression] = sparkRequiredSchema.fields.map { rf =>
-        rf.dataType match {
-          case projectedStruct: StructType if VariantMetadata.isVariantStruct(projectedStruct) =>
-            val (dataIdx, dataField) = lookupDataField(rf.name)
-            require(isVariantType(dataField.dataType),
-              s"Expected VariantType for field '${rf.name}' in data schema, got ${dataField.dataType}")
-            val variantRef: Expression = BoundReference(dataIdx, dataField.dataType, dataField.nullable)
-            val childExprs: Seq[Expression] = projectedStruct.fields.toSeq.flatMap { child =>
-              val vm = VariantMetadata.fromMetadata(child.metadata)
-              val pathLit = Literal(UTF8String.fromString(vm.path), DataTypes.StringType)
-              val tz: Option[String] = Option(vm.timeZoneId)
-              val variantGet: Expression = VariantGet(variantRef, pathLit, child.dataType, vm.failOnError, tz)
-              Seq(Literal(UTF8String.fromString(child.name), DataTypes.StringType), variantGet)
-            }
-            CreateNamedStruct(childExprs)
-          case _ =>
-            val (dataIdx, dataField) = lookupDataField(rf.name)
-            BoundReference(dataIdx, dataField.dataType, dataField.nullable)
-        }
+        val (dataIdx, dataField) = lookupDataField(sparkDataSchema, sparkRequiredSchema, rf.name, rf.name)
+        val ref: Expression = BoundReference(dataIdx, dataField.dataType, dataField.nullable)
+        projectionExpr(ref, dataField.dataType, rf.dataType, rf.name)
       }
 
       val projection = UnsafeProjection.create(exprs.toIndexedSeq, DataTypeUtils.toAttributes(sparkDataSchema))

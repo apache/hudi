@@ -84,12 +84,19 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
   private lazy val allFilters = filters ++ requiredFilters
 
   // For each field of `target`, replace its dataType with the matching field's projected
-  // variant struct from `source` (when present). Non-matching fields pass through.
+  // variant struct from `source` (when present), recursing into struct members so a variant
+  // reached through a struct path is overlaid too. Fields are matched by name (findFieldByName);
+  // non-matching fields pass through. The recursion mirrors PushVariantIntoScan's
+  // VariantInRelation.rewriteType, which rewrites variants at the root of the relation output
+  // and below STRUCT paths only, so an array element or a map value is never overlaid here
+  // either (#19783).
   private def overlayVariantProjections(target: StructType, source: StructType): StructType = {
     StructType(target.fields.map { f =>
-      SparkFileFormatInternalRowReaderContext.findFieldByName(source, f.name).map(_.dataType) match {
-        case Some(projStruct: StructType) if sparkAdapter.isVariantProjectionStruct(projStruct) =>
+      (f.dataType, SparkFileFormatInternalRowReaderContext.findFieldByName(source, f.name).map(_.dataType)) match {
+        case (_, Some(projStruct: StructType)) if sparkAdapter.isVariantProjectionStruct(projStruct) =>
           f.copy(dataType = projStruct)
+        case (targetStruct: StructType, Some(sourceStruct: StructType)) =>
+          f.copy(dataType = overlayVariantProjections(targetStruct, sourceStruct))
         case _ => f
       }
     })
@@ -101,10 +108,8 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
   // bare required schema would drop them and the merger would read garbage offsets.
   override def getLogBlockRecordProjection(
       dataBlockSchema: HoodieSchema): HOption[JFunction[InternalRow, InternalRow]] = {
-    val needsProjection = sparkRequiredSchema.exists(_.fields.exists(f => f.dataType match {
-      case st: StructType => sparkAdapter.isVariantProjectionStruct(st)
-      case _ => false
-    }))
+    val needsProjection =
+      sparkRequiredSchema.exists(_.fields.exists(f => sparkAdapter.containsVariantProjection(f.dataType)))
     if (!needsProjection) {
       return HOption.empty[JFunction[InternalRow, InternalRow]]()
     }
