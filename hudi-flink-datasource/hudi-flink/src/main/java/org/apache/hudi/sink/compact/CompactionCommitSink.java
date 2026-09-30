@@ -19,12 +19,10 @@
 package org.apache.hudi.sink.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.sink.compact.handler.CompactionCommitHandler;
 import org.apache.hudi.sink.compact.handler.TableServiceHandlerFactory;
 
-import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
 
 /**
@@ -38,7 +36,6 @@ import org.apache.flink.configuration.Configuration;
  * <p>It also inherits the {@link CleanFunction} cleaning ability. This is needed because
  * the SQL API does not allow multiple sinks in one table sink provider.
  */
-@Slf4j
 public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
 
   /**
@@ -62,28 +59,17 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
 
   @Override
   public void invoke(CompactionCommitEvent event, Context context) throws Exception {
-    final String instant = event.getInstant();
-    if (event.isFailed()
-        || (event.getWriteStatuses() != null
-        && event.getWriteStatuses().stream().anyMatch(writeStatus -> writeStatus.getTotalErrorRecords() > 0))) {
-      log.warn("Received abnormal CompactionCommitEvent of instant {}, task ID is {},"
-              + " is failed: {}, error record count: {}",
-          instant, event.getTaskID(), event.isFailed(), getNumErrorRecords(event));
-    }
     compactCommitHandler.commitIfNecessary(event);
   }
 
   @Override
   public void close() throws Exception {
-    compactCommitHandler.close();
-    super.close();
-  }
-
-  private long getNumErrorRecords(CompactionCommitEvent event) {
-    if (event.getWriteStatuses() == null) {
-      return -1L;
+    try {
+      if (compactCommitHandler != null) {
+        compactCommitHandler.close();
+      }
+    } finally {
+      super.close();
     }
-    return event.getWriteStatuses().stream()
-        .map(WriteStatus::getTotalErrorRecords).reduce(Long::sum).orElse(0L);
   }
 }
