@@ -644,14 +644,33 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
    * Whether the physical plan of `sql` reads a variant through a PushVariantIntoScan projection
    * struct: the file scan's required schema carries the projected struct at some struct path.
    * Pins that the rule actually fired for a true arm, so it cannot silently become a copy of the
-   * arm with the rule off. `sparkPlan` rather than `executedPlan`: under AQE the latter is a
-   * placeholder whose children only exist once the query runs.
+   * arm with the rule off.
    */
-  protected def variantProjectionPushedIntoScan(sql: String): Boolean = {
+  protected def variantProjectionPushedIntoScan(sql: String): Boolean =
+    fileScansOf(sql).exists(_.requiredSchema.fields.exists(f =>
+      SparkAdapterSupport.sparkAdapter.containsVariantProjection(f.dataType)))
+
+  /**
+   * The ReadSchema of the one file scan in the physical plan of `sql`, as its explain line prints
+   * it (the catalog string of the scan's required schema). A variant that PushVariantIntoScan
+   * rewrote shows there as a projection struct with one ordinal-named member per pushed path,
+   * `v:struct<0:bigint>`; one that reaches the reader whole shows as `v:variant`. Where
+   * [[variantProjectionPushedIntoScan]] says whether the rule fired, this pins what it pushed.
+   */
+  protected def scanReadSchema(sql: String): String = {
+    val scans = fileScansOf(sql)
+    assert(scans.size == 1, s"expected a single file scan in the plan of: $sql")
+    scans.head.requiredSchema.catalogString
+  }
+
+  /**
+   * The file scans in the physical plan of `sql`. `sparkPlan` rather than `executedPlan`: under
+   * AQE the latter is a placeholder whose children only exist once the query runs.
+   */
+  private def fileScansOf(sql: String): Seq[FileSourceScanExec] = {
     val scans = spark.sql(sql).queryExecution.sparkPlan.collect { case scan: FileSourceScanExec => scan }
     assert(scans.nonEmpty, s"expected a file scan in the plan of: $sql")
-    scans.exists(_.requiredSchema.fields.exists(f =>
-      SparkAdapterSupport.sparkAdapter.containsVariantProjection(f.dataType)))
+    scans
   }
 
   // ---------------------------------------------------------------------------------------------
