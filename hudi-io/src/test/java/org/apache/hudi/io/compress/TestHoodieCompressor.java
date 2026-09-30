@@ -20,6 +20,7 @@
 package org.apache.hudi.io.compress;
 
 import org.apache.hudi.io.compress.airlift.HoodieAirliftGzipCompressor;
+import org.apache.hudi.io.compress.airlift.HoodieAirliftZstdCompressor;
 import org.apache.hudi.io.compress.builtin.HoodieNoneCompressor;
 import org.apache.hudi.io.util.IOUtils;
 
@@ -29,8 +30,11 @@ import org.junit.jupiter.params.provider.EnumSource;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Random;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -49,6 +53,7 @@ public class TestHoodieCompressor {
     switch (codec) {
       case NONE:
       case GZIP:
+      case ZSTD:
         HoodieCompressor decompressor = HoodieCompressorFactory.getCompressor(codec);
         byte[] actualOutput = new byte[INPUT_LENGTH + 100];
         try (InputStream stream = prepareInputStream(codec)) {
@@ -69,6 +74,44 @@ public class TestHoodieCompressor {
     }
   }
 
+  @ParameterizedTest
+  @EnumSource(value = CompressionCodec.class, names = {"NONE", "GZIP", "ZSTD"})
+  public void testByteBufferCompression(CompressionCodec codec) throws IOException {
+    HoodieCompressor compressor = HoodieCompressorFactory.getCompressor(codec);
+    for (boolean direct : new boolean[] {false, true}) {
+      ByteBuffer input = direct ? ByteBuffer.allocateDirect(INPUT_LENGTH + 10)
+          : ByteBuffer.allocate(INPUT_LENGTH + 10);
+      input.position(4);
+      input.put(INPUT_BYTES);
+      input.limit(input.position());
+      input.position(4);
+      ByteBuffer compressed = compressor.compress(input.asReadOnlyBuffer());
+      byte[] compressedBytes = new byte[compressed.remaining()];
+      compressed.get(compressedBytes);
+      byte[] output = new byte[INPUT_LENGTH];
+      assertEquals(INPUT_LENGTH, compressor.decompress(
+          new ByteArrayInputStream(compressedBytes), output, 0, output.length));
+      assertArrayEquals(INPUT_BYTES, output);
+    }
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = CompressionCodec.class, names = {"NONE", "GZIP", "ZSTD"})
+  public void testEmptyAndBoundedDecompression(CompressionCodec codec) throws IOException {
+    HoodieCompressor compressor = HoodieCompressorFactory.getCompressor(codec);
+    byte[] output = new byte[12];
+    Arrays.fill(output, (byte) 7);
+    byte[] expected = output.clone();
+    assertEquals(0, compressor.decompress(
+        new ByteArrayInputStream(compressor.compress(new byte[0])), output, 4, 8));
+    assertArrayEquals(expected, output);
+    assertEquals(0, compressor.decompress(prepareInputStream(codec), output, 4, 0));
+    assertArrayEquals(expected, output);
+    assertEquals(4, compressor.decompress(prepareInputStream(codec), output, 4, 4));
+    System.arraycopy(INPUT_BYTES, 0, expected, 4, 4);
+    assertArrayEquals(expected, output);
+  }
+
   private static InputStream prepareInputStream(CompressionCodec codec) throws IOException {
     switch (codec) {
       case NONE:
@@ -77,6 +120,9 @@ public class TestHoodieCompressor {
       case GZIP:
         return new ByteArrayInputStream(
             new HoodieAirliftGzipCompressor().compress(INPUT_BYTES));
+      case ZSTD:
+        return new ByteArrayInputStream(
+            new HoodieAirliftZstdCompressor().compress(INPUT_BYTES));
       default:
         throw new IllegalArgumentException("Not supported in tests.");
     }
