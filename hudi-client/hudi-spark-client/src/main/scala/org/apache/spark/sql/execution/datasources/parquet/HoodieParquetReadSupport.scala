@@ -60,13 +60,13 @@ object HoodieParquetReadSupport {
    * schema is trimmed down to the requested fields. This can happen when the table schema evolves and only a subset of
    * the nested fields are required by the query.
    *
-   * A top-level field the file does not have at all (a column added by DDL, or by a later write)
-   * is removed as well. ParquetRowConverter builds its converters per parquet field and leaves the
+   * A top-level field the file does not have at all (a column added by DDL, or by a later write) is
+   * removed as well. ParquetRowConverter builds its converters per parquet field and leaves the
    * catalyst columns it never sees null, which is what Spark's own row-based reader gets from
-   * intersectParquetGroups when nested schema pruning is on (Hudi's readers switch it off). Kept,
-   * the field reaches the converter as a group synthesised from the catalyst type, and for a Spark
-   * 4.1 variant requested as the PushVariantIntoScan projection struct that is a plain group the
-   * variant converter rejects (INVALID_VARIANT_SHREDDING_SCHEMA, #20135).
+   * intersectParquetGroups when nested schema pruning is on (the file group reader switches it
+   * off). Kept, the field reaches the converter as a group synthesised from the catalyst type, and
+   * for a Spark 4.1 variant requested as the PushVariantIntoScan projection struct that is a plain
+   * group the variant converter rejects (INVALID_VARIANT_SHREDDING_SCHEMA, #20135).
    *
    * This holds whatever enableVectorizedReader the read support was built with: every reader that
    * uses it is row-based, HoodieSparkParquetReader included although it passes true, and the

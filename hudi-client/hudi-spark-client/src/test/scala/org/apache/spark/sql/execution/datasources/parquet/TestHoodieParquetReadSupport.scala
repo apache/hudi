@@ -119,7 +119,8 @@ class TestHoodieParquetReadSupport {
    * the read schema; the row converter leaves the catalyst column it never sees null. The missing
    * field is shaped like the Spark 4.1 PushVariantIntoScan projection struct of a variant column,
    * the case that fails when it is kept (#20135): the synthesised group is not a variant group,
-   * yet the variant converter is built over it.
+   * yet the variant converter is built over it. A request left with no field at all trims to an
+   * empty message.
    */
   @Test
   def testSchemaTrimmingMissingTopLevelField(): Unit = {
@@ -141,5 +142,11 @@ class TestHoodieParquetReadSupport {
         .addField(Types.optional(PrimitiveTypeName.BINARY).named("v"))
         .named("required")
     Assertions.assertEquals(expectedSchema, HoodieParquetReadSupport.trimParquetSchema(requiredSchema, dataSchema))
+
+    // A request whose only field is missing trims to an empty message, and the reader returns
+    // rows of nulls for it.
+    val onlyMissingField = Types.buildMessage().addField(projectionStruct).named("required")
+    Assertions.assertEquals(Types.buildMessage().named("required"),
+      HoodieParquetReadSupport.trimParquetSchema(onlyMissingField, dataSchema))
   }
 }
