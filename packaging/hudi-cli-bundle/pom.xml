@@ -100,6 +100,7 @@
                   <include>org.objenesis:objenesis</include>
 
                   <!-- cli related dependencies -->
+                  <include>com.beust:jcommander</include>
                   <include>com.fasterxml:classmate</include>
                   <include>com.fasterxml.woodstox:woodstox-core</include>
                   <include>com.google.code.gson:gson</include>
@@ -131,6 +132,10 @@
                 </includes>
               </artifactSet>
               <relocations>
+                <relocation>
+                  <pattern>com.beust.jcommander.</pattern>
+                  <shadedPattern>org.apache.hudi.com.beust.jcommander.</shadedPattern>
+                </relocation>
                 <!-- Kryo -->
                 <relocation>
                   <pattern>com.esotericsoftware.kryo.</pattern>

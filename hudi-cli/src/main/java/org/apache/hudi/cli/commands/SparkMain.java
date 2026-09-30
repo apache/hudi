@@ -37,6 +37,7 @@ import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -62,7 +63,6 @@ import org.apache.hudi.utilities.streamer.HoodieStreamer;
 import com.beust.jcommander.DynamicParameter;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
-import com.beust.jcommander.Parameters;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -80,6 +80,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -134,6 +135,7 @@ public class SparkMain {
     /**
      * Names of the positional command arguments (in order), used when assembling
      * the positional form out of the named form ({@code -Dkey=value} pairs).
+     * This order must match the argument indexes in the corresponding main() switch branch.
      */
     private final String[] paramNames;
 
@@ -176,18 +178,34 @@ public class SparkMain {
    * plus {@code -Dkey=value} pairs for every command argument. This makes the launcher command
    * self-describing and removes the risk of mis-aligned positional arguments at call sites.
    *
-   * @param namedArgs flat name/value pairs; {@code null} values are skipped, preserving the
-   *                  legacy semantics of absent trailing arguments (e.g. propsFilePath)
+   * @param namedArgs flat name/value pairs for the command's declared arguments. Every name
+   *                  except propsFilePath must be supplied; explicit null values become empty
+   *                  strings, preserving the positional slots for optional values.
    */
   public static void addNamedAppArgs(SparkLauncher sparkLauncher, SparkMain.SparkCommand cmd, String master, String memory, String... namedArgs) {
     ValidationUtils.checkArgument(namedArgs.length % 2 == 0, "namedArgs must be flat name/value pairs");
+    Map<String, String> params = new LinkedHashMap<>();
+    for (int i = 0; i < namedArgs.length; i += 2) {
+      ValidationUtils.checkArgument(!params.containsKey(namedArgs[i]), "Duplicate command argument: " + namedArgs[i]);
+      params.put(namedArgs[i], namedArgs[i + 1] == null ? "" : namedArgs[i + 1]);
+    }
+    validateNamedParams(cmd, params);
     sparkLauncher.addAppArgs("--command", cmd.toString());
     sparkLauncher.addAppArgs("--master", master);
     sparkLauncher.addAppArgs("--memory", memory);
-    for (int i = 0; i < namedArgs.length; i += 2) {
-      if (namedArgs[i + 1] != null) {
-        sparkLauncher.addAppArgs("-D" + namedArgs[i] + "=" + namedArgs[i + 1]);
-      }
+    params.forEach((name, value) -> sparkLauncher.addAppArgs("-D" + name + "=" + value));
+  }
+
+  private static void validateNamedParams(SparkCommand command, Map<String, String> params) {
+    ValidationUtils.checkArgument(command.paramNames.length > 0, "Named arguments are not supported for " + command);
+    List<String> paramNames = Arrays.asList(command.paramNames);
+    for (String name : params.keySet()) {
+      ValidationUtils.checkArgument(paramNames.contains(name), "Unknown argument for " + command + ": " + name
+          + ". Pass Spark/Hoodie configs as trailing key=value arguments without -D.");
+    }
+    for (String name : paramNames) {
+      ValidationUtils.checkArgument(params.containsKey(name) || "propsFilePath".equals(name),
+          "Missing argument for " + command + ": " + name);
     }
   }
 
@@ -198,43 +216,49 @@ public class SparkMain {
   /**
    * Translates {@code --command X --master Y --memory Z -Dkey=value...} into the positional
    * form {@code [X, Y, Z, arg1, arg2, ...]} expected by the legacy invocation path. The named
-   * -D arguments are mapped onto the command's positional argument names; unknown -D keys are
-   * passed through as trailing configs, matching {@link SparkCommand#makeConfigs(String[])}.
+   * -D arguments must match the command's positional argument names. Spark/Hoodie configs
+   * are supplied as trailing {@code key=value} arguments.
    */
-  private static String[] namedArgsToPositional(String[] argv) {
-    NamedArgs namedArgs = new NamedArgs();
-    JCommander commander = JCommander.newBuilder()
-        .addObject(namedArgs)
-        .build();
-    commander.parse(argv);
-
+  @VisibleForTesting
+  static String[] namedArgsToPositional(String[] argv) {
+    NamedArgs namedArgs = parseNamedArgs(argv);
     SparkCommand command = SparkCommand.valueOf(namedArgs.command);
-    Map<String, String> params = namedArgs.params;
-    List<String> positionalArgs = new ArrayList<>(command.paramNames.length);
-    for (String paramName : command.paramNames) {
-      String value = params.get(paramName);
-      // absent named args map to empty strings to keep the positional slots aligned; trailing
-      // empty slots are handled by getPropsFilePath/makeConfigs exactly like the legacy form
-      positionalArgs.add(value != null ? value.trim() : "");
-    }
-    // extra -D keys are forwarded as trailing configs, mirroring makeConfigs behavior
-    List<String> extraConfigs = new ArrayList<>();
-    for (Map.Entry<String, String> entry : params.entrySet()) {
-      if (!Arrays.asList(command.paramNames).contains(entry.getKey())) {
-        extraConfigs.add(entry.getKey() + "=" + entry.getValue());
-      }
-    }
-
+    validateNamedParams(command, namedArgs.params);
     List<String> positional = new ArrayList<>();
     positional.add(namedArgs.command);
     positional.add(namedArgs.master);
     positional.add(namedArgs.memory);
-    positional.addAll(positionalArgs);
-    positional.addAll(extraConfigs);
-    // callers append extra spark/hoodie configs (key=value) right after the named block; keep them
-    // as trailing configs so they land in makeConfigs exactly like in the positional form
+    for (String name : command.paramNames) {
+      positional.add(namedArgs.params.getOrDefault(name, ""));
+    }
     positional.addAll(namedArgs.trailingConfigs);
     return positional.toArray(new String[0]);
+  }
+
+  private static NamedArgs parseNamedArgs(String[] argv) {
+    NamedArgs namedArgs = new NamedArgs();
+    List<String> options = new ArrayList<>();
+    for (int i = 0; i < argv.length; i++) {
+      String arg = argv[i];
+      if ("--".equals(arg)) {
+        namedArgs.trailingConfigs.addAll(Arrays.asList(argv).subList(i + 1, argv.length));
+        break;
+      } else if (arg.startsWith("-")) {
+        options.add(arg);
+        if (Arrays.asList("--command", "-command", "--master", "-master", "--memory", "-memory", "-D").contains(arg)) {
+          ValidationUtils.checkArgument(i + 1 < argv.length, "Missing value for " + arg);
+          options.add(argv[++i]);
+        }
+      } else {
+        // JCommander trims and unquotes main parameters. Keep raw configs out of its parser;
+        // option values (including dynamic -D values) are consumed verbatim by fixed arity.
+        namedArgs.trailingConfigs.add(arg);
+      }
+    }
+    JCommander commander = JCommander.newBuilder().addObject(namedArgs).build();
+    commander.setExpandAtSign(false);
+    commander.parse(options.toArray(new String[0]));
+    return namedArgs;
   }
 
   /**
@@ -242,7 +266,6 @@ public class SparkMain {
    * positional protocol so that existing call sites and scripts keep working unchanged:
    * if the first argument does not look like a named option the legacy path is used.
    */
-  @Parameters
   private static class NamedArgs {
     @Parameter(names = {"--command", "-command"}, description = "Name of the Spark command to run (e.g. ROLLBACK)", required = true)
     private String command;
@@ -250,10 +273,10 @@ public class SparkMain {
     @Parameter(names = {"--master", "-master"}, description = "Spark master URL (was positional arg 2)", required = true)
     private String master;
 
-    @Parameter(names = {"--memory", "-memory"}, description = "Spark driver memory (was positional arg 3)", required = true)
+    @Parameter(names = {"--memory", "-memory"}, description = "Spark executor memory (was positional arg 3)", required = true)
     private String memory;
 
-    @DynamicParameter(names = "-D", description = "Command arguments and spark configs as -Dkey=value pairs")
+    @DynamicParameter(names = "-D", description = "Command arguments as -Dkey=value pairs")
     private Map<String, String> params = new HashMap<>();
 
     /**
@@ -261,7 +284,6 @@ public class SparkMain {
      * see {@link org.apache.hudi.utilities.UtilHelpers#validateAndAddProperties}); they are
      * forwarded as trailing configs to mirror the positional form.
      */
-    @Parameter(description = "Trailing spark/hoodie configs appended after the named block")
     private List<String> trailingConfigs = new ArrayList<>();
   }
 
