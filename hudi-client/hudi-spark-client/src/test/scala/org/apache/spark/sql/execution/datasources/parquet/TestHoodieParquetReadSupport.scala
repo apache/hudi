@@ -52,8 +52,7 @@ class TestHoodieParquetReadSupport {
         .addField(Types.required(PrimitiveTypeName.BINARY).named("e"))
         .named("data")
 
-    val trimmedSchema = HoodieParquetReadSupport.trimParquetSchema(requiredSchema, dataSchema,
-      dropMissingTopLevelFields = true)
+    val trimmedSchema = HoodieParquetReadSupport.trimParquetSchema(requiredSchema, dataSchema)
 
     // The nested struct field "b" and the array field "list" are removed because they do not have any
     // matching child fields in the data schema. The map field "key_value" is retained because the key type
@@ -98,8 +97,7 @@ class TestHoodieParquetReadSupport {
         .addField(Types.required(PrimitiveTypeName.BINARY).named("e"))
         .named("data")
 
-    val trimmedSchema = HoodieParquetReadSupport.trimParquetSchema(requiredSchema, dataSchema,
-      dropMissingTopLevelFields = true)
+    val trimmedSchema = HoodieParquetReadSupport.trimParquetSchema(requiredSchema, dataSchema)
 
     // Only nested_b (present in both schemas) is retained; nested_a (only in requested)
     // is excluded from the Parquet read schema. Spark schema evolution fills it with null.
@@ -117,12 +115,11 @@ class TestHoodieParquetReadSupport {
   }
 
   /**
-   * A top-level field the file does not have at all (a column added by DDL, say) is dropped for the
-   * row-based reader, whose converter leaves the catalyst columns it never sees null, and kept for
-   * the vectorized reader, which null-fills a missing column itself and matches by position. The
-   * missing field is shaped like the Spark 4.1 PushVariantIntoScan projection struct of a variant
-   * column, the case that fails when it is kept (#20135): the synthesised group is not a variant
-   * group, yet the variant converter is built over it.
+   * A top-level field the file does not have at all (a column added by DDL, say) is dropped from
+   * the read schema; the row converter leaves the catalyst column it never sees null. The missing
+   * field is shaped like the Spark 4.1 PushVariantIntoScan projection struct of a variant column,
+   * the case that fails when it is kept (#20135): the synthesised group is not a variant group,
+   * yet the variant converter is built over it.
    */
   @Test
   def testSchemaTrimmingMissingTopLevelField(): Unit = {
@@ -139,13 +136,10 @@ class TestHoodieParquetReadSupport {
         .addField(Types.optional(PrimitiveTypeName.BINARY).named("v"))
         .named("data")
 
-    val rowReaderSchema = Types.buildMessage()
+    val expectedSchema = Types.buildMessage()
         .addField(Types.required(PrimitiveTypeName.INT32).named("id"))
         .addField(Types.optional(PrimitiveTypeName.BINARY).named("v"))
         .named("required")
-    Assertions.assertEquals(rowReaderSchema,
-      HoodieParquetReadSupport.trimParquetSchema(requiredSchema, dataSchema, dropMissingTopLevelFields = true))
-    Assertions.assertEquals(requiredSchema,
-      HoodieParquetReadSupport.trimParquetSchema(requiredSchema, dataSchema, dropMissingTopLevelFields = false))
+    Assertions.assertEquals(expectedSchema, HoodieParquetReadSupport.trimParquetSchema(requiredSchema, dataSchema))
   }
 }

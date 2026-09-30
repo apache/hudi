@@ -2150,17 +2150,20 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
     // pruning off, so the missing column has to leave the parquet read schema through
     // HoodieParquetReadSupport.trimParquetSchema; kept there it becomes a plain group over which
     // Spark builds its variant converter and fails (INVALID_VARIANT_SHREDDING_SCHEMA, #20135). The
-    // same base-file read sits under the COW merge handle and under MOR compaction. New files
-    // shred v2 under the forced layout (which applies to every variant column), a COW update
-    // rewrites an old file group with v2 added, and on MOR a log block carrying v2 merges over a
-    // base file without it until compaction folds them together.
+    // same base-file read sits under the COW merge handle and under MOR compaction, and the MOR
+    // legs write a log block before the DDL as well: a native parquet log without v2 goes through
+    // the same read support from HoodieSparkParquetReader. New files shred v2 under the forced
+    // layout (which applies to every variant column), a COW update rewrites an old file group with
+    // v2 added, and on MOR a log block carrying v2 merges over a base file and a log block without
+    // it until compaction folds them together.
     def rowsSql(lo: Int, hi: Int, kPrefix: String, ts: Long, v2Prefix: Option[String]): String = {
       val v2Col = v2Prefix.map(p => s""", parse_json(concat('{"k":"$p', id, '"}')) as v2""").getOrElse("")
       s"""select cast(id as int) as id,
          | parse_json(concat('{"k":"$kPrefix', id, '"}')) as v,
          | ${ts}L as ts$v2Col from range($lo, $hi, 1, 1)""".stripMargin
     }
-    // ids 0-2 come from commit 1, ids 3-5 from the insert after the DDL.
+    // ids 0-2 come from commit 1 (on MOR through the log block written before the DDL), ids 3-5
+    // from the insert after the DDL.
     def vOf(id: Int): String = if (id < 3) s"a$id" else s"b$id"
 
     // The reads every state is checked with; `v2Of` gives the expected $.k of v2 per id, null
@@ -2193,10 +2196,12 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
           withVariantTable(s"$label pushVariantIntoScan=$pushIntoScan", tableType, props = tableProps,
             recordTypes = recordTypes) { (tableName, tablePath, leg) =>
             val pushed = pushIntoScan.toBoolean
+            val isMor = expectLogBlockType.isDefined
 
-            // Commit 1: v only, shredded.
+            // Commit 1: v only, shredded. The MOR legs seed values that the log block below
+            // replaces, so a merged read that skipped that block would show the stale ones.
             withWriteLayout(Forced("k string")) {
-              spark.sql(s"insert into $tableName ${rowsSql(0, 3, "a", 1000L, None)}")
+              spark.sql(s"insert into $tableName ${rowsSql(0, 3, if (isMor) "o" else "a", 1000L, None)}")
             }
             assertVariantLayout(tablePath, shredded = true, leg)
             assert(!spark.table(tableName).schema.fieldNames.contains("v2"),
@@ -2205,6 +2210,18 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
             val firstFileIds = baseLayouts(tablePath).filter(_.instantTime == commit1).map(_.fileId).distinct
             assert(firstFileIds.size == 1, s"[$leg] commit 1 should write one file group, got $firstFileIds")
             val firstFileId = firstFileIds.head
+
+            // MOR: a log block written before the DDL, so the old file group reads v2 through a log
+            // file that lacks the column as well as through a base file that lacks it.
+            val preDdlLogInstant = if (isMor) {
+              withWriteLayout(Forced("k string")) {
+                spark.sql(s"update $tableName set " +
+                  """v = parse_json(concat('{"k":"a', id, '"}')), ts = 1001""")
+              }
+              Some(latestCompletedInstant(tablePath))
+            } else {
+              None
+            }
             val filesBeforeDdl = listDataParquetFiles(tablePath).sorted
 
             // The DDL: an empty ALTER_SCHEMA commit whose metadata carries v2 as a VARIANT.
@@ -2284,15 +2301,19 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
                 assertAllShredded(baseLayouts(tablePath).filter(_.instantTime == commit4), shredded = true,
                   s"$leg v in the rewritten base files")
               case Some(blockType) =>
-                // MOR: one log block per file group; the base files stay as they were.
+                // MOR: the log block from before the DDL plus one per file group from this update;
+                // the base files stay as they were.
                 val blockTypes = listLogBlockTypes(tablePath)
-                assert(blockTypes.count(_ == blockType) == 2 && blockTypes.forall(_ == blockType),
-                  s"[$leg] expected exactly two $blockType blocks, found: $blockTypes")
+                assert(blockTypes.count(_ == blockType) == 3 && blockTypes.forall(_ == blockType),
+                  s"[$leg] expected exactly three $blockType blocks, found: $blockTypes")
                 if (blockType == HoodieLogBlockType.PARQUET_DATA_BLOCK) {
-                  val logs = nativeLogLayouts(tablePath, "v2")
-                  assert(logs.size == 2 && logs.forall(_.hasColumn),
-                    s"[$leg] both native log files should carry v2: ${logs.map(_.path)}")
-                  assertAllShredded(logs, shredded = true, s"$leg v2 in the native log files")
+                  val (preDdlLogs, updateLogs) = nativeLogLayouts(tablePath, "v2")
+                    .partition(log => preDdlLogInstant.contains(log.instantTime))
+                  assert(preDdlLogs.size == 1 && !preDdlLogs.head.hasColumn,
+                    s"[$leg] the log file written before the DDL must not have v2: ${preDdlLogs.map(_.path)}")
+                  assert(updateLogs.size == 2 && updateLogs.forall(_.hasColumn),
+                    s"[$leg] both log files of the update should carry v2: ${updateLogs.map(_.path)}")
+                  assertAllShredded(updateLogs, shredded = true, s"$leg v2 in the log files of the update")
                 }
             }
 
