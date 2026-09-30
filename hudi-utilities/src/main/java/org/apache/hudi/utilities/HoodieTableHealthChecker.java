@@ -29,6 +29,7 @@ import org.apache.hudi.utilities.health.HealthCheck;
 import org.apache.hudi.utilities.health.HealthCheckContext;
 import org.apache.hudi.utilities.health.HealthCheckResult;
 import org.apache.hudi.utilities.health.HealthStatus;
+import org.apache.hudi.utilities.health.RecordIndexSizingCheck;
 import org.apache.hudi.utilities.health.SavepointArchivalBlockCheck;
 
 import com.beust.jcommander.JCommander;
@@ -121,7 +122,8 @@ public class HoodieTableHealthChecker implements Serializable {
         new CompactionCadenceCheck(),
         new CleanerCadenceCheck(),
         new SavepointArchivalBlockCheck(),
-        new ArchivalCadenceCheck());
+        new ArchivalCadenceCheck(),
+        new RecordIndexSizingCheck());
   }
 
   /**
@@ -257,7 +259,7 @@ public class HoodieTableHealthChecker implements Serializable {
     public String basePath = null;
 
     @Parameter(names = {"--checks"}, description = "Comma-separated checks to run, or 'all'. Available: "
-        + "compaction, cleaner, savepoint, archival")
+        + "compaction, cleaner, savepoint, archival, record-index")
     public String checks = "all";
 
     @Parameter(names = {"--apply-all-defaults"}, description = "Evaluate checks against Hudi default values for any "
