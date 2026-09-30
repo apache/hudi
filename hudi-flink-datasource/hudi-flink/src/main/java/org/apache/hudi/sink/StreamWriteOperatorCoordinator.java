@@ -488,6 +488,10 @@ public class StreamWriteOperatorCoordinator
     HoodieTimer timer = HoodieTimer.start();
     try {
       try (HiveSyncTool syncTool = hiveSyncContext.hiveSyncTool()) {
+        if (!syncTool.isSyncClientInitialized()) {
+          hiveSyncMetrics.markSyncFailed(timer.endTimer());
+          return;
+        }
         syncTool.syncHoodieTable();
       }
     } catch (Throwable t) {

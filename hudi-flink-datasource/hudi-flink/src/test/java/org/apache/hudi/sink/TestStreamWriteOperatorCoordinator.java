@@ -47,6 +47,7 @@ import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.MissingSchemaFieldException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.sink.event.Correspondent;
@@ -624,23 +625,44 @@ public class TestStreamWriteOperatorCoordinator {
   @Test
   void testHiveSyncFailureUpdatesMetrics() throws Exception {
     coordinator.close();
-    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-    conf.set(FlinkOptions.HIVE_SYNC_ENABLED, true);
-    conf.set(FlinkOptions.HIVE_SYNC_MODE, "jdbc");
-    // nothing listens on port 1, so every sync fails to connect
-    conf.set(FlinkOptions.HIVE_SYNC_JDBC_URL, "jdbc:hive2://localhost:1");
+    Configuration conf = getUnreachableMetastoreConf();
     CapturingCoordinatorMetricGroup metricGroup = new CapturingCoordinatorMetricGroup();
     coordinator = startCoordinator(conf, metricGroup);
 
     assertEquals(0L, metricGroup.gauges.get("hiveSyncLastSuccessTimeMs").getValue());
 
-    assertThrows(HoodieException.class, () -> coordinator.doSyncHive());
-    assertThrows(HoodieException.class, () -> coordinator.doSyncHive());
+    assertThrows(HoodieHiveSyncException.class, () -> coordinator.doSyncHive());
+    assertThrows(HoodieHiveSyncException.class, () -> coordinator.doSyncHive());
 
     assertEquals(0, metricGroup.counters.get("hiveSyncSuccessCount").getCount());
     assertEquals(2, metricGroup.counters.get("hiveSyncFailureCount").getCount());
     assertEquals(2, metricGroup.histograms.get("hiveSyncDurationMs").getCount());
     assertEquals(0L, metricGroup.gauges.get("hiveSyncLastSuccessTimeMs").getValue());
+  }
+
+  @Test
+  void testHiveSyncWithIgnoredClientFailureCountsAsFailure() throws Exception {
+    coordinator.close();
+    Configuration conf = getUnreachableMetastoreConf();
+    conf.set(FlinkOptions.HIVE_SYNC_IGNORE_EXCEPTIONS, true);
+    CapturingCoordinatorMetricGroup metricGroup = new CapturingCoordinatorMetricGroup();
+    coordinator = startCoordinator(conf, metricGroup);
+
+    assertDoesNotThrow(() -> coordinator.doSyncHive());
+
+    assertEquals(0, metricGroup.counters.get("hiveSyncSuccessCount").getCount());
+    assertEquals(1, metricGroup.counters.get("hiveSyncFailureCount").getCount());
+    assertEquals(1, metricGroup.histograms.get("hiveSyncDurationMs").getCount());
+    assertEquals(0L, metricGroup.gauges.get("hiveSyncLastSuccessTimeMs").getValue());
+  }
+
+  private Configuration getUnreachableMetastoreConf() {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.HIVE_SYNC_ENABLED, true);
+    // nothing listens on port 1, so creating the metastore client fails on its only attempt
+    conf.set(FlinkOptions.HIVE_SYNC_METASTORE_URIS, "thrift://localhost:1");
+    conf.setString(HadoopConfigurations.HADOOP_PREFIX + "hive.metastore.connect.retries", "0");
+    return conf;
   }
 
   @Test

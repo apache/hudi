@@ -45,8 +45,10 @@ public class FlinkHiveSyncMetrics extends HoodieFlinkMetrics {
   private final Counter syncSuccessCount = new ThreadSafeSimpleCounter();
 
   /**
-   * Number of syncs that threw. The sync executor only logs a failure, so without this counter a
-   * table that has stopped syncing leaves no trace outside the JobManager log.
+   * Number of syncs that threw, or that did nothing because the metastore client could not be created
+   * and {@code hive_sync.ignore_exceptions} swallowed the error. The sync executor only logs a
+   * failure, so without this counter a table that has stopped syncing leaves no trace outside the
+   * JobManager log.
    */
   private final Counter syncFailureCount = new ThreadSafeSimpleCounter();
 
