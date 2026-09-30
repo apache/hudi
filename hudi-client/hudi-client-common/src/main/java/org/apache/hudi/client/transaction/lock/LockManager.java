@@ -95,14 +95,19 @@ public class LockManager implements Serializable, AutoCloseable {
    * and tries to call unlock()
    */
   public void unlock() {
-    getLockProvider().unlock();
+    // Close even when the release fails, so the next lock() builds a fresh provider instead of
+    // reusing one whose lock state is no longer trustworthy.
     try {
-      metrics.updateLockHeldTimerMetrics();
-    } catch (HoodieException e) {
-      log.error(String.format("Exception encountered when updating lock metrics: %s", e));
+      getLockProvider().unlock();
+      try {
+        metrics.updateLockHeldTimerMetrics();
+      } catch (HoodieException e) {
+        log.error(String.format("Exception encountered when updating lock metrics: %s", e));
+      }
+      metrics.updateLockReleaseSuccessMetric();
+    } finally {
+      close();
     }
-    metrics.updateLockReleaseSuccessMetric();
-    close();
   }
 
   public synchronized LockProvider getLockProvider() {

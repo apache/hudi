@@ -94,10 +94,12 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
 
   @Override
   public int archiveIfRequired(HoodieEngineContext context, boolean acquireLock) throws IOException {
+    boolean lockAcquired = false;
     try {
       if (acquireLock) {
         // there is no owner or instant time per se for archival.
         txnManager.beginStateChange(Option.empty(), Option.empty());
+        lockAcquired = true;
       }
     } catch (HoodieLockException e) {
       log.error("Fail to begin transaction", e);
@@ -139,8 +141,14 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
       metrics.put(failureMetricName, 1L);
       throw e;
     } finally {
-      if (acquireLock) {
-        txnManager.endStateChange(Option.empty());
+      if (lockAcquired) {
+        try {
+          txnManager.endStateChange(Option.empty());
+        } finally {
+          // A no-op after endStateChange. Some providers delete the lock on close, so never
+          // close a lock this call did not acquire.
+          txnManager.close();
+        }
       }
     }
   }
