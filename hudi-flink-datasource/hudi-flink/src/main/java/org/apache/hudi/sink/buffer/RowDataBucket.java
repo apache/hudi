@@ -34,7 +34,7 @@ import java.io.IOException;
  * to minimize GC costs.
  */
 public class RowDataBucket {
-  private final RowDataSortBuffer dataBuffer;
+  private final StableSortBuffer dataBuffer;
   @Getter
   private final BucketInfo bucketInfo;
   private final BufferSizeDetector detector;
@@ -45,7 +45,7 @@ public class RowDataBucket {
 
   public RowDataBucket(
       String bucketId,
-      RowDataSortBuffer dataBuffer,
+      StableSortBuffer dataBuffer,
       BucketInfo bucketInfo,
       Double batchSize) {
     this.bucketId = bucketId;

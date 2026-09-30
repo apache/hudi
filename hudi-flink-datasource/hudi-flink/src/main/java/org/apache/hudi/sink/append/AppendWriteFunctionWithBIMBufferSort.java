@@ -24,7 +24,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.buffer.BufferType;
-import org.apache.hudi.sink.buffer.RowDataSortBuffer;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
 import org.apache.hudi.sink.utils.BufferUtils;
 import org.apache.hudi.util.MutableIteratorWrapperIterator;
@@ -36,6 +35,7 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
 import org.apache.flink.table.runtime.generated.GeneratedNormalizedKeyComputer;
 import org.apache.flink.table.runtime.generated.GeneratedRecordComparator;
+import org.apache.flink.table.runtime.operators.sort.BinaryInMemorySortBuffer;
 import org.apache.flink.table.runtime.util.MemorySegmentPool;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
@@ -69,8 +69,8 @@ import java.util.concurrent.atomic.AtomicReference;
 public class AppendWriteFunctionWithBIMBufferSort<T> extends AppendWriteFunction<T> {
 
   private final long writeBufferSize;
-  private transient RowDataSortBuffer activeBuffer;
-  private transient RowDataSortBuffer backgroundBuffer;
+  private transient BinaryInMemorySortBuffer activeBuffer;
+  private transient BinaryInMemorySortBuffer backgroundBuffer;
   private transient MemorySegmentPool[] memorySegmentPools;
   private transient ExecutorService asyncWriteExecutor;
   private transient AtomicReference<CompletableFuture<Void>> asyncWriteTask;
@@ -92,11 +92,11 @@ public class AppendWriteFunctionWithBIMBufferSort<T> extends AppendWriteFunction
     GeneratedRecordComparator recordComparator = sortOperatorGen.generateRecordComparator("SortComparator");
     this.memorySegmentPools = this.memorySegmentPoolFactory.createMemorySegmentPools(config, 2, OptionsResolver.getWriteBufferSizeInBytes(config));
 
-    this.activeBuffer = BufferUtils.createBuffer(rowType,
+    this.activeBuffer = BufferUtils.createSortBuffer(rowType,
         memorySegmentPools[0],
         keyComputer.newInstance(Thread.currentThread().getContextClassLoader()),
         recordComparator.newInstance(Thread.currentThread().getContextClassLoader()));
-    this.backgroundBuffer = BufferUtils.createBuffer(rowType,
+    this.backgroundBuffer = BufferUtils.createSortBuffer(rowType,
         memorySegmentPools[1],
         keyComputer.newInstance(Thread.currentThread().getContextClassLoader()),
         recordComparator.newInstance(Thread.currentThread().getContextClassLoader()));
@@ -162,7 +162,7 @@ public class AppendWriteFunctionWithBIMBufferSort<T> extends AppendWriteFunction
     waitForAsyncWriteCompletion();
 
     // Swap buffers
-    RowDataSortBuffer temp = activeBuffer;
+    BinaryInMemorySortBuffer temp = activeBuffer;
     activeBuffer = backgroundBuffer;
     backgroundBuffer = temp;
 
@@ -207,7 +207,7 @@ public class AppendWriteFunctionWithBIMBufferSort<T> extends AppendWriteFunction
    * 2. Binary buffer is full.
    * 3. `endInput` is called for pipelines with a bounded source.
    */
-  private void sortAndSend(RowDataSortBuffer buffer) throws IOException {
+  private void sortAndSend(BinaryInMemorySortBuffer buffer) throws IOException {
     if (buffer.isEmpty()) {
       return;
     }

@@ -39,9 +39,10 @@ import static org.apache.flink.util.Preconditions.checkArgument;
 /**
  * Copied from Flink's {@code BinaryInMemorySortBuffer}.
  *
- * <p>Diff: Compares record offsets when keys are equal to preserve the original insert order.
+ * <p>Provides stable sorting by comparing record offsets when keys are equal,
+ * preserving the original insertion order of records with equal keys.
  */
-public final class RowDataSortBuffer extends BinaryIndexedSortable {
+public final class StableSortBuffer extends BinaryIndexedSortable {
 
   private static final int MIN_REQUIRED_BUFFERS = 3;
 
@@ -54,7 +55,7 @@ public final class RowDataSortBuffer extends BinaryIndexedSortable {
   private long sortIndexBytes;
 
   /** Create a memory sorter in `insert` way. */
-  public static RowDataSortBuffer createBuffer(
+  public static StableSortBuffer createBuffer(
       NormalizedKeyComputer normalizedKeyComputer,
       AbstractRowDataSerializer<RowData> inputSerializer,
       BinaryRowDataSerializer serializer,
@@ -63,7 +64,7 @@ public final class RowDataSortBuffer extends BinaryIndexedSortable {
     checkArgument(memoryPool.freePages() >= MIN_REQUIRED_BUFFERS);
     int totalNumBuffers = memoryPool.freePages();
     ArrayList<MemorySegment> recordBufferSegments = new ArrayList<>(16);
-    return new RowDataSortBuffer(
+    return new StableSortBuffer(
         normalizedKeyComputer,
         inputSerializer,
         serializer,
@@ -75,7 +76,7 @@ public final class RowDataSortBuffer extends BinaryIndexedSortable {
         totalNumBuffers);
   }
 
-  private RowDataSortBuffer(
+  private StableSortBuffer(
       NormalizedKeyComputer normalizedKeyComputer,
       AbstractRowDataSerializer<RowData> inputSerializer,
       BinaryRowDataSerializer serializer,

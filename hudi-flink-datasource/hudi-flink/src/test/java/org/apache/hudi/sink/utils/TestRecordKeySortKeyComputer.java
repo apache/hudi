@@ -21,7 +21,7 @@ package org.apache.hudi.sink.utils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.buffer.HeapMemorySegmentPool;
-import org.apache.hudi.sink.buffer.RowDataSortBuffer;
+import org.apache.hudi.sink.buffer.StableSortBuffer;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.sink.bulk.RowDataKeyGens;
 
@@ -212,7 +212,7 @@ class TestRecordKeySortKeyComputer {
   }
 
   @Test
-  void testRowDataSortBufferOrdering() throws Exception {
+  void testStableSortBufferOrdering() throws Exception {
     RowType longRowType = rowType(new String[] {"key"}, new LogicalType[] {new BigIntType()});
     assertBufferSort(longRowType, "key", Arrays.asList(
         GenericRowData.of(2L), GenericRowData.of(10L), GenericRowData.of(-1L), GenericRowData.of(100L)));
@@ -308,7 +308,7 @@ class TestRecordKeySortKeyComputer {
       throws Exception {
     RowDataKeyGen keyGen = keyGen(rowType, recordKeyFields);
     int recordKeyFieldCount = recordKeyFields.split(",").length;
-    RowDataSortBuffer buffer = BufferUtils.createBuffer(
+    StableSortBuffer buffer = BufferUtils.createStableSortBuffer(
         rowType,
         new HeapMemorySegmentPool(MemoryManager.DEFAULT_PAGE_SIZE, BUFFER_SIZE_BYTES),
         new RecordKeySortKeyComputer(keyGen, recordKeyFieldCount),

@@ -90,7 +90,7 @@ class TestRowDataBucket {
       keyComputer = new RecordKeySortKeyComputer(keyGen, 1);
       comparator = new RecordKeySortComparator(keyGen);
     }
-    RowDataSortBuffer buffer = BufferUtils.createBuffer(rowType, pool, keyComputer, comparator);
+    StableSortBuffer buffer = BufferUtils.createStableSortBuffer(rowType, pool, keyComputer, comparator);
     RowDataBucket bucket = new RowDataBucket(
         "bucket-0", buffer, new BucketInfo(BucketType.INSERT, "file-0", "partition-0"), 256.0);
     List<RowData> expected = new ArrayList<>();
@@ -179,7 +179,7 @@ class TestRowDataBucket {
         return descending;
       }
     };
-    RowDataSortBuffer buffer = BufferUtils.createBuffer(rowType, pool, keyComputer, (left, right) -> {
+    StableSortBuffer buffer = BufferUtils.createStableSortBuffer(rowType, pool, keyComputer, (left, right) -> {
       throw new AssertionError("Fully determining normalized keys must not deserialize records for comparison");
     });
     List<RowData> expected = new ArrayList<>();
@@ -225,7 +225,7 @@ class TestRowDataBucket {
     int initialFreePages = pool.freePages();
     SortOperatorGen generator = new SortOperatorGen(rowType, new String[] {"key"});
     ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-    RowDataSortBuffer buffer = BufferUtils.createBuffer(rowType, pool,
+    StableSortBuffer buffer = BufferUtils.createStableSortBuffer(rowType, pool,
         generator.generateNormalizedKeyComputer("ResetKeyComputer").newInstance(classLoader),
         generator.generateRecordComparator("ResetComparator").newInstance(classLoader));
     int emptyBufferFreePages = pool.freePages();
@@ -267,7 +267,7 @@ class TestRowDataBucket {
     RowType rowType = (RowType) DataTypes.ROW(DataTypes.FIELD("key", DataTypes.INT())).getLogicalType();
     HeapMemorySegmentPool pool = new HeapMemorySegmentPool(32 * 1024, 64 * 1024);
     int initialFreePages = pool.freePages();
-    assertThrows(MemoryPagesExhaustedException.class, () -> BufferUtils.createBuffer(rowType, pool));
+    assertThrows(MemoryPagesExhaustedException.class, () -> BufferUtils.createStableSortBuffer(rowType, pool));
     assertEquals(initialFreePages, pool.freePages());
   }
 
@@ -282,7 +282,7 @@ class TestRowDataBucket {
     int initialFreePages = pool.freePages();
     RowDataBucket bucket = new RowDataBucket(
         "bucket-0",
-        BufferUtils.createBuffer(rowType, pool),
+        BufferUtils.createStableSortBuffer(rowType, pool),
         new BucketInfo(BucketType.INSERT, "file-0", "partition-0"),
         256.0);
 
@@ -301,7 +301,7 @@ class TestRowDataBucket {
         expectedIds.add(id);
       }
 
-      assertTrue(writeFailed, "the tiny pool should cause RowDataSortBuffer.write to return false");
+      assertTrue(writeFailed, "the tiny pool should cause StableSortBuffer.write to return false");
       assertTrue(bucket.isDiverged());
       assertFalse(bucket.isEmpty(), "successful rows written before exhaustion should remain readable");
 

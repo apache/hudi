@@ -22,7 +22,7 @@ import org.apache.hudi.exception.HoodieException;
 
 /**
  * Exception thrown for memory pages in {@code MemorySegmentPool} are not enough to
- * create a {@code RowDataSortBuffer}.
+ * create a sort buffer.
  */
 public class MemoryPagesExhaustedException extends HoodieException {
 

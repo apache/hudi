@@ -19,7 +19,7 @@
 package org.apache.hudi.sink.partitioner.index;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
-import org.apache.hudi.sink.buffer.RowDataSortBuffer;
+import org.apache.hudi.sink.buffer.StableSortBuffer;
 import org.apache.hudi.sink.utils.BufferUtils;
 
 import org.apache.flink.configuration.Configuration;
@@ -69,7 +69,7 @@ class TestIndexWriteFunction {
   void testCloseContinuesAfterCleanupFailure(boolean bufferFails) throws Exception {
     HoodieFlinkWriteClient writeClient = mock(HoodieFlinkWriteClient.class);
     IndexWriteFunction function = new TestFunction(writeClient);
-    RowDataSortBuffer buffer = mock(RowDataSortBuffer.class);
+    StableSortBuffer buffer = mock(StableSortBuffer.class);
     CloseableMemorySegmentPool pool = mock(CloseableMemorySegmentPool.class);
     setField(function, "indexDataBuffer", buffer);
     setField(function, "memorySegmentPool", pool);
@@ -99,7 +99,7 @@ class TestIndexWriteFunction {
     MemoryManager memoryManager = MemoryManager.create(8L * pageSize, pageSize);
     try {
       LazyMemorySegmentPool pool = new LazyMemorySegmentPool(new Object(), memoryManager, 8);
-      RowDataSortBuffer buffer = BufferUtils.createBuffer(IndexRowUtils.INDEX_ROW_TYPE, pool);
+      StableSortBuffer buffer = BufferUtils.createStableSortBuffer(IndexRowUtils.INDEX_ROW_TYPE, pool);
       HoodieFlinkWriteClient writeClient = mock(HoodieFlinkWriteClient.class);
       IndexWriteFunction function = new TestFunction(writeClient);
       setField(function, "indexDataBuffer", buffer);
