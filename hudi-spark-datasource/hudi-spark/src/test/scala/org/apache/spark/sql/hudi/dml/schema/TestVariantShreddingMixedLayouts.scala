@@ -1111,6 +1111,137 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
     }
   }
 
+  test("Explicit ALTER COLUMN TYPE beside a variant is refused without schema-on-read") {
+    assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
+
+    // The explicit twin of the two "Implicit widening" tests. Without hoodie.schema.on.read.enable
+    // HoodieCatalog.loadTable hands the table back as a V1Table and BaseResolveHudiAlterTableCommand
+    // leaves ALTER plans alone, so Spark's ResolveSessionCatalog turns ALTER COLUMN ... TYPE (and the
+    // Hive-style CHANGE COLUMN) into its v1 AlterTableChangeColumnCommand, which
+    // HoodiePostAnalysisRule swaps for AlterHoodieTableChangeColumnCommand; Spark's own up-cast check
+    // on AlterColumns never runs on this route. That command
+    // requires name AND type to match (columnEqual) before commitWithSchema, so every type change
+    // is refused with no instant written and the catalog schema untouched: re-typing the variant
+    // and re-typing the sibling into a variant hit the same check as the widening. The explicit
+    // path therefore cannot widen a sibling of a variant; the DataFrame write in the "Implicit
+    // widening" tests is the only way a table gets there. A struct member never reaches Hudi at
+    // all: ResolveSessionCatalog refuses a qualified column on a v1 table outright.
+    // A refused DDL does not depend on the record type, so the SPARK record type alone is swept.
+    def hudiRefusal(column: String, from: String, to: String): String =
+      "ALTER TABLE CHANGE COLUMN is not supported for changing column " +
+        s"'$column' with type '$from' to '$column' with type '$to'"
+
+    // The refused DDLs must leave the table readable on both PushVariantIntoScan arms: the value
+    // and filter reads, the full variant, and the plan shape of the projection.
+    def assertReadsOnBothArms(tableName: String, leg: String, variantExpr: String, nExpr: String): Unit = {
+      Seq("true", "false").foreach { pushIntoScan =>
+        withSQLConf("spark.sql.variant.pushVariantIntoScan" -> pushIntoScan) {
+          val projection = s"select id, variant_get($variantExpr, '$$.k', 'string'), $nExpr from $tableName"
+          checkAnswer(s"$projection order by id")(Seq(0, "x0", 0), Seq(1, "y1", 1), Seq(2, "y2", 2))
+          checkAnswer(s"select id from $tableName where variant_get($variantExpr, '$$.k', 'string') = 'y2'")(
+            Seq(2))
+          checkAnswer(s"select id from $tableName where $nExpr >= 1 order by id")(Seq(1), Seq(2))
+          checkAnswer(s"select id, cast($variantExpr as string) from $tableName order by id")(
+            Seq(0, """{"k":"x0"}"""), Seq(1, """{"k":"y1"}"""), Seq(2, """{"k":"y2"}"""))
+          val pushed = pushIntoScan.toBoolean
+          assert(variantProjectionPushedIntoScan(projection) == pushed,
+            s"[$leg] PushVariantIntoScan ${if (pushed) "should have" else "must not have"} rewritten " +
+              s"$variantExpr into a projection struct")
+        }
+      }
+    }
+
+    Seq("cow", "mor").foreach { tableType =>
+      // On MOR the update of commit 2 lands in a log block; keeping inline compaction off keeps it
+      // there, so the reads after the refused DDLs merge a log over the base.
+      val props = if (tableType == "mor") Seq("hoodie.compact.inline = 'false'") else Seq.empty
+
+      withVariantTable(s"alter column type beside a top-level variant $tableType", tableType, props = props,
+        extraCols = "n int", recordTypes = Seq(HoodieRecordType.SPARK)) { (tableName, tablePath, leg) =>
+        def rowsSql(lo: Int, hi: Int, nType: String, kPrefix: String, ts: Long): String =
+          s"""select cast(id as int) as id, parse_json(concat('{"k":"$kPrefix', id, '"}')) as v,
+             | cast(id as $nType) as n, ${ts}L as ts from range($lo, $hi, 1, 1)""".stripMargin
+        withWriteLayout(Forced("k string")) {
+          spark.sql(s"insert into $tableName ${rowsSql(0, 3, "int", "x", 1000L)}")
+        }
+        assertVariantLayout(tablePath, shredded = true, leg)
+        // On MOR this is the log block the reads below merge; on COW it rewrites the base file.
+        withWriteLayout(Forced("k string")) {
+          spark.sql(s"""update $tableName set v = parse_json(concat('{"k":"y', id, '"}')),
+                       | n = cast(id as int), ts = 1001 where id >= 1""".stripMargin)
+        }
+        val before = latestCompletedInstant(tablePath)
+
+        // Widening the sibling: columnEqual refuses it, and the Hive-style CHANGE COLUMN syntax lands
+        // on the same command and the same refusal.
+        val widening = hudiRefusal("n", "IntegerType", "LongType")
+        checkExceptionContain(s"alter table $tableName alter column n type bigint")(widening)
+        checkExceptionContain(s"alter table $tableName change column n n bigint")(widening)
+        // Re-typing the variant, or the sibling into a variant, meets the same check.
+        checkExceptionContain(s"alter table $tableName alter column v type string")(
+          hudiRefusal("v", "VariantType", "StringType"))
+        checkExceptionContain(s"alter table $tableName alter column n type variant")(
+          hudiRefusal("n", "IntegerType", "VariantType"))
+
+        val schema = spark.table(tableName).schema
+        assert(schema("n").dataType == IntegerType, s"[$leg] n must stay int, got ${schema("n").dataType}")
+        assert(schema("v").dataType.simpleString == "variant",
+          s"[$leg] v must stay a variant, got ${schema("v").dataType}")
+        assert(latestCompletedInstant(tablePath) == before, s"[$leg] a refused DDL must not commit an instant")
+
+        assertReadsOnBothArms(tableName, leg, "v", "n")
+
+        // The table still takes writes after the refusals.
+        withWriteLayout(Forced("k string")) {
+          spark.sql(s"insert into $tableName ${rowsSql(3, 5, "int", "z", 1002L)}")
+        }
+        assertVariantLayout(tablePath, shredded = true, leg)
+        checkAnswer(s"select id, variant_get(v, '$$.k', 'string'), n from $tableName order by id")(
+          Seq(0, "x0", 0), Seq(1, "y1", 1), Seq(2, "y2", 2), Seq(3, "z3", 3), Seq(4, "z4", 4))
+      }
+
+      withNestedOnlyVariantTable(s"alter column type beside a nested variant $tableType", tableType,
+        props = props, recordTypes = Seq(HoodieRecordType.SPARK), structMembers = "inner: variant, n: int") {
+        (tableName, tablePath, leg) =>
+        def rowsSql(lo: Int, hi: Int, nType: String, kPrefix: String, ts: Long): String =
+          s"""select cast(id as int) as id,
+             | named_struct('inner', parse_json(concat('{"k":"$kPrefix', id, '"}')), 'n', cast(id as $nType)) as s,
+             | ${ts}L as ts from range($lo, $hi, 1, 1)""".stripMargin
+        withWriteLayout(Forced("k string")) {
+          spark.sql(s"insert into $tableName ${rowsSql(0, 3, "int", "x", 1000L)}")
+        }
+        assertVariantLayout(tablePath, shredded = true, leg, column = "s.inner")
+        withWriteLayout(Forced("k string")) {
+          spark.sql(s"""update $tableName
+                       | set s = named_struct('inner', parse_json(concat('{"k":"y', id, '"}')), 'n', cast(id as int)),
+                       | ts = 1001 where id >= 1""".stripMargin)
+        }
+        val before = latestCompletedInstant(tablePath)
+
+        // Spark refuses a qualified column on a v1 table at analysis, so neither the sibling nor the
+        // variant inside `s` can be re-typed, and Hudi's command is never reached.
+        val qualifiedRefusal = "does not support ALTER COLUMN with qualified column"
+        checkExceptionContain(s"alter table $tableName alter column s.n type bigint")(qualifiedRefusal)
+        checkExceptionContain(s"alter table $tableName alter column s.inner type string")(qualifiedRefusal)
+
+        val structType = spark.table(tableName).schema("s").dataType.asInstanceOf[StructType]
+        assert(structType("n").dataType == IntegerType, s"[$leg] s.n must stay int, got ${structType("n").dataType}")
+        assert(structType("inner").dataType.simpleString == "variant",
+          s"[$leg] s.inner must stay a variant, got ${structType("inner").dataType}")
+        assert(latestCompletedInstant(tablePath) == before, s"[$leg] a refused DDL must not commit an instant")
+
+        assertReadsOnBothArms(tableName, leg, "s.inner", "s.n")
+
+        withWriteLayout(Forced("k string")) {
+          spark.sql(s"insert into $tableName ${rowsSql(3, 5, "int", "z", 1002L)}")
+        }
+        assertVariantLayout(tablePath, shredded = true, leg, column = "s.inner")
+        checkAnswer(s"select id, variant_get(s.inner, '$$.k', 'string'), s.n from $tableName order by id")(
+          Seq(0, "x0", 0), Seq(1, "y1", 1), Seq(2, "y2", 2), Seq(3, "z3", 3), Seq(4, "z4", 4))
+      }
+    }
+  }
+
   // -----------------------------------------------------------------------------------------------
   // F. Nested variant
   // -----------------------------------------------------------------------------------------------
