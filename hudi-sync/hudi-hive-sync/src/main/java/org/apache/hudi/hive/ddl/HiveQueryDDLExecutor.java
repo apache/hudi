@@ -24,9 +24,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.util.HiveDriverPool;
-import org.apache.hudi.hive.util.HiveDriverUtil;
 import org.apache.hudi.hive.util.HiveMetaStoreClientPool;
 import org.apache.hudi.hive.util.HivePartitionUtil;
+import org.apache.hudi.hive.util.HiveStatementExecutor;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -189,7 +189,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       SessionState.setCurrentSessionState(sessionState);
       for (String sql : sqls) {
         if (hiveDriver != null) {
-          HiveDriverUtil.runOrThrow(hiveDriver, sql);
+          HiveStatementExecutor.executeOrThrow(hiveDriver, sql);
         }
       }
     } catch (Exception e) {

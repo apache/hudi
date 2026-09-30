@@ -27,7 +27,7 @@ import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
 /**
  * Runs HiveQL through a Hive {@link Driver}.
  */
-public final class HiveDriverUtil {
+public final class HiveStatementExecutor {
 
   /**
    * Batched partition statements can run to many kilobytes; the error only needs enough of the
@@ -35,7 +35,7 @@ public final class HiveDriverUtil {
    */
   static final int MAX_STATEMENT_LENGTH_IN_ERROR = 1000;
 
-  private HiveDriverUtil() {
+  private HiveStatementExecutor() {
   }
 
   /**
@@ -44,7 +44,7 @@ public final class HiveDriverUtil {
    * metastore refuses) through a non-zero response code rather than by throwing, so a caller that
    * only catches exceptions goes on as though the statement had been applied.
    */
-  public static void runOrThrow(Driver driver, String sql) throws CommandNeedRetryException {
+  public static void executeOrThrow(Driver driver, String sql) throws CommandNeedRetryException {
     CommandProcessorResponse response = driver.run(sql);
     if (response.getResponseCode() != 0) {
       throw new HoodieHiveSyncException(String.format(
