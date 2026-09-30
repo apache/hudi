@@ -98,7 +98,8 @@ public final class VectorIndexOptions {
     int bits = getRaBitQBits(options);
     long seed = getRaBitQSeed(options);
     boolean assumeNormalized = shouldAssumeNormalizedVectors(options);
-    int numProbes = getNumProbes(options);
+    int numProbes = options.containsKey(QUERY_NUM_PROBES)
+        ? getNumProbes(options) : Math.min(DEFAULT_NUM_PROBES, numClusters);
     int refineFactor = getRefineFactor(options);
     VectorQueryMode queryMode = getQueryMode(options);
     VectorStalePolicy stalePolicy = getStalePolicy(options);

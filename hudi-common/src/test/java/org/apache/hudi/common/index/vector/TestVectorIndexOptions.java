@@ -109,7 +109,20 @@ class TestVectorIndexOptions {
   }
 
   @Test
+  void testImplicitNumProbesIsCappedAtNumClusters() {
+    assertCanonical(opts(), VectorIndexOptions.QUERY_NUM_PROBES, "32");
+    for (int clusters : new int[] {1, 4, 31, 32, 64}) {
+      assertCanonical(opts(VectorIndexOptions.NUM_CLUSTERS, String.valueOf(clusters)),
+          VectorIndexOptions.QUERY_NUM_PROBES, String.valueOf(Math.min(32, clusters)));
+    }
+  }
+
+  @Test
   void testNumProbesMustNotExceedNumClusters() {
+    assertCanonical(opts(VectorIndexOptions.NUM_CLUSTERS, "4",
+        VectorIndexOptions.QUERY_NUM_PROBES, "2"), VectorIndexOptions.QUERY_NUM_PROBES, "2");
+    assertCanonical(opts(VectorIndexOptions.NUM_CLUSTERS, "64",
+        VectorIndexOptions.QUERY_NUM_PROBES, "48"), VectorIndexOptions.QUERY_NUM_PROBES, "48");
     assertCanonical(
         opts(
             VectorIndexOptions.NUM_CLUSTERS, "32",
