@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CommitUtils;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -35,6 +36,7 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncTool;
+import org.apache.hudi.metrics.FlinkHiveSyncMetrics;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
@@ -189,6 +191,11 @@ public class StreamWriteOperatorCoordinator
    * Context that holds variables for asynchronous hive sync.
    */
   private HiveSyncContext hiveSyncContext;
+
+  /**
+   * Metrics for hive sync, registered on the coordinator's metric group when hive sync is enabled.
+   */
+  private FlinkHiveSyncMetrics hiveSyncMetrics;
 
   /**
    * The table state.
@@ -457,6 +464,8 @@ public class StreamWriteOperatorCoordinator
         .threadFactory(getThreadFactory("hive-sync"))
         .waitForTasksFinish(true).build();
     this.hiveSyncContext = HiveSyncContext.create(conf, this.storageConf);
+    this.hiveSyncMetrics = new FlinkHiveSyncMetrics(context.metricGroup());
+    this.hiveSyncMetrics.registerMetrics();
   }
 
   private void syncHiveAsync() {
@@ -476,9 +485,16 @@ public class StreamWriteOperatorCoordinator
    * Sync hoodie table metadata to Hive metastore.
    */
   public void doSyncHive() {
-    try (HiveSyncTool syncTool = hiveSyncContext.hiveSyncTool()) {
-      syncTool.syncHoodieTable();
+    HoodieTimer timer = HoodieTimer.start();
+    try {
+      try (HiveSyncTool syncTool = hiveSyncContext.hiveSyncTool()) {
+        syncTool.syncHoodieTable();
+      }
+    } catch (Throwable t) {
+      hiveSyncMetrics.markSyncFailed(timer.endTimer());
+      throw t;
     }
+    hiveSyncMetrics.markSyncSucceeded(timer.endTimer());
   }
 
   private void scheduleTableServices(Boolean committed) {
