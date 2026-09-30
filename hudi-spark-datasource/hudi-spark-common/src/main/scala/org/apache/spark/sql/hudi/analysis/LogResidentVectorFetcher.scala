@@ -78,7 +78,8 @@ private[analysis] final class LogResidentVectorFetcher(
   private def fetchSliceNonEmpty(
       partitionPath: String,
       fileSlice: FileSlice,
-      candidateKeys: Set[String]): Seq[InternalRow] = {    val readerContext = new HoodieAvroReaderContext(
+      candidateKeys: Set[String]): Seq[InternalRow] = {
+    val readerContext = new HoodieAvroReaderContext(
       storageConf, metaClient.getTableConfig,
       HOption.empty[InstantRange](), HOption.empty[Predicate](), new TypedProperties())
     val fileGroupReader: HoodieFileGroupReader[IndexedRecord] = HoodieFileGroupReader.builder()
