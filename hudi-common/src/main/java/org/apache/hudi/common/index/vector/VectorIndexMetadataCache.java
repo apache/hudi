@@ -279,7 +279,7 @@ public final class VectorIndexMetadataCache implements Serializable {
     float[][] centroids = null;
     Long quantizerSeed = null;
     int rabitqBits = activeManifest.getBitsTotal();
-    int dimension = activeManifest.getDim();
+    int dimension = activeManifest.getDimension();
     boolean assumeNormalized = activeManifest.getAssumeNormalized();
     boolean residualEncoding = activeManifest.getResidualEncoding();
     Map<Integer, ClusterManifest> clusterManifests = new HashMap<>();

@@ -43,7 +43,7 @@ final class VectorIndexMetadataSerde {
         intField(record, "indexVersion"),
         stringField(record, "generationId"),
         stringField(record, "state"),
-        intField(record, "dim"),
+        intField(record, "dimension"),
         intField(record, "dimPadded"),
         intField(record, "codeRowBytes"),
         intField(record, "bitsTotal"),
@@ -100,7 +100,7 @@ final class VectorIndexMetadataSerde {
   }
 
   static float[][] deserializeCentroids(ByteBuffer bytes, HoodieVectorIndexManifest manifest) {
-    return deserializeCentroids(bytes, manifest.getDim(), manifest.getDimPadded(), manifest.getNumClusters());
+    return deserializeCentroids(bytes, manifest.getDimension(), manifest.getDimPadded(), manifest.getNumClusters());
   }
 
   static String manifestState(Object info) {

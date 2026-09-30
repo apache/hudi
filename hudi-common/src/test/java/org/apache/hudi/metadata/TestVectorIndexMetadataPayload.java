@@ -34,6 +34,7 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -104,6 +105,9 @@ class TestVectorIndexMetadataPayload {
 
     HoodieVectorIndexManifest manifest =
         (HoodieVectorIndexManifest) record.getData().getVectorIndexMetadata().get();
+    assertEquals(128, manifest.getDimension());
+    assertNotNull(HoodieVectorIndexManifest.getClassSchema().getField("dimension"));
+    assertNull(HoodieVectorIndexManifest.getClassSchema().getField("dim"));
     assertEquals("20260724000000", manifest.getBootstrapInstant());
     assertEquals("20260724010101", manifest.getVerifiedFrontier());
     assertEquals(8, manifest.getFileGroupCount());
