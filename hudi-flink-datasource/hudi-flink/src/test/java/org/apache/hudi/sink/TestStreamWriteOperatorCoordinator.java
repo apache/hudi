@@ -66,6 +66,11 @@ import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestUtils;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.metrics.Counter;
+import org.apache.flink.metrics.Gauge;
+import org.apache.flink.metrics.Histogram;
+import org.apache.flink.metrics.groups.OperatorCoordinatorMetricGroup;
+import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
 import org.apache.flink.runtime.operators.coordination.MockOperatorCoordinatorContext;
@@ -112,6 +117,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -605,6 +611,39 @@ public class TestStreamWriteOperatorCoordinator {
   }
 
   @Test
+  void testHiveSyncMetricsNotRegisteredWhenHiveSyncDisabled() throws Exception {
+    coordinator.close();
+    CapturingCoordinatorMetricGroup metricGroup = new CapturingCoordinatorMetricGroup();
+    coordinator = startCoordinator(TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()), metricGroup);
+
+    assertTrue(metricGroup.counters.isEmpty());
+    assertTrue(metricGroup.histograms.isEmpty());
+    assertTrue(metricGroup.gauges.isEmpty());
+  }
+
+  @Test
+  void testHiveSyncFailureUpdatesMetrics() throws Exception {
+    coordinator.close();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.HIVE_SYNC_ENABLED, true);
+    conf.set(FlinkOptions.HIVE_SYNC_MODE, "jdbc");
+    // nothing listens on port 1, so every sync fails to connect
+    conf.set(FlinkOptions.HIVE_SYNC_JDBC_URL, "jdbc:hive2://localhost:1");
+    CapturingCoordinatorMetricGroup metricGroup = new CapturingCoordinatorMetricGroup();
+    coordinator = startCoordinator(conf, metricGroup);
+
+    assertEquals(0L, metricGroup.gauges.get("hiveSyncLastSuccessTimeMs").getValue());
+
+    assertThrows(HoodieException.class, () -> coordinator.doSyncHive());
+    assertThrows(HoodieException.class, () -> coordinator.doSyncHive());
+
+    assertEquals(0, metricGroup.counters.get("hiveSyncSuccessCount").getCount());
+    assertEquals(2, metricGroup.counters.get("hiveSyncFailureCount").getCount());
+    assertEquals(2, metricGroup.histograms.get("hiveSyncDurationMs").getCount());
+    assertEquals(0L, metricGroup.gauges.get("hiveSyncLastSuccessTimeMs").getValue());
+  }
+
+  @Test
   void testSyncMetadataTable() throws Exception {
     // reset
     reset();
@@ -998,6 +1037,20 @@ public class TestStreamWriteOperatorCoordinator {
     return coordinator;
   }
 
+  private static StreamWriteOperatorCoordinator startCoordinator(
+      Configuration conf, OperatorCoordinatorMetricGroup metricGroup) throws Exception {
+    MockOperatorCoordinatorContext coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), 1) {
+      @Override
+      public OperatorCoordinatorMetricGroup metricGroup() {
+        return metricGroup;
+      }
+    };
+    StreamWriteOperatorCoordinator coordinator = new StreamWriteOperatorCoordinator(conf, coordinatorContext);
+    coordinator.start();
+    setSynchronousExecutors(coordinator);
+    return coordinator;
+  }
+
   private static void setSynchronousExecutors(StreamWriteOperatorCoordinator coordinator) throws Exception {
     MockOperatorCoordinatorContext coordinatorContext = (MockOperatorCoordinatorContext) coordinator.getContext();
     coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
@@ -1007,6 +1060,34 @@ public class TestStreamWriteOperatorCoordinator {
   private static StreamWriteOperatorCoordinator createCoordinator(Configuration conf, int subTasks) {
     MockOperatorCoordinatorContext coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), subTasks);
     return new StreamWriteOperatorCoordinator(conf, coordinatorContext);
+  }
+
+  /**
+   * A coordinator metric group that keeps what is registered on it.
+   */
+  private static final class CapturingCoordinatorMetricGroup extends UnregisteredMetricsGroup
+      implements OperatorCoordinatorMetricGroup {
+    private final Map<String, Counter> counters = new HashMap<>();
+    private final Map<String, Histogram> histograms = new HashMap<>();
+    private final Map<String, Gauge<?>> gauges = new HashMap<>();
+
+    @Override
+    public <C extends Counter> C counter(String name, C counter) {
+      counters.put(name, counter);
+      return counter;
+    }
+
+    @Override
+    public <H extends Histogram> H histogram(String name, H histogram) {
+      histograms.put(name, histogram);
+      return histogram;
+    }
+
+    @Override
+    public <T, G extends Gauge<T>> G gauge(String name, G gauge) {
+      gauges.put(name, gauge);
+      return gauge;
+    }
   }
 
   /**
