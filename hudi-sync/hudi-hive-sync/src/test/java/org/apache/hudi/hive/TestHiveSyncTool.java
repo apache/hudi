@@ -41,6 +41,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.ExceptionUtil;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
@@ -128,7 +129,6 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -425,12 +425,9 @@ public class TestHiveSyncTool {
     reInitHiveSyncClient();
 
     HoodieException ex = assertThrows(HoodieException.class, this::reSyncHiveTable);
-    Throwable rejection = ex;
-    while (rejection != null && !(rejection.getMessage() != null && rejection.getMessage().contains("Hive rejected the statement"))) {
-      rejection = rejection.getCause();
-    }
-    assertNotNull(rejection, "The sync must fail with Hive's rejection of the ADD PARTITION");
-    assertTrue(rejection.getMessage().contains("datestr"), rejection.getMessage());
+    assertTrue(ExceptionUtil.validateErrorMsg(ex, "Hive rejected the statement"),
+        "The sync must fail with Hive's rejection of the ADD PARTITION");
+    assertTrue(ExceptionUtil.validateErrorMsg(ex, "datestr"));
     assertEquals("100", hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get(),
         "A commit whose partitions Hive rejected must not be recorded as synced");
   }
