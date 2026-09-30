@@ -1030,7 +1030,7 @@ public final class VectorIndexMdtSearchUtils {
     int bitOffset = 0;
     for (int dim = 0; dim < dimension; dim++) {
       for (int bit = 0; bit < exBits; bit++) {
-        int plane = bit;
+        int plane = exBits - 1 - bit;
         int planeOffset = view.exPlaneOffset(vectorIndex, plane) + (dim >> 3);
         if ((exPlanes.get(planeOffset) & (1 << (dim & 7))) != 0) {
           int absoluteBit = bitOffset + bit;
