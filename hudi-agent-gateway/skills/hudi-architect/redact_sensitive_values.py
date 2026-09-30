@@ -40,8 +40,10 @@ SENSITIVE_KEY = re.compile(
 )
 
 ASSIGNMENT = re.compile(
+    # Try only token starts, not every suffix of long non-secret values.
+    r"(?<![A-Za-z0-9_.-])"
     r"(?P<prefix>(?P<key_quote>[\"']?)(?P<key>[A-Za-z0-9_.-]+)"
-    r"(?P=key_quote)\s*(?:=|:)\s*)"
+    r"(?P=key_quote)[ \t]*(?:=|:)[ \t]*)"
 )
 
 URI_USERINFO = re.compile(
@@ -96,8 +98,10 @@ def _consume_assignment_value(text: str, start: int) -> tuple[int, str]:
     if start < len(text) and text[start] in "\"'":
         return _consume_quoted_value(text, start)
 
+    # Punctuation can be part of an unquoted property credential. Without a quoted
+    # boundary, conservatively omit the rest of the line, even in inline evidence.
     index = start
-    while index < len(text) and text[index] not in ",;)}]&\r\n":
+    while index < len(text) and text[index] not in "\r\n":
         index += 1
     return index, REDACTED
 
@@ -128,7 +132,16 @@ def _redact_assignments(text: str) -> str:
     output: list[str] = []
     position = 0
     while match := ASSIGNMENT.search(text, position):
-        if SENSITIVE_KEY.search(match.group("key")) is None:
+        # Keep the boundaries of values already handled by the query/CLI consumers.
+        # Other sensitive keys still need conservative assignment redaction.
+        if (
+            SENSITIVE_KEY.search(match.group("key")) is None
+            or SENSITIVE_CLI_FLAG.match(text, match.start()) is not None
+            or (
+                match.start() > 0
+                and SENSITIVE_QUERY_PARAMETER.match(text, match.start() - 1) is not None
+            )
+        ):
             output.append(text[position : match.end("prefix")])
             position = match.end("prefix")
             continue

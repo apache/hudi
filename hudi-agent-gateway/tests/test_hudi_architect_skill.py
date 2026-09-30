@@ -423,3 +423,88 @@ def test_redactor_consumes_complete_inline_and_quoted_values(
         check=True,
     )
     assert repeated.stdout == expected
+
+
+@pytest.mark.parametrize(
+    ("evidence", "expected"),
+    [
+        ("password=first&second", "password=<redacted>"),
+        (
+            "s3.secret-key=first,second;third}fourth",
+            "s3.secret-key=<redacted>",
+        ),
+        ("  password = first)second]third", "  password = <redacted>"),
+        ("password=first second#third", "password=<redacted>"),
+        ("password=first?token=second&third", "password=<redacted>"),
+        ("password=", "password=<redacted>"),
+        ("command --passwd=first&second --table orders", "command --passwd=<redacted>"),
+        ("command --db.password=first&second", "command --db.password=<redacted>"),
+        (
+            "endpoint=https://example.com/?pwd=first&second",
+            "endpoint=https://example.com/?pwd=<redacted>",
+        ),
+        (
+            "endpoint=https://example.com/?region=us&pwd=first&second",
+            "endpoint=https://example.com/?region=us&pwd=<redacted>",
+        ),
+    ],
+)
+@pytest.mark.parametrize("ending", ["\n", "\r\n", "\r", ""])
+def test_redactor_removes_entire_unquoted_property_value(
+    evidence: str, expected: str, ending: str
+) -> None:
+    # Byte I/O checks that CR/LF survive without subprocess newline normalization.
+    following_fact = "table.name=orders" if ending else ""
+    source = (evidence + ending + following_fact).encode()
+    expected_output = (expected + ending + following_fact).encode()
+    for _ in range(2):
+        result = subprocess.run(
+            [sys.executable, str(SKILL_DIR / "redact_sensitive_values.py")],
+            input=source,
+            capture_output=True,
+            check=True,
+        )
+        assert result.stdout == expected_output
+        source = result.stdout
+
+
+@pytest.mark.parametrize(
+    ("evidence", "expected"),
+    [
+        (
+            "endpoint=https://example.com/?token=secret&region=us&password=other&limit=10",
+            "endpoint=https://example.com/?token=<redacted>&region=us"
+            "&password=<redacted>&limit=10",
+        ),
+        (
+            "command --password=first&second --table orders",
+            "command --password=<redacted> --table orders",
+        ),
+    ],
+)
+def test_redactor_preserves_query_and_cli_value_boundaries(evidence: str, expected: str) -> None:
+    for _ in range(2):
+        result = subprocess.run(
+            [sys.executable, str(SKILL_DIR / "redact_sensitive_values.py")],
+            input=evidence,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        assert result.stdout == expected
+        evidence = result.stdout
+
+
+@pytest.mark.parametrize("prefix", ["payload=", "", 'payload="'])
+def test_redactor_preserves_long_non_secret_values_without_stalling(prefix: str) -> None:
+    evidence = prefix + "x" * 65536 + ('"' if prefix.endswith('"') else "") + "\n"
+    result = subprocess.run(
+        [sys.executable, str(SKILL_DIR / "redact_sensitive_values.py")],
+        input=evidence,
+        text=True,
+        capture_output=True,
+        check=True,
+        # Generous startup allowance; the old suffix-by-suffix scan takes tens of seconds.
+        timeout=5,
+    )
+    assert result.stdout == evidence
