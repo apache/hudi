@@ -2,7 +2,7 @@
 title: SQL DDL
 summary: "In this page, we discuss using SQL DDL commands with Hudi"
 toc: true
-last_modified_at: 2026-08-07T20:54:32+05:30
+last_modified_at: 2026-09-30T18:50:00+08:00
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -332,6 +332,16 @@ decodable in application code if needed. What you do **not** get on Spark 3.x:
 | Spark 3.x (3.4 / 3.5) | No native VARIANT. [Backward-compat read](#reading-variant-from-spark-3x-backward-compatibility) of a Spark 4.x-written table requires the explicit binary-struct DDL above; raw bytes only. |
 | Flink &lt; 2.1 | Throws `UnsupportedOperationException` on VARIANT columns. |
 | Flink ≥ 2.1 | Surfaces VARIANT as `ROW<metadata BYTES, value BYTES>`. Flink can read the underlying struct but cannot decode it as a variant value. |
+
+:::caution Spark 4.1 and `spark.sql.variant.pushVariantIntoScan`
+In Hudi 1.2.0 and 1.2.1, reads of VARIANT columns can return wrong rows or fail while Spark's
+`PushVariantIntoScan` rule is on, which is the Spark 4.1 default: on Merge-on-Read tables when
+log files are merged, and on any table for a VARIANT column added with
+`ALTER TABLE ... ADD COLUMNS`. If a read hits one of these, set
+`spark.sql.variant.pushVariantIntoScan=false` for the session. On Spark 4.0 keep the setting at
+its default (`false`): with it on, every read of a table with a VARIANT column fails. See the
+[1.2 release notes](/releases/release-1.2#known-issues).
+:::
 
 VARIANT columns are not supported on Lance-backed tables.
 
