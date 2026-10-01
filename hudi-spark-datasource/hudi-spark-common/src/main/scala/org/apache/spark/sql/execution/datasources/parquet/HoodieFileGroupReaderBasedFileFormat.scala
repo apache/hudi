@@ -121,16 +121,6 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
   private def evaluateRequiredFiltersPerRow: Boolean = requiredFilters.nonEmpty && !requiredFiltersAppliedInPlan
 
   /**
-   * Flag saying whether vectorized reading is supported.
-   */
-  private var supportVectorizedRead = false
-
-  /**
-   * Flag saying whether batch output is supported.
-   */
-  private var supportReturningBatch = false
-
-  /**
    * Cached result of vector column detection keyed by schema identity.
    * Avoids re-parsing metadata on repeated supportBatch calls with the same schema.
    */
@@ -166,30 +156,23 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
   }
 
   /**
-   * Checks if the file format supports vectorized reading, please refer to SPARK-40918.
+   * Whether the base-file reader may use a vectorized reader for a scan whose output schema is `schema`.
    *
-   * NOTE: for mor read, even for file-slice with only base file, we can read parquet file with vectorized read,
-   * but the return result of the whole data-source-scan phase cannot be batch,
-   * because when there are any log file in a file slice, it needs to be read by the file group reader.
-   * Since we are currently performing merges based on rows, the result returned by merging should be based on rows,
-   * we cannot assume that all file slices have only base files.
-   * So we need to set the batch result back to false.
-   *
+   * This is a pure function of the session conf, the schema and the table properties. No state is kept
+   * between calls on purpose: Spark only calls [[supportBatch]] for scans whose schema is below
+   * spark.sql.codegen.maxFields, so [[buildReaderWithPartitionValues]] must evaluate this itself for
+   * the schema it is handed rather than reuse the answer given for some earlier scan.
    */
-  override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
+  private def canReadVectorized(sparkSession: SparkSession, schema: StructType): Boolean = {
     // Vector columns are stored as FIXED_LEN_BYTE_ARRAY in Parquet but read as ArrayType in Spark.
     // The binary→array conversion requires row-level access, so disable vectorized batch reading.
     if (detectVectorColumnsCached(schema).nonEmpty) {
-      supportVectorizedRead = false
-      supportReturningBatch = false
       false
     } else if (schema.fields.exists(f => containsType(f.dataType, isVariantProjection))) {
       // Spark 4.1's PushVariantIntoScan rewrites a variant column to a struct of pushed-down
       // extractions. The Spark vectorized parquet reader treats this as a nested type change
       // (data column is VariantType, required is a struct) and refuses to read in vectorized
       // mode (ParquetSchemaEvolutionUtils throws). Force row-based reading on this path.
-      supportVectorizedRead = false
-      supportReturningBatch = false
       false
     } else if (HoodieSparkUtils.gteqSpark4_1
         && schema.fields.exists(f => containsType(f.dataType, sparkAdapter.isVariantType))) {
@@ -206,8 +189,6 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       // carried inside a struct is exposed exactly the same way under any range-partitioned query.
       // The cost is that nested-variant tables lose vectorization on 4.1+ by default, exactly as
       // top-level ones do.
-      supportVectorizedRead = false
-      supportReturningBatch = false
       false
     } else {
       val conf = sparkSession.sessionState.conf
@@ -218,7 +199,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       // TODO: Implement columnar batch reading https://github.com/apache/hudi/issues/17736
       val lanceBatchSupported = false
 
-      val supportBatch = if (isMultipleBaseFileFormatsEnabled) {
+      val formatSupportsBatch = if (isMultipleBaseFileFormatsEnabled) {
         parquetBatchSupported && orcBatchSupported
       } else if (hoodieFileFormat == HoodieFileFormat.PARQUET) {
         parquetBatchSupported
@@ -234,15 +215,25 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       // the same reader, so vectorized reading must be disabled for both. All other combinations
       // (COW snapshot, COW incremental, MOR snapshot) either have no log merging or handle it via
       // a separate non-vectorized fileGroupBaseFileReader while the base file reader stays vectorized.
-      supportVectorizedRead = !(isIncremental && (isMOR || isCDC)) && !isBootstrap && supportBatch
-      // Required filters (the commit-time range of an incremental query) must hold for every row, but the
-      // vectorized reader only uses them to prune row groups. Unless the plan already filters on them, return
-      // rows rather than batches so that the base file read can evaluate them row by row; decoding stays vectorized.
-      supportReturningBatch = !isMOR && supportVectorizedRead && !evaluateRequiredFiltersPerRow
-      logDebug(s"supportReturningBatch: $supportReturningBatch, supportVectorizedRead: $supportVectorizedRead, isIncremental: $isIncremental, " +
-        s"isCDC: $isCDC, isBootstrap: $isBootstrap, superSupportBatch: $supportBatch")
-      supportReturningBatch
+      !(isIncremental && (isMOR || isCDC)) && !isBootstrap && formatSupportsBatch
     }
+  }
+
+  /**
+   * Checks if the file format supports returning columnar batches, please refer to SPARK-40918.
+   *
+   * NOTE: for MOR, a file slice with only a base file can still be read with the vectorized reader,
+   * but the scan as a whole cannot return batches because slices with log files are merged row by row.
+   */
+  override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
+    val vectorized = canReadVectorized(sparkSession, schema)
+    // Required filters (the commit-time range of an incremental query) must hold for every row, but the
+    // vectorized reader only uses them to prune row groups. Unless the plan already filters on them, return
+    // rows rather than batches so that the base file read can evaluate them row by row; decoding stays vectorized.
+    val returningBatch = !isMOR && vectorized && !evaluateRequiredFiltersPerRow
+    logDebug(s"supportReturningBatch: $returningBatch, supportVectorizedRead: $vectorized, " +
+      s"isIncremental: $isIncremental, isCDC: $isCDC, isBootstrap: $isBootstrap, isMOR: $isMOR")
+    returningBatch
   }
 
   //for partition columns that we read from the file, we don't want them to be constant column vectors so we
@@ -362,10 +353,11 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val dataStructTypeWithMandatoryPartitionFields = StructType(dataStructType.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name) && !isNestedPartitionField(f.name)))
     val dataSchema = HoodieSchemaUtils.pruneDataSchema(schema, HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(dataStructTypeWithMandatoryPartitionFields, sanitizedTableName), exclusionFields)
 
-    spark.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", supportVectorizedRead.toString)
+    // Decide per scan: Spark skips supportBatch for scans wider than spark.sql.codegen.maxFields
+    val vectorizedRead = canReadVectorized(spark, outputSchema)
 
-    val baseFileReader = spark.sparkContext.broadcast(buildBaseFileReader(spark, options, augmentedStorageConf.unwrap(), dataStructType, supportVectorizedRead))
-    val fileGroupBaseFileReader = if (isMOR && supportVectorizedRead) {
+    val baseFileReader = spark.sparkContext.broadcast(buildBaseFileReader(spark, options, augmentedStorageConf.unwrap(), dataStructType, vectorizedRead))
+    val fileGroupBaseFileReader = if (isMOR && vectorizedRead) {
       // for file group reader to perform read, we always need to read the record without vectorized reader because our merging is based on row level.
       // TODO: please consider to support vectorized reader in file group reader
       spark.sparkContext.broadcast(buildBaseFileReader(spark, options, augmentedStorageConf.unwrap(), dataStructType, enableVectorizedRead = false))
