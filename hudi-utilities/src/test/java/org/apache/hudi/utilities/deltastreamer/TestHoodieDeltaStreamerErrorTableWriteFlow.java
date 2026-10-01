@@ -57,21 +57,26 @@ class TestHoodieDeltaStreamerErrorTableWriteFlow extends TestHoodieDeltaStreamer
   /**
    * Bad records a source batch can carry, each built from valid generated records by one column mutation. A case
    * declares, per write operation, whether the streamer must route the record to the error table or write it to the
-   * base table, so every case is exercised by the same streamer sync. Cover a new failure mode by adding a case here
-   * rather than a new test, since each streamer sync is expensive.
+   * base table, and the reason it is routed there, so every case is exercised by the same streamer sync. Cover a new
+   * failure mode by adding a case here rather than a new test, since each streamer sync is expensive.
    */
   enum BadRecordCase {
-    EMPTY_RECORD_KEY(df -> df.withColumn("_row_key", functions.lit("")), operation -> true),
+    // The original record key is kept in driver, so each quarantined record stays attributable.
+    EMPTY_RECORD_KEY(df -> df.withColumn("driver", functions.col("_row_key")).withColumn("_row_key", functions.lit("")),
+        operation -> true, ErrorEvent.ErrorReason.RECORD_CREATION),
     // Only an upsert combines records by their ordering value; the other operations write a null one through.
     NULL_ORDERING_VALUE(df -> df.withColumn("timestamp", functions.lit(null).cast(DataTypes.LongType)),
-        operation -> operation == WriteOperationType.UPSERT);
+        operation -> operation == WriteOperationType.UPSERT, ErrorEvent.ErrorReason.RECORD_CREATION);
 
     private final UnaryOperator<Dataset<Row>> mutation;
     private final Predicate<WriteOperationType> routedToErrorTable;
+    private final ErrorEvent.ErrorReason errorReason;
 
-    BadRecordCase(UnaryOperator<Dataset<Row>> mutation, Predicate<WriteOperationType> routedToErrorTable) {
+    BadRecordCase(UnaryOperator<Dataset<Row>> mutation, Predicate<WriteOperationType> routedToErrorTable,
+                  ErrorEvent.ErrorReason errorReason) {
       this.mutation = mutation;
       this.routedToErrorTable = routedToErrorTable;
+      this.errorReason = errorReason;
     }
   }
 
@@ -80,10 +85,10 @@ class TestHoodieDeltaStreamerErrorTableWriteFlow extends TestHoodieDeltaStreamer
     int errorRecords = sourceGenInfo.f1;
     int numFiles = sourceGenInfo.f2;
     boolean shouldCreateMultipleSourceFiles = numFiles > 1;
-    // Expected outcome, kept up to date as each batch is built: the base table as record key to rider, and the record
-    // keys of the records routed to the error table.
+    // Expected outcome, kept up to date as each batch is built: the base table as record key to rider, and the records
+    // routed to the error table as (record, reason), where a record is named by its key, or by driver when the key is empty.
     Map<String, String> expectedRiders = new HashMap<>();
-    List<String> expectedErrorRecordKeys = new ArrayList<>();
+    List<String> expectedErrorRecords = new ArrayList<>();
 
     PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + testNum++;
 
@@ -105,7 +110,7 @@ class TestHoodieDeltaStreamerErrorTableWriteFlow extends TestHoodieDeltaStreamer
         for (BadRecordCase badRecordCase : BadRecordCase.values()) {
           String errorDataSourceRoot = basePath + "parquetErrorFilesDfs" + testNum++;
           prepareParquetDFSFiles(errorRecords, errorDataSourceRoot);
-          addBadRecords(badRecordCase, sparkSession.read().parquet(errorDataSourceRoot), expectedRiders, expectedErrorRecordKeys);
+          addBadRecords(badRecordCase, sparkSession.read().parquet(errorDataSourceRoot), expectedRiders, expectedErrorRecords);
         }
       }
     } else {
@@ -119,7 +124,7 @@ class TestHoodieDeltaStreamerErrorTableWriteFlow extends TestHoodieDeltaStreamer
     this.deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
     this.deltaStreamer.sync();
     int expectedInstants = 1;
-    int lastSyncErrorRecords = expectedErrorRecordKeys.size();
+    int lastSyncErrorRecords = expectedErrorRecords.size();
 
     // An upsert also updates stored records, in a second sync: a valid update must be applied, every bad record in the
     // batch must reach the error table, and a null ordering value on a stored record must leave that record unchanged.
@@ -128,7 +133,7 @@ class TestHoodieDeltaStreamerErrorTableWriteFlow extends TestHoodieDeltaStreamer
     if (writeOperationType == WriteOperationType.UPSERT && errorRecords > 0) {
       assertTrue(validRecords.size() >= (BadRecordCase.values().length + 1) * errorRecords,
           "the second sync updates errorRecords stored records per bad-record case, plus as many valid updates");
-      int firstSyncErrorRecords = expectedErrorRecordKeys.size();
+      int firstSyncErrorRecords = expectedErrorRecords.size();
       List<Row> validUpdates = updatesOf(validRecords.subList(0, errorRecords), sourceSchema);
       addParquetData(validUpdates, sourceSchema);
       validUpdates.forEach(row -> expectedRiders.put(row.getAs("_row_key"), row.getAs("rider")));
@@ -136,12 +141,12 @@ class TestHoodieDeltaStreamerErrorTableWriteFlow extends TestHoodieDeltaStreamer
       for (int i = 0; i < badRecordCases.length; i++) {
         List<Row> storedRecords = validRecords.subList((i + 1) * errorRecords, (i + 2) * errorRecords);
         addBadRecords(badRecordCases[i], sparkSession.createDataFrame(updatesOf(storedRecords, sourceSchema), sourceSchema),
-            expectedRiders, expectedErrorRecordKeys);
+            expectedRiders, expectedErrorRecords);
       }
       this.deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
       this.deltaStreamer.sync();
       expectedInstants++;
-      lastSyncErrorRecords = expectedErrorRecordKeys.size() - firstSyncErrorRecords;
+      lastSyncErrorRecords = expectedErrorRecords.size() - firstSyncErrorRecords;
     }
 
     // base table validation
@@ -161,10 +166,10 @@ class TestHoodieDeltaStreamerErrorTableWriteFlow extends TestHoodieDeltaStreamer
 
     // error table validation
     if (withErrorTable) {
-      Collections.sort(expectedErrorRecordKeys);
+      Collections.sort(expectedErrorRecords);
       List<Object> receivedErrorEvents = new ArrayList<>();
       TestErrorTable.receivedErrorEvents.forEach(errorEvents -> receivedErrorEvents.addAll(errorEvents.collect()));
-      assertEquals(expectedErrorRecordKeys, recordKeysOf(receivedErrorEvents));
+      assertEquals(expectedErrorRecords, errorRecordsOf(receivedErrorEvents));
       // What the error table writer committed, not only what it was handed
       List<Object> committed = new ArrayList<>();
       TestErrorTable.commited.values().forEach(errors -> errors.ifPresent(rdd -> committed.addAll(rdd.collect())));
@@ -172,18 +177,18 @@ class TestHoodieDeltaStreamerErrorTableWriteFlow extends TestHoodieDeltaStreamer
         // The unified write commits write statuses, and each commit replaces the previous one
         assertEquals(lastSyncErrorRecords, committed.stream().mapToLong(status -> ((WriteStatus) status).getTotalRecords()).sum());
       } else {
-        assertEquals(expectedErrorRecordKeys, recordKeysOf(committed));
+        assertEquals(expectedErrorRecords, errorRecordsOf(committed));
       }
     }
   }
 
   private void addBadRecords(BadRecordCase badRecordCase, Dataset<Row> records, Map<String, String> expectedRiders,
-                             List<String> expectedErrorRecordKeys) {
+                             List<String> expectedErrorRecords) {
     Dataset<Row> badRecords = badRecordCase.mutation.apply(records);
-    List<Row> badRows = badRecords.select("_row_key", "rider").collectAsList();
+    List<Row> badRows = badRecords.select("_row_key", "rider", "driver").collectAsList();
     addParquetData(badRecords, false);
     if (badRecordCase.routedToErrorTable.test(writeOperationType)) {
-      badRows.forEach(row -> expectedErrorRecordKeys.add(row.getString(0)));
+      badRows.forEach(row -> expectedErrorRecords.add(errorRecord(row.getString(0), row.getString(2), badRecordCase.errorReason)));
     } else {
       badRows.forEach(row -> expectedRiders.put(row.getString(0), row.getString(1)));
     }
@@ -204,17 +209,27 @@ class TestHoodieDeltaStreamerErrorTableWriteFlow extends TestHoodieDeltaStreamer
   }
 
   /**
-   * Record keys of the given error events, sorted. Error records are serialized as JSON, where a nullable field may be
-   * wrapped in its union branch.
+   * The given error events as (record, reason), sorted. Error records are serialized as JSON, where a nullable field
+   * may be wrapped in its union branch.
    */
-  private static List<String> recordKeysOf(List<Object> errorEvents) throws IOException {
-    List<String> recordKeys = new ArrayList<>();
+  private static List<String> errorRecordsOf(List<Object> errorEvents) throws IOException {
+    List<String> errorRecords = new ArrayList<>();
     for (Object errorEvent : errorEvents) {
-      JsonNode recordKey = OBJECT_MAPPER.readTree(((ErrorEvent<String>) errorEvent).getPayload()).get("_row_key");
-      recordKeys.add(recordKey.isObject() ? recordKey.get("string").asText() : recordKey.asText());
+      ErrorEvent<String> event = (ErrorEvent<String>) errorEvent;
+      JsonNode record = OBJECT_MAPPER.readTree(event.getPayload());
+      errorRecords.add(errorRecord(stringField(record, "_row_key"), stringField(record, "driver"), event.getReason()));
     }
-    Collections.sort(recordKeys);
-    return recordKeys;
+    Collections.sort(errorRecords);
+    return errorRecords;
+  }
+
+  private static String errorRecord(String recordKey, String driver, ErrorEvent.ErrorReason reason) {
+    return (recordKey.isEmpty() ? driver : recordKey) + "," + reason;
+  }
+
+  private static String stringField(JsonNode record, String field) {
+    JsonNode value = record.get(field);
+    return value.isObject() ? value.get("string").asText() : value.asText();
   }
 
   protected static Stream<Arguments> testErrorTableWriteFlowArgs() {
