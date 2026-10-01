@@ -21,6 +21,7 @@ package org.apache.spark.sql.hudi.dml.schema
 import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
@@ -30,6 +31,9 @@ import org.apache.spark.sql.execution.FileSourceScanExec
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.types.{DataType, StructType}
 
+import java.nio.file.{Files, Paths}
+
+import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 import scala.util.{Failure, Success, Try}
 
@@ -211,6 +215,110 @@ class TestVariantPushVariantIntoScan extends HoodieSparkSqlTestBase {
           s"[$tableName] whole-struct read of s.inner for id $id should be ${mergedJson(id)}, got $inner")
       }
       assertPushed(s"select id, variant_get(s.inner, '$$.k', 'string') from $tableName", pushed, tableName)
+    }
+  }
+
+  test("a second variant column added by DDL reads through old and new files") {
+    assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
+
+    // Without schema-on-read, `alter table add columns` writes an empty ALTER_SCHEMA commit and
+    // touches no data file, so every file written before it lacks v2. Hudi's readers switch
+    // Spark's nested schema pruning off, so the missing column has to leave the parquet read schema
+    // through HoodieParquetReadSupport.trimParquetSchema; kept there, it becomes a plain group over
+    // which Spark builds its variant converter and fails with INVALID_VARIANT_SHREDDING_SCHEMA
+    // (#20135). The same read sits under the COW merge handle, the native parquet log reader and
+    // MOR compaction, so the old file group is read through each of them.
+    def dataFiles(tablePath: String): Seq[String] = {
+      val stream = Files.walk(Paths.get(tablePath))
+      try {
+        stream.iterator().asScala.filter(Files.isRegularFile(_))
+          .map(p => Paths.get(tablePath).relativize(p).toString)
+          .filter(p => !p.startsWith(".hoodie") && !p.endsWith(".crc") && (p.endsWith(".parquet") || p.contains(".log.")))
+          .toSeq.sorted
+      } finally {
+        stream.close()
+      }
+    }
+    def rowsSql(lo: Int, hi: Int, kPrefix: String, ts: Long, v2Prefix: Option[String]): String = {
+      val v2Col = v2Prefix.map(p => s""", parse_json(concat('{"k":"$p', id, '"}')) as v2""").getOrElse("")
+      s"""select cast(id as int) as id, parse_json(concat('{"k":"$kPrefix', id, '"}')) as v,
+         | ${ts}L as ts$v2Col from range($lo, $hi, 1, 1)""".stripMargin
+    }
+    // ids 0-2 come from the writes before the DDL, ids 3-5 from the insert after it.
+    def vOf(id: Int): String = if (id < 3) s"a$id" else s"b$id"
+
+    // `v2Of` gives the expected $.k of v2 per id, null where the row has no v2; `v2FilterIds` names
+    // one row per file or block that holds a v2 value, each matched by its own filter.
+    def assertReads(tableName: String, leg: String, pushed: Boolean, ids: Range, v2Of: Int => String,
+                    v2FilterIds: Seq[Int] = Seq.empty): Unit = {
+      checkAnswer(s"select id, variant_get(v, '$$.k', 'string'), variant_get(v2, '$$.k', 'string') " +
+        s"from $tableName order by id")(ids.map(id => Seq(id, vOf(id), v2Of(id))): _*)
+      checkAnswer(s"select id from $tableName where v2 is null order by id")(
+        ids.filter(v2Of(_) == null).map(Seq(_)): _*)
+      checkAnswer(s"select id from $tableName where variant_get(v, '$$.k', 'string') = 'a1'")(Seq(1))
+      checkAnswer(s"select id from $tableName where variant_get(v2, '$$.k', 'string') = 'none'")()
+      v2FilterIds.foreach { id =>
+        checkAnswer(s"select id from $tableName where variant_get(v2, '$$.k', 'string') = '${v2Of(id)}'")(Seq(id))
+      }
+      checkAnswer(s"select id, cast(v2 as string) from $tableName order by id")(
+        ids.map(id => Seq(id, Option(v2Of(id)).map(k => s"""{"k":"$k"}""").orNull)): _*)
+      Seq("v", "v2").foreach { column =>
+        assertPushed(s"select id, variant_get($column, '$$.k', 'string') from $tableName", pushed, s"$leg, $column")
+      }
+    }
+
+    sweep("ddl-variant") { (tableName, tablePath, tableType, pushed) =>
+      val leg = s"$tableType, $tableName"
+      createTable(tableName, tablePath, tableType, "v variant")
+      // Seeded values that the update below replaces; on MOR the update is a log block written
+      // before the DDL, so the old file group reads v2 through a log file that lacks it too.
+      spark.sql(s"insert into $tableName ${rowsSql(0, 3, "o", 1000L, None)}")
+      spark.sql(s"update $tableName set " + """v = parse_json(concat('{"k":"a', id, '"}')), ts = 1001""")
+      if (tableType == "mor") {
+        assert(dataFiles(tablePath).count(_.contains(".log.")) == 1,
+          s"[$leg] expected one log file before the DDL: ${dataFiles(tablePath)}")
+      }
+      val filesBeforeDdl = dataFiles(tablePath)
+
+      spark.sql(s"alter table $tableName add columns (v2 variant)")
+      val timeline = createMetaClient(spark, tablePath).getActiveTimeline
+      val alterMetadata = timeline.readCommitMetadata(
+        timeline.getCommitsTimeline.filterCompletedInstants.lastInstant.get)
+      assert(alterMetadata.getOperationType == WriteOperationType.ALTER_SCHEMA,
+        s"[$leg] the DDL commit should be ALTER_SCHEMA, got ${alterMetadata.getOperationType}")
+      assert(dataFiles(tablePath) == filesBeforeDdl, s"[$leg] the DDL must not add or rewrite data files")
+      assert(spark.table(tableName).schema("v2").dataType.simpleString == "variant",
+        s"[$leg] the catalog should report v2 as variant")
+
+      // Old files only: every row reads v2 through a file that lacks the column.
+      assertReads(tableName, leg, pushed, 0 until 3, _ => null)
+
+      // Rows that carry v2; the small-file limit of 0 keeps them out of the old file group.
+      withSQLConf("hoodie.parquet.small.file.limit" -> "0") {
+        spark.sql(s"insert into $tableName ${rowsSql(3, 6, "b", 1000L, Some("z"))}")
+      }
+      assertReads(tableName, leg, pushed, 0 until 6, id => if (id < 3) null else s"z$id", v2FilterIds = Seq(3))
+
+      // One row of each file group: COW rewrites both groups through the merge handle, MOR writes
+      // one log block per group beside the one from before the DDL.
+      spark.sql(s"update $tableName set " +
+        """v2 = parse_json(concat('{"k":"u', id, '"}')), ts = 1002 where id in (2, 4)""")
+      def updatedV2(id: Int): String = id match {
+        case 2 | 4 => s"u$id"
+        case _ if id < 3 => null
+        case _ => s"z$id"
+      }
+      assertReads(tableName, leg, pushed, 0 until 6, updatedV2, v2FilterIds = Seq(2, 3, 4))
+
+      if (tableType == "mor") {
+        assert(dataFiles(tablePath).count(_.contains(".log.")) == 3,
+          s"[$leg] expected three log files after the update: ${dataFiles(tablePath)}")
+        val baseFilesBefore = dataFiles(tablePath).count(_.endsWith(".parquet"))
+        spark.sql(s"call run_compaction(op => 'run', table => '$tableName')")
+        assert(dataFiles(tablePath).count(_.endsWith(".parquet")) == baseFilesBefore + 2,
+          s"[$leg] compaction should write a new base file for both file groups: ${dataFiles(tablePath)}")
+        assertReads(tableName, leg, pushed, 0 until 6, updatedV2, v2FilterIds = Seq(2, 3, 4))
+      }
     }
   }
 
