@@ -19,6 +19,7 @@
 package org.apache.hudi.sink.compact.handler;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
@@ -65,17 +66,25 @@ public final class TableServiceHandlerFactory {
 
   public static CompactionCommitHandler createCompactionCommitHandler(Configuration conf, RuntimeContext runtimeContext) {
     HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf, runtimeContext);
-    boolean needsDataCompaction = OptionsResolver.needsAsyncCompaction(conf);
-    boolean needsMetadataCompaction = OptionsResolver.needsAsyncMetadataCompaction(conf);
-    if (needsDataCompaction && needsMetadataCompaction) {
-      return new CompositeCompactionCommitHandler(
-          new DataTableCompactionCommitHandler(conf, writeClient),
-          new MetadataTableCompactionCommitHandler(conf, StreamerUtil.createMetadataWriteClient(writeClient)));
+    HoodieFlinkWriteClient metadataWriteClient = null;
+    try {
+      boolean needsDataCompaction = OptionsResolver.needsAsyncCompaction(conf);
+      boolean needsMetadataCompaction = OptionsResolver.needsAsyncMetadataCompaction(conf);
+      if (needsMetadataCompaction) {
+        metadataWriteClient = StreamerUtil.createMetadataWriteClient(writeClient);
+        if (needsDataCompaction) {
+          return new CompositeCompactionCommitHandler(
+              new DataTableCompactionCommitHandler(conf, writeClient),
+              new MetadataTableCompactionCommitHandler(conf, metadataWriteClient));
+        }
+        return new MetadataTableCompactionCommitHandler(conf, metadataWriteClient, writeClient);
+      }
+      return new DataTableCompactionCommitHandler(conf, writeClient);
+    } catch (RuntimeException | Error failure) {
+      CloseableUtils.closeSuppressing(metadataWriteClient, failure);
+      CloseableUtils.closeSuppressing(writeClient, failure);
+      throw failure;
     }
-    if (needsMetadataCompaction) {
-      return new MetadataTableCompactionCommitHandler(conf, StreamerUtil.createMetadataWriteClient(writeClient));
-    }
-    return new DataTableCompactionCommitHandler(conf, writeClient);
   }
 
   public static CleanHandler createCleanHandler(Configuration conf, HoodieFlinkWriteClient writeClient) {
