@@ -338,7 +338,10 @@ In Hudi 1.2.0 and 1.2.1, reads of VARIANT columns can return wrong rows or fail 
 `PushVariantIntoScan` rule is on, which is the Spark 4.1 default: on Merge-on-Read tables when
 log files are merged, and on any table for a VARIANT column added with
 `ALTER TABLE ... ADD COLUMNS`. If a read hits one of these, set
-`spark.sql.variant.pushVariantIntoScan=false` for the session. On Spark 4.0 keep the setting at
+`spark.sql.variant.pushVariantIntoScan=false` for the session. One case raises no error: on
+Merge-on-Read, a VARIANT set to null by an update is read back as a struct of nulls, so
+`v IS NULL` misses the row. Keep the rule off for Spark 4.1 reads of Merge-on-Read tables whose
+VARIANT columns can be null. On Spark 4.0 keep the setting at
 its default (`false`): with it on, every read of a table with a VARIANT column fails. See the
 [1.2 release notes](/releases/release-1.2#known-issues).
 :::
