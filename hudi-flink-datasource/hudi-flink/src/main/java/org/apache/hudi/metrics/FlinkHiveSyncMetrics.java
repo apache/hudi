@@ -64,7 +64,7 @@ public class FlinkHiveSyncMetrics extends HoodieFlinkMetrics {
    * Duration of each sync in milliseconds, failed ones included: a sync that fails after retrying
    * an unreachable metastore is the slow case this is meant to show.
    */
-  private final Histogram syncDurationMs;
+  private final Histogram syncDurationMs = newHistogram();
 
   /** Wall-clock time of the last completed sync in epoch milliseconds, or 0 until the first one. */
   private volatile long lastSyncSuccessTimeMs = 0L;
@@ -102,7 +102,6 @@ public class FlinkHiveSyncMetrics extends HoodieFlinkMetrics {
 
   public FlinkHiveSyncMetrics(MetricGroup metricGroup) {
     super(metricGroup);
-    this.syncDurationMs = newHistogram();
   }
 
   @Override
