@@ -28,6 +28,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.util.Collector;
+import org.apache.flink.util.IOUtils;
 
 /**
  * Function to check and commit the compaction action.
@@ -74,12 +75,6 @@ public class CompactionCommitSinkV2 extends CleanFunctionV2<CompactionCommitEven
 
   @Override
   public void close() throws Exception {
-    try {
-      if (compactCommitHandler != null) {
-        compactCommitHandler.close();
-      }
-    } finally {
-      super.close();
-    }
+    IOUtils.closeAll(compactCommitHandler, super::close);
   }
 }

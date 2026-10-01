@@ -24,6 +24,7 @@ import org.apache.hudi.sink.compact.handler.CompactionCommitHandler;
 import org.apache.hudi.sink.compact.handler.TableServiceHandlerFactory;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.util.IOUtils;
 
 /**
  * Function to check and commit the compaction action.
@@ -64,12 +65,6 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
 
   @Override
   public void close() throws Exception {
-    try {
-      if (compactCommitHandler != null) {
-        compactCommitHandler.close();
-      }
-    } finally {
-      super.close();
-    }
+    IOUtils.closeAll(compactCommitHandler, super::close);
   }
 }
