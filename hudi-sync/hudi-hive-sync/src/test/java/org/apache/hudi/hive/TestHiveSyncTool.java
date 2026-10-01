@@ -48,6 +48,7 @@ import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hive.ddl.HMSDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
+import org.apache.hudi.hive.replication.GlobalHiveSyncTool;
 import org.apache.hudi.hive.testutils.HiveTestUtil;
 import org.apache.hudi.hive.util.IMetaStoreClientUtil;
 import org.apache.hudi.metrics.MetricsReporterType;
@@ -1107,6 +1108,18 @@ public class TestHiveSyncTool {
     assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE));
     assertEquals(5, stats.getPartitionsAdded(),
         "The read-optimized and snapshot tables get the same 5 partitions, which count once");
+  }
+
+  @Test
+  void testSyncStatsOfGlobalHiveSyncTool() throws Exception {
+    HiveTestUtil.createCOWTable("100", 5, true);
+
+    try (GlobalHiveSyncTool tool = new GlobalHiveSyncTool(hiveSyncProps, HiveTestUtil.getHiveConf())) {
+      tool.syncHoodieTable();
+      HiveSyncStats stats = tool.getSyncStats();
+      assertTrue(stats.getMetastoreMs().isPresent());
+      assertEquals(5, stats.getPartitionsAdded());
+    }
   }
 
   @ParameterizedTest

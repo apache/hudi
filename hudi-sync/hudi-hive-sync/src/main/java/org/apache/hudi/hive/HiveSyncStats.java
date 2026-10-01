@@ -87,6 +87,10 @@ public class HiveSyncStats {
     partitionScanMs = Math.max(0, partitionScanMs) + durationMs;
   }
 
+  /**
+   * Keeps the largest count rather than the sum: the Hive tables of a MERGE_ON_READ table each get
+   * the same partitions, so summing would count them once per table.
+   */
   void recordPartitionsAdded(int count) {
     partitionsAdded = Math.max(partitionsAdded, count);
   }

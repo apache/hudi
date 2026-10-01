@@ -177,7 +177,6 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
 
   @Override
   public void syncHoodieTable() {
-    syncStats = new HiveSyncStats();
     try {
       if (syncClient != null) {
         log.info("Syncing target hoodie table with hive table({}). Hive metastore URL from HiveConf:{}). "
@@ -185,12 +184,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
             tableId(databaseName, tableName), config.getHiveConf().get(HiveConf.ConfVars.METASTOREURIS.varname),
             config.getString(METASTORE_URIS), config.getString(META_SYNC_BASE_PATH));
 
-        HoodieTimer timer = HoodieTimer.start();
-        try {
-          doSync();
-        } finally {
-          syncStats.setTotalMs(timer.endTimer());
-        }
+        doSync();
       }
     } catch (RuntimeException re) {
       throw new HoodieException("Got runtime exception when hive syncing " + tableName, re);
@@ -215,6 +209,16 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   }
 
   protected void doSync() {
+    syncStats = new HiveSyncStats();
+    HoodieTimer timer = HoodieTimer.start();
+    try {
+      syncTables();
+    } finally {
+      syncStats.setTotalMs(timer.endTimer());
+    }
+  }
+
+  private void syncTables() {
     // create database if needed
     checkAndCreateDatabase();
 
