@@ -19,6 +19,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.model.HoodieVectorIndexManifest;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -55,6 +56,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestSparkVectorIndexBootstrap extends SparkClientFunctionalTestHarness {
@@ -105,7 +107,7 @@ class TestSparkVectorIndexBootstrap extends SparkClientFunctionalTestHarness {
     List<FileSliceAndPartition> fileSlices = collectLatestFileSlices(metaClient, writeConfig);
     SparkIndexerSupport indexerSupport = new SparkIndexerSupport(context(), writeConfig);
     List<HoodieRecord> records = HoodieJavaRDD.getJavaRDD(
-        indexerSupport.generateVectorIndexRecords(indexDefinition, metaClient, fileSlices, tableSchema, 1)).collect();
+        indexerSupport.generateVectorIndexRecords(indexDefinition, metaClient, fileSlices, tableSchema, 1, instantTime)).collect();
     List<String> recordKeys = records.stream()
         .map(record -> record.getKey().getRecordKey())
         .collect(Collectors.toList());
@@ -122,6 +124,17 @@ class TestSparkVectorIndexBootstrap extends SparkClientFunctionalTestHarness {
         "Expected a posting record. Families: " + families);
     assertTrue(recordKeys.stream().anyMatch(TestSparkVectorIndexBootstrap::isManifestGenerationOne),
         "Expected generation-1 manifest key in fresh vector bootstrap. Families: " + families);
+
+    HoodieRecord manifestRecord = records.stream()
+        .filter(record -> isManifestGenerationOne(record.getRecordKey()))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("Missing generation-1 vector manifest"));
+    HoodieVectorIndexManifest manifest = (HoodieVectorIndexManifest)
+        ((HoodieMetadataPayload) manifestRecord.getData()).getVectorIndexMetadata().get();
+    assertEquals(instantTime, manifest.getBootstrapInstant().toString(),
+        "Bootstrap must identify the source snapshot represented by this generation");
+    assertEquals(instantTime, manifest.getVerifiedFrontier().toString(),
+        "A fresh generation must start its verified frontier at the bootstrap snapshot");
   }
 
   private static int family(String key) {

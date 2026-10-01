@@ -91,7 +91,8 @@ public class UnsupportedEngineIndexerSupport implements EngineIndexerSupport {
       HoodieTableMetaClient dataMetaClient,
       List<FileSliceAndPartition> fileSlices,
       HoodieSchema tableSchema,
-      int generation) {
+      int generation,
+      String sourceInstant) {
     throw new HoodieNotSupportedException(engineType + " engine does not support building vector index yet");
   }
 }

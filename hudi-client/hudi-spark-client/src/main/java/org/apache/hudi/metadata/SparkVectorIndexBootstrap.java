@@ -100,6 +100,7 @@ public final class SparkVectorIndexBootstrap {
    * @param indexDef       the index definition
    * @param vectorType     resolved vector element type from the table schema
    * @param generation     vector generation ordinal
+   * @param sourceInstant  source-table snapshot cutoff represented by the bootstrap
    * @param lastUpdatedTs  timestamp for MDT bookkeeping
    * @return all metadata records to write into the vector index MDT partition
    */
@@ -109,6 +110,7 @@ public final class SparkVectorIndexBootstrap {
                                              HoodieSchema.Vector.VectorElementType vectorType,
                                              int dimension,
                                              int generation,
+                                             String sourceInstant,
                                              long lastUpdatedTs) {
     Map<String, String> options = indexDef.getIndexOptions();
     String indexName = indexDef.getIndexName();
@@ -267,8 +269,8 @@ public final class SparkVectorIndexBootstrap {
               "",
               0,
               0,
-              "",
-              "",
+              sourceInstant,
+              sourceInstant,
               lastUpdatedTs,
               indexName));
           driverRecords.add(HoodieMetadataPayload.createVectorIndexActiveManifestRecord(
