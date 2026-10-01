@@ -165,7 +165,12 @@ public final class SparkVectorIndexBootstrap {
           resolvedOptions.maxIterations, quantizerSeed, indexName);
       float[][] centroids = trainingArtifacts.centroids;
       Object routingModel = trainingArtifacts.routingModel;
+      float[][] coarseCentroids = routingModel == null ? null
+          : TwoLevelKMeansBootstrap$.MODULE$.coarseCentroidsForJava(routingModel);
+      int[] leafOffsets = routingModel == null ? null
+          : TwoLevelKMeansBootstrap$.MODULE$.leafOffsetsForJava(routingModel);
       double[][] centroidsDouble = toDoubleCentroids(centroids);
+      float[][] persistedCentroids = persistedCentroidGeometry(centroids, vectorType);
       int actualK = centroids.length;
 
       log.info("Centroid training complete: {} clusters for {}", actualK, indexName);
@@ -236,8 +241,8 @@ public final class SparkVectorIndexBootstrap {
             generation, 0, quantizerType, quantizerSeed, null, indexName));
 
         if (storeInMdt) {
-          // Manifest
-          driverRecords.add(HoodieMetadataPayload.createVectorIndexManifestRecord(
+          // Manifest: preserve the legacy flat path without inventing two-level geometry.
+          HoodieRecord<HoodieMetadataPayload> manifestRecord = HoodieMetadataPayload.createVectorIndexManifestRecord(
               generation,
               String.valueOf(generation),
               "ACTIVE",
@@ -268,7 +273,15 @@ public final class SparkVectorIndexBootstrap {
               sourceInstant,
               sourceInstant,
               lastUpdatedTs,
-              indexName));
+              indexName);
+          if (routingModel != null) {
+            manifestRecord = HoodieMetadataPayload.createVectorIndexRoutedManifestRecord(
+                manifestRecord, VectorRoutingArtifacts.ROUTING_VERSION,
+                VectorRoutingArtifacts.serializeFloatMatrix(coarseCentroids),
+                VectorRoutingArtifacts.serializeIntArray(leafOffsets), assignmentExpandRatio,
+                VectorRoutingArtifacts.digest(coarseCentroids, persistedCentroids, leafOffsets, assignmentExpandRatio));
+          }
+          driverRecords.add(manifestRecord);
           driverRecords.add(HoodieMetadataPayload.createVectorIndexActiveManifestRecord(
               generation, indexName));
 
@@ -473,6 +486,20 @@ public final class SparkVectorIndexBootstrap {
       }
     }
     return result;
+  }
+
+  private static float[][] persistedCentroidGeometry(
+      float[][] centroids, HoodieSchema.Vector.VectorElementType vectorType) {
+    float[][] persisted = new float[centroids.length][];
+    for (int row = 0; row < centroids.length; row++) {
+      persisted[row] = centroids[row].clone();
+      if (vectorType == HoodieSchema.Vector.VectorElementType.INT8) {
+        for (int column = 0; column < persisted[row].length; column++) {
+          persisted[row][column] = (byte) Math.round(persisted[row][column]);
+        }
+      }
+    }
+    return persisted;
   }
 
   private static double[][] toDoubleCentroids(float[][] centroids) {

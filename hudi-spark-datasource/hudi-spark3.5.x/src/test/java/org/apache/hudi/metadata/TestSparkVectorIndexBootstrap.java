@@ -25,6 +25,7 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.index.vector.VectorIndexMetadataCache;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieKey;
@@ -136,6 +137,18 @@ class TestSparkVectorIndexBootstrap extends SparkClientFunctionalTestHarness {
         "Bootstrap must identify the source snapshot represented by this generation");
     assertEquals(instantTime, manifest.getVerifiedFrontier().toString(),
         "A fresh generation must start its verified frontier at the bootstrap snapshot");
+    assertEquals(VectorRoutingArtifacts.ROUTING_VERSION, manifest.getRoutingVersion());
+    assertEquals(64, manifest.getRoutingArtifactDigest().length());
+    HoodieRecord centroidRecord = records.stream()
+        .filter(record -> family(record.getRecordKey()) == VectorIndexMetadataKey.FAMILY_CENTROIDS)
+        .findFirst().orElseThrow(() -> new AssertionError("Missing centroids"));
+    float[][] leaves = VectorIndexMetadataCache.deserializeCentroids(
+        ((org.apache.hudi.avro.model.HoodieVectorIndexCentroids)
+            ((HoodieMetadataPayload) centroidRecord.getData()).getVectorIndexMetadata().get()).getCentroidBytes(),
+        HoodieSchema.createVector(dim, HoodieSchema.Vector.VectorElementType.FLOAT));
+    Object restored = VectorRoutingArtifacts.restore(manifest, leaves);
+    assertEquals(leaves.length, org.apache.hudi.spark.index.vector.TwoLevelKMeansBootstrap$.MODULE$
+        .leafCentroidsForJava(restored).length);
     assertTrue(records.stream()
         .filter(record -> family(record.getRecordKey()) == VectorIndexMetadataKey.FAMILY_CLUSTER_STATS)
         .map(record -> (HoodieVectorIndexClusterStats)

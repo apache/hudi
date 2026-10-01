@@ -49,6 +49,11 @@ final class VectorIndexMetadataSerde {
         intField(record, "bitsTotal"),
         intField(record, "numExPlanes"),
         intField(record, "numClusters"),
+        nullableIntField(record, "routingVersion"),
+        nullableBytesField(record, "routingCoarseCentroids"),
+        nullableBytesField(record, "routingLeafOffsets"),
+        nullableFloatField(record, "routingExpandRatio"),
+        nullableRoutingDigest(record),
         intField(record, "shardCount"),
         intField(record, "fileGroupCount"),
         stringField(record, "metric"),
@@ -167,6 +172,29 @@ final class VectorIndexMetadataSerde {
 
   private static String stringField(GenericRecord record, String field) {
     return requiredField(record, field).toString();
+  }
+
+  private static Integer nullableIntField(GenericRecord record, String field) {
+    Object value = optionalField(record, field);
+    return value == null ? null : ((Number) value).intValue();
+  }
+
+  private static Float nullableFloatField(GenericRecord record, String field) {
+    Object value = optionalField(record, field);
+    return value == null ? null : ((Number) value).floatValue();
+  }
+
+  private static ByteBuffer nullableBytesField(GenericRecord record, String field) {
+    return (ByteBuffer) optionalField(record, field);
+  }
+
+  private static Object optionalField(GenericRecord record, String field) {
+    return record.getSchema().getField(field) == null ? null : record.get(field);
+  }
+
+  private static String nullableRoutingDigest(GenericRecord record) {
+    Object value = optionalField(record, "routingArtifactDigest");
+    return value == null ? null : value.toString();
   }
 
   private static String nullableStringField(GenericRecord record, String field) {

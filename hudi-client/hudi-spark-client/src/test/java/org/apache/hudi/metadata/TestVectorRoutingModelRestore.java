@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.model.HoodieVectorIndexManifest;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.spark.index.vector.TwoLevelKMeansBootstrap$;
 
@@ -83,6 +84,27 @@ class TestVectorRoutingModelRestore {
         VectorRoutingArtifacts.ROUTING_VERSION,
         VectorRoutingArtifacts.serializeFloatMatrix(new float[][] {{0.0f}, {10.0f}}),
         VectorRoutingArtifacts.serializeIntArray(new int[] {0, 2, 1}), 1.1f, 1, leaves));
+  }
+
+  @Test
+  void manifestRestoreRejectsMissingOrMismatchedArtifacts() {
+    HoodieVectorIndexManifest manifest = new HoodieVectorIndexManifest();
+    manifest.setDimension(2);
+    float[][] coarse = {{0.0f, 0.0f}, {10.0f, 0.0f}};
+    float[][] leaves = {{100.0f, 0.0f}, {11.0f, 0.0f}};
+    int[] offsets = {0, 1, 2};
+    assertThrows(HoodieMetadataException.class, () -> VectorRoutingArtifacts.restore(manifest, leaves));
+
+    manifest.setRoutingVersion(VectorRoutingArtifacts.ROUTING_VERSION);
+    manifest.setRoutingCoarseCentroids(VectorRoutingArtifacts.serializeFloatMatrix(coarse));
+    manifest.setRoutingLeafOffsets(VectorRoutingArtifacts.serializeIntArray(offsets));
+    manifest.setRoutingExpandRatio(1.1f);
+    manifest.setRoutingArtifactDigest(VectorRoutingArtifacts.digest(coarse, leaves, offsets, 1.1f));
+    assertEquals(0, TwoLevelKMeansBootstrap$.MODULE$.assignOneForJava(
+        VectorRoutingArtifacts.restore(manifest, leaves), new float[] {0.0f, 0.0f}, 1.1f));
+
+    manifest.setRoutingArtifactDigest("wrong");
+    assertThrows(HoodieMetadataException.class, () -> VectorRoutingArtifacts.restore(manifest, leaves));
   }
 
   @Test

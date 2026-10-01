@@ -123,7 +123,8 @@ object TwoLevelKMeansBootstrap {
 
   def train(spark: SparkSession, sample: RDD[Array[Float]], cfg: TrainConfig): TwoLevelModel = {
     val dim = sample.first().length
-    val k1 = if (cfg.coarseCells > 0) cfg.coarseCells else math.max(16, math.round(math.sqrt(cfg.numClusters)).toInt)
+    val requestedCoarseCells = if (cfg.coarseCells > 0) cfg.coarseCells else math.max(16, math.round(math.sqrt(cfg.numClusters)).toInt)
+    val k1 = math.max(1, math.min(cfg.numClusters, requestedCoarseCells))
     val leavesPerCell = math.max(1, cfg.numClusters / k1)
     LOG.info("[vector_bootstrap][train] numClusters={} k1={} leavesPerCell={} dim={}",
       Int.box(cfg.numClusters), Int.box(k1), Int.box(leavesPerCell), Int.box(dim))

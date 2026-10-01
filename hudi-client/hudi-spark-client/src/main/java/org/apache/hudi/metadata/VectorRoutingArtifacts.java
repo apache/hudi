@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.model.HoodieVectorIndexManifest;
 import org.apache.hudi.common.index.vector.VectorArtifactIdentity;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.spark.index.vector.TwoLevelKMeansBootstrap$;
@@ -67,6 +68,26 @@ public final class VectorRoutingArtifacts {
     }
     buffer.flip();
     return buffer;
+  }
+
+  public static Object restore(HoodieVectorIndexManifest manifest, float[][] leafCentroids) {
+    if (manifest.getRoutingVersion() == null
+        || manifest.getRoutingCoarseCentroids() == null
+        || manifest.getRoutingLeafOffsets() == null
+        || manifest.getRoutingExpandRatio() == null
+        || manifest.getRoutingArtifactDigest() == null
+        || manifest.getRoutingArtifactDigest().toString().isEmpty()) {
+      throw new HoodieMetadataException("ACTIVE vector generation lacks persisted two-level routing geometry; rebuild before updating");
+    }
+    Object model = restore(manifest.getRoutingVersion(), manifest.getRoutingCoarseCentroids(),
+        manifest.getRoutingLeafOffsets(), manifest.getRoutingExpandRatio(), manifest.getDimension(), leafCentroids);
+    String actual = digest(TwoLevelKMeansBootstrap$.MODULE$.coarseCentroidsForJava(model),
+        leafCentroids, TwoLevelKMeansBootstrap$.MODULE$.leafOffsetsForJava(model),
+        manifest.getRoutingExpandRatio());
+    if (!actual.equals(manifest.getRoutingArtifactDigest().toString())) {
+      throw new HoodieMetadataException("ACTIVE vector generation routing artifact digest does not match persisted centroids");
+    }
+    return model;
   }
 
   public static Object restore(

@@ -434,6 +434,11 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         bitsTotal,
         numExPlanes,
         numClusters,
+        null,
+        null,
+        null,
+        null,
+        null,
         shardCount,
         fileGroupCount,
         metric,
@@ -458,6 +463,24 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     return new HoodieAvroRecord<>(
         new HoodieKey(recordKey, metadataPartitionPath),
         new HoodieMetadataPayload(recordKey, manifest));
+  }
+
+  /** Populates routing geometry only for a bootstrap generation trained with two-level placement. */
+  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexRoutedManifestRecord(
+      HoodieRecord<HoodieMetadataPayload> manifestRecord,
+      int routingVersion,
+      ByteBuffer coarseCentroids,
+      ByteBuffer leafOffsets,
+      float expandRatio,
+      String artifactDigest) {
+    HoodieVectorIndexManifest manifest = (HoodieVectorIndexManifest)
+        manifestRecord.getData().getVectorIndexMetadata().get();
+    manifest.setRoutingVersion(routingVersion);
+    manifest.setRoutingCoarseCentroids(coarseCentroids);
+    manifest.setRoutingLeafOffsets(leafOffsets);
+    manifest.setRoutingExpandRatio(expandRatio);
+    manifest.setRoutingArtifactDigest(artifactDigest);
+    return manifestRecord;
   }
 
   public static HoodieRecord<HoodieMetadataPayload> createVectorIndexClusterManifestRecord(
