@@ -2,7 +2,7 @@
 title: "Release 1.2"
 layout: releases
 toc: true
-last_modified_at: 2026-09-24T18:00:00-08:00
+last_modified_at: 2026-09-30T18:50:00+08:00
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -50,15 +50,30 @@ The Trino-Hudi connector now lives in the Hudi repo (RFC-105, [#18837](https://g
 
 ## Known Issues
 
-On Spark 4.1, `spark.sql.variant.pushVariantIntoScan` is on by default. With it on, snapshot reads of Merge-on-Read tables with `VARIANT` columns can go wrong when log files are merged:
+These issues affect 1.2.0 and 1.2.1. Spark's `PushVariantIntoScan` rule is controlled by `spark.sql.variant.pushVariantIntoScan`, which is on by default in Spark 4.1 and off by default in Spark 4.0.
+
+On Spark 4.1 with the rule on, reads of `VARIANT` columns can go wrong. On Merge-on-Read tables, when a snapshot read merges log files:
 
 * A top-level `VARIANT` value set to null by an update is read back as a struct of nulls instead of `NULL`, so a filter such as `v IS NULL` misses the row.
 * A `VARIANT` nested inside a struct can crash the executor JVM.
+* A query that extracts several paths from one `VARIANT` can fail with `NegativeArraySizeException` when rows lack some of those paths.
 
-Copy-on-Write tables are not affected. Spark 4.0 is affected only if `spark.sql.variant.pushVariantIntoScan` is turned on, since it is off by default there. A fix is tracked in [#20039](https://github.com/apache/hudi/pull/20039).
+On Copy-on-Write and Merge-on-Read tables:
 
-:::tip
-Until the fix is released, set `spark.sql.variant.pushVariantIntoScan=false` for Spark 4.1 reads of Merge-on-Read tables with `VARIANT` columns.
+* A `VARIANT` column added with `ALTER TABLE ... ADD COLUMNS` cannot be read from files written before it was added. The read fails with `INVALID_VARIANT_SHREDDING_SCHEMA`.
+
+Reads with the rule off are not affected. The first two are fixed on the 1.2.x branch ([#20039](https://github.com/apache/hudi/pull/20039)); no release carries that fix yet. The other two are tracked in [#20040](https://github.com/apache/hudi/issues/20040) and [#20135](https://github.com/apache/hudi/issues/20135).
+
+On Spark 4.0 the rule is not supported. With it turned on, every read of a table that has a `VARIANT` column fails with `HoodieSchemaException: Illegal initial character: 0`, so leave it at its default there.
+
+:::tip Workaround
+If a read hits one of these, turn the rule off for the session:
+
+```sql
+SET spark.sql.variant.pushVariantIntoScan=false;
+```
+
+or start Spark with `--conf spark.sql.variant.pushVariantIntoScan=false`. Spark then reads the whole `VARIANT` and evaluates `variant_get` and casts after the scan. The setting is per Spark session and also applies to the non-Hudi Parquet tables read in it. The first issue raises no error, so keep the rule off for Spark 4.1 reads of Merge-on-Read tables whose `VARIANT` columns can be null.
 :::
 
 ## Raw Release Notes
@@ -145,6 +160,10 @@ TBLPROPERTIES (primaryKey = 'event_id');
 Engine support: native `VARIANT` keyword on Spark 4.0+; on Spark 3.x, VARIANT surfaces as `STRUCT<metadata: BINARY, value: BINARY>` and remains readable. On Flink, the column is accessible as `ROW<metadata BYTES, value BYTES>` but cannot be decoded natively. VARIANT is not supported on Lance-backed tables. Use Parquet for tables that contain VARIANT columns.
 
 **Limitations as of 1.2.0**: Shredding is not supported in this release. Hudi 1.2.0 stores the entire VARIANT as the binary value payload plus its key-dictionary metadata; frequently accessed fields are not projected into native typed columns. As a result, predicates and projections over fields inside a VARIANT are not pushed down at the column level. A query that filters on a nested field (for example `WHERE tool_calls[0].name = 'search'`) reads and decodes the binary payload rather than skipping it via a shredded column. Shredding and column-level pushdown for shredded fields is planned for a future release.
+
+:::caution
+On Spark 4.1, some reads of `VARIANT` columns fail or miss rows on 1.2.0 and 1.2.1. Setting `spark.sql.variant.pushVariantIntoScan=false` avoids them. See [Known Issues](#known-issues).
+:::
 
 ##### BLOB
 
