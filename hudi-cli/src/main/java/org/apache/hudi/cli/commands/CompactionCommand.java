@@ -201,8 +201,10 @@ public class CompactionCommand {
         Utils.getDefaultPropertiesFile(convertJavaPropertiesToScalaMap(System.getProperties()));
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     String tableName = client.getTableConfig().getTableName();
-    SparkMain.addAppArgs(sparkLauncher, SparkCommand.COMPACT_SCHEDULE, master, sparkMemory, HoodieCLI.basePath,
-        tableName, propsFilePath);
+    SparkMain.addNamedAppArgs(sparkLauncher, SparkCommand.COMPACT_SCHEDULE, master, sparkMemory,
+        "basePath", HoodieCLI.basePath,
+        "tableName", tableName,
+        "propsFilePath", propsFilePath);
     UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
@@ -249,9 +251,14 @@ public class CompactionCommand {
     String sparkPropertiesPath =
         Utils.getDefaultPropertiesFile(convertJavaPropertiesToScalaMap(System.getProperties()));
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    SparkMain.addAppArgs(sparkLauncher, SparkCommand.COMPACT_RUN, master, sparkMemory, HoodieCLI.basePath,
-        client.getTableConfig().getTableName(), compactionInstantTime, parallelism, schemaFilePath,
-        retry, propsFilePath);
+    SparkMain.addNamedAppArgs(sparkLauncher, SparkCommand.COMPACT_RUN, master, sparkMemory,
+        "basePath", HoodieCLI.basePath,
+        "tableName", client.getTableConfig().getTableName(),
+        "compactionInstant", compactionInstantTime,
+        "parallelism", parallelism,
+        "schemaPath", schemaFilePath,
+        "retry", retry,
+        "propsFilePath", propsFilePath);
     UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
@@ -284,9 +291,13 @@ public class CompactionCommand {
     String sparkPropertiesPath =
         Utils.getDefaultPropertiesFile(convertJavaPropertiesToScalaMap(System.getProperties()));
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    SparkMain.addAppArgs(sparkLauncher, SparkCommand.COMPACT_SCHEDULE_AND_EXECUTE, master, sparkMemory, HoodieCLI.basePath,
-        client.getTableConfig().getTableName(), parallelism, schemaFilePath,
-        retry, propsFilePath);
+    SparkMain.addNamedAppArgs(sparkLauncher, SparkCommand.COMPACT_SCHEDULE_AND_EXECUTE, master, sparkMemory,
+        "basePath", HoodieCLI.basePath,
+        "tableName", client.getTableConfig().getTableName(),
+        "parallelism", parallelism,
+        "schemaPath", schemaFilePath,
+        "retry", retry,
+        "propsFilePath", propsFilePath);
     UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
@@ -462,8 +473,11 @@ public class CompactionCommand {
       String sparkPropertiesPath = Utils
           .getDefaultPropertiesFile(convertJavaPropertiesToScalaMap(System.getProperties()));
       SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-      SparkMain.addAppArgs(sparkLauncher, SparkCommand.COMPACT_VALIDATE, master, sparkMemory, HoodieCLI.basePath,
-          compactionInstant, outputPathStr, parallelism);
+      SparkMain.addNamedAppArgs(sparkLauncher, SparkCommand.COMPACT_VALIDATE, master, sparkMemory,
+          "basePath", HoodieCLI.basePath,
+          "compactionInstant", compactionInstant,
+          "outputPath", outputPathStr,
+          "parallelism", parallelism);
       Process process = sparkLauncher.launch();
       InputStreamConsumer.captureOutput(process);
       int exitCode = process.waitFor();
@@ -526,9 +540,13 @@ public class CompactionCommand {
       String sparkPropertiesPath = Utils
           .getDefaultPropertiesFile(convertJavaPropertiesToScalaMap(System.getProperties()));
       SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-      SparkMain.addAppArgs(sparkLauncher, SparkCommand.COMPACT_UNSCHEDULE_PLAN, master, sparkMemory, HoodieCLI.basePath,
-          compactionInstant, outputPathStr, parallelism, Boolean.valueOf(skipV).toString(),
-          Boolean.valueOf(dryRun).toString());
+      SparkMain.addNamedAppArgs(sparkLauncher, SparkCommand.COMPACT_UNSCHEDULE_PLAN, master, sparkMemory,
+          "basePath", HoodieCLI.basePath,
+          "compactionInstant", compactionInstant,
+          "outputPath", outputPathStr,
+          "parallelism", parallelism,
+          "skipValidation", Boolean.valueOf(skipV).toString(),
+          "dryRun", Boolean.valueOf(dryRun).toString());
       Process process = sparkLauncher.launch();
       InputStreamConsumer.captureOutput(process);
       int exitCode = process.waitFor();
@@ -570,9 +588,14 @@ public class CompactionCommand {
       String sparkPropertiesPath = Utils
           .getDefaultPropertiesFile(convertJavaPropertiesToScalaMap(System.getProperties()));
       SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-      SparkMain.addAppArgs(sparkLauncher, SparkCommand.COMPACT_UNSCHEDULE_FILE, master, sparkMemory, HoodieCLI.basePath,
-          fileId, partitionPath, outputPathStr, "1", Boolean.valueOf(skipV).toString(),
-          Boolean.valueOf(dryRun).toString());
+      SparkMain.addNamedAppArgs(sparkLauncher, SparkCommand.COMPACT_UNSCHEDULE_FILE, master, sparkMemory,
+          "basePath", HoodieCLI.basePath,
+          "fileId", fileId,
+          "partitionPath", partitionPath,
+          "outputPath", outputPathStr,
+          "parallelism", "1",
+          "skipValidation", Boolean.valueOf(skipV).toString(),
+          "dryRun", Boolean.valueOf(dryRun).toString());
       Process process = sparkLauncher.launch();
       InputStreamConsumer.captureOutput(process);
       int exitCode = process.waitFor();
@@ -615,8 +638,12 @@ public class CompactionCommand {
       String sparkPropertiesPath = Utils
           .getDefaultPropertiesFile(convertJavaPropertiesToScalaMap(System.getProperties()));
       SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-      SparkMain.addAppArgs(sparkLauncher, SparkCommand.COMPACT_REPAIR, master, sparkMemory, HoodieCLI.basePath,
-          compactionInstant, outputPathStr, parallelism, Boolean.valueOf(dryRun).toString());
+      SparkMain.addNamedAppArgs(sparkLauncher, SparkCommand.COMPACT_REPAIR, master, sparkMemory,
+          "basePath", HoodieCLI.basePath,
+          "compactionInstant", compactionInstant,
+          "outputPath", outputPathStr,
+          "parallelism", parallelism,
+          "dryRun", Boolean.valueOf(dryRun).toString());
       Process process = sparkLauncher.launch();
       InputStreamConsumer.captureOutput(process);
       int exitCode = process.waitFor();
