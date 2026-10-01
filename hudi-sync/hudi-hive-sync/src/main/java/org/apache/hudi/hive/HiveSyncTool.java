@@ -111,6 +111,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
 
   private String hiveSyncTableStrategy;
 
+  // never null, so getSyncStats() also works when no sync ran, e.g. when the metastore client could not be created
   private HiveSyncStats syncStats = new HiveSyncStats();
 
   public HiveSyncTool(Properties props, Configuration hadoopConf) {
@@ -209,6 +210,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   }
 
   protected void doSync() {
+    // the durations add up across the Hive tables of one sync, so start fresh rather than adding to the previous sync's
     syncStats = new HiveSyncStats();
     HoodieTimer timer = HoodieTimer.start();
     try {
