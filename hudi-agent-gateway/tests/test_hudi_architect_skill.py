@@ -508,3 +508,101 @@ def test_redactor_preserves_long_non_secret_values_without_stalling(prefix: str)
         timeout=5,
     )
     assert result.stdout == evidence
+
+
+def _redact_evidence_bytes(evidence: bytes) -> bytes:
+    return subprocess.run(
+        [sys.executable, str(SKILL_DIR / "redact_sensitive_values.py")],
+        input=evidence,
+        capture_output=True,
+        check=True,
+        timeout=5,
+    ).stdout
+
+
+@pytest.mark.parametrize("ending", ["\n", "\r\n"])
+@pytest.mark.parametrize("layout", ["before_separator", "after_separator", "both"])
+@pytest.mark.parametrize("secret", ["test-secret", 'first"second\\suffix'])
+def test_redactor_consumes_newline_separated_json_values(
+    ending: str, layout: str, secret: str
+) -> None:
+    whitespace = ending + "  "
+    if layout == "both":
+        whitespace = ending + "\t " + ending + "  "
+    before = whitespace if layout in ("before_separator", "both") else ""
+    after = whitespace if layout in ("after_separator", "both") else " "
+    prefix = '{"password"' + before + ":" + after
+    suffix = ',' + ending + '  "table": "orders"}'
+    evidence = (prefix + json.dumps(secret) + suffix).encode()
+    expected = (prefix + '"<redacted>"' + suffix).encode()
+
+    output = _redact_evidence_bytes(evidence)
+
+    assert output == expected
+    assert json.loads(output) == {"password": "<redacted>", "table": "orders"}
+    assert _redact_evidence_bytes(output) == output
+
+
+@pytest.mark.parametrize("ending", ["\n", "\r\n"])
+@pytest.mark.parametrize("layout", ["before_separator", "after_separator", "both"])
+def test_redactor_consumes_newline_separated_sql_properties(ending: str, layout: str) -> None:
+    whitespace = ending + "  "
+    before = whitespace if layout in ("before_separator", "both") else ""
+    after = whitespace if layout in ("after_separator", "both") else " "
+    prefix = "CREATE TABLE src (id INT) WITH ('password'" + before + "=" + after
+    suffix = ", 'connector'='jdbc');"
+    evidence = (prefix + "'first''second'" + suffix).encode()
+    expected = (prefix + "'<redacted>'" + suffix).encode()
+
+    output = _redact_evidence_bytes(evidence)
+
+    assert output == expected
+    assert _redact_evidence_bytes(output) == output
+
+
+@pytest.mark.parametrize("ending", ["\n", "\r\n"])
+@pytest.mark.parametrize("separator", ["=", ":"])
+def test_redactor_keeps_empty_property_values_on_their_own_line(
+    ending: str, separator: str
+) -> None:
+    evidence = ("password " + separator + " \t" + ending + "table.name=orders" + ending).encode()
+    expected = (
+        "password " + separator + " \t<redacted>" + ending + "table.name=orders" + ending
+    ).encode()
+
+    output = _redact_evidence_bytes(evidence)
+
+    assert output == expected
+    assert _redact_evidence_bytes(output) == output
+
+
+@pytest.mark.parametrize(
+    ("evidence", "expected"),
+    [
+        (
+            "WITH ('password'=\n'first\nsecond', 'connector'='jdbc')",
+            "WITH ('password'=\n'<redacted>', 'connector'='jdbc')",
+        ),
+        (
+            '{"password":\n "first\nsecond',
+            '{"password":\n "<redacted>',
+        ),
+        (
+            "password=\"first\nsecond\nthird",
+            'password="<redacted>',
+        ),
+        (
+            '{"password":\n first\n second}',
+            '{"password":\n <redacted>',
+        ),
+        (
+            "WITH ('password'=\n first\n second)",
+            "WITH ('password'=\n <redacted>",
+        ),
+    ],
+)
+def test_redactor_does_not_expose_value_continuations(evidence: str, expected: str) -> None:
+    output = _redact_evidence_bytes(evidence.encode())
+
+    assert output == expected.encode()
+    assert _redact_evidence_bytes(output) == output

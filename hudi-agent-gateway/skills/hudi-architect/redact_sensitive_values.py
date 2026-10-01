@@ -42,8 +42,14 @@ SENSITIVE_KEY = re.compile(
 ASSIGNMENT = re.compile(
     # Try only token starts, not every suffix of long non-secret values.
     r"(?<![A-Za-z0-9_.-])"
-    r"(?P<prefix>(?P<key_quote>[\"']?)(?P<key>[A-Za-z0-9_.-]+)"
-    r"(?P=key_quote)[ \t]*(?:=|:)[ \t]*)"
+    r"(?P<prefix>(?:"
+    # Quoted JSON/SQL keys permit whitespace across lines around the separator.
+    r"(?P<key_quote>[\"'])(?P<quoted_key>[A-Za-z0-9_.-]+)"
+    r"(?P=key_quote)[ \t\r\n]*(?:=|:)[ \t\r\n]*"
+    r"|"
+    # Unquoted properties are line-oriented: an empty value must not consume the next line.
+    r"(?P<key>[A-Za-z0-9_.-]+)[ \t]*(?:=|:)[ \t]*"
+    r"))"
 )
 
 URI_USERINFO = re.compile(
@@ -74,14 +80,11 @@ AWS_ACCESS_KEY_ID = re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b")
 
 
 def _consume_quoted_value(text: str, start: int) -> tuple[int, str]:
-    """Consume one complete quoted value, including escapes and SQL doubled quotes."""
+    """Consume a quoted value across lines, or omit the remainder if it never closes."""
     quote = text[start]
     index = start + 1
     while index < len(text):
         character = text[index]
-        if character in "\r\n":
-            # Fail closed for malformed input without swallowing unrelated later lines.
-            return index, f"{quote}{REDACTED}"
         if character == "\\":
             index = min(index + 2, len(text))
             continue
@@ -94,9 +97,14 @@ def _consume_quoted_value(text: str, start: int) -> tuple[int, str]:
     return index, f"{quote}{REDACTED}"
 
 
-def _consume_assignment_value(text: str, start: int) -> tuple[int, str]:
+def _consume_assignment_value(text: str, start: int, *, structured: bool) -> tuple[int, str]:
     if start < len(text) and text[start] in "\"'":
         return _consume_quoted_value(text, start)
+
+    if structured:
+        # Without a quoted value boundary, a structured credential might continue across
+        # lines. Omit the remainder rather than guessing where that continuation ends.
+        return len(text), REDACTED
 
     # Punctuation can be part of an unquoted property credential. Without a quoted
     # boundary, conservatively omit the rest of the line, even in inline evidence.
@@ -132,10 +140,11 @@ def _redact_assignments(text: str) -> str:
     output: list[str] = []
     position = 0
     while match := ASSIGNMENT.search(text, position):
+        key = match.group("quoted_key") or match.group("key")
         # Keep the boundaries of values already handled by the query/CLI consumers.
         # Other sensitive keys still need conservative assignment redaction.
         if (
-            SENSITIVE_KEY.search(match.group("key")) is None
+            SENSITIVE_KEY.search(key) is None
             or SENSITIVE_CLI_FLAG.match(text, match.start()) is not None
             or (
                 match.start() > 0
@@ -147,7 +156,9 @@ def _redact_assignments(text: str) -> str:
             continue
 
         output.append(text[position : match.end("prefix")])
-        value_end, replacement = _consume_assignment_value(text, match.end("prefix"))
+        value_end, replacement = _consume_assignment_value(
+            text, match.end("prefix"), structured=match.group("quoted_key") is not None
+        )
         output.append(replacement)
         position = value_end
     output.append(text[position:])
