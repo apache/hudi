@@ -76,6 +76,48 @@ Once a lock is acquired, a dedicated heartbeat task periodically calls renewLock
 - Clock drift: we allow for a maximum of 500ms of clock drift between nodes. A requirement of this lock provider is that all writers competing for the same lock must be writing from the same cloud provider (AWS/Azure/GCP).
   - This will not be configurable at this time. If a storage-specific implementation needs to customize this the config can be added at that time but it should never go below 500ms.
 
+### Ambiguous write results
+
+The operations above treat each conditional write as having a definitive answer:
+- success;
+- 412, the file changed since we read or wrote it;
+- 429, throttled and not applied, retried with backoff;
+- on S3, 409 ConditionalRequestConflict, not applied and to be retried.
+
+A write can also come back with an *ambiguous* answer, where storage does not say whether it applied the write: a server-side error (HTTP 5xx), a client-side timeout, or a dropped connection. The write may have landed, so the provider must not assume either way. SDK-level retries are disabled in all three storage clients, so the provider sees every such answer.
+
+The lock file makes this resolvable. Each provider instance has a random `owner` UUID and no other instance writes it. A lock file that carries our owner was therefore written by this instance.
+
+**Rule.** After an ambiguous answer, the provider retries the operation with the same precondition (bounded attempts, with backoff). It also remembers that the write is unresolved until a definitive answer arrives. While a write is unresolved, a 412 on any later operation does not count as another writer's write straight away: that covers the in-cycle retry, the next heartbeat's renewal, and `unlock()`. The same goes for a lock that looks held on the next acquire attempt. The provider first reads the lock file back. Only if the read-back does not match one of the rows below is the result treated as another writer's.
+
+| Operation | The read-back is our owner, and... | Outcome |
+|---|---|---|
+| `tryLock()` | `expired = false`, still valid (expiration plus the clock drift buffer is in the future), and the expiration this call wrote | The acquire write landed. Adopt that lock file, including its version tag, and start the heartbeat. |
+| `renewLock()` | `expired = false` and an expiration later than the one we hold | A renewal landed. Adopt it and keep the heartbeat running. |
+| `unlock()` | `expired = true` and the same expiration as the lock being released | The release landed. The release succeeded. |
+
+Any other read-back keeps the existing behaviour:
+- **A different owner** is not proof that our earlier write landed. On renew or unlock it is reported as the lock being acquired by others; on acquire it means the lock is held.
+- **A failed read** (the read fails or finds no lock file) leaves the outcome unknown, and the result is treated as another writer's write:
+  - `tryLock()` reports the lock as not acquired. If our acquire write did land, that lock has no heartbeat and stays held until its expiration.
+  - `renewLock()` treats the lock as lost: the heartbeat stops and the writer thread is interrupted.
+  - `unlock()` reports the release as failed and clears the local lock state. The lock file then belongs to another writer, or is ours until its expiration.
+
+Notes:
+- **Version tags.** The adopted lock file's version tag comes from the same read as its content, so it is a valid precondition for the next write.
+  - S3: the ETag and the content come from one GetObject response.
+  - Azure: the ETag and the content come from one download response.
+  - GCS: the content read is pinned to the generation returned with the metadata.
+- **Clock.** The renewal comparison uses this writer's own clock. A backward clock step can make it reject our own landed renewal. That fails safe: the renewal is reported as lost and the writer thread is interrupted.
+- **Shutdown hook and heartbeat-start failure.** These release paths stay single-attempt and best-effort.
+- **Per-client classification.** Each storage client must map timeouts and dropped connections to an ambiguous result, rather than rethrowing them or reporting them as unknown and unretried. The same applies to the S3 409 above. On Azure, a 409 on create means the blob already exists, so it is not a retriable conflict.
+
+The read-back never makes a writer believe it holds a lock it does not hold:
+- Every write remains conditional on the version this instance last read or wrote.
+- An adopted lock must carry our owner and still be valid by the same test other writers use before taking over a lock.
+
+So mutual exclusion is unchanged. What the read-back prevents is a writer giving up a lock it actually holds, or reporting a release as failed when it landed. A false release failure costs one lease period of stalled writers and shows up as a dangling lock. A false loss of the lock also aborts the writer's in-flight work.
+
 ### New Hudi configs
 
 - `hoodie.write.lock.storage.heartbeat.poll.secs`: default 30 sec, how often to renew each lock.
