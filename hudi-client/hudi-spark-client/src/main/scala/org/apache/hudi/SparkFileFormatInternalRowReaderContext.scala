@@ -26,6 +26,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler
 import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.common.util.ValidationUtils.checkState
@@ -102,15 +103,30 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
     })
   }
 
+  // Whether the query carries a Spark 4.1 PushVariantIntoScan projection at all.
+  private lazy val hasVariantProjection: Boolean =
+    sparkRequiredSchema.exists(_.fields.exists(f => sparkAdapter.containsVariantProjection(f.dataType)))
+
+  // HoodieFileGroupReader installs the schema handler before it asks for the output converter, so
+  // this is where the record context learns what shape its rows carry. Base-file rows are read in
+  // the projected shape and getLogBlockRecordProjection rewrites log rows into it, so every row
+  // writer the record context builds from an engine schema needs the shape (#20040).
+  override def setSchemaHandler(schemaHandler: FileGroupReaderSchemaHandler[InternalRow]): Unit = {
+    super.setSchemaHandler(schemaHandler)
+    if (hasVariantProjection) {
+      val requiredStruct = sparkRequiredSchema.get
+      recordContext.asInstanceOf[BaseSparkInternalRecordContext].setRowShape(
+        overlayVariantProjections(_, requiredStruct))
+    }
+  }
+
   // Aligns log-block records with the PushVariantIntoScan-projected variant shape before
   // they reach the merger. Preserves merger metadata cols (_hoodie_record_key,
   // _tmp_metadata_row_index) which the merger reads by ordinal — projecting down to the
   // bare required schema would drop them and the merger would read garbage offsets.
   override def getLogBlockRecordProjection(
       dataBlockSchema: HoodieSchema): HOption[JFunction[InternalRow, InternalRow]] = {
-    val needsProjection =
-      sparkRequiredSchema.exists(_.fields.exists(f => sparkAdapter.containsVariantProjection(f.dataType)))
-    if (!needsProjection) {
+    if (!hasVariantProjection) {
       return HOption.empty[JFunction[InternalRow, InternalRow]]()
     }
     val req = sparkRequiredSchema.get
