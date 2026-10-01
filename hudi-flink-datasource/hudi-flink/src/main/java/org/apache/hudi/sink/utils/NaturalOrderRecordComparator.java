@@ -22,7 +22,7 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.generated.RecordComparator;
 
 /**
- * An implementation of @{code RecordComparator} for {@code BinaryInMemorySortBuffer} in case sort is not needed,
+ * An implementation of @{code RecordComparator} for {@code StableSortBuffer} in case sort is not needed,
  * and the returned iterator follows natural order as inserted.
  */
 public class NaturalOrderRecordComparator implements RecordComparator {

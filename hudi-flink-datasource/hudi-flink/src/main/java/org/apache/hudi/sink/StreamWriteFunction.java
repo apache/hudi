@@ -36,6 +36,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.FlinkStreamWriteMetrics;
 import org.apache.hudi.sink.buffer.PreemptiveMemorySegmentPool;
 import org.apache.hudi.sink.buffer.RowDataBucket;
+import org.apache.hudi.sink.buffer.StableSortBuffer;
 import org.apache.hudi.sink.buffer.TotalSizeTracer;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.sink.bulk.RowDataKeyGens;
@@ -61,7 +62,6 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
 import org.apache.flink.table.runtime.generated.NormalizedKeyComputer;
 import org.apache.flink.table.runtime.generated.RecordComparator;
-import org.apache.flink.table.runtime.operators.sort.BinaryInMemorySortBuffer;
 import org.apache.flink.table.runtime.util.MemorySegmentPool;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
@@ -84,7 +84,7 @@ import static org.apache.hudi.common.util.HoodieRecordUtils.getOrderingFieldName
  *
  * <p><h2>Work Flow</h2>
  *
- * <p>The function firstly buffers the data (RowData) in a binary buffer based on {@code BinaryInMemorySortBuffer}.
+ * <p>The function firstly buffers the data (RowData) in a {@link StableSortBuffer}.
  * It flushes(write) the records batch when the batch size exceeds the configured size {@link FlinkOptions#WRITE_BATCH_SIZE}
  * or the memory of the binary buffer is exhausted, and could not append any more data or a Flink checkpoint starts.
  * After a batch has been written successfully, the function notifies its operator coordinator {@link StreamWriteOperatorCoordinator}
@@ -355,7 +355,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     boolean success = doBufferRecord(bucketID, record);
     if (!success) {
       // 2. reclaim pages. A buffer whose write returned false must never be reused because
-      // BinaryInMemorySortBuffer may already have changed its variable-length storage state.
+      // StableSortBuffer may already have changed its variable-length storage state.
       reclaimMemoryAfterFailedWrite(bucketID);
 
       // 2.1 retry once with a newly-created buffer
@@ -566,12 +566,12 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     return statuses;
   }
 
-  private BinaryInMemorySortBuffer createDataBuffer() {
+  private StableSortBuffer createDataBuffer() {
     if (recordKeyComputer == null) {
-      return BufferUtils.createBuffer(rowType, preemptiveMemorySegmentPool);
+      return BufferUtils.createStableSortBuffer(rowType, preemptiveMemorySegmentPool);
     }
     try {
-      return BufferUtils.createBuffer(
+      return BufferUtils.createStableSortBuffer(
           rowType,
           preemptiveMemorySegmentPool,
           recordKeyComputer,
