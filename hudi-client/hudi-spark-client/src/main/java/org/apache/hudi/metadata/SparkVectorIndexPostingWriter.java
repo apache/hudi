@@ -36,7 +36,6 @@ import org.apache.spark.broadcast.Broadcast;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 import scala.Tuple2;
 
@@ -51,7 +50,7 @@ final class SparkVectorIndexPostingWriter {
       Broadcast<Integer> dimension,
       Broadcast<HoodieSchema.Vector.VectorElementType> vectorType,
       Broadcast<float[][]> centroids,
-      Broadcast<Map<Integer, Integer>> shardCounts,
+      Broadcast<Integer> shardCount,
       long quantizerSeed,
       int rabitqBits,
       boolean assumeNormalized,
@@ -66,8 +65,7 @@ final class SparkVectorIndexPostingWriter {
           dimension.value(), rabitqBits, quantizerSeed, assumeNormalized);
       int clusterId = entry._1;
       VectorRow row = entry._2;
-      int shardId = computeShardId(
-          row.recordKey, shardCounts.value().getOrDefault(clusterId, 1));
+      int shardId = computeShardId(row.recordKey, shardCount.value());
       if (row.rowPosition < 0) {
         throw new IllegalStateException(
             "Vector index bootstrap requires file-absolute rowPosition for record "

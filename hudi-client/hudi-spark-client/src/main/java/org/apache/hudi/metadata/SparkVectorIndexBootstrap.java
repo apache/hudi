@@ -43,7 +43,6 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -195,24 +194,21 @@ public final class SparkVectorIndexBootstrap {
         vectorRows.unpersist();
 
         Map<Integer, Long> clusterVectorCounts = assignedRows.countByKey();
-        Map<Integer, Integer> clusterShardCounts = new HashMap<>();
-        for (Map.Entry<Integer, Long> entry : clusterVectorCounts.entrySet()) {
-          clusterShardCounts.put(entry.getKey(),
-              computeShardCount(entry.getValue(), targetRowsPerShard, maxShardsPerCluster));
-        }
+        int generationShardCount = generationShardCount(
+            clusterVectorCounts, targetRowsPerShard, maxShardsPerCluster);
 
         log.info("Cluster stats collected: {} clusters, total {} vectors", clusterVectorCounts.size(), totalVectors);
 
         // ---- Phase 2b: Single-pass encode + emit canonical posting records ----
 
-        Broadcast<Map<Integer, Integer>> bShardCounts = jsc.broadcast(clusterShardCounts);
+        Broadcast<Integer> bShardCount = jsc.broadcast(generationShardCount);
         boolean residualEncoding = true;
 
         JavaRDD<HoodieRecord> dataRecords;
         if (storeInMdt) {
           dataRecords = SparkVectorIndexPostingWriter.buildPostingRecords(
               assignedRows, bDimension, bVectorType, bCentroids,
-              bShardCounts, quantizerSeed, rabitqBits, assumeNormalized, residualEncoding,
+              bShardCount, quantizerSeed, rabitqBits, assumeNormalized, residualEncoding,
               metric, vectorsPerBlock, generation, indexName);
         } else {
           dataRecords = jsc.emptyRDD();
@@ -251,7 +247,7 @@ public final class SparkVectorIndexBootstrap {
               rabitqBits,
               Math.max(0, rabitqBits - 1),
               actualK,
-              maxShardCount(clusterShardCounts),
+              generationShardCount,
               Math.max(1, actualK),
               manifestMetricName(metric),
               assumeNormalized,
@@ -282,7 +278,7 @@ public final class SparkVectorIndexBootstrap {
             driverRecords.add(HoodieMetadataPayload.createVectorIndexClusterManifestRecord(
                 generation,
                 clusterId,
-                clusterShardCounts.getOrDefault(clusterId, 1),
+                generationShardCount,
                 // Exact rerank uses per-candidate posting locators, not cluster-wide file-group sets.
                 // Keep this reserved metadata empty to avoid stale routing state and driver-side collection.
                 Collections.emptySet(),
@@ -446,12 +442,13 @@ public final class SparkVectorIndexBootstrap {
 
   // ---- Utilities ----
 
-  private static int maxShardCount(Map<Integer, Integer> shardCounts) {
-    int max = 1;
-    for (Integer shardCount : shardCounts.values()) {
-      max = Math.max(max, shardCount == null ? 1 : shardCount);
-    }
-    return max;
+  static int generationShardCount(
+      Map<Integer, Long> clusterVectorCounts, int targetRowsPerShard, int maxShardsPerCluster) {
+    long largestClusterPopulation = clusterVectorCounts.values().stream()
+        .mapToLong(Long::longValue)
+        .max()
+        .orElse(0L);
+    return computeShardCount(largestClusterPopulation, targetRowsPerShard, maxShardsPerCluster);
   }
 
   private static String manifestMetricName(VectorDistanceMetric metric) {

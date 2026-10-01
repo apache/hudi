@@ -19,6 +19,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.model.HoodieVectorIndexClusterStats;
 import org.apache.hudi.avro.model.HoodieVectorIndexManifest;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -135,6 +136,12 @@ class TestSparkVectorIndexBootstrap extends SparkClientFunctionalTestHarness {
         "Bootstrap must identify the source snapshot represented by this generation");
     assertEquals(instantTime, manifest.getVerifiedFrontier().toString(),
         "A fresh generation must start its verified frontier at the bootstrap snapshot");
+    assertTrue(records.stream()
+        .filter(record -> family(record.getRecordKey()) == VectorIndexMetadataKey.FAMILY_CLUSTER_STATS)
+        .map(record -> (HoodieVectorIndexClusterStats)
+            ((HoodieMetadataPayload) record.getData()).getVectorIndexMetadata().get())
+        .allMatch(stats -> stats.getShardCount() == manifest.getShardCount()),
+        "All cluster stats must use the generation-wide posting shard count");
   }
 
   private static int family(String key) {
