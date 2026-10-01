@@ -89,6 +89,31 @@ object TwoLevelKMeansBootstrap {
   def leafCentroidsForJava(model: AnyRef): Array[Array[Float]] =
     model.asInstanceOf[TwoLevelModel].leafCentroids
 
+  def coarseCentroidsForJava(model: AnyRef): Array[Array[Float]] =
+    model.asInstanceOf[TwoLevelModel].coarseCentroids
+
+  def leafOffsetsForJava(model: AnyRef): Array[Int] =
+    model.asInstanceOf[TwoLevelModel].leafOffsets
+
+  def restoreModelForJava(
+      coarseCentroids: Array[Array[Float]],
+      leafCentroids: Array[Array[Float]],
+      leafOffsets: Array[Int]): AnyRef = {
+    require(coarseCentroids.nonEmpty, "coarse centroids must not be empty")
+    require(leafCentroids.nonEmpty, "leaf centroids must not be empty")
+    require(leafOffsets.length == coarseCentroids.length + 1,
+      "leaf offsets must contain one boundary per coarse cell plus the terminal boundary")
+    require(leafOffsets.head == 0, "leaf offsets must start at zero")
+    require(leafOffsets.last == leafCentroids.length, "leaf offsets must end at the leaf count")
+    require(leafOffsets.sliding(2).forall(pair => pair(0) <= pair(1)), "leaf offsets must be monotonic")
+    TwoLevelModel(
+      coarseCentroids,
+      leafCentroids,
+      leafOffsets,
+      leafCentroids.map(sqNorm),
+      coarseCentroids.map(sqNorm))
+  }
+
   def assignOneForJava(model: AnyRef, v: Array[Float], expandRatio: Float): Int =
     assignOne(model.asInstanceOf[TwoLevelModel], v, expandRatio)
 
