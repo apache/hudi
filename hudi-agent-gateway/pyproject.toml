@@ -43,6 +43,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# The Spark Thrift Server backend (GATEWAY_ENGINE=spark). PyHive speaks the
+# HiveServer2 Thrift protocol; the pure-sasl extra avoids a C sasl build.
+spark = [
+  "pyhive[hive_pure_sasl]>=0.7.0",
+]
 dev = [
   "pytest>=8.0",
   "pytest-asyncio>=0.24",

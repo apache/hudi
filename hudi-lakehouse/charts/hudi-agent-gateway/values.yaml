@@ -55,13 +55,28 @@ gateway:
     baseUrl: ""
   llmTimeoutSeconds: 120
 
+# Lakehouse SQL engine serving the tools: "trino" (default) or "spark"
+# (a Spark Thrift Server; reads MOR snapshots and Hudi 1.x unstructured types).
+engine: trino
 trino:
   host: hudi-trino.hudi-lakehouse.svc
   port: 8080
   catalog: hudi
   schema: default
   user: hudi-agent-gateway
+spark:
+  host: ""
+  port: 10000
+  database: default
+  user: hudi-agent-gateway
+  # HiveServer2 auth mode: none | nosasl | ldap. For ldap, provide the
+  # password via the existingSecret (key GATEWAY_SPARK_PASSWORD).
+  auth: none
+  # Pooled HiveServer2 sessions (also the query concurrency bound).
+  maxConnections: 8
 
+# Live schema context for the model: off | errors | prompt | both.
+schemaHints: both
 guardrails:
   rowCap: 200
   queryTimeoutSeconds: 120
