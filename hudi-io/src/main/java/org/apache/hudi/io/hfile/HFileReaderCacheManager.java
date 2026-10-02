@@ -19,6 +19,8 @@
 
 package org.apache.hudi.io.hfile;
 
+import org.apache.hudi.common.util.Option;
+
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.extern.slf4j.Slf4j;
@@ -80,6 +82,13 @@ public final class HFileReaderCacheManager {
     return INSTANCE;
   }
 
+  /**
+   * Returns the shared manager, or empty if no caching reader has created it yet.
+   */
+  public static Option<HFileReaderCacheManager> getInstanceIfInitialized() {
+    return Option.ofNullable(INSTANCE);
+  }
+
   public static void reset() {
     synchronized (INSTANCE_LOCK) {
       if (INSTANCE != null) {
@@ -102,6 +111,14 @@ public final class HFileReaderCacheManager {
   public LoadOnOpenBlocks getOrComputeLoadOnOpenData(String filePath,
                                                      Callable<LoadOnOpenBlocks> loader) throws IOException {
     return HFileBlockCache.getOrLoad(loadOnOpenDataCache, filePath, loader);
+  }
+
+  public boolean containsLoadOnOpenData(String filePath) {
+    return loadOnOpenDataCache.getIfPresent(filePath) != null;
+  }
+
+  public void invalidateLoadOnOpenData(String filePath) {
+    loadOnOpenDataCache.invalidate(filePath);
   }
 
   public void clear() {

@@ -50,7 +50,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
 
-import com.github.benmanes.caffeine.cache.Cache;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -65,7 +64,6 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.lang.reflect.Field;
 import java.net.URI;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -81,7 +79,9 @@ import static org.apache.hudi.common.util.CollectionUtils.toStream;
 import static org.apache.hudi.core.io.storage.HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_META_BLOCK;
 import static org.apache.hudi.core.io.storage.HoodieAvroHFileReaderImplBase.SCHEMA_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -243,8 +243,11 @@ public class TestHoodieNativeAvroHFileReaderCaching {
     try (HFileReader reader = readerFactory.createHFileReader()) {
       reader.initializeMetadata();
     }
-    assertNotNull(getLoadOnOpenDataCacheEntry());
-    invalidateLoadOnOpenDataCacheEntry();
+    HFileReaderCacheManager cacheManager = HFileReaderCacheManager.getInstanceIfInitialized().get();
+    String cacheKey = getFilePath().toString();
+    assertTrue(cacheManager.containsLoadOnOpenData(cacheKey));
+    cacheManager.invalidateLoadOnOpenData(cacheKey);
+    assertFalse(cacheManager.containsLoadOnOpenData(cacheKey));
 
     counter.reset();
     try (HFileReader reader = readerFactory.createHFileReader()) {
@@ -253,7 +256,7 @@ public class TestHoodieNativeAvroHFileReaderCaching {
 
     assertTrue(counter.getOpenCount() > 0, "Clearing load-on-open cache should force stream reopen");
     assertTrue(counter.getReadCount() > 0, "Clearing load-on-open cache should force stream reads");
-    assertNotNull(getLoadOnOpenDataCacheEntry());
+    assertTrue(cacheManager.containsLoadOnOpenData(cacheKey));
   }
 
   @Test
@@ -272,13 +275,14 @@ public class TestHoodieNativeAvroHFileReaderCaching {
     HFileReaderFactory firstFactory = createCachingReaderFactory(storage);
     HFileReaderFactory secondFactory = createCachingReaderFactory(storage);
 
+    assertFalse(HFileReaderCacheManager.getInstanceIfInitialized().isPresent());
     try (HFileReader ignored = firstFactory.createHFileReader()) {
-      HFileReaderCacheManager firstManager = getCacheManagerInstance();
+      HFileReaderCacheManager firstManager = HFileReaderCacheManager.getInstanceIfInitialized().orElse(null);
       assertNotNull(firstManager, "Creating the first cached reader should initialize the cache manager");
 
       try (HFileReader alsoIgnored = secondFactory.createHFileReader()) {
-        HFileReaderCacheManager secondManager = getCacheManagerInstance();
-        assertTrue(firstManager == secondManager, "Cached readers should share the same cache manager instance");
+        HFileReaderCacheManager secondManager = HFileReaderCacheManager.getInstanceIfInitialized().orElse(null);
+        assertSame(firstManager, secondManager, "Cached readers should share the same cache manager instance");
       }
     }
   }
@@ -706,41 +710,5 @@ public class TestHoodieNativeAvroHFileReaderCaching {
     public void close() throws IOException {
       delegate.close();
     }
-  }
-
-  @SuppressWarnings("unchecked")
-  private Object getLoadOnOpenDataCacheEntry() throws Exception {
-    Field cacheField = HFileReaderCacheManager.class.getDeclaredField("INSTANCE");
-    cacheField.setAccessible(true);
-    HFileReaderCacheManager manager = (HFileReaderCacheManager) cacheField.get(null);
-    if (manager == null) {
-      return null;
-    }
-    Field loadOnOpenCacheField = HFileReaderCacheManager.class.getDeclaredField("loadOnOpenDataCache");
-    loadOnOpenCacheField.setAccessible(true);
-    Cache<String, Object> cache = (Cache<String, Object>) loadOnOpenCacheField.get(manager);
-    return cache == null ? null : cache.getIfPresent(getFilePath().toString());
-  }
-
-  @SuppressWarnings("unchecked")
-  private void invalidateLoadOnOpenDataCacheEntry() throws Exception {
-    Field cacheField = HFileReaderCacheManager.class.getDeclaredField("INSTANCE");
-    cacheField.setAccessible(true);
-    HFileReaderCacheManager manager = (HFileReaderCacheManager) cacheField.get(null);
-    if (manager == null) {
-      return;
-    }
-    Field loadOnOpenCacheField = HFileReaderCacheManager.class.getDeclaredField("loadOnOpenDataCache");
-    loadOnOpenCacheField.setAccessible(true);
-    Cache<String, Object> cache = (Cache<String, Object>) loadOnOpenCacheField.get(manager);
-    if (cache != null) {
-      cache.invalidate(getFilePath().toString());
-    }
-  }
-
-  private HFileReaderCacheManager getCacheManagerInstance() throws Exception {
-    Field instanceField = HFileReaderCacheManager.class.getDeclaredField("INSTANCE");
-    instanceField.setAccessible(true);
-    return (HFileReaderCacheManager) instanceField.get(null);
   }
 }
