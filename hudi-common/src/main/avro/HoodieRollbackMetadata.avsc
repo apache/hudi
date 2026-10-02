@@ -66,6 +66,14 @@
           "default": [],
           "items": "HoodieInstantInfo"
        }
+     },
+     {
+        "name":"extraMetadata",
+        "type":["null", {
+           "type":"map",
+           "values":"string"
+        }],
+        "default": null
      }
  ]
 }
