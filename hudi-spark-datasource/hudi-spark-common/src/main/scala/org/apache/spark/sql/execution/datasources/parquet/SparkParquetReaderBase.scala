@@ -25,6 +25,7 @@ import org.apache.hudi.common.util
 import org.apache.hudi.storage.StorageConfiguration
 
 import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.mapred.JobConf
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.{PartitionedFile, SparkColumnarFileReader}
 import org.apache.spark.sql.internal.SQLConf
@@ -64,7 +65,8 @@ abstract class SparkParquetReaderBase(enableVectorizedReader: Boolean,
                  filters: Seq[Filter],
                  storageConf: StorageConfiguration[Configuration],
                  tableSchemaOpt: util.Option[org.apache.parquet.schema.MessageType] = util.Option.empty()): Iterator[InternalRow] = {
-    val conf = storageConf.unwrapCopy()
+    // A JobConf, so the task attempt context doRead builds on it reuses it instead of copying it again
+    val conf = new JobConf(storageConf.unwrap())
     conf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, requiredSchema.json)
     conf.set(ParquetWriteSupport.SPARK_ROW_SCHEMA, requiredSchema.json)
 
