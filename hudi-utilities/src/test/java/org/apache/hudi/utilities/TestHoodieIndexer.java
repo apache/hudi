@@ -26,19 +26,27 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
+import org.apache.hudi.common.config.HoodieIndexingConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
@@ -57,12 +65,17 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.reload;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
 import static org.apache.hudi.config.HoodieWriteConfig.CLIENT_HEARTBEAT_INTERVAL_IN_MS;
 import static org.apache.hudi.config.HoodieWriteConfig.CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES;
+import static org.apache.hudi.core.index.expression.HoodieExpressionIndex.IDENTITY_TRANSFORM;
+import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileSystemViewForMetadataTable;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartitionExists;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
@@ -77,6 +90,7 @@ import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -179,6 +193,232 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     // build indexer config which has only files enabled
     indexMetadataPartitionsAndAssert(RECORD_INDEX.getPartitionPath(), Collections.singletonList(FILES), Arrays.asList(new MetadataPartitionType[] {COLUMN_STATS, BLOOM_FILTERS}), tableName,
         "streamer-config/indexer-record-index.properties");
+  }
+
+  /**
+   * An indexing action builds the partition it names. With two secondary-index and two expression-index definitions
+   * registered and none initialized (the shape of a table whose metadata table was rebuilt with its definitions
+   * intact), each action builds exactly the index it names, on storage and not only in the table config, until all
+   * four are built.
+   */
+  @Test
+  void testIndexerBuildsEachRequestedIndexAmongSeveralUninitialized() {
+    String tableName = "indexer_test_two_si_two_ei";
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+        .enable(true).withAsyncIndex(false).withMetadataIndexColumnStats(false).build();
+    upsertToTable(metadataConfig, tableName);
+    indexMetadataPartitionsAndAssert(RECORD_INDEX.getPartitionPath(), Collections.singletonList(FILES), Arrays.asList(COLUMN_STATS, BLOOM_FILTERS), tableName,
+        "streamer-config/indexer-record-index.properties");
+
+    metaClient = reload(metaClient);
+    String riderSecondaryIndex = SECONDARY_INDEX.getPartitionPath() + "idx_rider";
+    String driverSecondaryIndex = SECONDARY_INDEX.getPartitionPath() + "idx_driver";
+    String riderExpressionIndex = EXPRESSION_INDEX.getPartitionPath() + "idx_rider_expr";
+    String driverExpressionIndex = EXPRESSION_INDEX.getPartitionPath() + "idx_driver_expr";
+    metaClient.buildIndexDefinition(secondaryIndexDefinition(riderSecondaryIndex, "rider"));
+    metaClient.buildIndexDefinition(secondaryIndexDefinition(driverSecondaryIndex, "driver"));
+    metaClient.buildIndexDefinition(expressionIndexDefinition(riderExpressionIndex, "rider"));
+    metaClient.buildIndexDefinition(expressionIndexDefinition(driverExpressionIndex, "driver"));
+
+    indexMetadataPartitionsAndAssert(riderSecondaryIndex, Arrays.asList(FILES, RECORD_INDEX), Arrays.asList(COLUMN_STATS, BLOOM_FILTERS), tableName,
+        "streamer-config/indexer-secondary-index.properties");
+    assertIndexesNotBuilt(Arrays.asList(driverSecondaryIndex, riderExpressionIndex, driverExpressionIndex));
+
+    indexMetadataPartitionsAndAssert(driverSecondaryIndex, Arrays.asList(FILES, RECORD_INDEX), Arrays.asList(COLUMN_STATS, BLOOM_FILTERS), tableName,
+        "streamer-config/indexer-secondary-index.properties",
+        Arrays.asList("hoodie.index.name=idx_driver", "hoodie.metadata.index.secondary.column=driver"));
+    assertIndexesNotBuilt(Arrays.asList(riderExpressionIndex, driverExpressionIndex));
+
+    indexMetadataPartitionsAndAssert(riderExpressionIndex, Arrays.asList(FILES, RECORD_INDEX), Arrays.asList(COLUMN_STATS, BLOOM_FILTERS), tableName,
+        "streamer-config/indexer-expression-index.properties",
+        Arrays.asList("hoodie.index.name=idx_rider_expr", "hoodie.metadata.index.expression.column=rider"));
+    assertIndexesNotBuilt(Collections.singletonList(driverExpressionIndex));
+
+    indexMetadataPartitionsAndAssert(driverExpressionIndex, Arrays.asList(FILES, RECORD_INDEX), Arrays.asList(COLUMN_STATS, BLOOM_FILTERS), tableName,
+        "streamer-config/indexer-expression-index.properties",
+        Arrays.asList("hoodie.index.name=idx_driver_expr", "hoodie.metadata.index.expression.column=driver"));
+
+    assertIndexesBuiltWithFileSlices(Arrays.asList(riderSecondaryIndex, driverSecondaryIndex, riderExpressionIndex, driverExpressionIndex));
+  }
+
+  private HoodieIndexDefinition secondaryIndexDefinition(String fullIndexName, String sourceField) {
+    return HoodieIndexDefinition.newBuilder()
+        .withIndexName(fullIndexName)
+        .withIndexType(PARTITION_NAME_SECONDARY_INDEX)
+        .withIndexFunction(IDENTITY_TRANSFORM)
+        .withSourceFields(Collections.singletonList(sourceField))
+        .withVersion(HoodieIndexVersion.getCurrentVersion(metaClient.getTableConfig().getTableVersion(), SECONDARY_INDEX))
+        .build();
+  }
+
+  /**
+   * A requested index partition bootstraps under a solo-family instant rather than the indexing action's own
+   * instant, so it no longer matches the isIndexingCommit exemption that keeps a concurrent writer from rolling
+   * an in-progress bootstrap back under the eager cleaning policy. Streaming writes to the metadata table are
+   * disabled here so the concurrent writer's metadata client is EAGER; the Spark default enables them, which
+   * makes that client LAZY and protects an in-progress bootstrap by heartbeat instead.
+   */
+  @Test
+  void testEagerWriterDoesNotRollBackAnInFlightRequestedIndexBootstrap() throws IOException {
+    String tableName = "indexer_solo_instant_rollback";
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+        .enable(true).withAsyncIndex(false).withMetadataIndexColumnStats(false)
+        .withStreamingWriteEnabled(false).build();
+    upsertToTable(metadataConfig, tableName);
+
+    metaClient = reload(metaClient);
+    String riderSecondaryIndex = SECONDARY_INDEX.getPartitionPath() + "idx_rider";
+    metaClient.buildIndexDefinition(secondaryIndexDefinition(riderSecondaryIndex, "rider"));
+
+    HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(
+        context(), metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString());
+    HoodieTableMetaClient metadataMetaClient = metadata.getMetadataMetaClient();
+    Set<String> instantsBeforeIndexing = metadataMetaClient.getActiveTimeline().getInstantsAsStream()
+        .map(HoodieInstant::requestedTime).collect(Collectors.toSet());
+
+    indexMetadataPartitionsAndAssert(riderSecondaryIndex, Collections.singletonList(FILES), Arrays.asList(COLUMN_STATS, BLOOM_FILTERS), tableName,
+        "streamer-config/indexer-secondary-index.properties");
+
+    // Precondition: the bootstrap committed under a fresh solo-family instant, not the indexing instant.
+    metadataMetaClient = reload(metadataMetaClient);
+    String bootstrapCommitTime = metadataMetaClient.getActiveTimeline().getInstantsAsStream()
+        .map(HoodieInstant::requestedTime)
+        .filter(time -> !instantsBeforeIndexing.contains(time) && time.startsWith(SOLO_COMMIT_TIMESTAMP))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("the requested index partition did not bootstrap under a solo instant"));
+    HoodieInstant indexingInstant = metaClient.reloadActiveTimeline()
+        .filter(instant -> HoodieTimeline.INDEXING_ACTION.equals(instant.getAction())).getInstants().get(0);
+    assertNotEquals(indexingInstant.requestedTime(), bootstrapCommitTime,
+        "precondition: the bootstrap must not share the indexing action's instant");
+    assertTrue(metadataPartitionExists(basePath(), context(), riderSecondaryIndex),
+        "precondition: the index partition must exist on storage before we simulate an in-progress bootstrap");
+
+    // Put the table back into the shape of a bootstrap still running under a pending indexing action.
+    metaClient.getActiveTimeline().revertToInflight(indexingInstant);
+    metaClient = reload(metaClient);
+    HoodieInstant bootstrapCommit = metadataMetaClient.getActiveTimeline()
+        .filter(instant -> instant.requestedTime().equals(bootstrapCommitTime)).getInstants().get(0);
+    metadataMetaClient.getActiveTimeline().revertToInflight(bootstrapCommit);
+    metadataMetaClient = reload(metadataMetaClient);
+    metaClient.getTableConfig().setMetadataPartitionState(metaClient, riderSecondaryIndex, false);
+    metaClient.getTableConfig().setMetadataPartitionsInflight(metaClient, Collections.singletonList(riderSecondaryIndex));
+    metaClient = reload(metaClient);
+
+    // Preconditions on the simulated state.
+    assertTrue(metaClient.getActiveTimeline()
+            .filter(instant -> HoodieTimeline.INDEXING_ACTION.equals(instant.getAction()) && !instant.isCompleted())
+            .getInstants().size() == 1,
+        "precondition: the indexing action must be pending on the data table");
+    assertTrue(metadataMetaClient.getActiveTimeline().filterInflightsAndRequested().containsInstant(bootstrapCommitTime),
+        "precondition: the bootstrap commit must be inflight on the metadata table");
+    assertTrue(metaClient.getTableConfig().getMetadataPartitionsInflight().contains(riderSecondaryIndex),
+        "precondition: the index partition must be inflight in the table config");
+    assertFalse(metaClient.getTableConfig().getMetadataPartitions().contains(riderSecondaryIndex),
+        "precondition: the index partition must not be marked complete while the bootstrap is in progress");
+
+    upsertToTable(metadataConfig, tableName);
+    metadataMetaClient = reload(metadataMetaClient);
+    assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(bootstrapCommitTime),
+        "a concurrent writer must not roll back a bootstrap running under a pending indexing action");
+    assertTrue(metadataMetaClient.getActiveTimeline().getRollbackTimeline().empty(),
+        "no rollback should have been issued on the metadata table");
+
+    // With no indexing action pending the same commit must become rollback-eligible again, so the exemption
+    // is scoped rather than a blanket pass for the solo family.
+    // revertToInflight leaves the requested file behind, so clear every state of the action.
+    while (!metaClient.reloadActiveTimeline()
+        .filter(instant -> HoodieTimeline.INDEXING_ACTION.equals(instant.getAction())).empty()) {
+      metaClient.getActiveTimeline().deleteInstantFileIfExists(metaClient.getActiveTimeline()
+          .filter(instant -> HoodieTimeline.INDEXING_ACTION.equals(instant.getAction())).getInstants().get(0));
+    }
+    metaClient = reload(metaClient);
+    assertTrue(metaClient.getActiveTimeline()
+            .filter(instant -> HoodieTimeline.INDEXING_ACTION.equals(instant.getAction())).empty(),
+        "precondition: no indexing action may remain on the data timeline");
+    upsertToTable(metadataConfig, tableName);
+    metadataMetaClient = reload(metadataMetaClient);
+    assertFalse(metadataMetaClient.getActiveTimeline().containsInstant(bootstrapCommitTime),
+        "with no indexing action pending the solo-family commit must not stay exempt");
+  }
+
+  /**
+   * An indexing action for an index that has no definition yet fails while another index of the same type is
+   * uninitialized, rather than building that other index and marking the requested one complete.
+   */
+  @Test
+  void testIndexerFailsWhenTheOnlyUninitializedDefinitionIsNotTheRequestedIndex() {
+    String tableName = "indexer_test_si_request_mismatch";
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+        .enable(true).withAsyncIndex(false).withMetadataIndexColumnStats(false).build();
+    upsertToTable(metadataConfig, tableName);
+    indexMetadataPartitionsAndAssert(RECORD_INDEX.getPartitionPath(), Collections.singletonList(FILES), Arrays.asList(COLUMN_STATS, BLOOM_FILTERS), tableName,
+        "streamer-config/indexer-record-index.properties");
+
+    metaClient = reload(metaClient);
+    String riderSecondaryIndex = SECONDARY_INDEX.getPartitionPath() + "idx_rider";
+    String driverSecondaryIndex = SECONDARY_INDEX.getPartitionPath() + "idx_driver";
+    metaClient.buildIndexDefinition(secondaryIndexDefinition(riderSecondaryIndex, "rider"));
+
+    HoodieIndexer.Config config = new HoodieIndexer.Config();
+    config.basePath = basePath();
+    config.tableName = tableName;
+    config.indexTypes = SECONDARY_INDEX.name();
+    config.runningMode = SCHEDULE_AND_EXECUTE;
+    config.propsFilePath = Objects.requireNonNull(
+        getClass().getClassLoader().getResource("streamer-config/indexer-secondary-index.properties")).getPath();
+    config.configs.addAll(Arrays.asList("hoodie.index.name=idx_driver", "hoodie.metadata.index.secondary.column=driver"));
+    // HoodieIndexer.start rethrows through UtilHelpers.retry rather than returning a non-zero code.
+    Throwable thrown = assertThrows(RuntimeException.class, () -> new HoodieIndexer(jsc(), config).start(0));
+    assertTrue(rootCauseMessage(thrown).contains(driverSecondaryIndex),
+        "the failure must name the requested partition, but was: " + rootCauseMessage(thrown));
+
+    assertIndexesNotBuilt(Arrays.asList(riderSecondaryIndex, driverSecondaryIndex));
+    // The failure aborts the action: the requested partition is not left inflight in the table config and the
+    // indexing instant is gone from the timeline, requested and inflight files alike.
+    assertFalse(metaClient.getTableConfig().getMetadataPartitionsInflight().contains(driverSecondaryIndex),
+        "the aborted action must not leave the requested partition inflight in the table config");
+    assertTrue(metaClient.getActiveTimeline().filterPendingIndexTimeline().empty(),
+        "the aborted action must not leave the indexing instant pending, but the timeline has "
+            + metaClient.getActiveTimeline().filterPendingIndexTimeline().getInstants());
+  }
+
+  private static String rootCauseMessage(Throwable thrown) {
+    Throwable cause = thrown;
+    while (cause.getCause() != null) {
+      cause = cause.getCause();
+    }
+    return String.valueOf(cause.getMessage());
+  }
+
+  /** An expression index carries the type of the index it materializes, which is column stats by default. */
+  private HoodieIndexDefinition expressionIndexDefinition(String fullIndexName, String sourceField) {
+    return HoodieIndexDefinition.newBuilder()
+        .withIndexName(fullIndexName)
+        .withIndexType(PARTITION_NAME_COLUMN_STATS)
+        .withIndexFunction(IDENTITY_TRANSFORM)
+        .withSourceFields(Collections.singletonList(sourceField))
+        .withVersion(HoodieIndexVersion.getCurrentVersion(metaClient.getTableConfig().getTableVersion(), EXPRESSION_INDEX))
+        .build();
+  }
+
+  private void assertIndexesNotBuilt(List<String> indexPartitions) {
+    metaClient = reload(metaClient);
+    for (String indexPartition : indexPartitions) {
+      assertFalse(metaClient.getTableConfig().getMetadataPartitions().contains(indexPartition),
+          "only the requested index may be built, but the table config lists " + indexPartition);
+      assertFalse(metadataPartitionExists(basePath(), context(), indexPartition),
+          "only the requested index may be built, but storage holds " + indexPartition);
+    }
+  }
+
+  private void assertIndexesBuiltWithFileSlices(List<String> indexPartitions) {
+    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
+        .setConf(metaClient.getStorageConf().newInstance()).setBasePath(metaClient.getMetaPath() + "/metadata").build();
+    Option<HoodieTableFileSystemView> fsView = Option.of(getFileSystemViewForMetadataTable(metadataMetaClient));
+    for (String indexPartition : indexPartitions) {
+      List<FileSlice> fileSlices = HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, fsView, indexPartition);
+      assertFalse(fileSlices.isEmpty(), indexPartition + " must have been built, not merely marked complete");
+    }
   }
 
   /**
@@ -501,6 +741,10 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
   }
 
   private void scheduleAndExecuteIndexing(MetadataPartitionType partitionTypeToIndex, String tableName, String propsFilePath) {
+    scheduleAndExecuteIndexing(partitionTypeToIndex, tableName, propsFilePath, Collections.emptyList());
+  }
+
+  private void scheduleAndExecuteIndexing(MetadataPartitionType partitionTypeToIndex, String tableName, String propsFilePath, List<String> extraConfigs) {
     HoodieIndexer.Config config = new HoodieIndexer.Config();
     String propsPath = Objects.requireNonNull(getClass().getClassLoader().getResource(propsFilePath)).getPath();
     config.basePath = basePath();
@@ -508,6 +752,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     config.indexTypes = partitionTypeToIndex.name();
     config.runningMode = SCHEDULE_AND_EXECUTE;
     config.propsFilePath = propsPath;
+    config.configs.addAll(extraConfigs);
     if (partitionTypeToIndex.getPartitionPath().equals(COLUMN_STATS.getPartitionPath())) {
       config.configs.add(HoodieMetadataConfig.METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT.key() + "=" + colStatsFileGroupCount);
     }
@@ -521,7 +766,12 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
 
   private void indexMetadataPartitionsAndAssert(String indexPartitionPath, List<MetadataPartitionType> alreadyCompletedPartitions, List<MetadataPartitionType> nonExistentPartitions,
                                                 String tableName, String propsFilePath) {
-    scheduleAndExecuteIndexing(MetadataPartitionType.fromPartitionPath(indexPartitionPath), tableName, propsFilePath);
+    indexMetadataPartitionsAndAssert(indexPartitionPath, alreadyCompletedPartitions, nonExistentPartitions, tableName, propsFilePath, Collections.emptyList());
+  }
+
+  private void indexMetadataPartitionsAndAssert(String indexPartitionPath, List<MetadataPartitionType> alreadyCompletedPartitions, List<MetadataPartitionType> nonExistentPartitions,
+                                                String tableName, String propsFilePath, List<String> extraConfigs) {
+    scheduleAndExecuteIndexing(MetadataPartitionType.fromPartitionPath(indexPartitionPath), tableName, propsFilePath, extraConfigs);
 
     // validate table config
     metaClient.reloadTableConfig();
@@ -666,6 +916,109 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     config.runningMode = runMode;
     config.propsFilePath = propsPath;
     return config;
+  }
+
+  /**
+   * Two secondary indexes built by consecutive indexing actions through a write client with async indexing off, the
+   * shape a metadata-table rebuild takes. The second action's metadata writer infers the remaining index at
+   * construction time; the instant it bootstraps under must not be one the metadata table already holds, since a
+   * commit reapplied at a completed instant is rolled back first, which empties the index built by the first action.
+   */
+  @Test
+  void testIndexActionsBuiltOneAfterAnotherKeepEveryIndexPopulated() {
+    String tableName = "indexer_sequential_actions";
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+        .enable(true).withAsyncIndex(false).withMetadataIndexColumnStats(false).build();
+    upsertToTable(metadataConfig, tableName);
+
+    metaClient = reload(metaClient);
+    String riderSecondaryIndex = SECONDARY_INDEX.getPartitionPath() + "idx_rider";
+    String driverSecondaryIndex = SECONDARY_INDEX.getPartitionPath() + "idx_driver";
+    metaClient.buildIndexDefinition(secondaryIndexDefinition(riderSecondaryIndex, "rider"));
+    metaClient.buildIndexDefinition(secondaryIndexDefinition(driverSecondaryIndex, "driver"));
+    for (String indexPartition : Arrays.asList(riderSecondaryIndex, driverSecondaryIndex)) {
+      scheduleAndExecuteIndexingWithWriteClient(metadataConfig, tableName, indexPartition);
+    }
+
+    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
+        .setConf(metaClient.getStorageConf().newInstance()).setBasePath(metaClient.getMetaPath() + "/metadata").build();
+    assertTrue(metadataMetaClient.getActiveTimeline().getRollbackTimeline().empty(),
+        "no bootstrap may be rolled back, but the metadata timeline has " + metadataMetaClient.getActiveTimeline().getRollbackTimeline().getInstants());
+    Option<HoodieTableFileSystemView> fsView = Option.of(getFileSystemViewForMetadataTable(metadataMetaClient));
+    for (String indexPartition : Arrays.asList(riderSecondaryIndex, driverSecondaryIndex)) {
+      List<FileSlice> fileSlices = HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, fsView, indexPartition);
+      assertFalse(fileSlices.isEmpty(), indexPartition + " must have file slices");
+      assertTrue(fileSlices.stream().allMatch(slice -> slice.getBaseInstantTime().startsWith(SOLO_COMMIT_TIMESTAMP)),
+          indexPartition + " must bootstrap under a solo-family instant, but its file slices are " + fileSlices);
+    }
+    assertEquals(100, secondaryIndexRecordCount("rider-"), riderSecondaryIndex + " must hold one record per data record");
+    assertEquals(100, secondaryIndexRecordCount("driver-"), driverSecondaryIndex + " must hold one record per data record");
+  }
+
+  /**
+   * An index build that fails midway, here on a definition naming a column the table does not have, is
+   * aborted: the index is left neither inflight nor complete in the table config, no indexing instant stays
+   * pending on the data timeline, and no partition is left on storage, so correcting the definition and
+   * running the action again builds the index.
+   */
+  @Test
+  void testAnIndexBuildThatFailsMidwayIsAbortedAndCanBeRetried() {
+    String tableName = "indexer_failed_build_abort";
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+        .enable(true).withAsyncIndex(false).withMetadataIndexColumnStats(false).build();
+    upsertToTable(metadataConfig, tableName);
+
+    metaClient = reload(metaClient);
+    String riderSecondaryIndex = SECONDARY_INDEX.getPartitionPath() + "idx_rider";
+    metaClient.buildIndexDefinition(secondaryIndexDefinition(riderSecondaryIndex, "no_such_column"));
+
+    assertThrows(HoodieIndexException.class, () -> indexWithWriteClient(metadataConfig, tableName, riderSecondaryIndex));
+
+    metaClient = reload(metaClient);
+    assertFalse(metaClient.getTableConfig().getMetadataPartitionsInflight().contains(riderSecondaryIndex),
+        "the aborted build must clear the index from the inflight list");
+    assertFalse(metaClient.getTableConfig().getMetadataPartitions().contains(riderSecondaryIndex),
+        "the aborted build must not list the index complete");
+    assertTrue(metaClient.getActiveTimeline().filterPendingIndexTimeline().empty(),
+        "the aborted build must leave no indexing instant pending, but the timeline has "
+            + metaClient.getActiveTimeline().filterPendingIndexTimeline().getInstants());
+    assertFalse(metadataPartitionExists(basePath(), context(), riderSecondaryIndex),
+        "the aborted build must leave no partition on storage");
+
+    metaClient.deleteIndexDefinition(riderSecondaryIndex);
+    metaClient.buildIndexDefinition(secondaryIndexDefinition(riderSecondaryIndex, "rider"));
+    scheduleAndExecuteIndexingWithWriteClient(metadataConfig, tableName, riderSecondaryIndex);
+    assertEquals(100, secondaryIndexRecordCount("rider-"), riderSecondaryIndex + " must hold one record per data record");
+  }
+
+  /** Schedules and runs an indexing action for one index partition through a synchronous-metadata write client. */
+  private void scheduleAndExecuteIndexingWithWriteClient(HoodieMetadataConfig metadataConfig, String tableName, String indexPartition) {
+    indexWithWriteClient(metadataConfig, tableName, indexPartition);
+    metaClient = reload(metaClient);
+    assertTrue(metaClient.getTableConfig().getMetadataPartitions().contains(indexPartition));
+  }
+
+  /** Runs an indexing action for one index partition and lets any failure propagate. */
+  private void indexWithWriteClient(HoodieMetadataConfig metadataConfig, String tableName, String indexPartition) {
+    HoodieWriteConfig writeConfig = getWriteConfigBuilder(basePath(), tableName)
+        .withMetadataConfig(metadataConfig)
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
+        .withProps(Collections.singletonMap(HoodieIndexingConfig.INDEX_NAME.key(), indexPartition.substring(SECONDARY_INDEX.getPartitionPath().length())))
+        .build();
+    try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig)) {
+      Option<String> instant = writeClient.scheduleIndexing(Collections.singletonList(SECONDARY_INDEX), Collections.singletonList(indexPartition));
+      assertTrue(instant.isPresent(), "scheduling " + indexPartition + " must return an instant");
+      writeClient.index(instant.get());
+    }
+  }
+
+  /** Secondary-index records in the metadata table whose secondary key starts with the prefix. */
+  private long secondaryIndexRecordCount(String secondaryKeyPrefix) {
+    return spark().read().format("hudi").load(metaClient.getMetaPath() + "/metadata")
+        .where("type = " + SECONDARY_INDEX.getRecordType())
+        .where("key like '" + secondaryKeyPrefix + "%'")
+        .count();
   }
 
   private static HoodieWriteConfig.Builder getWriteConfigBuilder(String basePath, String tableName) {
