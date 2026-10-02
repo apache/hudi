@@ -51,6 +51,9 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 /**
  * Tests {@link FileSystemBackedTableMetadata}.
  */
@@ -243,7 +246,7 @@ public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
    * nor list it as a partition, even when it holds a stray partition metafile.
    */
   @Test
-  public void testMetaFolderIsNotProbedForPartitionMetadata() throws Exception {
+  void testMetaFolderIsNotProbedForPartitionMetadata() throws Exception {
     hoodieTestTable = hoodieTestTable.addCommit("100");
     for (String partition : ONE_LEVEL_PARTITIONS) {
       hoodieTestTable = hoodieTestTable.withPartitionMetaFiles(partition)
@@ -263,11 +266,11 @@ public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
         new HoodieLocalEngineContext(conf), metaClient.getTableConfig(), storage, basePath);
     List<String> partitions = fileSystemBackedTableMetadata.getAllPartitionPaths();
 
-    Assertions.assertEquals(ONE_LEVEL_PARTITIONS, partitions.stream().sorted().collect(Collectors.toList()));
+    assertEquals(ONE_LEVEL_PARTITIONS, partitions.stream().sorted().collect(Collectors.toList()));
     Predicate<Call> partitionMetadataProbe = Call.pathContains(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX);
-    Assertions.assertTrue(RecordingLocalFileSystem.count(partitionMetadataProbe.and(Call.underMetaFolder().negate())) > 0,
+    assertTrue(RecordingLocalFileSystem.count(partitionMetadataProbe.and(Call.underMetaFolder().negate())) > 0,
         "The listing must probe the data partitions through the recording file system");
-    Assertions.assertEquals(0, RecordingLocalFileSystem.count(partitionMetadataProbe.and(Call.underMetaFolder())),
+    assertEquals(0, RecordingLocalFileSystem.count(partitionMetadataProbe.and(Call.underMetaFolder())),
         () -> "The meta folder was probed for partition metadata: "
             + RecordingLocalFileSystem.describe(partitionMetadataProbe.and(Call.underMetaFolder())));
   }
