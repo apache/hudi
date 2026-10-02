@@ -24,8 +24,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
 
-import org.apache.arrow.util.VisibleForTesting;
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -106,7 +104,9 @@ public class CachingHFileReaderImpl extends HFileReaderImpl {
     return cacheManager.getStats();
   }
 
-  @VisibleForTesting
+  /**
+   * Clears the global caches. Should only be used for testing.
+   */
   public static void resetGlobalCache() {
     HFileReaderCacheManager.reset();
   }
