@@ -105,6 +105,13 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     )
   }
 
+  /**
+   * The table schema the base file readers repair logical timestamps against. They repair only when the table has a
+   * timestamp-millis field (see [[ENABLE_LOGICAL_TIMESTAMP_REPAIR]]), so the conversion is skipped otherwise.
+   */
+  private def tableSchemaForTimestampRepair: HOption[MessageType] =
+    if (hasTimestampMillisFieldInTableSchema) tableSchemaAsMessageType else HOption.empty()
+
   private lazy val hasTimestampMillisFieldInTableSchema = HoodieSchemaRepair.hasTimestampMillisField(schema)
   private lazy val supportBatchWithTableSchema = HoodieSparkUtils.gteqSpark3_5 || !hasTimestampMillisFieldInTableSchema
   override def shortName(): String = "HudiFileGroup"
@@ -370,6 +377,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     (file: PartitionedFile) => {
       // executor
       val storageConf = new HadoopStorageConfiguration(broadcastedStorageConf.value.value)
+      // Base file reads share the broadcast conf, so the parquet reader prepares its read conf once per scan.
+      val baseFileStorageConf = new SharedScanStorageConfiguration(broadcastedStorageConf.value.value)
       val iter = file.partitionValues match {
         // Snapshot or incremental queries.
         case fileSliceMapping: HoodiePartitionFileSliceMapping =>
@@ -437,7 +446,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
 
             case _ =>
               readBaseFile(file, baseFileReader.value, requestedStructType, remainingPartitionSchema, fixedPartitionIndexes,
-                readRequiredSchema, partitionSchema, outputSchema, filters ++ requiredFilters, storageConf)
+                readRequiredSchema, partitionSchema, outputSchema, filters ++ requiredFilters, baseFileStorageConf)
           }
         // CDC queries.
         case hoodiePartitionCDCFileGroupSliceMapping: HoodiePartitionCDCFileGroupMapping =>
@@ -445,7 +454,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
 
         case _ =>
           readBaseFile(file, baseFileReader.value, requestedStructType, remainingPartitionSchema, fixedPartitionIndexes,
-            readRequiredSchema, partitionSchema, outputSchema, filters ++ requiredFilters, storageConf)
+            readRequiredSchema, partitionSchema, outputSchema, filters ++ requiredFilters, baseFileStorageConf)
       }
       CloseableIteratorListener.addListener(iter)
     }
@@ -624,7 +633,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
 
     val rawIter = if (remainingPartitionSchema.fields.length == partitionSchema.fields.length) {
       //none of partition fields are read from the file, so the reader will do the appending for us
-      val iter = parquetFileReader.read(file, modifiedReadRequiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf, tableSchemaAsMessageType)
+      val iter = parquetFileReader.read(file, modifiedReadRequiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf, tableSchemaForTimestampRepair)
       projectIfNeeded(iter, StructType(modifiedReadRequiredSchema.fields ++ partitionSchema.fields), modifiedOutputSchema)
     } else if (remainingPartitionSchema.fields.length == 0) {
       //we read all of the partition fields from the file
@@ -633,7 +642,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       val modifiedFile = pfileUtils.createPartitionedFile(InternalRow.empty, pfileUtils.getPathFromPartitionedFile(file), file.start, file.length)
       val readSchema = StructType(modifiedReadRequiredSchema.fields ++ partitionSchema.fields)
       //and we pass an empty schema for the partition schema
-      val iter = parquetFileReader.read(modifiedFile, readSchema, new StructType(), internalSchemaOpt, filters, storageConf, tableSchemaAsMessageType)
+      val iter = parquetFileReader.read(modifiedFile, readSchema, new StructType(), internalSchemaOpt, filters, storageConf, tableSchemaForTimestampRepair)
       projectIfNeeded(iter, readSchema, modifiedOutputSchema)
     } else {
       //need to do an additional projection here. The case in mind is that partition schema is "a,b,c" mandatoryFields is "a,c",
@@ -642,7 +651,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       val pfileUtils = sparkAdapter.getSparkPartitionedFileUtils
       val partitionValues = getFixedPartitionValues(file.partitionValues, partitionSchema, fixedPartitionIndexes)
       val modifiedFile = pfileUtils.createPartitionedFile(partitionValues, pfileUtils.getPathFromPartitionedFile(file), file.start, file.length)
-      val iter = parquetFileReader.read(modifiedFile, modifiedRequestedSchema, remainingPartitionSchema, internalSchemaOpt, filters, storageConf, tableSchemaAsMessageType)
+      val iter = parquetFileReader.read(modifiedFile, modifiedRequestedSchema, remainingPartitionSchema, internalSchemaOpt, filters, storageConf, tableSchemaForTimestampRepair)
       projectIter(iter, StructType(modifiedRequestedSchema.fields ++ remainingPartitionSchema.fields), modifiedOutputSchema)
     }
 

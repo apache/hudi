@@ -36,6 +36,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+import org.apache.hadoop.mapred.JobConf
 import org.apache.parquet.hadoop.metadata.FileMetaData
 import org.apache.parquet.schema.{GroupType, MessageType, Type => ParquetType}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
@@ -80,9 +81,19 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
 
   protected var typeChangeInfos: java.util.Map[Integer, Pair[DataType, DataType]] = null
 
-  def getHadoopConfClone(footerFileMetaData: FileMetaData, enableVectorizedReader: Boolean): Configuration = {
-    // Clone new conf
-    val hadoopAttemptConf = new Configuration(sharedConf)
+  /**
+   * Returns the conf to read the file with: `sharedConf` itself when the file needs no keys of its own, otherwise a
+   * copy with the file's requested schema. Other files may share `sharedConf`, so it is never modified; pass
+   * `writable` when the caller sets keys on the returned conf.
+   */
+  def getFileReadConf(footerFileMetaData: FileMetaData, enableVectorizedReader: Boolean, writable: Boolean): Configuration = {
+    var fileConf: Configuration = if (writable) new JobConf(sharedConf) else null
+    def hadoopAttemptConf: Configuration = {
+      if (fileConf == null) {
+        fileConf = new JobConf(sharedConf)
+      }
+      fileConf
+    }
     typeChangeInfos = if (shouldUseInternalSchema) {
       // Empty projections (count(*), select 1) read no column data, so there is nothing to
       // reconstruct - and querySchemaOption is the UNPRUNED table schema in that case (see
@@ -97,7 +108,7 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
 
       SparkInternalSchemaConverter.collectTypeChangedCols(querySchemaOption.get(), mergedInternalSchema)
     } else {
-      val (implicitTypeChangeInfo, sparkRequestSchema) = HoodieParquetFileFormatHelper.buildImplicitSchemaChangeInfo(hadoopAttemptConf, footerFileMetaData, requiredSchema)
+      val (implicitTypeChangeInfo, sparkRequestSchema) = HoodieParquetFileFormatHelper.buildImplicitSchemaChangeInfo(sharedConf, footerFileMetaData, requiredSchema)
       if (!implicitTypeChangeInfo.isEmpty) {
         shouldUseInternalSchema = true
         hadoopAttemptConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, sparkRequestSchema.json)
@@ -112,7 +123,7 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
           "To workaround this issue, set spark.sql.parquet.enableVectorizedReader=false.")
     }
 
-    hadoopAttemptConf
+    if (fileConf == null) sharedConf else fileConf
   }
 
   def generateUnsafeProjection(fullSchema: Seq[AttributeReference], timeZoneId: Option[String]): UnsafeProjection = {
@@ -255,7 +266,7 @@ object ParquetSchemaEvolutionUtils {
    * names both routes rather than blaming pushVariantIntoScan on a read that never set it.
    * Real support is #18285.
    *
-   * Shared by [[ParquetSchemaEvolutionUtils.getHadoopConfClone]] and the per-version legacy
+   * Shared by [[ParquetSchemaEvolutionUtils.getFileReadConf]] and the per-version legacy
    * file formats, which carry a copy of the same schema-merge block. Callers gate on a
    * non-empty projection: empty-projection queries (count(*), select 1) read no column data
    * and must keep working, and the query schema is unpruned in that case.
@@ -302,6 +313,21 @@ object ParquetSchemaEvolutionUtils {
       parquetFieldIgnoreCase(fileParquetSchema, field.name)
         .foreach(validateNoShreddedVariantStruct(field.dataType, _, field.name))
     }
+  }
+
+  /**
+   * Whether any struct in `requiredSchema`, at any depth [[validateNoShreddedVariantStructs]] walks, has the unshredded
+   * variant shape. When there is none, that check cannot fail for any file, so readers skip it.
+   */
+  def containsUnshreddedVariantStruct(requiredSchema: StructType): Boolean =
+    requiredSchema.fields.exists(field => containsUnshreddedVariantStruct(field.dataType))
+
+  private def containsUnshreddedVariantStruct(dataType: DataType): Boolean = dataType match {
+    case struct: StructType if isUnshreddedVariantStruct(struct) => true
+    case struct: StructType => struct.fields.exists(field => containsUnshreddedVariantStruct(field.dataType))
+    case array: ArrayType => containsUnshreddedVariantStruct(array.elementType)
+    case map: MapType => containsUnshreddedVariantStruct(map.valueType)
+    case _ => false
   }
 
   /**
