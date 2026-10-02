@@ -19,15 +19,19 @@
 
 package org.apache.hudi.metadata.index.secondary;
 
+import org.apache.hudi.common.data.HoodieBroadcastScope;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
@@ -48,6 +52,7 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -57,6 +62,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getSecondaryIndex
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.SECONDARY_INDEX;
 import static org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.convertWriteStatsToSecondaryIndexRecords;
+import static org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.getPreviousFileSlices;
 import static org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.readSecondaryKeysFromFileSlices;
 
 /**
@@ -122,13 +128,20 @@ public class SecondaryIndexer extends BaseIndexer {
       return Collections.emptyList();
     }
 
+    List<HoodieWriteStat> allWriteStats = context.commitMetadata().getPartitionToWriteStats().values().stream()
+        .flatMap(Collection::stream).collect(Collectors.toList());
+    // the previous file slices of the written file groups are the same for every secondary index of the table
+    HoodieBroadcastScope broadcastScope = broadcastScope(context);
+    Lazy<Map<HoodieFileGroupId, FileSlice>> previousFileSlices = Lazy.lazily(() -> getPreviousFileSlices(
+        allWriteStats, context.instantTime(), dataTableMetaClient, dataTableWriteConfig, context.commitMetadata()));
     return dataTableMetaClient.getTableConfig().getMetadataPartitions()
         .stream()
         .filter(partition -> partition.startsWith(PARTITION_NAME_SECONDARY_INDEX_PREFIX))
         .map(partition -> {
           HoodieData<HoodieRecord> secondaryIndexRecords;
           try {
-            secondaryIndexRecords = getSecondaryIndexUpdates(context.commitMetadata(), partition, context.instantTime());
+            secondaryIndexRecords = getSecondaryIndexUpdates(context.commitMetadata(), allWriteStats, partition, context.instantTime(), previousFileSlices,
+                broadcastScope);
           } catch (Exception e) {
             throw new HoodieMetadataException("Failed to get secondary index updates for partition " + partition, e);
           }
@@ -141,9 +154,9 @@ public class SecondaryIndexer extends BaseIndexer {
     return Collections.emptyList();
   }
 
-  private HoodieData<HoodieRecord> getSecondaryIndexUpdates(HoodieCommitMetadata commitMetadata, String indexPartition, String instantTime) {
-    List<HoodieWriteStat> allWriteStats = commitMetadata.getPartitionToWriteStats().values().stream()
-        .flatMap(Collection::stream).collect(Collectors.toList());
+  private HoodieData<HoodieRecord> getSecondaryIndexUpdates(HoodieCommitMetadata commitMetadata, List<HoodieWriteStat> allWriteStats, String indexPartition,
+                                                            String instantTime, Lazy<Map<HoodieFileGroupId, FileSlice>> previousFileSlices,
+                                                            HoodieBroadcastScope broadcastScope) {
     // Return early if there are no write stats, or if this helper is reached for a table-service operation.
     // A replace commit without a known operation type on a table without a record key, e.g. one that only drops files
     // written outside Hudi, has no write stats but still removes the records of the replaced file groups from the index.
@@ -156,6 +169,6 @@ public class SecondaryIndexer extends BaseIndexer {
     }
     HoodieIndexDefinition indexDefinition = HoodieTableMetadataUtil.getHoodieIndexDefinition(indexPartition, dataTableMetaClient);
     return convertWriteStatsToSecondaryIndexRecords(allWriteStats, instantTime, indexDefinition,
-        dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient, engineContext, dataTableWriteConfig, commitMetadata);
+        dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient, engineContext, dataTableWriteConfig, commitMetadata, previousFileSlices, broadcastScope);
   }
 }

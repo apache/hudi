@@ -14,10 +14,12 @@ package org.apache.hudi.metadata.index.bloomfilters;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -104,6 +106,8 @@ class TestBloomFiltersIndexer {
     when(writeConfig.getMetadataConfig()).thenReturn(metadataConfig);
     when(writeConfig.getBloomIndexParallelism()).thenReturn(4);
     when(writeConfig.getBloomFilterType()).thenReturn("DYNAMIC_V0");
+    when(writeConfig.getProps()).thenReturn(new TypedProperties());
+    when(writeConfig.getRecordMerger()).thenReturn(new HoodieAvroRecordMerger());
 
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     HoodieWriteStat writeStat = new HoodieWriteStat();

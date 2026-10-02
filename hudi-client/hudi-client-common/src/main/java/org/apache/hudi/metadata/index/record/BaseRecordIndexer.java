@@ -21,6 +21,8 @@ package org.apache.hudi.metadata.index.record;
 
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.data.HoodieBroadcast;
+import org.apache.hudi.common.data.HoodieBroadcastScope;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -146,7 +148,8 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
   @Override
   public List<IndexPartitionAndRecords> buildUpdate(IndexUpdateContext context) {
     HoodieData<HoodieRecord> updatesFromWriteStatuses = convertMetadataToRecordIndexRecords(engineContext, context.commitMetadata(),
-        dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient, getFileIdEncoding(dataTableMetaClient, dataTableWriteConfig), context.instantTime());
+        dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient, getFileIdEncoding(dataTableMetaClient, dataTableWriteConfig), context.instantTime(),
+        broadcastScope(context));
     HoodieData<HoodieRecord> additionalUpdates = getRecordIndexAdditionalUpserts(updatesFromWriteStatuses, context.commitMetadata(), context.lazyFileSystemView());
     return Collections.singletonList(IndexPartitionAndRecords.of(RECORD_INDEX.getPartitionPath(), updatesFromWriteStatuses.union(additionalUpdates)));
   }
@@ -266,40 +269,44 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
     final boolean generateRecordKeys = !metaClient.getTableConfig().hasRecordKey();
     final int fileIdEncoding = getFileIdEncoding(metaClient, dataWriteConfig);
     ReaderContextFactory<T> readerContextFactory = engineContext.getReaderContextFactory(metaClient);
+    // the schemas are the same for every file slice, so they are resolved once rather than in every task
+    final Option<HoodieSchema> dataSchemaOpt = generateRecordKeys ? Option.empty() : Option.of(resolveDataSchemaForRLIBootstrap(metaClient, dataWriteConfig));
+    final Option<HoodieSchema> requestedSchemaOpt = dataSchemaOpt.map(dataSchema -> metaClient.getTableConfig().populateMetaFields() ? getRecordKeySchema()
+        : HoodieSchemaUtils.projectSchema(dataSchema, Arrays.asList(metaClient.getTableConfig().getRecordKeyFields().orElse(new String[0]))));
+    final Option<InternalSchema> internalSchemaOption = generateRecordKeys ? Option.empty() : SerDeHelper.fromJson(dataWriteConfig.getInternalSchema());
+    final HoodieBroadcast<HoodieTableMetaClient> metaClientBroadcast = engineContext.broadcast(metaClient);
     return engineContext.parallelize(fileSlices, parallelism).flatMap(partitionAndFileSlice -> {
       final String partition = partitionAndFileSlice.getPartitionPath();
       final FileSlice fileSlice = partitionAndFileSlice.getFileSlice();
       final String fileId = fileSlice.getFileId();
+      final HoodieTableMetaClient taskMetaClient = metaClientBroadcast.value();
       long baseFileInstantTimeMillis = HoodieMetadataPayload.parseRecordIndexInstantTime(fileSlice.getBaseInstantTime());
       if (generateRecordKeys) {
         checkState(fileSlice.getBaseFile().isPresent() && !fileSlice.hasLogFiles(),
             "File group " + fileId + " in partition " + partition + " needs a base file and no log files to key its rows by "
                 + "position, because the table has no record key");
         StoragePath dataFilePath = fileSlice.getBaseFile().get().getStoragePath();
-        HoodieStorage storage = metaClient.getStorage();
+        HoodieStorage storage = taskMetaClient.getStorage();
         ClosableIterator<String> recordKeys = HoodieIOFactory.getIOFactory(storage)
-            .getFileFormatUtils(metaClient.getTableConfig().getBaseFileFormat())
-            .getRowKeyIterator(storage, dataFilePath, metaClient.getBasePath());
+            .getFileFormatUtils(taskMetaClient.getTableConfig().getBaseFileFormat())
+            .getRowKeyIterator(storage, dataFilePath, taskMetaClient.getBasePath());
         return new CloseableMappingIterator<>(recordKeys,
             recordKey -> HoodieMetadataPayload.createRecordIndexUpdate(recordKey, partition, fileId, baseFileInstantTimeMillis, fileIdEncoding));
       }
       HoodieReaderContext<T> readerContext = readerContextFactory.getContext();
-      HoodieSchema dataSchema = resolveDataSchemaForRLIBootstrap(metaClient, dataWriteConfig);
-      HoodieSchema requestedSchema = metaClient.getTableConfig().populateMetaFields() ? getRecordKeySchema()
-          : HoodieSchemaUtils.projectSchema(dataSchema, Arrays.asList(metaClient.getTableConfig().getRecordKeyFields().orElse(new String[0])));
-      Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(dataWriteConfig.getInternalSchema());
+      HoodieSchema requestedSchema = requestedSchemaOpt.get();
       HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>builder()
           .withReaderContext(readerContext)
-          .withHoodieTableMetaClient(metaClient)
+          .withHoodieTableMetaClient(taskMetaClient)
           .withBaseFileOption(fileSlice.getBaseFile())
           .withLogFiles(fileSlice.getLogFiles())
           .withPartitionPath(fileSlice.getPartitionPath())
           .withLatestCommitTime(instantTime.get())
-          .withDataSchema(dataSchema)
+          .withDataSchema(dataSchemaOpt.get())
           .withRequestedSchema(requestedSchema)
           .withInternalSchemaOpt(internalSchemaOption)
           .withShouldUseRecordPosition(false)
-          .withProps(metaClient.getTableConfig().getProps())
+          .withProps(taskMetaClient.getTableConfig().getProps())
           .build();
       return new CloseableMappingIterator<>(fileGroupReader.getClosableIterator(), record -> {
         String recordKey = readerContext.getRecordContext().getRecordKey(record, requestedSchema);
@@ -375,6 +382,17 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
                                                                                  HoodieTableMetaClient dataTableMetaClient,
                                                                                  int writesFileIdEncoding,
                                                                                  String instantTime) {
+    return convertMetadataToRecordIndexRecords(engineContext, commitMetadata, metadataConfig, dataTableMetaClient, writesFileIdEncoding, instantTime,
+        new HoodieBroadcastScope(engineContext));
+  }
+
+  private static <T> HoodieData<HoodieRecord> convertMetadataToRecordIndexRecords(HoodieEngineContext engineContext,
+                                                                                  HoodieCommitMetadata commitMetadata,
+                                                                                  HoodieMetadataConfig metadataConfig,
+                                                                                  HoodieTableMetaClient dataTableMetaClient,
+                                                                                  int writesFileIdEncoding,
+                                                                                  String instantTime,
+                                                                                  HoodieBroadcastScope broadcastScope) {
     List<HoodieWriteStat> allWriteStats = commitMetadata.getPartitionToWriteStats().values().stream()
         .flatMap(Collection::stream).collect(Collectors.toList());
     // Return early if there are no write stats, or if the operation is compaction or log compaction.
@@ -395,12 +413,13 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
       Map<String, List<HoodieWriteStat>> writeStatsByFileId = allWriteStats.stream().collect(Collectors.groupingBy(HoodieWriteStat::getFileId));
       int parallelism = Math.max(Math.min(writeStatsByFileId.size(), metadataConfig.getRecordIndexMaxParallelism()), 1);
       String basePath = dataTableMetaClient.getBasePath().toString();
-      StorageConfiguration storageConfiguration = dataTableMetaClient.getStorageConf();
       // a table without record keys, e.g. one that registers files written outside Hudi, keys every row by file path and position
       boolean generateRecordKeys = !dataTableMetaClient.getTableConfig().hasRecordKey();
       Option<HoodieSchema> writerSchemaOpt = HoodieTableMetadataUtil.tryResolveSchemaForTable(dataTableMetaClient);
       Option<HoodieSchema> finalWriterSchemaOpt = writerSchemaOpt;
       ReaderContextFactory<T> readerContextFactory = engineContext.getReaderContextFactory(dataTableMetaClient);
+      boolean isPartitionedRecordIndex = metadataConfig.isRecordLevelIndexEnabled();
+      HoodieBroadcast<HoodieTableMetaClient> metaClientBroadcast = broadcastScope.broadcast(dataTableMetaClient);
       HoodieData<HoodieRecord> recordIndexRecords = engineContext.parallelize(new ArrayList<>(writeStatsByFileId.entrySet()), parallelism)
           .flatMap(writeStatsByFileIdEntry -> {
             String fileId = writeStatsByFileIdEntry.getKey();
@@ -419,10 +438,10 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
             if (!baseFileWriteStats.isEmpty()) {
               return baseFileWriteStats.stream()
                   .flatMap(writeStat -> {
-                    HoodieStorage storage = HoodieStorageUtils.getStorage(new StoragePath(writeStat.getPath()), storageConfiguration);
+                    HoodieStorage storage = HoodieStorageUtils.getStorage(new StoragePath(writeStat.getPath()), metaClientBroadcast.value().getStorageConf());
                     return CollectionUtils.toStream(BaseFileRecordParsingUtils
                         .generateRLIMetadataHoodieRecordsForBaseFile(basePath, writeStat, writesFileIdEncoding, instantTime, storage,
-                            metadataConfig.isRecordLevelIndexEnabled(), generateRecordKeys));
+                            isPartitionedRecordIndex, generateRecordKeys));
                   })
                   .iterator();
             }
@@ -430,19 +449,19 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
             if (!logFileWriteStats.isEmpty()) {
               String partitionPath = logFileWriteStats.get(0).getPartitionPath();
               List<String> currentLogFilePaths = logFileWriteStats.stream()
-                  .map(writeStat -> new StoragePath(dataTableMetaClient.getBasePath(), writeStat.getPath()).toString())
+                  .map(writeStat -> new StoragePath(metaClientBroadcast.value().getBasePath(), writeStat.getPath()).toString())
                   .collect(Collectors.toList());
               List<String> allLogFilePaths = logFileWriteStats.stream()
                   .flatMap(writeStat -> {
                     checkState(writeStat instanceof HoodieDeltaWriteStat, "Log file should be associated with a delta write stat");
                     List<String> currentLogFiles = ((HoodieDeltaWriteStat) writeStat).getLogFiles().stream()
-                        .map(logFile -> new StoragePath(new StoragePath(dataTableMetaClient.getBasePath(), writeStat.getPartitionPath()), logFile).toString())
+                        .map(logFile -> new StoragePath(new StoragePath(metaClientBroadcast.value().getBasePath(), writeStat.getPartitionPath()), logFile).toString())
                         .collect(Collectors.toList());
                     return currentLogFiles.stream();
                   })
                   .collect(Collectors.toList());
               // Extract revived and deleted keys
-              Pair<Set<String>, Set<String>> revivedAndDeletedKeys = HoodieTableMetadataUtil.getRevivedAndDeletedKeysFromMergedLogs(dataTableMetaClient, instantTime,
+              Pair<Set<String>, Set<String>> revivedAndDeletedKeys = HoodieTableMetadataUtil.getRevivedAndDeletedKeysFromMergedLogs(metaClientBroadcast.value(), instantTime,
                   allLogFilePaths, finalWriterSchemaOpt, currentLogFilePaths, partitionPath, readerContextFactory.getContext());
               Set<String> revivedKeys = revivedAndDeletedKeys.getLeft();
               Set<String> deletedKeys = revivedAndDeletedKeys.getRight();
@@ -453,7 +472,7 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
                   .collect(Collectors.toList());
               // Process deleted keys to create deletes
               List<HoodieRecord> deletedRecords = deletedKeys.stream()
-                  .map(key -> HoodieMetadataPayload.createRecordIndexDelete(key, partitionPath, metadataConfig.isRecordLevelIndexEnabled()))
+                  .map(key -> HoodieMetadataPayload.createRecordIndexDelete(key, partitionPath, isPartitionedRecordIndex))
                   .collect(Collectors.toList());
               // Combine all records into one list
               List<HoodieRecord> allRecords = new ArrayList<>();
