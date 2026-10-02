@@ -23,11 +23,13 @@ import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.avro.AvroRecordContext;
 import org.apache.hudi.common.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieSparkRecord;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
@@ -97,6 +99,9 @@ public class HoodieStreamerUtils {
     String payloadClassName = StringUtils.isNullOrEmpty(cfg.payloadClassName)
         ? HoodieRecordPayload.getAvroPayloadForMergeMode(cfg.recordMergeMode, cfg.payloadClassName)
         : cfg.payloadClassName;
+    boolean requiresOrderingValue = shouldUseOrderingField
+        && cfg.recordMergeMode != RecordMergeMode.COMMIT_TIME_ORDERING
+        && !OverwriteWithLatestAvroPayload.class.getName().equals(payloadClassName);
 
     return avroRDDOptional.map(avroRDD -> {
       HoodieSchema targetSchema = schemaProvider.getTargetHoodieSchema();
@@ -131,6 +136,13 @@ public class HoodieStreamerUtils {
                       ? OrderingValues.create(orderingFieldsStr.split(","),
                          field -> (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, field, false, useConsistentLogicalTimestamp))
                       : null;
+                  if (requiresOrderingValue && OrderingValues.isMissing(orderingValue)) {
+                    throw new IllegalArgumentException(
+                        "Ordering fields '" + orderingFieldsStr + "' resolved to a null value for record key '"
+                            + hoodieKey.getRecordKey() + "'. Please ensure all records carry non-null values for "
+                            + "the ordering fields, or use a merge mode or payload class that does not order "
+                            + "(e.g., COMMIT_TIME_ORDERING or OverwriteWithLatestAvroPayload).");
+                  }
                   HoodieRecord record = shouldUseOrderingField ? HoodieRecordUtils.createHoodieRecord(gr, orderingValue, hoodieKey, payloadClassName, isDelete)
                       : HoodieRecordUtils.createHoodieRecord(gr, hoodieKey, payloadClassName, isDelete);
                   return Either.left(record);

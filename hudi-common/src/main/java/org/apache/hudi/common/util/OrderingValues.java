@@ -21,6 +21,7 @@ package org.apache.hudi.common.util;
 import org.apache.hudi.common.util.collection.ArrayComparable;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Function;
 
 /**
@@ -91,6 +92,21 @@ public class OrderingValues {
   /**
    * Returns whether the given {@code orderingValue} is default.
    */
+  /**
+   * Whether a required ordering value is missing, meaning there is nothing the mergers can compare.
+   * A single ordering field resolves to the field value itself, so a null field yields a null
+   * ordering value; several fields resolve to an {@link ArrayComparable} that is non-null and holds
+   * the nulls, so its elements are checked too. Either shape fails with a NullPointerException once
+   * a merger compares it.
+   */
+  public static boolean isMissing(Comparable orderingValue) {
+    if (orderingValue == null) {
+      return true;
+    }
+    return orderingValue instanceof ArrayComparable
+        && ((ArrayComparable) orderingValue).getValues().stream().anyMatch(Objects::isNull);
+  }
+
   public static boolean isDefault(Comparable orderingValue) {
     return DEFAULT_VALUE.equals(orderingValue);
   }

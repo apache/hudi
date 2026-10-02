@@ -299,7 +299,7 @@ object HoodieCreateRecordUtils {
       orderingFields,
       JFunction.toJavaFunction[String, Comparable[_]](field => {
         val fieldVal = HoodieAvroUtils.getNestedFieldVal(avroRec, field, false, consistentLogicalTimestampEnabled)
-        if (fieldVal == null) {
+        if (OrderingValues.isMissing(fieldVal.asInstanceOf[Comparable[_]])) {
           if (requiresOrderingValue) {
             throw new IllegalArgumentException(
               s"Ordering field '$field' has null value for record key '$recordKey'. " +

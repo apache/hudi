@@ -67,6 +67,18 @@ public class TestHoodieStreamerUtils extends UtilitiesTestBase {
       + "{\"name\": \"timestamp\",\"type\": \"long\"}," + "{\"name\": \"_row_key\", \"type\": \"string\"},"
       + "{\"name\": \"partition_path\", \"type\": [\"null\", \"string\"], \"default\": null },"
       + "{\"name\": \"rider\", \"type\": \"string\"}," + "{\"name\": \"driver\", \"type\": \"string\"}]}";
+  private static final String ORDERING_FIELD = "event_time";
+  private static final String NULLABLE_ORDERING_SCHEMA_STRING = "{\"type\": \"record\"," + "\"name\": \"rec\"," + "\"fields\": [ "
+      + "{\"name\": \"timestamp\",\"type\": \"long\"}," + "{\"name\": \"_row_key\", \"type\": \"string\"},"
+      + "{\"name\": \"partition_path\", \"type\": [\"null\", \"string\"], \"default\": null },"
+      + "{\"name\": \"rider\", \"type\": \"string\"}," + "{\"name\": \"driver\", \"type\": \"string\"},"
+      + "{\"name\": \"" + ORDERING_FIELD + "\", \"type\": [\"null\", \"long\"], \"default\": null }]}";
+  private static final String NULLABLE_ORDERING_DELETE_SCHEMA_STRING = "{\"type\": \"record\"," + "\"name\": \"rec\"," + "\"fields\": [ "
+      + "{\"name\": \"timestamp\",\"type\": \"long\"}," + "{\"name\": \"_row_key\", \"type\": \"string\"},"
+      + "{\"name\": \"partition_path\", \"type\": [\"null\", \"string\"], \"default\": null },"
+      + "{\"name\": \"rider\", \"type\": \"string\"}," + "{\"name\": \"driver\", \"type\": \"string\"},"
+      + "{\"name\": \"" + ORDERING_FIELD + "\", \"type\": [\"null\", \"long\"], \"default\": null },"
+      + "{\"name\": \"" + HoodieRecord.HOODIE_IS_DELETED_FIELD + "\", \"type\": \"boolean\", \"default\": false }]}";
 
   @BeforeAll
   public static void setupOnce() throws Exception {
@@ -237,5 +249,146 @@ public class TestHoodieStreamerUtils extends UtilitiesTestBase {
 
     // propsOverride takes precedence
     assertEquals("overrideValue", result.getString("hoodie.overridden.key"));
+  }
+
+  /**
+   * A null value in the ordering field must be quarantined as a record-creation failure rather than
+   * flowing into the write.
+   */
+  @Test
+  void testCreateHoodieRecordsWithNullOrderingValue() {
+    HoodieSchema schema = HoodieSchema.parse(NULLABLE_ORDERING_SCHEMA_STRING);
+    JavaRDD<GenericRecord> recordRdd = jsc.parallelize(Collections.singletonList(1)).map(i -> {
+      GenericRecord genericRecord = new GenericData.Record(schema.toAvroSchema());
+      genericRecord.put(0, i * 1000L);
+      genericRecord.put(1, "key" + i);
+      genericRecord.put(2, "path" + i);
+      genericRecord.put(3, "rider1");
+      genericRecord.put(4, "driver1");
+      genericRecord.put(5, null);
+      return genericRecord;
+    });
+    HoodieStreamer.Config cfg = new HoodieStreamer.Config();
+    cfg.payloadClassName = DefaultHoodieRecordPayload.class.getName();
+    cfg.sourceOrderingFields = ORDERING_FIELD;
+    TypedProperties props = new TypedProperties();
+    props.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition_path");
+    props.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
+    BaseErrorTableWriter errorTableWriter = Mockito.mock(BaseErrorTableWriter.class);
+    ArgumentCaptor<JavaRDD<?>> errorEventCaptor = ArgumentCaptor.forClass(JavaRDD.class);
+    doNothing().when(errorTableWriter).addErrorEvents(errorEventCaptor.capture());
+
+    Option<JavaRDD<HoodieRecord>> recordOpt = HoodieStreamerUtils.createHoodieRecords(
+        cfg, props, Option.of(recordRdd), new SimpleSchemaProvider(jsc, schema, props),
+        HoodieRecordType.AVRO, false, "000", Option.of(errorTableWriter), new HoodieTableConfig());
+
+    assertTrue(recordOpt.isPresent());
+    assertEquals(Collections.emptyList(), recordOpt.get().collect());
+    List<ErrorEvent<String>> errorEvents = (List<ErrorEvent<String>>) errorEventCaptor.getValue().collect();
+    // The record is schema-valid, so it is serialized by the Avro JsonEncoder, which wraps
+    // nullable union values.
+    ErrorEvent<String> expectedErrorEvent = new ErrorEvent<>(
+        "{\"timestamp\":1000,\"_row_key\":\"key1\",\"partition_path\":{\"string\":\"path1\"},"
+            + "\"rider\":\"rider1\",\"driver\":\"driver1\",\"" + ORDERING_FIELD + "\":null}",
+        ErrorEvent.ErrorReason.RECORD_CREATION);
+    assertEquals(Collections.singletonList(expectedErrorEvent), errorEvents);
+  }
+
+  /**
+   * With several ordering fields, a null in any one of them is still a missing ordering value:
+   * OrderingValues.create returns a non-null ArrayComparable holding the null, so it survives a
+   * plain null check and fails later when the merger compares it.
+   */
+  @Test
+  void testCreateHoodieRecordsWithNullInOneOfSeveralOrderingFields() {
+    HoodieSchema schema = HoodieSchema.parse(NULLABLE_ORDERING_SCHEMA_STRING);
+    JavaRDD<GenericRecord> recordRdd = nullOrderingRecords(schema, false);
+    HoodieStreamer.Config cfg = nullOrderingConfig("timestamp," + ORDERING_FIELD);
+
+    List<ErrorEvent<String>> errorEvents = quarantinedEvents(cfg, schema, recordRdd);
+
+    assertEquals(1, errorEvents.size());
+    assertEquals(ErrorEvent.ErrorReason.RECORD_CREATION, errorEvents.get(0).getReason());
+  }
+
+  /**
+   * A delete carrying a null ordering value is rejected too. It is not a commit-time-ordering
+   * delete, since that requires the default ordering value rather than a null one, so the merger
+   * would compare the null and fail.
+   */
+  @Test
+  void testCreateHoodieRecordsWithNullOrderingValueOnDelete() {
+    HoodieSchema schema = HoodieSchema.parse(NULLABLE_ORDERING_DELETE_SCHEMA_STRING);
+    JavaRDD<GenericRecord> recordRdd = nullOrderingRecords(schema, true);
+    HoodieStreamer.Config cfg = nullOrderingConfig(ORDERING_FIELD);
+
+    List<ErrorEvent<String>> errorEvents = quarantinedEvents(cfg, schema, recordRdd);
+
+    assertEquals(1, errorEvents.size());
+    assertEquals(ErrorEvent.ErrorReason.RECORD_CREATION, errorEvents.get(0).getReason());
+  }
+
+  /**
+   * Without an error table there is nowhere to quarantine the record, so the batch fails instead of
+   * writing an unusable ordering value.
+   */
+  @Test
+  void testCreateHoodieRecordsWithNullOrderingValueFailsWithoutErrorTable() {
+    HoodieSchema schema = HoodieSchema.parse(NULLABLE_ORDERING_SCHEMA_STRING);
+    JavaRDD<GenericRecord> recordRdd = nullOrderingRecords(schema, false);
+    HoodieStreamer.Config cfg = nullOrderingConfig(ORDERING_FIELD);
+
+    Option<JavaRDD<HoodieRecord>> recordOpt = HoodieStreamerUtils.createHoodieRecords(
+        cfg, nullOrderingProps(), Option.of(recordRdd), new SimpleSchemaProvider(jsc, schema, nullOrderingProps()),
+        HoodieRecordType.AVRO, false, "000", Option.empty(), new HoodieTableConfig());
+
+    assertTrue(recordOpt.isPresent());
+    SparkException sparkException = assertThrows(SparkException.class, () -> recordOpt.get().collect());
+    assertEquals(HoodieRecordCreationException.class, sparkException.getCause().getClass());
+  }
+
+  private static TypedProperties nullOrderingProps() {
+    TypedProperties props = new TypedProperties();
+    props.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition_path");
+    props.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
+    return props;
+  }
+
+  private static HoodieStreamer.Config nullOrderingConfig(String orderingFields) {
+    HoodieStreamer.Config cfg = new HoodieStreamer.Config();
+    cfg.payloadClassName = DefaultHoodieRecordPayload.class.getName();
+    cfg.sourceOrderingFields = orderingFields;
+    return cfg;
+  }
+
+  private JavaRDD<GenericRecord> nullOrderingRecords(HoodieSchema schema, boolean isDelete) {
+    return jsc.parallelize(Collections.singletonList(1)).map(i -> {
+      GenericRecord genericRecord = new GenericData.Record(schema.toAvroSchema());
+      genericRecord.put(0, i * 1000L);
+      genericRecord.put(1, "key" + i);
+      genericRecord.put(2, "path" + i);
+      genericRecord.put(3, "rider1");
+      genericRecord.put(4, "driver1");
+      genericRecord.put(5, null);
+      if (isDelete) {
+        genericRecord.put(6, true);
+      }
+      return genericRecord;
+    });
+  }
+
+  private List<ErrorEvent<String>> quarantinedEvents(HoodieStreamer.Config cfg, HoodieSchema schema, JavaRDD<GenericRecord> recordRdd) {
+    TypedProperties props = nullOrderingProps();
+    BaseErrorTableWriter errorTableWriter = Mockito.mock(BaseErrorTableWriter.class);
+    ArgumentCaptor<JavaRDD<?>> errorEventCaptor = ArgumentCaptor.forClass(JavaRDD.class);
+    doNothing().when(errorTableWriter).addErrorEvents(errorEventCaptor.capture());
+
+    Option<JavaRDD<HoodieRecord>> recordOpt = HoodieStreamerUtils.createHoodieRecords(
+        cfg, props, Option.of(recordRdd), new SimpleSchemaProvider(jsc, schema, props),
+        HoodieRecordType.AVRO, false, "000", Option.of(errorTableWriter), new HoodieTableConfig());
+
+    assertTrue(recordOpt.isPresent());
+    assertEquals(Collections.emptyList(), recordOpt.get().collect());
+    return (List<ErrorEvent<String>>) errorEventCaptor.getValue().collect();
   }
 }
