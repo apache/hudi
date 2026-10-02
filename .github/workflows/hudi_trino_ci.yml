@@ -143,7 +143,6 @@ jobs:
         with:
           java-version: '25'
           distribution: 'temurin'
-          cache: maven
       - name: Purge Trino artifacts from the local m2
         if: needs.changes.outputs.trino == 'true'
         # Artifacts an older pin left behind carry the same SNAPSHOT coordinates as the current ones.

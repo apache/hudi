@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSyncTableStrategy;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
@@ -56,6 +57,7 @@ import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 import org.apache.hudi.sync.common.model.PartitionEvent;
 import org.apache.hudi.sync.common.model.PartitionEvent.PartitionEventType;
+import org.apache.hudi.sync.common.util.HoodieMetastoreTableDescriptor;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
@@ -772,6 +774,31 @@ public class TestHiveSyncTool {
 
     reInitHiveSyncClient();
     reSyncHiveTable();
+
+    if (syncAsDataSourceTable) {
+      Map<String, String> syncedDescriptorParameters;
+      IMetaStoreClient client = IMetaStoreClientUtil.getMSC(getHiveConf());
+      try {
+        syncedDescriptorParameters = client.getTable(HiveTestUtil.DB_NAME, HiveTestUtil.TABLE_NAME)
+            .getParameters()
+            .entrySet()
+            .stream()
+            .filter(entry -> entry.getKey().equals("EXTERNAL") || entry.getKey().startsWith("spark.sql."))
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+      } finally {
+        client.close();
+      }
+
+      assertEquals(
+          HoodieMetastoreTableDescriptor.forSnapshotView(
+              hiveClient.getStorageSchema(true),
+              Collections.singletonList("datestr"),
+              HoodieTableType.COPY_ON_WRITE,
+              HiveTestUtil.basePath,
+              true)
+              .getTableParameters(),
+          syncedDescriptorParameters);
+    }
 
     SessionState.start(HiveTestUtil.getHiveConf());
     Driver hiveDriver = new org.apache.hadoop.hive.ql.Driver(HiveTestUtil.getHiveConf());
