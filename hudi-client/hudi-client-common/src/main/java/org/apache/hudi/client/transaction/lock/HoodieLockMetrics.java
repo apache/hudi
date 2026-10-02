@@ -50,6 +50,7 @@ public class HoodieLockMetrics {
   public static final String LOCK_DANGLING_COUNTER_NAME = "lock.dangling";
   public static final String LOCK_INTERRUPTED_COUNTER_NAME = "lock.interrupted";
   public static final String LOCK_THROTTLED_COUNTER_NAME = "lock.throttled";
+  public static final String LOCK_TRANSIENT_ERROR_COUNTER_NAME = "lock.transient.error";
   private final HoodieWriteConfig writeConfig;
   private final boolean isMetricsEnabled;
   private final int keepLastNtimes = 100;
@@ -67,6 +68,7 @@ public class HoodieLockMetrics {
   private transient Counter lockDangling;
   private transient Counter lockInterrupted;
   private transient Counter lockThrottled;
+  private transient Counter lockTransientError;
   private transient Timer lockDuration;
   private transient Timer lockApiRequestDuration;
   private static final Object REGISTRY_LOCK = new Object();
@@ -92,6 +94,7 @@ public class HoodieLockMetrics {
       lockDangling = registry.counter(getMetricsName(LOCK_DANGLING_COUNTER_NAME));
       lockInterrupted = registry.counter(getMetricsName(LOCK_INTERRUPTED_COUNTER_NAME));
       lockThrottled = registry.counter(getMetricsName(LOCK_THROTTLED_COUNTER_NAME));
+      lockTransientError = registry.counter(getMetricsName(LOCK_TRANSIENT_ERROR_COUNTER_NAME));
       lockDuration = createTimerForMetrics(registry, LOCK_ACQUIRE_DURATION_TIMER_NAME);
       lockApiRequestDuration = createTimerForMetrics(registry, LOCK_REQUEST_LATENCY_TIMER_NAME);
     }
@@ -209,6 +212,18 @@ public class HoodieLockMetrics {
   public void updateLockThrottledMetric() {
     if (isMetricsEnabled) {
       this.lockThrottled.inc();
+    }
+  }
+
+  /**
+   * Counts retriable server-side storage errors (HTTP 5xx) on lock writes. Tracked separately
+   * from {@link #updateLockThrottledMetric()} and {@link #updateLockStateUnknownMetric()} so an
+   * operator can tell a rate-limited backend from an unavailable one from a genuinely
+   * indeterminate lock state.
+   */
+  public void updateLockTransientErrorMetric() {
+    if (isMetricsEnabled) {
+      this.lockTransientError.inc();
     }
   }
 }

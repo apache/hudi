@@ -50,7 +50,8 @@ public class TestLockResultEnums {
     assertEquals(1, LockUpsertResult.ACQUIRED_BY_OTHERS.getCode());
     assertEquals(2, LockUpsertResult.UNKNOWN_ERROR.getCode());
     assertEquals(3, LockUpsertResult.THROTTLED.getCode());
-    assertEquals(4, LockUpsertResult.values().length);
+    assertEquals(4, LockUpsertResult.TRANSIENT_ERROR.getCode());
+    assertEquals(5, LockUpsertResult.values().length);
   }
 
   @Test
