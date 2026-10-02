@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.view;
 
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
+import org.apache.hudi.common.bootstrap.index.NoOpBootstrapIndex;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BootstrapBaseFileMapping;
 import org.apache.hudi.common.model.BootstrapFileMapping;
@@ -43,6 +44,7 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SamplingLogger;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -121,6 +123,11 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   private BootstrapIndex bootstrapIndex;
   private HoodieTableVersion tableVersion;
 
+  @VisibleForTesting
+  BootstrapIndex getBootstrapIndex() {
+    return bootstrapIndex;
+  }
+
   protected AbstractTableFileSystemView(HoodieTableMetadata tableMetadata) {
     this.tableMetadata = tableMetadata;
   }
@@ -134,7 +141,16 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     this.tableVersion = metaClient.getTableConfig().getTableVersion();
     refreshTimeline(visibleActiveTimeline);
     resetFileGroupsReplaced(visibleCommitsAndCompactionTimeline);
-    this.bootstrapIndex =  BootstrapIndex.getBootstrapIndex(metaClient);
+    // For non-bootstrap tables, skip initializing the real bootstrap index and use a NoOp
+    // implementation instead. HFileBootstrapIndex's constructor issues two storage.exists()
+    // probes (plus a reflective class load) on every view init; on object stores like S3
+    // each probe is a billable HEAD request, so for the common case where no bootstrap
+    // table exists this is a pure waste of latency and money. useIndex() already
+    // short-circuits to false when the bootstrap base path is absent, so swapping in
+    // NoOpBootstrapIndex is behavior-preserving while cutting those S3 API calls.
+    this.bootstrapIndex = metaClient.getTableConfig().getBootstrapBasePath().isPresent()
+        ? BootstrapIndex.getBootstrapIndex(metaClient)
+        : new NoOpBootstrapIndex(metaClient);
     // Load Pending Compaction Operations
     resetPendingCompactionOperations(CompactionUtils.getAllPendingCompactionOperations(metaClient).values().stream()
         .map(e -> Pair.of(e.getKey(), CompactionOperation.convertFromAvroRecordInstance(e.getValue()))));
