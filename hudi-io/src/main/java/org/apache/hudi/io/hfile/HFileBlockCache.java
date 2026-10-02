@@ -22,6 +22,8 @@ package org.apache.hudi.io.hfile;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.Callable;
@@ -68,16 +70,41 @@ public class HFileBlockCache {
    * @param key      the cache key
    * @param loader   callable to load the block if not in cache
    * @return cached or newly computed block
+   * @throws IOException if the loader fails, in which case nothing is cached for the key
    */
-  public HFileBlock getOrCompute(BlockCacheKey key, Callable<HFileBlock> loader) {
-    // Caffeine uses Function instead of Callable, so we need to wrap the Callable
-    return cache.get(key, (k) -> {
-      try {
-        return loader.call();
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    });
+  public HFileBlock getOrCompute(BlockCacheKey key, Callable<HFileBlock> loader) throws IOException {
+    return getOrLoad(cache, key, loader);
+  }
+
+  /**
+   * Gets a value from a cache, or loads and caches it if not present.
+   *
+   * <p>Caffeine only accepts a {@link java.util.function.Function} as the loader, so a checked
+   * exception has to cross the cache boundary wrapped; it is unwrapped here so that callers keep
+   * the {@link IOException} the loader threw. Unchecked exceptions propagate as they are.
+   *
+   * @param cache  the cache
+   * @param key    the cache key
+   * @param loader callable to load the value if not in cache
+   * @return cached or newly loaded value
+   * @throws IOException if the loader fails, in which case nothing is cached for the key
+   */
+  static <K, V> V getOrLoad(Cache<K, V> cache, K key, Callable<? extends V> loader) throws IOException {
+    try {
+      return cache.get(key, k -> {
+        try {
+          return loader.call();
+        } catch (IOException e) {
+          throw new UncheckedIOException(e);
+        } catch (RuntimeException e) {
+          throw e;
+        } catch (Exception e) {
+          throw new UncheckedIOException(new IOException("Failed to load HFile block", e));
+        }
+      });
+    } catch (UncheckedIOException e) {
+      throw e.getCause();
+    }
   }
 
   /**

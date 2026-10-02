@@ -21,6 +21,7 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
 
 import org.apache.arrow.util.VisibleForTesting;
@@ -88,7 +89,7 @@ public class CachingHFileReaderImpl extends HFileReaderImpl {
 
   @Override
   protected List<BlockIndexEntry> readDataBlockIndexEntries(BlockIndexEntry indexEntry,
-                                                            HFileBlockType blockType) {
+                                                            HFileBlockType blockType) throws IOException {
     HFileLeafIndexBlock block = getOrComputeBlock(indexEntry.getOffset(), indexEntry.getSize(), blockType, HFileLeafIndexBlock.class);
     return block.readBlockIndex();
   }
@@ -112,13 +113,14 @@ public class CachingHFileReaderImpl extends HFileReaderImpl {
 
   private HFileReaderCacheManager.LoadOnOpenBlocks getOrComputeLoadOnOpenData() throws IOException {
     return cacheManager.getOrComputeLoadOnOpenData(filePath, () -> {
-      SeekableDataInputStream stream = lazyStream.get();
-      HFileTrailer loadedTrailer = readTrailer(stream, lazyFileSize.get());
+      SeekableDataInputStream stream = getStream();
+      long fileSize = lazyFileSize.get();
+      HFileTrailer loadedTrailer = readTrailer(stream, fileSize);
       HFileContext loadOnOpenContext = HFileContext.builder()
           .compressionCodec(loadedTrailer.getCompressionCodec())
           .build();
       HFileBlockReader blockReader = new HFileBlockReader(loadOnOpenContext, stream,
-          loadedTrailer.getLoadOnOpenDataOffset(), lazyFileSize.get() - HFileTrailer.getTrailerSize());
+          loadedTrailer.getLoadOnOpenDataOffset(), fileSize - HFileTrailer.getTrailerSize());
       HFileRootIndexBlock rootDataIndexBlock = (HFileRootIndexBlock) blockReader.nextBlock(HFileBlockType.ROOT_INDEX);
       HFileRootIndexBlock metaRootIndexBlock = (HFileRootIndexBlock) blockReader.nextBlock(HFileBlockType.ROOT_INDEX);
       HFileFileInfoBlock fileInfoBlock = (HFileFileInfoBlock) blockReader.nextBlock(HFileBlockType.FILE_INFO);
@@ -130,10 +132,25 @@ public class CachingHFileReaderImpl extends HFileReaderImpl {
   private <T extends HFileBlock> T getOrComputeBlock(long offset,
                                                      int size,
                                                      HFileBlockType expectedBlockType,
-                                                     Class<T> blockClass) {
+                                                     Class<T> blockClass) throws IOException {
     return cacheManager.getOrComputeBlock(filePath, offset, size, blockClass, () -> {
-      HFileBlockReader blockReader = new HFileBlockReader(context, lazyStream.get(), offset, offset + size);
+      HFileBlockReader blockReader = new HFileBlockReader(context, getStream(), offset, offset + size);
       return blockReader.nextBlock(expectedBlockType);
     });
+  }
+
+  /**
+   * Opens the underlying stream on first use. The lazy supplier can only surface an open failure
+   * as a {@link HoodieIOException}, so it is unwrapped here to keep the reader's {@link IOException} contract.
+   */
+  private SeekableDataInputStream getStream() throws IOException {
+    try {
+      return lazyStream.get();
+    } catch (HoodieIOException e) {
+      if (e.getIOException() != null) {
+        throw e.getIOException();
+      }
+      throw e;
+    }
   }
 }

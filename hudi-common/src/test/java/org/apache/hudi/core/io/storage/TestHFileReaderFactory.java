@@ -42,6 +42,7 @@ import java.io.IOException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -224,6 +225,38 @@ class TestHFileReaderFactory {
 
     HFileReader reader = factory.createHFileReader();
     assertInstanceOf(CachingHFileReaderImpl.class, reader);
+    verify(mockStorage, never()).openSeekable(mockPath, false);
+  }
+
+  @Test
+  void testCreateHFileReader_WithoutCaching_ShouldSurfaceFileSizeIOException() throws IOException {
+    IOException sizeFailure = new IOException("size lookup failed");
+    when(mockStorage.getPathInfo(mockPath)).thenThrow(sizeFailure);
+
+    HFileReaderFactory factory = HFileReaderFactory.builder()
+        .withStorage(mockStorage)
+        .withProps(properties)
+        .withPath(mockPath)
+        .build();
+
+    assertSame(sizeFailure, assertThrows(IOException.class, factory::createHFileReader));
+    verify(mockStorage, never()).openSeekable(mockPath, false);
+  }
+
+  @Test
+  void testCreateHFileReader_WithCaching_ShouldSurfaceFileSizeIOExceptionOnFirstRead() throws IOException {
+    properties.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(), "true");
+    IOException sizeFailure = new IOException("size lookup failed");
+    when(mockStorage.getPathInfo(mockPath)).thenThrow(sizeFailure);
+
+    HFileReaderFactory factory = HFileReaderFactory.builder()
+        .withStorage(mockStorage)
+        .withProps(properties)
+        .withPath(mockPath)
+        .build();
+
+    HFileReader reader = factory.createHFileReader();
+    assertSame(sizeFailure, assertThrows(IOException.class, reader::initializeMetadata));
     verify(mockStorage, never()).openSeekable(mockPath, false);
   }
 }

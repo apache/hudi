@@ -21,6 +21,7 @@ package org.apache.hudi.io.hfile;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
@@ -30,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -137,6 +139,34 @@ public class TestHFileBlockCache {
 
     // 6. Final check: ensure the pre-existing block is still accessible
     assertSame(preExistingBlock, cache.getBlock(preExistingKey), "Pre-existing block should remain untouched.");
+  }
+
+  @Test
+  public void testGetOrComputeSurfacesLoaderIOExceptionAndCachesNothing() throws Exception {
+    HFileBlockCache cache = new HFileBlockCache(10, 30, TimeUnit.MINUTES);
+    HFileBlockCache.BlockCacheKey key = new HFileBlockCache.BlockCacheKey("file-A", 1024, 128);
+    IOException loadFailure = new IOException("block read failed");
+    AtomicInteger loaderExecutionCount = new AtomicInteger(0);
+
+    IOException thrown = assertThrows(IOException.class, () -> cache.getOrCompute(key, () -> {
+      loaderExecutionCount.incrementAndGet();
+      throw loadFailure;
+    }));
+    assertSame(loadFailure, thrown, "The loader's IOException should surface unwrapped.");
+    assertEquals(0, cache.size(), "A failed load should leave nothing in the cache.");
+
+    IllegalStateException unchecked = assertThrows(IllegalStateException.class, () -> cache.getOrCompute(key, () -> {
+      throw new IllegalStateException("unchecked");
+    }));
+    assertEquals("unchecked", unchecked.getMessage());
+
+    MockHFileDataBlock block = new MockHFileDataBlock(HFileContext.builder().build(), createValidHFileBlockData(), 0);
+    assertSame(block, cache.getOrCompute(key, () -> {
+      loaderExecutionCount.incrementAndGet();
+      return block;
+    }));
+    assertEquals(2, loaderExecutionCount.get(), "The key should be loaded again after the failed attempt.");
+    assertEquals(1, cache.size());
   }
 
   /**

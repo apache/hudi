@@ -82,6 +82,7 @@ import static org.apache.hudi.core.io.storage.HoodieAvroHFileReaderImplBase.KEY_
 import static org.apache.hudi.core.io.storage.HoodieAvroHFileReaderImplBase.SCHEMA_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Slf4j
@@ -256,6 +257,17 @@ public class TestHoodieNativeAvroHFileReaderCaching {
   }
 
   @Test
+  public void testMissingFileSurfacesIOExceptionThroughCachingReader() throws Exception {
+    StoragePath missingPath = new StoragePath(tempDir.toString() + "/missing.hfile");
+    HFileReaderFactory readerFactory = createCachingReaderFactory(storage, missingPath);
+
+    try (HFileReader reader = readerFactory.createHFileReader()) {
+      assertThrows(IOException.class, reader::initializeMetadata);
+      assertThrows(IOException.class, reader::seekTo);
+    }
+  }
+
+  @Test
   public void testReadersShareSingleCacheManagerInstance() throws Exception {
     HFileReaderFactory firstFactory = createCachingReaderFactory(storage);
     HFileReaderFactory secondFactory = createCachingReaderFactory(storage);
@@ -414,6 +426,10 @@ public class TestHoodieNativeAvroHFileReaderCaching {
   }
 
   private HFileReaderFactory createCachingReaderFactory(HoodieStorage storage) {
+    return createCachingReaderFactory(storage, getFilePath());
+  }
+
+  private HFileReaderFactory createCachingReaderFactory(HoodieStorage storage, StoragePath path) {
     TypedProperties props = new TypedProperties();
     props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(), "true");
     props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key(), "100");
@@ -422,7 +438,7 @@ public class TestHoodieNativeAvroHFileReaderCaching {
 
     return HFileReaderFactory.builder()
         .withStorage(storage)
-        .withPath(getFilePath())
+        .withPath(path)
         .withProps(props)
         .build();
   }

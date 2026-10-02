@@ -93,7 +93,7 @@ public final class HFileReaderCacheManager {
                                                     long offset,
                                                     int size,
                                                     Class<T> blockClass,
-                                                    Callable<HFileBlock> loader) {
+                                                    Callable<HFileBlock> loader) throws IOException {
     HFileBlockCache.BlockCacheKey cacheKey = new HFileBlockCache.BlockCacheKey(filePath, offset, size);
     HFileBlock block = blockCache.getOrCompute(cacheKey, loader);
     return blockClass.cast(block);
@@ -101,13 +101,7 @@ public final class HFileReaderCacheManager {
 
   public LoadOnOpenBlocks getOrComputeLoadOnOpenData(String filePath,
                                                      Callable<LoadOnOpenBlocks> loader) throws IOException {
-    return loadOnOpenDataCache.get(filePath, key -> {
-      try {
-        return loader.call();
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    });
+    return HFileBlockCache.getOrLoad(loadOnOpenDataCache, filePath, loader);
   }
 
   public void clear() {
