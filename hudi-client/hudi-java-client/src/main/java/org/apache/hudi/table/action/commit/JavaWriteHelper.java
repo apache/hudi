@@ -29,13 +29,17 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class JavaWriteHelper<T,R> extends BaseWriteHelper<T, List<HoodieRecord<T>>,
     List<HoodieKey>, List<WriteStatus>, R> {
@@ -55,6 +59,28 @@ public class JavaWriteHelper<T,R> extends BaseWriteHelper<T, List<HoodieRecord<T
   @Override
   protected List<HoodieRecord<T>> tag(List<HoodieRecord<T>> dedupedRecords, HoodieEngineContext context, HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table) {
     return table.getIndex().tagLocation(HoodieListData.eager(dedupedRecords), context, table).collectAsList();
+  }
+
+  @Override
+  protected List<HoodieRecord<T>> updatesAsDeletesAndInserts(List<HoodieRecord<T>> taggedRecords,
+                                                             HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
+                                                             int configuredShuffleParallelism) {
+    HoodieWriteConfig config = table.getConfig();
+    TypedProperties props = config.getProps();
+    final HoodieSchema schema = HoodieSchema.parse(config.getSchema());
+    DeleteContext deleteContext = DeleteContext.fromRecordSchema(props, schema);
+    Map<HoodieKey, HoodieRecord<T>> latestByKey = new LinkedHashMap<>();
+    taggedRecords.forEach(
+        record -> latestByKey.merge(record.getKey(), record, JavaWriteHelper::latestLocation));
+    return latestByKey.values().stream().flatMap(record -> {
+      if (!record.isCurrentLocationKnown() || record.isDelete(deleteContext, props)) {
+        return Stream.of(record);
+      }
+      HoodieRecord<T> deleteRecord = HoodieDeleteHelper.createDeleteRecord(config, record.getKey());
+      deleteRecord.setIgnoreIndexUpdate(true);
+      HoodieIndexUtils.tagRecord(deleteRecord, record.getCurrentLocation());
+      return Stream.of(deleteRecord, record.newInstance(record.getKey()));
+    }).collect(Collectors.toList());
   }
 
   @Override
