@@ -47,6 +47,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -171,7 +172,7 @@ public class ParquetUtils extends FileFormatUtils {
     AvroReadSupport.setRequestedProjection(conf, HoodieSchemaUtils.getRecordKeySchema().toAvroSchema());
     try {
       ParquetReaderIterator<GenericRecord> rowIterator = new ParquetReaderIterator<>(
-          AvroParquetReader.<GenericRecord>builder(new Path(filePath.toUri())).withConf(conf).build());
+          AvroParquetReader.<GenericRecord>builder(new Path(filePath.toUri())).withDataModel(GenericData.get()).withConf(conf).build());
       return new ClosableIterator<String>() {
         private long rowPosition = 0;
 
@@ -241,7 +242,7 @@ public class ParquetUtils extends FileFormatUtils {
     AvroReadSupport.setRequestedProjection(conf, readSchema.toAvroSchema());
     Set<Pair<String, Long>> rowKeys = new HashSet<>();
     long rowPosition = 0;
-    try (ParquetReader reader = AvroParquetReader.builder(filePath).withConf(conf).build()) {
+    try (ParquetReader reader = AvroParquetReader.builder(filePath).withDataModel(GenericData.get()).withConf(conf).build()) {
       Object obj = reader.read();
       while (obj != null) {
         if (obj instanceof GenericRecord) {
@@ -291,7 +292,7 @@ public class ParquetUtils extends FileFormatUtils {
       AvroReadSupport.setAvroReadSchema(conf, readSchema.toAvroSchema());
       AvroReadSupport.setRequestedProjection(conf, readSchema.toAvroSchema());
       ParquetReader<GenericRecord> reader =
-          AvroParquetReader.<GenericRecord>builder(new Path(filePath.toUri())).withConf(conf).build();
+          AvroParquetReader.<GenericRecord>builder(new Path(filePath.toUri())).withDataModel(GenericData.get()).withConf(conf).build();
       return HoodieKeyIterator.getInstance(new ParquetReaderIterator<>(reader), keyGeneratorOpt, partitionPath);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read from Parquet file " + filePath, e);
@@ -431,6 +432,7 @@ public class ParquetUtils extends FileFormatUtils {
   public List<GenericRecord> readAvroRecords(HoodieStorage storage, StoragePath filePath) {
     List<GenericRecord> records = new ArrayList<>();
     try (ParquetReader reader = AvroParquetReader.builder(new Path(filePath.toUri()))
+        .withDataModel(GenericData.get())
         .withConf(storage.getConf().unwrapAs(Configuration.class)).build()) {
       Object obj = reader.read();
       while (obj != null) {
