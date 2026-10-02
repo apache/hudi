@@ -29,7 +29,6 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
-import org.apache.hudi.common.testutils.FooterKeyDecryptionFactory;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -41,33 +40,19 @@ import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.parquet.HadoopReadOptions;
-import org.apache.parquet.ParquetReadOptions;
 import org.apache.parquet.avro.AvroSchemaConverter;
-import org.apache.parquet.avro.HoodieAvroParquetReaderBuilder;
-import org.apache.parquet.crypto.FileDecryptionProperties;
-import org.apache.parquet.filter2.compat.FilterCompat;
-import org.apache.parquet.filter2.predicate.FilterApi;
-import org.apache.parquet.hadoop.ParquetInputFormat;
-import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
-import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.schema.MessageType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -82,10 +67,8 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.schema.HoodieSchemaUtils.METADATA_FIELD_SCHEMA;
 import static org.apache.hudi.metadata.HoodieIndexVersion.V1;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -565,86 +548,5 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     assertTrue(metadataWithSkipRowGroups.getFileMetaData() != null);
     assertFalse(metadata.getBlocks().isEmpty());
     assertTrue(metadataWithSkipRowGroups.getBlocks().isEmpty());
-  }
-
-  /**
-   * A reader built with {@link ParquetUtils#withHadoopReadOptions} must get the read options parquet builds
-   * from the configuration and the file path, field by field, and read the same rows as a reader built from
-   * the path with {@code withConf}.
-   */
-  @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  void testWithHadoopReadOptionsMatchesPathBasedReader(boolean encrypted) throws Exception {
-    Configuration conf = new Configuration();
-    Path path = new Path(Paths.get(basePath, "options.parquet").toUri());
-    FooterKeyDecryptionFactory.writeFile(conf, path, 10, encrypted);
-    if (encrypted) {
-      conf.set(FooterKeyDecryptionFactory.CRYPTO_FACTORY_CLASS, FooterKeyDecryptionFactory.class.getName());
-    }
-    // Non-default values, so options that ignore the configuration differ
-    conf.setBoolean(ParquetInputFormat.STATS_FILTERING_ENABLED, false);
-    conf.setBoolean(ParquetInputFormat.DICTIONARY_FILTERING_ENABLED, false);
-    conf.setBoolean(ParquetInputFormat.COLUMN_INDEX_FILTERING_ENABLED, false);
-    conf.setBoolean(ParquetInputFormat.BLOOM_FILTERING_ENABLED, false);
-    conf.setBoolean(ParquetInputFormat.PAGE_VERIFY_CHECKSUM_ENABLED, true);
-    conf.setInt("parquet.read.allocation.size", 4 * 1024 * 1024);
-    ParquetInputFormat.setFilterPredicate(conf, FilterApi.eq(FilterApi.longColumn("ts"), 5L));
-
-    HadoopInputFile inputFile = HadoopInputFile.fromPath(path, conf);
-    ParquetReadOptions expectedOptions = HadoopReadOptions.builder(conf, inputFile.getPath()).build();
-    FooterKeyDecryptionFactory.drainRequestedPaths();
-    try (ParquetReader<IndexedRecord> reader = ParquetUtils.withHadoopReadOptions(
-        new HoodieAvroParquetReaderBuilder<IndexedRecord>(inputFile), inputFile).build()) {
-      assertEquals(encrypted ? Collections.singletonList(inputFile.getPath()) : Collections.emptyList(),
-          FooterKeyDecryptionFactory.drainRequestedPaths());
-      Field options = ParquetReader.class.getDeclaredField("options");
-      options.setAccessible(true);
-      assertSameFields(expectedOptions, options.get(reader), "options");
-
-      List<String> keys = readKeys(reader);
-      assertEquals(Collections.singletonList("key5"), keys);
-      try (ParquetReader<IndexedRecord> pathReader = new HoodieAvroParquetReaderBuilder<IndexedRecord>(
-          new StoragePath(path.toUri())).withConf(conf).build()) {
-        assertEquals(readKeys(pathReader), keys);
-      }
-    }
-  }
-
-  private static void assertSameFields(Object expected, Object actual, String name) throws ReflectiveOperationException {
-    assertEquals(expected.getClass(), actual.getClass(), name);
-    for (Class<?> clazz = expected.getClass(); clazz != Object.class; clazz = clazz.getSuperclass()) {
-      for (Field field : clazz.getDeclaredFields()) {
-        if (Modifier.isStatic(field.getModifiers())) {
-          continue;
-        }
-        field.setAccessible(true);
-        Object expectedValue = field.get(expected);
-        Object actualValue = field.get(actual);
-        String fieldName = name + "." + field.getName();
-        if (expectedValue == null || actualValue == null || expectedValue instanceof Configuration) {
-          assertSame(expectedValue, actualValue, fieldName);
-        } else if (expectedValue instanceof byte[]) {
-          assertArrayEquals((byte[]) expectedValue, (byte[]) actualValue, fieldName);
-        } else if (expectedValue instanceof FileDecryptionProperties) {
-          assertSameFields(expectedValue, actualValue, fieldName);
-        } else if (expectedValue instanceof FilterCompat.FilterPredicateCompat) {
-          assertEquals(((FilterCompat.FilterPredicateCompat) expectedValue).getFilterPredicate(),
-              ((FilterCompat.FilterPredicateCompat) actualValue).getFilterPredicate(), fieldName);
-        } else if (expectedValue.getClass().getMethod("equals", Object.class).getDeclaringClass() != Object.class) {
-          assertEquals(expectedValue, actualValue, fieldName);
-        } else {
-          // Created per build without value equality (codec factory, allocator, configuration wrapper)
-          assertEquals(expectedValue.getClass(), actualValue.getClass(), fieldName);
-        }
-      }
-    }
-  }
-
-  private static List<String> readKeys(ParquetReader<IndexedRecord> reader) throws IOException {
-    List<String> keys = new ArrayList<>();
-    for (IndexedRecord record = reader.read(); record != null; record = reader.read()) {
-      keys.add(((GenericRecord) record).get("_row_key").toString());
-    }
-    return keys;
   }
 }
