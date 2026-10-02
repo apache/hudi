@@ -199,7 +199,12 @@ Same principle as the platform-managed section — emit config that changes beha
 
 ### 9.6 Sample submit command
 
-A runnable `spark-submit` (or Flink equivalent) for the derived writer, per config-templates.md → Sample submit commands. Not applicable to Spark DataSource, where the write lives in the user's own application code.
+A runnable `spark-submit` for the derived Spark writer, per config-templates.md → Sample submit commands. Not applicable to Spark DataSource, where the write lives in the user's own application code.
+
+For Flink requests in PR1, replace this subsection with the non-executable safety
+assessment defined by `flink-config-templates.md`. Do not emit Flink SQL, connector
+options, or a submit command until a later implementation adds and validates that
+capability.
 
 Split the flags explicitly:
 
