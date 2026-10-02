@@ -51,6 +51,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.apache.hudi.common.schema.HoodieSchemaTestUtils.createNullablePrimitiveField;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -939,5 +940,39 @@ public class TestAvroSchemaEvolutionUtils {
       default:
         throw new IllegalArgumentException(token);
     }
+  }
+
+  @Test
+  void testReconcileSchemaWithAbsentIncomingSchemaFallsBackToTableSchema() {
+    HoodieSchema tableSchema = create("simple", createNullablePrimitiveField("a", HoodieSchemaType.BOOLEAN));
+    HoodieSchema emptyTableSchema = create("empty");
+    Map<String, Type> noOverrides = SchemaChangeUtils.parseTimestampLogicalTypeOverrides("");
+
+    for (HoodieSchema incoming : new HoodieSchema[] {null, HoodieSchema.create(HoodieSchemaType.NULL)}) {
+      for (HoodieSchema table : new HoodieSchema[] {tableSchema, emptyTableSchema}) {
+        InternalSchema tableInternalSchema = InternalSchemaConverter.convert(table);
+        assertEquals(tableInternalSchema,
+            AvroSchemaEvolutionUtils.reconcileSchema(incoming, tableInternalSchema, true, noOverrides));
+        assertEquals(tableInternalSchema,
+            InternalSchemaConverter.convert(AvroSchemaEvolutionUtils.reconcileSchema(incoming, table, true, noOverrides)));
+      }
+    }
+  }
+
+  @Test
+  void testReconcileSchemaRequirementsWithAbsentSourceSchema() {
+    HoodieSchema tableSchema = create("simple", createNullablePrimitiveField("a", HoodieSchemaType.BOOLEAN));
+    HoodieSchema emptyTableSchema = create("empty");
+    HoodieSchema nullTableSchema = HoodieSchema.create(HoodieSchemaType.NULL);
+
+    for (HoodieSchema source : new HoodieSchema[] {null, HoodieSchema.create(HoodieSchemaType.NULL), create("emptyIncoming")}) {
+      for (HoodieSchema table : new HoodieSchema[] {tableSchema, emptyTableSchema, nullTableSchema}) {
+        assertEquals(table, AvroSchemaEvolutionUtils.reconcileSchemaRequirements(source, table, false),
+            () -> "source=" + source + ", table=" + table);
+      }
+    }
+    // a populated source has nothing to reconcile against and is returned as-is
+    assertEquals(tableSchema, AvroSchemaEvolutionUtils.reconcileSchemaRequirements(tableSchema, emptyTableSchema, false));
+    assertEquals(tableSchema, AvroSchemaEvolutionUtils.reconcileSchemaRequirements(tableSchema, nullTableSchema, false));
   }
 }

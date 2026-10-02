@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
@@ -31,8 +32,11 @@ import org.apache.hudi.utilities.streamer.StreamContext;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+
+import java.util.Arrays;
 
 /**
  * A mock implementation of S3EventsHoodieIncrSource used for testing StreamSync functionality.
@@ -40,6 +44,11 @@ import org.apache.spark.sql.SparkSession;
  * and data ingestion behavior of the StreamSync class.
  */
 public class MockS3EventsHoodieIncrSource extends S3EventsHoodieIncrSource {
+
+  /**
+   * Newline-separated JSON rows to return as the next batch instead of running a dummy operation.
+   */
+  public static final String MOCK_ROWS_JSON = "mockTestRowsJson";
   
   /**
    * Constructs a new MockS3EventsHoodieIncrSource with the specified parameters.
@@ -90,6 +99,12 @@ public class MockS3EventsHoodieIncrSource extends S3EventsHoodieIncrSource {
   @Override
   public Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     CheckpointValidator.validateCheckpointOption(lastCheckpoint, props);
+    if (props.containsKey(MOCK_ROWS_JSON)) {
+      Dataset<Row> rows = sparkSession.read().json(
+          sparkSession.createDataset(Arrays.asList(props.getString(MOCK_ROWS_JSON).split("\n")), Encoders.STRING()));
+      return Pair.of(Option.of(rows),
+          new StreamerCheckpointV1(props.getString(DummyOperationExecutor.RETURN_CHECKPOINT_KEY, DummyOperationExecutor.CUSTOM_CHECKPOINT1)));
+    }
     return DummyOperationExecutor.executeDummyOperation(lastCheckpoint, sourceLimit, props);
   }
 }
