@@ -25,12 +25,14 @@ import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import com.sun.net.httpserver.HttpServer;
 import org.apache.spark.SparkException;
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.RowFactory;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.storage.StorageLevel;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -62,6 +64,9 @@ public class TestEmbeddingTransformer extends UtilitiesTestBase {
 
   private static HttpServer server;
   private static final AtomicInteger REQUEST_COUNT = new AtomicInteger();
+  // Total number of inputs (texts) the server was asked to embed across all requests; used to prove the
+  // upstream DAG (and therefore the per-input embedding call) is computed once when the records RDD is cached.
+  private static final AtomicInteger EMBEDDED_INPUT_COUNT = new AtomicInteger();
   private static final AtomicInteger REMAINING_FAILURES = new AtomicInteger();
   private static volatile int failureStatus = 500;
 
@@ -83,6 +88,7 @@ public class TestEmbeddingTransformer extends UtilitiesTestBase {
       Matcher matcher = INPUT_PATTERN.matcher(body);
       assertTrue(matcher.find());
       String[] inputs = matcher.group(1).split("\",\"");
+      EMBEDDED_INPUT_COUNT.addAndGet(inputs.length);
       for (int i = 0; i < inputs.length; i++) {
         String text = inputs[i].replaceAll("^\"|\"$", "");
         data.append(i > 0 ? "," : "")
@@ -197,5 +203,44 @@ public class TestEmbeddingTransformer extends UtilitiesTestBase {
         .apply(jsc, sparkSession, sourceDataset("doomed").coalesce(1), props(16));
     assertThrows(SparkException.class, failing::collectAsList);
     REMAINING_FAILURES.set(0);
+  }
+
+  @Test
+  public void testCachedRecordsRddEmbedsEachInputOnceAcrossTwoActions() {
+    REQUEST_COUNT.set(0);
+    EMBEDDED_INPUT_COUNT.set(0);
+    // 6 rows, all with text; a single partition keeps batching deterministic.
+    Dataset<Row> input = sourceDataset("a1", "b2", "c3", "d4", "e5", "f6").coalesce(1);
+    Dataset<Row> output = new EmbeddingTransformer().apply(jsc, sparkSession, input, props(2));
+
+    // Cache the records RDD the way StreamSync caches the input-to-write records, then trigger two actions - the
+    // index-tag lookup and the write both consume the RDD. The embedding backend must see each input exactly once.
+    JavaRDD<Row> records = output.toJavaRDD();
+    records.persist(StorageLevel.MEMORY_AND_DISK_SER());
+    try {
+      assertEquals(6L, records.count());
+      assertEquals(6, records.collect().size());
+      assertEquals(6, EMBEDDED_INPUT_COUNT.get(),
+          "with the records RDD cached, each of the 6 inputs must be embedded exactly once across the two actions");
+    } finally {
+      records.unpersist(false);
+    }
+  }
+
+  @Test
+  public void testUncachedRecordsRddEmbedsEachInputTwiceAcrossTwoActions() {
+    REQUEST_COUNT.set(0);
+    EMBEDDED_INPUT_COUNT.set(0);
+    Dataset<Row> input = sourceDataset("a1", "b2", "c3", "d4", "e5", "f6").coalesce(1);
+    Dataset<Row> output = new EmbeddingTransformer().apply(jsc, sparkSession, input, props(2));
+
+    // Control: without caching, each action recomputes the whole DAG, so every input is embedded again on the
+    // second action (2N). This is the double-embedding the cache fixes, and it proves the N assertion above is not
+    // vacuous.
+    JavaRDD<Row> records = output.toJavaRDD();
+    assertEquals(6L, records.count());
+    assertEquals(6, records.collect().size());
+    assertEquals(12, EMBEDDED_INPUT_COUNT.get(),
+        "without caching, the 6 inputs are embedded again on the second action (2N)");
   }
 }
