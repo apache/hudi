@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.table.HoodieTable;
 
 /**
@@ -49,26 +50,52 @@ public class HoodieKeyLocationFetchHandle<T, I, K, O> extends HoodieReadHandle<T
     this.keyGeneratorOpt = keyGeneratorOpt;
   }
 
-  private ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieBaseFile baseFile) {
-    FileFormatUtils fileFormatUtils = HoodieIOFactory.getIOFactory(hoodieTable.getStorage())
-        .getFileFormatUtils(baseFile.getStoragePath());
-    return fileFormatUtils.fetchRecordKeysWithPositions(hoodieTable.getStorage(), baseFile.getStoragePath(), keyGeneratorOpt, Option.of(partitionPathBaseFilePair.getKey()));
-  }
-
   public ClosableIterator<Pair<HoodieKey, HoodieRecordLocation>> locations() {
-    HoodieBaseFile baseFile = partitionPathBaseFilePair.getRight();
-    String commitTime = baseFile.getCommitTime();
-    String fileId = baseFile.getFileId();
-    return new CloseableMappingIterator<>(fetchRecordKeysWithPositions(baseFile),
-        entry -> Pair.of(entry.getLeft(), new HoodieRecordLocation(commitTime, fileId, entry.getRight())));
+    return locations(hoodieTable.getStorage(), partitionPathBaseFilePair, keyGeneratorOpt);
   }
 
   public ClosableIterator<Pair<String, HoodieRecordGlobalLocation>> globalLocations() {
+    return globalLocations(hoodieTable.getStorage(), partitionPathBaseFilePair, keyGeneratorOpt);
+  }
+
+  /**
+   * Returns the keys of the records in a base file with their locations.
+   *
+   * @param storage                   storage to read the base file with
+   * @param partitionPathBaseFilePair partition path and base file
+   * @param keyGeneratorOpt           key generator, when the table does not populate the meta fields
+   */
+  public static ClosableIterator<Pair<HoodieKey, HoodieRecordLocation>> locations(
+      HoodieStorage storage, Pair<String, HoodieBaseFile> partitionPathBaseFilePair, Option<BaseKeyGenerator> keyGeneratorOpt) {
     HoodieBaseFile baseFile = partitionPathBaseFilePair.getRight();
-    return new CloseableMappingIterator<>(fetchRecordKeysWithPositions(baseFile),
+    String commitTime = baseFile.getCommitTime();
+    String fileId = baseFile.getFileId();
+    return new CloseableMappingIterator<>(fetchRecordKeysWithPositions(storage, partitionPathBaseFilePair, keyGeneratorOpt),
+        entry -> Pair.of(entry.getLeft(), new HoodieRecordLocation(commitTime, fileId, entry.getRight())));
+  }
+
+  /**
+   * Returns the record keys in a base file with their global locations.
+   *
+   * @param storage                   storage to read the base file with
+   * @param partitionPathBaseFilePair partition path and base file
+   * @param keyGeneratorOpt           key generator, when the table does not populate the meta fields
+   */
+  public static ClosableIterator<Pair<String, HoodieRecordGlobalLocation>> globalLocations(
+      HoodieStorage storage, Pair<String, HoodieBaseFile> partitionPathBaseFilePair, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    HoodieBaseFile baseFile = partitionPathBaseFilePair.getRight();
+    return new CloseableMappingIterator<>(fetchRecordKeysWithPositions(storage, partitionPathBaseFilePair, keyGeneratorOpt),
         entry -> Pair.of(entry.getLeft().getRecordKey(),
             new HoodieRecordGlobalLocation(
                 entry.getLeft().getPartitionPath(), baseFile.getCommitTime(),
                 baseFile.getFileId(), entry.getRight())));
+  }
+
+  private static ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(
+      HoodieStorage storage, Pair<String, HoodieBaseFile> partitionPathBaseFilePair, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    HoodieBaseFile baseFile = partitionPathBaseFilePair.getRight();
+    FileFormatUtils fileFormatUtils = HoodieIOFactory.getIOFactory(storage)
+        .getFileFormatUtils(baseFile.getStoragePath());
+    return fileFormatUtils.fetchRecordKeysWithPositions(storage, baseFile.getStoragePath(), keyGeneratorOpt, Option.of(partitionPathBaseFilePair.getKey()));
   }
 }
