@@ -36,6 +36,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+import org.apache.hadoop.mapred.JobConf
 import org.apache.parquet.hadoop.metadata.FileMetaData
 import org.apache.parquet.schema.{GroupType, MessageType, Type => ParquetType}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
@@ -81,12 +82,20 @@ class ParquetSchemaEvolutionUtils(readConf: Configuration,
   protected var typeChangeInfos: java.util.Map[Integer, Pair[DataType, DataType]] = null
 
   /**
-   * Sets the file's requested read schema on the read configuration and returns it for the task
-   * attempt context. The configuration belongs to this read only (see [[SparkParquetReaderBase.read]]),
-   * so it is updated in place.
+   * Returns the configuration to read the file with: the read configuration itself when the file needs no
+   * keys of its own, otherwise a copy with the file's requested schema. Pass `writable` when the caller sets
+   * keys on the returned configuration. The read configuration is never modified, since other readers may
+   * share it.
    */
-  def getHadoopAttemptConf(footerFileMetaData: FileMetaData, enableVectorizedReader: Boolean): Configuration = {
-    val hadoopAttemptConf = readConf
+  def getFileReadConf(footerFileMetaData: FileMetaData, enableVectorizedReader: Boolean, writable: Boolean): Configuration = {
+    // A JobConf, so the task attempt context built on it does not copy it again
+    var fileReadConf: Configuration = if (writable) new JobConf(readConf) else readConf
+    def setRequestedSchema(schema: StructType): Unit = {
+      if (fileReadConf eq readConf) {
+        fileReadConf = new JobConf(readConf)
+      }
+      fileReadConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, schema.json)
+    }
     typeChangeInfos = if (shouldUseInternalSchema) {
       // Empty projections (count(*), select 1) read no column data, so there is nothing to
       // reconstruct - and querySchemaOption is the UNPRUNED table schema in that case (see
@@ -97,14 +106,14 @@ class ParquetSchemaEvolutionUtils(readConf: Configuration,
       val mergedInternalSchema = new InternalSchemaMerger(fileSchema, querySchemaOption.get(), true, true).mergeSchema()
       val mergedSchema = SparkInternalSchemaConverter.constructSparkSchemaFromInternalSchema(mergedInternalSchema)
 
-      hadoopAttemptConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, mergedSchema.json)
+      setRequestedSchema(mergedSchema)
 
       SparkInternalSchemaConverter.collectTypeChangedCols(querySchemaOption.get(), mergedInternalSchema)
     } else {
-      val (implicitTypeChangeInfo, sparkRequestSchema) = HoodieParquetFileFormatHelper.buildImplicitSchemaChangeInfo(hadoopAttemptConf, footerFileMetaData, requiredSchema)
+      val (implicitTypeChangeInfo, sparkRequestSchema) = HoodieParquetFileFormatHelper.buildImplicitSchemaChangeInfo(readConf, footerFileMetaData, requiredSchema)
       if (!implicitTypeChangeInfo.isEmpty) {
         shouldUseInternalSchema = true
-        hadoopAttemptConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, sparkRequestSchema.json)
+        setRequestedSchema(sparkRequestSchema)
       }
       implicitTypeChangeInfo
     }
@@ -116,7 +125,7 @@ class ParquetSchemaEvolutionUtils(readConf: Configuration,
           "To workaround this issue, set spark.sql.parquet.enableVectorizedReader=false.")
     }
 
-    hadoopAttemptConf
+    fileReadConf
   }
 
   def generateUnsafeProjection(fullSchema: Seq[AttributeReference], timeZoneId: Option[String]): UnsafeProjection = {
@@ -259,7 +268,7 @@ object ParquetSchemaEvolutionUtils {
    * names both routes rather than blaming pushVariantIntoScan on a read that never set it.
    * Real support is #18285.
    *
-   * Shared by [[ParquetSchemaEvolutionUtils.getHadoopAttemptConf]] and the per-version legacy
+   * Shared by [[ParquetSchemaEvolutionUtils.getFileReadConf]] and the per-version legacy
    * file formats, which carry a copy of the same schema-merge block. Callers gate on a
    * non-empty projection: empty-projection queries (count(*), select 1) read no column data
    * and must keep working, and the query schema is unpruned in that case.

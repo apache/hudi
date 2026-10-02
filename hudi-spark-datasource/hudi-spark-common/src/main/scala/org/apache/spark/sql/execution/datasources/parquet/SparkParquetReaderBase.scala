@@ -94,7 +94,7 @@ abstract class SparkParquetReaderBase(enableVectorizedReader: Boolean,
    * @param partitionSchema    schema of the partition columns. Partition values will be appended to the end of every row
    * @param internalSchemaOpt  option of internal schema for schema.on.read
    * @param filters            filters for data skipping. Not guaranteed to be used; the spark plan will also apply the filters.
-   * @param sharedConf         the hadoop conf of this read, copied from the caller's conf; it may be modified
+   * @param sharedConf         the hadoop conf
    * @param tableSchemaOpt     option of table schema for timestamp precision conversion
    * @return iterator of rows read from the file output type says [[InternalRow]] but could be [[ColumnarBatch]]
    */
