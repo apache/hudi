@@ -1,0 +1,278 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+"""Tests for the safety manager and confirmation token system."""
+
+from unittest.mock import patch
+
+import pytest
+
+from hudi_cli_mcp.commands import RiskLevel
+from hudi_cli_mcp.safety import (
+    MAX_PENDING_OPERATIONS,
+    PendingOperationLimitError,
+    SafetyManager,
+    TokenNotFoundError,
+)
+
+
+class TestPendingOperation:
+    def test_create_operation(self):
+        safety = SafetyManager()
+        op = safety.prepare_operation(
+            command="commit rollback --commit 123",
+            risk_level=RiskLevel.HIGH,
+            table_path="/tmp/table",
+            description="Roll back commit 123",
+        )
+        assert op.command == "commit rollback --commit 123"
+        assert op.risk_level == RiskLevel.HIGH
+        assert op.table_path == "/tmp/table"
+        assert op.description == "Roll back commit 123"
+        assert op.token  # Non-empty UUID
+        assert op.dry_run_result is None
+        assert not op.is_expired
+        assert op.seconds_remaining > 0
+
+    def test_create_with_dry_run(self):
+        safety = SafetyManager()
+        op = safety.prepare_operation(
+            command="cleans run",
+            risk_level=RiskLevel.HIGH,
+            table_path="/tmp/table",
+            description="Run clean",
+            dry_run_result='{"tables": []}',
+        )
+        assert op.dry_run_result == '{"tables": []}'
+
+    def test_to_dict(self):
+        safety = SafetyManager()
+        op = safety.prepare_operation(
+            command="compaction schedule",
+            risk_level=RiskLevel.MEDIUM,
+            table_path="/tmp/table",
+            description="Schedule compaction",
+        )
+        d = op.to_dict()
+        assert d["token"] == op.token
+        assert d["command"] == "compaction schedule"
+        assert d["risk_level"] == "medium"
+        assert d["table_path"] == "/tmp/table"
+        assert d["description"] == "Schedule compaction"
+        assert d["dry_run_result"] is None
+        assert isinstance(d["expires_in_seconds"], int)
+        assert d["expires_in_seconds"] > 0
+
+
+class TestSafetyManagerConfirm:
+    def test_confirm_valid_token(self):
+        safety = SafetyManager()
+        op = safety.prepare_operation(
+            command="cleans run",
+            risk_level=RiskLevel.HIGH,
+            table_path="/tmp/table",
+            description="Run clean",
+        )
+        confirmed = safety.confirm(op.token)
+        assert confirmed.command == "cleans run"
+        assert confirmed.table_path == "/tmp/table"
+
+    def test_confirm_consumes_token(self):
+        safety = SafetyManager()
+        op = safety.prepare_operation(
+            command="cleans run",
+            risk_level=RiskLevel.HIGH,
+            table_path="/tmp/table",
+            description="Run clean",
+        )
+        safety.confirm(op.token)
+        with pytest.raises(TokenNotFoundError, match="not found"):
+            safety.confirm(op.token)
+
+    def test_confirm_unknown_token(self):
+        safety = SafetyManager()
+        with pytest.raises(TokenNotFoundError, match="not found"):
+            safety.confirm("nonexistent-token")
+
+    def test_confirm_expired_token(self):
+        safety = SafetyManager()
+        op = safety.prepare_operation(
+            command="cleans run",
+            risk_level=RiskLevel.HIGH,
+            table_path="/tmp/table",
+            description="Run clean",
+        )
+        # Expire the token by moving time forward
+        with patch("hudi_cli_mcp.safety.time.time", return_value=op.created_at + 400):
+            with pytest.raises(TokenNotFoundError):
+                # Expired tokens are cleaned up before lookup
+                safety.confirm(op.token)
+
+
+class TestSafetyManagerCancel:
+    def test_cancel_valid_token(self):
+        safety = SafetyManager()
+        op = safety.prepare_operation(
+            command="cleans run",
+            risk_level=RiskLevel.HIGH,
+            table_path="/tmp/table",
+            description="Run clean",
+        )
+        cancelled = safety.cancel(op.token)
+        assert cancelled.command == "cleans run"
+
+    def test_cancel_removes_token(self):
+        safety = SafetyManager()
+        op = safety.prepare_operation(
+            command="cleans run",
+            risk_level=RiskLevel.HIGH,
+            table_path="/tmp/table",
+            description="Run clean",
+        )
+        safety.cancel(op.token)
+        with pytest.raises(TokenNotFoundError):
+            safety.cancel(op.token)
+
+    def test_cancel_unknown_token(self):
+        safety = SafetyManager()
+        with pytest.raises(TokenNotFoundError, match="not found"):
+            safety.cancel("nonexistent-token")
+
+
+class TestSafetyManagerListPending:
+    def test_empty_list(self):
+        safety = SafetyManager()
+        assert safety.list_pending() == []
+
+    def test_list_returns_pending(self):
+        safety = SafetyManager()
+        op1 = safety.prepare_operation(
+            command="cleans run",
+            risk_level=RiskLevel.HIGH,
+            table_path="/tmp/table",
+            description="Run clean",
+        )
+        op2 = safety.prepare_operation(
+            command="compaction schedule",
+            risk_level=RiskLevel.MEDIUM,
+            table_path="/tmp/table",
+            description="Schedule compaction",
+        )
+        pending = safety.list_pending()
+        assert len(pending) == 2
+        tokens = {op.token for op in pending}
+        assert op1.token in tokens
+        assert op2.token in tokens
+
+    def test_list_excludes_expired(self):
+        safety = SafetyManager()
+        op = safety.prepare_operation(
+            command="cleans run",
+            risk_level=RiskLevel.HIGH,
+            table_path="/tmp/table",
+            description="Run clean",
+        )
+        with patch("hudi_cli_mcp.safety.time.time", return_value=op.created_at + 400):
+            pending = safety.list_pending()
+            assert len(pending) == 0
+
+    def test_list_excludes_confirmed(self):
+        safety = SafetyManager()
+        op = safety.prepare_operation(
+            command="cleans run",
+            risk_level=RiskLevel.HIGH,
+            table_path="/tmp/table",
+            description="Run clean",
+        )
+        safety.confirm(op.token)
+        assert len(safety.list_pending()) == 0
+
+
+class TestMultipleOperations:
+    def test_multiple_tokens_independent(self):
+        safety = SafetyManager()
+        op1 = safety.prepare_operation(
+            command="cleans run",
+            risk_level=RiskLevel.HIGH,
+            table_path="/tmp/table1",
+            description="Clean table 1",
+        )
+        op2 = safety.prepare_operation(
+            command="compaction run",
+            risk_level=RiskLevel.HIGH,
+            table_path="/tmp/table2",
+            description="Compact table 2",
+        )
+        # Confirm one, cancel the other
+        confirmed = safety.confirm(op1.token)
+        assert confirmed.table_path == "/tmp/table1"
+
+        cancelled = safety.cancel(op2.token)
+        assert cancelled.table_path == "/tmp/table2"
+
+    def test_unique_tokens_for_distinct_operations(self):
+        # Distinct (command, table_path) pairs each get their own token.
+        # (Identical pairs are deliberately deduped -- see TestPendingDedupeAndCap.)
+        safety = SafetyManager()
+        tokens = set()
+        for i in range(MAX_PENDING_OPERATIONS):
+            op = safety.prepare_operation(
+                command=f"cleans run --retain {i}",
+                risk_level=RiskLevel.HIGH,
+                table_path="/tmp/table",
+                description=f"Op {i}",
+            )
+            tokens.add(op.token)
+        assert len(tokens) == MAX_PENDING_OPERATIONS
+
+
+class TestPendingDedupeAndCap:
+    def _prep(self, safety, command, path="/tmp/table"):
+        return safety.prepare_operation(
+            command=command,
+            risk_level=RiskLevel.HIGH,
+            table_path=path,
+            description="d",
+        )
+
+    def test_identical_pending_operation_returns_same_token(self):
+        safety = SafetyManager()
+        a = self._prep(safety, "compaction run")
+        b = self._prep(safety, "compaction run")
+        # A retry loop must not mint a second token for the same destructive op.
+        assert a.token == b.token
+        assert len(safety.list_pending()) == 1
+
+    def test_different_command_or_table_gets_new_token(self):
+        safety = SafetyManager()
+        a = self._prep(safety, "compaction run")
+        b = self._prep(safety, "cleans run")
+        c = self._prep(safety, "compaction run", path="/tmp/other")
+        assert len({a.token, b.token, c.token}) == 3
+
+    def test_pending_cap_enforced(self):
+        safety = SafetyManager()
+        for i in range(MAX_PENDING_OPERATIONS):
+            self._prep(safety, f"cleans run --x {i}")
+        with pytest.raises(PendingOperationLimitError):
+            self._prep(safety, "compaction run")
+
+    def test_cancel_frees_a_slot(self):
+        safety = SafetyManager()
+        ops = [self._prep(safety, f"cleans run --x {i}") for i in range(MAX_PENDING_OPERATIONS)]
+        safety.cancel(ops[0].token)
+        self._prep(safety, "compaction run")  # should not raise
