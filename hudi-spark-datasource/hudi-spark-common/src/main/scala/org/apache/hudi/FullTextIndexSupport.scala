@@ -20,7 +20,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, TIME_TRAVEL_AS_OF_INSTANT}
-import org.apache.hudi.FullTextIndexSupport.{evaluate, indexLeaves, mayMatch, rowLevelUseful, toCondition, AndCond, IndexLeaf, IndexView, PrefixLeaf, TokenLeaf}
+import org.apache.hudi.FullTextIndexSupport.{evaluate, indexLeaves, mayMatch, rowLevelUseful, toCondition, AndCond, IndexLeaf, IndexView, MAX_PREFIX_POSITION_TERMS, PrefixLeaf, TokenLeaf}
 import org.apache.hudi.avro.model.HoodieFullTextIndexInfo
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieListData
@@ -36,7 +36,7 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_FULL_TEXT
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Expression, Not, Or}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
-import org.apache.spark.sql.hudi.fulltext.{HudiHasAnyTokens, HudiHasTokenPrefix, TokenPredicate}
+import org.apache.spark.sql.hudi.fulltext.{HudiHasAnyTokens, HudiHasPhrase, HudiHasTokenPrefix, TokenPredicate}
 import org.apache.spark.sql.types.StringType
 import org.roaringbitmap.RoaringBitmap
 
@@ -111,7 +111,14 @@ class FullTextIndexSupport(spark: SparkSession,
       // Only units whose coverage marker is visible can be pruned by this index view.
       val markers = readExact(indexPartition, sliceUnits.map { case (fileId, unit) => FullTextIndexUtils.markerKey(fileId, unit) }.toSeq)
       val covered = sliceUnits.filter { case (fileId, unit) => markers.contains(FullTextIndexUtils.markerKey(fileId, unit)) }
-      indexPartition -> IndexView(covered, readPresence(indexPartition, partitionLeaves, covered))
+      val rowCounts = covered.map { case (fileId, unit) =>
+        fileId -> markers(FullTextIndexUtils.markerKey(fileId, unit)).getFullTextIndexMetadata.getRowCount.toLong
+      }
+      val presence = readPresence(indexPartition, partitionLeaves, covered)
+      val prefixTerms = partitionLeaves.collect { case PrefixLeaf(_, prefix) =>
+        prefix -> presence.keys.filter(_.startsWith(prefix)).toSeq
+      }.toMap
+      indexPartition -> IndexView(covered, rowCounts, presence, prefixTerms)
     }
 
     // File-level pass on presence entries, then a row-level pass on positions for the files left.
@@ -123,6 +130,10 @@ class FullTextIndexSupport(spark: SparkSession,
       fileLevel.filter(fileId => mayMatch(evaluate(condition, fileId, views, bitmaps)))
     }
 
+    if (candidates.size == sliceUnits.size) {
+      // Nothing pruned: leave the filters to the other index supports.
+      return None
+    }
     val keptBaseFiles = baseOnly.filter(s => candidates.contains(s.getFileId)).map(_.getBaseFile.get.getFileName)
     val keptWithLogs = withLogs.flatMap { s =>
       Option(s.getBaseFile.orElse(null)).map(_.getFileName).toSeq ++ s.getLogFiles.iterator().asScala.map(_.getFileName)
@@ -156,9 +167,10 @@ class FullTextIndexSupport(spark: SparkSession,
                             views: Map[String, IndexView]): Map[(String, String, String), RoaringBitmap] = {
     leaves.distinct.groupBy(_.indexPartition).flatMap { case (indexPartition, partitionLeaves) =>
       val view = views(indexPartition)
+      // A prefix matching too many terms is evaluated on presence only.
       val terms = partitionLeaves.flatMap {
         case TokenLeaf(_, token) => Seq(token)
-        case PrefixLeaf(_, prefix) => view.presence.keys.filter(_.startsWith(prefix))
+        case PrefixLeaf(_, prefix) => view.prefixTerms(prefix).filter(_ => view.prefixTerms(prefix).size <= MAX_PREFIX_POSITION_TERMS)
       }.distinct
       val keys = for {
         term <- terms
@@ -202,6 +214,8 @@ object FullTextIndexSupport {
   case class AndCond(children: Seq[Condition]) extends Condition
   case class OrCond(children: Seq[Condition]) extends Condition
   case class NotCond(child: Condition) extends Condition
+  /** Satisfied only by rows satisfying the child, but not surely by all of them: keeps the child's sup, drops its sub. */
+  case class SubsetOf(child: Condition) extends Condition
   case object Unknown extends Condition
   sealed trait IndexLeaf extends Condition {
     def indexPartition: String
@@ -209,8 +223,15 @@ object FullTextIndexSupport {
   case class TokenLeaf(indexPartition: String, token: String) extends IndexLeaf
   case class PrefixLeaf(indexPartition: String, prefix: String) extends IndexLeaf
 
-  /** The covered units (file id -> unit) of one index partition and their presence entries (term -> file id -> entry). */
-  case class IndexView(covered: Map[String, String], presence: Map[String, Map[String, HoodieFullTextIndexInfo]])
+  /** Above this many matching terms, a prefix is evaluated on presence entries only, without positions. */
+  val MAX_PREFIX_POSITION_TERMS = 1000
+
+  /**
+   * One index partition as seen by a query: covered units (file id -> unit), their row counts from the coverage
+   * markers, presence entries (term -> file id -> entry), and the terms each queried prefix expands to.
+   */
+  case class IndexView(covered: Map[String, String], rowCounts: Map[String, Long],
+                       presence: Map[String, Map[String, HoodieFullTextIndexInfo]], prefixTerms: Map[String, Seq[String]])
 
   /**
    * Rows of one file that may satisfy a condition (sup) and rows that surely do (sub); None is every row.
@@ -238,7 +259,11 @@ object FullTextIndexSupport {
           case _ if tokens.isEmpty => Unknown
           case _: HudiHasAnyTokens => OrCond(tokens.map(TokenLeaf(indexPartition, _)))
           case _: HudiHasTokenPrefix => if (tokens.size == 1) PrefixLeaf(indexPartition, tokens.head) else Unknown
-          // A phrase needs all of its tokens; adjacency is checked on the rows read.
+          case _: HudiHasPhrase =>
+            // A row with the phrase holds all of its indexed tokens, but a row holding them may lack the phrase
+            // (order, adjacency, repeated or over-long tokens), so only a one-token phrase is exact.
+            val and = AndCond(tokens.map(TokenLeaf(indexPartition, _)))
+            if (FullTextIndexUtils.tokenSequence(query).size == 1 && tokens.size == 1) and else SubsetOf(and)
           case _ => AndCond(tokens.map(TokenLeaf(indexPartition, _)))
         }
       case _ => Unknown
@@ -253,6 +278,7 @@ object FullTextIndexSupport {
     case AndCond(cs) => cs.flatMap(indexLeaves)
     case OrCond(cs) => cs.flatMap(indexLeaves)
     case NotCond(child) => indexLeaves(child)
+    case SubsetOf(child) => indexLeaves(child)
     case leaf: IndexLeaf => Seq(leaf)
     case Unknown => Seq.empty
   }
@@ -262,6 +288,7 @@ object FullTextIndexSupport {
     case AndCond(cs) => cs.count(indexLeaves(_).nonEmpty) >= 2 || cs.exists(rowLevelUseful)
     case OrCond(cs) => cs.exists(rowLevelUseful)
     case NotCond(child) => indexLeaves(child).nonEmpty
+    case SubsetOf(child) => rowLevelUseful(child)
     case _ => false
   }
 
@@ -276,6 +303,8 @@ object FullTextIndexSupport {
     }
     case NotCond(child) =>
       Rows(complement(evaluate(child, fileId, views, positions).sub, rowCount(fileId, views)), noRows)
+    case SubsetOf(child) =>
+      Rows(evaluate(child, fileId, views, positions).sup, noRows)
     case TokenLeaf(indexPartition, token) =>
       val view = views(indexPartition)
       if (!view.covered.contains(fileId)) {
@@ -296,8 +325,7 @@ object FullTextIndexSupport {
         unknownRows
       } else {
         // Any of the terms starting with the prefix; none at all means no row matches.
-        val terms = view.presence.keys.filter(_.startsWith(prefix)).toSeq
-        evaluate(OrCond(terms.map(TokenLeaf(indexPartition, _))), fileId, views, positions)
+        evaluate(OrCond(view.prefixTerms(prefix).map(TokenLeaf(indexPartition, _))), fileId, views, positions)
       }
     case Unknown => unknownRows
   }
@@ -305,7 +333,7 @@ object FullTextIndexSupport {
   private def inEveryRow(info: HoodieFullTextIndexInfo): Boolean = info.getCardinality == info.getRowCount
 
   private def rowCount(fileId: String, views: Map[String, IndexView]): Option[Long] =
-    views.values.flatMap(_.presence.values.flatMap(_.get(fileId))).headOption.map(_.getRowCount.longValue())
+    views.values.flatMap(_.rowCounts.get(fileId)).headOption
 
   private def intersect(a: Option[RoaringBitmap], b: Option[RoaringBitmap]): Option[RoaringBitmap] = (a, b) match {
     case (None, _) => b

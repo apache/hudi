@@ -29,8 +29,9 @@ import org.apache.spark.sql.types.{AbstractDataType, StringType}
 import scala.collection.JavaConverters._
 
 /**
- * Token predicates over a text column. Both the row-level evaluation and the full-text index use
- * [[FullTextIndexUtils.tokenize]], so pruning by the index can never disagree with the filter.
+ * Token predicates over a text column. Row-level evaluation uses the same tokenizer as the full-text index
+ * ([[FullTextIndexUtils.tokenize]], or [[FullTextIndexUtils.tokenSequence]] for phrases), so every row matching a
+ * predicate holds the indexed tokens the index prunes on.
  */
 sealed abstract class TokenPredicate extends BinaryExpression with Predicate with ImplicitCastInputTypes with CodegenFallback {
 

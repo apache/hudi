@@ -327,75 +327,91 @@ class TestFullTextIndex extends HoodieSparkSqlTestBase {
   }
 
   test("Test full-text index never prunes a file with a match (property test)") {
-    withTempDir { tmp =>
-      val tableName = generateTableName
-      val basePath = s"${tmp.getCanonicalPath}/$tableName"
-      createTable(tableName, basePath)
-      val random = new Random(20260924L)
-      val vocab = Seq("disk", "full", "quota", "node", "user", "login", "error", "ok", "the", "a", "cache", "miss")
-      def sentence(): String = Seq.fill(1 + random.nextInt(5))(vocab(random.nextInt(vocab.size))).mkString(" ")
-      def text(): String = if (random.nextInt(8) == 0) "null" else s"'${sentence()}'"
-      def rows(ids: Seq[Int], ts: Int): String =
-        ids.map(id => s"($id, ${text()}, $ts, '${if (random.nextBoolean()) "a" else "b"}')").mkString(", ")
-      def leaf(): (Expression, String) = {
-        val word = vocab(random.nextInt(vocab.size))
-        val query = Seq.fill(1 + random.nextInt(3))(vocab(random.nextInt(vocab.size))).mkString(" ")
-        random.nextInt(6) match {
-          case 0 => (HudiHasToken(msg, Literal(word)), s"hudi_has_token(msg, '$word')")
-          case 1 => (HudiHasAllTokens(msg, Literal(query)), s"hudi_has_all_tokens(msg, '$query')")
-          case 2 => (HudiHasAnyTokens(msg, Literal(query)), s"hudi_has_any_tokens(msg, '$query')")
-          case 3 =>
-            val prefix = word.take(1 + random.nextInt(word.length))
-            (HudiHasTokenPrefix(msg, Literal(prefix)), s"hudi_has_token_prefix(msg, '$prefix')")
-          case 4 => (HudiHasPhrase(msg, Literal(query)), s"hudi_has_phrase(msg, '$query')")
-          case _ =>
-            val bound = random.nextInt(25)
-            (GreaterThan(ts, Literal(bound.toLong)), s"ts > $bound")
-        }
-      }
-      def predicate(depth: Int): (Expression, String) =
-        if (depth == 0 || random.nextInt(3) == 0) {
-          leaf()
-        } else {
-          random.nextInt(3) match {
-            case 0 =>
-              val ((l, ls), (r, rs)) = (predicate(depth - 1), predicate(depth - 1))
-              (And(l, r), s"($ls) and ($rs)")
-            case 1 =>
-              val ((l, ls), (r, rs)) = (predicate(depth - 1), predicate(depth - 1))
-              (Or(l, r), s"($ls) or ($rs)")
+    // Positions are stored for every term with dense_ratio 1.0 and for few terms of these small files with 0.25.
+    Seq("0.25", "1.0").foreach { denseRatio =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+        createTable(tableName, basePath)
+        val random = new Random(20260924L)
+        val vocab = Seq("disk", "full", "quota", "node", "user", "login", "error", "ok", "the", "a", "cache", "miss")
+        // A small sub-vocabulary makes rows that hold a phrase's tokens out of order, repeated or apart common.
+        val phraseVocab = Seq("disk", "quota", "full")
+        def phraseWords(): String = Seq.fill(1 + random.nextInt(3))(phraseVocab(random.nextInt(phraseVocab.size))).mkString(" ")
+        def sentence(): String =
+          if (random.nextInt(3) == 0) phraseWords() else Seq.fill(1 + random.nextInt(5))(vocab(random.nextInt(vocab.size))).mkString(" ")
+        def text(): String = if (random.nextInt(8) == 0) "null" else s"'${sentence()}'"
+        def rows(ids: Seq[Int], ts: Int): String =
+          ids.map(id => s"($id, ${text()}, $ts, '${if (random.nextBoolean()) "a" else "b"}')").mkString(", ")
+        // A file of its own where every row holds every phrase word, in shuffled order and sometimes repeated: the
+        // index then reports each word in every row while only some rows hold a given phrase.
+        def phraseFileRows(ids: Seq[Int], ts: Int): String = ids.map { id =>
+          val words = random.shuffle(phraseVocab ++ phraseVocab.take(random.nextInt(2))).mkString(" ")
+          s"($id, '$words', $ts, 'w$ts')"
+        }.mkString(", ")
+        def leaf(): (Expression, String) = {
+          val word = vocab(random.nextInt(vocab.size))
+          val query = Seq.fill(1 + random.nextInt(3))(vocab(random.nextInt(vocab.size))).mkString(" ")
+          random.nextInt(6) match {
+            case 0 => (HudiHasToken(msg, Literal(word)), s"hudi_has_token(msg, '$word')")
+            case 1 => (HudiHasAllTokens(msg, Literal(query)), s"hudi_has_all_tokens(msg, '$query')")
+            case 2 => (HudiHasAnyTokens(msg, Literal(query)), s"hudi_has_any_tokens(msg, '$query')")
+            case 3 =>
+              val prefix = word.take(1 + random.nextInt(word.length))
+              (HudiHasTokenPrefix(msg, Literal(prefix)), s"hudi_has_token_prefix(msg, '$prefix')")
+            case 4 =>
+              val phrase = if (random.nextBoolean()) phraseWords() else query
+              (HudiHasPhrase(msg, Literal(phrase)), s"hudi_has_phrase(msg, '$phrase')")
             case _ =>
-              val (c, cs) = predicate(depth - 1)
-              (Not(c), s"not ($cs)")
+              val bound = random.nextInt(25)
+              (GreaterThan(ts, Literal(bound.toLong)), s"ts > $bound")
           }
         }
+        def predicate(depth: Int): (Expression, String) =
+          if (depth == 0 || random.nextInt(3) == 0) {
+            leaf()
+          } else {
+            random.nextInt(3) match {
+              case 0 =>
+                val ((l, ls), (r, rs)) = (predicate(depth - 1), predicate(depth - 1))
+                (And(l, r), s"($ls) and ($rs)")
+              case 1 =>
+                val ((l, ls), (r, rs)) = (predicate(depth - 1), predicate(depth - 1))
+                (Or(l, r), s"($ls) or ($rs)")
+              case _ =>
+                val (c, cs) = predicate(depth - 1)
+                (Not(c), s"not ($cs)")
+            }
+          }
 
-      spark.sql(s"insert into $tableName values ${rows(1 to 8, 1)}")
-      spark.sql(s"create index idx_msg on $tableName using full_text(msg)")
-      var nextId = 9
-      var checks = 0
-      (1 to 20).foreach { step =>
-        random.nextInt(4) match {
-          case 0 =>
-            spark.sql(s"insert into $tableName values ${rows(nextId until nextId + 3, step)}")
-            nextId += 3
-          case 1 =>
-            val id = 1 + random.nextInt(nextId - 1)
-            spark.sql(s"update $tableName set msg = ${text()}, ts = ${step + 100} where id = $id")
-          case 2 =>
-            spark.sql(s"delete from $tableName where id = ${1 + random.nextInt(nextId - 1)}")
-          case _ =>
-            spark.sql(s"call run_clustering(table => '$tableName', op => 'scheduleandexecute')")
+        spark.sql(s"insert into $tableName values ${rows(1 to 8, 1)}")
+        spark.sql(s"create index idx_msg on $tableName using full_text(msg) options (dense_ratio = '$denseRatio')")
+        var nextId = 9
+        var checks = 0
+        (1 to 20).foreach { step =>
+          random.nextInt(4) match {
+            case 0 =>
+              val values = if (random.nextBoolean()) rows(nextId until nextId + 3, step) else phraseFileRows(nextId until nextId + 3, step)
+              spark.sql(s"insert into $tableName values $values")
+              nextId += 3
+            case 1 =>
+              val id = 1 + random.nextInt(nextId - 1)
+              spark.sql(s"update $tableName set msg = ${text()}, ts = ${step + 100} where id = $id")
+            case 2 =>
+              spark.sql(s"delete from $tableName where id = ${1 + random.nextInt(nextId - 1)}")
+            case _ =>
+              spark.sql(s"call run_clustering(table => '$tableName', op => 'scheduleandexecute')")
+          }
+          (1 to 10).foreach { _ =>
+            val (expr, sqlPred) = predicate(3)
+            val needed = filesWithMatches(basePath, sqlPred)
+            val kept = filesRead(basePath, expr)
+            assert(needed.subsetOf(kept), s"dense_ratio $denseRatio, step $step, $sqlPred: pruned a file with a match; needed=$needed kept=$kept")
+            checks += 1
+          }
         }
-        (1 to 10).foreach { _ =>
-          val (expr, sqlPred) = predicate(3)
-          val needed = filesWithMatches(basePath, sqlPred)
-          val kept = filesRead(basePath, expr)
-          assert(needed.subsetOf(kept), s"step $step, $sqlPred: pruned a file with a match; needed=$needed kept=$kept")
-          checks += 1
-        }
+        assertResult(200)(checks)
       }
-      assertResult(200)(checks)
     }
   }
 
@@ -486,7 +502,11 @@ class TestFullTextIndex extends HoodieSparkSqlTestBase {
       assertResult(Seq(4))(idsRead(basePath, "hudi_has_phrase(msg, 'quota disk')"))
       // A token too long for the index still separates the phrase in the row, and still has to match.
       assertResult(Seq(6))(idsRead(basePath, s"hudi_has_phrase(msg, 'disk $longToken')"))
-      Seq("hudi_has_token_prefix(msg, 'disk')", "hudi_has_phrase(msg, 'disk quota')", s"hudi_has_phrase(msg, 'disk $longToken')")
+      // NOT of a phrase: rows holding every phrase token, but not as the phrase, still satisfy it.
+      assertResult(Seq(1, 2, 4, 5, 6))(idsRead(basePath, "not hudi_has_phrase(msg, 'disk quota')", skipping = false))
+      Seq("hudi_has_token_prefix(msg, 'disk')", "hudi_has_phrase(msg, 'disk quota')", s"hudi_has_phrase(msg, 'disk $longToken')",
+        "not hudi_has_phrase(msg, 'disk quota')", "not hudi_has_phrase(msg, 'quota disk')", "not hudi_has_phrase(msg, 'disk disk')",
+        s"not hudi_has_phrase(msg, 'disk $longToken')", "not hudi_has_phrase(msg, 'disk')")
         .foreach(predicate => assertResult(idsRead(basePath, predicate, skipping = false), predicate)(idsRead(basePath, predicate)))
     }
   }
