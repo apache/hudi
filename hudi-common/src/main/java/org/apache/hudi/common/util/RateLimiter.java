@@ -26,6 +26,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Thread-safe rate limiter implementation.
@@ -36,25 +37,36 @@ public class RateLimiter {
 
   private final Semaphore semaphore;
   private final int maxPermits;
+  private final long releasePermitsPeriod;
   private final TimeUnit timePeriod;
-  private ScheduledExecutorService scheduler;
+  private final AtomicBoolean stopped = new AtomicBoolean(false);
+  private volatile ScheduledExecutorService scheduler;
   private static final long RELEASE_PERMITS_PERIOD_IN_SECONDS = 1L;
   private static final long WAIT_BEFORE_NEXT_ACQUIRE_PERMIT_IN_MS = 5;
   private static final int SCHEDULER_CORE_THREAD_POOL_SIZE = 1;
 
   public static RateLimiter create(int permits, TimeUnit timePeriod) {
-    final RateLimiter limiter = new RateLimiter(permits, timePeriod);
+    return create(permits, RELEASE_PERMITS_PERIOD_IN_SECONDS, timePeriod);
+  }
+
+  public static RateLimiter create(int permits, long releasePermitsPeriod, TimeUnit timePeriod) {
+    ValidationUtils.checkArgument(permits > 0, "Permits must be greater than zero");
+    ValidationUtils.checkArgument(releasePermitsPeriod > 0, "Release permits period must be greater than zero");
+    ValidationUtils.checkArgument(timePeriod != null, "Time period must not be null");
+    final RateLimiter limiter = new RateLimiter(permits, releasePermitsPeriod, timePeriod);
     limiter.releasePermitsPeriodically();
     return limiter;
   }
 
-  private RateLimiter(int permits, TimeUnit timePeriod) {
+  private RateLimiter(int permits, long releasePermitsPeriod, TimeUnit timePeriod) {
     this.semaphore = new Semaphore(permits);
     this.maxPermits = permits;
+    this.releasePermitsPeriod = releasePermitsPeriod;
     this.timePeriod = timePeriod;
   }
 
   public boolean tryAcquire(int numPermits) {
+    ValidationUtils.checkArgument(numPermits > 0, "Number of permits must be greater than zero");
     int remainingPermits = numPermits;
     while (remainingPermits > 0) {
       if (remainingPermits > maxPermits) {
@@ -68,27 +80,45 @@ public class RateLimiter {
   }
 
   public boolean acquire(int numOps) {
+    ValidationUtils.checkArgument(numOps > 0 && numOps <= maxPermits,
+        "Number of permits must be between one and the configured maximum");
     try {
-      while (!semaphore.tryAcquire(numOps)) {
+      while (!stopped.get() && !semaphore.tryAcquire(numOps)) {
         Thread.sleep(WAIT_BEFORE_NEXT_ACQUIRE_PERMIT_IN_MS);
       }
+      ValidationUtils.checkState(!stopped.get(), "Rate limiter is stopped");
       log.debug("acquire permits: {}, maxPermits: {}", numOps, maxPermits);
     } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
       throw new RuntimeException("Unable to acquire permits", e);
     }
     return true;
   }
 
-  public void stop() {
-    scheduler.shutdownNow();
+  public synchronized void stop() {
+    if (stopped.compareAndSet(false, true)) {
+      ScheduledExecutorService currentScheduler = scheduler;
+      if (currentScheduler != null) {
+        currentScheduler.shutdownNow();
+      }
+    }
   }
 
-  public void releasePermitsPeriodically() {
-    scheduler = Executors.newScheduledThreadPool(SCHEDULER_CORE_THREAD_POOL_SIZE);
+  public boolean isStopped() {
+    return stopped.get();
+  }
+
+  public synchronized void releasePermitsPeriodically() {
+    ValidationUtils.checkState(!stopped.get(), "Cannot start a stopped rate limiter");
+    if (scheduler != null) {
+      return;
+    }
+    scheduler = Executors.newScheduledThreadPool(SCHEDULER_CORE_THREAD_POOL_SIZE,
+        new CustomizedThreadFactory("rate-limiter", true));
     scheduler.scheduleAtFixedRate(() -> {
       log.debug("Release permits: maxPermits: {}, available: {}", maxPermits, semaphore.availablePermits());
       semaphore.release(maxPermits - semaphore.availablePermits());
-    }, RELEASE_PERMITS_PERIOD_IN_SECONDS, RELEASE_PERMITS_PERIOD_IN_SECONDS, timePeriod);
+    }, releasePermitsPeriod, releasePermitsPeriod, timePeriod);
 
   }
 
