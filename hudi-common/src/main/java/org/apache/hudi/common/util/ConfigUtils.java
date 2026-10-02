@@ -887,8 +887,6 @@ public class ConfigUtils {
         DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
         Boolean.toString(commonConfig.isBitCaskDiskMapCompressionEnabled()));
     props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(),
-        shouldReuse ? "true" : metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED));
-    props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(),
         metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED));
     props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key(),
         metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE));
