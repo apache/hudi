@@ -110,9 +110,10 @@ Notes:
   - GCS: the content read is pinned to the generation returned with the metadata.
 - **Clock.** The renewal comparison uses this writer's own clock. A backward clock step can make it reject our own landed renewal. That fails safe: the renewal is reported as lost and the writer thread is interrupted.
 - **Shutdown hook and heartbeat-start failure.** These release paths stay single-attempt and best-effort.
+- **Ownership unit.** Lock ownership, reentrancy and the read-back are per provider instance, not per thread. A second thread that uses the same instance while it holds the lock is treated as the holder, and the heartbeat monitors only the thread that acquired the lock. Callers that share one provider instance across threads must serialize their critical sections themselves.
 - **Per-client classification.** Each storage client must map timeouts and dropped connections to an ambiguous result, rather than rethrowing them or reporting them as unknown and unretried. The same applies to the S3 409 above. On Azure, a 409 on create means the blob already exists, so it is not a retriable conflict.
 
-The read-back never makes a writer believe it holds a lock it does not hold:
+The read-back never makes this provider instance believe it holds a lock it does not hold:
 - Every write remains conditional on the version this instance last read or wrote.
 - An adopted lock must carry our owner and still be valid by the same test other writers use before taking over a lock.
 
