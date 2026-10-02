@@ -36,7 +36,9 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.execution.bulkinsert.NonSortPartitioner;
 import org.apache.hudi.testutils.HoodieClientTestBase;
@@ -143,6 +145,20 @@ public class TestHoodieClientOnLsmStorage extends HoodieClientTestBase {
           .findFirst()
           .orElseThrow(() -> new AssertionError("No instant " + instantTime));
       assertEquals(HoodieInstant.State.REQUESTED, instant.getState());
+    }
+  }
+
+  @Test
+  void testRejectsCustomClusteringSortBeforePlanGeneration() throws IOException {
+    LsmTableTestContext testContext = createTestContext(HoodieTableType.COPY_ON_WRITE);
+    testContext.writeConfig.setValue(
+        HoodieClusteringConfig.PLAN_STRATEGY_SINGLE_GROUP_CLUSTERING_ENABLED, "true");
+    testContext.writeConfig.setValue(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS, "begin_lat");
+
+    try (SparkRDDWriteClient client = getHoodieWriteClient(testContext.writeConfig)) {
+      bootstrapTable(testContext, client);
+      assertThrows(HoodieClusteringException.class, () -> client.scheduleClustering(Option.empty()));
+      assertTrue(testContext.metaClient.reloadActiveTimeline().filterPendingClusteringTimeline().empty());
     }
   }
 
