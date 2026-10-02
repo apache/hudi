@@ -56,7 +56,8 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.core.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.hadoop.fs.MetaFolderAccessRecordingFileSystem;
+import org.apache.hudi.hadoop.fs.RecordingLocalFileSystem;
+import org.apache.hudi.hadoop.fs.RecordingLocalFileSystem.Call;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 import org.apache.hudi.io.ByteBufferBackedInputStream;
@@ -129,6 +130,7 @@ import static org.apache.hudi.utils.TestData.insertRow;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -1604,8 +1606,8 @@ public class TestInputFormat {
   @ValueSource(booleans = {false, true})
   void testReadSplitsWithoutMetaFolderAccess(boolean streaming) throws Exception {
     Map<String, String> options = new HashMap<>();
-    options.put("hadoop.fs.file.impl", MetaFolderAccessRecordingFileSystem.class.getName());
-    options.put("hadoop.fs.file.impl.disable.cache", "true");
+    options.put("hadoop." + RecordingLocalFileSystem.FILE_IMPL_KEY, RecordingLocalFileSystem.class.getName());
+    options.put("hadoop." + RecordingLocalFileSystem.DISABLE_CACHE_KEY, "true");
     options.put(FlinkOptions.READ_START_COMMIT.key(), FlinkOptions.START_COMMIT_EARLIEST);
     beforeEach(HoodieTableType.MERGE_ON_READ, options);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
@@ -1620,16 +1622,14 @@ public class TestInputFormat {
         : inputFormat.createInputSplits(1);
     assertTrue(splits.length > 0);
 
-    MetaFolderAccessRecordingFileSystem.reset();
-    MetaFolderAccessRecordingFileSystem.setTaskScope(() -> true);
+    RecordingLocalFileSystem.reset();
     List<RowData> result;
-    try {
+    try (RecordingLocalFileSystem.Scope ignored = RecordingLocalFileSystem.withScope(() -> true)) {
       result = readData(inputFormat, splits);
-    } finally {
-      MetaFolderAccessRecordingFileSystem.setTaskScope(() -> false);
     }
-    assertTrue(MetaFolderAccessRecordingFileSystem.getTaskAccesses().isEmpty(),
-        MetaFolderAccessRecordingFileSystem.describeTaskAccesses());
+    assertTrue(RecordingLocalFileSystem.count(Call.inScope()) > 0, "The readers must go through the recording file system");
+    assertEquals(0, RecordingLocalFileSystem.count(Call.inScope().and(Call.underMetaFolder())),
+        () -> RecordingLocalFileSystem.describe(Call.inScope().and(Call.underMetaFolder())));
     assertTrue(TestData.rowDataToString(result).contains("+I[id1, Danny, 24, 1970-01-01T00:00:00.001, par1]"),
         TestData.rowDataToString(result));
   }

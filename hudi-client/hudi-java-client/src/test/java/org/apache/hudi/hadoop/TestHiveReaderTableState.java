@@ -35,7 +35,8 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.hadoop.fs.MetaFolderAccessRecordingFileSystem;
+import org.apache.hudi.hadoop.fs.RecordingLocalFileSystem;
+import org.apache.hudi.hadoop.fs.RecordingLocalFileSystem.Call;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.storage.StoragePath;
@@ -96,13 +97,12 @@ class TestHiveReaderTableState extends HoodieJavaClientTestHarness {
     write(config, updateTime, dataGen.generateUpdates(updateTime, inserts.subList(0, 10)), false);
 
     JobConf jobConf = newJobConf();
-    MetaFolderAccessRecordingFileSystem.register(jobConf);
+    RecordingLocalFileSystem.register(jobConf);
     Map<String, String> riders = read(tableType, jobConf, true);
 
-    // Listing the splits reads the table, which proves the recording file system is in use.
-    assertTrue(MetaFolderAccessRecordingFileSystem.getNonTaskAccessCount() > 0);
-    assertTrue(MetaFolderAccessRecordingFileSystem.getTaskAccesses().isEmpty(),
-        MetaFolderAccessRecordingFileSystem.describeTaskAccesses());
+    assertTrue(RecordingLocalFileSystem.count(Call.inScope()) > 0, "The readers must go through the recording file system");
+    assertEquals(0, RecordingLocalFileSystem.count(Call.inScope().and(Call.underMetaFolder())),
+        () -> RecordingLocalFileSystem.describe(Call.inScope().and(Call.underMetaFolder())));
     assertEquals(20, riders.size());
     assertEquals(10, riders.values().stream().filter(rider -> rider.equals("rider-" + updateTime)).count());
     assertEquals(10, riders.values().stream().filter(rider -> rider.equals("rider-" + insertTime)).count());
@@ -176,11 +176,12 @@ class TestHiveReaderTableState extends HoodieJavaClientTestHarness {
 
     JobConf jobConf = newJobConf();
     jobConf.set(HoodieMetadataConfig.ENABLE.key(), "false");
-    MetaFolderAccessRecordingFileSystem.register(jobConf);
+    RecordingLocalFileSystem.register(jobConf);
     Map<String, String> riders = read(tableType, jobConf, true);
 
-    assertTrue(MetaFolderAccessRecordingFileSystem.getTaskAccesses().isEmpty(),
-        MetaFolderAccessRecordingFileSystem.describeTaskAccesses());
+    assertTrue(RecordingLocalFileSystem.count(Call.inScope()) > 0, "The readers must go through the recording file system");
+    assertEquals(0, RecordingLocalFileSystem.count(Call.inScope().and(Call.underMetaFolder())),
+        () -> RecordingLocalFileSystem.describe(Call.inScope().and(Call.underMetaFolder())));
     Map<String, String> expected = new HashMap<>();
     inserts.subList(0, 5).forEach(record -> expected.put(record.getRecordKey(), "rider-" + committedUpdateTime));
     inserts.subList(5, 10).forEach(record -> expected.put(record.getRecordKey(), "rider-" + latestTime));
@@ -254,14 +255,13 @@ class TestHiveReaderTableState extends HoodieJavaClientTestHarness {
    */
   private Map<String, String> read(HoodieTableType tableType, JobConf jobConf, boolean recordTaskAccesses) throws Exception {
     HoodieParquetInputFormat inputFormat = newInputFormat(tableType, jobConf);
-    MetaFolderAccessRecordingFileSystem.reset();
+    RecordingLocalFileSystem.reset();
     InputSplit[] splits = listSplits(inputFormat, jobConf);
 
     int keyPos = SCHEMA.getField("_row_key").get().pos();
     int riderPos = SCHEMA.getField("rider").get().pos();
     Map<String, String> riders = new HashMap<>();
-    MetaFolderAccessRecordingFileSystem.setTaskScope(() -> recordTaskAccesses);
-    try {
+    try (RecordingLocalFileSystem.Scope ignored = RecordingLocalFileSystem.withScope(() -> recordTaskAccesses)) {
       for (InputSplit split : splits) {
         RecordReader<NullWritable, ArrayWritable> reader = inputFormat.getRecordReader(shipped(split), jobConf, null);
         NullWritable key = reader.createKey();
@@ -272,8 +272,6 @@ class TestHiveReaderTableState extends HoodieJavaClientTestHarness {
         }
         reader.close();
       }
-    } finally {
-      MetaFolderAccessRecordingFileSystem.setTaskScope(() -> false);
     }
     return riders;
   }

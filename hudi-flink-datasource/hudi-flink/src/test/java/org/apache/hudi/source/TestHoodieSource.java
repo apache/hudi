@@ -30,7 +30,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
-import org.apache.hudi.hadoop.fs.MetaFolderAccessRecordingFileSystem;
+import org.apache.hudi.hadoop.fs.RecordingLocalFileSystem;
+import org.apache.hudi.hadoop.fs.RecordingLocalFileSystem.Call;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.source.enumerator.HoodieSplitEnumeratorState;
@@ -505,15 +506,16 @@ public class TestHoodieSource {
     conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
     conf.set(FlinkOptions.READ_AS_STREAMING, streaming);
     conf.set(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
-    conf.setString("hadoop.fs.file.impl", MetaFolderAccessRecordingFileSystem.class.getName());
-    conf.setString("hadoop.fs.file.impl.disable.cache", "true");
+    conf.setString("hadoop." + RecordingLocalFileSystem.FILE_IMPL_KEY, RecordingLocalFileSystem.class.getName());
+    conf.setString("hadoop." + RecordingLocalFileSystem.DISABLE_CACHE_KEY, "true");
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
     TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
 
     Map<String, List<Integer>> ages = readAgesWithSourceV2(streaming, true);
 
-    assertTrue(MetaFolderAccessRecordingFileSystem.getTaskAccesses().isEmpty(),
-        MetaFolderAccessRecordingFileSystem.describeTaskAccesses());
+    assertTrue(RecordingLocalFileSystem.count(Call.inScope()) > 0, "The readers must go through the recording file system");
+    assertEquals(0, RecordingLocalFileSystem.count(Call.inScope().and(Call.underMetaFolder())),
+        () -> RecordingLocalFileSystem.describe(Call.inScope().and(Call.underMetaFolder())));
     assertEquals(Collections.singletonList(24), ages.get("id1"));
   }
 
@@ -556,10 +558,9 @@ public class TestHoodieSource {
         (SerializableSupplier<SplitReaderFunction<RowData>>) supplierField.get(source), getClass().getClassLoader());
     SplitReaderFunction<RowData> function = supplier.get();
 
-    MetaFolderAccessRecordingFileSystem.reset();
-    MetaFolderAccessRecordingFileSystem.setTaskScope(() -> recordTaskAccesses);
+    RecordingLocalFileSystem.reset();
     Map<String, List<Integer>> ages = new HashMap<>();
-    try {
+    try (RecordingLocalFileSystem.Scope ignored = RecordingLocalFileSystem.withScope(() -> recordTaskAccesses)) {
       for (HoodieSourceSplit split : splits) {
         function.open(split);
         BatchRecords<RowData> batch;
@@ -572,8 +573,6 @@ public class TestHoodieSource {
         function.closeCurrentSplit();
       }
       function.close();
-    } finally {
-      MetaFolderAccessRecordingFileSystem.setTaskScope(() -> false);
     }
     return ages;
   }
