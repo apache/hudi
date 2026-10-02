@@ -167,7 +167,8 @@ public class HoodieTableMetaClient implements Serializable {
 
   // In-memory cache for archived timeline based on the start instant time
   // Only one entry should be present in this map
-  private final Map<String, HoodieArchivedTimeline> archivedTimelineMap = new HashMap<>();
+  // Not serialized, so a copy shipped to an executor does not carry the loaded archived instants and their details
+  private transient Map<String, HoodieArchivedTimeline> archivedTimelineMap = new HashMap<>();
 
   protected StoragePath basePath;
   protected StoragePath metaPath;
@@ -388,6 +389,7 @@ public class HoodieTableMetaClient implements Serializable {
     in.defaultReadObject();
 
     storage = null; // will be lazily initialized
+    archivedTimelineMap = new HashMap<>();
   }
 
   private void writeObject(java.io.ObjectOutputStream out) throws IOException {

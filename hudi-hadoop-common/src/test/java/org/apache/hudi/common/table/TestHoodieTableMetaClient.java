@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
@@ -43,20 +44,27 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -104,6 +112,39 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     assertTrue(completedInstant.isCompleted());
     assertEquals(completedInstant.requestedTime(), instant.requestedTime());
     assertEquals("val", metaClient.getActiveTimeline().readCommitMetadata(completedInstant).getExtraMetadata().get("key"));
+  }
+
+  /**
+   * The archived timeline is cached by the meta client that loaded it, and a serialized copy (as shipped to
+   * executors) must not carry it, since it holds every loaded archived instant and its details.
+   */
+  @Test
+  void testArchivedTimelineCacheIsNotSerialized() throws IOException, ClassNotFoundException {
+    HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
+    assertSame(archivedTimeline, metaClient.getArchivedTimeline());
+
+    Set<Class<?>> serializedClasses = new HashSet<>();
+    ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+    try (ObjectOutputStream out = new ObjectOutputStream(bytes) {
+      {
+        enableReplaceObject(true);
+      }
+
+      @Override
+      protected Object replaceObject(Object obj) {
+        serializedClasses.add(obj.getClass());
+        return obj;
+      }
+    }) {
+      out.writeObject(metaClient);
+    }
+    assertTrue(serializedClasses.stream().noneMatch(HoodieArchivedTimeline.class::isAssignableFrom),
+        "The archived timeline was serialized with the meta client: " + serializedClasses);
+
+    try (ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+      HoodieTableMetaClient deserializedMetaClient = (HoodieTableMetaClient) in.readObject();
+      assertNotNull(deserializedMetaClient.getArchivedTimeline());
+    }
   }
 
   @Test
