@@ -22,8 +22,11 @@ package org.apache.spark.sql.execution.datasources.parquet
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaField, HoodieSchemaType}
 import org.apache.hudi.common.schema.internal.InternalSchema
 import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter
+import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.exception.HoodieException
 
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.parquet.hadoop.metadata.FileMetaData
 import org.apache.parquet.schema.{MessageType, Type, Types}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
@@ -385,6 +388,42 @@ class TestParquetSchemaEvolutionUtils {
       ParquetSchemaEvolutionUtils.rebuildFilterFromParquet(untouched, fileSchema, null))
     Assertions.assertSame(untouched,
       ParquetSchemaEvolutionUtils.rebuildFilterFromParquet(untouched, null, null))
+  }
+
+  /**
+   * Any type change is reported, so a reader returning rows reads the file row-based. Only a nested
+   * change fails a caller that must read vectorized (it returns batches); an atomic change does not.
+   */
+  @Test
+  def testTypeChangesAreReportedAndOnlyNestedOnesFailVectorizedReads(): Unit = {
+    val footer = new FileMetaData(Types.buildMessage()
+      .addField(Types.optional(PrimitiveTypeName.INT32).named("id"))
+      .addField(Types.optionalGroup().addField(Types.optional(PrimitiveTypeName.INT32).named("a")).named("nested"))
+      .named("test"), new HashMap[String, String](), "test")
+    // The keys ParquetToSparkSchemaConverter reads, as SparkParquetReaderBase.read sets them.
+    val conf = new Configuration(false)
+    conf.setBoolean("spark.sql.caseSensitive", false)
+    conf.setBoolean("spark.sql.parquet.binaryAsString", false)
+    conf.setBoolean("spark.sql.parquet.int96AsTimestamp", true)
+    conf.setBoolean("spark.sql.legacy.parquet.nanosAsLong", false)
+    conf.setBoolean("spark.sql.parquet.inferTimestampNTZ.enabled", true)
+    def utils(requiredSchema: String): ParquetSchemaEvolutionUtils = new ParquetSchemaEvolutionUtils(
+      conf, new Path("file:///tmp/test.parquet"), StructType.fromDDL(requiredSchema), new StructType(), HOption.empty())
+
+    val unchanged = utils("id int, nested struct<a: int>")
+    unchanged.getHadoopConfClone(footer, true)
+    Assertions.assertFalse(unchanged.hasTypeChange)
+
+    val atomicChange = utils("id long, nested struct<a: int>")
+    atomicChange.getHadoopConfClone(footer, true)
+    Assertions.assertTrue(atomicChange.hasTypeChange)
+
+    val nestedChange = utils("id int, nested struct<a: long>")
+    nestedChange.getHadoopConfClone(footer, false)
+    Assertions.assertTrue(nestedChange.hasTypeChange)
+    val failure = Assertions.assertThrows(classOf[IllegalArgumentException], () =>
+      utils("id int, nested struct<a: long>").getHadoopConfClone(footer, true))
+    Assertions.assertTrue(failure.getMessage.contains("cannot be read in vectorized mode"), failure.getMessage)
   }
 
   /** An internal schema over the given top-level columns, in order; field ids are positional. */

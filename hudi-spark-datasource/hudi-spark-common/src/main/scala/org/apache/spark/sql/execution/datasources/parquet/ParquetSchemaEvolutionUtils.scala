@@ -80,16 +80,23 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
 
   protected var typeChangeInfos: java.util.Map[Integer, Pair[DataType, DataType]] = null
 
-  def getHadoopConfClone(footerFileMetaData: FileMetaData, enableVectorizedReader: Boolean): Configuration = {
+  /**
+   * Clones the conf for one file and records the file's type changes.
+   *
+   * @param requireVectorizedRead true when the caller can only read the file vectorized (it returns
+   *                              batches), so a nested type change fails here
+   */
+  def getHadoopConfClone(footerFileMetaData: FileMetaData, requireVectorizedRead: Boolean): Configuration = {
     // Clone new conf
     val hadoopAttemptConf = new Configuration(sharedConf)
-    typeChangeInfos = if (shouldUseInternalSchema) {
-      // Empty projections (count(*), select 1) read no column data, so there is nothing to
-      // reconstruct - and querySchemaOption is the UNPRUNED table schema in that case (see
-      // pruneInternalSchema), so running the guard would fail queries that work fine.
-      if (requiredSchema.nonEmpty) {
-        ParquetSchemaEvolutionUtils.validateNoShreddedVariants(requiredSchema, querySchemaOption.get(), footerFileMetaData)
-      }
+    typeChangeInfos = if (shouldUseInternalSchema && requiredSchema.isEmpty) {
+      // Empty projections (count(*), select 1) read no column data, so the requested schema stays
+      // empty. querySchemaOption is the UNPRUNED table schema in that case (see pruneInternalSchema);
+      // requesting it would decode every column, and the shredded variant guard or the vectorized
+      // reader would fail on columns the query never reads.
+      new java.util.HashMap[Integer, Pair[DataType, DataType]]()
+    } else if (shouldUseInternalSchema) {
+      ParquetSchemaEvolutionUtils.validateNoShreddedVariants(requiredSchema, querySchemaOption.get(), footerFileMetaData)
       val mergedInternalSchema = new InternalSchemaMerger(fileSchema, querySchemaOption.get(), true, true).mergeSchema()
       val mergedSchema = SparkInternalSchemaConverter.constructSparkSchemaFromInternalSchema(mergedInternalSchema)
 
@@ -105,8 +112,7 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
       implicitTypeChangeInfo
     }
 
-    if (enableVectorizedReader && shouldUseInternalSchema &&
-      !typeChangeInfos.values().forall(_.getLeft.isInstanceOf[AtomicType])) {
+    if (requireVectorizedRead && !canReadVectorized) {
       throw new IllegalArgumentException(
         "Nested types with type changes(implicit or explicit) cannot be read in vectorized mode. " +
           "To workaround this issue, set spark.sql.parquet.enableVectorizedReader=false.")
@@ -114,6 +120,20 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
 
     hadoopAttemptConf
   }
+
+  /**
+   * Whether the vectorized reader can decode this file: a nested type change (implicit or
+   * explicit) needs the row-based reader. Valid after [[getHadoopConfClone]].
+   */
+  private def canReadVectorized: Boolean =
+    !shouldUseInternalSchema || typeChangeInfos.values().forall(_.getLeft.isInstanceOf[AtomicType])
+
+  /**
+   * Whether this file needs a type conversion (implicit or schema-on-read). A reader that returns
+   * rows reads such a file row-based, where Cast converts the values; the vectorized reader's own
+   * conversions cover fewer types. Valid after [[getHadoopConfClone]].
+   */
+  def hasTypeChange: Boolean = !typeChangeInfos.isEmpty
 
   def generateUnsafeProjection(fullSchema: Seq[AttributeReference], timeZoneId: Option[String]): UnsafeProjection = {
     SparkSchemaTransformUtils.generateUnsafeProjection(fullSchema, timeZoneId, typeChangeInfos, requiredSchema, partitionSchema, schemaUtils)

@@ -94,8 +94,11 @@ public class HoodieVectorizedParquetRecordReader extends VectorizedParquetRecord
   @Override
   public void close() throws IOException {
     super.close();
-    for (Map.Entry<Integer, WritableColumnVector> e : idToColumnVectors.entrySet()) {
-      e.getValue().close();
+    // Null when initialization failed before initBatch; closing must not mask that failure.
+    if (idToColumnVectors != null) {
+      for (Map.Entry<Integer, WritableColumnVector> e : idToColumnVectors.entrySet()) {
+        e.getValue().close();
+      }
     }
     idToColumnVectors = null;
     columnarBatch = null;

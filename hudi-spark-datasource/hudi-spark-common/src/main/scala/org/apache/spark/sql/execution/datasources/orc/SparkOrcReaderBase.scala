@@ -174,7 +174,8 @@ object SparkOrcReaderBase {
       MemoryMode.ON_HEAP
     }
 
-    val enableVectorizedReader = sqlConf.orcVectorizedReaderEnabled &&
+    // Batches follow the plan-time decision in the option, not the conf at execution time.
+    val enableVectorizedReader = vectorized &&
       options.getOrElse(FileFormat.OPTION_RETURNING_BATCH,
           throw new IllegalArgumentException(
             "OPTION_RETURNING_BATCH should always be set for OrcFileFormat. " +
@@ -182,7 +183,7 @@ object SparkOrcReaderBase {
         .equals("true")
 
     new SparkOrcReaderBase(
-      enableVectorizedReader = enableVectorizedReader && vectorized,
+      enableVectorizedReader = enableVectorizedReader,
       dataSchema = dataSchema,
       orcFilterPushDown = sqlConf.orcFilterPushDown,
       isCaseSensitive = sqlConf.caseSensitiveAnalysis,

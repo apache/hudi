@@ -34,7 +34,7 @@ import org.apache.spark.sql.{functions, DataFrame, Row, SaveMode, SparkSession, 
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types.{DoubleType, IntegerType, LongType, StringType, StructField, StructType}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 
@@ -458,12 +458,13 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
   /**
    * int->long promotion under schema-on-read on a MOR table. Commit 2 only touches p1, so the read
    * spans a base-only int file (p2) and an int base file merged with a long log file (p1). The
-   * top-level `age` promotion is atomic and is read with the vectorized parquet reader on. When the
-   * same promotion is applied inside the `nested` struct the changed top-level column is no longer
-   * atomic: ParquetSchemaEvolutionUtils.getHadoopConfClone must reject it fast on the base slice
-   * instead of returning corrupt columns, and the workaround it advertises (disabling the vectorized
-   * reader) must actually widen `nested.a` across both shapes. COW is covered by
-   * TestLegacyParquetReadPath#testCowSnapshotReadWithNestedTypeChange.
+   * top-level `age` promotion is atomic. When the same promotion is applied inside the `nested`
+   * struct the changed top-level column is no longer atomic, so the vectorized reader cannot decode
+   * the int base file. A MOR scan returns rows, so the reader reads a base file with a type change
+   * row-based, and `nested.a` must be widened across both shapes with the vectorized reader on or
+   * off. COW is covered by
+   * TestLegacyParquetReadPath#testCowSnapshotReadWithNestedTypeChange and
+   * TestVectorizedParquetReadPerScan#testNestedTypeChangeReadsRowBasedPerFile.
    */
   @ParameterizedTest
   @ValueSource(booleans = Array(false, true))
@@ -528,26 +529,46 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
       assertEquals(IntegerType, snapshot.schema("nested").dataType.asInstanceOf[StructType]("a").dataType)
       assertPromotedRows(snapshot)
     } else {
-      // the non-atomic type change must fail fast in vectorized mode rather than return corrupt columns.
-      // `nested` has to be projected for the guard to engage: a bare count() prunes it away and passes.
-      val thrown = assertThrows(classOf[Throwable]) {
-        loadSnapshot().select("_row_key", "nested").collect()
-      }
-      val causes = Iterator.iterate(thrown: Throwable)(_.getCause).takeWhile(_ != null).take(10).toSeq
-      assertTrue(causes.exists(c => c.isInstanceOf[IllegalArgumentException]
-        && String.valueOf(c.getMessage).contains("cannot be read in vectorized mode")),
-        s"Expected the non-atomic type-change rejection but got: $thrown")
-
+      // The int base file has a non-atomic type change, which the vectorized reader cannot decode.
+      // The MOR scan returns rows, so that file is read row-based instead of failing.
       val vectorizedKey = "spark.sql.parquet.enableVectorizedReader"
       val previous = spark.conf.get(vectorizedKey, "true")
-      spark.conf.set(vectorizedKey, "false")
+      val nestedVectorizedKey = "spark.sql.parquet.enableNestedColumnVectorizedReader"
+      val previousNested = spark.conf.get(nestedVectorizedKey, "false")
       try {
-        val snapshot = loadSnapshot()
-        assertEquals(LongType, snapshot.schema("age").dataType)
-        assertEquals(LongType, snapshot.schema("nested").dataType.asInstanceOf[StructType]("a").dataType)
-        assertPromotedRows(snapshot)
+        Seq("true", "false").foreach { vectorized =>
+          spark.conf.set(vectorizedKey, vectorized)
+          val snapshot = loadSnapshot()
+          assertEquals(LongType, snapshot.schema("age").dataType)
+          assertEquals(LongType, snapshot.schema("nested").dataType.asInstanceOf[StructType]("a").dataType)
+          assertPromotedRows(snapshot)
+          // `nested` has to be projected to reach the type change: a bare count() prunes it away.
+          val nestedA = snapshot.select("_row_key", "nested").collect()
+            .map(r => r.getString(0) -> r.getStruct(1).getLong(0)).toMap
+          assertEquals(1L, nestedA("id1"), s"vectorized reader: $vectorized")
+          assertEquals(expectedNestedA4, nestedA("id4"), s"vectorized reader: $vectorized")
+        }
+
+        // commit 3, new partition p3, written with the long types: with the vectorized reader on, the
+        // p3 base file decodes vectorized while the int p2 base file falls back in the same scan.
+        Seq(("id9", "n9", 19L, 9L, "v9", 3L, "p3"))
+          .toDF("_row_key", "name", "age", "a", "b", "timestamp", "partition")
+          .withColumn("nested", functions.struct(functions.col("a"), functions.col("b")))
+          .drop("a", "b")
+          .write.format("hudi")
+          .options(opts)
+          .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+          .mode(SaveMode.Append)
+          .save(basePath)
+        spark.conf.set(vectorizedKey, "true")
+        spark.conf.set(nestedVectorizedKey, "true")
+        val classes = TestVectorizedParquetReadPerScan.rowClassesByPartition(
+          loadSnapshot().select("_row_key", "nested", "partition"))
+        assertEquals(Set("UnsafeRow"), classes("p2"), s"p2 falls back to the row-based reader: $classes")
+        assertFalse(classes("p3").contains("UnsafeRow"), s"p3 decodes vectorized: $classes")
       } finally {
         spark.conf.set(vectorizedKey, previous)
+        spark.conf.set(nestedVectorizedKey, previousNested)
       }
     }
   }

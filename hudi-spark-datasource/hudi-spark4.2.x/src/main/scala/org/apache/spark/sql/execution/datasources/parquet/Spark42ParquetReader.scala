@@ -171,14 +171,16 @@ class Spark42ParquetReader(enableVectorizedReader: Boolean,
 
       val attemptId = new TaskAttemptID(new TaskID(new JobID(), TaskType.MAP, 0), 0)
       val hadoopAttemptContext =
-        new TaskAttemptContextImpl(schemaEvolutionUtils.getHadoopConfClone(footerFileMetaData, enableVectorizedReader), attemptId)
+        new TaskAttemptContextImpl(schemaEvolutionUtils.getHadoopConfClone(footerFileMetaData, enableVectorizedReader && returningBatch), attemptId)
 
       // Try to push down filters when filter push-down is enabled.
       // Notice: This push-down is RowGroups level, not individual records.
       pushed.foreach {
         ParquetInputFormat.setFilterPredicate(hadoopAttemptContext.getConfiguration, _)
       }
-      if (enableVectorizedReader) {
+      // Batch output decodes vectorized (a nested type change failed above). Row output reads a file
+      // with a type change row-based, where Cast converts it; that file's footer is read again.
+      if (enableVectorizedReader && (returningBatch || !schemaEvolutionUtils.hasTypeChange)) {
         buildVectorizedIterator(
           hadoopAttemptContext, split, file.partitionValues, partitionSchema, convertTz,
           datetimeRebaseSpec, int96RebaseSpec, enableOffHeapColumnVector, returningBatch,
@@ -340,7 +342,8 @@ object Spark42ParquetReader extends SparkParquetReaderBuilder {
     hadoopConf.setBoolean(SQLConf.PARQUET_INFER_TIMESTAMP_NTZ_ENABLED.key, sqlConf.parquetInferTimestampNTZEnabled)
 
     val enableLogicalTimestampRepair = hadoopConf.getBoolean(ENABLE_LOGICAL_TIMESTAMP_REPAIR, true)
-    val returningBatch = sqlConf.parquetVectorizedReaderEnabled &&
+    // Batches follow the plan-time decision in the option, not the conf at execution time.
+    val returningBatch = vectorized &&
       options.getOrElse(FileFormat.OPTION_RETURNING_BATCH,
           throw new IllegalArgumentException(
             "OPTION_RETURNING_BATCH should always be set for ParquetFileFormat. " +
