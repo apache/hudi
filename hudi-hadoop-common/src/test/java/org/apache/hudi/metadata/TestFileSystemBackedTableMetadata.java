@@ -21,7 +21,6 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.HoodieStorageUtils;
@@ -29,7 +28,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.hadoop.fs.MetaFolderAccessRecordingFileSystem;
+import org.apache.hudi.hadoop.fs.RecordingLocalFileSystem;
+import org.apache.hudi.hadoop.fs.RecordingLocalFileSystem.Call;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -47,6 +47,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -255,29 +256,20 @@ public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
 
     StorageConfiguration<Configuration> conf = HadoopFSUtils.getStorageConfWithCopy(
         metaClient.getStorageConf().unwrapAs(Configuration.class));
-    MetaFolderAccessRecordingFileSystem.register(conf.unwrap());
-    MetaFolderAccessRecordingFileSystem.reset();
-    MetaFolderAccessRecordingFileSystem.setTaskScope(() -> true);
-    List<String> partitions;
-    try {
-      HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, conf);
-      FileSystemBackedTableMetadata fileSystemBackedTableMetadata = new FileSystemBackedTableMetadata(
-          new HoodieLocalEngineContext(conf), metaClient.getTableConfig(), storage, basePath);
-      partitions = fileSystemBackedTableMetadata.getAllPartitionPaths();
-      Assertions.assertTrue(storage.exists(new StoragePath(metaClient.getMetaPath(), HoodieTableConfig.HOODIE_PROPERTIES_FILE)));
-    } finally {
-      MetaFolderAccessRecordingFileSystem.setTaskScope(() -> false);
-    }
+    RecordingLocalFileSystem.register(conf.unwrap());
+    RecordingLocalFileSystem.reset();
+    HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, conf);
+    FileSystemBackedTableMetadata fileSystemBackedTableMetadata = new FileSystemBackedTableMetadata(
+        new HoodieLocalEngineContext(conf), metaClient.getTableConfig(), storage, basePath);
+    List<String> partitions = fileSystemBackedTableMetadata.getAllPartitionPaths();
 
     Assertions.assertEquals(ONE_LEVEL_PARTITIONS, partitions.stream().sorted().collect(Collectors.toList()));
-    Assertions.assertFalse(MetaFolderAccessRecordingFileSystem.getTaskAccesses().isEmpty(),
-        "The storage used for listing must go through the recording file system");
-    List<String> metaFolderProbes = MetaFolderAccessRecordingFileSystem.getTaskAccesses().stream()
-        .map(MetaFolderAccessRecordingFileSystem.Access::getPath)
-        .filter(path -> path.contains(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX))
-        .collect(Collectors.toList());
-    Assertions.assertTrue(metaFolderProbes.isEmpty(),
-        "The meta folder was probed for partition metadata: " + metaFolderProbes);
+    Predicate<Call> partitionMetadataProbe = Call.pathContains(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX);
+    Assertions.assertTrue(RecordingLocalFileSystem.count(partitionMetadataProbe.and(Call.underMetaFolder().negate())) > 0,
+        "The listing must probe the data partitions through the recording file system");
+    Assertions.assertEquals(0, RecordingLocalFileSystem.count(partitionMetadataProbe.and(Call.underMetaFolder())),
+        () -> "The meta folder was probed for partition metadata: "
+            + RecordingLocalFileSystem.describe(partitionMetadataProbe.and(Call.underMetaFolder())));
   }
 
   @Test
