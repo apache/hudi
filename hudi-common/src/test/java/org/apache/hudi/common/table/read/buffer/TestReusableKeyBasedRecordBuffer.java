@@ -101,4 +101,23 @@ class TestReusableKeyBasedRecordBuffer {
     }
     assertEquals(Arrays.asList(new TestRecord("1", 10), new TestRecord("3", 3), new TestRecord("2", 2)), actualRecords);
   }
+
+  @Test
+  void testLogRecordsAreTheReusedOnes() {
+    // This buffer builds no map of its own, so it has to serve the records it was handed.
+    Map<Serializable, BufferedRecord<TestRecord>> preMergedLogRecords = new HashMap<>();
+    preMergedLogRecords.put("1", new BufferedRecord<>("1", 10, new TestRecord("1", 1), 0, null));
+    preMergedLogRecords.put("2", new BufferedRecord<>("2", 10, new TestRecord("2", 2), 0, null));
+    HoodieReadStats readStats = new HoodieReadStats();
+    when(mockReaderContext.getPayloadClasses(any())).thenReturn(Option.empty());
+    UpdateProcessor<TestRecord> updateProcessor = UpdateProcessor.create(readStats, mockReaderContext, false, Option.empty(), new TypedProperties());
+    Predicate keyFilter = Predicates.in(null, Arrays.asList(Literal.from("1"), Literal.from("2")));
+    when(mockReaderContext.getKeyFilterOpt()).thenReturn(Option.of(keyFilter));
+
+    ReusableKeyBasedRecordBuffer<TestRecord> buffer = new ReusableKeyBasedRecordBuffer<>(mockReaderContext, metaClient,
+        RecordMergeMode.EVENT_TIME_ORDERING, Option.empty(), new TypedProperties(), Collections.singletonList("value"), updateProcessor, preMergedLogRecords);
+
+    assertEquals(preMergedLogRecords, buffer.getLogRecords());
+    assertEquals(2, buffer.size());
+  }
 }

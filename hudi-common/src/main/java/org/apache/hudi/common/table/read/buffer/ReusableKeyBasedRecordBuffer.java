@@ -71,6 +71,17 @@ public class ReusableKeyBasedRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   }
 
   @Override
+  public Map<Serializable, BufferedRecord<T>> getLogRecords() {
+    // This buffer reuses log records loaded by an earlier reader rather than building its own map.
+    return existingRecords;
+  }
+
+  @Override
+  public int size() {
+    return existingRecords.size();
+  }
+
+  @Override
   protected void initializeLogRecordIterator() {
     logRecordIterator = new RemainingRecordIterator<>(validKeys, existingRecords);
   }

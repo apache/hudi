@@ -116,6 +116,29 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
 
   protected ClosableIterator<IndexedRecord> getFileGroupIterator(int numFiles, boolean shouldReadPositions, boolean allowInflightCommits)
       throws IOException, InterruptedException {
+    return getFileGroupReader(numFiles, shouldReadPositions, allowInflightCommits).getClosableIterator();
+  }
+
+  protected ClosableIterator<IndexedRecord> getFileGroupIterator(FileSlice fileSlice, boolean shouldReadPositions, boolean allowInflightCommits)
+      throws IOException {
+    return getFileGroupReader(fileSlice, shouldReadPositions, allowInflightCommits).getClosableIterator();
+  }
+
+  /**
+   * Builds a reader over a file slice made up of the first {@code numFiles} record sets, the first of which
+   * becomes the base file and the rest log files.
+   */
+  protected HoodieFileGroupReader<IndexedRecord> getFileGroupReader(int numFiles, boolean shouldReadPositions, boolean allowInflightCommits)
+      throws IOException, InterruptedException {
+    return getFileGroupReader(writeFileSlice(numFiles), shouldReadPositions, allowInflightCommits);
+  }
+
+  /**
+   * Writes the first {@code numFiles} record sets to storage as one file slice, the first of which becomes
+   * the base file and the rest log files. Call this at most once per test, since it fails if the base file
+   * is already there.
+   */
+  protected FileSlice writeFileSlice(int numFiles) throws IOException, InterruptedException {
     assert (numFiles >= 1 && numFiles <= keyRanges.size());
 
     HoodieStorage hoodieStorage = HoodieStorageUtils.getStorage(basePath, storageConf);
@@ -133,11 +156,10 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
             FILE_ID
         );
 
-    FileSlice fileSlice = fileSliceOpt.orElseThrow(() -> new IllegalArgumentException("FileSlice is not present"));
-    return getFileGroupIterator(fileSlice, shouldReadPositions, allowInflightCommits);
+    return fileSliceOpt.orElseThrow(() -> new IllegalArgumentException("FileSlice is not present"));
   }
 
-  protected ClosableIterator<IndexedRecord> getFileGroupIterator(FileSlice fileSlice, boolean shouldReadPositions, boolean allowInflightCommits)
+  protected HoodieFileGroupReader<IndexedRecord> getFileGroupReader(FileSlice fileSlice, boolean shouldReadPositions, boolean allowInflightCommits)
       throws IOException {
     properties.setProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(),String.valueOf(1024 * 1024 * 1000));
     properties.setProperty(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(),  basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME);
@@ -157,6 +179,6 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
         .withAllowInflightInstants(allowInflightCommits)
         .build();
 
-    return fileGroupReader.getClosableIterator();
+    return fileGroupReader;
   }
 }
