@@ -19,7 +19,8 @@
 
 package org.apache.hudi.testutils;
 
-import org.apache.hudi.hadoop.fs.MetaFolderAccessRecordingFileSystem;
+import org.apache.hudi.hadoop.fs.RecordingLocalFileSystem;
+import org.apache.hudi.hadoop.fs.RecordingLocalFileSystem.Call;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.SparkContext;
@@ -40,15 +41,14 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BooleanSupplier;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -93,8 +93,6 @@ public final class SparkExecutorGuards {
   private static final Pattern TASK_THREAD_STAGE = Pattern.compile("^Executor task launch worker .* in stage (\\d+)\\.");
 
   private static final int MAX_WRITTEN_BEFORE = 12;
-  private static final String[] FILE_SCHEME_KEYS = {"fs.file.impl", "fs.file.impl.disable.cache"};
-  private static final Map<Configuration, Map<String, String>> VALUES_BEFORE_RECORDING = new WeakHashMap<>();
 
   private static volatile Runnable taskStartHook = () -> { };
 
@@ -102,61 +100,42 @@ public final class SparkExecutorGuards {
   }
 
   /**
-   * Routes the {@code file} scheme through {@link MetaFolderAccessRecordingFileSystem} for every
-   * reader created from {@code hadoopConf} (use the Spark context's Hadoop configuration). Register
-   * it before writing the table too, so that all files are written and read by the same file
-   * system implementation.
+   * Routes the {@code file} scheme through {@link RecordingLocalFileSystem} for every reader created
+   * from {@code hadoopConf} (use the Spark context's Hadoop configuration), with Spark tasks as the
+   * recording scope. Register it before writing the table too, so that all files are written and read
+   * by the same file system implementation.
    */
-  public static void enableMetaFolderAccessRecording(Configuration hadoopConf) {
-    synchronized (VALUES_BEFORE_RECORDING) {
-      VALUES_BEFORE_RECORDING.computeIfAbsent(hadoopConf, conf -> {
-        Map<String, String> values = new HashMap<>();
-        for (String key : FILE_SCHEME_KEYS) {
-          values.put(key, conf.getRaw(key));
-        }
-        return values;
-      });
-    }
-    MetaFolderAccessRecordingFileSystem.setTaskScope(IN_SPARK_TASK);
-    MetaFolderAccessRecordingFileSystem.register(hadoopConf);
+  public static void enableFileSystemCallRecording(Configuration hadoopConf) {
+    RecordingLocalFileSystem.setScope(IN_SPARK_TASK);
+    RecordingLocalFileSystem.register(hadoopConf);
   }
 
   /**
-   * Reverts {@link #enableMetaFolderAccessRecording}, restoring the {@code file} scheme settings the
-   * configuration had before.
+   * Reverts {@link #enableFileSystemCallRecording}.
    */
-  public static void disableMetaFolderAccessRecording(Configuration hadoopConf) {
-    MetaFolderAccessRecordingFileSystem.unregister(hadoopConf);
-    Map<String, String> values;
-    synchronized (VALUES_BEFORE_RECORDING) {
-      values = VALUES_BEFORE_RECORDING.remove(hadoopConf);
-    }
-    if (values != null) {
-      values.forEach((key, value) -> {
-        if (value != null) {
-          hadoopConf.set(key, value);
-        }
-      });
-    }
+  public static void disableFileSystemCallRecording(Configuration hadoopConf) {
+    RecordingLocalFileSystem.unregister(hadoopConf);
+    RecordingLocalFileSystem.setScope(() -> false);
   }
 
   /**
    * Runs {@code action} and fails if any Spark task accessed a path under {@code .hoodie} while it
-   * ran. Also fails if the driver did not access {@code .hoodie} either, which means the recording
-   * file system is not in use and the guard would pass vacuously.
+   * ran. Also fails if no Spark task call was recorded at all, which means the tasks do not use the
+   * recording file system and the guard would pass vacuously.
    */
   public static <T> T assertNoExecutorMetaFolderAccess(String description, Supplier<T> action) {
-    MetaFolderAccessRecordingFileSystem.reset();
+    RecordingLocalFileSystem.reset();
     T result = action.get();
-    assertTrue(MetaFolderAccessRecordingFileSystem.getNonTaskAccessCount() > 0,
-        description + ": no .hoodie access was recorded at all, so the guard is not live. Register "
-            + MetaFolderAccessRecordingFileSystem.class.getSimpleName()
-            + " on the Hadoop configuration the read uses (enableMetaFolderAccessRecording).");
-    if (!MetaFolderAccessRecordingFileSystem.getTaskAccesses().isEmpty()) {
+    assertTrue(RecordingLocalFileSystem.count(Call.inScope()) > 0,
+        description + ": no file system call of a Spark task was recorded, so the guard is not live. Register "
+            + RecordingLocalFileSystem.class.getSimpleName()
+            + " on the Hadoop configuration the read uses (enableFileSystemCallRecording).");
+    Predicate<Call> executorMetaFolderAccess = Call.inScope().and(Call.underMetaFolder());
+    if (RecordingLocalFileSystem.count(executorMetaFolderAccess) > 0) {
       fail(description + ": Spark tasks accessed the .hoodie folder. Table config, timeline and schema"
           + " history must be resolved once on the driver and handed to the tasks; every access below"
           + " is repeated per task (per file group) on the executors.\n"
-          + MetaFolderAccessRecordingFileSystem.describeTaskAccesses());
+          + RecordingLocalFileSystem.describe(executorMetaFolderAccess));
     }
     return result;
   }
