@@ -31,7 +31,7 @@ import org.apache.hudi.table.action.commit.HoodieDeleteHelper;
 public class SparkDeleteDeltaCommitActionExecutor<T>
     extends BaseSparkDeltaCommitActionExecutor<T> {
 
-  private final HoodieData<HoodieKey> keys;
+  private final transient HoodieData<HoodieKey> keys;
 
   public SparkDeleteDeltaCommitActionExecutor(HoodieSparkEngineContext context,
                                               HoodieWriteConfig config, HoodieTable table,

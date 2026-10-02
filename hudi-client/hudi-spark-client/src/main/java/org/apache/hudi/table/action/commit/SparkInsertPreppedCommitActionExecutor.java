@@ -30,7 +30,7 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 public class SparkInsertPreppedCommitActionExecutor<T>
     extends BaseSparkCommitActionExecutor<T> {
 
-  private final HoodieData<HoodieRecord<T>> preppedRecords;
+  private final transient HoodieData<HoodieRecord<T>> preppedRecords;
 
   public SparkInsertPreppedCommitActionExecutor(HoodieSparkEngineContext context,
                                                 HoodieWriteConfig config, HoodieTable table,
