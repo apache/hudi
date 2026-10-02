@@ -14,6 +14,7 @@
 package io.trino.plugin.hudi.split;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import io.airlift.units.DataSize;
 import io.trino.plugin.hive.HivePartitionKey;
 import io.trino.plugin.hudi.HudiSplit;
@@ -31,6 +32,7 @@ import org.apache.hudi.storage.StoragePathInfo;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalLong;
 
 import static io.airlift.units.DataSize.Unit.MEGABYTE;
@@ -230,7 +232,9 @@ public class TestHudiSplitFactory
                 TupleDomain.all(),
                 OptionalLong.empty(),
                 "",
-                "101");
+                "101",
+                ImmutableMap.of(),
+                Optional.empty());
     }
 
     private static FileSlice createFileSlice(DataSize baseFileSize, Option<DataSize> logFileSize)

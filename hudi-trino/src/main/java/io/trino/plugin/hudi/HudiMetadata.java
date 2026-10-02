@@ -166,7 +166,8 @@ public class HudiMetadata
         String inputFormat = table.getStorage().getStorageFormat().getInputFormat();
         HoodieTableType hoodieTableType = HudiTableTypeUtils.fromInputFormat(inputFormat);
         Lazy<HoodieTableMetaClient> lazyMetaClient = Lazy.lazily(() -> buildTableMetaClient(fileSystem, tableName.toString(), basePath));
-        Optional<Lazy<HoodieSchema>> hudiTableSchema = isResolveColumnNameCasingEnabled(session) ?
+        // Workers merging log files read the schema from the handle
+        Optional<Lazy<HoodieSchema>> hudiTableSchema = hoodieTableType == HoodieTableType.MERGE_ON_READ || isResolveColumnNameCasingEnabled(session) ?
                 Optional.of(Lazy.lazily(() -> getLatestTableSchema(lazyMetaClient.get(), tableName.getTableName()))) : Optional.empty();
 
         return new HudiTableHandle(
