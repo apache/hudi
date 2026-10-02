@@ -17,9 +17,10 @@
 
 package org.apache.spark.sql.hudi.common
 
+import org.apache.hudi.{HoodieSchemaConversionUtils, HoodieTableSchema}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.model.{HoodieAvroPayload, HoodieAvroRecord, HoodieKey, HoodieRecord, HoodieTableType}
+import org.apache.hudi.common.model.{HoodieAvroPayload, HoodieAvroRecord, HoodieFileFormat, HoodieKey, HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.read.CustomPayloadForTesting
@@ -31,10 +32,11 @@ import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.avro.generic.{GenericData, GenericRecord}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{DataFrame, Row}
-import org.apache.spark.sql.execution.{FileSourceScanExec, ProjectExec}
+import org.apache.spark.sql.execution.{FileSourceScanExec, ProjectExec, SparkPlan}
+import org.apache.spark.sql.execution.datasources.parquet.HoodieFileGroupReaderBasedFileFormat
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{ArrayType, IntegerType, MapType, StringType, StructField, StructType}
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
 import scala.collection.JavaConverters._
 
@@ -297,6 +299,84 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase {
         selectDF.count
       }
     }
+  }
+
+  test("Nested struct predicate pushdown") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+
+        createTableWithNestedStructSchema(tableType, tableName, tablePath)
+
+        val query = s"SELECT id FROM $tableName WHERE item.name = 'a1' AND item.price > 5"
+        // NOTE: Spark infers a top-level IsNotNull(item) from the nested predicates and pushes it
+        //       regardless of the allowlist, so assert on the nested predicates themselves.
+        val nestedFilters = Seq("EqualTo(item.name,a1)", "GreaterThan(item.price,5)")
+
+        val pushedFilters = pushedFiltersOf(spark.sql(query))
+        nestedFilters.foreach { f =>
+          assertTrue(pushedFilters.contains(f), s"[$tableType] $f should be pushed down, got $pushedFilters")
+        }
+        checkAnswer(query)(Seq(1))
+
+        // Negative leg: with an empty allowlist the nested predicates must not be pushed.
+        withSQLConf(SQLConf.NESTED_PREDICATE_PUSHDOWN_FILE_SOURCE_LIST.key -> "") {
+          val prunedFilters = pushedFiltersOf(spark.sql(query))
+          nestedFilters.foreach { f =>
+            assertFalse(prunedFilters.contains(f), s"[$tableType] $f should not be pushed down, got $prunedFilters")
+          }
+          checkAnswer(query)(Seq(1))
+        }
+      }
+    }
+  }
+
+  test("Nested struct predicate pushdown with schema on read and a renamed nested column") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        withSQLConf("hoodie.schema.on.read.enable" -> "true") {
+          val tableName = generateTableName
+          val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+
+          createTableWithNestedStructSchema(tableType, tableName, tablePath)
+          spark.sql(s"ALTER TABLE $tableName RENAME COLUMN item.name TO title")
+
+          // The base file still stores item.name, so the pushed filter must be rewritten to the
+          // file-side name rather than dropped or failing the read.
+          val query = s"SELECT id FROM $tableName WHERE item.title = 'a1'"
+          val pushedFilters = pushedFiltersOf(spark.sql(query))
+          assertTrue(pushedFilters.contains("EqualTo(item.title,a1)"),
+            s"[$tableType] EqualTo(item.title,a1) should be pushed down, got $pushedFilters")
+          checkAnswer(query)(Seq(1))
+          checkAnswer(s"SELECT id FROM $tableName WHERE item.title = 'a2'")()
+        }
+      }
+    }
+  }
+
+  test("shortName matches the base file format") {
+    val unusedSchema = StructType.fromDDL("id int, ts long")
+    def formatFor(fileFormat: HoodieFileFormat, multipleBaseFileFormats: Boolean = false) =
+      new HoodieFileGroupReaderBasedFileFormat(
+        "unused", HoodieTableSchema(unusedSchema,
+          HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(unusedSchema, "unused", "hoodie.test")),
+        "unused", "000", Seq.empty, isMOR = false, isBootstrap = false, isIncremental = false,
+        "", shouldUseRecordPosition = false, Seq.empty, multipleBaseFileFormats, fileFormat)
+
+    assertEquals("parquet", formatFor(HoodieFileFormat.PARQUET).shortName())
+    assertEquals("orc", formatFor(HoodieFileFormat.ORC).shortName())
+    assertEquals("lance", formatFor(HoodieFileFormat.LANCE).shortName())
+    assertEquals("parquet", formatFor(HoodieFileFormat.ORC, multipleBaseFileFormats = true).shortName())
+  }
+
+  private def pushedFiltersOf(selectDF: DataFrame): String =
+    findFileScan(selectDF.queryExecution.executedPlan).metadata.getOrElse("PushedFilters", "")
+
+  private def findFileScan(plan: SparkPlan): FileSourceScanExec = {
+    val scans = plan.collect { case f: FileSourceScanExec => f }
+    assert(scans.nonEmpty, s"No FileSourceScanExec found in plan:\n$plan")
+    scans.head
   }
 
   private def assertPrunedReadSchema(selectDF: DataFrame,

@@ -107,7 +107,23 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
 
   private lazy val hasTimestampMillisFieldInTableSchema = HoodieSchemaRepair.hasTimestampMillisField(schema)
   private lazy val supportBatchWithTableSchema = HoodieSparkUtils.gteqSpark3_5 || !hasTimestampMillisFieldInTableSchema
-  override def shortName(): String = "HudiFileGroup"
+  /**
+   * Returns the base file format's short name so that Spark's nested predicate pushdown allowlist
+   * (spark.sql.optimizer.nestedPredicatePushdown.supportedFileSources, default "parquet,orc")
+   * matches on every read path. Tables with multiple base file formats report "parquet", since
+   * both the Parquet and ORC filter translation resolve nested column names.
+   */
+  override def shortName(): String = {
+    if (isMultipleBaseFileFormatsEnabled) {
+      "parquet"
+    } else {
+      hoodieFileFormat match {
+        case HoodieFileFormat.ORC => "orc"
+        case HoodieFileFormat.LANCE => "lance"
+        case _ => "parquet"
+      }
+    }
+  }
 
   override def toString: String = "HoodieFileGroupReaderBasedFileFormat"
 
