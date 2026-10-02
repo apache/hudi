@@ -717,10 +717,11 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
         return ExpireLockResult.SUCCESS;
       case ACQUIRED_BY_OTHERS:
         if (afterRetriableAttempt && earlierExpireWriteLanded()) {
-          // An earlier attempt landed even though storage answered it with an error, so the
-          // precondition failure is our own release (or a writer that acquired after it).
-          logger.info("Owner {}: Expire retry for lock {} hit a precondition failure, but an earlier "
-              + "attempt landed despite its error response.", ownerId, lockFilePath);
+          // The precondition failed against our own expired lock: an earlier attempt landed even
+          // though storage answered it with an error. The lock is released.
+          logger.info("Owner {}: Expire retry for lock {} hit a precondition failure, but storage "
+              + "already holds our expired lock; an earlier attempt landed despite its error response.",
+              ownerId, lockFilePath);
           logInfoLockState(RELEASED);
           recordAuditOperation(AuditOperationState.END, lockExpirationTimeMs);
           setLock(null);
@@ -745,8 +746,8 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
   }
 
   /**
-   * Whether an earlier expire attempt that was answered with an error actually landed: storage
-   * holds our expired lock, or another owner holds it while our lease has not yet elapsed.
+   * Whether storage now holds the expired version of the lock we are releasing, i.e. whether an
+   * earlier expire attempt that was answered with an error actually landed.
    */
   private boolean earlierExpireWriteLanded() {
     final Pair<LockGetResult, Option<StorageLockFile>> current;
@@ -763,12 +764,9 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       return false;
     }
     StorageLockFile stored = current.getRight().get();
-    if (ownerId.equals(stored.getOwner())) {
-      return stored.isExpired() && stored.getValidUntilMs() == getLock().getValidUntilMs();
-    }
-    // Others take over a live lease only after validUntil + CLOCK_DRIFT_BUFFER_MS, so another
-    // owner holding it inside our lease means our expire landed and they acquired after it.
-    return getCurrentEpochMs() < getLock().getValidUntilMs();
+    return stored.isExpired()
+        && ownerId.equals(stored.getOwner())
+        && stored.getValidUntilMs() == getLock().getValidUntilMs();
   }
 
   /**

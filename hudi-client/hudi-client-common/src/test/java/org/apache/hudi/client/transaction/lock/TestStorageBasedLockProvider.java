@@ -640,9 +640,9 @@ class TestStorageBasedLockProvider {
   }
 
   @Test
-  void testUnlockReconcilesWhenLockTakenByOthersInsideOurLeaseAfterTransientError() throws InterruptedException {
-    // Others take over a live lease only after it elapses, so another owner holding the lock inside
-    // our lease means the 5xx-answered expire landed and they acquired after it: a release.
+  void testUnlockStillFailsWhenLockTakenByOthersAfterTransientError() throws InterruptedException {
+    // The reconcile must only excuse our own expired lock. If the retry's precondition failed
+    // because another owner now holds the lock, it is still a failed release.
     when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, Option.empty()));
     StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
     StorageLockFile realLockFile = new StorageLockFile(data, "v1");
@@ -661,10 +661,8 @@ class TestStorageBasedLockProvider {
         new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, "other-owner"), "v3");
     when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.SUCCESS, Option.of(otherOwnersLock)));
 
-    lockProvider.unlock();
-
-    assertNull(lockProvider.getLock(), "Our landed expire write means the lock is released");
-    verify(mockLogger).info(contains("an earlier attempt landed"), eq(ownerId), any());
+    HoodieLockException exception = assertThrows(HoodieLockException.class, () -> lockProvider.unlock());
+    assertTrue(exception.getMessage().contains(StorageBasedLockProvider.CAUSE_EXPIRE_WRITE_FAILED), exception.getMessage());
   }
 
   @Test
@@ -801,9 +799,7 @@ class TestStorageBasedLockProvider {
   }
 
   @Test
-  void testUnlockReconcilesWhenLockTakenByOthersInsideOurLeaseAfterUnknownError() throws InterruptedException {
-    // A timed-out expire can land while the client waits, and a polling writer then acquires the
-    // released lock before our retry: the retry's precondition failure is our own release.
+  void testUnlockStillFailsWhenLockTakenByOthersAfterUnknownError() throws InterruptedException {
     when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, Option.empty()));
     StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
     StorageLockFile realLockFile = new StorageLockFile(data, "v1");
@@ -815,34 +811,6 @@ class TestStorageBasedLockProvider {
     when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(true);
     when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(true).thenReturn(false);
     doNothing().when(lockProvider).sleepBeforeRetry(anyLong());
-    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(realLockFile))))
-        .thenReturn(Pair.of(LockUpsertResult.UNKNOWN_ERROR, Option.empty()))
-        .thenReturn(Pair.of(LockUpsertResult.ACQUIRED_BY_OTHERS, Option.empty()));
-    StorageLockFile otherOwnersLock = new StorageLockFile(
-        new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, "other-owner"), "v3");
-    when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.SUCCESS, Option.of(otherOwnersLock)));
-
-    lockProvider.unlock();
-
-    assertNull(lockProvider.getLock(), "Our landed expire write means the lock is released");
-    verify(mockLockService, times(2)).tryUpsertLockFile(any(), eq(Option.of(realLockFile)));
-  }
-
-  @Test
-  void testUnlockStillFailsWhenLockTakenByOthersAfterOurLeaseElapsed() throws InterruptedException {
-    when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, Option.empty()));
-    StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
-    StorageLockFile realLockFile = new StorageLockFile(data, "v1");
-    when(mockLockService.tryUpsertLockFile(any(), eq(Option.empty())))
-        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(realLockFile)));
-    when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
-    assertTrue(lockProvider.tryLock());
-
-    when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(true);
-    when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(true).thenReturn(false);
-    doNothing().when(lockProvider).sleepBeforeRetry(anyLong());
-    // Past our lease another owner may have reclaimed it without our write landing: still a failure.
-    doReturn(data.getValidUntil() + 1).when(lockProvider).getCurrentEpochMs();
     when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(realLockFile))))
         .thenReturn(Pair.of(LockUpsertResult.UNKNOWN_ERROR, Option.empty()))
         .thenReturn(Pair.of(LockUpsertResult.ACQUIRED_BY_OTHERS, Option.empty()));
