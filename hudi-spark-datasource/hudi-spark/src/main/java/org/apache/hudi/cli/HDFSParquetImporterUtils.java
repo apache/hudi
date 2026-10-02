@@ -52,6 +52,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.parquet.avro.AvroReadSupport;
+import org.apache.parquet.avro.GenericDataSupplier;
 import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -184,6 +185,7 @@ public class HDFSParquetImporterUtils implements Serializable {
     job.getConfiguration().set(FileInputFormat.LIST_STATUS_NUM_THREADS, "1024");
     AvroReadSupport.setAvroReadSchema(jsc.hadoopConfiguration(), HoodieSchema.parse(schemaStr).getAvroSchema());
     ParquetInputFormat.setReadSupportClass(job, (AvroReadSupport.class));
+    AvroReadSupport.setAvroDataSupplier(job.getConfiguration(), GenericDataSupplier.class);
 
     HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
     context.setJobStatus(this.getClass().getSimpleName(), "Build records for import: " + this.tableName);

@@ -50,6 +50,7 @@ public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
   }
 
   public HoodieAvroReadSupport() {
+    super(GenericData.get());
     tableSchema = Option.empty();
   }
 
