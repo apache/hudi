@@ -134,6 +134,20 @@ public class HoodieArchivalConfig extends HoodieConfig {
           + "is not removed for commits whose data files still exist on storage, preventing inconsistencies between "
           + "the timeline and the actual data.");
 
+  public static final ConfigProperty<String> ROLLBACK_ORPHAN_GUARD_MODE = ConfigProperty
+      .key("hoodie.archive.rollback.orphan.guard.mode")
+      .defaultValue("OFF")
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Controls whether the archive planner defers archival of a rollback instant when "
+          + "leftover orphan files from that rollback are still present on storage. Once the rollback record "
+          + "is archived, such orphans become indistinguishable from legitimate committed files and can lead "
+          + "to corrupt-parquet read errors or duplicate records. Allowed values: "
+          + "OFF (default; archive proceeds unconditionally), "
+          + "LIGHT (defer if HoodieRollbackMetadata.failedDeleteFiles is non-empty), "
+          + "THOROUGH (LIGHT plus a per-partition listing for files whose embedded instant matches the "
+          + "rollback's target instant — catches late-landing writes that completed after rollback ran).");
+
   /**
    * @deprecated Use {@link #MAX_COMMITS_TO_KEEP} and its methods instead
    */
@@ -232,6 +246,11 @@ public class HoodieArchivalConfig extends HoodieConfig {
 
     public Builder withBlockArchivalOnCleanECTR(boolean blockArchivalOnCleanECTR) {
       archivalConfig.setValue(BLOCK_ARCHIVAL_ON_LATEST_CLEAN_ECTR, String.valueOf(blockArchivalOnCleanECTR));
+      return this;
+    }
+
+    public Builder withRollbackOrphanGuardMode(String mode) {
+      archivalConfig.setValue(ROLLBACK_ORPHAN_GUARD_MODE, mode);
       return this;
     }
 
