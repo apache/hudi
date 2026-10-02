@@ -19,6 +19,7 @@
 package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hudi.{DataSourceReadOptions, SparkAdapterSupport}
+import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql.SparkSession
@@ -53,6 +54,9 @@ class LegacyHoodieParquetFileFormat extends ParquetFileFormat with SparkAdapterS
     val shouldExtractPartitionValuesFromPartitionPath =
       options.getOrElse(DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key,
         DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.defaultValue.toString).toBoolean
+    // Spark copies reader options into the conf with lowercased keys, so restore the mixed-case schema-on-read ones
+    Seq(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SparkInternalSchemaConverter.HOODIE_TABLE_PATH)
+      .foreach(key => options.get(key).foreach(value => hadoopConf.set(key, value)))
 
     sparkAdapter
       .createLegacyHoodieParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath).get

@@ -64,7 +64,7 @@ import org.apache.spark.util.SerializableConfiguration
 
 import java.io.Closeable
 
-import scala.collection.JavaConverters.mapAsJavaMapConverter
+import scala.collection.JavaConverters.{mapAsJavaMapConverter, mapAsScalaMapConverter}
 
 trait HoodieFormatTrait {
 
@@ -309,7 +309,6 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       .flatMap(name => dataStructType.fields.find(_.name == name))
     val readRequiredSchema = StructType(requiredSchema.fields ++ filterOnlyFields)
     val augmentedStorageConf = new HadoopStorageConfiguration(hadoopConf).getInline
-    setSchemaEvolutionConfigs(augmentedStorageConf)
     augmentedStorageConf.set(ENABLE_LOGICAL_TIMESTAMP_REPAIR, hasTimestampMillisFieldInTableSchema.toString)
     // Nested partition columns (e.g. "nested_record.level") are never read from the data file: the
     // flattened dotted name is not a valid top-level field and the value is materialized from the
@@ -357,15 +356,16 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       baseFileReader
     }
 
-    val broadcastedStorageConf = spark.sparkContext.broadcast(new SerializableConfiguration(augmentedStorageConf.unwrap()))
+    // Create metaclient on driver to avoid expensive operations on executors
+    val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
+      .builder().setConf(augmentedStorageConf).setBasePath(tablePath).build
+
+    val broadcastedStorageConf = spark.sparkContext.broadcast(
+      new SerializableConfiguration(withSchemaEvolutionConfigs(augmentedStorageConf.unwrap(), metaClient)))
     val fileIndexProps: TypedProperties = HoodieFileIndex.getConfigProperties(spark, options, null)
 
     val engineContext = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
     val maxMemoryPerCompaction = MergeUtils.getMaxMemoryPerCompaction(engineContext.getTaskContextSupplier, options.asJava)
-
-    // Create metaclient on driver to avoid expensive operations on executors
-    val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
-      .builder().setConf(augmentedStorageConf).setBasePath(tablePath).build
 
     (file: PartitionedFile) => {
       // executor
@@ -475,10 +475,18 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     }
   }
 
-  private def setSchemaEvolutionConfigs(conf: StorageConfiguration[Configuration]): Unit = {
+  /**
+   * Returns a copy of the conf carrying what the base file readers need to resolve each file's schema
+   * under schema-on-read, or the conf itself when schema-on-read is off.
+   */
+  private def withSchemaEvolutionConfigs(conf: Configuration, metaClient: HoodieTableMetaClient): Configuration = {
     if (internalSchemaOpt.isPresent) {
-      conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, tablePath)
-      conf.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
+      val readerConf = new Configuration(conf)
+      SparkInternalSchemaConverter.getSchemaEvolutionReadConfigs(metaClient, validCommits).asScala
+        .foreach { case (key, value) => readerConf.set(key, value) }
+      readerConf
+    } else {
+      conf
     }
   }
 

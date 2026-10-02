@@ -51,7 +51,6 @@ import org.apache.spark.sql.types.StructType;
 import org.apache.spark.util.SerializableConfiguration;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -84,7 +83,7 @@ public class SparkReaderContextFactory implements ReaderContextFactory<InternalR
     InstantFileNameGenerator fileNameGenerator = metaClient.getTimelineLayout().getInstantFileNameGenerator();
     HoodieTimeline timeline = metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants();
     Map<String, String> schemaEvolutionConfigs =
-        getSchemaEvolutionConfigs(resolver, timeline, fileNameGenerator, metaClient.getBasePath().toString());
+        getSchemaEvolutionConfigs(resolver, timeline, fileNameGenerator, metaClient);
 
     // Broadcast: SQLConf.
     // Broadcast: Configuration.
@@ -183,14 +182,12 @@ public class SparkReaderContextFactory implements ReaderContextFactory<InternalR
   private static Map<String, String> getSchemaEvolutionConfigs(TableSchemaResolver schemaResolver,
                                                                HoodieTimeline timeline,
                                                                InstantFileNameGenerator fileNameGenerator,
-                                                               String basePath) {
+                                                               HoodieTableMetaClient metaClient) {
     Option<InternalSchema> internalSchemaOpt = schemaResolver.getTableInternalSchemaFromCommitMetadata();
-    Map<String, String> configs = new HashMap<>();
     if (internalSchemaOpt.isPresent()) {
       List<String> instantFiles = timeline.getInstants().stream().map(fileNameGenerator::getFileName).collect(Collectors.toList());
-      configs.put(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, String.join(",", instantFiles));
-      configs.put(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, basePath);
+      return SparkInternalSchemaConverter.getSchemaEvolutionReadConfigs(metaClient, String.join(",", instantFiles));
     }
-    return configs;
+    return Collections.emptyMap();
   }
 }

@@ -20,17 +20,27 @@
 package org.apache.hudi.table.format;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.schema.internal.Types;
-import org.apache.hudi.common.util.HoodieStorageUtils;
-import org.apache.hudi.common.util.InternalSchemaCache;
-import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.common.schema.internal.io.FileBasedInternalSchemaStorageManager;
+import org.apache.hudi.common.schema.internal.utils.SerDeHelper;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.types.DataType;
+import org.apache.flink.util.InstantiationUtil;
 import org.junit.jupiter.api.Test;
-import org.mockito.MockedStatic;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.io.File;
+import java.util.Arrays;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -39,7 +49,6 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.mockStatic;
 
 /**
  * Tests read-time schema reconciliation in {@link InternalSchemaManager}.
@@ -145,23 +154,37 @@ class TestInternalSchemaManager {
   }
 
   @Test
-  void testGetMergeSchemaLoadsSchemaForFileVersion() {
-    InternalSchema querySchema =
-        schema(Types.Field.get(0, false, "id", Types.IntType.get()));
-    InternalSchemaManager manager = manager(querySchema);
-    HoodieStorage storage = mock(HoodieStorage.class);
+  void testGetMergeSchemaResolvesWithoutTableMetadata(@TempDir File tempDir) throws Exception {
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
+    InternalSchema fileSchema = schema(
+        Types.Field.get(0, false, "id", Types.IntType.get()),
+        Types.Field.get(1, true, "old_name", Types.StringType.get()));
+    fileSchema.setSchemaId(100L);
+    InternalSchema querySchema = schema(
+        Types.Field.get(0, false, "id", Types.IntType.get()),
+        Types.Field.get(1, true, "new_name", Types.StringType.get()));
+    querySchema.setSchemaId(200L);
+    FileBasedInternalSchemaStorageManager schemaManager = new FileBasedInternalSchemaStorageManager(metaClient);
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    String history = SerDeHelper.inheritSchemas(fileSchema, "");
+    schemaManager.persistHistorySchemaStr("100", history);
+    testTable.addCommit("100", Option.of(commitMetadata(fileSchema)));
+    schemaManager.persistHistorySchemaStr("200", SerDeHelper.inheritSchemas(querySchema, history));
+    testTable.addCommit("200", Option.of(commitMetadata(querySchema)));
+    metaClient.reloadActiveTimeline();
 
-    try (MockedStatic<HoodieStorageUtils> storageUtils = mockStatic(HoodieStorageUtils.class);
-         MockedStatic<InternalSchemaCache> schemaCache = mockStatic(InternalSchemaCache.class)) {
-      storageUtils.when(
-          () -> HoodieStorageUtils.getStorage((String) null, null)).thenReturn(storage);
-      schemaCache.when(
-          () -> InternalSchemaCache.getInternalSchemaByVersionId(
-              1L, null, storage, null, null, null)).thenReturn(querySchema);
+    org.apache.hadoop.conf.Configuration hadoopConf = new org.apache.hadoop.conf.Configuration();
+    hadoopConf.setBoolean(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), true);
+    InternalSchemaManager manager = InstantiationUtil.clone(
+        InternalSchemaManager.get(new HadoopStorageConfiguration(hadoopConf), metaClient));
+    metaClient.getStorage().deleteDirectory(metaClient.getMetaPath());
 
-      assertTrue(
-          manager.getMergeSchema("file-id_1-0-1_001.parquet").isEmptySchema());
-    }
+    assertEquals(querySchema, manager.getQuerySchema());
+    assertEquals(
+        Arrays.asList("id", "old_name"),
+        manager.getMergeSchema("file-id_1-0-1_100.parquet").getRecord().fields().stream()
+            .map(Types.Field::name).collect(Collectors.toList()));
+    assertTrue(manager.getMergeSchema("file-id_1-0-1_200.parquet").isEmptySchema());
   }
 
   @Test
@@ -195,7 +218,13 @@ class TestInternalSchemaManager {
   }
 
   private static InternalSchemaManager manager(InternalSchema querySchema) {
-    return new InternalSchemaManager(null, querySchema, null, null, null, null);
+    return new InternalSchemaManager(querySchema, null);
+  }
+
+  private static HoodieCommitMetadata commitMetadata(InternalSchema latestSchema) {
+    HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+    metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(latestSchema));
+    return metadata;
   }
 
   private static InternalSchema schema(Types.Field... fields) {

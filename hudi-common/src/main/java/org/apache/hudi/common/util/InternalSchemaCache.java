@@ -37,6 +37,7 @@ import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.TimelinePathProvider;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -45,6 +46,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
@@ -166,8 +168,6 @@ public class InternalSchemaCache {
   public static InternalSchema getInternalSchemaByVersionId(long versionId, String tablePath, HoodieStorage storage, String validCommits,
                                                             TimelineLayout timelineLayout, HoodieTableConfig tableConfig) {
     InstantFileNameParser fileNameParser = timelineLayout.getInstantFileNameParser();
-    CommitMetadataSerDe commitMetadataSerDe = timelineLayout.getCommitMetadataSerDe();
-    InstantGenerator instantGenerator = timelineLayout.getInstantGenerator();
     TimelinePathProvider timelinePathProvider = timelineLayout.getTimelinePathProvider();
     StoragePath timelinePath = timelinePathProvider.getTimelinePath(tableConfig, new StoragePath(tablePath));
 
@@ -182,14 +182,7 @@ public class InternalSchemaCache {
         .findFirst().map(f -> new StoragePath(timelinePath, f)).orElse(null);
     if (candidateCommitFile != null) {
       try {
-        HoodieCommitMetadata metadata;
-        try (InputStream is = storage.open(candidateCommitFile)) {
-          metadata = commitMetadataSerDe.deserialize(instantGenerator.createNewInstant(
-                  new StoragePathInfo(candidateCommitFile, -1, false, (short) 0, 0L, 0L)),
-              is, () -> false, HoodieCommitMetadata.class);
-        } catch (IOException e) {
-          throw e;
-        }
+        HoodieCommitMetadata metadata = readCommitMetadata(storage, candidateCommitFile, timelineLayout);
         String latestInternalSchemaStr = metadata.getMetadata(SerDeHelper.LATEST_SCHEMA);
         avroSchema = metadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY);
         if (latestInternalSchemaStr != null) {
@@ -222,12 +215,38 @@ public class InternalSchemaCache {
     return getInternalSchemaByVersionId(versionId, tablePath, storage, validCommits, timelineLayout, HoodieTableConfig.loadFromHoodieProps(storage, tablePath));
   }
 
+  /**
+   * Same as {@link #getInternalSchemaByVersionId(long, String, HoodieStorage, String, TimelineLayout, HoodieTableConfig)},
+   * with the table config and the timeline layout loaded from the table's {@code hoodie.properties}.
+   */
+  public static InternalSchema getInternalSchemaByVersionId(long versionId, String tablePath, HoodieStorage storage, String validCommits) {
+    HoodieTableConfig tableConfig = HoodieTableConfig.loadFromHoodieProps(storage, tablePath);
+    TimelineLayout timelineLayout = TimelineLayout.fromVersion(tableConfig.getTableVersion().getTimelineLayoutVersion());
+    return getInternalSchemaByVersionId(versionId, tablePath, storage, validCommits, timelineLayout, tableConfig);
+  }
+
   public static InternalSchema getInternalSchemaByVersionId(long versionId, HoodieTableMetaClient metaClient) {
     InstantFileNameGenerator factory = metaClient.getInstantFileNameGenerator();
     String validCommitLists = metaClient
         .getCommitsAndCompactionTimeline().filterCompletedInstants().getInstantsAsStream().map(factory::getFileName).collect(Collectors.joining(","));
     return getInternalSchemaByVersionId(versionId, metaClient.getBasePath().toString(), metaClient.getStorage(),
         validCommitLists, metaClient.getTimelineLayout(), metaClient.getTableConfig());
+  }
+
+  private static HoodieCommitMetadata readCommitMetadata(HoodieStorage storage, StoragePath commitFile, TimelineLayout timelineLayout) throws IOException {
+    return deserializeCommitMetadata(readCommitFile(storage, commitFile), commitFile, timelineLayout);
+  }
+
+  static byte[] readCommitFile(HoodieStorage storage, StoragePath commitFile) throws IOException {
+    try (InputStream is = storage.open(commitFile)) {
+      return FileIOUtils.readAsByteArray(is);
+    }
+  }
+
+  static HoodieCommitMetadata deserializeCommitMetadata(byte[] content, StoragePath commitFile, TimelineLayout timelineLayout) throws IOException {
+    return timelineLayout.getCommitMetadataSerDe().deserialize(
+        timelineLayout.getInstantGenerator().createNewInstant(new StoragePathInfo(commitFile, -1, false, (short) 0, 0L, 0L)),
+        new ByteArrayInputStream(content), () -> false, HoodieCommitMetadata.class);
   }
 }
 
