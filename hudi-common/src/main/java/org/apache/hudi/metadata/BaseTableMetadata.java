@@ -214,6 +214,17 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
       recordsData.unpersistWithDependencies();
     }
 
+    return toBloomFilters(fileToKeyMap, hoodieRecords);
+  }
+
+  /**
+   * Builds the bloom filters of the files from their bloom filter index records.
+   *
+   * @param fileToKeyMap  (partition, file name) of each file, by its encoded bloom filter index key
+   * @param hoodieRecords bloom filter index records, keyed by their encoded key
+   */
+  static Map<Pair<String, String>, BloomFilter> toBloomFilters(Map<String, Pair<String, String>> fileToKeyMap,
+                                                               List<Pair<String, HoodieMetadataPayload>> hoodieRecords) {
     Map<Pair<String, String>, BloomFilter> partitionFileToBloomFilterMap = new HashMap<>(hoodieRecords.size());
     for (final Pair<String, HoodieMetadataPayload> entry : hoodieRecords) {
       final Option<HoodieMetadataBloomFilter> bloomFilterMetadata =

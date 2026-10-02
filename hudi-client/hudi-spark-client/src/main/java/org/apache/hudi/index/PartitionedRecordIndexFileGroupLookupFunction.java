@@ -19,14 +19,19 @@
 
 package org.apache.hudi.index;
 
-import org.apache.hudi.common.data.HoodieListData;
-import org.apache.hudi.common.data.HoodiePairData;
+import org.apache.hudi.common.data.HoodieBroadcast;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.MetadataPartitionReader;
+import org.apache.hudi.metadata.RecordIndexRawKey;
 import org.apache.hudi.metrics.RecordIndexLookupMetrics;
 
 import org.apache.spark.api.java.function.PairFlatMapFunction;
@@ -37,8 +42,11 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import scala.Tuple2;
+
+import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 
 /**
  * Looks up record-index keys that have already been grouped into one shard of a partitioned record index.
@@ -46,19 +54,25 @@ import scala.Tuple2;
 public class PartitionedRecordIndexFileGroupLookupFunction
     implements PairFlatMapFunction<Iterator<Pair<String, String>>, String, HoodieRecordGlobalLocation> {
 
-  private final HoodieTableMetadata metadataTable;
+  private final HoodieBroadcast<MetadataPartitionReader> recordIndexReader;
   /** Empty when no counters should be collected; see RecordIndexLookupMetrics#resolveRegistry. */
   private final Option<Registry> lookupMetrics;
 
-  /** Uninstrumented, for the query-side read path. */
-  public PartitionedRecordIndexFileGroupLookupFunction(HoodieTableMetadata metadataTable) {
-    this(metadataTable, Option.empty());
+  public PartitionedRecordIndexFileGroupLookupFunction(HoodieBroadcast<MetadataPartitionReader> recordIndexReader,
+                                                       Option<Registry> lookupMetrics) {
+    this.recordIndexReader = recordIndexReader;
+    this.lookupMetrics = lookupMetrics;
   }
 
-  public PartitionedRecordIndexFileGroupLookupFunction(HoodieTableMetadata metadataTable,
-                                                       Option<Registry> lookupMetrics) {
-    this.metadataTable = metadataTable;
-    this.lookupMetrics = lookupMetrics;
+  /**
+   * Creates the function with the record index reader of the given table metadata broadcast once.
+   *
+   * @param lookupMetrics empty for the uninstrumented query-side read path
+   */
+  public static PartitionedRecordIndexFileGroupLookupFunction create(HoodieEngineContext context, HoodieTableMetadata metadataTable,
+                                                                     Option<Registry> lookupMetrics) {
+    return new PartitionedRecordIndexFileGroupLookupFunction(
+        context.broadcast(metadataTable.getPartitionReader(RECORD_INDEX.getPartitionPath())), lookupMetrics);
   }
 
   @Override
@@ -79,20 +93,18 @@ public class PartitionedRecordIndexFileGroupLookupFunction
 
     // Started only when collecting: an unused timer is an allocation per shard on the disabled path.
     HoodieTimer shardTimer = lookupMetrics.isPresent() ? HoodieTimer.start() : null;
-    HoodiePairData<String, HoodieRecordGlobalLocation> recordIndexData =
-        metadataTable.readRecordIndexLocationsWithKeys(HoodieListData.eager(keysToLookup), Option.of(partitionName));
-    try {
-      Map<String, HoodieRecordGlobalLocation> recordIndexInfo = recordIndexData.collectAsList().stream()
-          .collect(HashMap::new, (map, pair) -> map.put(pair.getKey(), pair.getValue()), HashMap::putAll);
-      // recordIndexInfo is keyed by record key, so its key set is the found set with no extra allocation.
-      if (lookupMetrics.isPresent()) {
-        RecordIndexLookupMetrics.recordShardLookup(lookupMetrics.get(), keysToLookup,
-            recordIndexInfo.keySet(), shardTimer.endTimer());
-      }
-      return recordIndexInfo.entrySet().stream()
-          .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator();
-    } finally {
-      recordIndexData.unpersistWithDependencies();
+    Map<String, HoodieRecordGlobalLocation> recordIndexInfo = new HashMap<>();
+    try (ClosableIterator<HoodieRecord<HoodieMetadataPayload>> records =
+             recordIndexReader.value().lookupRecordsInDataTablePartition(partitionName,
+                 keysToLookup.stream().map(RecordIndexRawKey::new).collect(Collectors.toList()))) {
+      records.forEachRemaining(record -> recordIndexInfo.put(record.getRecordKey(), record.getData().getRecordGlobalLocation()));
     }
+    // recordIndexInfo is keyed by record key, so its key set is the found set with no extra allocation.
+    if (lookupMetrics.isPresent()) {
+      RecordIndexLookupMetrics.recordShardLookup(lookupMetrics.get(), keysToLookup,
+          recordIndexInfo.keySet(), shardTimer.endTimer());
+    }
+    return recordIndexInfo.entrySet().stream()
+        .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator();
   }
 }

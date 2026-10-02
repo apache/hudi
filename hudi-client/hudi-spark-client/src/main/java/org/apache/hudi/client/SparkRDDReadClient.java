@@ -67,6 +67,7 @@ public class SparkRDDReadClient<T> implements Serializable {
    * base path pointing to the table. Until, then just always assume a BloomIndex
    */
   private final transient HoodieIndex<?, ?> index;
+  private final transient HoodieWriteConfig clientConfig;
   private final HoodieTable hoodieTable;
   private transient Option<SQLContext> sqlContextOpt;
   private final transient HoodieSparkEngineContext context;
@@ -111,6 +112,7 @@ public class SparkRDDReadClient<T> implements Serializable {
   public SparkRDDReadClient(HoodieSparkEngineContext context, HoodieWriteConfig clientConfig) {
     this.context = context;
     this.storageConf = context.getStorageConf();
+    this.clientConfig = clientConfig;
     this.hoodieTable = HoodieSparkTable.create(clientConfig, context);
     this.index = SparkHoodieIndexFactory.createIndex(clientConfig);
     this.sqlContextOpt = Option.empty();
@@ -184,7 +186,7 @@ public class SparkRDDReadClient<T> implements Serializable {
   public JavaPairRDD<HoodieKey, Option<Pair<String, String>>> checkExists(JavaRDD<HoodieKey> hoodieKeys) {
     return HoodieJavaRDD.getJavaRDD(
         index.tagLocation(HoodieJavaRDD.of(hoodieKeys.map(k -> new HoodieAvroRecord<>(k, null))),
-            context, hoodieTable))
+            context, createTableForLookup()))
         .mapToPair(hr -> new Tuple2<>(hr.getKey(), hr.isCurrentLocationKnown()
             ? Option.of(Pair.of(hr.getPartitionPath(), hr.getCurrentLocation().getFileId()))
             : Option.empty())
@@ -211,7 +213,15 @@ public class SparkRDDReadClient<T> implements Serializable {
    */
   public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> hoodieRecords) throws HoodieIndexException {
     return HoodieJavaRDD.getJavaRDD(
-        index.tagLocation(HoodieJavaRDD.of(hoodieRecords), context, hoodieTable));
+        index.tagLocation(HoodieJavaRDD.of(hoodieRecords), context, createTableForLookup()));
+  }
+
+  /**
+   * Index lookups read the table metadata snapshot of the table they are given, so each lookup gets a table
+   * built now and sees the commits made since this client was created.
+   */
+  private HoodieTable createTableForLookup() {
+    return HoodieSparkTable.create(clientConfig, context);
   }
 
   /**
