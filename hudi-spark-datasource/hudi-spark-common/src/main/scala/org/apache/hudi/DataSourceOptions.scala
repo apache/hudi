@@ -88,7 +88,10 @@ object DataSourceReadOptions {
     .noDefaultValue()
     .markAdvanced()
     .sinceVersion("0.9.0")
-    .withDocumentation("Comma separated list of file paths to read within a Hudi table.")
+    .deprecatedAfter("1.2.0")
+    .withDocumentation("Comma separated list of file paths to read within a Hudi table. This config is deprecated "
+      + "as of 1.2.0 and setting it now fails the read. Load the table base path and filter on the partition "
+      + "columns instead: such predicates are pushed down and prune partitions before files are listed.")
 
   @Deprecated
   val READ_PRE_COMBINE_FIELD = HoodieWriteConfig.PRECOMBINE_FIELD_NAME
