@@ -52,7 +52,7 @@ import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjecti
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{JoinedRow, UnsafeProjection}
-import org.apache.spark.sql.execution.datasources.{OutputWriterFactory, PartitionedFile, SparkColumnarFileReader, SparkSchemaTransformUtils}
+import org.apache.spark.sql.execution.datasources.{OutputWriterFactory, PartitionedFile, SparkColumnarFileReader, SparkSchemaTransformUtils, UnsafeProjectionPool}
 import org.apache.spark.sql.execution.datasources.orc.OrcUtils
 import org.apache.spark.sql.execution.vectorized.{OffHeapColumnVector, OnHeapColumnVector}
 import org.apache.spark.sql.hudi.MultipleColumnarFileFormatReader
@@ -65,6 +65,7 @@ import org.apache.spark.util.SerializableConfiguration
 import java.io.Closeable
 
 import scala.collection.JavaConverters.mapAsJavaMapConverter
+import scala.util.hashing.MurmurHash3
 
 trait HoodieFormatTrait {
 
@@ -520,40 +521,52 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
         //some partition fields read from file, some were not
         getFixedPartitionValues(partitionValues, partitionSchema, fixedPartitionIndexes)
       }
-      val unsafeProjection = generateOutputProjection(StructType(inputSchema.fields ++ partitionSchema.fields), to)
+      val unsafeProjection = leaseOutputProjection(StructType(inputSchema.fields ++ partitionSchema.fields), to)
       val joinedRow = new JoinedRow()
-      makeCloseableFileGroupMappingRecordIterator(iter, d => unsafeProjection(joinedRow(d, fixedPartitionValues)))
+      makeCloseableFileGroupMappingRecordIterator(iter, d => unsafeProjection(joinedRow(d, fixedPartitionValues)), unsafeProjection)
     }
   }
 
   private def projectSchema(iter: ClosableIterator[InternalRow],
                             from: StructType,
                             to: StructType): Iterator[InternalRow] = {
-    val unsafeProjection = generateOutputProjection(from, to)
-    makeCloseableFileGroupMappingRecordIterator(iter, d => unsafeProjection(d))
+    val unsafeProjection = leaseOutputProjection(from, to)
+    makeCloseableFileGroupMappingRecordIterator(iter, d => unsafeProjection(d), unsafeProjection)
   }
 
   /**
    * The scan's output projection. Stays the by-name top-level projection unless a column comes out of the
    * reader with nested fields Spark did not ask for (see `projectionInputSchema` in
-   * buildReaderWithPartitionValues), in which case those are dropped by name at every depth.
+   * buildReaderWithPartitionValues), in which case those are dropped by name at every depth. Leased for one
+   * iterator, so that file slices that need the same projection reuse one generation.
    */
-  private def generateOutputProjection(from: StructType, to: StructType): UnsafeProjection = {
+  private def leaseOutputProjection(from: StructType, to: StructType): UnsafeProjectionPool.Lease = {
     val hasWiderNestedInput = to.fields.exists { f =>
       from.getFieldIndex(f.name).exists(i => SparkSchemaTransformUtils.needsNestedPruning(from.fields(i).dataType, f.dataType))
     }
     if (hasWiderNestedInput) {
-      SparkSchemaTransformUtils.generateNestedPruningProjection(from, to)
+      // The pruning expressions include map builders, which read the SQL conf when they are built
+      UnsafeProjectionPool.lease(NestedPruningProjectionKey(from, to, UnsafeProjectionPool.sqlConf),
+        SparkSchemaTransformUtils.generateNestedPruningProjection(from, to))
     } else {
-      generateUnsafeProjection(from, to)
+      leaseByNameProjection(from, to)
     }
   }
 
+  /** Leases the projection of [[generateUnsafeProjection]] from `from` to `to` for one iterator. */
+  private def leaseByNameProjection(from: StructType, to: StructType): UnsafeProjectionPool.Lease =
+    UnsafeProjectionPool.lease(ByNameProjectionKey(from, to), generateUnsafeProjection(from, to))
+
+  /**
+   * Maps the rows of a file group reader with `mappingFunction`, which projects them with `projection`. The
+   * projection is released once the reader has no more rows.
+   */
   private def makeCloseableFileGroupMappingRecordIterator(closeableFileGroupRecordIterator: ClosableIterator[InternalRow],
-                                                          mappingFunction: Function[InternalRow, InternalRow]): Iterator[InternalRow] = {
+                                                          mappingFunction: Function[InternalRow, InternalRow],
+                                                          projection: UnsafeProjectionPool.Lease): Iterator[InternalRow] = {
     CloseableIteratorListener.addListener(closeableFileGroupRecordIterator)
     new Iterator[InternalRow] with Closeable {
-      override def hasNext: Boolean = closeableFileGroupRecordIterator.hasNext
+      override def hasNext: Boolean = projection.checkHasNext(closeableFileGroupRecordIterator.hasNext)
 
       override def next(): InternalRow = mappingFunction(closeableFileGroupRecordIterator.next())
 
@@ -657,12 +670,12 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
   }
 
   private def projectIter(iter: Iterator[Any], from: StructType, to: StructType): Iterator[InternalRow] = {
-    val unsafeProjection = generateUnsafeProjection(from, to)
+    val unsafeProjection = leaseByNameProjection(from, to)
     val batchProjection = ColumnarBatchUtils.generateProjection(from, to)
-    iter.map {
+    unsafeProjection.releaseWhenExhausted(iter.map {
       case ir: InternalRow => unsafeProjection(ir)
       case cb: ColumnarBatch => batchProjection(cb)
-    }.asInstanceOf[Iterator[InternalRow]]
+    }).asInstanceOf[Iterator[InternalRow]]
   }
 
   /**
@@ -700,4 +713,14 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
   override def prepareWrite(sparkSession: SparkSession, job: Job, options: Map[String, String], dataSchema: StructType): OutputWriterFactory = {
     throw new HoodieNotSupportedException("HoodieFileGroupReaderBasedFileFormat does not support writing")
   }
+}
+
+/** Key of the by-name projection [[HoodieCatalystExpressionUtils.generateUnsafeProjection]] generates. */
+private case class ByNameProjectionKey(from: StructType, to: StructType) {
+  override val hashCode: Int = MurmurHash3.productHash(this)
+}
+
+/** Key of the projection [[SparkSchemaTransformUtils.generateNestedPruningProjection]] generates. */
+private case class NestedPruningProjectionKey(from: StructType, to: StructType, sqlConf: Map[String, String]) {
+  override val hashCode: Int = MurmurHash3.productHash(this)
 }
