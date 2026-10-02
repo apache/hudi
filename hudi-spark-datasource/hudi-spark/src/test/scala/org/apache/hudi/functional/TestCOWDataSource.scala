@@ -24,7 +24,7 @@ import org.apache.hudi.QuickstartUtils.{convertToStringList, getQuickstartWriteC
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, RecordMergeMode}
-import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_TIMEZONE_FORMAT, TIMESTAMP_TYPE_FIELD}
+import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{INPUT_TIME_UNIT, TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_INPUT_TIMEZONE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_TIMEZONE_FORMAT, TIMESTAMP_TIMEZONE_FORMAT, TIMESTAMP_TYPE_FIELD}
 import org.apache.hudi.common.config.metrics.HoodieMetricsConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieRecord, HoodieReplaceCommitMetadata, WriteOperationType}
@@ -50,7 +50,7 @@ import org.apache.hudi.util.JFunction
 import org.apache.hadoop.fs.FileSystem
 import org.apache.spark.sql.{DataFrame, DataFrameWriter, Dataset, Encoders, Row, SaveMode, SparkSession, SparkSessionExtensions}
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
-import org.apache.spark.sql.functions.{col, concat, lit, udf, when}
+import org.apache.spark.sql.functions.{col, concat, date_format, lit, udf, when}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types.{ArrayType, DataTypes, DateType, IntegerType, LongType, MapType, StringType, StructField, StructType, TimestampType}
 import org.joda.time.DateTime
@@ -1448,6 +1448,47 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val recordsReadDF = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
     val udf_date_format = udf((data: Long) => new DateTime(data).toString(DateTimeFormat.forPattern("yyyyMMdd")))
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= udf_date_format(col("current_ts"))).count() == 0)
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
+  def testTimestampBasedKeyGeneratorWithVariousConfigurations(recordType: HoodieRecordType) {
+    val (writeOpts, readOpts) = getWriterReaderOptsLessPartitionPath(recordType)
+
+    val records = recordsToStrings(dataGen.generateInserts("000", 2)).asScala.toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 1))
+      .withColumn("current_date_string", lit("2009-02-14 07:31:30"))
+      .withColumn("current_ts_micros", lit(1234596690123456L))
+
+    case class TestCase(partitionCol: String, tsType: String,
+                        extraOpts: Map[String, String], expectedPartition: String)
+
+    val testCases = Seq(
+      // Non-default input/output zones shift the date as well as the hour.
+      TestCase("current_date_string", "DATE_STRING",
+        Map(TIMESTAMP_INPUT_DATE_FORMAT.key -> "yyyy-MM-dd HH:mm:ss",
+          TIMESTAMP_INPUT_TIMEZONE_FORMAT.key -> "GMT+08:00",
+          TIMESTAMP_OUTPUT_TIMEZONE_FORMAT.key -> "GMT-05:00"), "2009-02-13 18"),
+      TestCase("current_ts_micros", "SCALAR",
+        Map(INPUT_TIME_UNIT.key -> "microseconds",
+          TIMESTAMP_OUTPUT_TIMEZONE_FORMAT.key -> "UTC"), "2009-02-14 07"))
+
+    testCases.foreach { tc =>
+      inputDF.write.format("hudi")
+        .options(writeOpts)
+        .options(tc.extraOpts)
+        .option(KEYGENERATOR_CLASS_NAME.key(), classOf[TimestampBasedKeyGenerator].getName)
+        .mode(SaveMode.Overwrite)
+        .partitionBy(tc.partitionCol)
+        .option(TIMESTAMP_TYPE_FIELD.key, tc.tsType)
+        .option(TIMESTAMP_OUTPUT_DATE_FORMAT.key, "yyyy-MM-dd HH")
+        .save(basePath)
+      val paths = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
+        .select("_hoodie_partition_path").collect().map(_.getString(0)).toSeq
+      val caseLabel = s"${tc.tsType}, $recordType"
+      assertEquals(2, paths.size, s"unexpected row count for $caseLabel")
+      assertEquals(Seq.fill(2)(tc.expectedPartition), paths, s"partition path mismatch for $caseLabel")
+    }
   }
 
   @ParameterizedTest
