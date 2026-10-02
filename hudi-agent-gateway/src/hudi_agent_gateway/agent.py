@@ -27,18 +27,18 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.prebuilt import create_react_agent
 
 from hudi_agent_gateway.config import GatewaySettings
+from hudi_agent_gateway.tools import get_connector
 from hudi_agent_gateway.tools.registry import ToolRegistry
 
 _SYSTEM_PROMPT = """\
 You are the Apache Hudi lakehouse analyst. You answer questions about data in \
-an Apache Hudi lakehouse by querying it through Trino using your tools. The \
-default catalog is `{catalog}` and the default schema is `{schema}`; tables \
-are Hudi tables registered in the catalog's metastore.
+an Apache Hudi lakehouse by querying it through {engine_name} using your tools. \
+{namespace_line}
 
 Tool strategy:
 - For unfamiliar tables, call `list_tables` and `describe_table` BEFORE writing SQL.
-- `query_lakehouse` accepts exactly ONE read-only SELECT statement (Trino SQL). \
-Qualify names as catalog.schema.table when querying outside the defaults.
+- `query_lakehouse` accepts exactly ONE read-only SELECT statement ({dialect}). \
+{qualify_line}
 - A server-side row cap of {row_cap} rows is enforced. Prefer aggregations, \
 GROUP BY, and explicit LIMIT over raw row dumps.
 - If a result has `truncated: true`, tell the user the result was truncated and \
@@ -54,9 +54,12 @@ Grounding rules:
 
 def build_system_prompt(settings: GatewaySettings) -> str:
     extra = f"\n{settings.system_prompt_extra}" if settings.system_prompt_extra else ""
+    ctx = get_connector(settings.engine).prompt_context(settings)
     return _SYSTEM_PROMPT.format(
-        catalog=settings.trino_catalog,
-        schema=settings.trino_schema,
+        engine_name=ctx.engine_name,
+        dialect=ctx.dialect,
+        namespace_line=ctx.namespace_line,
+        qualify_line=ctx.qualify_line,
         row_cap=settings.sql_row_cap,
         extra=extra,
     )

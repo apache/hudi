@@ -35,7 +35,7 @@ async def client(settings, registry, fake_trino):
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as c, app.router.lifespan_context(app):
-        app.state.trino_client = fake_trino
+        app.state.lakehouse_client = fake_trino
         app.state.registry = registry
         app.state.agents = FixedAgents(
             build_agent(

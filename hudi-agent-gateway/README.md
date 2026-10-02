@@ -26,8 +26,9 @@ process hosts three surfaces over the same set of guarded lakehouse tools:
 | MCP server | `/mcp` (streamable HTTP) | external agents (Claude, anything MCP) call the lakehouse tools directly |
 | Chat UI | `/ui/` | first-party ChatGPT-style web UI (zero third-party code) |
 
-The v1 tools query the lakehouse through Trino: `query_lakehouse` (guarded,
-read-only SQL), `list_tables`, `describe_table`. Every model-written query
+The tools query the lakehouse through a pluggable SQL engine -- Trino (the
+default) or a Spark Thrift Server (`GATEWAY_ENGINE=spark`): `query_lakehouse`
+(guarded, read-only SQL), `list_tables`, `describe_table`. Every model-written query
 passes AST-level guardrails (single statement, SELECT-only, row cap injected
 as a real `LIMIT`) and every invocation is logged as structured JSON — the
 seed of the gateway's trace collection.
@@ -67,6 +68,72 @@ Connect an MCP client:
 claude mcp add --transport http hudi-lakehouse http://localhost:8000/mcp/
 ```
 
+## Using Spark instead of Trino (via Apache Kyuubi)
+
+Set `GATEWAY_ENGINE=spark` to serve the same tools through a Spark SQL engine
+over the HiveServer2 Thrift protocol. Spark reads everything Spark can read:
+MOR snapshot queries, and Hudi 1.x tables carrying the unstructured types
+(`BLOB`, `VECTOR`, `VARIANT`) -- e.g. `size(embedding)` over a vector column
+works. Queries are validated and rendered in the Spark SQL dialect;
+`list_tables`/`describe_table` use `SHOW TABLES` / `DESCRIBE TABLE`.
+
+The recommended endpoint is **[Apache Kyuubi](https://kyuubi.apache.org/)**,
+which exposes the same HiveServer2 protocol but adds what a bare Spark Thrift
+Server lacks -- isolated on-demand engines, HA + service discovery, and real
+authn/authz. Because the wire protocol is identical, the gateway connects to
+Kyuubi with **no code change** -- only the host/port differ (Kyuubi defaults to
+10009; a raw Spark Thrift Server uses 10000).
+
+```bash
+# the spark extra brings PyHive (pure-sasl, no C toolchain needed):
+.venv/bin/pip install -e ".[spark,dev]"
+
+# Point Kyuubi's engine at a Spark build with the Hudi bundle on its classpath
+# (SPARK_HOME/conf/spark-defaults.conf), then start Kyuubi:
+#   export SPARK_HOME=/path/to/spark-with-hudi
+#   $KYUUBI_HOME/bin/kyuubi start        # HiveServer2 Thrift on :10009
+
+GATEWAY_ENGINE=spark GATEWAY_SPARK_HOST=localhost GATEWAY_SPARK_PORT=10009 \
+GATEWAY_LLM_PROVIDER=ollama GATEWAY_LLM_MODEL=qwen3:8b \
+  .venv/bin/hudi-agent-gateway serve
+
+curl localhost:8000/ready   # {"checks": {"spark": {"ok": true, ...}, ...}}
+```
+
+Kyuubi operational notes (learned the hard way -- see the PR for detail):
+
+- **Engine share level.** For a single-service gateway, run Kyuubi with
+  `kyuubi.engine.share.level=SERVER` so every connection reuses one engine and
+  one catalog. With the default `USER` level each distinct connecting user
+  gets its *own* engine (extra cold-start) and, with an embedded derby
+  metastore, its *own* tables -- so `GATEWAY_SPARK_USER` must match whoever
+  registered them, or back Kyuubi with a shared Hive Metastore.
+- **First-query cold start.** The engine spins up on the first query and can
+  take minutes with a large Hudi classpath; keep
+  `kyuubi.session.engine.initialize.timeout` generous and give the driver
+  enough memory, or the engine is killed mid-init. The gateway's readiness
+  ping may report `spark` down until the engine is warm.
+
+Any HiveServer2-compatible endpoint works, including a raw
+`start-thriftserver.sh` for a quick local check (lighter, but single shared
+context, no HA) -- set `GATEWAY_SPARK_PORT=10000` for that.
+
+The chat API, UI, MCP server, guardrails, and agent behavior are identical
+across engines -- only the SQL dialect and the endpoint in `/v1/info` change.
+Two engine-specific notes:
+
+- **Connections are pooled.** HiveServer2 sessions are expensive to open, so
+  the client keeps up to `GATEWAY_SPARK_MAX_CONNECTIONS` live sessions,
+  recycles them past idle/lifetime limits, discards any session whose query
+  timed out, and transparently retries once on a fresh connection when a
+  pooled session died underneath a query (server restart, idle kill).
+- **Tool argument shapes follow the engine's namespace model**: `list_tables`
+  takes `database` (not `catalog`/`schema_name`) and `describe_table` accepts
+  `table` or `database.table` -- MCP clients that hardcode tool arguments
+  should read `GET /v1/tools` rather than assume the Trino shapes. The thrift
+  transport is unencrypted; `ldap` sends the password in the SASL exchange,
+  so use it only on trusted networks (TLS support is a tracked follow-up).
+
 ## Deploying on Kubernetes
 
 See `hudi-lakehouse/charts/hudi-agent-gateway` — the product Helm chart —
@@ -86,8 +153,14 @@ Environment variables (prefix `GATEWAY_` except the standard key names):
 | `GATEWAY_OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama endpoint |
 | `GATEWAY_OPENAI_BASE_URL` | — | endpoint for `openai-compatible` (vLLM, Together, …) |
 | `GATEWAY_LLM_TIMEOUT_SECONDS` | `120` | per-model-call timeout |
-| `GATEWAY_TRINO_HOST` / `_PORT` | `hudi-trino.hudi-lakehouse.svc` / `8080` | Trino coordinator |
+| `GATEWAY_ENGINE` | `trino` | lakehouse SQL engine: `trino` \| `spark` |
+| `GATEWAY_TRINO_HOST` / `_PORT` | `hudi-trino.hudi-lakehouse.svc` / `8080` | Trino coordinator (engine=trino) |
 | `GATEWAY_TRINO_CATALOG` / `_SCHEMA` / `_USER` | `hudi` / `default` / `hudi-agent-gateway` | query defaults |
+| `GATEWAY_SPARK_HOST` / `_PORT` | `localhost` / `10000` | Spark Thrift Server (engine=spark) |
+| `GATEWAY_SPARK_DATABASE` / `_USER` | `default` / `hudi-agent-gateway` | query defaults (engine=spark) |
+| `GATEWAY_SPARK_AUTH` / `_PASSWORD` | `none` / — | HiveServer2 auth: `none` \| `nosasl` \| `ldap` (password required for ldap) |
+| `GATEWAY_SPARK_MAX_CONNECTIONS` | `8` | pooled HiveServer2 sessions; also the query concurrency bound |
+| `GATEWAY_SPARK_POOL_MAX_IDLE_SECONDS` / `_MAX_LIFETIME_SECONDS` | `300` / `1800` | pooled sessions are recycled past these limits |
 | `GATEWAY_SQL_ROW_CAP` | `200` | LIMIT enforced on every query |
 | `GATEWAY_SQL_TIMEOUT_SECONDS` | `120` | per-query timeout |
 | `GATEWAY_TOOL_RESULT_MAX_BYTES` | `50000` | tool results truncated beyond this (with notice) |
@@ -111,6 +184,9 @@ readiness probe).
 
 # live integration (against a port-forwarded local-dev stack):
 GATEWAY_IT_TRINO_HOST=localhost GATEWAY_IT_TRINO_PORT=18080 .venv/bin/pytest tests/integration
+
+# live integration against a Spark Thrift Server (needs the spark extra):
+GATEWAY_IT_SPARK_HOST=localhost GATEWAY_IT_SPARK_PORT=10000 .venv/bin/pytest tests/integration/test_live_spark.py
 ```
 
 Adding a tool: write a module under `src/hudi_agent_gateway/tools/` with a
