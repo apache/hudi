@@ -20,7 +20,8 @@
 package org.apache.hudi
 
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, TIME_TRAVEL_AS_OF_INSTANT}
-import org.apache.hudi.FullTextIndexSupport.{extractConstraints, TokenConstraint}
+import org.apache.hudi.FullTextIndexSupport.{evaluate, indexLeaves, mayMatch, rowLevelUseful, toCondition, AndCond, IndexLeaf, IndexView, PrefixLeaf, TokenLeaf}
+import org.apache.hudi.avro.model.HoodieFullTextIndexInfo
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieListData
 import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition}
@@ -33,24 +34,25 @@ import org.apache.hudi.metadata.{BaseTableMetadata, FullTextIndexUtils, HoodieMe
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_FULL_TEXT_INDEX
 
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Expression, Literal}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Expression, Not, Or}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
-import org.apache.spark.sql.hudi.fulltext.{HudiHasAllTokens, HudiHasAnyTokens, HudiHasToken}
+import org.apache.spark.sql.hudi.fulltext.{HudiHasAnyTokens, HudiHasTokenPrefix, TokenPredicate}
 import org.apache.spark.sql.types.StringType
 import org.roaringbitmap.RoaringBitmap
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
+import scala.util.Try
 
 /**
- * Prunes file slices with the full-text index for hudi_has_token / hudi_has_all_tokens / hudi_has_any_tokens
- * predicates on an indexed column.
+ * Prunes file slices with the full-text index for the token predicates (hudi_has_token, hudi_has_all_tokens,
+ * hudi_has_any_tokens, hudi_has_token_prefix, hudi_has_phrase) on an indexed column, combined with AND, OR and NOT.
  *
  * <p>A slice is pruned only when the index view being read covers exactly its base file: the coverage marker
  * of that (file id, base instant) unit is present. Slices whose unit is not covered (the index view is behind
  * or ahead of the queried slices, or the file was never indexed) and slices with log files are always kept.
- * For an AND over several tokens, the row-position bitmaps of the non-dense tokens are intersected within each
- * file, so a covered file is kept only if some row holds every token.
+ * Within each covered file, the filter is evaluated on row positions where they are stored, so a file is kept only
+ * if some row may satisfy it; predicates the index cannot answer count as satisfied by every row.
  */
 // scalastyle:off return
 class FullTextIndexSupport(spark: SparkSession,
@@ -95,8 +97,9 @@ class FullTextIndexSupport(spark: SparkSession,
                                          prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
                                          shouldPushDownFilesFilter: Boolean): Option[Set[String]] = {
     val indexByColumn = fullTextIndexDefinitions.map(d => d.getSourceFields.get(0).toLowerCase -> d.getIndexName).toMap
-    val constraints = queryFilters.flatMap(f => extractConstraints(f)).filter(c => indexByColumn.contains(c.column))
-    if (constraints.isEmpty) {
+    val condition = AndCond(queryFilters.map(f => toCondition(f, indexByColumn)))
+    val leaves = indexLeaves(condition)
+    if (leaves.isEmpty) {
       return None
     }
 
@@ -104,68 +107,68 @@ class FullTextIndexSupport(spark: SparkSession,
     val (withLogs, baseOnly) = slices.partition(s => s.hasLogFiles || !s.getBaseFile.isPresent)
     val sliceUnits: Map[String, String] = baseOnly.map(s => s.getFileId -> FullTextIndexUtils.baseUnit(s.getBaseInstantTime)).toMap
 
-    var candidates: Option[Set[String]] = None
-    constraints.groupBy(c => indexByColumn(c.column)).foreach { case (indexPartition, indexConstraints) =>
+    val views: Map[String, IndexView] = leaves.groupBy(_.indexPartition).map { case (indexPartition, partitionLeaves) =>
       // Only units whose coverage marker is visible can be pruned by this index view.
       val markers = readExact(indexPartition, sliceUnits.map { case (fileId, unit) => FullTextIndexUtils.markerKey(fileId, unit) }.toSeq)
-      val coveredUnits = sliceUnits.filter { case (fileId, unit) => markers.contains(FullTextIndexUtils.markerKey(fileId, unit)) }
-      val uncovered = sliceUnits.keySet -- coveredUnits.keySet
-      indexConstraints.foreach { c =>
-        val tokens = FullTextIndexUtils.tokenize(c.query).asScala.toSeq
-        if (tokens.nonEmpty) {
-          val files = candidateFileIds(indexPartition, tokens, c.matchAll, coveredUnits) ++ uncovered
-          candidates = Some(candidates.map(_.intersect(files)).getOrElse(files))
-        }
-      }
+      val covered = sliceUnits.filter { case (fileId, unit) => markers.contains(FullTextIndexUtils.markerKey(fileId, unit)) }
+      indexPartition -> IndexView(covered, readPresence(indexPartition, partitionLeaves, covered))
     }
-    candidates.map { fileIds =>
-      val keptBaseFiles = baseOnly.filter(s => fileIds.contains(s.getFileId)).map(_.getBaseFile.get.getFileName)
-      val keptWithLogs = withLogs.flatMap { s =>
-        Option(s.getBaseFile.orElse(null)).map(_.getFileName).toSeq ++ s.getLogFiles.iterator().asScala.map(_.getFileName)
-      }
-      (keptBaseFiles ++ keptWithLogs).toSet
+
+    // File-level pass on presence entries, then a row-level pass on positions for the files left.
+    val fileLevel = sliceUnits.keySet.filter(fileId => mayMatch(evaluate(condition, fileId, views, Map.empty)))
+    val candidates = if (!rowLevelUseful(condition)) {
+      fileLevel
+    } else {
+      val bitmaps = readPositions(fileLevel, leaves, views)
+      fileLevel.filter(fileId => mayMatch(evaluate(condition, fileId, views, bitmaps)))
     }
+
+    val keptBaseFiles = baseOnly.filter(s => candidates.contains(s.getFileId)).map(_.getBaseFile.get.getFileName)
+    val keptWithLogs = withLogs.flatMap { s =>
+      Option(s.getBaseFile.orElse(null)).map(_.getFileName).toSeq ++ s.getLogFiles.iterator().asScala.map(_.getFileName)
+    }
+    Some((keptBaseFiles ++ keptWithLogs).toSet)
   }
 
-  private def candidateFileIds(indexPartition: String, tokens: Seq[String], matchAll: Boolean,
-                               liveUnits: Map[String, String]): Set[String] = {
-    // token -> (fileId -> dense) over live units only
-    val presence = mutable.Map[String, mutable.Map[String, Boolean]]()
-    tokens.foreach(t => presence(t) = mutable.Map.empty)
-    val prefixKeys = tokens.map(t => FullTextRawKey(FullTextIndexUtils.presencePrefix(t)))
-    metadataTable.getRecordsByKeyPrefixes(HoodieListData.eager(prefixKeys.asJava), indexPartition, true)
+  /** Presence entries of the leaves' terms, for covered units only: term -> file id -> entry. */
+  private def readPresence(indexPartition: String, leaves: Seq[IndexLeaf],
+                           covered: Map[String, String]): Map[String, Map[String, HoodieFullTextIndexInfo]] = {
+    val prefixes = leaves.map {
+      case TokenLeaf(_, token) => FullTextIndexUtils.presencePrefix(token)
+      case PrefixLeaf(_, prefix) => FullTextIndexUtils.presenceTermPrefix(prefix)
+    }.distinct.sorted
+    // The HFile reader only seeks forward, so a prefix extending a shorter one in the batch is dropped:
+    // the shorter prefix already returns its entries.
+    val minimal = prefixes.foldLeft(Vector.empty[String]) { (kept, p) => if (kept.exists(p.startsWith)) kept else kept :+ p }
+    val presence = mutable.Map[String, mutable.Map[String, HoodieFullTextIndexInfo]]()
+    metadataTable.getRecordsByKeyPrefixes(HoodieListData.eager(minimal.map(p => FullTextRawKey(p): RawKey).asJava), indexPartition, true)
       .collectAsList().asScala.foreach { record =>
         val Array(term, fileId, unit) = FullTextIndexUtils.parseKey(record.getRecordKey)
-        if (liveUnits.get(fileId).contains(unit) && presence.contains(term)) {
-          presence(term)(fileId) = record.getData.getFullTextIndexMetadata.getDense
+        if (covered.get(fileId).contains(unit)) {
+          presence.getOrElseUpdate(term, mutable.Map.empty)(fileId) = record.getData.getFullTextIndexMetadata
         }
       }
+    presence.map { case (term, files) => term -> files.toMap }.toMap
+  }
 
-    if (!matchAll) {
-      return presence.values.flatMap(_.keySet).toSet
-    }
-    val filesWithAllTokens = presence.values.map(_.keySet.toSet).reduce(_ intersect _)
-    if (tokens.size == 1 || filesWithAllTokens.isEmpty) {
-      return filesWithAllTokens
-    }
-
-    val needed = for {
-      fileId <- filesWithAllTokens.toSeq
-      token <- tokens if !presence(token)(fileId)
-    } yield (fileId, FullTextIndexUtils.positionsKey(token, fileId, liveUnits(fileId)))
-    val bitmaps: Map[String, RoaringBitmap] = readExact(indexPartition, needed.map(_._2)).flatMap { case (key, payload) =>
-      Option(payload.getFullTextIndexMetadata).flatMap(info => Option(info.getPositions))
-        .map(buffer => key -> FullTextIndexUtils.deserialize(buffer))
-    }
-    filesWithAllTokens.filter { fileId =>
-      val keys = needed.filter(_._1 == fileId).map(_._2)
-      if (keys.isEmpty) {
-        true
-      } else if (!keys.forall(bitmaps.contains)) {
-        // A missing positions entry cannot prove absence; keep the file.
-        true
-      } else {
-        !keys.map(bitmaps).reduce((a, b) => RoaringBitmap.and(a, b)).isEmpty
+  /** Positions of the leaves' non-dense terms in the given files: (index partition, term, file id) -> rows. */
+  private def readPositions(fileIds: Set[String], leaves: Seq[IndexLeaf],
+                            views: Map[String, IndexView]): Map[(String, String, String), RoaringBitmap] = {
+    leaves.distinct.groupBy(_.indexPartition).flatMap { case (indexPartition, partitionLeaves) =>
+      val view = views(indexPartition)
+      val terms = partitionLeaves.flatMap {
+        case TokenLeaf(_, token) => Seq(token)
+        case PrefixLeaf(_, prefix) => view.presence.keys.filter(_.startsWith(prefix))
+      }.distinct
+      val keys = for {
+        term <- terms
+        fileId <- fileIds.toSeq
+        info <- view.presence.get(term).flatMap(_.get(fileId)).toSeq if !info.getDense
+      } yield FullTextIndexUtils.positionsKey(term, fileId, view.covered(fileId))
+      readExact(indexPartition, keys).flatMap { case (key, payload) =>
+        val Array(term, fileId, _) = FullTextIndexUtils.parseKey(key)
+        Option(payload.getFullTextIndexMetadata).flatMap(info => Option(info.getPositions))
+          .map(buffer => (indexPartition, term, fileId) -> FullTextIndexUtils.deserialize(buffer))
       }
     }
   }
@@ -194,18 +197,132 @@ class FullTextIndexSupport(spark: SparkSession,
 object FullTextIndexSupport {
   val INDEX_NAME = "full_text_index"
 
-  case class TokenConstraint(column: String, query: String, matchAll: Boolean)
+  /** A pushed-down filter, with full-text predicates on indexed columns as leaves and anything else as Unknown. */
+  sealed trait Condition
+  case class AndCond(children: Seq[Condition]) extends Condition
+  case class OrCond(children: Seq[Condition]) extends Condition
+  case class NotCond(child: Condition) extends Condition
+  case object Unknown extends Condition
+  sealed trait IndexLeaf extends Condition {
+    def indexPartition: String
+  }
+  case class TokenLeaf(indexPartition: String, token: String) extends IndexLeaf
+  case class PrefixLeaf(indexPartition: String, prefix: String) extends IndexLeaf
+
+  /** The covered units (file id -> unit) of one index partition and their presence entries (term -> file id -> entry). */
+  case class IndexView(covered: Map[String, String], presence: Map[String, Map[String, HoodieFullTextIndexInfo]])
 
   /**
-   * Extracts token constraints from a pushed-down data filter. Only top-level conjuncts with a column
-   * reference and a string literal are used; anything else is left to row-level evaluation.
+   * Rows of one file that may satisfy a condition (sup) and rows that surely do (sub); None is every row.
+   * Pruning keeps a file unless sup is empty. NOT is evaluated as the complement of sub, so sub must never
+   * hold a row that does not satisfy the condition; NOT's own sub is left empty because rows with a null
+   * text satisfy neither a predicate nor its negation.
    */
-  def extractConstraints(filter: Expression): Seq[TokenConstraint] = filter match {
-    case And(left, right) => extractConstraints(left) ++ extractConstraints(right)
-    case HudiHasToken(a: AttributeReference, Literal(q, StringType)) if q != null => Seq(TokenConstraint(a.name.toLowerCase, q.toString, matchAll = true))
-    case HudiHasAllTokens(a: AttributeReference, Literal(q, StringType)) if q != null => Seq(TokenConstraint(a.name.toLowerCase, q.toString, matchAll = true))
-    case HudiHasAnyTokens(a: AttributeReference, Literal(q, StringType)) if q != null => Seq(TokenConstraint(a.name.toLowerCase, q.toString, matchAll = false))
-    case _ => Seq.empty
+  case class Rows(sup: Option[RoaringBitmap], sub: Option[RoaringBitmap])
+
+  private def noRows: Option[RoaringBitmap] = Some(new RoaringBitmap())
+
+  private val unknownRows: Rows = Rows(None, noRows)
+
+  def mayMatch(rows: Rows): Boolean = rows.sup.forall(!_.isEmpty)
+
+  def toCondition(filter: Expression, indexByColumn: Map[String, String]): Condition = filter match {
+    case And(left, right) => AndCond(Seq(toCondition(left, indexByColumn), toCondition(right, indexByColumn)))
+    case Or(left, right) => OrCond(Seq(toCondition(left, indexByColumn), toCondition(right, indexByColumn)))
+    case Not(child) => NotCond(toCondition(child, indexByColumn))
+    case p: TokenPredicate => (p.text, constantString(p.query)) match {
+      case (a: AttributeReference, Some(query)) if indexByColumn.contains(a.name.toLowerCase) =>
+        val indexPartition = indexByColumn(a.name.toLowerCase)
+        val tokens = FullTextIndexUtils.tokenize(query).asScala.toSeq
+        p match {
+          case _ if tokens.isEmpty => Unknown
+          case _: HudiHasAnyTokens => OrCond(tokens.map(TokenLeaf(indexPartition, _)))
+          case _: HudiHasTokenPrefix => if (tokens.size == 1) PrefixLeaf(indexPartition, tokens.head) else Unknown
+          // A phrase needs all of its tokens; adjacency is checked on the rows read.
+          case _ => AndCond(tokens.map(TokenLeaf(indexPartition, _)))
+        }
+      case _ => Unknown
+    }
+    case _ => Unknown
+  }
+
+  private def constantString(e: Expression): Option[String] =
+    if (e.foldable && e.dataType == StringType) Try(e.eval()).toOption.flatMap(Option(_)).map(_.toString) else None
+
+  def indexLeaves(c: Condition): Seq[IndexLeaf] = c match {
+    case AndCond(cs) => cs.flatMap(indexLeaves)
+    case OrCond(cs) => cs.flatMap(indexLeaves)
+    case NotCond(child) => indexLeaves(child)
+    case leaf: IndexLeaf => Seq(leaf)
+    case Unknown => Seq.empty
+  }
+
+  /** Whether positions can prune more than presence: an AND of indexed terms, or a NOT over one. */
+  def rowLevelUseful(c: Condition): Boolean = c match {
+    case AndCond(cs) => cs.count(indexLeaves(_).nonEmpty) >= 2 || cs.exists(rowLevelUseful)
+    case OrCond(cs) => cs.exists(rowLevelUseful)
+    case NotCond(child) => indexLeaves(child).nonEmpty
+    case _ => false
+  }
+
+  /** Evaluates the condition on one file; without positions every present term counts for every row. */
+  def evaluate(c: Condition, fileId: String, views: Map[String, IndexView],
+               positions: Map[(String, String, String), RoaringBitmap]): Rows = c match {
+    case AndCond(cs) => cs.map(evaluate(_, fileId, views, positions)).foldLeft(Rows(None, None)) { (a, b) =>
+      Rows(intersect(a.sup, b.sup), intersect(a.sub, b.sub))
+    }
+    case OrCond(cs) => cs.map(evaluate(_, fileId, views, positions)).foldLeft(Rows(noRows, noRows)) { (a, b) =>
+      Rows(union(a.sup, b.sup), union(a.sub, b.sub))
+    }
+    case NotCond(child) =>
+      Rows(complement(evaluate(child, fileId, views, positions).sub, rowCount(fileId, views)), noRows)
+    case TokenLeaf(indexPartition, token) =>
+      val view = views(indexPartition)
+      if (!view.covered.contains(fileId)) {
+        unknownRows
+      } else {
+        view.presence.get(token).flatMap(_.get(fileId)) match {
+          case None => Rows(noRows, noRows)
+          case Some(info) =>
+            positions.get((indexPartition, token, fileId)) match {
+              case Some(rows) => Rows(Some(rows), Some(rows))
+              case None => Rows(None, if (inEveryRow(info)) None else noRows)
+            }
+        }
+      }
+    case PrefixLeaf(indexPartition, prefix) =>
+      val view = views(indexPartition)
+      if (!view.covered.contains(fileId)) {
+        unknownRows
+      } else {
+        // Any of the terms starting with the prefix; none at all means no row matches.
+        val terms = view.presence.keys.filter(_.startsWith(prefix)).toSeq
+        evaluate(OrCond(terms.map(TokenLeaf(indexPartition, _))), fileId, views, positions)
+      }
+    case Unknown => unknownRows
+  }
+
+  private def inEveryRow(info: HoodieFullTextIndexInfo): Boolean = info.getCardinality == info.getRowCount
+
+  private def rowCount(fileId: String, views: Map[String, IndexView]): Option[Long] =
+    views.values.flatMap(_.presence.values.flatMap(_.get(fileId))).headOption.map(_.getRowCount.longValue())
+
+  private def intersect(a: Option[RoaringBitmap], b: Option[RoaringBitmap]): Option[RoaringBitmap] = (a, b) match {
+    case (None, _) => b
+    case (_, None) => a
+    case (Some(x), Some(y)) => Some(RoaringBitmap.and(x, y))
+  }
+
+  private def union(a: Option[RoaringBitmap], b: Option[RoaringBitmap]): Option[RoaringBitmap] = (a, b) match {
+    case (Some(x), Some(y)) => Some(RoaringBitmap.or(x, y))
+    case _ => None
+  }
+
+  private def complement(rows: Option[RoaringBitmap], rowCount: Option[Long]): Option[RoaringBitmap] = (rows, rowCount) match {
+    case (None, _) => noRows
+    case (Some(r), _) if r.isEmpty => None
+    case (Some(r), Some(n)) => Some(RoaringBitmap.flip(r, 0L, n))
+    case (Some(_), None) => None
   }
 }
 

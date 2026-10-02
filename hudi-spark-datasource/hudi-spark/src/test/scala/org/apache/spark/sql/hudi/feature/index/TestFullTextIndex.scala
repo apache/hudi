@@ -30,11 +30,11 @@ import org.apache.hudi.metadata.{FullTextIndexUtils, HoodieBackedTableMetadata}
 import org.apache.hudi.metadata.index.fulltext.FullTextIndexer
 
 import org.apache.spark.sql.SaveMode
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, Literal}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Concat, Expression, GreaterThan, Literal, Not, Or}
 import org.apache.spark.sql.functions.input_file_name
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
-import org.apache.spark.sql.hudi.fulltext.{HudiHasAllTokens, HudiHasAnyTokens, HudiHasToken}
-import org.apache.spark.sql.types.StringType
+import org.apache.spark.sql.hudi.fulltext.{HudiHasAllTokens, HudiHasAnyTokens, HudiHasPhrase, HudiHasToken, HudiHasTokenPrefix}
+import org.apache.spark.sql.types.{LongType, StringType}
 
 import scala.collection.JavaConverters._
 import scala.util.Random
@@ -46,6 +46,7 @@ class TestFullTextIndex extends HoodieSparkSqlTestBase {
   }
 
   private val msg = AttributeReference("msg", StringType, nullable = true)()
+  private val ts = AttributeReference("ts", LongType, nullable = true)()
 
   private def createTable(tableName: String, basePath: String, extraOptions: String = "", primaryKey: Boolean = true): Unit = {
     val pk = if (primaryKey) "primaryKey = 'id', preCombineField = 'ts'," else ""
@@ -98,6 +99,22 @@ class TestFullTextIndex extends HoodieSparkSqlTestBase {
       metadata.close()
     }
   }
+
+  /** Files the scan node reads for a SQL predicate, through the optimizer, with data skipping on. */
+  private def scanFiles(basePath: String, predicateSql: String): Long = {
+    val df = spark.read.format("hudi").option(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key, "true")
+      .option(HoodieMetadataConfig.ENABLE.key, "true").load(basePath).where(predicateSql)
+    df.collect()
+    val scans = df.queryExecution.executedPlan.collectLeaves().filter(_.metrics.contains("numFiles"))
+    assertResult(1)(scans.size)
+    scans.head.metrics("numFiles").value
+  }
+
+  /** Ids of the rows matching a SQL predicate, read through the file index with or without data skipping. */
+  private def idsRead(basePath: String, predicateSql: String, skipping: Boolean = true): Seq[Int] =
+    spark.read.format("hudi").option(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key, skipping.toString)
+      .option(HoodieMetadataConfig.ENABLE.key, "true").load(basePath).where(predicateSql)
+      .select("id").collect().map(_.getInt(0)).toSeq.sorted
 
   private def ids(sql: String): Seq[Int] = spark.sql(sql).collect().map(_.getInt(0)).toSeq.sorted
 
@@ -317,8 +334,41 @@ class TestFullTextIndex extends HoodieSparkSqlTestBase {
       val random = new Random(20260924L)
       val vocab = Seq("disk", "full", "quota", "node", "user", "login", "error", "ok", "the", "a", "cache", "miss")
       def sentence(): String = Seq.fill(1 + random.nextInt(5))(vocab(random.nextInt(vocab.size))).mkString(" ")
+      def text(): String = if (random.nextInt(8) == 0) "null" else s"'${sentence()}'"
       def rows(ids: Seq[Int], ts: Int): String =
-        ids.map(id => s"($id, '${sentence()}', $ts, '${if (random.nextBoolean()) "a" else "b"}')").mkString(", ")
+        ids.map(id => s"($id, ${text()}, $ts, '${if (random.nextBoolean()) "a" else "b"}')").mkString(", ")
+      def leaf(): (Expression, String) = {
+        val word = vocab(random.nextInt(vocab.size))
+        val query = Seq.fill(1 + random.nextInt(3))(vocab(random.nextInt(vocab.size))).mkString(" ")
+        random.nextInt(6) match {
+          case 0 => (HudiHasToken(msg, Literal(word)), s"hudi_has_token(msg, '$word')")
+          case 1 => (HudiHasAllTokens(msg, Literal(query)), s"hudi_has_all_tokens(msg, '$query')")
+          case 2 => (HudiHasAnyTokens(msg, Literal(query)), s"hudi_has_any_tokens(msg, '$query')")
+          case 3 =>
+            val prefix = word.take(1 + random.nextInt(word.length))
+            (HudiHasTokenPrefix(msg, Literal(prefix)), s"hudi_has_token_prefix(msg, '$prefix')")
+          case 4 => (HudiHasPhrase(msg, Literal(query)), s"hudi_has_phrase(msg, '$query')")
+          case _ =>
+            val bound = random.nextInt(25)
+            (GreaterThan(ts, Literal(bound.toLong)), s"ts > $bound")
+        }
+      }
+      def predicate(depth: Int): (Expression, String) =
+        if (depth == 0 || random.nextInt(3) == 0) {
+          leaf()
+        } else {
+          random.nextInt(3) match {
+            case 0 =>
+              val ((l, ls), (r, rs)) = (predicate(depth - 1), predicate(depth - 1))
+              (And(l, r), s"($ls) and ($rs)")
+            case 1 =>
+              val ((l, ls), (r, rs)) = (predicate(depth - 1), predicate(depth - 1))
+              (Or(l, r), s"($ls) or ($rs)")
+            case _ =>
+              val (c, cs) = predicate(depth - 1)
+              (Not(c), s"not ($cs)")
+          }
+        }
 
       spark.sql(s"insert into $tableName values ${rows(1 to 8, 1)}")
       spark.sql(s"create index idx_msg on $tableName using full_text(msg)")
@@ -331,26 +381,113 @@ class TestFullTextIndex extends HoodieSparkSqlTestBase {
             nextId += 3
           case 1 =>
             val id = 1 + random.nextInt(nextId - 1)
-            spark.sql(s"update $tableName set msg = '${sentence()}', ts = ${step + 100} where id = $id")
+            spark.sql(s"update $tableName set msg = ${text()}, ts = ${step + 100} where id = $id")
           case 2 =>
             spark.sql(s"delete from $tableName where id = ${1 + random.nextInt(nextId - 1)}")
           case _ =>
             spark.sql(s"call run_clustering(table => '$tableName', op => 'scheduleandexecute')")
         }
-        (1 to 6).foreach { _ =>
-          val query = Seq.fill(1 + random.nextInt(3))(vocab(random.nextInt(vocab.size))).mkString(" ")
-          val (expr, sqlPred) = random.nextInt(3) match {
-            case 0 => (HudiHasToken(msg, Literal(query.split(" ").head)), s"hudi_has_token(msg, '${query.split(" ").head}')")
-            case 1 => (HudiHasAllTokens(msg, Literal(query)), s"hudi_has_all_tokens(msg, '$query')")
-            case _ => (HudiHasAnyTokens(msg, Literal(query)), s"hudi_has_any_tokens(msg, '$query')")
-          }
+        (1 to 10).foreach { _ =>
+          val (expr, sqlPred) = predicate(3)
           val needed = filesWithMatches(basePath, sqlPred)
           val kept = filesRead(basePath, expr)
           assert(needed.subsetOf(kept), s"step $step, $sqlPred: pruned a file with a match; needed=$needed kept=$kept")
           checks += 1
         }
       }
-      assertResult(120)(checks)
+      assertResult(200)(checks)
+    }
+  }
+
+  test("Test full-text index prunes a query string given as a constant expression") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val basePath = s"${tmp.getCanonicalPath}/$tableName"
+      createTable(tableName, basePath)
+      spark.sql(s"insert into $tableName values (1, 'disk full', 1, 'a'), (2, 'quota ok', 1, 'a')")
+      spark.sql(s"insert into $tableName values (3, 'disk quota', 1, 'b')")
+      spark.sql(s"create index idx_msg on $tableName using full_text(msg) options (dense_ratio = '1.0')")
+      assertResult(1)(scanFiles(basePath, "hudi_has_token(msg, 'full')"))
+      assertResult(1)(scanFiles(basePath, "hudi_has_token(msg, concat('fu', 'll'))"))
+      assertResult(Set(filesWithMatches(basePath, "p = 'a'").head))(
+        filesRead(basePath, HudiHasToken(msg, Concat(Seq(Literal("fu"), Literal("ll"))))))
+    }
+  }
+
+  test("Test full-text index prunes AND, OR and NOT of predicates by row") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val basePath = s"${tmp.getCanonicalPath}/$tableName"
+      createTable(tableName, basePath)
+      spark.sql(s"insert into $tableName values (1, 'disk full', 1, 'a'), (2, 'quota ok', 1, 'a')")
+      spark.sql(s"insert into $tableName values (3, 'disk quota', 1, 'b')")
+      spark.sql(s"insert into $tableName values (4, 'disk', 1, 'c'), (5, 'disk error', 1, 'c')")
+      spark.sql(s"create index idx_msg on $tableName using full_text(msg) options (dense_ratio = '1.0')")
+
+      val all = filesRead(basePath, Literal.TrueLiteral, skipping = false)
+      val Seq(fileA, fileB, fileC) = Seq("a", "b", "c").map(p => filesWithMatches(basePath, s"p = '$p'").head)
+      val disk = HudiHasToken(msg, Literal("disk"))
+      val quota = HudiHasToken(msg, Literal("quota"))
+      val tsPositive = GreaterThan(ts, Literal(0L))
+
+      // File a holds 'disk' and 'quota', never in one row.
+      assertResult(Set(fileB))(filesRead(basePath, And(disk, quota)))
+      assertResult(Set(fileB))(filesRead(basePath, And(HudiHasTokenPrefix(msg, Literal("dis")), quota)))
+      assertResult(all)(filesRead(basePath, And(disk, tsPositive)))
+      assertResult(Set(fileA))(filesRead(basePath, Or(HudiHasToken(msg, Literal("full")), HudiHasToken(msg, Literal("absent")))))
+      assertResult(all)(filesRead(basePath, Or(HudiHasToken(msg, Literal("full")), tsPositive)))
+      // Every row of b and c holds 'disk'; only b has a row with both tokens, and it is its only row.
+      assertResult(Set(fileA))(filesRead(basePath, Not(disk)))
+      assertResult(Set(fileA, fileC))(filesRead(basePath, Not(HudiHasAllTokens(msg, Literal("disk quota")))))
+      assertResult(Set(fileA, fileC))(filesRead(basePath, And(Not(quota), disk)))
+      assertResult(all)(filesRead(basePath, Not(tsPositive)))
+
+      Seq("hudi_has_token(msg, 'disk') and hudi_has_token(msg, 'quota')",
+        "hudi_has_token(msg, 'full') or hudi_has_token(msg, 'absent')",
+        "not hudi_has_token(msg, 'disk')",
+        "not hudi_has_all_tokens(msg, 'disk quota')",
+        "not hudi_has_token(msg, 'quota') and hudi_has_token(msg, 'disk')").foreach { predicate =>
+        assertResult(idsRead(basePath, predicate, skipping = false), predicate)(idsRead(basePath, predicate))
+      }
+      assertResult(Seq(2))(idsRead(basePath, "not hudi_has_token(msg, 'disk')"))
+      assertResult(1)(scanFiles(basePath, "not hudi_has_token(msg, 'disk')"))
+      assertResult(1)(scanFiles(basePath, "hudi_has_token(msg, 'disk') and hudi_has_token(msg, 'quota')"))
+    }
+  }
+
+  test("Test full-text index prunes token prefix and phrase predicates") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val basePath = s"${tmp.getCanonicalPath}/$tableName"
+      createTable(tableName, basePath)
+      val longToken = "x" * 70
+      spark.sql(s"insert into $tableName values (1, 'disk full', 1, 'a'), (2, 'quota ok', 1, 'a')")
+      spark.sql(s"insert into $tableName values (3, 'disk quota exceeded', 1, 'b')")
+      spark.sql(s"insert into $tableName values (4, 'quota disk', 1, 'c'), (5, 'diskette', 1, 'c')")
+      spark.sql(s"insert into $tableName values (6, 'disk $longToken quota', 1, 'd')")
+      spark.sql(s"create index idx_msg on $tableName using full_text(msg) options (dense_ratio = '1.0')")
+
+      val all = filesRead(basePath, Literal.TrueLiteral, skipping = false)
+      val Seq(fileA, fileB, fileC, fileD) = Seq("a", "b", "c", "d").map(p => filesWithMatches(basePath, s"p = '$p'").head)
+
+      assertResult(Set(fileC))(filesRead(basePath, HudiHasTokenPrefix(msg, Literal("diske"))))
+      assertResult(Set(fileB))(filesRead(basePath, HudiHasTokenPrefix(msg, Literal("ex"))))
+      assertResult(Set(fileA))(filesRead(basePath, HudiHasTokenPrefix(msg, Literal("FUL"))))
+      assertResult(Set.empty)(filesRead(basePath, HudiHasTokenPrefix(msg, Literal("zz"))))
+      // A prefix of two tokens matches nothing and is not used for pruning.
+      assertResult(all)(filesRead(basePath, HudiHasTokenPrefix(msg, Literal("di sk"))))
+      assertResult(Seq(1, 3, 4, 5, 6))(idsRead(basePath, "hudi_has_token_prefix(msg, 'disk')"))
+      assertResult(Seq.empty)(idsRead(basePath, "hudi_has_token_prefix(msg, 'di sk')"))
+
+      // Pruning needs every phrase token in one row; order and adjacency are checked on the rows read.
+      assertResult(Set(fileB, fileC, fileD))(filesRead(basePath, HudiHasPhrase(msg, Literal("disk quota"))))
+      assertResult(Seq(3))(idsRead(basePath, "hudi_has_phrase(msg, 'disk quota')"))
+      assertResult(Seq(3))(idsRead(basePath, "hudi_has_phrase(msg, 'Disk, QUOTA')"))
+      assertResult(Seq(4))(idsRead(basePath, "hudi_has_phrase(msg, 'quota disk')"))
+      // A token too long for the index still separates the phrase in the row, and still has to match.
+      assertResult(Seq(6))(idsRead(basePath, s"hudi_has_phrase(msg, 'disk $longToken')"))
+      Seq("hudi_has_token_prefix(msg, 'disk')", "hudi_has_phrase(msg, 'disk quota')", s"hudi_has_phrase(msg, 'disk $longToken')")
+        .foreach(predicate => assertResult(idsRead(basePath, predicate, skipping = false), predicate)(idsRead(basePath, predicate)))
     }
   }
 }

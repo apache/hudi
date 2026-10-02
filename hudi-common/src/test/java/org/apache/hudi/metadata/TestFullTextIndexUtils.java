@@ -69,6 +69,31 @@ class TestFullTextIndexUtils {
   }
 
   @Test
+  void testTokenSequenceKeepsOrderDuplicatesAndLongTokens() {
+    assertEquals(Collections.emptyList(), FullTextIndexUtils.tokenSequence(null));
+    assertEquals(Arrays.asList("disk", "quota", "disk"), FullTextIndexUtils.tokenSequence("Disk, QUOTA disk!"));
+    assertEquals(Arrays.asList("disk", repeat('x', 65), "quota"), FullTextIndexUtils.tokenSequence("disk " + repeat('X', 65) + " quota"));
+    // The same split as tokenize, which only drops long tokens and duplicates.
+    String text = "Ünïcödé node-7 node " + repeat('y', 70);
+    assertEquals(new ArrayList<>(FullTextIndexUtils.tokenize(text)),
+        Arrays.asList("ünïcödé", "node", "7"));
+    assertEquals(Arrays.asList("ünïcödé", "node", "7", "node", repeat('y', 70)), FullTextIndexUtils.tokenSequence(text));
+  }
+
+  @Test
+  void testPresenceTermPrefix() {
+    String unit = FullTextIndexUtils.baseUnit("20260924063417000");
+    String fileId = "1f0e2d3c-4b5a-6978-8f9e-0a1b2c3d4e5f-0";
+    String termPrefix = FullTextIndexUtils.presenceTermPrefix("dis");
+    assertTrue(FullTextIndexUtils.presenceKey("dis", fileId, unit).startsWith(termPrefix));
+    assertTrue(FullTextIndexUtils.presenceKey("disk", fileId, unit).startsWith(termPrefix));
+    assertFalse(FullTextIndexUtils.presenceKey("di", fileId, unit).startsWith(termPrefix));
+    assertFalse(FullTextIndexUtils.positionsKey("disk", fileId, unit).startsWith(termPrefix));
+    assertFalse(FullTextIndexUtils.markerKey(fileId, unit).startsWith(termPrefix));
+    assertTrue(FullTextIndexUtils.presencePrefix("disk").startsWith(termPrefix));
+  }
+
+  @Test
   void testKeysSortApartAndRoundTrip() {
     String unit = FullTextIndexUtils.baseUnit("20260924063417000");
     String fileId = "1f0e2d3c-4b5a-6978-8f9e-0a1b2c3d4e5f-0";

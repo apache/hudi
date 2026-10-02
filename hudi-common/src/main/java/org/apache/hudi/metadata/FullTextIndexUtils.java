@@ -26,9 +26,12 @@ import org.roaringbitmap.RoaringBitmap;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.function.Consumer;
 
 /**
  * Tokenizer, key layout and bitmap helpers shared by the writer and the reader of the full-text index.
@@ -65,8 +68,23 @@ public final class FullTextIndexUtils {
    */
   public static Set<String> tokenize(String text) {
     Set<String> tokens = new LinkedHashSet<>();
+    split(text, raw -> addToken(tokens, raw));
+    return tokens;
+  }
+
+  /**
+   * Every token of the text in order, lowercased like {@link #tokenize}, keeping duplicates and tokens
+   * longer than {@link #MAX_TOKEN_BYTES}. Used for phrase matching, which needs adjacency.
+   */
+  public static List<String> tokenSequence(String text) {
+    List<String> tokens = new ArrayList<>();
+    split(text, raw -> tokens.add(raw.toLowerCase(Locale.ROOT)));
+    return tokens;
+  }
+
+  private static void split(String text, Consumer<String> sink) {
     if (text == null || text.isEmpty()) {
-      return tokens;
+      return;
     }
     int start = -1;
     int i = 0;
@@ -76,15 +94,14 @@ public final class FullTextIndexUtils {
       if (tokenChar && start < 0) {
         start = i;
       } else if (!tokenChar && start >= 0) {
-        addToken(tokens, text.substring(start, i));
+        sink.accept(text.substring(start, i));
         start = -1;
       }
       i += Character.charCount(cp);
     }
     if (start >= 0) {
-      addToken(tokens, text.substring(start));
+      sink.accept(text.substring(start));
     }
-    return tokens;
   }
 
   private static void addToken(Set<String> tokens, String raw) {
@@ -112,6 +129,11 @@ public final class FullTextIndexUtils {
 
   public static String presencePrefix(String term) {
     return PRESENCE_FAMILY + SEPARATOR + term + SEPARATOR;
+  }
+
+  /** Key prefix of the presence entries of every term starting with {@code termPrefix}. */
+  public static String presenceTermPrefix(String termPrefix) {
+    return PRESENCE_FAMILY + SEPARATOR + termPrefix;
   }
 
   /**
