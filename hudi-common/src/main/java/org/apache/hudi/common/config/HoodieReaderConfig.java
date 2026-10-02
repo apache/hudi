@@ -101,14 +101,14 @@ public class HoodieReaderConfig extends HoodieConfig {
           + "Higher values improve cache hit rates but consume more memory. "
           + "Only effective when hfile.block.cache.enabled is true.");
 
-  public static final ConfigProperty<Integer> HFILE_INDEX_BLOCK_CACHE_SIZE = ConfigProperty
-      .key("hoodie.hfile.index.block.cache.size")
+  public static final ConfigProperty<Integer> HFILE_LOAD_ON_OPEN_CACHE_SIZE = ConfigProperty
+      .key("hoodie.hfile.load.on.open.cache.size")
       .defaultValue(100)
       .markAdvanced()
-      .sinceVersion("1.2.0")
-      .withDocumentation("Maximum number of HFile load-on-open data entries to cache in memory. "
-          + "Each entry caches trailer, root data index block, meta root index block, and file info block "
-          + "for a single HFile. Only effective when hfile.block.cache.enabled is true.");
+      .sinceVersion("1.3.0")
+      .withDocumentation("Maximum number of HFiles whose load-on-open region (trailer, root data index block, "
+          + "meta index block, and file info block) is cached in memory, so that reopening a file does not "
+          + "re-read it. Only effective when hfile.block.cache.enabled is true.");
 
   public static final ConfigProperty<Integer> HFILE_BLOCK_CACHE_TTL_MINUTES = ConfigProperty
       .key("hoodie.hfile.block.cache.ttl.minutes")

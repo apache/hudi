@@ -71,8 +71,8 @@ public class HFileReaderFactory {
 
     int blockCacheSize = ConfigUtils.getIntWithAltKeys(
         properties, HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE);
-    int indexBlockCacheSize = ConfigUtils.getIntWithAltKeys(
-        properties, HoodieReaderConfig.HFILE_INDEX_BLOCK_CACHE_SIZE);
+    int loadOnOpenCacheSize = ConfigUtils.getIntWithAltKeys(
+        properties, HoodieReaderConfig.HFILE_LOAD_ON_OPEN_CACHE_SIZE);
     int cacheTtlMinutes = ConfigUtils.getIntWithAltKeys(
         properties, HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES);
     // The caching reader opens the stream only on a cache miss, so both the size lookup and the
@@ -92,7 +92,7 @@ public class HFileReaderFactory {
       }
     });
     return new CachingHFileReaderImpl(
-        lazyStream, lazyFileSize, getFilePath(), blockCacheSize, indexBlockCacheSize, cacheTtlMinutes);
+        lazyStream, lazyFileSize, getFilePath(), blockCacheSize, loadOnOpenCacheSize, cacheTtlMinutes);
   }
 
   private long getFileSize() throws IOException {

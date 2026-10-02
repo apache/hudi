@@ -433,7 +433,7 @@ public class TestHoodieNativeAvroHFileReaderCaching {
     TypedProperties props = new TypedProperties();
     props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(), "true");
     props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key(), "100");
-    props.setProperty(HoodieReaderConfig.HFILE_INDEX_BLOCK_CACHE_SIZE.key(), "100");
+    props.setProperty(HoodieReaderConfig.HFILE_LOAD_ON_OPEN_CACHE_SIZE.key(), "100");
     props.setProperty(HoodieMetadataConfig.METADATA_FILE_CACHE_MAX_SIZE_MB.key(), "0");
 
     return HFileReaderFactory.builder()

@@ -41,11 +41,11 @@ public class CachingHFileReaderImpl extends HFileReaderImpl {
                                 Lazy<Long> lazyFileSize,
                                 String filePath,
                                 int blockCacheSize,
-                                int indexBlockCacheSize,
+                                int loadOnOpenCacheSize,
                                 int cacheTtlMinutes) {
     super(lazyStream, lazyFileSize);
     this.filePath = filePath;
-    this.cacheManager = HFileReaderCacheManager.getInstance(blockCacheSize, indexBlockCacheSize, cacheTtlMinutes);
+    this.cacheManager = HFileReaderCacheManager.getInstance(blockCacheSize, loadOnOpenCacheSize, cacheTtlMinutes);
   }
 
   @Override
