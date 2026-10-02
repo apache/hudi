@@ -705,4 +705,24 @@ public class TestHoodieMetrics {
         HoodieWriteConflictException.ConflictCategory.TABLE_SERVICE_VS_TABLE_SERVICE);
     assertEquals(1, metrics.getRegistry().getCounters().get(tableServiceVsTableService).getCount());
   }
+
+  @Test
+  public void testEmitTableVersionMetric() {
+    int versionCode = 6;
+    hoodieMetrics.emitTableVersionMetric(versionCode);
+
+    String metricName = hoodieMetrics.getMetricsName("table", HoodieMetrics.TABLE_VERSION_STR);
+    assertEquals((long) versionCode, metrics.getRegistry().getGauges().get(metricName).getValue());
+  }
+
+  @Test
+  public void testEmitTableVersionMetricWhenMetricsDisabled() {
+    HoodieMetrics disabledMetrics = buildMetricsOff();
+    disabledMetrics.emitTableVersionMetric(6);
+
+    String metricName = disabledMetrics.getMetricsName("table", HoodieMetrics.TABLE_VERSION_STR);
+    if (disabledMetrics.getMetrics() != null) {
+      assertNull(disabledMetrics.getMetrics().getRegistry().getGauges().get(metricName));
+    }
+  }
 }
