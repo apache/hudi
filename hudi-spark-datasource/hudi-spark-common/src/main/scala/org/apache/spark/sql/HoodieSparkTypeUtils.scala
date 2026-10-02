@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql
 
+import org.apache.spark.sql.catalyst.expressions.Cast
 import org.apache.spark.sql.types.{DataType, DecimalType, NumericType, StringType}
 
 // TODO unify w/ DataTypeUtils
@@ -35,10 +36,20 @@ object HoodieSparkTypeUtils {
    */
   def isCastPreservingOrdering(from: DataType, to: DataType): Boolean =
     (from, to) match {
-      // NOTE: In the casting rules defined by Spark, only casting from String to Numeric
-      // (and vice versa) are the only casts that might break the ordering of the elements after casting
-      case (StringType, _: NumericType) => false
-      case (_: NumericType, StringType) => false
+      // NOTE: Casting between String and Numeric types re-orders elements (for ex, "10" < "9"
+      //       lexicographically). These arms must stay ahead of the numeric arm below, since
+      //       Cast.canUpCast treats atomic-to-string casts as legal up-casts
+      case (_: StringType, _: NumericType) => false
+      case (_: NumericType, _: StringType) => false
+      // NOTE: On Spark 4 StringType carries a collation (and constraint) and its equals compares
+      //       both; casting to a different collation changes the sort order. On Spark 3
+      //       StringType is a singleton, making this arm trivially true
+      case (fromStr: StringType, toStr: StringType) => fromStr == toStr
+      // NOTE: Narrowing numeric casts (for ex, bigint to int) overflow and wrap around in
+      //       non-ANSI mode, breaking ordering; only up-casts are guaranteed order-preserving.
+      //       This is conservative (for ex, double to float rounds monotonically but is
+      //       rejected), which only costs pruning opportunity, never correctness
+      case (fromNum: NumericType, toNum: NumericType) => Cast.canUpCast(fromNum, toNum)
 
       case _ => true
     }
