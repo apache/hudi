@@ -27,9 +27,11 @@ import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.read.HoodieRecordReader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -576,6 +578,32 @@ public class TestData {
       List<RowData> dataBuffer,
       Configuration conf) throws Exception {
     writeData(dataBuffer, 0, conf);
+  }
+
+  /**
+   * Writes a merge-on-read table of version 6 whose file group of {@code id1} has a log block of a completed delta
+   * commit (age 24) and, after it, a log block of a delta commit that did not complete (age 25), followed by a
+   * completed delta commit updating {@code id2} (age 34). A read must return ages 24 and 34.
+   */
+  public static void writeVersionSixWithUncommittedLogBlock(Configuration conf) throws Exception {
+    conf.set(FlinkOptions.TABLE_TYPE, "MERGE_ON_READ");
+    conf.set(FlinkOptions.WRITE_TABLE_VERSION, HoodieTableVersion.SIX.versionCode());
+    conf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(), HoodieTableConfig.TableStorageLayout.DEFAULT.configValue());
+    conf.set(FlinkOptions.METADATA_ENABLED, false);
+    conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+    writeData(DATA_SET_INSERT, conf);
+    writeData(Collections.singletonList(insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 24,
+        TimestampData.fromEpochMillis(1), StringData.fromString("par1"))), conf);
+    writeData(Collections.singletonList(insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 25,
+        TimestampData.fromEpochMillis(1), StringData.fromString("par1"))), conf);
+    HoodieTableMetaClient metaClient = createMetaClient(conf.get(FlinkOptions.PATH));
+    String failedInstant = metaClient.getCommitsTimeline().lastInstant().get().requestedTime();
+    writeData(Collections.singletonList(insertRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 34,
+        TimestampData.fromEpochMillis(2), StringData.fromString("par1"))), conf);
+    // Deleting the completed instant file leaves the delta commit inflight, as a failed write does.
+    File completedInstant = new File(conf.get(FlinkOptions.PATH), METAFOLDER_NAME + "/" + failedInstant + HoodieTimeline.DELTA_COMMIT_EXTENSION);
+    assertTrue(completedInstant.delete(), "delete " + completedInstant);
+    assertThat(metaClient.getTableConfig().getTableVersion(), is(HoodieTableVersion.SIX));
   }
 
   /**

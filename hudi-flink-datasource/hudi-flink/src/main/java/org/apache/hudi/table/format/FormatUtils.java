@@ -25,8 +25,10 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.serialization.DefaultSerializer;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
+import org.apache.hudi.common.table.read.FileGroupReaderTableState;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.read.HoodieRecordReader;
 import org.apache.hudi.common.table.read.lsm.HoodieLsmFileGroupReader;
@@ -39,6 +41,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.source.ExpressionPredicates;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.FlinkClientUtil;
 import org.apache.hudi.util.HoodieSchemaConverter;
@@ -53,6 +56,8 @@ import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
 import org.apache.hadoop.conf.Configuration;
+
+import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -147,25 +152,70 @@ public class FormatUtils {
       boolean emitDelete,
       List<ExpressionPredicates.Predicate> predicates,
       Option<InstantRange> instantRangeOption) {
-    if (!LsmReaderUtils.shouldUseLsmReader(metaClient.getTableConfig(), mergeType)) {
-      return createFileGroupReader(metaClient, writeConfig, internalSchemaManager, fileSlice,
+    return createRecordReader(metaClient, FileGroupReaderTableState.fromMetaClient(metaClient), metaClient.getStorageConf(),
+        writeConfig, internalSchemaManager, fileSlice, tableSchema, requiredSchema, latestInstant, mergeType, emitDelete,
+        predicates, instantRangeOption);
+  }
+
+  /**
+   * Creates the record reader matching the physical layout of the file slice, reading with the given table state
+   * instead of a meta client.
+   *
+   * @see #createRecordReader(HoodieTableMetaClient, HoodieWriteConfig, InternalSchemaManager, FileSlice, HoodieSchema,
+   *     HoodieSchema, String, String, boolean, List, Option)
+   */
+  public static HoodieRecordReader<RowData> createRecordReader(
+      FileGroupReaderTableState tableState,
+      StorageConfiguration<?> storageConf,
+      HoodieWriteConfig writeConfig,
+      InternalSchemaManager internalSchemaManager,
+      FileSlice fileSlice,
+      HoodieSchema tableSchema,
+      HoodieSchema requiredSchema,
+      String latestInstant,
+      String mergeType,
+      boolean emitDelete,
+      List<ExpressionPredicates.Predicate> predicates,
+      Option<InstantRange> instantRangeOption) {
+    return createRecordReader(null, tableState, storageConf, writeConfig, internalSchemaManager, fileSlice, tableSchema,
+        requiredSchema, latestInstant, mergeType, emitDelete, predicates, instantRangeOption);
+  }
+
+  private static HoodieRecordReader<RowData> createRecordReader(
+      @Nullable HoodieTableMetaClient metaClient,
+      FileGroupReaderTableState tableState,
+      StorageConfiguration<?> storageConf,
+      HoodieWriteConfig writeConfig,
+      InternalSchemaManager internalSchemaManager,
+      FileSlice fileSlice,
+      HoodieSchema tableSchema,
+      HoodieSchema requiredSchema,
+      String latestInstant,
+      String mergeType,
+      boolean emitDelete,
+      List<ExpressionPredicates.Predicate> predicates,
+      Option<InstantRange> instantRangeOption) {
+    HoodieTableConfig tableConfig = tableState.getTableConfig();
+    if (!LsmReaderUtils.shouldUseLsmReader(tableConfig, mergeType)) {
+      return createFileGroupReader(metaClient, tableState, storageConf, writeConfig, internalSchemaManager, fileSlice,
           tableSchema, requiredSchema, latestInstant, mergeType, emitDelete, predicates, instantRangeOption);
     }
 
     final FlinkRowDataReaderContext readerContext =
         new FlinkRowDataReaderContext(
-            metaClient.getStorageConf(),
+            storageConf,
             () -> internalSchemaManager,
             predicates,
-            metaClient.getTableConfig(),
+            tableConfig,
             instantRangeOption);
 
-    final TypedProperties typedProps = FlinkClientUtil.getReadProps(metaClient.getTableConfig(), writeConfig);
+    final TypedProperties typedProps = FlinkClientUtil.getReadProps(tableConfig, writeConfig);
     typedProps.put(HoodieReaderConfig.MERGE_TYPE.key(), mergeType);
 
     return HoodieLsmFileGroupReader.<RowData>builder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metaClient)
+        .withTableState(tableState)
         .withLatestCommitTime(latestInstant)
         .withBaseFileOption(fileSlice.getBaseFile())
         .withLogFiles(fileSlice.getLogFiles())
@@ -207,21 +257,41 @@ public class FormatUtils {
       boolean emitDelete,
       List<ExpressionPredicates.Predicate> predicates,
       Option<InstantRange> instantRangeOption) {
+    return createFileGroupReader(metaClient, FileGroupReaderTableState.fromMetaClient(metaClient), metaClient.getStorageConf(),
+        writeConfig, internalSchemaManager, fileSlice, tableSchema, requiredSchema, latestInstant, mergeType, emitDelete,
+        predicates, instantRangeOption);
+  }
 
+  private static HoodieFileGroupReader<RowData> createFileGroupReader(
+      @Nullable HoodieTableMetaClient metaClient,
+      FileGroupReaderTableState tableState,
+      StorageConfiguration<?> storageConf,
+      HoodieWriteConfig writeConfig,
+      InternalSchemaManager internalSchemaManager,
+      FileSlice fileSlice,
+      HoodieSchema tableSchema,
+      HoodieSchema requiredSchema,
+      String latestInstant,
+      String mergeType,
+      boolean emitDelete,
+      List<ExpressionPredicates.Predicate> predicates,
+      Option<InstantRange> instantRangeOption) {
+    HoodieTableConfig tableConfig = tableState.getTableConfig();
     final FlinkRowDataReaderContext readerContext =
         new FlinkRowDataReaderContext(
-            metaClient.getStorageConf(),
+            storageConf,
             () -> internalSchemaManager,
             predicates,
-            metaClient.getTableConfig(),
+            tableConfig,
             instantRangeOption);
 
-    final TypedProperties typedProps = FlinkClientUtil.getReadProps(metaClient.getTableConfig(), writeConfig);
+    final TypedProperties typedProps = FlinkClientUtil.getReadProps(tableConfig, writeConfig);
     typedProps.put(HoodieReaderConfig.MERGE_TYPE.key(), mergeType);
 
     return HoodieFileGroupReader.<RowData>builder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metaClient)
+        .withTableState(tableState)
         .withLatestCommitTime(latestInstant)
         .withBaseFileOption(fileSlice.getBaseFile())
         .withLogFiles(fileSlice.getLogFiles())

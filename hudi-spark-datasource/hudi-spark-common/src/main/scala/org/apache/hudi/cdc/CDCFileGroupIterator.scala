@@ -30,6 +30,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, HoodieRecordMerger}
 import org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
+import org.apache.hudi.common.schema.internal.InternalSchema
 import org.apache.hudi.common.serialization.DefaultSerializer
 import org.apache.hudi.common.table.{HoodieTableMetaClient, PartialUpdateMode}
 import org.apache.hudi.common.table.cdc.{HoodieCDCFileSplit, HoodieCDCUtils}
@@ -37,9 +38,9 @@ import org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase._
 import org.apache.hudi.common.table.cdc.HoodieCDCOperation._
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode._
 import org.apache.hudi.common.table.log.{HoodieCDCEngineRecordAccessor, HoodieCDCInlineLogRecordIterator, HoodieCDCLogRecord, HoodieCDCLogRecordIterator, HoodieCDCNativeLogRecordIterator, HoodieMergedLogRecordReader}
-import org.apache.hudi.common.table.read.{BufferedRecord, BufferedRecordMerger, BufferedRecordMergerFactory, BufferedRecords, FileGroupReaderSchemaHandler, HoodieFileGroupReader, HoodieReadStats, IteratorMode, UpdateProcessor}
+import org.apache.hudi.common.table.read.{BufferedRecord, BufferedRecordMerger, BufferedRecordMergerFactory, BufferedRecords, FileGroupReaderSchemaHandler, FileGroupReaderTableState, HoodieFileGroupReader, HoodieReadStats, IteratorMode, UpdateProcessor}
 import org.apache.hudi.common.table.read.buffer.KeyBasedFileGroupRecordBuffer
-import org.apache.hudi.common.util.{DefaultSizeEstimator, HoodieRecordUtils, Option, ValidationUtils}
+import org.apache.hudi.common.util.{DefaultSizeEstimator, HoodieRecordUtils, HoodieStorageUtils, Option, ValidationUtils}
 import org.apache.hudi.common.util.collection.{ClosableIterator, ExternalSpillableMap}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.data.CloseableIteratorListener
@@ -75,7 +76,7 @@ import scala.collection.mutable
 case class HoodieCDCFileGroupSplit(changes: Array[HoodieCDCFileSplit])
 
 class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
-                           metaClient: HoodieTableMetaClient,
+                           tableState: FileGroupReaderTableState,
                            conf: StorageConfiguration[Configuration],
                            baseFileReader: SparkColumnarFileReader,
                            originTableSchema: HoodieTableSchema,
@@ -85,29 +86,42 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   extends Iterator[InternalRow]
   with SparkAdapterSupport with AvroDeserializerSupport with Closeable {
 
+  @deprecated("Use the constructor that takes a FileGroupReaderTableState", "1.3.0")
+  def this(split: HoodieCDCFileGroupSplit,
+           metaClient: HoodieTableMetaClient,
+           conf: StorageConfiguration[Configuration],
+           baseFileReader: SparkColumnarFileReader,
+           originTableSchema: HoodieTableSchema,
+           cdcSchema: StructType,
+           requiredCdcSchema: StructType,
+           props: TypedProperties) = {
+    this(split, FileGroupReaderTableState.fromMetaClient(metaClient), conf, baseFileReader, originTableSchema, cdcSchema,
+      requiredCdcSchema, props)
+  }
+
   private lazy val readerContext = {
     val bufferedReaderContext = new SparkFileFormatInternalRowReaderContext(baseFileReader,
-      Seq.empty, Seq.empty, conf, metaClient.getTableConfig)
+      Seq.empty, Seq.empty, conf, tableState.getTableConfig)
     bufferedReaderContext.initRecordMerger(readerProperties)
     bufferedReaderContext
   }
 
-  private lazy val orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(readerContext.getMergeMode, metaClient)
+  private lazy val orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(readerContext.getMergeMode, tableState.getTableConfig)
   private lazy val payloadClass: Option[String] = if (recordMerger.getMergingStrategy == PAYLOAD_BASED_MERGE_STRATEGY_UUID) {
-    Option.of(metaClient.getTableConfig.getPayloadClass)
+    Option.of(tableState.getTableConfig.getPayloadClass)
   } else {
     Option.empty.asInstanceOf[Option[String]]
   }
-  private lazy val partialUpdateModeOpt: Option[PartialUpdateMode] = metaClient.getTableConfig.getPartialUpdateMode
+  private lazy val partialUpdateModeOpt: Option[PartialUpdateMode] = tableState.getTableConfig.getPartialUpdateMode
   private var isPartialMergeEnabled = false
   private var bufferedRecordMerger = getBufferedRecordMerger
   private def getBufferedRecordMerger: BufferedRecordMerger[InternalRow] = BufferedRecordMergerFactory.create(readerContext,
     readerContext.getMergeMode, isPartialMergeEnabled, Option.of(recordMerger),
     payloadClass, schema, props, partialUpdateModeOpt)
 
-  private lazy val storage = metaClient.getStorage
+  private lazy val storage = HoodieStorageUtils.getStorage(tableState.getBasePath, conf)
 
-  private lazy val basePath = metaClient.getBasePath
+  private lazy val basePath = tableState.getBasePath
 
   private lazy val readerProperties: TypedProperties = {
     val configuration = conf.unwrapAs(classOf[Configuration])
@@ -133,7 +147,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
 
   protected override val structTypeSchema: StructType = originTableSchema.structTypeSchema
 
-  private val cdcSupplementalLoggingMode = metaClient.getTableConfig.cdcSupplementalLoggingMode
+  private val cdcSupplementalLoggingMode = tableState.getTableConfig.cdcSupplementalLoggingMode
 
   private lazy val cdcHoodieSchema: HoodieSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(
     cdcSupplementalLoggingMode,
@@ -493,7 +507,8 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   private def loadFileSlice(fileSlice: FileSlice, readerContext: SparkFileFormatInternalRowReaderContext): Iterator[BufferedRecord[InternalRow]] = {
     val fileGroupReader = HoodieFileGroupReader.builder()
       .withReaderContext(readerContext)
-      .withHoodieTableMetaClient(metaClient)
+      .withTableState(tableState)
+      .withStorage(storage)
       .withBaseFileOption(fileSlice.getBaseFile)
       .withLogFiles(fileSlice.getLogFiles)
       .withPartitionPath(fileSlice.getPartitionPath)
@@ -507,26 +522,26 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   }
 
   private def loadLogFile(logFile: HoodieLogFile, instant: String): Iterator[BufferedRecord[InternalRow]] = {
-    val partitionPath = FSUtils.getRelativePartitionPath(metaClient.getBasePath, logFile.getPath.getParent)
+    val partitionPath = FSUtils.getRelativePartitionPath(basePath, logFile.getPath.getParent)
     readerContext.setLatestCommitTime(instant)
     readerContext.setHasBootstrapBaseFile(false)
     readerContext.setHasLogFiles(true)
     readerContext.setSchemaHandler(
-      new FileGroupReaderSchemaHandler[InternalRow](readerContext, schema, schema, Option.empty(), readerProperties, metaClient))
+      new FileGroupReaderSchemaHandler[InternalRow](readerContext, schema, schema, Option.empty[InternalSchema](), readerProperties, tableState))
     val stats = new HoodieReadStats
     keyBasedFileGroupRecordBuffer.ifPresent(k => k.close())
-    keyBasedFileGroupRecordBuffer = Option.of(new KeyBasedFileGroupRecordBuffer[InternalRow](readerContext, metaClient, readerContext.getMergeMode,
-      metaClient.getTableConfig.getPartialUpdateMode, readerProperties, metaClient.getTableConfig.getOrderingFields,
+    keyBasedFileGroupRecordBuffer = Option.of(new KeyBasedFileGroupRecordBuffer[InternalRow](readerContext, readerContext.getMergeMode,
+      tableState.getTableConfig.getPartialUpdateMode, readerProperties, tableState.getTableConfig.getOrderingFields,
       UpdateProcessor.create(stats, readerContext, true, Option.empty(), props)))
 
     HoodieMergedLogRecordReader.newBuilder[InternalRow]
-      .withStorage(metaClient.getStorage)
+      .withStorage(storage)
       .withHoodieReaderContext(readerContext)
       .withLogFiles(Collections.singletonList(logFile))
       .withReverseReader(false)
       .withBufferSize(HoodieMetadataConfig.MAX_READER_BUFFER_SIZE_PROP.defaultValue)
       .withPartition(partitionPath)
-      .withMetaClient(metaClient)
+      .withTableState(tableState)
       .withRecordBuffer(keyBasedFileGroupRecordBuffer.get())
       .build
 

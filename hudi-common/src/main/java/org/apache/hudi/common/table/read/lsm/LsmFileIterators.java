@@ -21,13 +21,13 @@ package org.apache.hudi.common.table.read.lsm;
 
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.FileNameParser;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.log.NativeLogFooterMetadata;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordConverter;
 import org.apache.hudi.common.table.read.BufferedRecords;
@@ -37,6 +37,7 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -104,7 +105,6 @@ final class LsmFileIterators {
    */
   static <T> ClosableIterator<BufferedRecord<T>> createLogFileIterator(
       HoodieReaderContext<T> readerContext,
-      HoodieTableMetaClient metaClient,
       HoodieStorage storage,
       HoodieLogFile logFile,
       List<String> orderingFieldNames) throws IOException {
@@ -115,7 +115,7 @@ final class LsmFileIterators {
           readerContext, storage, pathInfo, storagePath, logFile.getFileSize(), orderingFieldNames);
     }
     return createNativeDataLogIterator(
-        readerContext, metaClient, storage, pathInfo, storagePath, logFile.getFileSize(), orderingFieldNames);
+        readerContext, storage, pathInfo, storagePath, logFile.getFileSize(), orderingFieldNames);
   }
 
   /**
@@ -127,7 +127,6 @@ final class LsmFileIterators {
    */
   private static <T> ClosableIterator<BufferedRecord<T>> createNativeDataLogIterator(
       HoodieReaderContext<T> readerContext,
-      HoodieTableMetaClient metaClient,
       HoodieStorage storage,
       StoragePathInfo pathInfo,
       StoragePath storagePath,
@@ -149,7 +148,9 @@ final class LsmFileIterators {
 
     // Read the writer schema from the footer instead of using the table schema. For partial updates,
     // the footer stores the partial schema written to this log file, which may differ from the table schema.
-    HoodieSchema writerSchema = TableSchemaResolver.readSchemaFromLogFile(metaClient, storagePath);
+    HoodieSchema writerSchema = NativeLogFooterMetadata.readSchemaFromNativeLogFile(storage, storagePath,
+        FileNameParser.parseNativeLogFile(storagePath.getName())
+            .orElseThrow(() -> new HoodieException("Not a native log file: " + storagePath)));
     Pair<Function<T, T>, HoodieSchema> schemaEvolutionTransformer =
         readerContext.getSchemaHandler().getSchemaEvolutionTransformer(
             writerSchema, FSUtils.getCommitTime(storagePath.getName())).get();

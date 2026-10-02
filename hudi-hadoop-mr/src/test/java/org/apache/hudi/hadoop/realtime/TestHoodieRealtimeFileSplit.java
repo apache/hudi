@@ -109,6 +109,8 @@ public class TestHoodieRealtimeFileSplit {
     inorder.verify(out, times(1)).writeInt(eq(deltaLogPaths.get(0).length()));
     inorder.verify(out, times(1)).write(aryEq(getUTF8Bytes(deltaLogPaths.get(0))));
     inorder.verify(out, times(1)).writeBoolean(false);
+    // no table state
+    inorder.verify(out, times(1)).writeByte(0);
     // verify there are no more interactions happened on the mocked object
     inorder.verifyNoMoreInteractions();
   }
@@ -121,7 +123,8 @@ public class TestHoodieRealtimeFileSplit {
 
     // register the mock responses to be returned when particular method call happens
     // on the mocked object
-    when(in.readByte()).thenReturn((byte) fileSplitName.length());
+    // the path length, then no table state
+    when(in.readByte()).thenReturn((byte) fileSplitName.length(), (byte) 0);
     // Answer implementation is used to guarantee the response in sequence of the mock method calls
     // since the same method is called many times, we need to return the responses in proper sequence
     when(in.readInt()).thenAnswer(new Answer<Integer>() {

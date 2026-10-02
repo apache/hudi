@@ -20,6 +20,7 @@ package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.HiveReaderTableState;
 
 import org.apache.hadoop.mapred.FileSplit;
 
@@ -63,6 +64,10 @@ public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit 
    * Virtual key configuration of the table this split belongs to
    */
   private Option<HoodieVirtualKeyInfo> virtualKeyInfo = Option.empty();
+  /**
+   * Table state captured when the split was listed
+   */
+  private Option<HiveReaderTableState> readerTableState = Option.empty();
 
   public HoodieRealtimeFileSplit() {
   }
@@ -74,6 +79,7 @@ public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit 
         path.getMaxCommitTime(),
         path.getBelongsToIncrementalQuery(),
         path.getVirtualKeyInfo());
+    this.readerTableState = path.getReaderTableState();
   }
 
   /**
@@ -137,6 +143,16 @@ public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit 
   @Override
   public void setBelongsToIncrementalQuery(boolean belongsToIncrementalPath) {
     this.belongsToIncrementalQuery = belongsToIncrementalPath;
+  }
+
+  @Override
+  public Option<HiveReaderTableState> getReaderTableState() {
+    return readerTableState;
+  }
+
+  @Override
+  public void setReaderTableState(Option<HiveReaderTableState> readerTableState) {
+    this.readerTableState = readerTableState;
   }
 
   @Override

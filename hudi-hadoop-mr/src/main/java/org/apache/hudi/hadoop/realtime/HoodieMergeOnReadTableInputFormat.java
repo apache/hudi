@@ -38,6 +38,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.BootstrapBaseFileSplit;
 import org.apache.hudi.hadoop.FileStatusWithBootstrapBaseFile;
+import org.apache.hudi.hadoop.HiveReaderTableState;
 import org.apache.hudi.hadoop.HoodieCopyOnWriteTableInputFormat;
 import org.apache.hudi.hadoop.LocatedFileStatusWithBootstrapBaseFile;
 import org.apache.hudi.hadoop.RealtimeFileStatus;
@@ -96,19 +97,23 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
 
   @Override
   protected FileStatus createFileStatusUnchecked(FileSlice fileSlice, Option<HoodieInstant> latestCompletedInstantOpt,
-                                                 String tableBasePath, HoodieTableMetaClient metaClient) {
+                                                 String tableBasePath, HoodieTableMetaClient metaClient,
+                                                 HiveReaderTableState.Capturer readerTableStates) {
     Option<HoodieBaseFile> baseFileOpt = fileSlice.getBaseFile();
     Option<HoodieLogFile> latestLogFileOpt = fileSlice.getLatestLogFile();
     Stream<HoodieLogFile> logFiles = fileSlice.getLogFiles();
 
     // Check if we're reading a MOR table
+    RealtimeFileStatus fileStatus;
     if (baseFileOpt.isPresent()) {
-      return createRealtimeFileStatusUnchecked(baseFileOpt.get(), logFiles, tableBasePath, latestCompletedInstantOpt, getHoodieVirtualKeyInfo(metaClient));
+      fileStatus = createRealtimeFileStatusUnchecked(baseFileOpt.get(), logFiles, tableBasePath, latestCompletedInstantOpt, getHoodieVirtualKeyInfo(metaClient));
     } else if (latestLogFileOpt.isPresent()) {
-      return createRealtimeFileStatusUnchecked(latestLogFileOpt.get(), logFiles, tableBasePath, latestCompletedInstantOpt, getHoodieVirtualKeyInfo(metaClient));
+      fileStatus = createRealtimeFileStatusUnchecked(latestLogFileOpt.get(), logFiles, tableBasePath, latestCompletedInstantOpt, getHoodieVirtualKeyInfo(metaClient));
     } else {
       throw new IllegalStateException("Invalid state: either base-file or log-file has to be present");
     }
+    fileStatus.setReaderTableState(readerTableStates.forFileSlicesAsOf(fileStatus.getMaxCommitTime()));
+    return fileStatus;
   }
 
   /**

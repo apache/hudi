@@ -28,8 +28,8 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.read.FileGroupReaderTableState;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -71,7 +71,6 @@ import static org.apache.hudi.common.config.HoodieReaderConfig.REALTIME_SKIP_MER
 import static org.apache.hudi.common.fs.FSUtils.getCommitTime;
 import static org.apache.hudi.common.fs.FSUtils.getFileId;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
-import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePathInfo;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getDeltaCommitTimeFromLogPath;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getFileIdFromLogPath;
@@ -116,19 +115,41 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     this.inputSplit = split;
 
     FileSplit fileSplit = (FileSplit) split;
-    String tableBasePath = getTableBasePath(split, jobConfCopy);
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(getStorageConf(jobConfCopy))
-        .setBasePath(tableBasePath)
-        .build();
-    String latestCommitTime = getLatestCommitTime(split, metaClient);
-    HoodieSchema tableSchema = getLatestTableSchema(metaClient, jobConfCopy, latestCommitTime);
+    Option<HiveReaderTableState> shippedState = HiveReaderTableState.of(split);
+    HoodieTableMetaClient metaClient = null;
+    String tableBasePath;
+    FileGroupReaderTableState tableState;
+    String latestCommitTime;
+    HoodieSchema tableSchema;
+    if (shippedState.isPresent()) {
+      tableState = shippedState.get().getTableState();
+      tableBasePath = tableState.getBasePath().toString();
+      latestCommitTime = split instanceof RealtimeSplit
+          ? ((RealtimeSplit) split).getMaxCommitTime() : shippedState.get().getLatestCommitTime();
+      Option<String> shippedSchema = shippedState.get().getLatestCommitTime().equals(latestCommitTime)
+          ? shippedState.get().getTableSchema() : Option.empty();
+      if (shippedSchema.isPresent()) {
+        tableSchema = HoodieRealtimeRecordReaderUtils.addPartitionFields(
+            HoodieSchema.parse(shippedSchema.get()), getPartitionFieldNames(jobConfCopy));
+      } else {
+        metaClient = buildMetaClient(tableBasePath, jobConfCopy);
+        tableSchema = getLatestTableSchema(metaClient, jobConfCopy, latestCommitTime);
+      }
+    } else {
+      // Splits listed without the table state, e.g. by an incremental query, resolve the table themselves
+      tableBasePath = getTableBasePath(split, jobConfCopy);
+      metaClient = buildMetaClient(tableBasePath, jobConfCopy);
+      tableState = FileGroupReaderTableState.fromMetaClient(metaClient);
+      latestCommitTime = getLatestCommitTime(split, metaClient);
+      tableSchema = getLatestTableSchema(metaClient, jobConfCopy, latestCommitTime);
+    }
     HoodieSchema requestedSchema = createRequestedSchema(tableSchema, jobConfCopy);
     this.readerContext = new HiveHoodieReaderContext(readerCreator,
         getStoredPartitionFieldNames(jobConfCopy, tableSchema), new HadoopStorageConfiguration(jobConfCopy),
-        metaClient.getTableConfig());
+        tableState.getTableConfig());
     this.arrayWritable = new ArrayWritable(Writable.class, new Writable[requestedSchema.getFields().size()]);
-    TypedProperties props = metaClient.getTableConfig().getProps();
+    // Read options go to a copy, so that they do not override the persisted table config
+    TypedProperties props = TypedProperties.copy(tableState.getTableConfig().getProps());
     jobConf.forEach(e -> {
       if (e.getKey().startsWith("hoodie")) {
         props.setProperty(e.getKey(), e.getValue());
@@ -148,6 +169,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     this.recordIterator = HoodieFileGroupReader.<ArrayWritable>builder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metaClient)
+        .withTableState(tableState)
         .withLatestCommitTime(latestCommitTime)
         .withBaseFileOption(fileSlice.getBaseFile())
         .withLogFiles(fileSlice.getLogFiles())
@@ -262,12 +284,14 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     if (split instanceof RealtimeSplit) {
       return ((RealtimeSplit) split).getMaxCommitTime();
     }
-    Option<HoodieInstant> lastInstant = metaClient.getCommitsTimeline().lastInstant();
-    if (lastInstant.isPresent()) {
-      return lastInstant.get().requestedTime();
-    } else {
-      return EMPTY_STRING;
-    }
+    return HiveReaderTableState.latestCompletedCommitTime(metaClient);
+  }
+
+  private static HoodieTableMetaClient buildMetaClient(String tableBasePath, JobConf jobConf) {
+    return HoodieTableMetaClient.builder()
+        .setConf(getStorageConf(jobConf))
+        .setBasePath(tableBasePath)
+        .build();
   }
 
   /**
