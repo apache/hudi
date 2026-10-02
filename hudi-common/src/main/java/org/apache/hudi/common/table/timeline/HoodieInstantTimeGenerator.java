@@ -84,10 +84,22 @@ public class HoodieInstantTimeGenerator {
   }
 
   public static Date parseDateFromInstantTime(String timestamp) throws ParseException {
+    return parseDateFromInstantTime(timestamp, ZoneId.systemDefault());
+  }
+
+  /**
+   * Parse an instant time string into a {@link Date}, interpreting the digits in {@code zoneId}.
+   * <p>
+   * Instant times are bare {@code yyyyMMddHHmmssSSS} digits with no zone information, so the
+   * caller decides which zone produced them -- typically the table's
+   * {@code hoodie.table.timeline.timezone}. The no-arg overload preserves the legacy behaviour
+   * of {@link ZoneId#systemDefault()}.
+   */
+  public static Date parseDateFromInstantTime(String timestamp, ZoneId zoneId) throws ParseException {
     try {
       String timestampInMillis = fixInstantTimeCompatibility(timestamp);
       LocalDateTime dt = LocalDateTime.parse(timestampInMillis, MILLIS_INSTANT_TIME_FORMATTER);
-      return Date.from(dt.atZone(ZoneId.systemDefault()).toInstant());
+      return Date.from(dt.atZone(zoneId).toInstant());
     } catch (DateTimeParseException e) {
       throw new ParseException(e.getMessage(), e.getErrorIndex());
     }
