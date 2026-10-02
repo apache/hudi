@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -31,6 +32,7 @@ import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -475,6 +477,37 @@ public class TestKeyGenUtils {
     metaClient.reloadTableConfig();
     KeyGenUtils.recordComplexKeygenEncodingIfMissing(metaClient, writeConfig);
     assertEquals(Option.of(ComplexKeyGenEncoding.VALUE_ONLY), metaClient.getTableConfig().getComplexKeyGenEncoding());
+  }
+
+  /**
+   * A retry of an upgrade that died after the 7 to 8 hop had moved the instants into the version 2 timeline reads an
+   * empty version 1 timeline. That must not be taken for a never-written table: the encoding cannot be deduced.
+   */
+  @Test
+  void testComplexKeyGenEncodingNotDeducedFromTimelineMovedByUnfinishedUpgrade(@TempDir Path tempDir) throws IOException {
+    Properties props = new Properties();
+    props.put(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), ComplexAvroKeyGenerator.class.getName());
+    props.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "id");
+    props.put(HoodieTableConfig.VERSION.key(), String.valueOf(HoodieTableVersion.SIX.versionCode()));
+    props.put(HoodieTableConfig.TIMELINE_LAYOUT_VERSION.key(), "1");
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(
+        HoodieTestUtils.getDefaultStorageConf(), tempDir.toString(), HoodieTableType.COPY_ON_WRITE, props);
+    HoodieTableConfig.delete(metaClient.getStorage(), metaClient.getMetaPath(),
+        Collections.singleton(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()));
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertEquals(HoodieTableVersion.SIX, metaClient.getTableConfig().getTableVersion());
+    StoragePath timelinePath = new StoragePath(metaClient.getMetaPath(), HoodieTableConfig.TIMELINE_PATH.defaultValue());
+    assertFalse(metaClient.getStorage().exists(timelinePath));
+
+    // no version 2 timeline: a table that was never written deduces the default
+    assertEquals(Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED), KeyGenUtils.deduceComplexKeyGenEncodingFromData(metaClient));
+
+    // the version 2 timeline of an unfinished upgrade: nothing can be deduced, so validation refuses to guess
+    metaClient.getStorage().createDirectory(timelinePath);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertFalse(KeyGenUtils.deduceComplexKeyGenEncodingFromData(metaClient).isPresent());
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(tempDir.toString()).build();
+    assertFalse(KeyGenUtils.resolveComplexKeyGenEncodingForWrite(metaClient, writeConfig).isPresent());
   }
 
   @Test
