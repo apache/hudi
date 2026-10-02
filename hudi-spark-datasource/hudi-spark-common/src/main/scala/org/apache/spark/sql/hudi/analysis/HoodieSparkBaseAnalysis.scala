@@ -157,19 +157,17 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
     case HoodieVectorSearchTableValuedFunction(args) =>
       val a = HoodieVectorSearchTableValuedFunction.parseArgs(args)
       val searchAlgorithm = HoodieVectorSearchPlanBuilder.resolveAlgorithm(a.algorithm)
-      val corpusDf = resolveTableToDf(a.table, HoodieVectorSearchTableValuedFunction.FUNC_NAME)
+      val corpusTable = resolveTableToDf(a.table, HoodieVectorSearchTableValuedFunction.FUNC_NAME)
       val queryVector = evaluateQueryVector(a.queryVectorExpr)
-      searchAlgorithm.buildSingleQueryPlan(
-        spark, corpusDf, a.embeddingCol, queryVector, a.k, a.metric, a.filter, a.maxDistance)
+      searchAlgorithm.buildSingleQueryPlan(spark, corpusTable, a.embeddingCol, queryVector, a.k, a.metric, a.runtimeOptions)
 
     case HoodieVectorSearchBatchTableValuedFunction(args) =>
       val a = HoodieVectorSearchBatchTableValuedFunction.parseArgs(args)
       val searchAlgorithm = HoodieVectorSearchPlanBuilder.resolveAlgorithm(a.algorithm)
-      val corpusDf = resolveTableToDf(a.corpusTable, HoodieVectorSearchBatchTableValuedFunction.FUNC_NAME)
-      val queryDf = resolveTableToDf(a.queryTable, HoodieVectorSearchBatchTableValuedFunction.FUNC_NAME)
+      val corpusTable = resolveTableToDf(a.corpusTable, HoodieVectorSearchBatchTableValuedFunction.FUNC_NAME)
+      val queryTable = resolveTableToDf(a.queryTable, HoodieVectorSearchBatchTableValuedFunction.FUNC_NAME)
       searchAlgorithm.buildBatchQueryPlan(
-        spark, corpusDf, a.corpusEmbeddingCol, queryDf, a.queryEmbeddingCol,
-        a.k, a.metric, a.filter, a.maxDistance)
+        spark, corpusTable, a.corpusEmbeddingCol, queryTable.df, a.queryEmbeddingCol, a.k, a.metric, a.runtimeOptions)
 
     case mO@MatchMergeIntoTable(targetTableO, sourceTableO, _)
       // START: custom Hudi change: don't want to go to the spark mit resolution so we resolve the source and target
@@ -345,12 +343,19 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
    * Resolves a table reference to a DataFrame. Accepts either a table identifier
    * (including multi-part identifiers like catalog.db.table) or a file path.
    */
-  private def resolveTableToDf(table: String, funcName: String): DataFrame = {
+  private def resolveTableToDf(table: String, funcName: String): VectorSearchTable = {
     try {
       if (table.contains(StoragePath.SEPARATOR)) {
-        spark.read.format("hudi").load(table)
+        VectorSearchTable(spark.read.format("hudi").load(table), Some(table))
       } else {
-        spark.table(table)
+        val tableDf = spark.table(table)
+        val basePathOpt = try {
+          val tableId = spark.sessionState.sqlParser.parseTableIdentifier(table)
+          Some(spark.sessionState.catalog.getTableMetadata(tableId).location.toString)
+        } catch {
+          case _: Exception => None
+        }
+        VectorSearchTable(tableDf, basePathOpt)
       }
     } catch {
       case e: Exception => throw new HoodieAnalysisException(

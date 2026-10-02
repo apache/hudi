@@ -107,6 +107,9 @@ public enum HoodieIndexVersion {
         }
         return V1;
 
+      case VECTOR_INDEX:
+        return V1;
+
       case FILES:
         return V1;
 
