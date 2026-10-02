@@ -33,11 +33,11 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -59,7 +59,8 @@ public class EmbeddedTimelineService {
   private final HoodieWriteConfig writeConfig;
   private TimelineService.Config serviceConfig;
   private final TimelineServiceIdentifier timelineServiceIdentifier;
-  private final Set<String> basePaths; // the set of base paths using this EmbeddedTimelineService
+  // Number of acquisitions per base path. All accesses after construction are guarded by SERVICE_LOCK.
+  private final Map<String, Integer> basePathReferenceCounts;
 
   @Getter
   private transient FileSystemViewManager viewManager;
@@ -71,8 +72,8 @@ public class EmbeddedTimelineService {
     this.context = context;
     this.writeConfig = writeConfig;
     this.timelineServiceIdentifier = timelineServiceIdentifier;
-    this.basePaths = new HashSet<>();
-    this.basePaths.add(writeConfig.getBasePath());
+    this.basePathReferenceCounts = new HashMap<>();
+    this.basePathReferenceCounts.put(writeConfig.getBasePath(), 1);
     this.storageConf = context.getStorageConf();
     this.viewManager = createViewManager();
   }
@@ -116,25 +117,23 @@ public class EmbeddedTimelineService {
                                                                TimelineServiceIdentifier timelineServiceIdentifier) throws IOException {
     EmbeddedTimelineService service = new EmbeddedTimelineService(context, embeddedTimelineServiceHostAddr, writeConfig, timelineServiceIdentifier);
     service.startServer(timelineServiceCreator);
-    METRICS_REGISTRY.set(NUM_EMBEDDED_TIMELINE_SERVERS, NUM_SERVERS_RUNNING.incrementAndGet());
+    synchronized (SERVICE_LOCK) {
+      METRICS_REGISTRY.set(NUM_EMBEDDED_TIMELINE_SERVERS, NUM_SERVERS_RUNNING.incrementAndGet());
+    }
     return service;
   }
 
   public static void shutdownAllTimelineServers() {
-    RUNNING_SERVICES.entrySet().forEach(entry -> {
-      log.info("Closing Timeline server");
-      try {
-        entry.getValue().server.close();
-      } catch (Exception e) {
-        // Keep sweeping: an unguarded throw here would abandon every server after this one and
-        // skip the clear() below, leaving the registry pointing at servers nobody can reach.
-        log.warn("Timeline server did not close cleanly during shutdown; continuing", e);
-      } finally {
-        METRICS_REGISTRY.set(NUM_EMBEDDED_TIMELINE_SERVERS, NUM_SERVERS_RUNNING.decrementAndGet());
+    List<TimelineService> serversToClose = new ArrayList<>();
+    synchronized (SERVICE_LOCK) {
+      for (EmbeddedTimelineService service : new ArrayList<>(RUNNING_SERVICES.values())) {
+        TimelineService serverToClose = service.detachServer();
+        if (serverToClose != null) {
+          serversToClose.add(serverToClose);
+        }
       }
-      log.info("Closed Timeline server");
-    });
-    RUNNING_SERVICES.clear();
+    }
+    serversToClose.forEach(EmbeddedTimelineService::closeServer);
   }
 
   private FileSystemViewManager createViewManager() {
@@ -226,43 +225,71 @@ public class EmbeddedTimelineService {
   }
 
   /**
-   * Adds a new base path to the set that are managed by this instance.
-   * @param basePath the new base path to add
+   * Acquires a reference for the given base path. Must be called while holding SERVICE_LOCK.
+   * @param basePath the base path to acquire
    */
   private void addBasePath(String basePath) {
-    basePaths.add(basePath);
+    basePathReferenceCounts.merge(basePath, 1, Integer::sum);
   }
 
   /**
-   * Stops the embedded timeline service for the given base path. If a timeline service is managing multiple tables, it will only be shutdown once all tables have been stopped.
-   * @param basePath For the table to stop the service for
+   * Releases one acquisition for the given base path. The table's view is cleared only after its last
+   * reference is released, and the service is closed only after all references have been released.
+   * Each owner must release at most once per acquisition; borrowed services must not be released.
+   * @param basePath the base path to release
    */
   public void stopForBasePath(String basePath) {
+    TimelineService serverToClose = null;
     synchronized (SERVICE_LOCK) {
-      basePaths.remove(basePath);
-      if (basePaths.isEmpty()) {
-        RUNNING_SERVICES.remove(timelineServiceIdentifier);
+      Integer referenceCount = basePathReferenceCounts.get(basePath);
+      if (referenceCount == null) {
+        return;
       }
-    }
-    if (this.server != null) {
-      this.server.unregisterBasePath(basePath);
-    }
-    // continue rest of shutdown outside of the synchronized block to avoid excess blocking
-    if (basePaths.isEmpty() && null != server) {
-      log.info("Closing Timeline server");
+      if (referenceCount > 1) {
+        basePathReferenceCounts.put(basePath, referenceCount - 1);
+        return;
+      }
+      basePathReferenceCounts.remove(basePath);
       try {
-        this.server.close();
+        // Serialize view cleanup with acquisition so it cannot invalidate a newly acquired reference.
+        server.unregisterBasePath(basePath);
       } catch (Exception e) {
-        // Release the references anyway: holding on to a server that failed to close leaves this
-        // instance permanently unclosable, since every later call re-enters this same branch.
-        log.warn("Timeline server did not close cleanly; releasing the reference anyway", e);
-      } finally {
-        METRICS_REGISTRY.set(NUM_EMBEDDED_TIMELINE_SERVERS, NUM_SERVERS_RUNNING.decrementAndGet());
-        this.server = null;
-        this.viewManager = null;
+        log.warn("Failed to unregister base path {} from the timeline server", basePath, e);
       }
-      log.info("Closed Timeline server");
+      if (basePathReferenceCounts.isEmpty()) {
+        serverToClose = detachServer();
+      }
     }
+    // Closing the server can block, so only detach it while holding SERVICE_LOCK.
+    if (serverToClose != null) {
+      closeServer(serverToClose);
+    }
+  }
+
+  /**
+   * Transfers responsibility for closing the server to the caller. Must be called while holding SERVICE_LOCK.
+   */
+  private TimelineService detachServer() {
+    RUNNING_SERVICES.remove(timelineServiceIdentifier, this);
+    basePathReferenceCounts.clear();
+    TimelineService serverToClose = server;
+    server = null;
+    viewManager = null;
+    return serverToClose;
+  }
+
+  private static void closeServer(TimelineService serverToClose) {
+    log.info("Closing Timeline server");
+    try {
+      serverToClose.close();
+    } catch (Exception e) {
+      log.warn("Timeline server did not close cleanly; releasing the reference anyway", e);
+    } finally {
+      synchronized (SERVICE_LOCK) {
+        METRICS_REGISTRY.set(NUM_EMBEDDED_TIMELINE_SERVERS, NUM_SERVERS_RUNNING.decrementAndGet());
+      }
+    }
+    log.info("Closed Timeline server");
   }
 
   private static TimelineServiceIdentifier getTimelineServiceIdentifier(String hostAddr, HoodieWriteConfig writeConfig) {
