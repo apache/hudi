@@ -152,12 +152,12 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
     // Until #20090, a read can leave the session's vectorized reader flag changed; reset it so that
     // every case plans its scan the same way whatever ran before it.
     spark().conf().unset(VECTORIZED_READER_ENABLED);
-    SparkExecutorGuards.enableMetaFolderAccessRecording(jsc().hadoopConfiguration());
+    SparkExecutorGuards.enableFileSystemCallRecording(jsc().hadoopConfiguration());
   }
 
   @AfterEach
   void disableRecording() {
-    SparkExecutorGuards.disableMetaFolderAccessRecording(jsc().hadoopConfiguration());
+    SparkExecutorGuards.disableFileSystemCallRecording(jsc().hadoopConfiguration());
   }
 
   @AfterAll
