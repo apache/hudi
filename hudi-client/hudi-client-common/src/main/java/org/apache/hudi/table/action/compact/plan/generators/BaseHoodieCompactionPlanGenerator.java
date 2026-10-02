@@ -21,7 +21,9 @@ package org.apache.hudi.table.action.compact.plan.generators;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.data.HoodieAccumulator;
+import org.apache.hudi.common.data.HoodieBroadcast;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.function.SerializableSupplier;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -36,6 +38,7 @@ import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -54,9 +57,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.util.stream.Collectors.toList;
 
+/**
+ * Generates the compaction plan of a table.
+ *
+ * <p>The planning tasks of an executor share one instance of a generator in an {@code org.apache.hudi} package, so
+ * such a generator must be safe for concurrent calls. A generator in any other package gets one copy per task.
+ */
 @Slf4j
 public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPayload, I, K, O> implements Serializable {
 
@@ -128,37 +138,21 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
 
     int parallelism = Math.min(partitionPaths.size(), writeConfig.getCompactionPlanParallelism());
-    List<HoodieCompactionOperation> operations = engineContext.flatMap(partitionPaths, partitionPath -> fileSystemView
-        .getLatestFileSlicesStateless(partitionPath)
-        .filter(slice -> filterFileSlice(slice, lastCompletedInstantTime, fgIdsInPendingCompactionAndClustering, instantRange))
-        .map(s -> {
-          // ==============================================================
-          // IMPORTANT
-          // ==============================================================
-          // Currently, our filesystem view could return a file slice with pending log files there,
-          // these files should be excluded from the plan, let's say we have such a sequence of actions
-
-          // t10: a delta commit starts,
-          // t20: the compaction is scheduled and the t10 delta commit is still pending, and the "fg_10.log" is included in the plan
-          // t25: the delta commit 10 finishes,
-          // t30: the compaction execution starts, now the reader considers the log file "fg_10.log" as valid.
-
-          // for both OCC and NB-CC, this is in-correct.
-          return s.filterLogFiles(logFile -> completionTimeQueryView.isCompletedBefore(compactionInstant, logFile.getDeltaCommitTime()));
-        })
-        .filter(FileSlice::hasLogFiles) // compaction is not needed if there is no log file.
-        .map(s -> {
-          List<HoodieLogFile> logFiles = s.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).collect(toList());
-          totalLogFiles.add(logFiles.size());
-          totalFileSlices.add(1L);
-          // Avro generated classes are not inheriting Serializable. Using CompactionOperation POJO
-          // for Map operations and collecting them finally in Avro generated classes for storing
-          // into meta files.
-          Option<HoodieBaseFile> dataFile = s.getBaseFile();
-          return new CompactionOperation(dataFile, partitionPath, logFiles,
-              writeConfig.getCompactionStrategy().captureMetrics(writeConfig, s));
-        }), parallelism).stream()
-        .map(CompactionUtils::buildHoodieCompactionOperation).collect(toList());
+    FileSliceSelection fileSliceSelection = new FileSliceSelection(this, fileSystemView, completionTimeQueryView, fgIdsInPendingCompactionAndClustering);
+    // the tasks of an executor share the generators Hudi ships; a custom generator may keep per-call state, so each
+    // task gets its own copy of it
+    Option<HoodieBroadcast<FileSliceSelection>> sharedSelection =
+        ReflectionUtils.isHudiClass(getClass()) ? Option.of(engineContext.broadcast(fileSliceSelection)) : Option.empty();
+    SerializableSupplier<FileSliceSelection> selection = sharedSelection.isPresent() ? sharedSelection.get()::value : () -> fileSliceSelection;
+    List<HoodieCompactionOperation> operations;
+    try {
+      operations = engineContext.flatMap(partitionPaths,
+          partitionPath -> selection.get().getCompactionOperations(partitionPath, compactionInstant, lastCompletedInstantTime, instantRange,
+              totalLogFiles, totalFileSlices), parallelism).stream()
+          .map(CompactionUtils::buildHoodieCompactionOperation).collect(toList());
+    } finally {
+      sharedSelection.ifPresent(HoodieBroadcast::destroy);
+    }
 
     log.info("Total of {} compaction operations are retrieved for table {}", operations.size(), hoodieTable.getConfig().getBasePath());
     log.info("Total number of log files {} for table {}", totalLogFiles.value(), hoodieTable.getConfig().getBasePath());
@@ -210,5 +204,60 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
 
   protected Map<String, String> getExtraMetadata(List<HoodieCompactionOperation> operationsBeforeApplyingStrategy, HoodieCompactionPlan compactionPlan) {
     return Collections.emptyMap();
+  }
+
+  /**
+   * What the tasks selecting the file slices to compact read from the driver, shared by the tasks of an executor.
+   */
+  private static class FileSliceSelection implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    private final BaseHoodieCompactionPlanGenerator<?, ?, ?, ?> generator;
+    private final SyncableFileSystemView fileSystemView;
+    private final CompletionTimeQueryView completionTimeQueryView;
+    private final Set<HoodieFileGroupId> fgIdsInPendingCompactionAndClustering;
+
+    FileSliceSelection(BaseHoodieCompactionPlanGenerator<?, ?, ?, ?> generator, SyncableFileSystemView fileSystemView,
+                       CompletionTimeQueryView completionTimeQueryView, Set<HoodieFileGroupId> fgIdsInPendingCompactionAndClustering) {
+      this.generator = generator;
+      this.fileSystemView = fileSystemView;
+      this.completionTimeQueryView = completionTimeQueryView;
+      this.fgIdsInPendingCompactionAndClustering = fgIdsInPendingCompactionAndClustering;
+    }
+
+    Stream<CompactionOperation> getCompactionOperations(String partitionPath, String compactionInstant, String lastCompletedInstantTime,
+                                                        Option<InstantRange> instantRange, HoodieAccumulator totalLogFiles,
+                                                        HoodieAccumulator totalFileSlices) {
+      return fileSystemView
+          .getLatestFileSlicesStateless(partitionPath)
+          .filter(slice -> generator.filterFileSlice(slice, lastCompletedInstantTime, fgIdsInPendingCompactionAndClustering, instantRange))
+          .map(s -> {
+            // ==============================================================
+            // IMPORTANT
+            // ==============================================================
+            // Currently, our filesystem view could return a file slice with pending log files there,
+            // these files should be excluded from the plan, let's say we have such a sequence of actions
+
+            // t10: a delta commit starts,
+            // t20: the compaction is scheduled and the t10 delta commit is still pending, and the "fg_10.log" is included in the plan
+            // t25: the delta commit 10 finishes,
+            // t30: the compaction execution starts, now the reader considers the log file "fg_10.log" as valid.
+
+            // for both OCC and NB-CC, this is in-correct.
+            return s.filterLogFiles(logFile -> completionTimeQueryView.isCompletedBefore(compactionInstant, logFile.getDeltaCommitTime()));
+          })
+          .filter(FileSlice::hasLogFiles) // compaction is not needed if there is no log file.
+          .map(s -> {
+            List<HoodieLogFile> logFiles = s.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).collect(toList());
+            totalLogFiles.add(logFiles.size());
+            totalFileSlices.add(1L);
+            // Avro generated classes are not inheriting Serializable. Using CompactionOperation POJO
+            // for Map operations and collecting them finally in Avro generated classes for storing
+            // into meta files.
+            Option<HoodieBaseFile> dataFile = s.getBaseFile();
+            return new CompactionOperation(dataFile, partitionPath, logFiles,
+                generator.writeConfig.getCompactionStrategy().captureMetrics(generator.writeConfig, s));
+          });
+    }
   }
 }
