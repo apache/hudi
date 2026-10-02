@@ -140,8 +140,8 @@ public class CompactionTestBase extends HoodieClientTestBase {
       assertNoWriteErrors(statusList);
       metaClient = createMetaClient(cfg.getBasePath());
       HoodieTable hoodieTable = getHoodieTable(metaClient, cfg);
-      List<HoodieBaseFile> dataFilesToRead = getCurrentLatestBaseFiles(hoodieTable);
-      assertTrue(dataFilesToRead.stream().findAny().isPresent(),
+      List<HoodieBaseFile> baseFilesToRead = getCurrentLatestBaseFiles(hoodieTable);
+      assertTrue(baseFilesToRead.stream().findAny().isPresent(),
           "should list the base files we wrote in the delta commit");
       validateDeltaCommit(firstInstant, fgIdToCompactionOperation, cfg);
     }
