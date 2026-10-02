@@ -73,10 +73,17 @@ public class FooterKeyDecryptionFactory implements DecryptionPropertiesFactory {
    * Writes {@code numRecords} records of {@link #SCHEMA} with an encrypted footer and encrypted columns.
    */
   public static void writeEncryptedFile(Configuration conf, Path path, int numRecords) throws IOException {
+    writeFile(conf, path, numRecords, true);
+  }
+
+  /**
+   * Writes {@code numRecords} records of {@link #SCHEMA}, encrypted as by {@link #writeEncryptedFile} or in plaintext.
+   */
+  public static void writeFile(Configuration conf, Path path, int numRecords, boolean encrypted) throws IOException {
     try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(HadoopOutputFile.fromPath(path, conf))
         .withSchema(SCHEMA)
         .withConf(conf)
-        .withEncryption(FileEncryptionProperties.builder(FOOTER_KEY).build())
+        .withEncryption(encrypted ? FileEncryptionProperties.builder(FOOTER_KEY).build() : null)
         .build()) {
       for (int i = 0; i < numRecords; i++) {
         GenericRecord record = new GenericData.Record(SCHEMA);

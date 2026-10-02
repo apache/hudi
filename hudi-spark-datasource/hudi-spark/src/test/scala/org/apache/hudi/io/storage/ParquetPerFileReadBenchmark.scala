@@ -33,6 +33,7 @@ import org.apache.spark.sql.execution.datasources.FileFormat
 import org.apache.spark.sql.types.StructType
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty
 import org.junit.jupiter.api.io.TempDir
 
 import java.lang.management.ManagementFactory
@@ -42,15 +43,18 @@ import scala.collection.JavaConverters._
 
 /**
  * Manual benchmark of the per-file CPU cost of the Spark parquet read paths: the log-file reader
- * ([[HoodieSparkParquetReader]]) and the base-file reader built by the Spark adapter. Not run in CI
- * (the class name matches no surefire include). Every round reads the same small files and checks
- * the row count and a checksum, so a faster but wrong reader fails the run.
+ * ([[HoodieSparkParquetReader]]) and the base-file reader built by the Spark adapter. Runs only when
+ * `benchmark.files` is set, so it stays out of CI. Every round reads the same small files and checks
+ * the row count and a checksum, so a faster but wrong reader fails the run. Run it with surefire
+ * directly, since `mvn test` in this module also runs every scalatest suite:
  *
  * {{{
- * mvn test -pl hudi-spark-datasource/hudi-spark -Dtest=ParquetPerFileReadBenchmark \
+ * mvn test-compile -pl hudi-spark-datasource/hudi-spark
+ * mvn surefire:test -pl hudi-spark-datasource/hudi-spark -Dtest=ParquetPerFileReadBenchmark \
  *   -Dbenchmark.files=400 -Dbenchmark.rounds=10 -Dbenchmark.warmupRounds=3
  * }}}
  */
+@EnabledIfSystemProperty(named = "benchmark.files", matches = "\\d+")
 class ParquetPerFileReadBenchmark {
 
   @TempDir
@@ -58,7 +62,7 @@ class ParquetPerFileReadBenchmark {
 
   @Test
   def benchmark(): Unit = {
-    val numFiles = Integer.getInteger("benchmark.files", 400).intValue()
+    val numFiles = Integer.getInteger("benchmark.files").intValue()
     val rounds = Integer.getInteger("benchmark.rounds", 10).intValue()
     val warmupRounds = Integer.getInteger("benchmark.warmupRounds", 3).intValue()
     val rowsPerFile = 20
