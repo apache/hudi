@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieTableVersionPinExceededException;
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -43,8 +44,10 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
@@ -157,6 +160,48 @@ class TestUpgradeDowngradeOrchestration {
     verify(testContext.tableConfig).clearValue(propertyToRemove);
     verify(testContext.tableConfig).setValue(propertyToAdd, "value");
     verify(testContext.tableConfig).setValue("test.property.legacy", "value");
+  }
+
+  @Test
+  void testUpgradeExceedingPinThrowsBeforeAnyRollbackOrCompaction() throws Exception {
+    TestContext testContext = new TestContext(HoodieTableVersion.EIGHT);
+    TrackingUpgradeDowngrade upgradeDowngrade = testContext.trackingUpgradeDowngrade();
+    doThrow(new HoodieTableVersionPinExceededException("pin exceeded"))
+        .when(testContext.tableConfig).validateVersionPin(HoodieTableVersion.NINE);
+
+    try (MockedStatic<UpgradeDowngradeUtils> upgradeUtils = mockStatic(UpgradeDowngradeUtils.class);
+         MockedStatic<HoodieTableConfig> tableConfigStatic = mockStatic(HoodieTableConfig.class)) {
+      assertThrows(HoodieTableVersionPinExceededException.class,
+          () -> upgradeDowngrade.run(HoodieTableVersion.NINE, "100"));
+
+      assertTrue(upgradeDowngrade.hops.isEmpty());
+      verify(testContext.tableConfig, never()).setTableVersion(any(HoodieTableVersion.class));
+      upgradeUtils.verifyNoInteractions();
+      tableConfigStatic.verifyNoInteractions();
+    }
+  }
+
+  @Test
+  void testDowngradeAndAtOrBelowPinUpgradeStillSucceed() throws Exception {
+    TestContext downgradeContext = new TestContext(HoodieTableVersion.NINE);
+    TrackingUpgradeDowngrade downgrade = downgradeContext.trackingUpgradeDowngrade();
+
+    try (MockedStatic<UpgradeDowngradeUtils> upgradeUtils = mockStatic(UpgradeDowngradeUtils.class);
+         MockedStatic<HoodieTableConfig> ignored = mockStatic(HoodieTableConfig.class)) {
+      downgrade.run(HoodieTableVersion.SIX, null);
+      assertEquals(Arrays.asList("9->8", "8->7", "7->6"), downgrade.hops);
+      verify(downgradeContext.tableConfig).setTableVersion(HoodieTableVersion.SIX);
+    }
+
+    TestContext upgradeContext = new TestContext(HoodieTableVersion.SIX);
+    TrackingUpgradeDowngrade upgrade = upgradeContext.trackingUpgradeDowngrade();
+
+    try (MockedStatic<UpgradeDowngradeUtils> upgradeUtils = mockStatic(UpgradeDowngradeUtils.class);
+         MockedStatic<HoodieTableConfig> ignored = mockStatic(HoodieTableConfig.class)) {
+      upgrade.run(HoodieTableVersion.NINE, "100");
+      assertEquals(Arrays.asList("6->7", "7->8", "8->9"), upgrade.hops);
+      verify(upgradeContext.tableConfig).setTableVersion(HoodieTableVersion.NINE);
+    }
   }
 
   @Test

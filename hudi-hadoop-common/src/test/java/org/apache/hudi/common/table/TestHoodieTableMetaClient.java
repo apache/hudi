@@ -30,6 +30,7 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieTableVersionPinExceededException;
 import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
@@ -266,6 +267,58 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         .setBasePath(basePath)
         .build();
     assertEquals(HoodieTableVersion.SIX, metaClient2.getTableConfig().getTableVersion());
+  }
+
+  @Test
+  void testInitTableAboveVersionPinThrows() throws IOException {
+    final String basePath = tempDir.toAbsolutePath() + Path.SEPARATOR + "pinned-new-table";
+    final String pinKey = HoodieTableConfig.MAX_ALLOWED_TABLE_VERSION.key();
+    final String previousPin = System.getProperty(pinKey);
+    System.setProperty(pinKey, Integer.toString(HoodieTableVersion.EIGHT.versionCode()));
+    try {
+      assertThrows(HoodieTableVersionPinExceededException.class, () -> HoodieTableMetaClient.newTableBuilder()
+          .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+          .setTableName("pinned-new-table")
+          .setTableVersion(HoodieTableVersion.NINE.versionCode())
+          .initTable(this.metaClient.getStorageConf(), basePath));
+    } finally {
+      if (previousPin == null) {
+        System.clearProperty(pinKey);
+      } else {
+        System.setProperty(pinKey, previousPin);
+      }
+    }
+  }
+
+  @Test
+  void testPinSetOnAnExistingTableGuardsLaterLoads() throws IOException {
+    final String basePath = tempDir.toAbsolutePath() + Path.SEPARATOR + "pinned-existing-table";
+    HoodieTableMetaClient created = HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+        .setTableName("pinned-existing-table")
+        .setTableVersion(HoodieTableVersion.NINE.versionCode())
+        .initTable(this.metaClient.getStorageConf(), basePath);
+
+    // Pinning an existing table means persisting the config into its hoodie.properties, which is what
+    // `table update-configs` does; the pin then guards the table on every subsequent load.
+    HoodieTableConfig.update(created.getStorage(), created.getMetaPath(), getPinProps(HoodieTableVersion.NINE));
+
+    HoodieTableMetaClient reloaded = HoodieTableMetaClient.builder()
+        .setConf(this.metaClient.getStorageConf())
+        .setBasePath(basePath)
+        .build();
+    assertEquals(Integer.toString(HoodieTableVersion.NINE.versionCode()),
+        reloaded.getTableConfig().getString(HoodieTableConfig.MAX_ALLOWED_TABLE_VERSION));
+    assertEquals(HoodieTableVersion.NINE, reloaded.getTableConfig().getTableVersion());
+    assertThrows(HoodieTableVersionPinExceededException.class,
+        () -> reloaded.getTableConfig().setTableVersion(HoodieTableVersion.TEN));
+  }
+
+  private static Properties getPinProps(HoodieTableVersion pinnedVersion) {
+    Properties props = new Properties();
+    props.setProperty(HoodieTableConfig.MAX_ALLOWED_TABLE_VERSION.key(),
+        Integer.toString(pinnedVersion.versionCode()));
+    return props;
   }
 
   @Test
