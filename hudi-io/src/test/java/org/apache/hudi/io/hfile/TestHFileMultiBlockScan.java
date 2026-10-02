@@ -42,9 +42,9 @@ public class TestHFileMultiBlockScan {
 
   @ParameterizedTest
   @CsvSource({
-      "NONE, 64, 5000", "GZIP, 64, 5000",
-      "NONE, 1048576, 200000", "GZIP, 1048576, 200000",
-      "NONE, 65536, 200000", "GZIP, 65536, 200000"
+      "NONE, 64, 5000", "GZIP, 64, 5000", "ZSTD, 64, 5000",
+      "NONE, 1048576, 200000", "GZIP, 1048576, 200000", "ZSTD, 1048576, 200000",
+      "NONE, 65536, 200000", "GZIP, 65536, 200000", "ZSTD, 65536, 200000"
   })
   public void fullScanReturnsAllRecords(String codec, int blockSize, int numRecords) throws Exception {
     HFileContext context = new HFileContext.Builder()
