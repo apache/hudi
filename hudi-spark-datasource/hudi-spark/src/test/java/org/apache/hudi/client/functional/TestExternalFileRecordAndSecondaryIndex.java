@@ -54,6 +54,7 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.execution.FileSourceScanExec;
 import org.apache.spark.sql.execution.SparkPlan;
 import org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -143,6 +144,28 @@ public class TestExternalFileRecordAndSecondaryIndex extends HoodieClientTestBas
       assertEquals(mapOf("bob", setOf(file2.key(0)), "carol", setOf(file2.key(1))),
           readSecondaryIndex(tableMetadata, secondaryIndexPartition(), Arrays.asList("alice", "bob", "carol")));
     }
+  }
+
+  @Test
+  public void testFilesWithTheSameNameInDifferentPartitions() throws Exception {
+    // Spark names a file part-<task>-<job uuid>, so one task of a partitioned write leaves the same file name in every
+    // partition it writes, and the file ids of those files are only unique within their partition
+    initExternalTable(PARTITION);
+    HoodieWriteConfig writeConfig = writeConfig(true, false);
+    writeClient = getHoodieWriteClient(writeConfig);
+    writeClient.setOperationType(WriteOperationType.UNKNOWN);
+
+    ExternalFile brazil = new ExternalFile(PARTITION, Option.empty(), "part-00000.parquet");
+    ExternalFile chile = new ExternalFile("americas/chile", Option.empty(), "part-00000.parquet");
+    commitReplace(Arrays.asList(
+        Pair.of(brazil, rows(1, "alice", 2, "bob")),
+        Pair.of(chile, rows(3, "alice", 4, "carol", 5, "dave"))), Collections.emptyMap());
+
+    HoodieBackedTableMetadata tableMetadata = tableMetadata(writeConfig);
+    assertRecordIndex(tableMetadata, Option.empty(), brazil, 2);
+    assertRecordIndex(tableMetadata, Option.empty(), chile, 3);
+    assertEquals(mapOf("alice", setOf(brazil.key(0), chile.key(0)), "bob", setOf(brazil.key(1)), "carol", setOf(chile.key(1))),
+        readSecondaryIndex(tableMetadata, secondaryIndexPartition(), Arrays.asList("alice", "bob", "carol")));
   }
 
   @ParameterizedTest
