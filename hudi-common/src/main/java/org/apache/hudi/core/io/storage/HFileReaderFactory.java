@@ -75,6 +75,8 @@ public class HFileReaderFactory {
         properties, HoodieReaderConfig.HFILE_LOAD_ON_OPEN_CACHE_SIZE);
     int cacheTtlMinutes = ConfigUtils.getIntWithAltKeys(
         properties, HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES);
+    long cacheMaxWeightBytes = (long) ConfigUtils.getIntWithAltKeys(
+        properties, HoodieReaderConfig.HFILE_BLOCK_CACHE_MAX_WEIGHT_MB) * 1024L * 1024L;
     // The caching reader opens the stream only on a cache miss, so both the size lookup and the
     // open are deferred; their IOExceptions are unwrapped again by the reader.
     final Lazy<Long> lazyFileSize = Lazy.lazily(() -> {
@@ -92,7 +94,7 @@ public class HFileReaderFactory {
       }
     });
     return new CachingHFileReaderImpl(
-        lazyStream, lazyFileSize, getFilePath(), blockCacheSize, loadOnOpenCacheSize, cacheTtlMinutes);
+        lazyStream, lazyFileSize, getFilePath(), blockCacheSize, cacheMaxWeightBytes, loadOnOpenCacheSize, cacheTtlMinutes);
   }
 
   private long getFileSize() throws IOException {

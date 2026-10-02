@@ -21,6 +21,7 @@ package org.apache.hudi.io.hfile;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.stats.CacheStats;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -32,16 +33,27 @@ import java.util.concurrent.TimeUnit;
 /**
  * Least Frequently Used (LFU) cache for HFile blocks to improve read performance by avoiding repeated block reads.
  * Uses Caffeine cache with configurable size and TTL. Thread-safe for concurrent access.
+ * The cache is bounded by entry count, or by retained bytes when a positive max weight is configured.
  */
 public class HFileBlockCache {
 
   private final Cache<BlockCacheKey, HFileBlock> cache;
 
   public HFileBlockCache(int maxCacheSize, long expireAfterWrite, TimeUnit timeUnit) {
-    this.cache = Caffeine.newBuilder()
-        .maximumSize(maxCacheSize)
+    this(maxCacheSize, 0L, expireAfterWrite, timeUnit);
+  }
+
+  public HFileBlockCache(int maxCacheSize, long maxWeightBytes, long expireAfterWrite, TimeUnit timeUnit) {
+    Caffeine<Object, Object> builder = Caffeine.newBuilder()
         .expireAfterAccess(Duration.ofMillis(timeUnit.toMillis(expireAfterWrite)))
-        .build();
+        .recordStats();
+    if (maxWeightBytes > 0L) {
+      this.cache = builder.maximumWeight(maxWeightBytes)
+          .weigher((BlockCacheKey key, HFileBlock block) -> Math.max(1, block.heapSize()))
+          .build();
+    } else {
+      this.cache = builder.maximumSize(maxCacheSize).build();
+    }
   }
 
   /**
@@ -121,6 +133,19 @@ public class HFileBlockCache {
    */
   public long size() {
     return cache.estimatedSize();
+  }
+
+  /**
+   * Returns a human-readable snapshot of the cache size, hit rate, hits, misses, and evictions.
+   */
+  public String statsString() {
+    return statsString("blocks", cache);
+  }
+
+  static String statsString(String entryName, Cache<?, ?> cache) {
+    CacheStats stats = cache.stats();
+    return String.format("%s=%d hitRate=%.3f hits=%d misses=%d evictions=%d",
+        entryName, cache.estimatedSize(), stats.hitRate(), stats.hitCount(), stats.missCount(), stats.evictionCount());
   }
 
   /**

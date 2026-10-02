@@ -169,6 +169,59 @@ public class TestHFileBlockCache {
     assertEquals(1, cache.size());
   }
 
+  @Test
+  public void testByteWeightedEviction() {
+    HFileContext context = HFileContext.builder().build();
+    byte[] validBlockData = createValidHFileBlockData();
+    int blockWeight = new MockHFileDataBlock(context, validBlockData, 0).heapSize();
+    assertTrue(blockWeight > 0, "heapSize must be positive to weigh blocks");
+
+    // Room for two blocks and a half: the third insert must evict by weight even though the
+    // count bound would hold a million blocks.
+    long maxWeightBytes = 2L * blockWeight + (blockWeight / 2);
+    HFileBlockCache cache = new HFileBlockCache(1_000_000, maxWeightBytes, 30, TimeUnit.MINUTES);
+
+    cache.putBlock(new HFileBlockCache.BlockCacheKey("f", 100, 64), new MockHFileDataBlock(context, validBlockData, 0));
+    cache.putBlock(new HFileBlockCache.BlockCacheKey("f", 200, 64), new MockHFileDataBlock(context, validBlockData, 0));
+    cache.putBlock(new HFileBlockCache.BlockCacheKey("f", 300, 64), new MockHFileDataBlock(context, validBlockData, 0));
+    cache.cleanUp();
+
+    assertTrue(cache.size() <= 2, "Byte-weighted cache must evict by weight, not count. size=" + cache.size());
+  }
+
+  @Test
+  public void testStatsStringReportsHitsAndMisses() throws Exception {
+    HFileContext context = HFileContext.builder().build();
+    MockHFileDataBlock block = new MockHFileDataBlock(context, createValidHFileBlockData(), 0);
+    HFileBlockCache cache = new HFileBlockCache(10, 4L * 1024 * 1024, 30, TimeUnit.MINUTES);
+
+    HFileBlockCache.BlockCacheKey key = new HFileBlockCache.BlockCacheKey("f", 1024, 128);
+    cache.getOrCompute(key, () -> block);
+    cache.getOrCompute(key, () -> block);
+
+    String stats = cache.statsString();
+    assertTrue(stats.contains("blocks=1"), "expected one block in: " + stats);
+    assertTrue(stats.contains("hits=1"), "expected one hit in: " + stats);
+    assertTrue(stats.contains("misses=1"), "expected one miss in: " + stats);
+  }
+
+  @Test
+  public void testHeapSizeWeighsBlockSpanNotBackingArray() {
+    HFileContext context = HFileContext.builder().build();
+    byte[] block = createValidHFileBlockData();
+    int expectedSpan = block.length;
+
+    // The same block embedded at an offset inside a much larger shared array, as a block sliced
+    // from a load-on-open buffer is.
+    int pad = 400;
+    byte[] backing = new byte[pad + block.length + 128];
+    System.arraycopy(block, 0, backing, pad, block.length);
+    MockHFileDataBlock sliced = new MockHFileDataBlock(context, backing, pad);
+
+    assertEquals(expectedSpan, sliced.heapSize(),
+        "heapSize must weigh the block span, not the shared backing array length");
+  }
+
   /**
    * Creates a valid HFile block data with proper header structure for testing. This mimics the structure expected by HFileBlock constructor.
    */

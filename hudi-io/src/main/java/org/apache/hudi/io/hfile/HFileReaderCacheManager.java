@@ -27,6 +27,10 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 
@@ -49,35 +53,54 @@ public final class HFileReaderCacheManager {
   private final HFileBlockCache blockCache;
   private final Cache<String, LoadOnOpenBlocks> loadOnOpenDataCache;
   private final int blockCacheSize;
+  private final long cacheMaxWeightBytes;
   private final int loadOnOpenDataCacheSize;
   private final int cacheTtlMinutes;
 
-  private HFileReaderCacheManager(int blockCacheSize, int loadOnOpenDataCacheSize, int cacheTtlMinutes) {
+  private HFileReaderCacheManager(int blockCacheSize,
+                                  long cacheMaxWeightBytes,
+                                  int loadOnOpenDataCacheSize,
+                                  int cacheTtlMinutes) {
     this.blockCacheSize = blockCacheSize;
+    this.cacheMaxWeightBytes = cacheMaxWeightBytes;
     this.loadOnOpenDataCacheSize = loadOnOpenDataCacheSize;
     this.cacheTtlMinutes = cacheTtlMinutes;
-    log.info("Initializing global HFileBlockCache with size: {}, TTL: {} minutes.",
-        blockCacheSize, cacheTtlMinutes);
-    log.info("Initializing global load-on-open data cache with size: {}, TTL: {} minutes.",
-        loadOnOpenDataCacheSize, cacheTtlMinutes);
-    this.blockCache = new HFileBlockCache(blockCacheSize, cacheTtlMinutes, TimeUnit.MINUTES);
-    this.loadOnOpenDataCache = Caffeine.newBuilder()
-        .maximumSize(loadOnOpenDataCacheSize)
+    log.info("Initializing global HFileBlockCache with size: {} blocks, maxWeightBytes: {}, TTL: {} minutes.",
+        blockCacheSize, cacheMaxWeightBytes, cacheTtlMinutes);
+    log.info("Initializing global load-on-open data cache with size: {} files, maxWeightBytes: {}, TTL: {} minutes.",
+        loadOnOpenDataCacheSize, cacheMaxWeightBytes, cacheTtlMinutes);
+    this.blockCache = new HFileBlockCache(blockCacheSize, cacheMaxWeightBytes, cacheTtlMinutes, TimeUnit.MINUTES);
+    Caffeine<Object, Object> builder = Caffeine.newBuilder()
         .expireAfterAccess(Duration.ofMinutes(cacheTtlMinutes))
-        .build();
+        .recordStats();
+    if (cacheMaxWeightBytes > 0L) {
+      this.loadOnOpenDataCache = builder.maximumWeight(cacheMaxWeightBytes)
+          .weigher((String key, LoadOnOpenBlocks blocks) -> (int) Math.min(Integer.MAX_VALUE, Math.max(1L, blocks.heapSize())))
+          .build();
+    } else {
+      this.loadOnOpenDataCache = builder.maximumSize(loadOnOpenDataCacheSize).build();
+    }
   }
 
-  public static HFileReaderCacheManager getInstance(int blockCacheSize, int loadOnOpenDataCacheSize, int cacheTtlMinutes) {
+  /**
+   * Returns the shared manager, creating it with the given configuration on first use. The
+   * configuration of later calls is ignored; a positive {@code cacheMaxWeightBytes} bounds each
+   * of the two caches by retained bytes instead of by entry count.
+   */
+  public static HFileReaderCacheManager getInstance(int blockCacheSize,
+                                                    long cacheMaxWeightBytes,
+                                                    int loadOnOpenDataCacheSize,
+                                                    int cacheTtlMinutes) {
     if (INSTANCE == null) {
       synchronized (INSTANCE_LOCK) {
         if (INSTANCE == null) {
-          INSTANCE = new HFileReaderCacheManager(blockCacheSize, loadOnOpenDataCacheSize, cacheTtlMinutes);
+          INSTANCE = new HFileReaderCacheManager(blockCacheSize, cacheMaxWeightBytes, loadOnOpenDataCacheSize, cacheTtlMinutes);
         } else {
-          INSTANCE.warnIfConfigIgnored(blockCacheSize, loadOnOpenDataCacheSize, cacheTtlMinutes);
+          INSTANCE.warnIfConfigIgnored(blockCacheSize, cacheMaxWeightBytes, loadOnOpenDataCacheSize, cacheTtlMinutes);
         }
       }
     } else {
-      INSTANCE.warnIfConfigIgnored(blockCacheSize, loadOnOpenDataCacheSize, cacheTtlMinutes);
+      INSTANCE.warnIfConfigIgnored(blockCacheSize, cacheMaxWeightBytes, loadOnOpenDataCacheSize, cacheTtlMinutes);
     }
     return INSTANCE;
   }
@@ -87,6 +110,14 @@ public final class HFileReaderCacheManager {
    */
   public static Option<HFileReaderCacheManager> getInstanceIfInitialized() {
     return Option.ofNullable(INSTANCE);
+  }
+
+  /**
+   * Returns the shared caches' statistics, or a sentinel when no caching reader has been created yet.
+   */
+  public static String globalStatsString() {
+    HFileReaderCacheManager instance = INSTANCE;
+    return instance != null ? instance.getStats() : "cache=inactive";
   }
 
   public static void reset() {
@@ -135,20 +166,40 @@ public final class HFileReaderCacheManager {
   }
 
   public String getStats() {
-    return "HFileReader Cache Stats - Block Cache Size: " + getBlockCacheSize()
-        + ", Load On Open Data Cache Size: " + getLoadOnOpenDataCacheSize();
+    return "HFileReader Cache Stats - Block Cache [" + blockCache.statsString()
+        + "], Load On Open Data Cache [" + HFileBlockCache.statsString("files", loadOnOpenDataCache) + "]";
   }
 
-  private void warnIfConfigIgnored(int requestedBlockCacheSize, int requestedLoadOnOpenDataCacheSize, int requestedCacheTtlMinutes) {
-    if (blockCacheSize != requestedBlockCacheSize || cacheTtlMinutes != requestedCacheTtlMinutes) {
+  /**
+   * Forces cache maintenance operations like eviction on both caches.
+   * This is useful for testing to ensure consistent behavior.
+   */
+  public void cleanUp() {
+    blockCache.cleanUp();
+    loadOnOpenDataCache.cleanUp();
+  }
+
+  private void warnIfConfigIgnored(int requestedBlockCacheSize,
+                                   long requestedCacheMaxWeightBytes,
+                                   int requestedLoadOnOpenDataCacheSize,
+                                   int requestedCacheTtlMinutes) {
+    if (blockCacheSize != requestedBlockCacheSize
+        || cacheMaxWeightBytes != requestedCacheMaxWeightBytes
+        || cacheTtlMinutes != requestedCacheTtlMinutes) {
       log.warn("HFile block cache is already initialized. The provided configuration is being ignored. "
-              + "Existing config: [Size: {}, TTL: {} mins], Ignored config: [Size: {}, TTL: {} mins].",
-          blockCacheSize, cacheTtlMinutes, requestedBlockCacheSize, requestedCacheTtlMinutes);
+              + "Existing config: [Size: {}, MaxWeightBytes: {}, TTL: {} mins], "
+              + "Ignored config: [Size: {}, MaxWeightBytes: {}, TTL: {} mins].",
+          blockCacheSize, cacheMaxWeightBytes, cacheTtlMinutes,
+          requestedBlockCacheSize, requestedCacheMaxWeightBytes, requestedCacheTtlMinutes);
     }
-    if (loadOnOpenDataCacheSize != requestedLoadOnOpenDataCacheSize || cacheTtlMinutes != requestedCacheTtlMinutes) {
+    if (loadOnOpenDataCacheSize != requestedLoadOnOpenDataCacheSize
+        || cacheMaxWeightBytes != requestedCacheMaxWeightBytes
+        || cacheTtlMinutes != requestedCacheTtlMinutes) {
       log.warn("HFile load-on-open data cache is already initialized. The provided configuration is being ignored. "
-              + "Existing config: [Size: {}, TTL: {} mins], Ignored config: [Size: {}, TTL: {} mins].",
-          loadOnOpenDataCacheSize, cacheTtlMinutes, requestedLoadOnOpenDataCacheSize, requestedCacheTtlMinutes);
+              + "Existing config: [Size: {}, MaxWeightBytes: {}, TTL: {} mins], "
+              + "Ignored config: [Size: {}, MaxWeightBytes: {}, TTL: {} mins].",
+          loadOnOpenDataCacheSize, cacheMaxWeightBytes, cacheTtlMinutes,
+          requestedLoadOnOpenDataCacheSize, requestedCacheMaxWeightBytes, requestedCacheTtlMinutes);
     }
   }
 
@@ -172,6 +223,23 @@ public final class HFileReaderCacheManager {
       this.rootDataIndexBlock = rootDataIndexBlock;
       this.metaRootIndexBlock = metaRootIndexBlock;
       this.fileInfoBlock = fileInfoBlock;
+    }
+
+    /**
+     * Returns the bytes this entry keeps alive for byte-weighted caching. The three blocks are
+     * slices of the one array read for the whole load-on-open region, so each distinct array
+     * is counted once.
+     */
+    long heapSize() {
+      Set<byte[]> buffers = Collections.newSetFromMap(new IdentityHashMap<>());
+      for (HFileBlock block : Arrays.asList(rootDataIndexBlock, metaRootIndexBlock, fileInfoBlock)) {
+        buffers.addAll(block.retainedBuffers());
+      }
+      long size = 0L;
+      for (byte[] buffer : buffers) {
+        size += buffer.length;
+      }
+      return size;
     }
   }
 }
