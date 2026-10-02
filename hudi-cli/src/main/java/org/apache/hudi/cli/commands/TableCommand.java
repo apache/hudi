@@ -267,7 +267,7 @@ public class TableCommand {
           + "whose incremental / file-pruning semantics differ between old and new data.")
   public String setMetaFieldsMode(
       @ShellOption(value = {"--target-mode"},
-          help = "One of ALL, NONE, COMMIT_TIME_ONLY, FILE_NAME_ONLY, COMMIT_TIME_AND_FILE_NAME")
+          help = "One of ALL, NONE, COMMIT_TIME_ONLY, FILE_NAME_ONLY, COMMIT_TIME_AND_FILE_NAME, ALL_EXCEPT_RECORD_KEY")
       final String targetModeStr,
       @ShellOption(value = {"--force"}, defaultValue = "false",
           help = "Allow NARROWING the mode on a table that already has commits. Does not permit "

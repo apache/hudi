@@ -54,7 +54,7 @@ public class TestHoodieStreamerMetaFieldsMode extends HoodieDeltaStreamerTestBas
    */
   @ParameterizedTest
   @EnumSource(value = MetaFieldsMode.class,
-      names = {"COMMIT_TIME_ONLY", "FILE_NAME_ONLY", "COMMIT_TIME_AND_FILE_NAME"})
+      names = {"COMMIT_TIME_ONLY", "FILE_NAME_ONLY", "COMMIT_TIME_AND_FILE_NAME", "ALL_EXCEPT_RECORD_KEY"})
   public void testStreamerRespectsMetaFieldsMode(MetaFieldsMode mode) throws Exception {
     String tablePath = basePath + "/streamer_meta_fields_mode_" + mode.name();
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tablePath, WriteOperationType.INSERT);
@@ -256,10 +256,9 @@ public class TestHoodieStreamerMetaFieldsMode extends HoodieDeltaStreamerTestBas
         expectedMode.isCommitTimePopulated(), expectedMode);
     assertMetaColumn(raw, total, HoodieRecord.FILENAME_METADATA_FIELD,
         expectedMode.isFileNamePopulated(), expectedMode);
-    boolean allMode = expectedMode == MetaFieldsMode.ALL;
-    assertMetaColumn(raw, total, HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, allMode, expectedMode);
-    assertMetaColumn(raw, total, HoodieRecord.RECORD_KEY_METADATA_FIELD, allMode, expectedMode);
-    assertMetaColumn(raw, total, HoodieRecord.PARTITION_PATH_METADATA_FIELD, allMode, expectedMode);
+    assertMetaColumn(raw, total, HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, expectedMode.isCommitSeqnoPopulated(), expectedMode);
+    assertMetaColumn(raw, total, HoodieRecord.RECORD_KEY_METADATA_FIELD, expectedMode.isRecordKeyPopulated(), expectedMode);
+    assertMetaColumn(raw, total, HoodieRecord.PARTITION_PATH_METADATA_FIELD, expectedMode.isPartitionPathPopulated(), expectedMode);
   }
 
   private static void assertMetaColumn(Dataset<Row> raw, long total, String column,
