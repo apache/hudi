@@ -128,6 +128,7 @@ case class HoodieFileIndex(spark: SparkSession,
       new BucketIndexSupport(spark, metadataConfig, metaClient)
     },
     new SecondaryIndexSupport(spark, metadataConfig, metaClient),
+    new FullTextIndexSupport(spark, metadataConfig, metaClient),
     new ExpressionIndexSupport(spark, schema, metadataConfig, metaClient),
     new BloomFiltersIndexSupport(spark, metadataConfig, metaClient),
     new ColumnStatsIndexSupport(spark, schema, rawHoodieSchema, metadataConfig, metaClient)

@@ -202,6 +202,8 @@ public class HoodieTableMetadataUtil {
   public static final String PARTITION_NAME_EXPRESSION_INDEX_PREFIX = "expr_index_";
   public static final String PARTITION_NAME_SECONDARY_INDEX = "secondary_index";
   public static final String PARTITION_NAME_SECONDARY_INDEX_PREFIX = "secondary_index_";
+  public static final String PARTITION_NAME_FULL_TEXT_INDEX = "full_text_index";
+  public static final String PARTITION_NAME_FULL_TEXT_INDEX_PREFIX = "full_text_index_";
 
   // Average size of a record saved within the record index.
   // Record index has a fixed size schema. This has been calculated based on experiments with default settings
@@ -1814,7 +1816,8 @@ public class HoodieTableMetadataUtil {
    * @return The fileID
    */
   public static String getFileIDForFileGroup(MetadataPartitionType partitionType, int index, String partitionName, Option<String> dataPartitionName) {
-    if (MetadataPartitionType.EXPRESSION_INDEX.equals(partitionType) || MetadataPartitionType.SECONDARY_INDEX.equals(partitionType)) {
+    if (MetadataPartitionType.EXPRESSION_INDEX.equals(partitionType) || MetadataPartitionType.SECONDARY_INDEX.equals(partitionType)
+        || MetadataPartitionType.FULL_TEXT_INDEX.equals(partitionType)) {
       return String.format("%s%04d-%d", partitionName.replaceAll("_", "-").concat("-"), index, 0);
     } else if (dataPartitionName.isPresent()) {
       return String.format("%s%s%04d-%d", partitionType.getFileIdPrefix(), PartitionPathEncodeUtils.escapeFileName(dataPartitionName.get()).concat("-"), index, 0);
@@ -2565,6 +2568,13 @@ public class HoodieTableMetadataUtil {
       indexName = partitionNamePrefix + indexName;
     }
     return indexName;
+  }
+
+  /**
+   * Returns the full-text index partitions that have an index definition but are not yet initialized.
+   */
+  public static Set<String> getFullTextIndexPartitionsToInit(HoodieTableMetaClient dataMetaClient) {
+    return getIndexPartitionsToInitBasedOnIndexDefinition(MetadataPartitionType.FULL_TEXT_INDEX, dataMetaClient);
   }
 
   private static Set<String> getIndexPartitionsToInitBasedOnIndexDefinition(MetadataPartitionType partitionType, HoodieTableMetaClient dataMetaClient) {

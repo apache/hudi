@@ -73,7 +73,9 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataIndexException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
+import org.apache.hudi.metadata.FullTextIndexUtils;
 import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -86,10 +88,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Predicate;
 
 import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP;
@@ -671,6 +675,63 @@ public class HoodieIndexUtils {
         .withIndexOptions(options)
         .withVersion(indexVersion)
         .build();
+  }
+
+  static HoodieIndexDefinition getFullTextIndexDefinition(HoodieTableMetaClient metaClient, String userIndexName, Map<String, Map<String, String>> columns,
+                                                          Map<String, String> options) throws Exception {
+    String fullIndexName = HoodieTableMetadataUtil.PARTITION_NAME_FULL_TEXT_INDEX_PREFIX + userIndexName;
+    if (indexExists(metaClient, fullIndexName)) {
+      throw new HoodieMetadataIndexException("Index already exists: " + userIndexName);
+    }
+    checkArgument(columns.size() == 1, "Only one column can be indexed for full-text index.");
+    if (metaClient.getTableType() != HoodieTableType.COPY_ON_WRITE) {
+      throw new HoodieMetadataIndexException(String.format(
+          "Cannot create full-text index '%s': only COPY_ON_WRITE tables are supported.", userIndexName));
+    }
+    if (metaClient.getTableConfig().getRecordMergeMode() == RecordMergeMode.CUSTOM) {
+      throw new HoodieMetadataIndexException(String.format(
+          "Cannot create full-text index '%s': CUSTOM merge mode can produce values that are in no written record, "
+              + "so the index could miss matches.", userIndexName));
+    }
+    String columnName = columns.keySet().iterator().next();
+    HoodieSchema tableSchema = new TableSchemaResolver(metaClient).getTableSchema();
+    Pair<String, HoodieSchemaField> fieldSchemaPair = HoodieSchemaUtils.getNestedField(tableSchema, columnName)
+        .orElseThrow(() -> new HoodieMetadataIndexException(String.format(
+            "Cannot create full-text index '%s': Column '%s' does not exist in the table schema.", userIndexName, columnName)));
+    if (fieldSchemaPair.getRight().schema().getNonNullType().getType() != HoodieSchemaType.STRING) {
+      throw new HoodieMetadataIndexException(String.format(
+          "Cannot create full-text index '%s': Column '%s' must be a STRING column.", userIndexName, columnName));
+    }
+    Map<String, String> indexOptions = new HashMap<>(options);
+    indexOptions.putIfAbsent(FullTextIndexUtils.OPTION_TOKENIZER_VERSION, String.valueOf(FullTextIndexUtils.TOKENIZER_VERSION));
+    validateFullTextIndexOption(userIndexName, indexOptions, FullTextIndexUtils.OPTION_DENSE_RATIO, v -> Double.parseDouble(v) > 0 && Double.parseDouble(v) <= 1);
+    validateFullTextIndexOption(userIndexName, indexOptions, "file_group_count", v -> Integer.parseInt(v) > 0);
+    return HoodieIndexDefinition.newBuilder()
+        .withIndexName(fullIndexName)
+        .withIndexType(HoodieTableMetadataUtil.PARTITION_NAME_FULL_TEXT_INDEX)
+        .withIndexFunction(IDENTITY_TRANSFORM)
+        .withSourceFields(new ArrayList<>(columns.keySet()))
+        .withIndexOptions(indexOptions)
+        .withVersion(HoodieIndexVersion.getCurrentVersion(metaClient.getTableConfig().getTableVersion(), MetadataPartitionType.FULL_TEXT_INDEX))
+        .build();
+  }
+
+  private static void validateFullTextIndexOption(String userIndexName, Map<String, String> options, String option,
+                                                  Predicate<String> valid) {
+    String value = options.get(option);
+    if (value == null) {
+      return;
+    }
+    boolean ok;
+    try {
+      ok = valid.test(value);
+    } catch (NumberFormatException e) {
+      ok = false;
+    }
+    if (!ok) {
+      throw new HoodieMetadataIndexException(String.format(
+          "Cannot create full-text index '%s': invalid value '%s' for option '%s'.", userIndexName, value, option));
+    }
   }
 
   static boolean indexExists(HoodieTableMetaClient metaClient, String indexName) {

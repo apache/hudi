@@ -67,6 +67,9 @@ case class CreateIndexCommand(table: CatalogTable,
       ValidationUtils.checkArgument(CreateIndexCommand.matchesRecordKeys(columnsMap.keySet().asScala.toSet, metaClient.getTableConfig),
         "Input columns should match configured record key columns: " + metaClient.getTableConfig.getRecordKeyFieldProp)
       new HoodieSparkIndexClient(sparkSession).create(metaClient, indexName, HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX, columnsMap, options.asJava, table.properties.asJava)
+    } else if (CreateIndexCommand.isFullTextIndexType(indexType)) {
+      new HoodieSparkIndexClient(sparkSession).create(metaClient, indexName, HoodieTableMetadataUtil.PARTITION_NAME_FULL_TEXT_INDEX,
+        columnsMap, options.asJava, table.properties.asJava)
     } else if (StringUtils.isNullOrEmpty(indexType)) {
       val columnNames = columnsMap.keySet().asScala.toSet
       val derivedIndexType: String = if (CreateIndexCommand.matchesRecordKeys(columnNames, metaClient.getTableConfig)) {
@@ -87,6 +90,9 @@ case class CreateIndexCommand(table: CatalogTable,
 }
 
 object CreateIndexCommand {
+
+  def isFullTextIndexType(indexType: String): Boolean =
+    indexType != null && (indexType.equalsIgnoreCase("full_text") || indexType.equalsIgnoreCase(HoodieTableMetadataUtil.PARTITION_NAME_FULL_TEXT_INDEX))
 
   /**
    * Returns true if the input columns are same as the set of the primary keys for the table.
