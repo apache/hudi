@@ -25,8 +25,10 @@ import org.apache.hudi.HoodieFileIndex;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.read.CustomPayloadForTesting;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
@@ -68,12 +70,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * the persisted config is authoritative, and a read must not return different rows because an
  * option was passed, or depending on which files a task happened to read first.
  *
- * <p>The table uses {@link RecordMergeMode#EVENT_TIME_ORDERING} on {@code ts}. Every key is first
- * written with {@code ts = 10} and value {@code A}, then updated with a lower {@code ts = 5} and
- * value {@code B}, which event time ordering must discard, so every read must return {@code A}.
- * All file groups are packed into a single task, so that later file groups of the task are read
- * after earlier ones have been set up. The table config of the relation must also be left as
- * persisted after the read.
+ * <p>The table orders by {@code ts}, through {@link RecordMergeMode#EVENT_TIME_ORDERING} or through a
+ * persisted custom payload. Every key is first written with {@code ts = 10} and value {@code A}, then
+ * updated with a lower {@code ts = 5} and value {@code B}, which the ordering must discard, so every read
+ * must return {@code A}. All file groups are packed into a single task, so that later file
+ * groups of the task are read after earlier ones have been set up. The table config of the relation
+ * must also be left as persisted after the read.
  */
 @Tag("functional")
 class TestReadOptionsDoNotOverrideTableConfig extends SparkClientFunctionalTestHarness {
@@ -117,23 +119,49 @@ class TestReadOptionsDoNotOverrideTableConfig extends SparkClientFunctionalTestH
 
   @Test
   void testMergeModeReadOptionDoesNotOverrideTableConfig() {
-    String basePath = writeTable();
+    String basePath = writeEventTimeOrderingTable();
     assertAllRowsKeepFirstValue(read(basePath, Collections.emptyMap()), "a read without options");
     Dataset<Row> df = read(basePath, Collections.singletonMap(HoodieTableConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.COMMIT_TIME_ORDERING.name()));
     assertAllRowsKeepFirstValue(df, "a read with " + HoodieTableConfig.RECORD_MERGE_MODE.key() + "=" + RecordMergeMode.COMMIT_TIME_ORDERING);
-    assertRelationTableConfigUnchanged(df);
+    assertEventTimeOrderingTableConfig(relationTableConfig(df));
   }
 
   @Test
   void testOrderingFieldsReadOptionDoesNotOverrideTableConfig() {
-    String basePath = writeTable();
+    String basePath = writeEventTimeOrderingTable();
     // other_ts orders the update after the insert; the persisted ordering field ts does not.
     Dataset<Row> df = read(basePath, Collections.singletonMap(HoodieTableConfig.ORDERING_FIELDS.key(), "other_ts"));
     assertAllRowsKeepFirstValue(df, "a read with " + HoodieTableConfig.ORDERING_FIELDS.key() + "=other_ts");
-    assertRelationTableConfigUnchanged(df);
+    assertEventTimeOrderingTableConfig(relationTableConfig(df));
   }
 
-  private String writeTable() {
+  /**
+   * The persisted payload class is looked up on a different path than the merge mode and ordering fields
+   * (see {@code ConfigUtils.getMergeProps}), so it gets its own table: a custom merge with
+   * {@link CustomPayloadForTesting}, which keeps the record with the higher {@code ts}.
+   */
+  @Test
+  void testPayloadClassReadOptionDoesNotOverrideTableConfig() {
+    Map<String, String> mergeOptions = new HashMap<>();
+    mergeOptions.put(HoodieWriteConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name());
+    mergeOptions.put(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), CustomPayloadForTesting.class.getName());
+    String basePath = writeTable(mergeOptions);
+    assertEquals(CustomPayloadForTesting.class.getName(), tableConfig(basePath).getPayloadClass());
+    assertAllRowsKeepFirstValue(read(basePath, Collections.emptyMap()), "a read without options");
+    // Overwriting with the latest write would keep the ts=5 update.
+    String overwritePayload = OverwriteWithLatestAvroPayload.class.getName();
+    Dataset<Row> df = read(basePath, Collections.singletonMap(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), overwritePayload));
+    assertAllRowsKeepFirstValue(df, "a read with " + HoodieTableConfig.PAYLOAD_CLASS_NAME.key() + "=" + overwritePayload);
+    assertEquals(CustomPayloadForTesting.class.getName(), relationTableConfig(df).getPayloadClass());
+  }
+
+  private String writeEventTimeOrderingTable() {
+    String basePath = writeTable(Collections.singletonMap(HoodieWriteConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.EVENT_TIME_ORDERING.name()));
+    assertEventTimeOrderingTableConfig(tableConfig(basePath));
+    return basePath;
+  }
+
+  private String writeTable(Map<String, String> mergeOptions) {
     String basePath = basePath();
     Map<String, String> options = new HashMap<>();
     options.put(HoodieTableConfig.NAME.key(), "merge_config_from_table");
@@ -141,17 +169,22 @@ class TestReadOptionsDoNotOverrideTableConfig extends SparkClientFunctionalTestH
     options.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "key");
     options.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "part");
     options.put(DataSourceWriteOptions.ORDERING_FIELDS().key(), "ts");
-    options.put(HoodieWriteConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.EVENT_TIME_ORDERING.name());
+    options.putAll(mergeOptions);
     options.put("hoodie.insert.shuffle.parallelism", "2");
     options.put("hoodie.upsert.shuffle.parallelism", "2");
     write(rows(10L, 1L, "A"), options, basePath);
     write(rows(5L, 2L, "B"), options, basePath);
-
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf()).build();
-    assertEquals(RecordMergeMode.EVENT_TIME_ORDERING, metaClient.getTableConfig().getRecordMergeMode());
-    assertEquals("ts", metaClient.getTableConfig().getOrderingFieldsStr().orElse(null));
     assertTrue(countLogFiles(tempDir) >= NUM_PARTITIONS, "Every file group should have a log file to merge");
     return basePath;
+  }
+
+  private HoodieTableConfig tableConfig(String basePath) {
+    return HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf()).build().getTableConfig();
+  }
+
+  private static void assertEventTimeOrderingTableConfig(HoodieTableConfig tableConfig) {
+    assertEquals(RecordMergeMode.EVENT_TIME_ORDERING, tableConfig.getRecordMergeMode());
+    assertEquals("ts", tableConfig.getOrderingFieldsStr().orElse(null));
   }
 
   private Dataset<Row> read(String basePath, Map<String, String> options) {
@@ -171,24 +204,22 @@ class TestReadOptionsDoNotOverrideTableConfig extends SparkClientFunctionalTestH
         .map(row -> row.getString(0) + "=" + row.getString(1) + "@ts" + row.getLong(2))
         .sorted()
         .collect(Collectors.toList());
-    assertTrue(overridden.isEmpty(), "With event time ordering on ts persisted in the table config, "
+    assertTrue(overridden.isEmpty(), "With the ordering on ts persisted in the table config, "
         + description + " must keep the ts=10 value A for every key, but these keys returned the lower-ts update: "
         + overridden);
   }
 
   /**
-   * The relation's meta client is the one the reader state is built from on the driver; the read options must not
-   * have been written into its table config.
+   * The table config of the relation's meta client, which the reader state is built from on the driver; the read
+   * options must not have been written into it.
    */
-  private static void assertRelationTableConfigUnchanged(Dataset<Row> df) {
+  private static HoodieTableConfig relationTableConfig(Dataset<Row> df) {
     LogicalPlan relationPlan = JavaConverters.seqAsJavaList(df.queryExecution().optimizedPlan().collectLeaves()).stream()
         .filter(plan -> plan instanceof LogicalRelation)
         .findFirst()
         .orElseThrow(() -> new AssertionError("No relation in the plan of the read"));
     HadoopFsRelation relation = (HadoopFsRelation) ((LogicalRelation) relationPlan).relation();
-    HoodieTableConfig tableConfig = ((HoodieFileIndex) relation.location()).metaClient().getTableConfig();
-    assertEquals(RecordMergeMode.EVENT_TIME_ORDERING, tableConfig.getRecordMergeMode());
-    assertEquals("ts", tableConfig.getOrderingFieldsStr().orElse(null));
+    return ((HoodieFileIndex) relation.location()).metaClient().getTableConfig();
   }
 
   private static List<Row> rows(long ts, long otherTs, String value) {
