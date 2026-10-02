@@ -29,7 +29,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieWriteConflictException;
-import org.apache.hudi.hadoop.fs.MetaFolderAccessRecordingFileSystem;
+import org.apache.hudi.hadoop.fs.RecordingLocalFileSystem;
+import org.apache.hudi.hadoop.fs.RecordingLocalFileSystem.Call;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.sink.compact.handler.DataTableCompactHandler;
 import org.apache.hudi.util.FlinkWriteClients;
@@ -403,23 +404,19 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
    */
   @Test
   void testCompactionResolvesSchemaOncePerInstant() throws Exception {
-    conf.setString("hadoop.fs.file.impl", MetaFolderAccessRecordingFileSystem.class.getName());
-    conf.setString("hadoop.fs.file.impl.disable.cache", "true");
-    MetaFolderAccessRecordingFileSystem.setTaskScope(TestWriteMergeOnReadWithCompact::isCompacting);
-    try {
+    conf.setString("hadoop." + RecordingLocalFileSystem.FILE_IMPL_KEY, RecordingLocalFileSystem.class.getName());
+    conf.setString("hadoop." + RecordingLocalFileSystem.DISABLE_CACHE_KEY, "true");
+    try (RecordingLocalFileSystem.Scope ignored = RecordingLocalFileSystem.withScope(TestWriteMergeOnReadWithCompact::isCompacting)) {
       TestHarness harness = preparePipeline()
           .consume(TestData.DATA_SET_INSERT)
           .checkpoint(1)
           .assertNextEvent(4, "par1,par2,par3,par4");
-      MetaFolderAccessRecordingFileSystem.reset();
+      RecordingLocalFileSystem.reset();
       // commits the instant, then schedules and executes a compaction of its four file groups
       harness.checkpointComplete(1);
-      List<MetaFolderAccessRecordingFileSystem.Access> accesses = MetaFolderAccessRecordingFileSystem.getTaskAccesses();
-      assertEquals(1, accesses.stream().filter(a -> isCompletedCommitFile(a.getPath())).count(),
-          MetaFolderAccessRecordingFileSystem.describeTaskAccesses());
+      assertEquals(1, RecordingLocalFileSystem.count(Call.inScope().and(TestWriteCopyOnWrite::isCompletedCommitFile)),
+          RecordingLocalFileSystem.describe(Call.inScope().and(Call.underMetaFolder())));
       harness.checkWrittenData(EXPECTED1).end();
-    } finally {
-      MetaFolderAccessRecordingFileSystem.setTaskScope(() -> false);
     }
   }
 

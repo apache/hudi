@@ -43,7 +43,8 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
-import org.apache.hudi.hadoop.fs.MetaFolderAccessRecordingFileSystem;
+import org.apache.hudi.hadoop.fs.RecordingLocalFileSystem;
+import org.apache.hudi.hadoop.fs.RecordingLocalFileSystem.Call;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.io.HoodieWriteMergeHandle;
@@ -498,30 +499,27 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
    */
   @Test
   void testTableStateLoadedOncePerInstant() throws Exception {
-    conf.setString("hadoop.fs.file.impl", MetaFolderAccessRecordingFileSystem.class.getName());
-    conf.setString("hadoop.fs.file.impl.disable.cache", "true");
-    MetaFolderAccessRecordingFileSystem.setTaskScope(TestWriteCopyOnWrite::isWritingBucket);
-    try {
+    conf.setString("hadoop." + RecordingLocalFileSystem.FILE_IMPL_KEY, RecordingLocalFileSystem.class.getName());
+    conf.setString("hadoop." + RecordingLocalFileSystem.DISABLE_CACHE_KEY, "true");
+    try (RecordingLocalFileSystem.Scope ignored = RecordingLocalFileSystem.withScope(TestWriteCopyOnWrite::isWritingBucket)) {
       TestHarness harness = preparePipeline()
           .consume(TestData.DATA_SET_INSERT)
           .checkpoint(1)
           .assertNextEvent()
           .checkpointComplete(1)
           .consume(TestData.DATA_SET_UPDATE_INSERT);
-      MetaFolderAccessRecordingFileSystem.reset();
+      RecordingLocalFileSystem.reset();
       // flushes one bucket per partition, four in all, to the second instant
       harness.checkpoint(2).assertNextEvent(4, "par1,par2,par3,par4");
-      List<MetaFolderAccessRecordingFileSystem.Access> accesses = MetaFolderAccessRecordingFileSystem.getTaskAccesses();
-      String description = MetaFolderAccessRecordingFileSystem.describeTaskAccesses();
-      assertEquals(1, accesses.stream().filter(a -> a.getPath().endsWith(HoodieTableConfig.HOODIE_PROPERTIES_FILE)).count(), description);
-      assertEquals(1, accesses.stream().filter(a -> isCompletedCommitFile(a.getPath())).count(), description);
+      String description = RecordingLocalFileSystem.describe(Call.inScope().and(Call.underMetaFolder()));
+      assertEquals(1, RecordingLocalFileSystem.count(Call.inScope().and(Call.pathEndsWith(HoodieTableConfig.HOODIE_PROPERTIES_FILE))), description);
+      assertEquals(1, RecordingLocalFileSystem.count(Call.inScope().and(TestWriteCopyOnWrite::isCompletedCommitFile)), description);
       // every bucket reloads the timeline, so that the file system view of its write handles is not behind the timeline server
-      assertEquals(4, accesses.stream().filter(a -> a.getOperation().equals("listStatus") && a.getPath().endsWith("/.hoodie/timeline")).count(), description);
+      assertEquals(4, RecordingLocalFileSystem.count(
+          Call.inScope().and(Call.operation("listStatus")).and(Call.pathEndsWith("/.hoodie/timeline"))), description);
       harness.checkpointComplete(2)
           .checkWrittenData(EXPECTED2)
           .end();
-    } finally {
-      MetaFolderAccessRecordingFileSystem.setTaskScope(() -> false);
     }
   }
 
@@ -542,32 +540,28 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     } else {
       conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
     }
-    conf.setString("hadoop.fs.file.impl", MetaFolderAccessRecordingFileSystem.class.getName());
-    conf.setString("hadoop.fs.file.impl.disable.cache", "true");
-    MetaFolderAccessRecordingFileSystem.setTaskScope(TestWriteCopyOnWrite::isRefreshingOnCheckpoint);
-    try {
+    conf.setString("hadoop." + RecordingLocalFileSystem.FILE_IMPL_KEY, RecordingLocalFileSystem.class.getName());
+    conf.setString("hadoop." + RecordingLocalFileSystem.DISABLE_CACHE_KEY, "true");
+    try (RecordingLocalFileSystem.Scope ignored = RecordingLocalFileSystem.withScope(TestWriteCopyOnWrite::isRefreshingOnCheckpoint)) {
       TestHarness harness = preparePipeline(conf)
           .consume(TestData.DATA_SET_INSERT)
           .checkpoint(1)
           .assertNextEvent()
           .checkpointComplete(1)
           .consume(TestData.DATA_SET_UPDATE_INSERT);
-      MetaFolderAccessRecordingFileSystem.reset();
+      RecordingLocalFileSystem.reset();
       harness.checkpoint(2)
           .assertNextEvent()
           .checkpointComplete(2);
       String dataMetaFolder = tempFile.toURI().getPath().replaceAll("/$", "") + "/.hoodie/";
-      List<MetaFolderAccessRecordingFileSystem.Access> accesses = MetaFolderAccessRecordingFileSystem.getTaskAccesses();
-      String description = MetaFolderAccessRecordingFileSystem.describeTaskAccesses();
-      assertEquals(isRecordLevelIndex ? 1 : 2, accesses.stream()
-          .filter(a -> a.getOperation().equals("listStatus") && a.getPath().endsWith(dataMetaFolder + "timeline")).count(), description);
+      String description = RecordingLocalFileSystem.describe(Call.inScope().and(Call.underMetaFolder()));
+      assertEquals(isRecordLevelIndex ? 1 : 2, RecordingLocalFileSystem.count(
+          Call.inScope().and(Call.operation("listStatus")).and(Call.pathEndsWith(dataMetaFolder + "timeline"))), description);
       if (!isRecordLevelIndex) {
-        assertEquals(1, accesses.stream()
-            .filter(a -> a.getPath().endsWith(dataMetaFolder + HoodieTableConfig.HOODIE_PROPERTIES_FILE)).count(), description);
+        assertEquals(1, RecordingLocalFileSystem.count(
+            Call.inScope().and(Call.pathEndsWith(dataMetaFolder + HoodieTableConfig.HOODIE_PROPERTIES_FILE))), description);
       }
       harness.checkWrittenData(EXPECTED2).end();
-    } finally {
-      MetaFolderAccessRecordingFileSystem.setTaskScope(() -> false);
     }
   }
 
@@ -582,7 +576,8 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .anyMatch(e -> e.getClassName().equals(StreamWriteFunction.class.getName()) && e.getMethodName().equals("writeRecords"));
   }
 
-  static boolean isCompletedCommitFile(String path) {
+  static boolean isCompletedCommitFile(Call call) {
+    String path = call.getPath();
     return path.contains("/.hoodie/timeline/")
         && (path.endsWith("." + HoodieTimeline.COMMIT_ACTION) || path.endsWith("." + HoodieTimeline.DELTA_COMMIT_ACTION));
   }
