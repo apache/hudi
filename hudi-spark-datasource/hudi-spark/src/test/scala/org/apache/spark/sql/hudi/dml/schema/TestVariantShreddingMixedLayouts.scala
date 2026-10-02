@@ -942,11 +942,9 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
         checkNestedExceptionContains(
           () => spark.sql(s"select id, cast(v as string), note from $tableName").collect())(
           "pushVariantIntoScan")
-        // The guard's empty-projection carve-out: count(*) reads no column data, and the query
-        // schema it would be checked against is the UNPRUNED table schema, variant included, so
-        // the guard must not run at all. Drop the requiredSchema.nonEmpty gate at any of its five
-        // sites and this count fails on the shredded file.
-        checkAnswer(s"select count(*) from $tableName")(Seq(1))
+        // count(*) is deliberately not pinned: it fails on any schema-on-read variant table once
+        // an internal schema is committed (#20139). Previously this stayed green only because #20140
+        // leaked the query-local vectorization fallback into the Spark session.
       }
 
       // Known #18285 residue, documented rather than pinned: the schema-on-read DDL also
@@ -2318,6 +2316,31 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
         StructField("s", StructType(Array(StructField("inner", projectionStruct))))))
       assert(!format.supportBatch(spark, nestedProjection),
         "a nested variant projection struct must fall back to row-based reads")
+    }
+  }
+
+  test("Variant read does not mutate the session vectorized reader configuration") {
+    assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
+
+    withVariantTable(
+      "vectorized reader session conf",
+      "cow",
+      recordTypes = Seq(HoodieRecordType.SPARK)) { (tableName, _, _) =>
+
+      spark.sql(
+        s"""insert into $tableName values (1, parse_json('{"key":"v1"}'), 1000)""")
+
+      withSQLConf("spark.sql.parquet.enableVectorizedReader" -> "true") {
+        assert(spark.conf.get("spark.sql.parquet.enableVectorizedReader") == "true")
+
+        checkAnswer(
+          s"select id, cast(v as string) from $tableName")(
+          Seq(1, """{"key":"v1"}"""))
+
+        assert(
+          spark.conf.get("spark.sql.parquet.enableVectorizedReader") == "true",
+          "A query-local vectorization fallback must not mutate the session configuration")
+      }
     }
   }
 
