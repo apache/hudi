@@ -19,15 +19,31 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
-import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 import java.io.Serializable;
 
-@AllArgsConstructor
 @Getter
 public class CloudObjectMetadata implements Serializable {
 
+  public static final long UNKNOWN_MODIFICATION_TIME = 0L;
+
   private final String path;
   private final long size;
+  /**
+   * Epoch millis at which the notification reported the object was written, or
+   * {@link #UNKNOWN_MODIFICATION_TIME} when the events carry no usable timestamp. Readers that
+   * need a timestamp must fall back to interrogating the object when this is unknown.
+   */
+  private final long modificationTime;
+
+  public CloudObjectMetadata(String path, long size) {
+    this(path, size, UNKNOWN_MODIFICATION_TIME);
+  }
+
+  public CloudObjectMetadata(String path, long size, long modificationTime) {
+    this.path = path;
+    this.size = size;
+    this.modificationTime = modificationTime;
+  }
 }
