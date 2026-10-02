@@ -200,11 +200,10 @@ case class HoodieFileIndex(spark: SparkSession,
       partitionFilters
     }
 
-    val slices = filterFileSlices(dataFilters, effectivePartitionFilters).flatMap(
-      { case (partitionOpt, fileSlices) =>
-        fileSlices.filter(!_.isEmpty).map(fs => (InternalRow.fromSeq(partitionOpt.get.getValues), fs))
-      }
-    )
+    val slices = filterFileSlices(dataFilters, effectivePartitionFilters).map {
+      case (partitionOpt, fileSlices) =>
+        (InternalRow.fromSeq(partitionOpt.get.getValues), fileSlices.filter(!_.isEmpty))
+    }
     prepareFileSlices(slices)
   }
 
@@ -213,24 +212,26 @@ case class HoodieFileIndex(spark: SparkSession,
     HoodieFileIndex.extractNestedPartitionFilters(dataFilters, getPartitionColumns.toSet)
   }
 
-  protected def prepareFileSlices(slices: Seq[(InternalRow, FileSlice)]): Seq[PartitionDirectory] = {
+  protected def prepareFileSlices(slices: Seq[(InternalRow, Seq[FileSlice])]): Seq[PartitionDirectory] = {
     hasPushedDownPartitionPredicates = true
 
-    val prunedPartitionsAndFilteredFileSlices = slices.map {
-      case (partitionValues, fileSlice) =>
+    val prunedPartitionsAndFilteredFileSlices = slices.filter(_._2.nonEmpty).flatMap {
+      case (partitionValues, fileSlices) =>
         if (shouldEmbedFileSlices) {
-          PartitionDirectoryConverter.convertFileSliceToPartitionDirectory(
+          PartitionDirectoryConverter.convertFileSlicesToPartitionDirectories(
             partitionValues,
-            fileSlice,
+            fileSlices,
             hoodieConfig)
         } else {
-          val baseFileStatusOpt = getBaseFileInfo(Option.apply(fileSlice.getBaseFile.orElse(null)))
-          val logPathInfoStream = fileSlice.getLogFiles.map[StoragePathInfo](JFunction.toJavaFunction[HoodieLogFile, StoragePathInfo](lf => lf.getPathInfo))
-          val files = logPathInfoStream.collect(Collectors.toList[StoragePathInfo]).asScala
-          baseFileStatusOpt.foreach(f => files.append(f))
-          val allCandidateFiles = files.map(fileInfo => new FileStatus(fileInfo.getLength, fileInfo.isDirectory, 0, fileInfo.getBlockSize,
-            fileInfo.getModificationTime, new Path(fileInfo.getPath.toUri))).toSeq
-          sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(partitionValues, allCandidateFiles)
+          val allCandidateFiles = fileSlices.flatMap { fileSlice =>
+            val baseFileStatusOpt = getBaseFileInfo(Option.apply(fileSlice.getBaseFile.orElse(null)))
+            val logPathInfoStream = fileSlice.getLogFiles.map[StoragePathInfo](JFunction.toJavaFunction[HoodieLogFile, StoragePathInfo](lf => lf.getPathInfo))
+            val files = logPathInfoStream.collect(Collectors.toList[StoragePathInfo]).asScala
+            baseFileStatusOpt.foreach(f => files.append(f))
+            files.map(fileInfo => new FileStatus(fileInfo.getLength, fileInfo.isDirectory, 0, fileInfo.getBlockSize,
+              fileInfo.getModificationTime, new Path(fileInfo.getPath.toUri)))
+          }
+          Seq(sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(partitionValues, allCandidateFiles))
         }
     }
 
