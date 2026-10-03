@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
@@ -392,8 +393,11 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
     }
 
     try {
-      Map<String, List<HoodieWriteStat>> writeStatsByFileId = allWriteStats.stream().collect(Collectors.groupingBy(HoodieWriteStat::getFileId));
-      int parallelism = Math.max(Math.min(writeStatsByFileId.size(), metadataConfig.getRecordIndexMaxParallelism()), 1);
+      // a file group is identified by its partition and file id, the file id alone is only unique within a partition for files
+      // written outside Hudi
+      Map<HoodieFileGroupId, List<HoodieWriteStat>> writeStatsByFileGroupId = allWriteStats.stream()
+          .collect(Collectors.groupingBy(writeStat -> new HoodieFileGroupId(writeStat.getPartitionPath(), writeStat.getFileId())));
+      int parallelism = Math.max(Math.min(writeStatsByFileGroupId.size(), metadataConfig.getRecordIndexMaxParallelism()), 1);
       String basePath = dataTableMetaClient.getBasePath().toString();
       StorageConfiguration storageConfiguration = dataTableMetaClient.getStorageConf();
       // a table without record keys, e.g. one that registers files written outside Hudi, keys every row by file path and position
@@ -401,10 +405,10 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
       Option<HoodieSchema> writerSchemaOpt = HoodieTableMetadataUtil.tryResolveSchemaForTable(dataTableMetaClient);
       Option<HoodieSchema> finalWriterSchemaOpt = writerSchemaOpt;
       ReaderContextFactory<T> readerContextFactory = engineContext.getReaderContextFactory(dataTableMetaClient);
-      HoodieData<HoodieRecord> recordIndexRecords = engineContext.parallelize(new ArrayList<>(writeStatsByFileId.entrySet()), parallelism)
-          .flatMap(writeStatsByFileIdEntry -> {
-            String fileId = writeStatsByFileIdEntry.getKey();
-            List<HoodieWriteStat> writeStats = writeStatsByFileIdEntry.getValue();
+      HoodieData<HoodieRecord> recordIndexRecords = engineContext.parallelize(new ArrayList<>(writeStatsByFileGroupId.entrySet()), parallelism)
+          .flatMap(writeStatsByFileGroupIdEntry -> {
+            String fileId = writeStatsByFileGroupIdEntry.getKey().getFileId();
+            List<HoodieWriteStat> writeStats = writeStatsByFileGroupIdEntry.getValue();
             // Partition the write stats into base file and log file write stats
             List<HoodieWriteStat> baseFileWriteStats = writeStats.stream()
                 .filter(writeStat -> FSUtils.isBaseFile(new StoragePath(writeStat.getPath())))
