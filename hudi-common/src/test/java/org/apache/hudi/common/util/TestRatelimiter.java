@@ -20,9 +20,17 @@ package org.apache.hudi.common.util;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -33,25 +41,75 @@ public class TestRatelimiter {
   @Test
   public void testRateLimiterWithNoThrottling() throws InterruptedException {
     RateLimiter limiter =  RateLimiter.create(1000, TimeUnit.SECONDS);
-    long start = System.currentTimeMillis();
-    assertEquals(true, limiter.tryAcquire(1000));
-    // Sleep to represent some operation
-    Thread.sleep(500);
-    long end = System.currentTimeMillis();
-    // With a large permit limit, there shouldn't be any throttling of operations
-    assertTrue((end - start) < TimeUnit.SECONDS.toMillis(2));
+    try {
+      long start = System.currentTimeMillis();
+      assertEquals(true, limiter.tryAcquire(1000));
+      // Sleep to represent some operation
+      Thread.sleep(500);
+      long end = System.currentTimeMillis();
+      // With a large permit limit, there shouldn't be any throttling of operations
+      assertTrue((end - start) < TimeUnit.SECONDS.toMillis(2));
+    } finally {
+      limiter.stop();
+    }
   }
 
   @Test
   public void testRateLimiterWithThrottling() throws InterruptedException {
     RateLimiter limiter =  RateLimiter.create(100, TimeUnit.SECONDS);
-    long start = System.currentTimeMillis();
-    assertEquals(true, limiter.tryAcquire(400));
-    // Sleep to represent some operation
-    Thread.sleep(500);
-    long end = System.currentTimeMillis();
-    // As size of operations is more than the maximum permits per second,
-    // whole execution should be greater than 1 second
-    assertTrue((end - start) >= TimeUnit.SECONDS.toMillis(2));
+    try {
+      long start = System.currentTimeMillis();
+      assertEquals(true, limiter.tryAcquire(400));
+      // Sleep to represent some operation
+      Thread.sleep(500);
+      long end = System.currentTimeMillis();
+      // As size of operations is more than the maximum permits per second,
+      // whole execution should be greater than 1 second
+      assertTrue((end - start) >= TimeUnit.SECONDS.toMillis(2));
+    } finally {
+      limiter.stop();
+    }
+  }
+
+  @Test
+  public void testCustomReleasePeriod() {
+    RateLimiter limiter = RateLimiter.create(1, 100, TimeUnit.MILLISECONDS);
+    try {
+      assertTrue(limiter.acquire(1));
+      long start = System.nanoTime();
+      assertTimeoutPreemptively(Duration.ofSeconds(1), () -> assertTrue(limiter.acquire(1)));
+      assertTrue(System.nanoTime() - start >= TimeUnit.MILLISECONDS.toNanos(50));
+    } finally {
+      limiter.stop();
+    }
+  }
+
+  @Test
+  public void testInvalidConfigurationIsRejected() {
+    assertThrows(IllegalArgumentException.class, () -> RateLimiter.create(0, TimeUnit.SECONDS));
+    assertThrows(IllegalArgumentException.class, () -> RateLimiter.create(1, 0, TimeUnit.SECONDS));
+    assertThrows(IllegalArgumentException.class, () -> RateLimiter.create(1, 1, null));
+  }
+
+  @Test
+  public void testStopIsIdempotentAndUnblocksAcquire() throws Exception {
+    RateLimiter limiter = RateLimiter.create(1, 1, TimeUnit.DAYS);
+    ExecutorService executor = Executors.newSingleThreadExecutor();
+    try {
+      assertTrue(limiter.acquire(1));
+      Future<Boolean> blockedAcquire = executor.submit(() -> limiter.acquire(1));
+
+      limiter.stop();
+      limiter.stop();
+
+      ExecutionException exception = assertThrows(
+          ExecutionException.class, () -> blockedAcquire.get(1, TimeUnit.SECONDS));
+      assertInstanceOf(IllegalStateException.class, exception.getCause());
+      assertTrue(limiter.isStopped());
+    } finally {
+      limiter.stop();
+      executor.shutdownNow();
+      assertTrue(executor.awaitTermination(1, TimeUnit.SECONDS));
+    }
   }
 }

@@ -21,13 +21,12 @@ package org.apache.hudi.sink.transform;
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.util.RateLimiter;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.sink.utils.FlinkRateLimiterFactory;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
-
-import java.util.concurrent.TimeUnit;
 
 /**
  * Function that transforms RowData to a {@code HoodieFlinkInternalRow} with RateLimit.
@@ -37,7 +36,7 @@ public class RowDataToHoodieFunctionWithRateLimit<I extends RowData, O extends H
   /**
    * Total rate limit per second for this job.
    */
-  private final double totalLimit;
+  private final long totalLimit;
 
   /**
    * Rate limit per second for per task.
@@ -52,13 +51,28 @@ public class RowDataToHoodieFunctionWithRateLimit<I extends RowData, O extends H
   @Override
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
-    this.rateLimiter =
-        RateLimiter.create((int) totalLimit / RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext()), TimeUnit.SECONDS);
+    this.rateLimiter = FlinkRateLimiterFactory.create(
+        totalLimit, RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext()));
   }
 
   @Override
   public O map(I i) throws Exception {
     rateLimiter.acquire(1);
     return super.map(i);
+  }
+
+  @Override
+  public void close() throws Exception {
+    try {
+      super.close();
+    } finally {
+      if (rateLimiter != null) {
+        rateLimiter.stop();
+      }
+    }
+  }
+
+  RateLimiter getRateLimiter() {
+    return rateLimiter;
   }
 }
