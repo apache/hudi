@@ -20,8 +20,10 @@
 package org.apache.hudi.core.io.storage;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.io.hfile.CachingHFileReaderImpl;
 import org.apache.hudi.io.hfile.HFileReader;
 import org.apache.hudi.io.hfile.HFileReaderImpl;
 import org.apache.hudi.storage.HoodieStorage;
@@ -40,6 +42,7 @@ import java.io.IOException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -70,6 +73,7 @@ class TestHFileReaderFactory {
   @BeforeEach
   void setUp() {
     properties = new TypedProperties();
+    properties.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(), "false");
   }
 
   @Test
@@ -199,10 +203,6 @@ class TestHFileReaderFactory {
 
   @Test
   void testBuilder_WithoutPropertiesProvided_ShouldUseDefaultProperties() throws IOException {
-    when(mockStorage.getPathInfo(mockPath)).thenReturn(mockPathInfo);
-    when(mockPathInfo.getLength()).thenReturn(1024L);
-    when(mockStorage.openSeekable(mockPath, false)).thenReturn(mockInputStream);
-
     // Not providing properties, should use defaults
     HFileReaderFactory factory = HFileReaderFactory.builder()
         .withStorage(mockStorage)
@@ -211,5 +211,52 @@ class TestHFileReaderFactory {
 
     HFileReader result = factory.createHFileReader();
     assertNotNull(result);
+  }
+
+  @Test
+  void testCreateHFileReader_WithCachingEnabled_ShouldLazilyOpenStream() throws IOException {
+    properties.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(), "true");
+
+    HFileReaderFactory factory = HFileReaderFactory.builder()
+        .withStorage(mockStorage)
+        .withProps(properties)
+        .withPath(mockPath)
+        .build();
+
+    HFileReader reader = factory.createHFileReader();
+    assertInstanceOf(CachingHFileReaderImpl.class, reader);
+    verify(mockStorage, never()).openSeekable(mockPath, false);
+  }
+
+  @Test
+  void testCreateHFileReader_WithoutCaching_ShouldSurfaceFileSizeIOException() throws IOException {
+    IOException sizeFailure = new IOException("size lookup failed");
+    when(mockStorage.getPathInfo(mockPath)).thenThrow(sizeFailure);
+
+    HFileReaderFactory factory = HFileReaderFactory.builder()
+        .withStorage(mockStorage)
+        .withProps(properties)
+        .withPath(mockPath)
+        .build();
+
+    assertSame(sizeFailure, assertThrows(IOException.class, factory::createHFileReader));
+    verify(mockStorage, never()).openSeekable(mockPath, false);
+  }
+
+  @Test
+  void testCreateHFileReader_WithCaching_ShouldSurfaceFileSizeIOExceptionOnFirstRead() throws IOException {
+    properties.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(), "true");
+    IOException sizeFailure = new IOException("size lookup failed");
+    when(mockStorage.getPathInfo(mockPath)).thenThrow(sizeFailure);
+
+    HFileReaderFactory factory = HFileReaderFactory.builder()
+        .withStorage(mockStorage)
+        .withProps(properties)
+        .withPath(mockPath)
+        .build();
+
+    HFileReader reader = factory.createHFileReader();
+    assertSame(sizeFailure, assertThrows(IOException.class, reader::initializeMetadata));
+    verify(mockStorage, never()).openSeekable(mockPath, false);
   }
 }

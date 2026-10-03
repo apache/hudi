@@ -32,6 +32,8 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.apache.hudi.io.hfile.DataSize.MAGIC_LENGTH;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_BYTE;
@@ -215,6 +217,33 @@ public abstract class HFileBlock {
 
   public int getOnDiskSizeWithHeader() {
     return onDiskSizeWithoutHeader + HFILEBLOCK_HEADER_SIZE;
+  }
+
+  /**
+   * Returns this block's content span for byte-weighted caching. The backing array can hold
+   * several blocks, so weighing its full length would over-count a block sliced from it.
+   */
+  public int heapSize() {
+    int contentSpan = HFILEBLOCK_HEADER_SIZE + Math.max(0, uncompressedSizeWithoutHeader);
+    if (contentSpan > HFILEBLOCK_HEADER_SIZE) {
+      return contentSpan;
+    }
+    return byteBuff != null ? byteBuff.length : getOnDiskSizeWithHeader();
+  }
+
+  /**
+   * Returns the byte arrays this block keeps alive: the array it was sliced from and, for a
+   * compressed block, the buffer it unpacked into.
+   */
+  List<byte[]> retainedBuffers() {
+    List<byte[]> buffers = new ArrayList<>(2);
+    if (byteBuff != null) {
+      buffers.add(byteBuff);
+    }
+    if (compressedByteBuff != null) {
+      buffers.add(compressedByteBuff);
+    }
+    return buffers;
   }
 
   /**

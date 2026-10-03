@@ -820,6 +820,10 @@ public class ConfigUtils {
         getStringWithAltKeys(options, HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED));
     config.setValue(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE,
         getStringWithAltKeys(options, HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE));
+    config.setValue(HoodieReaderConfig.HFILE_LOAD_ON_OPEN_CACHE_SIZE,
+        getStringWithAltKeys(options, HoodieReaderConfig.HFILE_LOAD_ON_OPEN_CACHE_SIZE));
+    config.setValue(HoodieReaderConfig.HFILE_BLOCK_CACHE_MAX_WEIGHT_MB,
+        getStringWithAltKeys(options, HoodieReaderConfig.HFILE_BLOCK_CACHE_MAX_WEIGHT_MB));
     config.setValue(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES,
         getStringWithAltKeys(options, HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES));
     return config;
@@ -883,11 +887,13 @@ public class ConfigUtils {
         DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
         Boolean.toString(commonConfig.isBitCaskDiskMapCompressionEnabled()));
     props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(),
-        shouldReuse ? "true" : metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED));
-    props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(),
         metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED));
     props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key(),
         metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE));
+    props.setProperty(HoodieReaderConfig.HFILE_LOAD_ON_OPEN_CACHE_SIZE.key(),
+        metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_LOAD_ON_OPEN_CACHE_SIZE));
+    props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_MAX_WEIGHT_MB.key(),
+        metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_MAX_WEIGHT_MB));
     props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.key(),
         metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES));
     props.setProperty(HoodieMetadataConfig.METADATA_FILE_CACHE_MAX_SIZE_MB.key(),
