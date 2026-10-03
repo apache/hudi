@@ -48,6 +48,7 @@ import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hive.ddl.HMSDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
+import org.apache.hudi.hive.replication.GlobalHiveSyncTool;
 import org.apache.hudi.hive.testutils.HiveTestUtil;
 import org.apache.hudi.hive.util.IMetaStoreClientUtil;
 import org.apache.hudi.metrics.MetricsReporterType;
@@ -1065,6 +1066,60 @@ public class TestHiveSyncTool {
         "The one partition we wrote should be added to hive");
     assertEquals(commitTime2, hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get(),
         "The last commit that was synced should be 101");
+  }
+
+  @ParameterizedTest
+  @MethodSource("syncMode")
+  void testSyncStatsDescribeWhatTheSyncDid(String syncMode) throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    HiveTestUtil.createCOWTable("100", 5, true);
+    reInitHiveSyncClient();
+
+    HiveSyncStats stats = syncAndGetStats();
+    assertTrue(stats.getSchemaReadMs().isPresent());
+    assertTrue(stats.getPartitionScanMs().isPresent());
+    assertTrue(stats.getMetastoreMs().isPresent());
+    assertEquals(5, stats.getPartitionsAdded());
+    assertFalse(stats.isSchemaEvolved(), "Creating the table is not a schema evolution");
+
+    HiveTestUtil.addCOWPartitions(1, false, true, ZonedDateTime.now().plusDays(6), "101");
+    reInitHiveSyncClient();
+    stats = syncAndGetStats();
+    assertEquals(1, stats.getPartitionsAdded());
+    assertTrue(stats.isSchemaEvolved(), "The partition written with the evolved schema changes the table's schema");
+
+    stats = syncAndGetStats();
+    assertFalse(stats.getSchemaReadMs().isPresent(), "A table already synced to the latest commit reads no schema");
+    assertFalse(stats.getPartitionScanMs().isPresent(), "A table already synced to the latest commit looks for no partitions");
+    assertTrue(stats.getMetastoreMs().isPresent());
+    assertEquals(0, stats.getPartitionsAdded());
+    assertFalse(stats.isSchemaEvolved());
+  }
+
+  @ParameterizedTest
+  @MethodSource("syncMode")
+  void testSyncStatsCountAMergeOnReadTableOnce(String syncMode) throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    HiveTestUtil.createMORTable("100", "101", 5, true, true);
+    reInitHiveSyncClient();
+
+    HiveSyncStats stats = syncAndGetStats();
+    assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_READ_OPTIMIZED_TABLE));
+    assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE));
+    assertEquals(5, stats.getPartitionsAdded(),
+        "The read-optimized and snapshot tables get the same 5 partitions, which count once");
+  }
+
+  @Test
+  void testSyncStatsOfGlobalHiveSyncTool() throws Exception {
+    HiveTestUtil.createCOWTable("100", 5, true);
+
+    try (GlobalHiveSyncTool tool = new GlobalHiveSyncTool(hiveSyncProps, HiveTestUtil.getHiveConf())) {
+      tool.syncHoodieTable();
+      HiveSyncStats stats = tool.getSyncStats();
+      assertTrue(stats.getMetastoreMs().isPresent());
+      assertEquals(5, stats.getPartitionsAdded());
+    }
   }
 
   @ParameterizedTest
@@ -2695,6 +2750,13 @@ public class TestHiveSyncTool {
 
     assertEquals(updatedDb, hiveClient.getDatabaseName(), "Database name in sync client should match");
     assertEquals(updatedTable, hiveClient.getTableName(), "Table name in sync client should match");
+  }
+
+  private HiveSyncStats syncAndGetStats() {
+    hiveSyncTool.syncHoodieTable();
+    HiveSyncStats stats = hiveSyncTool.getSyncStats();
+    reInitHiveSyncClient();
+    return stats;
   }
 
   private void reSyncHiveTable() {
