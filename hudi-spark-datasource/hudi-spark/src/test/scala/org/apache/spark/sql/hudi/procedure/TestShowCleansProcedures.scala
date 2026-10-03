@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hudi.HoodieSparkUtils
+import org.apache.hudi.common.table.HoodieTableVersion
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import scala.collection.JavaConverters._
@@ -479,10 +480,9 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
     }
   }
 
-  Seq(6, 9).foreach { tableVersion =>
+  Seq(6, HoodieTableVersion.current().versionCode()).foreach { tableVersion =>
     test(s"Test show_clean_plans with an archived clean instant - table version $tableVersion") {
-      withSQLConf("hoodie.clean.automatic" -> "false", "hoodie.archive.automatic" -> "false",
-        "hoodie.write.table.version" -> tableVersion.toString) {
+      withSQLConf("hoodie.clean.automatic" -> "false", "hoodie.archive.automatic" -> "false") {
         withTempDir { tmp =>
           val tableName = generateTableName
           val tablePath = tmp.getCanonicalPath
@@ -516,8 +516,7 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
             if (i > 0) {
               spark.sql(s"update $tableName set price = ${12 + i} where id = 1")
             }
-            spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1, " +
-              s"options => 'hoodie.write.table.version=$tableVersion')").collect()
+            spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)").collect()
           }
 
           // This table is not partitioned, so all three procedures return one row per clean.
@@ -533,7 +532,7 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
           spark.sql(s"call archive_commits(table => '$tableName', min_commits => 2, max_commits => 3," +
             s" retain_commits => 1, enable_metadata => false, options => 'hoodie.write.table.version=$tableVersion')").collect()
 
-          // Precondition: archival must have split the two cleans across the two timelines,
+          // Precondition: archival must have split the cleans across the active and archived timelines,
           // otherwise the archived branch below is never exercised and the test passes vacuously.
           val metaClient = createMetaClient(spark, tablePath)
           assertResult(tableVersion)(metaClient.getTableConfig.getTableVersion.versionCode())
@@ -556,6 +555,11 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
             assertResult(beforeArchive(procedure))(allRows)
             val limitedRows = spark.sql(s"call $procedure(table => '$tableName', showArchived => true, limit => 1)").collect().toSeq
             assertResult(allRows.take(1))(limitedRows)
+            val archiveLimit = activeCleans.size + 1
+            val archivedLimitedRows = spark.sql(
+              s"call $procedure(table => '$tableName', showArchived => true, limit => $archiveLimit)").collect().toSeq
+            assertResult(allRows.take(archiveLimit))(archivedLimitedRows)
+            assertResult(archivedCleans.max)(archivedLimitedRows.last.getString(0))
             val timeColumn = if (procedure == "show_clean_plans") "plan_time" else "clean_time"
             val filteredRows = spark.sql(
               s"""call $procedure(table => '$tableName', showArchived => true,

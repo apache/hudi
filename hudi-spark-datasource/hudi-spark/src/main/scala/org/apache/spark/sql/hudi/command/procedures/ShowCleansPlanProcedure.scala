@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.{HoodieCLIUtils, SparkAdapterSupport}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{HoodieInstant, TimelineLayout}
+import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.exception.HoodieException
 
 import org.apache.spark.internal.Logging
@@ -183,28 +183,10 @@ class ShowCleansPlanProcedure extends BaseProcedure with ProcedureBuilder with S
     require(limit > 0, s"Limit must be positive, got: $limit")
   }
 
-  private def getCleanerPlans(metaClient: HoodieTableMetaClient, limit: Int, showArchived: Boolean): Seq[Row] = {
-    val activeTimeline = metaClient.getActiveTimeline
-    val activeCleanInstants = getSortedCleanInstants(activeTimeline).take(limit)
-    val activeRows = activeCleanInstants.map(processCleanPlan(metaClient, activeTimeline, _))
-
-    if (showArchived) {
-      val archivedTimeline = ShowCleansProcedure.getArchivedCleanTimeline(metaClient, loadPlans = true, limit = limit)
-      val archivedCleanInstants = getSortedCleanInstants(archivedTimeline)
-      val archivedRows = archivedCleanInstants.map(processCleanPlan(metaClient, archivedTimeline, _))
-      (activeRows ++ archivedRows).sortWith((a, b) => a.getString(0) > b.getString(0)).take(limit)
-    } else {
-      activeRows
-    }
-  }
-
-  private def getSortedCleanInstants(timeline: org.apache.hudi.common.table.timeline.HoodieTimeline): Seq[HoodieInstant] = {
-    // Get both inflight and completed clean instants
-    val cleanInstants = timeline.getCleanerTimeline.getInstants.asScala.toSeq
-    val layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion)
-    val comparator = layout.getInstantComparator.requestedTimeOrderedComparator.reversed()
-
-    cleanInstants.sortWith((a, b) => comparator.compare(a, b) < 0)
+  private[procedures] def getCleanerPlans(metaClient: HoodieTableMetaClient, limit: Int, showArchived: Boolean): Seq[Row] = {
+    val timeline = ShowCleansProcedure.getCleanTimeline(metaClient, showArchived, loadPlans = true,
+      limit, batchSize = Math.min(limit, 32))
+    timeline.getReverseOrderedInstants.iterator().asScala.toSeq.map(processCleanPlan(metaClient, timeline, _))
   }
 
   private def processCleanPlan(metaClient: HoodieTableMetaClient,
