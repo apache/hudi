@@ -15,17 +15,16 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 -->
-# Flink question flow — routing and safety foundation
+# Flink question flow — first executable SQL sink path
 
 Load this file only after the user selects Flink. Do not load it for Spark or
 HoodieStreamer requests.
 
-This is the PR1 flow. It classifies the request and fails closed before any executable Flink
-SQL, connector options, or submit command is generated. PR2 adds the first executable Flink SQL
-sink path.
+The PR1 gates remain the entry to this flow. PR2 adds one bounded executable path after those
+gates: a new-table, confirmed-single-writer, append-only COW streaming sink using Flink SQL.
 
 Maintain a findings list throughout this flow. Adding a finding does not end the interview while
-another independent PR1 gate can still be evaluated. Ask dependent follow-ups only when their
+another independent gate can still be evaluated. Ask dependent follow-ups only when their
 prerequisites are known, then choose the single final status after all applicable gates. This is
 how one assessment preserves simultaneous `INCOMPLETE`, `REVIEW_REQUIRED`, and `BLOCKED` reasons.
 
@@ -85,7 +84,8 @@ independent writer. A separately deployed compactor or clustering job is.
 - Another independent writer → `REVIEW_REQUIRED` with `FLINK_MULTI_WRITER_REVIEW`.
 - Not sure → `REVIEW_REQUIRED` with `FLINK_WRITER_MODEL_UNRESOLVED`.
 
-Do not recommend OCC, NBCC, a lock provider, or an index/concurrency combination in PR1.
+Do not recommend OCC, NBCC, a lock provider, or an index/concurrency combination on this bounded
+path.
 
 ## F3 — External catalog visibility
 
@@ -116,8 +116,8 @@ Flink catalog and metastore composition arrives in PR6. Do not reuse the Spark s
 > - **Yes — an existing Hudi schema or another authoritative representation**
 > - **No or not yet**
 
-PR1 records only whether authoritative schema evidence exists; it does not generate or validate
-DDL.
+This gate records whether authoritative schema evidence exists. The eligible path validates its
+bounded physical form in F7; this gate does not generate DDL.
 
 - A sufficient representation exists → record its form and provenance, then continue.
 - Missing, partial, or guessed schema → add `FLINK_PHYSICAL_SCHEMA_REQUIRED` with an `INCOMPLETE`
@@ -140,9 +140,9 @@ First ask whether existing logical records can change:
 > - **Yes — updates or deletes occur**
 > - **Not sure**
 
-- Mutable → collect no configuration in PR1. Record that identity and ordering are required, then
-  add `FLINK_MUTABLE_COW_DEFERRED` with a `BLOCKED` contribution. The mutable COW path arrives in
-  PR3. Continue any independent gate, including replay behavior, but do not ask append-only key
+- Mutable → collect no configuration on this path. Record that identity and ordering are required,
+  then add `FLINK_MUTABLE_COW_DEFERRED` with a `BLOCKED` contribution. The mutable COW path arrives
+  in PR3. Continue any independent gate, including replay behavior, but do not ask append-only key
   follow-ups.
 - Not sure → `INCOMPLETE` with `FLINK_MUTABILITY_REQUIRED`.
 - Append-only → ask the record-key posture question below.
@@ -178,9 +178,8 @@ For append-only input:
   - Not decided, unanswered, or the session ends before acceptance → add
     `FLINK_AUTO_KEY_ACCEPTANCE_REQUIRED` with an `INCOMPLETE` contribution.
 
-  Do not add `FLINK_EXECUTABLE_PATH_DEFERRED` for a pending or declined decision. If F6 says
-  replay copies must collapse or replay behavior is unknown, retain that F6 finding and do not
-  ask for acceptance of an ineligible auto-key path.
+  If F6 says replay copies must collapse or replay behavior is unknown, retain that F6 finding
+  and do not ask for acceptance of an ineligible auto-key path.
 - Not sure → `INCOMPLETE` with `FLINK_RECORD_KEY_POSTURE_REQUIRED`.
 
 ## F6 — Replay and backfill idempotence
@@ -199,13 +198,85 @@ For append-only input:
   stable key and an upsert-capable path.
 - Not sure → `REVIEW_REQUIRED` with `FLINK_REPLAY_BEHAVIOR_UNRESOLVED`.
 
-## PR1 completion
+## F7 — Physical table and source contract
 
-After all applicable gates, consult `flink-decision-overrides.md` for status precedence and
-`flink-config-templates.md` for the non-executable output envelope. Emit every finding in gate
-order and compute the summary status only once.
+Enter this stage only when F0-F6 have no status-contributing finding. Collect, without guessing:
 
-Only a request with no other finding that passes every safety gate ends PR1 as `BLOCKED` with
-`FLINK_EXECUTABLE_PATH_DEFERRED`. That status means the routing assessment succeeded but the first
-executable Flink SQL sink path is intentionally deferred to PR2. Never turn the safe-path result
-into a Spark configuration or an invented Flink configuration.
+- A concrete target table identifier and credential-free target path.
+- Physical target columns: name, Flink SQL type, and nullability.
+- Partition fields, or an explicit unpartitioned decision.
+- Stable record-key fields when F5 found a stable business key.
+- The existing source-table identifier and its expected physical columns.
+
+PR2 validates a bounded scalar Flink SQL type surface recorded in the capability manifest.
+Nested, computed, metadata, and watermark columns remain `REVIEW_REQUIRED` with
+`FLINK_SCHEMA_TYPE_UNVERIFIED` until covered by a pinned fixture. A field referenced by the
+record key or partition list must exist. Stable-key columns must be `NOT NULL`.
+
+Use `PRIMARY KEY (...) NOT ENFORCED` for the canonical stable-key DDL. Do not also generate
+`hoodie.datasource.write.recordkey.field`. If supplied evidence contains both forms, reject a
+conflict rather than relying on the factory's precedence warning. The auto-key path emits neither
+form and remains eligible only after the F5 durability acceptance.
+
+The source contract is a prerequisite, not a generated source connector. Require the source
+table to expose every projected target field with the same type and nullability. Generate an
+explicit projection; never use `SELECT *`, infer casts, or invent a source DDL.
+
+## F8 — Source changelog contract
+
+> "Does the source table emit inserts only, or can it emit updates or deletes?"
+>
+> - **Inserts only**
+> - **Updates or deletes can occur**
+> - **Not sure**
+
+- Inserts only → record `INSERT_ONLY` and continue.
+- Updates or deletes → add `FLINK_SOURCE_CHANGELOG_NOT_APPEND_ONLY` with a `BLOCKED`
+  contribution. Mutable change semantics arrive in PR3.
+- Not sure → add `FLINK_SOURCE_CONTRACT_REQUIRED` with an `INCOMPLETE` contribution.
+
+This check is independent of sink-factory construction. Hudi 1.2.0 can construct a sink without
+proving that the upstream relational plan is insert-only.
+
+## F9 — Streaming checkpoint contract
+
+Ask for the intended checkpoint interval and confirm checkpointing will be enabled. Relate it to
+the requested commit freshness, but do not promise that the interval is the end-to-end visibility
+latency.
+
+- Checkpointing explicitly disabled → `BLOCKED` with `FLINK_CHECKPOINTING_REQUIRED`.
+- Checkpoint interval missing, zero, or still unknown → `INCOMPLETE` with
+  `FLINK_CHECKPOINT_INTERVAL_REQUIRED`.
+- Enabled with a concrete positive interval → continue and record the value as load-bearing.
+
+State that a completed checkpoint coordinates the Hudi commit. Do not claim end-to-end
+exactly-once: the source, checkpoint storage, restart behavior, and the rest of the pipeline remain
+deployment responsibilities. If known rate and active-partition evidence indicates very little
+data per checkpoint, surface `FLINK_CHECKPOINT_SMALL_FILE_RISK`; do not enable clustering or tune
+file sizing in PR2.
+
+## PR2 validation and completion
+
+After all applicable questions, build a version-1 JSON design contract containing the confirmed
+safety facts, physical schemas, identity mode, source contract, fixed write settings, and runtime
+contract. Do not insert placeholders for the target table, path, source table, or checkpoint
+interval. Record an explicitly empty pass-through connector-option map; PR2 never accepts an
+option that the canonical renderer would ignore.
+
+Run:
+
+```bash
+python3 validate_flink_design.py --input <redacted-design-contract.json>
+```
+
+The validator is allowed to reject or serialize explicit decisions; it must not select
+architecture decisions or fill missing values. Preserve every returned finding. Only a successful
+result may provide the canonical runtime SQL, Hudi DDL, and `INSERT INTO` and end with:
+
+```text
+Status: CONFIG_VALIDATED
+Executable eligible: true
+```
+
+Any validation failure withholds all SQL and reports executable eligibility as `false`. Consult
+`flink-decision-overrides.md` for precedence and `flink-config-templates.md` for both envelopes.

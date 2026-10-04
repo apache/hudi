@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-schema_version = 2
+schema_version = 3
 status_precedence = ["INCOMPLETE", "REVIEW_REQUIRED", "BLOCKED"]
 
 [auto_key_acceptance]
@@ -48,7 +48,6 @@ FLINK_AUTO_KEY_ACCEPTANCE_REQUIRED = "INCOMPLETE"
 FLINK_AUTO_KEY_DECLINED = "BLOCKED"
 FLINK_REPLAY_IDEMPOTENCE_DEFERRED = "BLOCKED"
 FLINK_REPLAY_BEHAVIOR_UNRESOLVED = "REVIEW_REQUIRED"
-FLINK_EXECUTABLE_PATH_DEFERRED = "BLOCKED"
 
 [[scenarios]]
 case_id = "F00_BASELINE"
@@ -124,9 +123,8 @@ executable_eligible = false
 
 [[scenarios]]
 case_id = "F10_SAFE_APPEND"
-finding_codes = ["FLINK_EXECUTABLE_PATH_DEFERRED"]
-expected_final_status = "BLOCKED"
-executable_eligible = false
+all_other_gates_pass = true
+passes_safety_gates = true
 
 [[scenarios]]
 case_id = "F11_COMBINED_GATES"
@@ -156,5 +154,4 @@ executable_eligible = false
 case_id = "F14_AUTO_KEY_ACCEPTED"
 all_other_gates_pass = true
 inputs = { stable_business_key = false, replay_behavior = "duplicates_acceptable", auto_key_acceptance = "accepted" }
-expected_final_status = "BLOCKED"
-executable_eligible = false
+passes_safety_gates = true

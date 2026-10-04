@@ -15,7 +15,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 -->
-# Flink warnings — PR1
+# Flink warnings — routing and first executable path
 
 Load these findings and advisories only for the Flink route. Each code has a deterministic trigger
 and action. Surface it when the triggering answer lands rather than batching messages at the end.
@@ -73,7 +73,7 @@ The table lifecycle must be known before choosing a path.
 **Trigger:** Another pipeline, backfill, cleanup writer, cross-engine writer, standalone compactor,
 or standalone clustering job can commit to the table.
 
-**Message:** The single-writer assumptions are invalid. PR1 does not claim an OCC, NBCC,
+**Message:** The single-writer assumptions are invalid. This path does not claim an OCC, NBCC,
 lock-provider, index, or table-service combination is safe.
 
 **Action:** `REVIEW_REQUIRED`; withhold concurrency-sensitive configuration.
@@ -164,8 +164,7 @@ is not decided, is unanswered, or the session ends before acceptance.
 **Message:** Auto-generated record keys require an explicit durability decision. Eligibility for
 that path must not be implied while the decision is pending.
 
-**Action:** `INCOMPLETE`; retain this finding in the final assessment and do not add
-`FLINK_EXECUTABLE_PATH_DEFERRED`.
+**Action:** `INCOMPLETE`; retain this finding and withhold executable output.
 
 ## FLINK_AUTO_KEY_DECLINED
 
@@ -175,8 +174,7 @@ declines auto-generated record keys.
 **Message:** The request has neither a stable business key nor an accepted auto-generated-key
 posture, so no record-key path is available.
 
-**Action:** `BLOCKED`; retain this finding in the final assessment and do not add
-`FLINK_EXECUTABLE_PATH_DEFERRED`.
+**Action:** `BLOCKED`; retain this finding and withhold executable output.
 
 ## FLINK_STABLE_KEY_NOT_IDEMPOTENT
 
@@ -207,15 +205,146 @@ idempotent.
 
 **Action:** `REVIEW_REQUIRED`; retain the uncertainty and withhold executable output.
 
-## FLINK_EXECUTABLE_PATH_DEFERRED
+## FLINK_RECORD_KEY_FIELD_MISSING
 
-**Trigger:** Every PR1 safety gate passes.
+**Trigger:** A stable key or explicit record-key option names a field absent from the physical
+schema, including when `write.operation=insert`.
 
-**Message:** The request is eligible for the future new-table, single-writer, append-only COW Flink
-SQL path, but PR1 intentionally provides routing and safety assessment only.
+**Message:** Hudi 1.2.0 skips its record-key field check in append mode, so the Architect validator
+must reject this mismatch before factory validation.
 
-**Action:** `BLOCKED`; emit the non-executable ADR envelope and no DDL, connector options, or submit
-command.
+**Action:** `BLOCKED`; emit no DDL or `INSERT INTO`.
+
+## FLINK_RECORD_KEY_NULLABLE
+
+**Trigger:** A stable record-key field is nullable.
+
+**Message:** The canonical Flink primary key requires non-null identity fields.
+
+**Action:** `BLOCKED`; require an authoritative non-null schema or a different stable key.
+
+## FLINK_PRIMARY_KEY_RECORD_KEY_CONFLICT
+
+**Trigger:** PRIMARY KEY syntax and a record-key option are both supplied, or the auto-key path
+contains either form.
+
+**Message:** The canonical PR2 output uses one identity representation. It does not rely on the
+factory warning that PRIMARY KEY syntax takes precedence.
+
+**Action:** `BLOCKED`; resolve the identity contract before rendering SQL.
+
+## FLINK_PARTITION_FIELD_MISSING
+
+**Trigger:** `PARTITIONED BY` references a field absent from the physical schema.
+
+**Message:** Partition fields must resolve without guessing before table creation.
+
+**Action:** `BLOCKED`; correct the schema or partition decision.
+
+## FLINK_SCHEMA_TYPE_UNVERIFIED
+
+**Trigger:** A physical field uses a complex, computed, metadata, watermark, or other type outside
+the pinned PR2 scalar validation surface.
+
+**Message:** The type may be valid Flink SQL, but it is not covered by this executable baseline.
+
+**Action:** `REVIEW_REQUIRED`; withhold executable output instead of passing through unchecked DDL.
+
+## FLINK_SOURCE_CONTRACT_REQUIRED
+
+**Trigger:** The source table, expected physical schema, or changelog semantics are unavailable.
+
+**Message:** A sink-side example must identify the existing source table and its expected contract.
+
+**Action:** `INCOMPLETE`; do not invent or generate a source connector.
+
+## FLINK_SOURCE_SCHEMA_MISMATCH
+
+**Trigger:** An explicitly projected source field is missing or differs in type or nullability from
+the target field.
+
+**Message:** PR2 does not infer casts, aliases, or schema reconciliation.
+
+**Action:** `BLOCKED`; require an explicit compatible source contract.
+
+## FLINK_SOURCE_CHANGELOG_NOT_APPEND_ONLY
+
+**Trigger:** The declared source changelog contains updates or deletes.
+
+**Message:** Sink-factory construction does not prove the complete source-to-sink statement is
+append-only. Mutable change semantics are deferred to PR3.
+
+**Action:** `BLOCKED`; do not generate executable append SQL.
+
+## FLINK_APPEND_MODE_CLUSTERING_ENABLED
+
+**Trigger:** The effective value of `write.insert.cluster` is not `false`.
+
+**Message:** In Hudi 1.2.0, COW insert is append mode only when insert clustering is disabled.
+Checking only `write.operation=insert` is insufficient.
+
+**Action:** `BLOCKED`; reject an incompatible override rather than silently changing it.
+
+## FLINK_PR2_WRITE_PATH_UNSUPPORTED
+
+**Trigger:** Table type, write operation, or execution mode is outside streaming COW insert.
+
+**Message:** PR2 implements only the first bounded append-only SQL sink path.
+
+**Action:** `BLOCKED`; route mutable COW to PR3 and MOR to PR4.
+
+## FLINK_CHECKPOINTING_REQUIRED
+
+**Trigger:** Checkpointing is explicitly disabled for the streaming sink.
+
+**Message:** The streaming Hudi commit lifecycle depends on completed Flink checkpoints.
+
+**Action:** `BLOCKED`; do not claim a normal commit cadence.
+
+## FLINK_CHECKPOINT_INTERVAL_REQUIRED
+
+**Trigger:** The checkpoint interval is absent, zero, negative, or unresolved.
+
+**Message:** The executable runtime contract needs a concrete positive checkpoint interval.
+
+**Action:** `INCOMPLETE`; withhold runtime SQL.
+
+## FLINK_LOAD_BEARING_VALUE_REQUIRED
+
+**Trigger:** The target table, target path, source table, or another load-bearing value is missing,
+a placeholder, or contains credentials that must be redacted.
+
+**Message:** `CONFIG_VALIDATED` cannot contain a value that still needs substitution.
+
+**Action:** `INCOMPLETE`; request a concrete non-secret value.
+
+## FLINK_OPTION_NOT_VERIFIED
+
+**Trigger:** The design supplies a connector option absent from the pinned manifest allowlist.
+
+**Message:** An option from the enclosing checkout or a later release is not evidence that the
+Hudi 1.2.0 path supports it.
+
+**Action:** `REVIEW_REQUIRED`; withhold executable output.
+
+## FLINK_DESIGN_CONTRACT_INVALID
+
+**Trigger:** The machine-readable design contract is malformed, omits a required structural field,
+or contains a value the canonical renderer would silently ignore.
+
+**Message:** Static validation cannot reproduce the intended design from the supplied contract.
+
+**Action:** `INCOMPLETE`; correct the contract without inferring architecture decisions.
+
+## FLINK_CHECKPOINT_SMALL_FILE_RISK
+
+**Trigger:** Known rate, checkpoint cadence, and active-partition evidence indicates very little
+data per checkpoint and partition.
+
+**Message:** The requested freshness may create excessive small files or timeline pressure.
+
+**Action:** Advisory only. Record the evidence and revisit cadence; do not enable clustering or
+invent a tuning value in PR2.
 
 ## FLINK_SECRET_REDACTED
 

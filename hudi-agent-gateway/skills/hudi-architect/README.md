@@ -35,10 +35,10 @@ Target Hudi version: **1.2.0**.
 
 - **Spark and HoodieStreamer** retain the existing full design flow, configuration bundle, and
   runnable output.
-- **Flink** currently provides the PR1 routing and safety foundation for Hudi 1.2.0 and Flink 1.20
-  (1.20.1 fixtures). It classifies new versus existing tables, writer topology, catalog visibility,
-  schema availability, record-key posture, and replay idempotence. It deliberately withholds
-  executable Flink SQL and connector configuration until the PR2 path and static validation land.
+- **Flink** combines the routing and safety foundation with one bounded executable Flink SQL sink
+  path for Hudi 1.2.0 and Flink 1.20 (1.20.1 fixtures). New-table, single-writer, append-only COW
+  designs without an external catalog can reach `CONFIG_VALIDATED` after schema, identity, source
+  changelog, append-mode, and checkpoint validation. Other Flink designs remain fail-closed.
 
 ## How to invoke
 
@@ -77,12 +77,12 @@ Even without invoking as a Skill, the files in `references/` are readable design
 - `config-templates.md` — `hoodie.*` property templates per decision + sample bundles for three workload archetypes.
 - `adr-template.md` — the structure of the ADR output.
 - `flink-question-flow.md` — Flink-only fail-closed gates, loaded after Flink is selected.
-- `flink-decision-overrides.md` — Flink PR1 statuses, routing invariants, and deterministic cases.
+- `flink-decision-overrides.md` — Flink statuses, routing invariants, and deterministic cases.
 - `flink-warnings.md` — warnings that must never fire for Spark scenarios.
 - `flink-1.20-hudi-1.2.0-capabilities.md` — the fixed initial capability baseline.
 - `flink-1.20-hudi-1.2.0-capabilities.toml` — the machine-readable manifest pinned to the Hudi
   1.2.0 source revision.
-- `flink-config-templates.md` — the PR1 non-executable output envelope.
+- `flink-config-templates.md` — non-executable and bounded executable Flink output envelopes.
 
 The Skill itself is defined in `SKILL.md`.
 
@@ -107,7 +107,18 @@ python3 hudi-agent-gateway/skills/hudi-architect/validate_flink_capabilities.py
 
 Maintainers with the pinned release commit available locally can additionally verify every source
 hash with `--verify-source`. Use `--emit-evidence` to produce the baseline evidence included in a
-Flink PR1 assessment.
+Flink assessment.
+
+Validate and render a complete bounded Flink design contract:
+
+```bash
+python3 hudi-agent-gateway/skills/hudi-architect/validate_flink_design.py \
+  --input hudi-agent-gateway/tests/fixtures/hudi_architect/flink_pr2/stable_key.json \
+  --emit-sql
+```
+
+The validator emits SQL only after all safety and load-bearing checks pass. The exact SQL is also
+planned in CI against the released Hudi 1.2.0 Flink bundle and Flink 1.20.1.
 
 Credential-bearing evidence can be sanitized without executing or parsing it as configuration:
 
@@ -124,13 +135,14 @@ This is **Milestone 1 of a longer arc** — meant to be shareable and playable, 
 3. **Try the tier gate at all four levels.** The `EXPLORATION` mode should feel like a Hudi tutor, not a design advisor. The `PRODUCTION_AT_SCALE` mode should feel rigorous. If either feels wrong, that's a signal.
 4. **Read the ADR output.** Are the revisit conditions actually measurable? Do the durability tables cover the one-way decisions relevant to your workload?
 5. **Declare a second writer.** On the Spark route, check the selected lock provider, emitted block,
-   and pre-launch checklist. On the Flink PR1 route, check that the result is `REVIEW_REQUIRED` and
+   and pre-launch checklist. On the Flink route, check that the result is `REVIEW_REQUIRED` and
    that no concurrency-sensitive configuration is emitted.
 
 ## What's out of scope in Milestone 1
 
-- Executable Flink SQL DDL, connector options, and submit commands. PR1 provides Flink routing and
-  safety assessment only; the first executable Flink SQL sink path is a follow-up.
+- Flink upsert/delete, MOR, existing-table composition, external catalogs, multiple writers,
+  DataStream API, `HoodieFlinkStreamer`, source connector generation, and submit/deploy commands.
+  Those paths do not reuse the bounded append-only SQL output as if it were generally applicable.
 
 - Multi-writer contention tuning — the mode, lock provider, and config bundle are derived, but retry/timeout tuning and early conflict detection stay at defaults (they depend on observed behavior, not design-time facts).
 - Benchmarking / scale-characterization — different flow shape, future revision.

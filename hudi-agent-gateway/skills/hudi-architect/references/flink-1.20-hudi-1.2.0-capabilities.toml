@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-schema_version = 1
+schema_version = 2
 baseline_id = "hudi-1.2.0-flink-1.20"
 validation_surface = "initial-flink-sql-sink"
 
@@ -25,6 +25,50 @@ release_ref = "release-1.2.0"
 [flink]
 compatibility_line = "1.20"
 fixture_version = "1.20.1"
+
+[fixture_artifacts]
+hudi_bundle = "org.apache.hudi:hudi-flink1.20-bundle:1.2.0"
+flink_version = "1.20.1"
+java_version = 11
+
+[executable_contract]
+contract_schema = 1
+table_lifecycle = "new"
+writer_model = "single_writer"
+external_catalog = false
+mutability = "append_only"
+source_changelog_mode = "INSERT_ONLY"
+execution_mode = "STREAMING"
+require_checkpointing = true
+allow_record_key_modes = ["stable_key", "auto_key"]
+allow_replay_behaviors = ["cannot_occur", "duplicates_acceptable"]
+
+# PR2 intentionally validates a bounded scalar physical-schema surface. Complex,
+# computed, metadata, and watermark columns remain unverified rather than being guessed.
+[physical_types]
+simple = [
+  "BIGINT",
+  "BOOLEAN",
+  "BYTES",
+  "DATE",
+  "DOUBLE",
+  "FLOAT",
+  "INT",
+  "INTEGER",
+  "SMALLINT",
+  "STRING",
+  "TINYINT",
+]
+parameterized = [
+  "BINARY",
+  "CHAR",
+  "DECIMAL",
+  "TIME",
+  "TIMESTAMP",
+  "TIMESTAMP_LTZ",
+  "VARBINARY",
+  "VARCHAR",
+]
 
 [[source_anchors]]
 id = "root_pom"
@@ -127,17 +171,20 @@ key = "write.operation"
 value = "insert"
 applies_to = "pr2-append-only-cow"
 
-[[deferred_acceptance_checks]]
+[[implemented_acceptance_checks]]
 id = "FLINK_RECORD_KEY_FIELD_MISSING"
-target_pr = "PR2"
 requirement = "Reject an explicitly configured record-key field that is absent from the physical schema, including append mode."
+python_test = "test_pr2_rejects_record_key_missing_from_append_schema"
+java_test = "testPinnedFactorySkipsMissingRecordKeyCheckInAppendMode"
 
-[[deferred_acceptance_checks]]
+[[implemented_acceptance_checks]]
 id = "FLINK_APPEND_MODE_CLUSTERING_ENABLED"
-target_pr = "PR2"
 requirement = "Reject COW insert output whose effective write.insert.cluster value is not false."
+python_test = "test_pr2_rejects_insert_clustering_override"
+java_test = "testPinnedAppendModeRequiresInsertClusteringDisabled"
 
-[[deferred_acceptance_checks]]
+[[implemented_acceptance_checks]]
 id = "FLINK_SOURCE_CHANGELOG_NOT_APPEND_ONLY"
-target_pr = "PR2"
 requirement = "Validate generated INSERT INTO with a declared source schema and append-only changelog contract through a planner fixture."
+python_test = "test_pr2_rejects_non_append_source_changelog"
+java_test = "testStableKeySinkAndInsertPlan"

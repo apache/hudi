@@ -23,9 +23,9 @@ A practical guide to running the Hudi Architect agent: what it does, how to set 
 
 **What you get out of a session:** for Spark and HoodieStreamer, an Architecture Decision Record
 (ADR) with tradeoff tables and measurable revisit conditions, a ready-to-use `hoodie.*` config
-bundle, and a runnable submit command — all pinned to **Hudi 1.2.0**. The Flink route currently
-returns a fail-closed safety assessment pinned to **Hudi 1.2.0 / Flink 1.20**; it does not yet emit
-executable Flink SQL or connector configuration.
+bundle, and a runnable submit command — all pinned to **Hudi 1.2.0**. The Flink route is pinned to
+**Hudi 1.2.0 / Flink 1.20** and remains fail-closed by default. It can emit validated Flink SQL for
+one bounded new-table, single-writer, no-external-catalog, append-only COW sink path.
 
 ---
 
@@ -137,11 +137,13 @@ A session ends with three artifacts:
 2. **The config bundle** — grouped `hoodie.*` properties. Everything in it either encodes a design decision or changes a default deliberately; it intentionally omits config that restates defaults.
 3. **The submit command** (or `.option(...)` snippet for DataSource writes) — flags are split into **load-bearing** (derived from the design; don't change casually) and **environment placeholders** (paths, memory, Scala/Spark versions — the agent deliberately doesn't guess these; fill them from your own build and cluster).
 
-For a Flink request in the current PR1 scope, the session instead ends with an ADR-shaped safety
-assessment, explicit gate findings, and one of `INCOMPLETE`, `BLOCKED`, or `REVIEW_REQUIRED`.
-Executable output is withheld even when every safety gate passes; that path will be implemented
-and validated in PR2. The assessment includes the immutable Hudi 1.2.0 source revision
-and Flink 1.20.1 fixture version reported by the checked-in capability manifest.
+For a Flink request, the session always includes an ADR-shaped safety assessment and the immutable
+Hudi 1.2.0 source revision plus Flink 1.20.1 fixture version. Any unresolved gate returns
+`INCOMPLETE`, `BLOCKED`, or `REVIEW_REQUIRED` without SQL. A design in the bounded executable
+surface reaches `CONFIG_VALIDATED` only after the physical target and source schemas, identity,
+`INSERT_ONLY` source changelog, COW insert append mode (`write.insert.cluster=false`), and a
+positive checkpoint interval pass deterministic validation. Its artifacts are runtime `SET`
+statements, Hudi `CREATE TABLE`, and an explicit-column `INSERT INTO`; deployment remains manual.
 
 Then: land a first commit in a staging path, run your real read patterns against it, and check the ADR's operational playbook section for what to monitor from day one (commit duration, pending compactions, active timeline size, small-file ratio).
 
@@ -149,12 +151,13 @@ Then: land a first commit in a staging path, run your real read patterns against
 
 Be aware of what the agent will *decline* to decide — it defers honestly rather than guessing, but plan for these yourself:
 
-- **Flink executable generation** — the current Flink path establishes the Hudi 1.2.0 / Flink
-  1.20 baseline and detects lifecycle, writer, catalog, schema, record-key, and replay risks. It
-  does not emit DDL, DynamicTable connector options, a submit command, or `CONFIG_VALIDATED`.
+- **Flink executable coverage** — only a new-table, single-writer, no-external-catalog,
+  append-only COW streaming SQL sink is implemented. Mutable/upsert/delete, MOR, existing tables,
+  catalogs, multiple writers, DataStream API, `HoodieFlinkStreamer`, source connector generation,
+  and submit/deploy commands remain out of scope.
 
-- **Multi-writer contention tuning** — on the Spark route, the agent asks whether anything else writes the table (every tier but the lightest), derives the concurrency mode, picks a lock provider, and emits a complete, runnable block. What it does *not* do is tune for observed contention: lock retry/timeout values, conflict-retry counts, and early conflict detection stay at their defaults, because the right values depend on measured behavior rather than design-time facts. That is Operations Agent territory. Two things remain yours to carry out: apply the emitted block to **every** writing job (the ADR's pre-launch checklist enumerates them), and confirm that writers using `INSERT`/`BULK_INSERT` have disjoint key spaces — concurrent inserts can duplicate even with dedup enabled. Flink PR1 detects multiple writers but emits no concurrency configuration. Background: [Hudi concurrency docs](https://hudi.apache.org/docs/concurrency_control).
-- **Catalog / metastore sync beyond the common paths** — on the Spark route, the agent asks which engines query the table and derives sync config for Hive Metastore, AWS Glue, BigQuery, and DataHub, including the partition-extractor and MOR `_ro`/`_rt` consequences. Flink PR1 detects an external-catalog requirement but emits no catalog configuration. Not covered: Polaris beyond pointing at the Spark catalog config, Snowflake/Redshift-specific setup, and per-catalog auth (Kerberos, IAM policy documents, service-account keys) — those are environment concerns the flow deliberately never asks about. Background: [metastore](https://hudi.apache.org/docs/syncing_metastore), [Glue](https://hudi.apache.org/docs/syncing_aws_glue_data_catalog), [BigQuery](https://hudi.apache.org/docs/gcp_bigquery), [DataHub](https://hudi.apache.org/docs/syncing_datahub).
+- **Multi-writer contention tuning** — on the Spark route, the agent asks whether anything else writes the table (every tier but the lightest), derives the concurrency mode, picks a lock provider, and emits a complete, runnable block. What it does *not* do is tune for observed contention: lock retry/timeout values, conflict-retry counts, and early conflict detection stay at their defaults, because the right values depend on measured behavior rather than design-time facts. That is Operations Agent territory. Two things remain yours to carry out: apply the emitted block to **every** writing job (the ADR's pre-launch checklist enumerates them), and confirm that writers using `INSERT`/`BULK_INSERT` have disjoint key spaces — concurrent inserts can duplicate even with dedup enabled. The current Flink path detects multiple writers but emits no concurrency configuration. Background: [Hudi concurrency docs](https://hudi.apache.org/docs/concurrency_control).
+- **Catalog / metastore sync beyond the common paths** — on the Spark route, the agent asks which engines query the table and derives sync config for Hive Metastore, AWS Glue, BigQuery, and DataHub, including the partition-extractor and MOR `_ro`/`_rt` consequences. The current Flink path detects an external-catalog requirement but emits no catalog configuration. Not covered: Polaris beyond pointing at the Spark catalog config, Snowflake/Redshift-specific setup, and per-catalog auth (Kerberos, IAM policy documents, service-account keys) — those are environment concerns the flow deliberately never asks about. Background: [metastore](https://hudi.apache.org/docs/syncing_metastore), [Glue](https://hudi.apache.org/docs/syncing_aws_glue_data_catalog), [BigQuery](https://hudi.apache.org/docs/gcp_bigquery), [DataHub](https://hudi.apache.org/docs/syncing_datahub).
 - **Non-Kafka source configs** — Kafka sources get full source-class + schema-provider derivation; for DFS/JDBC/Pulsar/Kinesis sources you'll fill in the `--source-class` and source properties from Hudi docs.
 - **Cross-format interoperability (Apache XTable)** — explained and linked, not configured. XTable translates Hudi metadata so the same files can be read as Iceberg or Delta, but it is a separate incubating project: its config keys live in its codebase rather than Hudi's, so this skill cannot machine-verify them the way it verifies every `hoodie.*` key it emits. The agent names the one durable coupling — **XTable's FAQ lists MOR as unsupported, so cross-format interop argues for CoW**, worth confirming against their current docs since the project is incubating — and points you at [xtable.apache.org](https://xtable.apache.org), [the repo](https://github.com/apache/incubator-xtable), and [Hudi's page](https://hudi.apache.org/docs/syncing_xtable) to follow up.
 - Also out of scope: benchmarking, record-level TTL, z-order/layout-optimization guidance, multi-table transactions, CONSISTENT_HASHING sizing, and versions other than 1.2.0.

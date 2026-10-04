@@ -68,6 +68,9 @@ jobs:
         run: |
           python skills/hudi-architect/validate_config_keys.py
           python skills/hudi-architect/validate_flink_capabilities.py --verify-source
+          python skills/hudi-architect/validate_flink_design.py \
+            --input tests/fixtures/hudi_architect/flink_pr2/stable_key.json \
+            --emit-sql > /dev/null
       - name: Test
         run: python -m pytest tests -q
       - name: Lint
@@ -75,8 +78,29 @@ jobs:
           ruff check src tests
           skills/hudi-architect/redact_sensitive_values.py
           skills/hudi-architect/validate_flink_capabilities.py
+          skills/hudi-architect/validate_flink_design.py
       - name: Type-check
-        run: mypy src skills/hudi-architect/validate_flink_capabilities.py
+        run: >-
+          mypy src
+          skills/hudi-architect/validate_flink_capabilities.py
+          skills/hudi-architect/validate_flink_design.py
+
+  flink-sql-fixtures:
+    name: Hudi 1.2.0 / Flink 1.20.1 SQL fixtures
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
+          cache: maven
+          cache-dependency-path: hudi-agent-gateway/fixtures/hudi-architect-flink-1.20/pom.xml
+      - name: Test generated SQL with the pinned factory and planner
+        run: >-
+          mvn -B
+          -f hudi-agent-gateway/fixtures/hudi-architect-flink-1.20/pom.xml
+          test
 
   chart-lint:
     name: helm lint + template
@@ -92,11 +116,11 @@ jobs:
           # hudi-trino intentionally fails fast on default values (metastore
           # uri is required), so render with local-dev values when present.
           for chart in hudi-lakehouse/charts/*/; do
-            helm lint "$chart"
             if [ -f "$chart/values-local-dev.yaml" ]; then
               helm lint "$chart" -f "$chart/values-local-dev.yaml"
               helm template "$chart" -f "$chart/values-local-dev.yaml" > /dev/null
             else
+              helm lint "$chart"
               helm template "$chart" > /dev/null
             fi
           done
