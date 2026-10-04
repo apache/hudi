@@ -63,6 +63,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class TestFlinkArchitectSqlFixtures {
 
+  private static final String ASF_LICENSE_MARKER =
+      "Licensed to the Apache Software Foundation (ASF) under one";
   private static final Pattern SET_STATEMENT = Pattern.compile(
       "SET\\s+'([^']+)'\\s*=\\s*'([^']+)'\\s*;?");
 
@@ -238,12 +240,23 @@ class TestFlinkArchitectSqlFixtures {
       try (InputStream stream = TestFlinkArchitectSqlFixtures.class
           .getClassLoader().getResourceAsStream(resourceName)) {
         assertNotNull(stream, resourceName);
-        sql = new String(stream.readAllBytes(), StandardCharsets.UTF_8).trim();
+        sql = stripLicenseHeader(
+            new String(stream.readAllBytes(), StandardCharsets.UTF_8)).trim();
       }
       String[] sections = sql.split("\\R\\s*\\R", 3);
       assertEquals(3, sections.length, sql);
       return new SqlFixture(
           sections[0].trim(), sections[1].trim(), sections[2].trim());
+    }
+
+    private static String stripLicenseHeader(String sql) {
+      int licenseEnd = sql.indexOf("*/");
+      assertTrue(licenseEnd >= 0, "missing block-comment license header");
+      assertTrue(sql.startsWith("/*"), "license header is not first");
+      assertTrue(
+          sql.substring(0, licenseEnd).contains(ASF_LICENSE_MARKER),
+          "missing ASF license header");
+      return sql.substring(licenseEnd + 2).stripLeading();
     }
   }
 

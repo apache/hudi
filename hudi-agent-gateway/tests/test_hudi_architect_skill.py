@@ -40,6 +40,7 @@ FLINK_VALIDATOR = SKILL_DIR / "validate_flink_capabilities.py"
 FLINK_DESIGN_VALIDATOR = SKILL_DIR / "validate_flink_design.py"
 PINNED_HUDI_REVISION = "f05c83f2b97732de7a558ff9b26959e1139c05f5"
 PR2_FIXTURE_DIR = GATEWAY_DIR / "tests" / "fixtures" / "hudi_architect" / "flink_pr2"
+ASF_LICENSE_MARKER = "Licensed to the Apache Software Foundation (ASF) under one"
 PR2_JAVA_FIXTURE = (
     GATEWAY_DIR
     / "fixtures"
@@ -67,6 +68,14 @@ FLINK_REFERENCES = (
 
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
+
+
+def _read_sql_golden(path: Path) -> str:
+    license_header, separator, sql = _read(path).partition("*/")
+    assert separator, f"missing block-comment license header: {path}"
+    assert license_header.startswith("/*"), f"license header is not first: {path}"
+    assert ASF_LICENSE_MARKER in license_header, f"missing ASF license header: {path}"
+    return sql.lstrip("\r\n")
 
 
 def _normalized(text: str) -> str:
@@ -396,7 +405,7 @@ def test_pr2_valid_designs_render_exact_executable_sql(fixture_name: str) -> Non
     assert assessment["status"] == "CONFIG_VALIDATED"
     assert assessment["executable_eligible"] is True
     assert assessment["finding_codes"] == []
-    assert assessment["artifacts"]["combined_sql"] == _read(
+    assert assessment["artifacts"]["combined_sql"] == _read_sql_golden(
         PR2_FIXTURE_DIR / f"{fixture_name}.sql"
     ).rstrip("\n")
     assert assessment["validation_evidence"] == {
