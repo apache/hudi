@@ -56,8 +56,7 @@ public class InternalSchema implements Serializable {
   private int maxColumnId;
   private long versionId;
 
-  // A schema can be shared by concurrent readers, so the lazily built lookup maps use a benign racy single-check:
-  // each is built into a local and published through a volatile field.
+  // Built lazily and published through volatile fields, since a schema can be shared by concurrent readers.
   private transient volatile Map<Integer, Field> idToField = null;
   private transient volatile Map<String, Integer> nameToId = null;
   private transient volatile Map<Integer, String> idToName = null;
