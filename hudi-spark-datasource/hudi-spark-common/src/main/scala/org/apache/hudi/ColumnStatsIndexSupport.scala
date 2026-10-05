@@ -41,6 +41,7 @@ import org.apache.hudi.util.JFunction
 
 import org.apache.avro.Conversions.DecimalConversion
 import org.apache.avro.generic.GenericData
+import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
@@ -136,10 +137,11 @@ class ColumnStatsIndexSupport(spark: SparkSession,
       case None =>
         val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = prunedFileNamesOpt match {
           case Some(prunedFileNames) =>
-            val filterFunction = new SerializableFunction[HoodieMetadataColumnStats, java.lang.Boolean] {
-              override def apply(r: HoodieMetadataColumnStats): java.lang.Boolean = {
-                prunedFileNames.contains(r.getFileName)
-              }
+            // Every task of an on-cluster read filters by the same file names, so executors fetch them once.
+            val filterFunction = if (shouldReadInMemory) {
+              fileNameFilter(prunedFileNames)
+            } else {
+              fileNameFilter(spark.sparkContext.broadcast(prunedFileNames))
             }
             loadColumnStatsIndexRecords(targetColumns, prunedPartitions, shouldReadInMemory).filter(filterFunction)
           case None =>
@@ -394,6 +396,16 @@ class ColumnStatsIndexSupport(spark: SparkSession,
 
 object ColumnStatsIndexSupport {
   val INDEX_NAME = "COLUMN_STATS"
+
+  private def fileNameFilter(fileNames: Set[String]): SerializableFunction[HoodieMetadataColumnStats, java.lang.Boolean] =
+    new SerializableFunction[HoodieMetadataColumnStats, java.lang.Boolean] {
+      override def apply(r: HoodieMetadataColumnStats): java.lang.Boolean = fileNames.contains(r.getFileName)
+    }
+
+  private def fileNameFilter(fileNames: Broadcast[Set[String]]): SerializableFunction[HoodieMetadataColumnStats, java.lang.Boolean] =
+    new SerializableFunction[HoodieMetadataColumnStats, java.lang.Boolean] {
+      override def apply(r: HoodieMetadataColumnStats): java.lang.Boolean = fileNames.value.contains(r.getFileName)
+    }
 
   private val expectedAvroSchemaValues = Set("BooleanWrapper", "IntWrapper", "LongWrapper", "FloatWrapper", "DoubleWrapper",
     "BytesWrapper", "StringWrapper", "DateWrapper", "DecimalWrapper", "TimeMicrosWrapper", "TimestampMicrosWrapper")
