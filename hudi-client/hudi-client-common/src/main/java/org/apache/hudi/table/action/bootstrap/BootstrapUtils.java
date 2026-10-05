@@ -19,14 +19,15 @@
 package org.apache.hudi.table.action.bootstrap;
 
 import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.common.data.HoodieBroadcast;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -44,7 +45,7 @@ public class BootstrapUtils {
   /**
    * Returns leaf folders with files under a path.
    * @param baseFileFormat Hoodie base file format
-   * @param storage  Hoodie Storage
+   * @param storage  storage of the base path; the tasks listing its sub-directories use its configuration
    * @param context JHoodieEngineContext
    * @return list of partition paths with files under them.
    * @throws IOException
@@ -78,19 +79,24 @@ public class BootstrapUtils {
     }
 
     if (!subDirectories.isEmpty()) {
-      result.addAll(context.flatMap(subDirectories, directory -> {
-        StoragePathFilter pathFilter = getFilePathFilter(baseFileExtension);
-        StoragePath path = new StoragePath(directory);
-        HoodieStorage tmpStorage = HoodieStorageUtils.getStorage(path, HadoopFSUtils.getStorageConf());
-        return tmpStorage.listFiles(path).stream()
-            .filter(pathInfo -> pathFilter.accept(pathInfo.getPath()))
-            .map(pathInfo -> {
-              String relativePath = FSUtils.getRelativePartitionPath(basePath, pathInfo.getPath().getParent());
-              Integer level = (int) relativePath.chars().filter(ch -> ch == '/').count();
-              HoodieFileStatus hoodieFileStatus = FSUtils.fromPathInfo(pathInfo);
-              return Pair.of(hoodieFileStatus, Pair.of(level, relativePath));
-            });
-      }, subDirectories.size()));
+      HoodieBroadcast<StorageConfiguration<?>> storageConf = context.broadcast(storage.getConf());
+      try {
+        result.addAll(context.flatMap(subDirectories, directory -> {
+          StoragePathFilter pathFilter = getFilePathFilter(baseFileExtension);
+          StoragePath path = new StoragePath(directory);
+          HoodieStorage tmpStorage = HoodieStorageUtils.getStorage(path, storageConf.value());
+          return tmpStorage.listFiles(path).stream()
+              .filter(pathInfo -> pathFilter.accept(pathInfo.getPath()))
+              .map(pathInfo -> {
+                String relativePath = FSUtils.getRelativePartitionPath(basePath, pathInfo.getPath().getParent());
+                Integer level = (int) relativePath.chars().filter(ch -> ch == '/').count();
+                HoodieFileStatus hoodieFileStatus = FSUtils.fromPathInfo(pathInfo);
+                return Pair.of(hoodieFileStatus, Pair.of(level, relativePath));
+              });
+        }, subDirectories.size()));
+      } finally {
+        storageConf.destroy();
+      }
     }
 
     result.forEach(val -> {

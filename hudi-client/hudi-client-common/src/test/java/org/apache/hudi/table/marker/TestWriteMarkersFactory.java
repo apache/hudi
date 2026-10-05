@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.storage.HoodieStorage;
@@ -46,6 +47,9 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorage
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class TestWriteMarkersFactory extends HoodieCommonTestHarness {
@@ -144,8 +148,9 @@ public class TestWriteMarkersFactory extends HoodieCommonTestHarness {
     when(storage.getFileSystem()).thenReturn(fileSystem);
     when(metaClient.getBasePath()).thenReturn(new StoragePath(basePath));
     when(metaClient.getMarkerFolderPath(any())).thenReturn(basePath + ".hoodie/.temp");
+    when(metaClient.getRawStorage()).thenReturn(HoodieStorageUtils.getStorage(basePath, getDefaultStorageConf()));
     when(table.getContext()).thenReturn(context);
-    StorageConfiguration storageConfToReturn = getDefaultStorageConf();
+    StorageConfiguration storageConfToReturn = spy(getDefaultStorageConf());
     when(context.getStorageConf()).thenReturn(storageConfToReturn);
     when(writeConfig.getViewStorageConfig())
         .thenReturn(FileSystemViewStorageConfig.newBuilder().build());
@@ -154,5 +159,9 @@ public class TestWriteMarkersFactory extends HoodieCommonTestHarness {
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
     assertEquals(expectedWriteMarkersClass,
         WriteMarkersFactory.get(markerTypeConfig, table, instantTime).getClass());
+    // markers are created per written file, so resolving the type must not copy the Hadoop configuration
+    verify(storageConfToReturn, never()).unwrapCopy();
+    verify(storageConfToReturn, never()).unwrapCopyAs(any());
+    verify(storageConfToReturn, never()).newInstance();
   }
 }

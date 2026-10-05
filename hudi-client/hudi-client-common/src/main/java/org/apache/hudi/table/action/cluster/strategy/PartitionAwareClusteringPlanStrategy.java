@@ -21,12 +21,15 @@ package org.apache.hudi.table.action.cluster.strategy;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieClusteringStrategy;
+import org.apache.hudi.common.data.HoodieBroadcast;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.function.SerializableSupplier;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -192,22 +195,20 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
     }
 
     final HoodieEngineContext engineContext = resolveEngineContextForPlanGeneration();
-
-    List<Pair<List<HoodieClusteringGroup>, String>> res = engineContext.map(partitionPaths, partitionPath -> {
-      List<FileSlice> fileSlicesEligible = getFileSlicesEligibleForClustering(partitionPath).collect(Collectors.toList());
-      Pair<Stream<HoodieClusteringGroup>, Boolean> groupPair = buildClusteringGroupsForPartition(partitionPath, fileSlicesEligible);
-      List<HoodieClusteringGroup> clusteringGroupsPartition = groupPair.getLeft().collect(Collectors.toList());
-      boolean partialScheduled = groupPair.getRight();
-      // return missed partition path
-      // because the candidate fileSlices in the current partition have not been completely processed.
-      if (clusteringGroupsPartition.size() > clusteringMaxNumGroups) {
-        return Pair.of(clusteringGroupsPartition.subList(0, clusteringMaxNumGroups), partitionPath);
-      } else if (partialScheduled) {
-        return Pair.of(clusteringGroupsPartition, partitionPath);
-      } else {
-        return Pair.of(clusteringGroupsPartition, "");
-      }
-    }, partitionPaths.size());
+    loadFileGroupsInPendingTableServices();
+    // the tasks of an executor share the strategies Hudi ships; a custom strategy may keep per-call state, so each
+    // task gets its own copy of it
+    Option<HoodieBroadcast<PartitionAwareClusteringPlanStrategy<T, I, K, O>>> sharedStrategy =
+        ReflectionUtils.isHudiClass(getClass()) ? Option.of(engineContext.broadcast(this)) : Option.empty();
+    SerializableSupplier<PartitionAwareClusteringPlanStrategy<T, I, K, O>> planStrategy =
+        sharedStrategy.isPresent() ? sharedStrategy.get()::value : () -> this;
+    List<Pair<List<HoodieClusteringGroup>, String>> res;
+    try {
+      res = engineContext.map(partitionPaths,
+          partitionPath -> planStrategy.get().buildClusteringGroupsAndMissedPartition(partitionPath, clusteringMaxNumGroups), partitionPaths.size());
+    } finally {
+      sharedStrategy.ifPresent(HoodieBroadcast::destroy);
+    }
 
     if (config.isIncrementalTableServiceEnabled()) {
       Set<String> skippedPartitions = new HashSet<>();
@@ -253,6 +254,26 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
         .setPreserveHoodieMetadata(true)
         .setMissingSchedulePartitions(missingPartitions)
         .build());
+  }
+
+  /**
+   * Builds the clustering groups of a partition, and returns the partition as missed when some of its file slices are
+   * left for a later plan, or an empty string otherwise.
+   */
+  private Pair<List<HoodieClusteringGroup>, String> buildClusteringGroupsAndMissedPartition(String partitionPath, int clusteringMaxNumGroups) {
+    List<FileSlice> fileSlicesEligible = getFileSlicesEligibleForClustering(partitionPath).collect(Collectors.toList());
+    Pair<Stream<HoodieClusteringGroup>, Boolean> groupPair = buildClusteringGroupsForPartition(partitionPath, fileSlicesEligible);
+    List<HoodieClusteringGroup> clusteringGroupsPartition = groupPair.getLeft().collect(Collectors.toList());
+    boolean partialScheduled = groupPair.getRight();
+    // return missed partition path
+    // because the candidate fileSlices in the current partition have not been completely processed.
+    if (clusteringGroupsPartition.size() > clusteringMaxNumGroups) {
+      return Pair.of(clusteringGroupsPartition.subList(0, clusteringMaxNumGroups), partitionPath);
+    } else if (partialScheduled) {
+      return Pair.of(clusteringGroupsPartition, partitionPath);
+    } else {
+      return Pair.of(clusteringGroupsPartition, "");
+    }
   }
 
   public List<String> getRegexPatternMatchedPartitions(HoodieWriteConfig config, List<String> partitionPaths) {

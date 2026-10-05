@@ -27,6 +27,7 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.RunsTableService;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieBroadcast;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.EngineType;
@@ -706,19 +707,26 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     ValidationUtils.checkArgument(fileGroupFileIds.size() == fileGroupCount);
     engineContext.setJobStatus(this.getClass().getSimpleName(), msg);
     final TaskContextSupplier taskContextSupplier = engineContext.getTaskContextSupplier();
-    engineContext.foreach(fileGroupFileIds, fileGroupFileId -> {
-      try {
-        createEmptyFileGroupLogFile(
-            dataMetaClient.getStorage(),
-            FSUtils.constructAbsolutePath(metadataWriteConfig.getBasePath(), relativePartitionPath),
-            fileGroupFileId,
-            instantTime,
-            taskContextSupplier,
-            metadataWriteConfig);
-      } catch (IOException | InterruptedException e) {
-        throw new HoodieException(String.format("Failed to create file group %s for partition %s", fileGroupFileId, relativePartitionPath), e);
-      }
-    }, fileGroupFileIds.size());
+    final StoragePath partitionPath = FSUtils.constructAbsolutePath(metadataWriteConfig.getBasePath(), relativePartitionPath);
+    HoodieBroadcast<Pair<HoodieTableMetaClient, HoodieWriteConfig>> metaClientAndConfig =
+        engineContext.broadcast(Pair.of(dataMetaClient, metadataWriteConfig));
+    try {
+      engineContext.foreach(fileGroupFileIds, fileGroupFileId -> {
+        try {
+          createEmptyFileGroupLogFile(
+              metaClientAndConfig.value().getLeft().getStorage(),
+              partitionPath,
+              fileGroupFileId,
+              instantTime,
+              taskContextSupplier,
+              metaClientAndConfig.value().getRight());
+        } catch (IOException | InterruptedException e) {
+          throw new HoodieException(String.format("Failed to create file group %s for partition %s", fileGroupFileId, relativePartitionPath), e);
+        }
+      }, fileGroupFileIds.size());
+    } finally {
+      metaClientAndConfig.destroy();
+    }
   }
 
   private void clearExistingMetadataPartition(String relativePartitionPath) throws IOException {

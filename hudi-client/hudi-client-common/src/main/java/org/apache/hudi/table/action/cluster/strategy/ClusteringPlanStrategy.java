@@ -54,6 +54,9 @@ import java.util.stream.Stream;
 
 /**
  * Pluggable implementation for scheduling clustering and creating ClusteringPlan.
+ *
+ * <p>The planning tasks of an executor share one instance of a strategy in an {@code org.apache.hudi} package, so
+ * such a strategy must be safe for concurrent calls. A strategy in any other package gets one copy per task.
  */
 @Getter(AccessLevel.PROTECTED)
 @Slf4j
@@ -64,6 +67,8 @@ public abstract class ClusteringPlanStrategy<T,I,K,O> implements Serializable {
   protected final HoodieTable<T, I, K, O> hoodieTable;
   private final transient HoodieEngineContext engineContext;
   private final HoodieWriteConfig writeConfig;
+  @Getter(AccessLevel.NONE)
+  private Set<HoodieFileGroupId> fileGroupsInPendingTableServices;
 
   /**
    * Check if the given class is deprecated.
@@ -121,16 +126,29 @@ public abstract class ClusteringPlanStrategy<T,I,K,O> implements Serializable {
    * Return file slices eligible for clustering. FileIds in pending clustering/compaction are not eligible for clustering.
    */
   protected Stream<FileSlice> getFileSlicesEligibleForClustering(String partition) {
-    SyncableFileSystemView fileSystemView = (SyncableFileSystemView) getHoodieTable().getSliceView();
-    Set<HoodieFileGroupId> fgIdsInPendingCompactionLogCompactionAndClustering =
-        Stream.concat(fileSystemView.getPendingCompactionOperations(), fileSystemView.getPendingLogCompactionOperations())
-            .map(instantTimeOpPair -> instantTimeOpPair.getValue().getFileGroupId())
-            .collect(Collectors.toSet());
-    fgIdsInPendingCompactionLogCompactionAndClustering.addAll(fileSystemView.getFileGroupsInPendingClustering().map(Pair::getKey).collect(Collectors.toSet()));
-
+    Set<HoodieFileGroupId> fgIdsInPendingCompactionLogCompactionAndClustering = fileGroupsInPendingTableServices != null
+        ? fileGroupsInPendingTableServices : readFileGroupsInPendingTableServices();
     return hoodieTable.getSliceView().getLatestFileSlicesStateless(partition)
         // file ids already in clustering are not eligible
         .filter(slice -> !fgIdsInPendingCompactionLogCompactionAndClustering.contains(slice.getFileGroupId()));
+  }
+
+  /**
+   * Reads the file groups in pending compaction, log compaction or clustering, and keeps them for
+   * {@link #getFileSlicesEligibleForClustering}, which otherwise reads them for every partition.
+   */
+  protected void loadFileGroupsInPendingTableServices() {
+    fileGroupsInPendingTableServices = readFileGroupsInPendingTableServices();
+  }
+
+  private Set<HoodieFileGroupId> readFileGroupsInPendingTableServices() {
+    SyncableFileSystemView fileSystemView = (SyncableFileSystemView) getHoodieTable().getSliceView();
+    Set<HoodieFileGroupId> fileGroupIds =
+        Stream.concat(fileSystemView.getPendingCompactionOperations(), fileSystemView.getPendingLogCompactionOperations())
+            .map(instantTimeOpPair -> instantTimeOpPair.getValue().getFileGroupId())
+            .collect(Collectors.toSet());
+    fileGroupIds.addAll(fileSystemView.getFileGroupsInPendingClustering().map(Pair::getKey).collect(Collectors.toSet()));
+    return fileGroupIds;
   }
 
   /**
