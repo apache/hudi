@@ -58,7 +58,10 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
   // Fetch internal schema
   private lazy val querySchemaOption: util.Option[InternalSchema] = pruneInternalSchema(internalSchemaOpt, requiredSchema)
 
-  var shouldUseInternalSchema: Boolean = querySchemaOption.isPresent && tablePath != null
+  // Empty projections (count(*), select 1) read no column data, so skip schema-on-read. Their query
+  // schema is unpruned (see pruneInternalSchema), and merging it would request every column, including
+  // a variant as a plain struct that Spark 4.x's vectorized reader rejects.
+  var shouldUseInternalSchema: Boolean = requiredSchema.nonEmpty && querySchemaOption.isPresent && tablePath != null
 
   private lazy val schemaUtils: HoodieSchemaUtils = sparkAdapter.getSchemaUtils
 
@@ -84,12 +87,8 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
     // Clone new conf
     val hadoopAttemptConf = new Configuration(sharedConf)
     typeChangeInfos = if (shouldUseInternalSchema) {
-      // Empty projections (count(*), select 1) read no column data, so there is nothing to
-      // reconstruct - and querySchemaOption is the UNPRUNED table schema in that case (see
-      // pruneInternalSchema), so running the guard would fail queries that work fine.
-      if (requiredSchema.nonEmpty) {
-        ParquetSchemaEvolutionUtils.validateNoShreddedVariants(requiredSchema, querySchemaOption.get(), footerFileMetaData)
-      }
+      // shouldUseInternalSchema implies a non-empty projection, so querySchemaOption is pruned here.
+      ParquetSchemaEvolutionUtils.validateNoShreddedVariants(requiredSchema, querySchemaOption.get(), footerFileMetaData)
       val mergedInternalSchema = new InternalSchemaMerger(fileSchema, querySchemaOption.get(), true, true).mergeSchema()
       val mergedSchema = SparkInternalSchemaConverter.constructSparkSchemaFromInternalSchema(mergedInternalSchema)
 

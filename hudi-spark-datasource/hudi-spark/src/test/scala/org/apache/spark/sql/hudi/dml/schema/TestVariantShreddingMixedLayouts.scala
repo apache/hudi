@@ -1044,9 +1044,11 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
           withSQLConf("spark.sql.variant.pushVariantIntoScan" -> "false") {
             checkAnswer(s"select id, ts from $tableName order by id")(Seq(1, 1000), Seq(2, 1000))
           }
-          // count(*) is deliberately not pinned: it fails on any schema-on-read variant table once
-          // an internal schema is committed, rename or not (#20139), and the existing pin in
-          // "Schema-on-read reads of shredded variant files fail fast" is green only through #20140.
+          // count(*) reads no column data, so it skips the schema-on-read merge
+          // (ParquetSchemaEvolutionUtils.shouldUseInternalSchema) and counts on every leg. The merge
+          // used to request the variant as a plain struct, which Spark 4.x's vectorized reader rejects
+          // for a VARIANT-annotated group, so COW counts failed whether the file was shredded or not.
+          checkAnswer(s"select count(*) from $tableName")(Seq(2))
         }
       }
     }
