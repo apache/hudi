@@ -607,6 +607,17 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
       assert(scanReadSchema(sql) == s"struct<id:int,v:$readV>", s"[$leg] ReadSchema of the scan of: $sql")
     }
 
+    // The scan reports the base file format as its short name (#20029), so Spark pushes nested
+    // predicates: with the rule on, a variant_get predicate arrives as a filter on the projection
+    // struct's ordinal-named member, a name no file carries as a parquet leaf. ParquetFilters drops
+    // it per file - it neither skips a row group nor lands on another column - and the checkAnswer
+    // counts in each leg, identical on both arms, are what pin that. This pins that the filter
+    // really was pushed, so those counts cannot go vacuous if the pushdown is lost again.
+    def assertPushedFilters(sql: String, pushIntoScan: String, on: String, off: String, leg: String): Unit = {
+      val expected = if (pushIntoScan.toBoolean) on else off
+      assert(scanPushedFilters(sql) == expected, s"[$leg] PushedFilters of the scan of: $sql")
+    }
+
     // Read-mode test; SPARK pinned (see the mixed-files test above).
     Seq("true", "false").foreach { pushIntoScan =>
       withSQLConf("spark.sql.variant.pushVariantIntoScan" -> pushIntoScan) {
@@ -640,6 +651,13 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
           checkAnswer(
             s"select count(*) from $tableName where try_variant_get(v, '$$.d', 'boolean')")(Seq(10))
           checkAnswer(s"select count(*) from $tableName where v is null")(Seq(0))
+          // An IsNull filter is the one that would drop rows if it resolved against the wrong leaf.
+          checkAnswer(
+            s"select count(*) from $tableName where try_variant_get(v, '$$.a', 'bigint') is null")(Seq(20))
+          assertPushedFilters(s"select count(*) from $tableName where try_variant_get(v, '$$.a', 'bigint') > 5",
+            pushIntoScan, on = "[IsNotNull(v), GreaterThan(v.`0`,5)]", off = "[IsNotNull(v)]", leg)
+          assertPushedFilters(s"select count(*) from $tableName where try_variant_get(v, '$$.a', 'bigint') is null",
+            pushIntoScan, on = "[IsNull(v.`0`)]", off = "[]", leg)
           assertVariantSegments(tableName, leg, Seq(("v", Seq(
             (0 until 20, ObjA), (20 until 30, ObjAConflict), (30 until 40, ObjB)))))
           assertScanReadsV(s"select id, try_variant_get(v, '$$.a', 'bigint') from $tableName",
@@ -684,6 +702,8 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
             s"select id from $tableName where variant_get(v, '$$.b', 'string') = 'b7'")(Seq(7))
           assertScanReadsV(s"select id, try_variant_get(v, '$$.a', 'bigint') from $tableName",
             pushIntoScan, pushedPaths = 1, leg)
+          assertPushedFilters(s"select count(*) from $tableName where try_variant_get(v, '$$.a', 'bigint') > 100",
+            pushIntoScan, on = "[IsNotNull(v), GreaterThan(v.`0`,100)]", off = "[IsNotNull(v)]", leg)
 
           // A MERGE INTO that assigns ts alone writes a partial log block
           // (hoodie.spark.sql.merge.into.partial.updates defaults to true on MOR), so the read
@@ -1525,6 +1545,12 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
           assert(variantProjectionPushedIntoScan(
             s"select id, variant_get(s.inner, '$$.k', 'string') from $tableName") == pushed,
             s"[$leg] PushVariantIntoScan $verdict rewritten s.inner into a projection struct")
+          // The nested twin of the top-level pin: the member filter sits one struct further down
+          // and is dropped the same way; IsNotNull(s.inner) is itself a nested filter on a group,
+          // which ParquetFilters does not serve either.
+          val filtered = s"select id from $tableName where variant_get(s.inner, '$$.k', 'string') = 'x7'"
+          val expectedFilters = if (pushed) "[IsNotNull(s.inner), EqualTo(s.inner.`0`,x7)]" else "[IsNotNull(s.inner)]"
+          assert(scanPushedFilters(filtered) == expectedFilters, s"[$leg] PushedFilters of the scan of: $filtered")
         }
       }
     }
