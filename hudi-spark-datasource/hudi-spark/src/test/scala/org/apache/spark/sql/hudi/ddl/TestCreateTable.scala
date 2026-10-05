@@ -21,10 +21,11 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat
 import org.apache.hudi.keygen.SimpleKeyGenerator
-import org.apache.hudi.testutils.Assertions
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -34,7 +35,6 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMetadata
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
-import org.junit.jupiter.api.function.Executable
 
 import scala.collection.JavaConverters._
 
@@ -953,7 +953,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         val tableName = generateTableName
         val tablePath = s"${tmp.getCanonicalPath}/$tableName"
         import spark.implicits._
-        // The COMPLEX_KEYGEN_NEW_ENCODING config only works for table version 8 and below
+        // The table records the encoding its first writer produced, and every later write follows it
         val keyPrefix = if (encodeSingleKeyFieldValue) "" else "id:"
         val df = Seq((1, "a1", 10, 1000, "2025-07-29", 12)).toDF("id", "name", "value", "ts", "day", "hh")
         // Write a table by spark dataframe.
@@ -983,7 +983,9 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
           Seq(keyPrefix + "1", 1, "a1", 10, 1000, "2025-07-29", 12)
         )
 
-        spark.sql(s"set hoodie.write.complex.keygen.new.encoding = $encodeSingleKeyFieldValue")
+        // The opposite session setting must not change how the SQL writes key their records: the table's recorded
+        // encoding decides.
+        spark.sql(s"set hoodie.write.complex.keygen.new.encoding = ${!encodeSingleKeyFieldValue}")
 
         // Check the missing properties for spark sql
         val metaClient = createMetaClient(spark, tablePath)
@@ -991,6 +993,8 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
         assertResult("day,hh")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
         assertResult("ts")(properties(HoodieTableConfig.PRECOMBINE_FIELD.key))
+        assertResult(ComplexKeyGenEncoding.fromUseNewEncoding(encodeSingleKeyFieldValue).name)(
+          properties(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key))
 
         val query = s"select _hoodie_record_key, _hoodie_partition_path, id, name, value, ts, day, hh from $tableName order by id"
 
@@ -1576,18 +1580,44 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
                                               query: String)
                                              (expectedRowsBefore: Seq[Any]*)
                                              (expectedRowsAfter: Seq[Any]*): Unit = {
-    // By default, the complex key generator validation is enabled and should throw exception on DML
-    Assertions.assertComplexKeyGeneratorValidationThrows(new Executable() {
-      override def execute(): Unit = {
-        spark.sql(dmlToWrite)
-      }
-    }, "ingestion")
-    // Query should still succeed
     checkAnswer(query)(expectedRowsBefore: _*)
-    // Disabling the complex key generator validation should let write succeed
-    spark.sql(s"set ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()}=false")
+    // The table records its record key encoding, so the write succeeds with the validation left at its default
     spark.sql(dmlToWrite)
-    spark.sql(s"set ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()}=true")
     checkAnswer(query)(expectedRowsAfter: _*)
+  }
+
+  test("Test Merge Into a legacy single-field complex keygen table without the recorded encoding") {
+    withTempDir { tmp =>
+      // the checked-in 0.14.1 table (version 6): bare record keys, written before the encoding was recorded
+      val fixtureName = "hudi-v6-table-complex-keygen-bare"
+      HoodieTestUtils.extractZipToDirectory(s"/upgrade-downgrade-fixtures/complex-keygen-tables/$fixtureName.zip", tmp.toPath, getClass)
+      val tablePath = s"${tmp.getCanonicalPath}/$fixtureName"
+      val tableName = generateTableName
+      assertResult(false)(createMetaClient(spark, tablePath).getTableConfig.contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING))
+
+      spark.sql(s"create table $tableName using hudi location '$tablePath'")
+      checkAnswer(s"select _hoodie_record_key, id from $tableName where id in ('id1', 'id2') order by id")(
+        Seq("id1", "id1"), Seq("id2", "id2"))
+
+      // the first write after the fix: it must find the bare key of id1 and update it in place, not insert a prefixed twin
+      spark.sql(
+        s"""
+           |merge into $tableName h0
+           |using (
+           |  select 'id1' as id, 'Alice_merged' as name, 5000L as ts, '2023-01-01' as `partition`, 'a' as category union all
+           |  select 'id9' as id, 'Ivy' as name, 9000L as ts, '2023-01-05' as `partition`, 'a' as category
+           |) s0
+           |on h0.id = s0.id
+           |when matched then update set *
+           |when not matched then insert *
+           |""".stripMargin)
+
+      checkAnswer(s"select _hoodie_record_key, id, name, ts from $tableName where id in ('id1', 'id9') order by id")(
+        Seq("id1", "id1", "Alice_merged", 5000L), Seq("id9", "id9", "Ivy", 9000L))
+      assertResult(9L)(spark.sql(s"select id from $tableName").count())
+      assertResult(9L)(spark.sql(s"select distinct _hoodie_record_key from $tableName").count())
+      assertResult(ComplexKeyGenEncoding.VALUE_ONLY.name)(
+        createMetaClient(spark, tablePath).getTableConfig.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING))
+    }
   }
 }

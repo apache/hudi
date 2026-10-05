@@ -41,7 +41,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -206,6 +208,18 @@ public class HoodieTableConfig extends HoodieConfig {
       .key("hoodie.table.keygenerator.class")
       .noDefaultValue()
       .withDocumentation("Key Generator class property for the hoodie table");
+
+  public static final ConfigProperty<String> COMPLEX_KEYGEN_ENCODING = ConfigProperty
+      .key("hoodie.table.complex.keygenerator.encoding")
+      .noDefaultValue()
+      .sinceVersion("0.16.0")
+      .withDocumentation("Encoding of the _hoodie_record_key meta field for a ComplexKeyGenerator configured with a "
+          + "single record key field: FIELD_PREFIXED (`<field_name>:<field_value>`) or VALUE_ONLY (bare `<field_value>`). "
+          + "A table without this property gets it recorded by its next write or upgrade: from the encoding found in its "
+          + "data, or for a table that holds no data yet, the one `hoodie.write.complex.keygen.new.encoding` selects. Once "
+          + "present it is authoritative for writers and readers, and is kept across upgrades and downgrades. The "
+          + "backfill inspects the most recently written data file only, so a table that already contains both "
+          + "encodings is not repaired by it.");
 
   public static final ConfigProperty<HoodieTimelineTimeZone> TIMELINE_TIMEZONE = ConfigProperty
       .key("hoodie.table.timeline.timezone")
@@ -670,6 +684,26 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public String getArchivelogFolder() {
     return getStringOrDefault(ARCHIVELOG_FOLDER);
+  }
+
+  /**
+   * @return the persisted record key encoding of a single-field complex key generator table
+   * ({@link #COMPLEX_KEYGEN_ENCODING}), or empty when the property has not been set on the table.
+   */
+  public Option<ComplexKeyGenEncoding> getComplexKeyGenEncoding() {
+    return contains(COMPLEX_KEYGEN_ENCODING)
+        ? Option.of(ComplexKeyGenEncoding.fromString(getString(COMPLEX_KEYGEN_ENCODING)))
+        : Option.empty();
+  }
+
+  /**
+   * @return whether the table uses the complex key generator with exactly one record key field, the shape
+   * whose {@code _hoodie_record_key} encoding is tracked by {@link #COMPLEX_KEYGEN_ENCODING}.
+   */
+  public boolean isComplexKeyGenWithSingleRecordKeyField() {
+    Option<String[]> recordKeyFields = getRecordKeyFields();
+    return KeyGeneratorType.isComplexKeyGenerator(this)
+        && recordKeyFields.isPresent() && recordKeyFields.get().length == 1;
   }
 
   /**

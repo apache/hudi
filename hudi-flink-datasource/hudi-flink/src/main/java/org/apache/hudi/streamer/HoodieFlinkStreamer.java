@@ -100,6 +100,7 @@ public class HoodieFlinkStreamer {
 
     OptionsInference.setupSinkTasks(conf, env.getParallelism());
     OptionsInference.setupClientId(conf);
+    OptionsInference.setupComplexKeygenEncoding(conf);
     DataStream<Object> pipeline;
     // Append mode
     if (OptionsResolver.isAppendMode(conf)) {

@@ -22,7 +22,6 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.keygen.KeyGenUtils
 import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.metadata.{HoodieTableMetadata, HoodieTableMetadataUtil}
 import org.apache.hudi.storage.StoragePathInfo
@@ -87,10 +86,11 @@ class RecordLevelIndexSupport(spark: SparkSession,
    * @return Tuple of List of filtered queries and list of record key literals that need to be matched
    */
   def filterQueriesWithRecordKey(queryFilters: Seq[Expression]): (List[Expression], List[String]) = {
-    if (!isIndexAvailable || KeyGenUtils.mayUseNewEncodingForComplexKeyGen(metaClient.getTableConfig)) {
+    if (!isIndexAvailable) {
       (List.empty, List.empty)
     } else if (KeyGeneratorType.isComplexKeyGenerator(metaClient.getTableConfig)) {
-      // Complex record keys filtering is not yet supported. Support was added in HUDI-8432.
+      // Complex record keys filtering, including a single field whose key encoding varies across releases, is not
+      // yet supported. Support was added in HUDI-8432.
       (List.empty, List.empty)
     } else {
       var recordKeyQueries: List[Expression] = List.empty

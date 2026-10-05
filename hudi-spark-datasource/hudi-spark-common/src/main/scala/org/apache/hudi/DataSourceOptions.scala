@@ -984,6 +984,11 @@ object DataSourceOptionsHelper {
     if (!params.contains(DataSourceWriteOptions.TABLE_TYPE.key())) {
       missingWriteConfigs ++= Map(DataSourceWriteOptions.TABLE_TYPE.key() -> tableConfig.getTableType.name())
     }
+    // the recorded record key encoding describes the table's data: later writes key with it (a conflicting write
+    // option fails the table config validation)
+    if (tableConfig.getComplexKeyGenEncoding.isPresent) {
+      missingWriteConfigs ++= Map(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key() -> tableConfig.getComplexKeyGenEncoding.get.name())
+    }
     missingWriteConfigs.toMap
   }
 

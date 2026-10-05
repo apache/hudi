@@ -18,7 +18,9 @@
 
 package org.apache.hudi.configuration;
 
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.util.ClientIds;
+import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
 import org.slf4j.Logger;
@@ -89,5 +91,21 @@ public class OptionsInference {
         }
       }
     }
+  }
+
+  /**
+   * Sets up the record key encoding of a single-field complex key generator job that does not go through
+   * {@code HoodieTableFactory}: the encoding the existing table records, otherwise the one the job's keys get.
+   */
+  public static void setupComplexKeygenEncoding(Configuration conf) {
+    StreamerUtil.getTableConfig(conf.getString(FlinkOptions.PATH), HadoopConfigurations.getHadoopConf(conf))
+        .ifPresent(tableConfig -> {
+          if (tableConfig.contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING)) {
+            conf.setString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), tableConfig.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING));
+          }
+        });
+    boolean complexHoodieKey = conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(",").length > 1
+        || conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",").length > 1;
+    StreamerUtil.checkKeygenGenerator(complexHoodieKey, conf);
   }
 }
