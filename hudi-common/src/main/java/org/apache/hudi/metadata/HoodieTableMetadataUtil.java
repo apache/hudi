@@ -2257,12 +2257,13 @@ public class HoodieTableMetadataUtil {
                                                                                  HoodieIndexVersion partitionStatsIndexVersion
   ) {
     try {
+      final boolean isTightBound = isShouldScanColStatsForTightBound(dataMetaClient);
       return columnRangeMetadataPartitionPair
           .flatMapValues(List::iterator)
           .groupByKey()
           .map(pair -> {
             final String partitionName = pair.getLeft();
-            return collectAndProcessColumnMetadata(pair.getRight(), partitionName, isShouldScanColStatsForTightBound(dataMetaClient), Option.empty(), colsToIndexSchemaMap, partitionStatsIndexVersion);
+            return collectAndProcessColumnMetadata(pair.getRight(), partitionName, isTightBound, Option.empty(), colsToIndexSchemaMap, partitionStatsIndexVersion);
           })
           .flatMap(recordStream -> recordStream.iterator());
     } catch (Exception e) {

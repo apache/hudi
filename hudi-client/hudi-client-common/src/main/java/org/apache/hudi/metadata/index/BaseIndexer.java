@@ -19,6 +19,7 @@
 
 package org.apache.hudi.metadata.index;
 
+import org.apache.hudi.common.data.HoodieBroadcastScope;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -26,6 +27,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.index.model.IndexPartitionAndRecords;
 import org.apache.hudi.metadata.index.model.IndexRestoreContext;
+import org.apache.hudi.metadata.index.model.IndexUpdateContext;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -49,6 +51,14 @@ public abstract class BaseIndexer implements Indexer {
     this.engineContext = engineContext;
     this.dataTableWriteConfig = dataTableWriteConfig;
     this.dataTableMetaClient = dataTableMetaClient;
+  }
+
+  /**
+   * Returns the scope to make the broadcasts of an index update in: the one the metadata writer shares across the
+   * index updates of the commit, or else a new one that is never closed.
+   */
+  protected HoodieBroadcastScope broadcastScope(IndexUpdateContext context) {
+    return context.broadcastScope().orElseGet(() -> new HoodieBroadcastScope(engineContext));
   }
 
   /**

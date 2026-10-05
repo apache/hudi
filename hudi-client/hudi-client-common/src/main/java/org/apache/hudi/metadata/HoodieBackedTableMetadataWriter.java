@@ -27,6 +27,7 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.RunsTableService;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieBroadcastScope;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.EngineType;
@@ -983,15 +984,18 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
     List<HoodieWriteStat> allWriteStats = new ArrayList<>(partialWriteStats);
     // update metadata for left over partitions which does not have streaming writes support.
-    allWriteStats.addAll(prepareAndWriteToNonStreamingPartitions(metadata, instantTime).map(WriteStatus::getStat).collectAsList());
+    try (HoodieBroadcastScope broadcastScope = new HoodieBroadcastScope(engineContext)) {
+      allWriteStats.addAll(prepareAndWriteToNonStreamingPartitions(metadata, instantTime, broadcastScope).map(WriteStatus::getStat).collectAsList());
+    }
     getWriteClient().commitStats(instantTime, allWriteStats, Option.empty(), HoodieTimeline.DELTA_COMMIT_ACTION,
         Collections.emptyMap(), Option.empty());
   }
 
-  private HoodieData<WriteStatus> prepareAndWriteToNonStreamingPartitions(HoodieCommitMetadata commitMetadata, String instantTime) {
+  private HoodieData<WriteStatus> prepareAndWriteToNonStreamingPartitions(HoodieCommitMetadata commitMetadata, String instantTime,
+                                                                          HoodieBroadcastScope broadcastScope) {
     Set<String> partitionsToUpdate = getNonStreamingMetadataPartitionsToUpdate();
-    List<IndexPartitionAndRecords> mdtPartitionsAndUnTaggedRecords = new BatchMetadataConversionFunction(instantTime, commitMetadata, partitionsToUpdate)
-        .convertMetadata();
+    List<IndexPartitionAndRecords> mdtPartitionsAndUnTaggedRecords = new BatchMetadataConversionFunction(instantTime, commitMetadata, partitionsToUpdate,
+        broadcastScope).convertMetadata();
 
     // write to mdt table for non-streaming mdt partitions
     Pair<HoodieData<HoodieRecord>, List<HoodieFileGroupId>> taggedRecords = tagRecordsWithLocation(mdtPartitionsAndUnTaggedRecords, false);
@@ -1065,7 +1069,10 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     checkClusteringKeepsRecordKeys(commitMetadata);
     mayBeReinitMetadataReader();
     maybeInitializeNewFileGroupsForPartitionedRLI(commitMetadata, instantTime);
-    processAndCommit(instantTime, new BatchMetadataConversionFunction(instantTime, commitMetadata, getMetadataPartitionsToUpdate()));
+    // the broadcasts of the index updates are released once the updates are written
+    try (HoodieBroadcastScope broadcastScope = new HoodieBroadcastScope(engineContext)) {
+      processAndCommit(instantTime, new BatchMetadataConversionFunction(instantTime, commitMetadata, getMetadataPartitionsToUpdate(), broadcastScope));
+    }
     closeInternal();
   }
 
@@ -1138,10 +1145,14 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     private final HoodieCommitMetadata commitMetadata;
     private final String instantTime;
     private final Set<String> partitionsToUpdate;
-    public BatchMetadataConversionFunction(String instantTime, HoodieCommitMetadata commitMetadata, Set<String> partitionsToUpdate) {
+    private final HoodieBroadcastScope broadcastScope;
+
+    public BatchMetadataConversionFunction(String instantTime, HoodieCommitMetadata commitMetadata, Set<String> partitionsToUpdate,
+                                           HoodieBroadcastScope broadcastScope) {
       this.instantTime = instantTime;
       this.commitMetadata = commitMetadata;
       this.partitionsToUpdate = partitionsToUpdate;
+      this.broadcastScope = broadcastScope;
     }
 
     @Override
@@ -1155,7 +1166,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
                 String.format("Index partition type %s should be included in the enabled index partitions: %s",
                     partitionType, enabledIndexerMap.keySet()));
             return indexer.buildUpdate(IndexUpdateContext.of(instantTime, getTableMetadata(),
-                Lazy.lazily(() -> getMetadataView()), commitMetadata)).stream();
+                Lazy.lazily(() -> getMetadataView()), commitMetadata, Option.of(broadcastScope))).stream();
           }).collect(Collectors.toList());
     }
   }
@@ -1499,10 +1510,13 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     }
     final int fileGroupCount = fileSlices.size();
     ValidationUtils.checkArgument(fileGroupCount > 0, String.format("FileGroup count for MDT partition %s should be > 0", partitionPath));
+    final List<HoodieRecordLocation> fileGroupLocations = fileSlices.stream()
+        .map(slice -> new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()))
+        .collect(Collectors.toList());
     return r -> {
-      FileSlice slice = fileSlices.get(mappingFunction.apply(r.getRecordKey(), fileGroupCount));
+      HoodieRecordLocation location = fileGroupLocations.get(mappingFunction.apply(r.getRecordKey(), fileGroupCount));
       r.unseal();
-      r.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
+      r.setCurrentLocation(new HoodieRecordLocation(location.getInstantTime(), location.getFileId()));
       r.seal();
       return r;
     };

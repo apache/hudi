@@ -189,7 +189,7 @@ class TestPartitionStatsIndexer {
     List<IndexPartitionAndRecords> result;
     try (MockedStatic<PartitionStatsIndexer> mockedPartitionStatsIndexer = mockStatic(PartitionStatsIndexer.class)) {
       mockedPartitionStatsIndexer.when(() -> PartitionStatsIndexer.convertMetadataToPartitionStatsRecords(
-              any(), any(), any(), any(), any(), any(), any(), any(), anyBoolean()))
+              any(), any(), any(), any(), any(), any(), any(), any(), anyBoolean(), any()))
           .thenReturn(partitionStatsData);
 
       result = indexer.buildUpdate(IndexUpdateContext.of(
