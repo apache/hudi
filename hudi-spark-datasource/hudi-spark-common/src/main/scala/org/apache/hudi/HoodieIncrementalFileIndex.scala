@@ -19,6 +19,7 @@ package org.apache.hudi
 
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.core.read.BaseHoodieTableFileIndex
 import org.apache.hudi.storage.StoragePathInfo
 import org.apache.hudi.util.{JFunction, SparkConfigUtils}
 
@@ -45,21 +46,20 @@ class HoodieIncrementalFileIndex(override val spark: SparkSession,
 
   // Skip the Spark optimizer's partition pruning rule (e.g. Spark33HoodiePruneFileSourcePartitions)
   // which would trigger a full-table partition listing via the base class. The incremental file
-  // index already selects only modified file groups via listFileSplits().
-  hasPushedDownPartitionPredicates = true
+  // index already selects only modified file groups, and prunes them by the partition filters, in
+  // listFileSplits(). Overridden rather than set so that it also holds after refresh().
+  override def hasPredicatesPushedDown: Boolean = true
 
-  override def filterFileSlices(dataFilters: Seq[Expression], partitionFilters: Seq[Expression], isPartitionPruned: Boolean = false)
+  // Serve file slices from the incremental relation rather than the base class listing, in case
+  // anything still calls this.
+  override def filterFileSlices(dataFilters: Seq[Expression], partitionFilters: Seq[Expression],
+                                isPartitionPruneOnly: Boolean)
   : Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])] = {
-    hasPushedDownPartitionPredicates = true
-    val fileSliceMap = mergeOnReadIncrementalRelation.listFileSplits(partitionFilters, dataFilters)
-    fileSliceMap.toSeq.flatMap { case (partitionValues, fileSlices) =>
-      val nonEmpty = fileSlices.filter(!_.isEmpty)
-      if (nonEmpty.nonEmpty) {
-        Seq((Option.empty[BaseHoodieTableFileIndex.PartitionPath], nonEmpty))
-      } else {
-        Seq.empty
-      }
-    }
+    mergeOnReadIncrementalRelation.listFileSplits(partitionFilters, dataFilters).values.flatten
+      .filter(!_.isEmpty)
+      .groupBy(_.getPartitionPath)
+      .map { case (partitionPath, fileSlices) => (Option(convertToPartitionPath(partitionPath)), fileSlices.toSeq) }
+      .toSeq
   }
 
   override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
