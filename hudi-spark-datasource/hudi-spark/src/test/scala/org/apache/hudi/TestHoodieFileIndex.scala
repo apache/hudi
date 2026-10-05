@@ -46,7 +46,7 @@ import org.apache.hudi.util.JFunction
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, Expression, GetStructField, GreaterThanOrEqual, LessThan, Literal, Or}
-import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation, NoopCache, PartitionDirectory, PartitionedFile}
+import org.apache.spark.sql.execution.datasources.{FileIndex, HadoopFsRelation, LogicalRelation, NoopCache, PartitionDirectory, PartitionedFile}
 import org.apache.spark.sql.functions.{lit, struct}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types._
@@ -902,39 +902,44 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
   def testListFilesGroupsFileSlicesByPartition(tableType: HoodieTableType): Unit = {
     val partitionCount = 5
     val commitCount = 3
-    val writeOpts = writeFileGroups(tableType, partitionCount, commitCount)
+    val table = writeFileGroups(tableType, partitionCount, commitCount)
     val fileIndex = HoodieFileIndex(spark, metaClient, None, queryOpts,
       includeLogFiles = tableType == HoodieTableType.MERGE_ON_READ, shouldEmbedFileSlices = true)
 
     val directories = fileIndex.listFiles(Nil, Nil)
-    assertEquals(partitionCount, directories.size)
-    assertEquals(partitionCount, directories.map(_.values).distinct.size)
-    directories.foreach { directory =>
-      assertFalse(directory.values.isInstanceOf[HoodiePartitionFileSliceMapping])
-      assertEquals(commitCount, directory.files.size)
-    }
+    assertDirectoryLayout(directories, partitionCount, partitionCount * commitCount, fileSlicesWithLogFilesCount = 0)
+    directories.foreach(directory => assertEquals(commitCount, directory.files.size))
     assertSameSplitPlanning(fileIndex, directories, exactFileOrder = true)
 
-    val incrementalRelation = spark.read.format("hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, "000")
-      .load(basePath)
-      .queryExecution.analyzed.collectFirst { case relation: LogicalRelation => relation.relation.asInstanceOf[HadoopFsRelation] }.get
-    assertEquals(partitionCount, incrementalRelation.location.listFiles(Nil, Nil).size)
+    val snapshot = DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL
+    val readOptimized = DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL
+    val incremental = DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL
+    Seq(snapshot, readOptimized, incremental).foreach { queryType =>
+      assertDirectoryLayout(loadFileIndex(queryType).listFiles(Nil, Nil), partitionCount, partitionCount * commitCount,
+        fileSlicesWithLogFilesCount = 0)
+      assertEquals(table.timestamps.toSeq.sorted, readTimestamps(queryType))
+    }
 
     if (tableType == HoodieTableType.MERGE_ON_READ) {
-      // update one record in each of the first two partitions, which adds log files to one file group of each
-      upsertRecords(writeOpts, Seq(("key-0-0", 0, "ts-3"), ("key-0-1", 1, "ts-3")))
+      // update one record in each of the first two partitions, which appends log files to one file group of each
+      val updates = Seq(("key-0-0", 0, "ts-3"), ("key-0-1", 1, "ts-3"))
+      upsertToLogFiles(table, updates)
       fileIndex.refresh()
 
       val directoriesWithLogFiles = fileIndex.listFiles(Nil, Nil)
-      val (perSliceDirectories, perPartitionDirectories) =
-        directoriesWithLogFiles.partition(_.values.isInstanceOf[HoodiePartitionFileSliceMapping])
-      assertEquals(partitionCount, perPartitionDirectories.size)
-      assertEquals(partitionCount * commitCount - 2, perPartitionDirectories.map(_.files.size).sum)
-      assertEquals(2, perSliceDirectories.size)
-      perSliceDirectories.foreach(directory => assertTrue(getMappedSlice(directory).hasLogFiles))
+      assertDirectoryLayout(directoriesWithLogFiles, partitionCount, partitionCount * commitCount - 2, fileSlicesWithLogFilesCount = 2)
       assertSameSplitPlanning(fileIndex, directoriesWithLogFiles, exactFileOrder = false)
+
+      // snapshot and incremental queries merge the log files, while read-optimized queries read the base files only
+      val updatedTimestamps = table.timestamps ++ updates.map { case (key, _, timestamp) => key -> timestamp }
+      Seq(snapshot, incremental).foreach { queryType =>
+        assertDirectoryLayout(loadFileIndex(queryType).listFiles(Nil, Nil), partitionCount, partitionCount * commitCount - 2,
+          fileSlicesWithLogFilesCount = 2)
+        assertEquals(updatedTimestamps.toSeq.sorted, readTimestamps(queryType))
+      }
+      assertDirectoryLayout(loadFileIndex(readOptimized).listFiles(Nil, Nil), partitionCount, partitionCount * commitCount,
+        fileSlicesWithLogFilesCount = 0)
+      assertEquals(table.timestamps.toSeq.sorted, readTimestamps(readOptimized))
 
       // without embedded file slices, a partition directory lists the base and log files of the partition
       val legacyFileIndex = HoodieFileIndex(spark, metaClient, None, queryOpts, includeLogFiles = true)
@@ -949,7 +954,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
   @EnumSource(classOf[HoodieTableType])
   def testListFilesGroupsFileSlicesOfNonPartitionedTable(tableType: HoodieTableType): Unit = {
     val commitCount = 3
-    val writeOpts = writeFileGroups(tableType, partitionCount = 1, commitCount, partitioned = false)
+    val table = writeFileGroups(tableType, partitionCount = 1, commitCount, partitioned = false)
     val fileIndex = HoodieFileIndex(spark, metaClient, None, queryOpts,
       includeLogFiles = tableType == HoodieTableType.MERGE_ON_READ, shouldEmbedFileSlices = true)
 
@@ -960,7 +965,8 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     assertSameSplitPlanning(fileIndex, directories, exactFileOrder = true)
 
     if (tableType == HoodieTableType.MERGE_ON_READ) {
-      upsertRecords(writeOpts, Seq(("key-0-0", 0, "ts-3")))
+      val updates = Seq(("key-0-0", 0, "ts-3"))
+      upsertToLogFiles(table, updates)
       fileIndex.refresh()
 
       val directoriesWithLogFiles = fileIndex.listFiles(Nil, Nil)
@@ -968,40 +974,118 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       assertFalse(directoriesWithLogFiles.head.values.isInstanceOf[HoodiePartitionFileSliceMapping])
       assertEquals(commitCount - 1, directoriesWithLogFiles.head.files.size)
       assertTrue(getMappedSlice(directoriesWithLogFiles.last).hasLogFiles)
+      assertEquals((table.timestamps ++ updates.map { case (key, _, timestamp) => key -> timestamp }).toSeq.sorted,
+        readTimestamps(DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL))
     }
   }
 
   /**
-   * Writes `commitCount` inserts, each adding a new file group to every partition, and returns the write options.
+   * A table written by [[writeFileGroups]]: its write options, its partition paths, and the timestamp written for each record key.
+   */
+  private case class FileGroupsTable(writeOpts: Map[String, String], partitionPaths: Seq[String], timestamps: Map[String, String])
+
+  /**
+   * Writes `commitCount` inserts, each adding a new file group to every partition, and checks on storage that
+   * every partition holds `commitCount` base-file-only slices, which the small file limit of 0 is there to ensure.
    */
   private def writeFileGroups(tableType: HoodieTableType, partitionCount: Int, commitCount: Int,
-                              partitioned: Boolean = true): Map[String, String] = {
+                              partitioned: Boolean = true): FileGroupsTable = {
     val writeOpts = commonOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name,
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> (if (partitioned) "partition" else ""),
       HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key -> "0")
+    val partitionPaths = if (partitioned) (0 until partitionCount).map(_.toString) else Seq("")
     val _spark = spark
     import _spark.implicits._
-    (0 until commitCount).foreach { commit =>
+    val records = (0 until commitCount).flatMap { commit =>
       val tuples = for (i <- 0 until 20) yield (s"key-$commit-$i", i % partitionCount, s"ts-$commit")
       tuples.toDF("_row_key", "partition", "timestamp")
         .write.format("hudi").options(writeOpts)
         .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
         .mode(if (commit == 0) SaveMode.Overwrite else SaveMode.Append)
         .save(basePath)
+      tuples
     }
     metaClient = HoodieTableMetaClient.reload(metaClient)
-    writeOpts
+
+    latestFileSlices(partitionPaths).foreach { case (partitionPath, slices) =>
+      assertEquals(commitCount, slices.size, s"File groups in partition '$partitionPath'")
+      slices.foreach(slice => assertTrue(slice.getBaseFile.isPresent && !slice.hasLogFiles, s"Expected a base-file-only slice: $slice"))
+    }
+    FileGroupsTable(writeOpts, partitionPaths, records.map { case (key, _, timestamp) => key -> timestamp }.toMap)
   }
 
-  private def upsertRecords(writeOpts: Map[String, String], records: Seq[(String, Int, String)]): Unit = {
+  /**
+   * Upserts records with existing keys and checks on storage that each update was appended as a log file to
+   * its file group, rather than merged into a new base file or written to a new file group.
+   */
+  private def upsertToLogFiles(table: FileGroupsTable, updates: Seq[(String, Int, String)]): Unit = {
+    def baseFiles(slices: Map[String, Seq[FileSlice]]): Set[String] =
+      slices.values.flatten.map(_.getBaseFile.get.getPath).toSet
+    val baseFilesBeforeUpdate = baseFiles(latestFileSlices(table.partitionPaths))
+
     val _spark = spark
     import _spark.implicits._
-    records.toDF("_row_key", "partition", "timestamp")
-      .write.format("hudi").options(writeOpts)
+    updates.toDF("_row_key", "partition", "timestamp")
+      .write.format("hudi").options(table.writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+
+    val slices = latestFileSlices(table.partitionPaths)
+    assertEquals(baseFilesBeforeUpdate, baseFiles(slices))
+    val slicesWithLogFiles = slices.values.flatten.filter(_.hasLogFiles).toSeq
+    assertEquals(updates.size, slicesWithLogFiles.size)
+    slicesWithLogFiles.foreach(slice => assertEquals(1L, slice.getLogFiles.count()))
+  }
+
+  /**
+   * Lists the latest file slices of the partitions from storage, independent of the file index under test.
+   */
+  private def latestFileSlices(partitionPaths: Seq[String]): Map[String, Seq[FileSlice]] = {
+    val fileSystemView = HoodieTableFileSystemView.fileListingBasedFileSystemView(
+      new HoodieJavaEngineContext(new HadoopStorageConfiguration(false)), metaClient,
+      metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants)
+    try {
+      partitionPaths.map(partitionPath =>
+        partitionPath -> fileSystemView.getLatestFileSlices(partitionPath).iterator().asScala.toSeq).toMap
+    } finally {
+      fileSystemView.close()
+    }
+  }
+
+  private def readTable(queryType: String): DataFrame = {
+    val incrementalOpts = if (queryType == DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL) {
+      Map(DataSourceReadOptions.START_COMMIT.key -> "000")
+    } else {
+      Map.empty[String, String]
+    }
+    spark.read.format("hudi").option(DataSourceReadOptions.QUERY_TYPE.key, queryType).options(incrementalOpts).load(basePath)
+  }
+
+  private def loadFileIndex(queryType: String): FileIndex = {
+    readTable(queryType).queryExecution.analyzed.collectFirst {
+      case relation: LogicalRelation => relation.relation.asInstanceOf[HadoopFsRelation].location
+    }.get
+  }
+
+  private def readTimestamps(queryType: String): Seq[(String, String)] = {
+    readTable(queryType).select("_row_key", "timestamp").collect().map(row => (row.getString(0), row.getString(1))).toSeq.sorted
+  }
+
+  /**
+   * Asserts one directory per partition holding all base-file-only slices, plus one directory per file slice with log files.
+   */
+  private def assertDirectoryLayout(directories: Seq[PartitionDirectory], partitionCount: Int,
+                                    baseFileOnlyCount: Int, fileSlicesWithLogFilesCount: Int): Unit = {
+    val (perSliceDirectories, perPartitionDirectories) =
+      directories.partition(_.values.isInstanceOf[HoodiePartitionFileSliceMapping])
+    assertEquals(partitionCount, perPartitionDirectories.size)
+    assertEquals(partitionCount, perPartitionDirectories.map(_.values).distinct.size)
+    assertEquals(baseFileOnlyCount, perPartitionDirectories.map(_.files.size).sum)
+    assertEquals(fileSlicesWithLogFilesCount, perSliceDirectories.size)
+    perSliceDirectories.foreach(directory => assertTrue(getMappedSlice(directory).hasLogFiles))
   }
 
   private def getMappedSlice(directory: PartitionDirectory): FileSlice = {
