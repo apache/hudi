@@ -37,6 +37,8 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.JobConf
+import org.apache.parquet.filter2.predicate.FilterPredicate
+import org.apache.parquet.hadoop.ParquetInputFormat
 import org.apache.parquet.hadoop.metadata.FileMetaData
 import org.apache.parquet.schema.{GroupType, MessageType, Type => ParquetType}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
@@ -83,19 +85,24 @@ class ParquetSchemaEvolutionUtils(readConf: Configuration,
 
   /**
    * Returns the configuration to read the file with: the read configuration itself when the file needs no
-   * keys of its own, otherwise a copy with the file's requested schema. Pass `writable` when the caller sets
-   * keys on the returned configuration. The read configuration is never modified, since other readers may
-   * share it.
+   * keys of its own, otherwise a copy with the file's requested schema or the pushed row-group filter. The
+   * read configuration is never modified, since other readers may share it, so callers must not modify the
+   * returned configuration either.
    */
-  def getFileReadConf(footerFileMetaData: FileMetaData, enableVectorizedReader: Boolean, writable: Boolean): Configuration = {
-    // A JobConf, so the task attempt context built on it does not copy it again
-    var fileReadConf: Configuration = if (writable) new JobConf(readConf) else readConf
-    def setRequestedSchema(schema: StructType): Unit = {
+  def getFileReadConf(footerFileMetaData: FileMetaData,
+                      enableVectorizedReader: Boolean,
+                      pushedFilter: Option[FilterPredicate]): Configuration = {
+    var fileReadConf: Configuration = readConf
+    def fileOwnConf(): Configuration = {
       if (fileReadConf eq readConf) {
+        // A JobConf, so the task attempt context built on it does not copy it again: JobContextImpl reuses a
+        // JobConf and copies any other Configuration
         fileReadConf = new JobConf(readConf)
       }
-      fileReadConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, schema.json)
+      fileReadConf
     }
+    def setRequestedSchema(schema: StructType): Unit =
+      fileOwnConf().set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, schema.json)
     typeChangeInfos = if (shouldUseInternalSchema) {
       // Empty projections (count(*), select 1) read no column data, so there is nothing to
       // reconstruct - and querySchemaOption is the UNPRUNED table schema in that case (see
@@ -125,6 +132,8 @@ class ParquetSchemaEvolutionUtils(readConf: Configuration,
           "To workaround this issue, set spark.sql.parquet.enableVectorizedReader=false.")
     }
 
+    // Row-group level push-down, not individual records
+    pushedFilter.foreach(ParquetInputFormat.setFilterPredicate(fileOwnConf(), _))
     fileReadConf
   }
 

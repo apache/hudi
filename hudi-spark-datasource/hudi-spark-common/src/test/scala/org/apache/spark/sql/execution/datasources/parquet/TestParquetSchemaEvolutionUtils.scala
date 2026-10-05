@@ -27,6 +27,9 @@ import org.apache.hudi.exception.HoodieException
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+import org.apache.parquet.filter2.compat.FilterCompat
+import org.apache.parquet.filter2.predicate.{FilterApi, FilterPredicate}
+import org.apache.parquet.hadoop.ParquetInputFormat
 import org.apache.parquet.hadoop.metadata.FileMetaData
 import org.apache.parquet.schema.{MessageType, Type, Types}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
@@ -392,8 +395,8 @@ class TestParquetSchemaEvolutionUtils {
   }
 
   /**
-   * The read configuration may be shared by other readers: a file that needs its own requested schema, or
-   * whose caller sets keys on the result, gets a copy, and any other file reads with the read configuration itself.
+   * The read configuration may be shared by other readers: a file that needs its own requested schema or a
+   * pushed filter gets a copy, and any other file reads with the read configuration itself.
    */
   @Test
   def testGetFileReadConfNeverModifiesTheReadConf(): Unit = {
@@ -407,21 +410,30 @@ class TestParquetSchemaEvolutionUtils {
     val requiredSchema = new StructType().add("id", LongType)
     readConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, requiredSchema.json)
 
-    def fileReadConf(fileType: PrimitiveTypeName, writable: Boolean): Configuration =
+    def fileReadConf(fileType: PrimitiveTypeName, pushedFilter: Option[FilterPredicate]): Configuration =
       new ParquetSchemaEvolutionUtils(readConf, new Path("/tmp/file.parquet"), requiredSchema, new StructType(), util.Option.empty())
-        .getFileReadConf(footerOf(Types.optional(fileType).named("id")), enableVectorizedReader = false, writable)
+        .getFileReadConf(footerOf(Types.optional(fileType).named("id")), enableVectorizedReader = false, pushedFilter)
 
-    Assertions.assertSame(readConf, fileReadConf(PrimitiveTypeName.INT64, writable = false))
-    val writable = fileReadConf(PrimitiveTypeName.INT64, writable = true)
-    Assertions.assertNotSame(readConf, writable)
-    Assertions.assertEquals(requiredSchema.json, writable.get(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA))
+    def pushedFilterOf(conf: Configuration): FilterPredicate = ParquetInputFormat.getFilter(conf) match {
+      case predicate: FilterCompat.FilterPredicateCompat => predicate.getFilterPredicate
+      case _ => null
+    }
+
+    val filter = FilterApi.eq(FilterApi.longColumn("id"), java.lang.Long.valueOf(1L))
+    Assertions.assertSame(readConf, fileReadConf(PrimitiveTypeName.INT64, None))
+    val filtered = fileReadConf(PrimitiveTypeName.INT64, Some(filter))
+    Assertions.assertNotSame(readConf, filtered)
+    Assertions.assertEquals(requiredSchema.json, filtered.get(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA))
+    Assertions.assertEquals(filter, pushedFilterOf(filtered))
     // An int file read as long gets a copy that requests the int column
-    for (callerWrites <- Seq(false, true)) {
-      val promoted = fileReadConf(PrimitiveTypeName.INT32, callerWrites)
+    for (pushedFilter <- Seq(None, Some(filter))) {
+      val promoted = fileReadConf(PrimitiveTypeName.INT32, pushedFilter)
       Assertions.assertNotSame(readConf, promoted)
       Assertions.assertEquals(new StructType().add("id", IntegerType).json, promoted.get(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA))
+      Assertions.assertEquals(pushedFilter.orNull, pushedFilterOf(promoted))
     }
     Assertions.assertEquals(requiredSchema.json, readConf.get(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA))
+    Assertions.assertNull(pushedFilterOf(readConf))
   }
 
   /** An internal schema over the given top-level columns, in order; field ids are positional. */

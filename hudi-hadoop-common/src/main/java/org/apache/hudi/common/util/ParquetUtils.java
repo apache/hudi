@@ -202,9 +202,10 @@ public class ParquetUtils extends FileFormatUtils {
    * Sets the Hadoop read options of a reader built with {@code ParquetReader.Builder(InputFile)} from the
    * file's {@link Configuration}, as {@code ParquetReader.Builder(Path)} followed by {@code withConf} does,
    * without creating a new {@link Configuration}. {@code withConf} rebuilds the read options from the
-   * configuration; the decryption properties are the only option that takes the file path, which
-   * {@code withConf} drops, so they are resolved here with it. On parquet 1.14+ the {@code InputFile}
-   * constructor alone builds plain {@code ParquetReadOptions}, which never consult the
+   * configuration and the builder's {@code path} field, which the {@code InputFile} constructor leaves null.
+   * The decryption properties are the only option that takes the file path, so parquet would hand the
+   * decryption factory a null path; they are resolved here with the file's path instead. On parquet 1.14+
+   * the {@code InputFile} constructor alone builds plain {@code ParquetReadOptions}, which never consult the
    * {@code parquet.crypto.factory.class} decryption factory.
    */
   public static <T> ParquetReader.Builder<T> withHadoopReadOptions(ParquetReader.Builder<T> builder, HadoopInputFile file) {

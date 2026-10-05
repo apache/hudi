@@ -65,7 +65,8 @@ abstract class SparkParquetReaderBase(enableVectorizedReader: Boolean,
                  filters: Seq[Filter],
                  storageConf: StorageConfiguration[Configuration],
                  tableSchemaOpt: util.Option[org.apache.parquet.schema.MessageType] = util.Option.empty()): Iterator[InternalRow] = {
-    // A JobConf, so the task attempt context doRead builds on it reuses it instead of copying it again
+    // A JobConf, so the task attempt context doRead builds on it reuses it instead of copying it again:
+    // JobContextImpl reuses a JobConf and copies any other Configuration
     val conf = new JobConf(storageConf.unwrap())
     conf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, requiredSchema.json)
     conf.set(ParquetWriteSupport.SPARK_ROW_SCHEMA, requiredSchema.json)
