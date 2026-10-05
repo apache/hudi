@@ -48,7 +48,7 @@ import java.util.TreeMap;
  * for the second. {@link #fromMetaClient} keeps the older behavior of loading both lazily from a meta client.
  */
 @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
-public final class FileGroupReaderTableState implements Serializable {
+public final class TableState implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
@@ -70,13 +70,13 @@ public final class FileGroupReaderTableState implements Serializable {
    *                               history through {@link InternalSchemaCache} without loading the table config or the
    *                               timeline
    */
-  public static FileGroupReaderTableState snapshotOf(HoodieTableMetaClient metaClient, boolean readsLogFiles,
+  public static TableState snapshotOf(HoodieTableMetaClient metaClient, boolean readsLogFiles,
                                                      boolean resolvesSchemaVersions) {
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
     Option<CommittedInstants> committed = readsLogFiles && tableConfig.getTableVersion().lesserThan(HoodieTableVersion.EIGHT)
         ? Option.of(CommittedInstants.fromCommitsTimeline(metaClient.getCommitsTimeline()))
         : Option.empty();
-    String basePath = String.valueOf(metaClient.getBasePath());
+    String basePath = metaClient.getBasePath().toString();
     InternalSchemaResolver schemaResolver;
     if (resolvesSchemaVersions) {
       // Loaded here so that every copy of the state carries it
@@ -85,7 +85,7 @@ public final class FileGroupReaderTableState implements Serializable {
     } else {
       schemaResolver = new UnavailableSchemaResolver(basePath);
     }
-    return new FileGroupReaderTableState(metaClient.getBasePath(), tableConfig,
+    return new TableState(metaClient.getBasePath(), tableConfig,
         new CapturedCommittedInstants(basePath, committed.orElse(null)), schemaResolver);
   }
 
@@ -96,13 +96,13 @@ public final class FileGroupReaderTableState implements Serializable {
    * @param schemaHistory     serialized schema history (see {@link SerDeHelper#parseSchemas}), required for
    *                          schema-on-read
    */
-  public static FileGroupReaderTableState of(StoragePath basePath,
+  public static TableState of(StoragePath basePath,
                                              HoodieTableConfig tableConfig,
                                              Option<CommittedInstants> committedInstants,
                                              Option<String> schemaHistory) {
-    return new FileGroupReaderTableState(basePath, tableConfig,
-        new CapturedCommittedInstants(String.valueOf(basePath), committedInstants.orElse(null)),
-        schemaHistory.isPresent() ? new SchemaHistoryResolver(schemaHistory.get()) : new UnavailableSchemaResolver(String.valueOf(basePath)));
+    return new TableState(basePath, tableConfig,
+        new CapturedCommittedInstants(basePath.toString(), committedInstants.orElse(null)),
+        schemaHistory.isPresent() ? new SchemaHistoryResolver(schemaHistory.get()) : new UnavailableSchemaResolver(basePath.toString()));
   }
 
   /**
@@ -110,8 +110,8 @@ public final class FileGroupReaderTableState implements Serializable {
    * use. The state holds the meta client and carries it, timeline included, when serialized; a state shipped to
    * executors must be built with {@link #snapshotOf} instead.
    */
-  public static FileGroupReaderTableState fromMetaClient(HoodieTableMetaClient metaClient) {
-    return new FileGroupReaderTableState(metaClient.getBasePath(), metaClient.getTableConfig(),
+  public static TableState fromMetaClient(HoodieTableMetaClient metaClient) {
+    return new TableState(metaClient.getBasePath(), metaClient.getTableConfig(),
         new MetaClientCommittedInstants(metaClient), new MetaClientSchemaResolver(metaClient));
   }
 

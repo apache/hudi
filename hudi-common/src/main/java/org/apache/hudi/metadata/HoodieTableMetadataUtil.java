@@ -77,9 +77,9 @@ import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
-import org.apache.hudi.common.table.read.FileGroupReaderTableState;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.read.HoodieReadStats;
+import org.apache.hudi.common.table.read.TableState;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.table.read.buffer.KeyBasedFileGroupRecordBuffer;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -617,7 +617,7 @@ public class HoodieTableMetadataUtil {
       readerContext.setHasBootstrapBaseFile(false);
       readerContext.setHasLogFiles(true);
       HoodieTableConfig tableConfig = datasetMetaClient.getTableConfig();
-      FileGroupReaderTableState tableState = FileGroupReaderTableState.fromMetaClient(datasetMetaClient);
+      TableState tableState = TableState.fromMetaClient(datasetMetaClient);
       readerContext.initRecordMerger(properties);
       readerContext.setSchemaHandler(
           new FileGroupReaderSchemaHandler<>(readerContext, writerSchemaOpt.get(), writerSchemaOpt.get(), Option.empty(), properties, tableState));

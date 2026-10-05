@@ -44,10 +44,10 @@ import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
-import org.apache.hudi.common.table.read.FileGroupReaderTableState;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
+import org.apache.hudi.common.table.read.TableState;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
@@ -171,7 +171,7 @@ public class BaseTestFileGroupRecordBuffer {
       ReaderParameters readerParameters = mock(ReaderParameters.class);
       when(readerParameters.isSortOutputs()).thenReturn(false);
       return (KeyBasedFileGroupRecordBuffer<IndexedRecord>) recordBufferLoader.getRecordBuffer(readerContext, mockMetaClient.getStorage(), inputSplit,
-          orderingFieldNames, FileGroupReaderTableState.fromMetaClient(mockMetaClient), props, readerParameters, readStats, Option.empty()).getKey();
+          orderingFieldNames, TableState.fromMetaClient(mockMetaClient), props, readerParameters, readStats, Option.empty()).getKey();
     }
   }
 

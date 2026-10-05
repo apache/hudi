@@ -23,10 +23,10 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.read.BaseFileUpdateCallback;
-import org.apache.hudi.common.table.read.FileGroupReaderTableState;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
+import org.apache.hudi.common.table.read.TableState;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
@@ -57,7 +57,7 @@ class DefaultFileGroupRecordBufferLoader<T> extends LogScanningRecordBufferLoade
                                                                             HoodieStorage storage,
                                                                             InputSplit inputSplit,
                                                                             List<String> orderingFieldNames,
-                                                                            FileGroupReaderTableState tableState,
+                                                                            TableState tableState,
                                                                             TypedProperties props,
                                                                             ReaderParameters readerParameters,
                                                                             HoodieReadStats readStats,

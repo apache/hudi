@@ -73,7 +73,7 @@ import java.util.stream.Stream;
 public final class HoodieFileGroupReader<T> implements HoodieRecordReader<T> {
 
   private final HoodieReaderContext<T> readerContext;
-  private final FileGroupReaderTableState tableState;
+  private final TableState tableState;
   private final InputSplit inputSplit;
   private final Option<String[]> partitionPathFields;
   private final List<String> orderingFieldNames;
@@ -101,8 +101,8 @@ public final class HoodieFileGroupReader<T> implements HoodieRecordReader<T> {
       HoodieSchema dataSchema,
       HoodieSchema requestedSchema,
       Option<InternalSchema> internalSchemaOpt,
-      HoodieTableMetaClient hoodieTableMetaClient,
-      FileGroupReaderTableState tableState,
+      @Deprecated HoodieTableMetaClient hoodieTableMetaClient,
+      TableState tableState,
       HoodieStorage storage,
       TypedProperties props,
       Option<HoodieBaseFile> baseFileOption,
@@ -157,7 +157,7 @@ public final class HoodieFileGroupReader<T> implements HoodieRecordReader<T> {
     }
 
     if (tableState == null) {
-      tableState = FileGroupReaderTableState.fromMetaClient(hoodieTableMetaClient);
+      tableState = TableState.fromMetaClient(hoodieTableMetaClient);
     }
     String tablePath = tableState.getBasePath().toString();
 

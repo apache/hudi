@@ -34,10 +34,10 @@ import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
-import org.apache.hudi.common.table.read.FileGroupReaderTableState;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
+import org.apache.hudi.common.table.read.TableState;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
@@ -146,7 +146,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     ReaderParameters readerParameters = mock(ReaderParameters.class);
     when(readerParameters.isSortOutputs()).thenReturn(true);
     SortedKeyBasedFileGroupRecordBuffer fileGroupRecordBuffer  = (SortedKeyBasedFileGroupRecordBuffer<IndexedRecord>) recordBufferLoader
-        .getRecordBuffer(readerContext, mockMetaClient.getStorage(), inputSplit, Collections.singletonList("ts"), FileGroupReaderTableState.fromMetaClient(mockMetaClient), properties,
+        .getRecordBuffer(readerContext, mockMetaClient.getStorage(), inputSplit, Collections.singletonList("ts"), TableState.fromMetaClient(mockMetaClient), properties,
             readerParameters, readStats, Option.empty()).getKey();
     when(tableConfig.getPayloadClass()).thenReturn(DefaultHoodieRecordPayload.class.getName());
 

@@ -34,10 +34,10 @@ import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
 import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.table.read.DeleteContext;
-import org.apache.hudi.common.table.read.FileGroupReaderTableState;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
+import org.apache.hudi.common.table.read.TableState;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.Option;
@@ -84,7 +84,7 @@ import static org.apache.hudi.io.util.FileIOUtils.getDefaultSpillableMapBasePath
 public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedRecord<T>> {
 
   private final HoodieReaderContext<T> readerContext;
-  private final FileGroupReaderTableState tableState;
+  private final TableState tableState;
   private final HoodieStorage storage;
   private final InputSplit inputSplit;
   private final HoodieSchema readerSchema;
@@ -105,7 +105,7 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
                                     HoodieStorage storage,
                                     InputSplit inputSplit,
                                     List<String> orderingFieldNames,
-                                    FileGroupReaderTableState tableState,
+                                    TableState tableState,
                                     TypedProperties props,
                                     ReaderParameters readerParameters,
                                     HoodieReadStats readStats,
@@ -114,7 +114,7 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
   }
 
   /**
-   * @deprecated use the constructor that takes a {@link FileGroupReaderTableState}.
+   * @deprecated use the constructor that takes a {@link TableState}.
    */
   @Deprecated
   public LsmFileGroupRecordIterator(HoodieReaderContext<T> readerContext,
@@ -126,7 +126,7 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
                                     ReaderParameters readerParameters,
                                     HoodieReadStats readStats,
                                     Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) throws IOException {
-    this(readerContext, storage, inputSplit, orderingFieldNames, FileGroupReaderTableState.fromMetaClient(metaClient), props,
+    this(readerContext, storage, inputSplit, orderingFieldNames, TableState.fromMetaClient(metaClient), props,
         readerParameters, readStats, fileGroupUpdateCallback, true);
   }
 
@@ -140,7 +140,7 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
                                     HoodieStorage storage,
                                     InputSplit inputSplit,
                                     List<String> orderingFieldNames,
-                                    FileGroupReaderTableState tableState,
+                                    TableState tableState,
                                     TypedProperties props,
                                     ReaderParameters readerParameters,
                                     HoodieReadStats readStats,
@@ -164,7 +164,7 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
   }
 
   /**
-   * @deprecated use the constructor that takes a {@link FileGroupReaderTableState}.
+   * @deprecated use the constructor that takes a {@link TableState}.
    */
   @Deprecated
   public LsmFileGroupRecordIterator(HoodieReaderContext<T> readerContext,
@@ -177,7 +177,7 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
                                     HoodieReadStats readStats,
                                     Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback,
                                     boolean includeBaseFile) throws IOException {
-    this(readerContext, storage, inputSplit, orderingFieldNames, FileGroupReaderTableState.fromMetaClient(metaClient), props,
+    this(readerContext, storage, inputSplit, orderingFieldNames, TableState.fromMetaClient(metaClient), props,
         readerParameters, readStats, fileGroupUpdateCallback, includeBaseFile);
   }
 

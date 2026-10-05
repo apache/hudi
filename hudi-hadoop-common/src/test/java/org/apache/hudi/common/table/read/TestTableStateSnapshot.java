@@ -44,10 +44,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests that {@link FileGroupReaderTableState#snapshotOf} captures committed instants and schema versions only where
+ * Tests that {@link TableState#snapshotOf} captures committed instants and schema versions only where
  * they are consulted.
  */
-class TestFileGroupReaderTableStateSnapshot {
+class TestTableStateSnapshot {
 
   @TempDir
   Path tempDir;
@@ -55,15 +55,15 @@ class TestFileGroupReaderTableStateSnapshot {
   @Test
   void capturesCommittedInstantsOnlyForLogReadsBeforeVersionEight() throws Exception {
     HoodieTableMetaClient sixTable = tableWithCommit("six", HoodieTableVersion.SIX);
-    FileGroupReaderTableState withLogs = FileGroupReaderTableState.snapshotOf(sixTable, true, false);
+    TableState withLogs = TableState.snapshotOf(sixTable, true, false);
     assertTrue(withLogs.isCommitted("001"));
     assertFalse(withLogs.isCommitted("002"));
     assertThrows(IllegalStateException.class,
-        () -> FileGroupReaderTableState.snapshotOf(sixTable, false, false).isCommitted("001"));
+        () -> TableState.snapshotOf(sixTable, false, false).isCommitted("001"));
 
     HoodieTableMetaClient currentTable = tableWithCommit("current", HoodieTableVersion.current());
     assertThrows(IllegalStateException.class,
-        () -> FileGroupReaderTableState.snapshotOf(currentTable, true, false).isCommitted("001"));
+        () -> TableState.snapshotOf(currentTable, true, false).isCommitted("001"));
   }
 
   @Test
@@ -73,10 +73,10 @@ class TestFileGroupReaderTableStateSnapshot {
         Types.RecordType.get(Collections.singletonList(Types.Field.get(1, true, "a", Types.LongType.get()))));
     new FileBasedInternalSchemaStorageManager(metaClient).persistHistorySchemaStr("001", SerDeHelper.inheritSchemas(schema, ""));
 
-    FileGroupReaderTableState shipped = roundTrip(FileGroupReaderTableState.snapshotOf(metaClient, true, true));
+    TableState shipped = roundTrip(TableState.snapshotOf(metaClient, true, true));
     assertEquals("a", shipped.getInternalSchema(1L).getRecord().fields().get(0).name());
     assertThrows(IllegalStateException.class,
-        () -> roundTrip(FileGroupReaderTableState.snapshotOf(metaClient, true, false)).getInternalSchema(1L));
+        () -> roundTrip(TableState.snapshotOf(metaClient, true, false)).getInternalSchema(1L));
   }
 
   @SuppressWarnings("unchecked")

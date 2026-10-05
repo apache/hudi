@@ -32,13 +32,13 @@ import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BaseFileUpdateCallback;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
-import org.apache.hudi.common.table.read.FileGroupReaderTableState;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.HoodieRecordReader;
 import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.IteratorMode;
 import org.apache.hudi.common.table.read.ParquetRowIndexBasedSchemaHandler;
 import org.apache.hudi.common.table.read.ReaderParameters;
+import org.apache.hudi.common.table.read.TableState;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.HoodieStorageUtils;
@@ -74,7 +74,7 @@ import java.util.stream.Stream;
 public final class HoodieLsmFileGroupReader<T> implements HoodieRecordReader<T> {
 
   private final HoodieReaderContext<T> readerContext;
-  private final FileGroupReaderTableState tableState;
+  private final TableState tableState;
   private final InputSplit inputSplit;
   private final List<String> orderingFieldNames;
   private final HoodieStorage storage;
@@ -93,8 +93,8 @@ public final class HoodieLsmFileGroupReader<T> implements HoodieRecordReader<T> 
       HoodieSchema dataSchema,
       HoodieSchema requestedSchema,
       Option<InternalSchema> internalSchemaOpt,
-      HoodieTableMetaClient hoodieTableMetaClient,
-      FileGroupReaderTableState tableState,
+      @Deprecated HoodieTableMetaClient hoodieTableMetaClient,
+      TableState tableState,
       HoodieStorage storage,
       TypedProperties props,
       Option<HoodieBaseFile> baseFileOption,
@@ -138,7 +138,7 @@ public final class HoodieLsmFileGroupReader<T> implements HoodieRecordReader<T> 
     }
 
     if (tableState == null) {
-      tableState = FileGroupReaderTableState.fromMetaClient(hoodieTableMetaClient);
+      tableState = TableState.fromMetaClient(hoodieTableMetaClient);
     }
     String tablePath = tableState.getBasePath().toString();
     if (storage == null) {

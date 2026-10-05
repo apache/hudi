@@ -28,7 +28,7 @@ import org.apache.hudi.common.schema.HoodieSchemaUtils
 import org.apache.hudi.common.schema.internal.InternalSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.log.InstantRange
-import org.apache.hudi.common.table.read.{FileGroupReaderTableState, HoodieFileGroupReader}
+import org.apache.hudi.common.table.read.{HoodieFileGroupReader, TableState}
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.exception.HoodieNotSupportedException
 import org.apache.hudi.io.MergeUtils
@@ -353,7 +353,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       .builder().setConf(augmentedStorageConf).setBasePath(tablePath).build)
     // Only a MOR scan is given log files, the only files checked against the committed instants or resolved
     // through schema versions; base files resolve their schema-on-read versions in the parquet reader.
-    val tableState = FileGroupReaderTableState.snapshotOf(metaClient, isMOR, isMOR && internalSchemaOpt.isPresent)
+    val tableState = TableState.snapshotOf(metaClient, isMOR, isMOR && internalSchemaOpt.isPresent)
     val readerProps = TypedProperties.copy(metaClient.getTableConfig.getProps)
     options.foreach(kv => readerProps.setProperty(kv._1, kv._2))
     readerProps.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction))

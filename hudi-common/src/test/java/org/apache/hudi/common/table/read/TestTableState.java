@@ -49,9 +49,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests {@link CommittedInstants} and {@link FileGroupReaderTableState}.
+ * Tests {@link CommittedInstants} and {@link TableState}.
  */
-class TestFileGroupReaderTableState {
+class TestTableState {
 
   // Second-granularity instants predate millisecond instant times; "999" is the suffix added when they are extended.
   private static final String SECONDS_INSTANT = "20240101000000";
@@ -139,8 +139,8 @@ class TestFileGroupReaderTableState {
     CommittedInstants committed = CommittedInstants.of(Arrays.asList("20240201000000000"), Arrays.asList("20240301000000000"),
         Option.of("20240201000000000"));
     String history = SerDeHelper.toJson(Arrays.asList(schemaWithVersion(100L, "a"), schemaWithVersion(200L, "b")));
-    FileGroupReaderTableState state = roundTrip(
-        FileGroupReaderTableState.of(new StoragePath("/tmp/table"), new HoodieTableConfig(), Option.of(committed), Option.of(history)));
+    TableState state = roundTrip(
+        TableState.of(new StoragePath("/tmp/table"), new HoodieTableConfig(), Option.of(committed), Option.of(history)));
 
     assertEquals("/tmp/table", state.getBasePath().toString());
     assertTrue(state.isCommitted("20240201000000000"));
@@ -153,7 +153,7 @@ class TestFileGroupReaderTableState {
 
   @Test
   void uncapturedValuesFailClearly() {
-    FileGroupReaderTableState state = FileGroupReaderTableState.of(new StoragePath("/tmp/table"), new HoodieTableConfig(), Option.empty(), Option.empty());
+    TableState state = TableState.of(new StoragePath("/tmp/table"), new HoodieTableConfig(), Option.empty(), Option.empty());
     assertThrows(IllegalStateException.class, () -> state.isCommitted("20240201000000000"));
     assertThrows(IllegalStateException.class, () -> state.getInternalSchema(100L));
   }
