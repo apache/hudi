@@ -18,20 +18,27 @@
 
 package org.apache.hudi.source.reader.function;
 
+import org.apache.hudi.common.table.read.FileGroupReaderTableState;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.source.reader.BatchRecords;
 import org.apache.hudi.source.split.HoodieSourceSplit;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.table.format.ReaderTableStateProvider;
 import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.types.logical.RowType;
+
+import javax.annotation.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -59,8 +66,12 @@ public abstract class AbstractSplitReaderFunction implements SplitReaderFunction
   protected final InternalSchemaManager internalSchemaManager;
   protected final List<ExpressionPredicates.Predicate> predicates;
   protected final boolean emitDelete;
+  // Table state captured where the read was planned, null to build a meta client per split.
+  @Nullable
+  protected final ReaderTableStateProvider tableStateProvider;
   private transient HoodieWriteConfig writeConfig;
   private transient org.apache.hadoop.conf.Configuration hadoopConf;
+  private transient StorageConfiguration<?> storageConf;
   private transient RowDataSerializer copySerializer;
 
   // Per-split cursor state (split-fetcher thread only).
@@ -72,10 +83,20 @@ public abstract class AbstractSplitReaderFunction implements SplitReaderFunction
       List<ExpressionPredicates.Predicate> predicates,
       InternalSchemaManager internalSchemaManager,
       boolean emitDelete) {
+    this(conf, predicates, internalSchemaManager, emitDelete, null);
+  }
+
+  public AbstractSplitReaderFunction(
+      Configuration conf,
+      List<ExpressionPredicates.Predicate> predicates,
+      InternalSchemaManager internalSchemaManager,
+      boolean emitDelete,
+      @Nullable ReaderTableStateProvider tableStateProvider) {
     this.conf = conf;
     this.predicates = predicates;
     this.internalSchemaManager = internalSchemaManager;
     this.emitDelete = emitDelete;
+    this.tableStateProvider = tableStateProvider;
   }
 
   /**
@@ -169,5 +190,21 @@ public abstract class AbstractSplitReaderFunction implements SplitReaderFunction
       hadoopConf = HadoopConfigurations.getHadoopConf(conf);
     }
     return hadoopConf;
+  }
+
+  protected StorageConfiguration<?> getStorageConf() {
+    if (storageConf == null) {
+      storageConf = HadoopFSUtils.getStorageConfWithCopy(getHadoopConf());
+    }
+    return storageConf;
+  }
+
+  /**
+   * Returns the table state to read one split with.
+   */
+  protected FileGroupReaderTableState tableStateForSplit() {
+    return tableStateProvider != null
+        ? tableStateProvider.forSplit(getStorageConf())
+        : FileGroupReaderTableState.fromMetaClient(StreamerUtil.metaClientForReader(conf, getHadoopConf()));
   }
 }

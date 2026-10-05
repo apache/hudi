@@ -27,11 +27,12 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
+import org.apache.hudi.common.table.read.FileGroupReaderTableState;
 import org.apache.hudi.common.table.read.HoodieRecordReader;
+import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -45,13 +46,13 @@ import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.table.format.ReaderTableStateProvider;
 import org.apache.hudi.table.format.RecordIterators;
 import org.apache.hudi.table.format.cdc.CdcImageManager;
 import org.apache.hudi.table.format.cdc.CdcInputFormat;
 import org.apache.hudi.table.format.cdc.CdcIterators;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadTableState;
-import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.util.VectorConversionUtils;
 
 import lombok.extern.slf4j.Slf4j;
@@ -59,6 +60,8 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.fs.Path;
+
+import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -82,7 +85,6 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
 
   private final List<DataType> fieldTypes;
   private final MergeOnReadTableState tableState;
-  private transient HoodieTableMetaClient metaClient;
   // Fallback reader for non-CDC splits (e.g. snapshot reads when read.start-commit='earliest')
   private transient HoodieSplitReaderFunction fallbackReaderFunction;
   private transient DataType[] readFieldTypes;
@@ -106,7 +108,23 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
       List<DataType> fieldTypes,
       List<ExpressionPredicates.Predicate> predicates,
       boolean emitDelete) {
-    super(conf, predicates, internalSchemaManager, emitDelete);
+    this(conf, tableState, internalSchemaManager, fieldTypes, predicates, emitDelete, null);
+  }
+
+  /**
+   * Creates a CDC split reader function reading with table state captured where the read was planned.
+   *
+   * @param tableStateProvider the table state captured at planning, null to build a meta client per split
+   */
+  public HoodieCdcSplitReaderFunction(
+      org.apache.flink.configuration.Configuration conf,
+      MergeOnReadTableState tableState,
+      InternalSchemaManager internalSchemaManager,
+      List<DataType> fieldTypes,
+      List<ExpressionPredicates.Predicate> predicates,
+      boolean emitDelete,
+      @Nullable ReaderTableStateProvider tableStateProvider) {
+    super(conf, predicates, internalSchemaManager, emitDelete, tableStateProvider);
     ValidationUtils.checkArgument(tableState != null, "tableState can't be null");
     ValidationUtils.checkArgument(internalSchemaManager != null, "internalSchemaManager can't be null");
     this.tableState = tableState;
@@ -125,11 +143,14 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
 
     HoodieCDCSupplementalLoggingMode mode = OptionsResolver.getCDCSupplementalLoggingMode(conf);
 
+    // One table state for the whole CDC split, so that its before and after images see the same timeline.
+    Lazy<FileGroupReaderTableState> splitTableState = Lazy.lazily(this::tableStateForSplit);
     CdcImageManager imageManager = new CdcImageManager(
-        tableState.getRowType(), getWriteConfig(), this::getFileSliceIterator);
+        tableState.getRowType(), getWriteConfig(), fileSlice -> getFileSliceIterator(fileSlice, splitTableState));
 
     Function<HoodieCDCFileSplit, ClosableIterator<RowData>> recordIteratorFunc =
         cdcFileSplit -> createRecordIteratorSafe(
+            splitTableState,
             cdcSplit.getTablePath(),
             cdcSplit.getMaxCompactionMemoryInBytes(),
             cdcFileSplit,
@@ -160,25 +181,28 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
           internalSchemaManager,
           conf.get(FlinkOptions.MERGE_TYPE),
           predicates,
-          emitDelete);
+          emitDelete,
+          tableStateProvider);
     }
     return fallbackReaderFunction;
   }
 
   private ClosableIterator<RowData> createRecordIteratorSafe(
+      Lazy<FileGroupReaderTableState> splitTableState,
       String tablePath,
       long maxCompactionMemoryInBytes,
       HoodieCDCFileSplit fileSplit,
       HoodieCDCSupplementalLoggingMode mode,
       CdcImageManager imageManager) {
     try {
-      return createRecordIterator(tablePath, maxCompactionMemoryInBytes, fileSplit, mode, imageManager);
+      return createRecordIterator(splitTableState, tablePath, maxCompactionMemoryInBytes, fileSplit, mode, imageManager);
     } catch (IOException e) {
       throw new HoodieException("Failed to create CDC record iterator for split: " + fileSplit, e);
     }
   }
 
   private ClosableIterator<RowData> createRecordIterator(
+      Lazy<FileGroupReaderTableState> splitTableState,
       String tablePath,
       long maxCompactionMemoryInBytes,
       HoodieCDCFileSplit fileSplit,
@@ -200,7 +224,7 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
         MergeOnReadInputSplit inputSplit = CdcIterators.fileSlice2Split(
             tablePath, fileSplit.getBeforeFileSlice().get(), maxCompactionMemoryInBytes);
         return new CdcIterators.RemoveBaseFileIterator(
-            tableState.getRequiredRowType(), tableState.getRequiredPositions(), getFileSliceIterator(inputSplit));
+            tableState.getRequiredRowType(), tableState.getRequiredPositions(), getFileSliceIterator(inputSplit, splitTableState));
       }
       case AS_IS: {
         HoodieSchema dataSchema = HoodieSchemaUtils.removeMetadataFields(tableSchema);
@@ -229,12 +253,12 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
             "CDC file path should exist and be singleton for LOG_FILE");
         String logFilePath = new Path(tablePath, fileSplit.getCdcFiles().get(0)).toString();
         MergeOnReadInputSplit split = CdcIterators.singleLogFile2Split(tablePath, logFilePath, maxCompactionMemoryInBytes);
-        ClosableIterator<HoodieRecord<RowData>> recordIterator = getFileSliceHoodieRecordIterator(split);
+        ClosableIterator<HoodieRecord<RowData>> recordIterator = getFileSliceHoodieRecordIterator(split, splitTableState);
         try {
           return new CdcIterators.DataLogFileIterator(
               maxCompactionMemoryInBytes, imageManager, fileSplit, tableSchema,
               tableState.getRequiredRowType(), tableState.getRequiredPositions(),
-              recordIterator, getMetaClient(), getWriteConfig());
+              recordIterator, splitTableState.get().getTableConfig(), getStorageConf(), internalSchemaManager, getWriteConfig());
         } catch (IOException | RuntimeException | Error e) {
           closeSuppressing(recordIterator, e);
           throw e;
@@ -243,7 +267,7 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
       case REPLACE_COMMIT: {
         return new CdcIterators.ReplaceCommitIterator(
             tablePath, tableState.getRequiredRowType(), tableState.getRequiredPositions(),
-            maxCompactionMemoryInBytes, fileSplit, this::getFileSliceIterator);
+            maxCompactionMemoryInBytes, fileSplit, fileSlice -> getFileSliceIterator(fileSlice, splitTableState));
       }
       default:
         throw new AssertionError("Unexpected CDC file split infer case: " + fileSplit.getCdcInferCase());
@@ -251,12 +275,12 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
   }
 
   /** Reads the full-schema before/after image for a file slice (emitDelete=false). */
-  private ClosableIterator<RowData> getFileSliceIterator(MergeOnReadInputSplit split) {
+  private ClosableIterator<RowData> getFileSliceIterator(MergeOnReadInputSplit split, Lazy<FileGroupReaderTableState> splitTableState) {
     FileSlice fileSlice = buildFileSlice(split);
     final HoodieSchema tableSchema = HoodieSchemaCache.intern(HoodieSchema.parse(tableState.getTableSchema()));
     try {
       HoodieRecordReader<RowData> reader = FormatUtils.createRecordReader(
-          getMetaClient(), getWriteConfig(), internalSchemaManager, fileSlice,
+          splitTableState.get(), getStorageConf(), getWriteConfig(), internalSchemaManager, fileSlice,
           tableSchema, tableSchema, split.getLatestCommit(),
           FlinkOptions.REALTIME_PAYLOAD_COMBINE, false,
           predicates, split.getInstantRange());
@@ -267,12 +291,13 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
   }
 
   /** Reads a single log file and returns a typed {@link HoodieRecord} iterator (for LOG_FILE CDC inference). */
-  private ClosableIterator<HoodieRecord<RowData>> getFileSliceHoodieRecordIterator(MergeOnReadInputSplit split) {
+  private ClosableIterator<HoodieRecord<RowData>> getFileSliceHoodieRecordIterator(
+      MergeOnReadInputSplit split, Lazy<FileGroupReaderTableState> splitTableState) {
     FileSlice fileSlice = buildFileSlice(split);
     final HoodieSchema tableSchema = HoodieSchemaCache.intern(HoodieSchema.parse(tableState.getTableSchema()));
     try {
       HoodieRecordReader<RowData> reader = FormatUtils.createRecordReader(
-          getMetaClient(), getWriteConfig(), internalSchemaManager, fileSlice,
+          splitTableState.get(), getStorageConf(), getWriteConfig(), internalSchemaManager, fileSlice,
           tableSchema, tableSchema, split.getLatestCommit(),
           FlinkOptions.REALTIME_PAYLOAD_COMBINE, true,
           predicates, split.getInstantRange());
@@ -334,12 +359,5 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
         split.getLogPaths()
             .map(lp -> lp.stream().map(HoodieLogFile::new).collect(Collectors.toList()))
             .orElse(Collections.emptyList()));
-  }
-
-  private HoodieTableMetaClient getMetaClient() {
-    if (metaClient == null) {
-      metaClient = StreamerUtil.metaClientForReader(conf, getHadoopConf());
-    }
-    return metaClient;
   }
 }

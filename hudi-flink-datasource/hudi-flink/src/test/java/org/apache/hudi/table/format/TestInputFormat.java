@@ -45,6 +45,7 @@ import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.read.FileGroupReaderTableState;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -54,6 +55,9 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.core.io.storage.HoodieAvroHFileReaderImplBase;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.hadoop.fs.RecordingLocalFileSystem;
+import org.apache.hudi.hadoop.fs.RecordingLocalFileSystem.Call;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 import org.apache.hudi.io.ByteBufferBackedInputStream;
@@ -126,8 +130,10 @@ import static org.apache.hudi.utils.TestData.insertRow;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -1590,6 +1596,76 @@ public class TestInputFormat {
     InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
     List<RowData> result = readData(inputFormat);
     TestData.assertRowDataEquals(result, TestData.DATA_SET_INSERT);
+  }
+
+  /**
+   * Reading the splits of a bounded or a streaming read touches nothing under the table's .hoodie folder: the table
+   * state comes with the input format.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void testReadSplitsWithoutMetaFolderAccess(boolean streaming) throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put("hadoop." + RecordingLocalFileSystem.FILE_IMPL_KEY, RecordingLocalFileSystem.class.getName());
+    options.put("hadoop." + RecordingLocalFileSystem.DISABLE_CACHE_KEY, "true");
+    options.put(FlinkOptions.READ_START_COMMIT.key(), FlinkOptions.START_COMMIT_EARLIEST);
+    beforeEach(HoodieTableType.MERGE_ON_READ, options);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
+
+    this.tableSource = getTableSource(conf);
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat(streaming);
+    InputSplit[] splits = streaming
+        ? IncrementalInputSplits.builder().rowType(TestConfigurations.ROW_TYPE).conf(conf)
+            .path(FilePathUtils.toFlinkPath(new StoragePath(tempFile.getAbsolutePath()))).build()
+            .inputSplits(StreamerUtil.createMetaClient(conf), null, false).getInputSplits().toArray(new MergeOnReadInputSplit[0])
+        : inputFormat.createInputSplits(1);
+    assertTrue(splits.length > 0);
+
+    RecordingLocalFileSystem.reset();
+    List<RowData> result;
+    try (RecordingLocalFileSystem.Scope ignored = RecordingLocalFileSystem.withScope(() -> true)) {
+      result = readData(inputFormat, splits);
+    }
+    assertTrue(RecordingLocalFileSystem.count(Call.inScope()) > 0, "The readers must go through the recording file system");
+    assertEquals(0, RecordingLocalFileSystem.count(Call.inScope().and(Call.underMetaFolder())),
+        () -> RecordingLocalFileSystem.describe(Call.inScope().and(Call.underMetaFolder())));
+    assertTrue(TestData.rowDataToString(result).contains("+I[id1, Danny, 24, 1970-01-01T00:00:00.001, par1]"),
+        TestData.rowDataToString(result));
+  }
+
+  /**
+   * A bounded read of a merge-on-read table of version 6 skips the log block of a delta commit that did not complete
+   * and reads the one of a completed delta commit, through the committed instants captured at planning.
+   */
+  @Test
+  void testBoundedReadOfVersionSixSkipsUncommittedLogBlock() throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.WRITE_TABLE_VERSION.key(), String.valueOf(HoodieTableVersion.SIX.versionCode()));
+    options.put(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(), HoodieTableConfig.TableStorageLayout.DEFAULT.configValue());
+    beforeEach(HoodieTableType.MERGE_ON_READ, options);
+    TestData.writeVersionSixWithUncommittedLogBlock(conf);
+
+    List<RowData> result = readData(getTableSource(conf).getInputFormat());
+    Map<String, Integer> ages = result.stream()
+        .collect(Collectors.toMap(row -> row.getString(0).toString(), row -> row.getInt(2)));
+    assertThat(ages.get("id1"), is(24));
+    assertThat(ages.get("id2"), is(34));
+  }
+
+  /**
+   * A bounded read without schema evolution captures no schema history into its input format.
+   */
+  @Test
+  void testBoundedReadWithoutSchemaEvolutionCapturesNoSchemaHistory() throws Exception {
+    beforeEach(HoodieTableType.MERGE_ON_READ);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    InputFormat<RowData, ?> inputFormat = getTableSource(conf).getInputFormat();
+    assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
+    FileGroupReaderTableState tableState = ((MergeOnReadInputFormat) inputFormat).getTableStateProvider()
+        .forSplit(HadoopFSUtils.getStorageConf(HadoopConfigurations.getHadoopConf(conf)));
+    assertThrows(IllegalStateException.class, () -> tableState.getInternalSchema(1L));
   }
 
   @ParameterizedTest

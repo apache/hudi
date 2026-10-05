@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.read.FileGroupReaderTableState;
 import org.apache.hudi.common.table.read.HoodieRecordReader;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -33,10 +34,13 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.source.ExpressionPredicates.Predicate;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.table.format.ReaderTableStateProvider;
 import org.apache.hudi.table.format.RecordIterators;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
@@ -51,6 +55,8 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.io.InputSplitAssigner;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
+
+import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -136,9 +142,17 @@ public class MergeOnReadInputFormat
   protected final InternalSchemaManager internalSchemaManager;
 
   /**
-   * The table metadata client
+   * Table state captured where the read was planned, null to build a meta client per split.
    */
-  protected transient HoodieTableMetaClient metaClient;
+  @Nullable
+  private final ReaderTableStateProvider tableStateProvider;
+
+  /**
+   * The table state the current split is read with.
+   */
+  protected transient FileGroupReaderTableState readerTableState;
+
+  protected transient StorageConfiguration<?> storageConf;
 
   /**
    * The hoodie write configuration.
@@ -152,7 +166,8 @@ public class MergeOnReadInputFormat
       List<Predicate> predicates,
       long limit,
       boolean emitDelete,
-      InternalSchemaManager internalSchemaManager) {
+      InternalSchemaManager internalSchemaManager,
+      @Nullable ReaderTableStateProvider tableStateProvider) {
     this.conf = conf;
     this.tableState = tableState;
     this.fieldNames = tableState.getRowType().getFieldNames().toArray(new String[0]);
@@ -164,6 +179,7 @@ public class MergeOnReadInputFormat
     this.limit = limit;
     this.emitDelete = emitDelete;
     this.internalSchemaManager = internalSchemaManager;
+    this.tableStateProvider = tableStateProvider;
   }
 
   /**
@@ -178,10 +194,17 @@ public class MergeOnReadInputFormat
     this.currentReadCount = 0L;
     this.closed = false;
     this.hadoopConf = HadoopConfigurations.getHadoopConf(this.conf);
-    this.metaClient = StreamerUtil.metaClientForReader(this.conf, hadoopConf);
+    if (tableStateProvider != null) {
+      this.storageConf = HadoopFSUtils.getStorageConfWithCopy(hadoopConf);
+      this.readerTableState = tableStateProvider.forSplit(storageConf);
+    } else {
+      HoodieTableMetaClient metaClient = StreamerUtil.metaClientForReader(this.conf, hadoopConf);
+      this.storageConf = metaClient.getStorageConf();
+      this.readerTableState = FileGroupReaderTableState.fromMetaClient(metaClient);
+    }
     this.writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf);
     this.iterator = initIterator(split);
-    this.tableName = metaClient.getTableConfig().getTableName();
+    this.tableName = readerTableState.getTableConfig().getTableName();
     mayShiftInputSplit(split);
   }
 
@@ -362,7 +385,7 @@ public class MergeOnReadInputFormat
         "",
         split.getBasePath().map(HoodieBaseFile::new).orElse(null),
         split.getLogPaths().map(logFiles -> logFiles.stream().map(HoodieLogFile::new).collect(Collectors.toList())).orElse(Collections.emptyList()));
-    return FormatUtils.createRecordReader(metaClient, writeConfig, internalSchemaManager, fileSlice,
+    return FormatUtils.createRecordReader(readerTableState, storageConf, writeConfig, internalSchemaManager, fileSlice,
         tableSchema, requiredSchema, split.getLatestCommit(), mergeType, emitDelete, predicates, split.getInstantRange());
   }
 
@@ -381,6 +404,7 @@ public class MergeOnReadInputFormat
     protected long limit = -1;
     protected boolean emitDelete = false;
     protected InternalSchemaManager internalSchemaManager = InternalSchemaManager.DISABLED;
+    protected ReaderTableStateProvider tableStateProvider;
 
     public Builder config(Configuration conf) {
       this.conf = conf;
@@ -417,15 +441,28 @@ public class MergeOnReadInputFormat
       return this;
     }
 
+    /**
+     * Sets the table state captured at planning; without it, every split builds a meta client.
+     */
+    public Builder tableStateProvider(ReaderTableStateProvider tableStateProvider) {
+      this.tableStateProvider = tableStateProvider;
+      return this;
+    }
+
     public MergeOnReadInputFormat build() {
       return new MergeOnReadInputFormat(conf, tableState,
-          fieldTypes, predicates, limit, emitDelete, internalSchemaManager);
+          fieldTypes, predicates, limit, emitDelete, internalSchemaManager, tableStateProvider);
     }
   }
 
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
+
+  @VisibleForTesting
+  public ReaderTableStateProvider getTableStateProvider() {
+    return tableStateProvider;
+  }
 
   @VisibleForTesting
   public void isEmitDelete(boolean emitDelete) {

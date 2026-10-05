@@ -61,6 +61,10 @@ public class RealtimeFileStatus extends FileStatus {
    * Virtual key configuration of the table this split belongs to
    */
   private final Option<HoodieVirtualKeyInfo> virtualKeyInfo;
+  /**
+   * Table state captured when the file was listed
+   */
+  private Option<HiveReaderTableState> readerTableState = Option.empty();
 
   public RealtimeFileStatus(FileStatus fileStatus,
                             String basePath,
@@ -84,6 +88,7 @@ public class RealtimeFileStatus extends FileStatus {
     if (bootStrapFileStatus != null) {
       realtimePath.setPathWithBootstrapFileStatus((PathWithBootstrapFileStatus)bootStrapFileStatus.getPath());
     }
+    realtimePath.setReaderTableState(readerTableState);
 
     return realtimePath;
   }
@@ -102,5 +107,9 @@ public class RealtimeFileStatus extends FileStatus {
 
   public void setBootStrapFileStatus(FileStatus bootStrapFileStatus) {
     this.bootStrapFileStatus = bootStrapFileStatus;
+  }
+
+  public void setReaderTableState(Option<HiveReaderTableState> readerTableState) {
+    this.readerTableState = readerTableState;
   }
 }

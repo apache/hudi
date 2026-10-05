@@ -132,6 +132,10 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
   }
 
   private static boolean checkIfHudiTable(final InputSplit split, final JobConf job) {
+    if (HiveReaderTableState.of(split).isPresent()) {
+      // listed from a Hudi table
+      return true;
+    }
     try {
       Path inputPath = ((FileSplit) split).getPath();
       FileSystem fs = inputPath.getFileSystem(job);

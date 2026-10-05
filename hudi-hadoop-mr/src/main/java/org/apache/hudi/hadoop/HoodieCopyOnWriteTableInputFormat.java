@@ -89,6 +89,9 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
   @Override
   protected FileSplit makeSplit(Path file, long start, long length,
                                 String[] hosts) {
+    if (file instanceof PathWithReaderTableState) {
+      return new FileSplitWithReaderTableState(file, start, length, hosts, ((PathWithReaderTableState) file).getReaderTableState());
+    }
     FileSplit split = new FileSplit(file, start, length, hosts);
 
     if (file instanceof PathWithBootstrapFileStatus) {
@@ -100,6 +103,10 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
   @Override
   protected FileSplit makeSplit(Path file, long start, long length,
                                 String[] hosts, String[] inMemoryHosts) {
+    if (file instanceof PathWithReaderTableState) {
+      return new FileSplitWithReaderTableState(file, start, length, hosts, inMemoryHosts,
+          ((PathWithReaderTableState) file).getReaderTableState());
+    }
     FileSplit split = new FileSplit(file, start, length, hosts, inMemoryHosts);
     if (file instanceof PathWithBootstrapFileStatus) {
       return makeExternalFileSplit((PathWithBootstrapFileStatus)file, split);
@@ -200,11 +207,18 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
   }
 
   protected FileStatus createFileStatusUnchecked(FileSlice fileSlice, Option<HoodieInstant> latestCompletedInstantOpt,
-                                                 String tableBasePath, HoodieTableMetaClient metaClient) {
+                                                 String tableBasePath, HoodieTableMetaClient metaClient,
+                                                 HiveReaderTableState.Capturer readerTableStates) {
     Option<HoodieBaseFile> baseFileOpt = fileSlice.getBaseFile();
 
     if (baseFileOpt.isPresent()) {
-      return getFileStatusUnchecked(baseFileOpt.get());
+      FileStatus fileStatus = getFileStatusUnchecked(baseFileOpt.get());
+      Option<HiveReaderTableState> readerTableState = readerTableStates.forLatestCommit();
+      // Bootstrap files are not read by the file group reader
+      if (readerTableState.isPresent() && fileStatus.getClass() == FileStatus.class) {
+        fileStatus.setPath(new PathWithReaderTableState(fileStatus.getPath(), readerTableState.get()));
+      }
+      return fileStatus;
     } else {
       throw new IllegalStateException("Invalid state: base-file has to be present");
     }
@@ -243,6 +257,7 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
 
       boolean shouldIncludePendingCommits =
           HoodieHiveUtils.shouldIncludePendingCommits(job, tableMetaClient.getTableConfig().getTableName());
+      HiveReaderTableState.Capturer readerTableStates = HiveReaderTableState.capturer(tableMetaClient, job);
 
       if (HoodieTableMetadataUtil.isFilesPartitionAvailable(tableMetaClient) || conf.getBoolean(ENABLE.key(), ENABLE.defaultValue())) {
         HiveHoodieTableFileIndex fileIndex =
@@ -263,7 +278,7 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
                 .flatMap(Collection::stream)
                 .filter(fileSlice -> checkIfValidFileSlice(fileSlice))
                 .map(fileSlice -> createFileStatusUnchecked(fileSlice, fileIndex.getLatestCompletedInstant(),
-                        fileIndex.getBasePath().toString(), tableMetaClient))
+                        fileIndex.getBasePath().toString(), tableMetaClient, readerTableStates))
                 .collect(Collectors.toList())
         );
       } else {
@@ -298,7 +313,7 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
               filteredFileSlices.stream()
                   .filter(fileSlice -> checkIfValidFileSlice(fileSlice))
                   .map(fileSlice -> createFileStatusUnchecked(fileSlice, timeline.filterCompletedInstants().lastInstant(),
-                          basePath, tableMetaClient))
+                          basePath, tableMetaClient, readerTableStates))
                   .collect(Collectors.toList()));
         } finally {
           fsViewCache.forEach(((metaClient, fsView) -> fsView.close()));

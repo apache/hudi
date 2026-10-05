@@ -77,6 +77,7 @@ import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
+import org.apache.hudi.common.table.read.FileGroupReaderTableState;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.UpdateProcessor;
@@ -616,11 +617,12 @@ public class HoodieTableMetadataUtil {
       readerContext.setHasBootstrapBaseFile(false);
       readerContext.setHasLogFiles(true);
       HoodieTableConfig tableConfig = datasetMetaClient.getTableConfig();
+      FileGroupReaderTableState tableState = FileGroupReaderTableState.fromMetaClient(datasetMetaClient);
       readerContext.initRecordMerger(properties);
       readerContext.setSchemaHandler(
-          new FileGroupReaderSchemaHandler<>(readerContext, writerSchemaOpt.get(), writerSchemaOpt.get(), Option.empty(), properties, datasetMetaClient));
+          new FileGroupReaderSchemaHandler<>(readerContext, writerSchemaOpt.get(), writerSchemaOpt.get(), Option.empty(), properties, tableState));
       HoodieReadStats readStats = new HoodieReadStats();
-      KeyBasedFileGroupRecordBuffer<T> recordBuffer = new KeyBasedFileGroupRecordBuffer<>(readerContext, datasetMetaClient,
+      KeyBasedFileGroupRecordBuffer<T> recordBuffer = new KeyBasedFileGroupRecordBuffer<>(readerContext,
           readerContext.getMergeMode(), Option.empty(), properties, tableConfig.getOrderingFields(),
           UpdateProcessor.create(readStats, readerContext, true, Option.empty(), properties));
 
@@ -633,7 +635,7 @@ public class HoodieTableMetadataUtil {
           .withBufferSize(HoodieMetadataConfig.MAX_READER_BUFFER_SIZE_PROP.defaultValue())
           .withPartition(partitionPath)
           .withAllowInflightInstants(true)
-          .withMetaClient(datasetMetaClient)
+          .withTableState(tableState)
           .withAllowInflightInstants(true)
           .withRecordBuffer(recordBuffer)
           .build()) {

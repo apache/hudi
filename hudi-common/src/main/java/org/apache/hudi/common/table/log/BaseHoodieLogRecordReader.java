@@ -27,14 +27,13 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.read.FileGroupReaderTableState;
 import org.apache.hudi.common.table.read.buffer.HoodieFileGroupRecordBuffer;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
@@ -86,7 +85,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
   // Log-Blocks belonging to inflight delta-instants are filtered-out using this high-watermark.
   private final String latestInstantTime;
   protected final HoodieReaderContext<T> readerContext;
-  protected final HoodieTableMetaClient hoodieTableMetaClient;
+  protected final FileGroupReaderTableState tableState;
   // Merge strategy to use when combining records from log
   @Getter(AccessLevel.PROTECTED)
   private final String payloadClassFQN;
@@ -151,7 +150,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
   // table version for compatibility
   private final HoodieTableVersion tableVersion;
 
-  protected BaseHoodieLogRecordReader(HoodieReaderContext<T> readerContext, HoodieTableMetaClient hoodieTableMetaClient, HoodieStorage storage,
+  protected BaseHoodieLogRecordReader(HoodieReaderContext<T> readerContext, FileGroupReaderTableState tableState, HoodieStorage storage,
                                       List<HoodieLogFile> logFiles,
                                       boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
                                       boolean withOperationField, boolean forceFullScan, Option<String> partitionNameOverride,
@@ -160,9 +159,9 @@ public abstract class BaseHoodieLogRecordReader<T> {
     this.readerContext = readerContext;
     this.readerSchema = readerContext.getSchemaHandler() != null ? readerContext.getSchemaHandler().getRequiredSchema() : null;
     this.latestInstantTime = readerContext.getLatestCommitTime();
-    this.hoodieTableMetaClient = hoodieTableMetaClient;
+    this.tableState = tableState;
     // load class from the payload fully qualified class name
-    HoodieTableConfig tableConfig = this.hoodieTableMetaClient.getTableConfig();
+    HoodieTableConfig tableConfig = tableState.getTableConfig();
     this.payloadClassFQN = tableConfig.getPayloadClass();
     this.orderingFields = tableConfig.getOrderingFieldsStr().orElse(null);
     // Log scanner merge log with precombine
@@ -224,7 +223,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
     HoodieLogFormatReader logFormatReaderWrapper = null;
     try {
       // Iterate over the paths
-      logFormatReaderWrapper = new HoodieLogFormatReader(storage, hoodieTableMetaClient, logFiles,
+      logFormatReaderWrapper = new HoodieLogFormatReader(storage, tableState.getTableConfig(), tableState.getBasePath(), logFiles,
           readerSchema, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema);
 
       /**
@@ -300,9 +299,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
         }
         if (logBlock.getBlockType() != COMMAND_BLOCK) {
           if (this.tableVersion.lesserThan(HoodieTableVersion.EIGHT) && !allowInflightInstants) {
-            HoodieTimeline commitsTimeline = this.hoodieTableMetaClient.getCommitsTimeline();
-            if (commitsTimeline.filterInflights().containsInstant(instantTime)
-                || !commitsTimeline.filterCompletedInstants().containsOrBeforeTimelineStarts(instantTime)) {
+            if (!tableState.isCommitted(instantTime)) {
               // hit an uncommitted block possibly from a failed write, move to the next one and skip processing this one
               continue;
             }
