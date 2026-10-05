@@ -20,8 +20,9 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.{DataSourceUtils, DataSourceWriteOptions, HoodieWriterUtils}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
+import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.testutils.HoodieTestUtils
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.ComplexKeyGenFixtures._
 import org.apache.hudi.keygen.KeyGenUtils
 import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding
@@ -325,6 +326,36 @@ class TestComplexKeyGenEncoding extends HoodieSparkClientTestBase {
     val latestFileKeys = sparkSession.read.parquet(latestFile.toString).select("_hoodie_record_key").collect().map(_.getString(0))
     assertEquals(10, latestFileKeys.length, "The newest commit must have rewritten the small file")
     assertTrue(latestFileKeys.head.startsWith("id:"), s"The rewritten file must start with an older record: ${latestFileKeys.mkString(",")}")
+
+    HoodieTableConfig.delete(storage, loadMetaClient().getMetaPath, Set(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key).asJava)
+    assertEquals(org.apache.hudi.common.util.Option.of(ComplexKeyGenEncoding.VALUE_ONLY),
+      KeyGenUtils.deduceComplexKeyGenEncodingFromData(loadMetaClient()))
+  }
+
+  /**
+   * Clustering rewrites records other commits keyed, so a newest clustering commit must not decide the encoding:
+   * it is skipped and the encoding comes from the newest commit that ingested data.
+   */
+  @Test
+  def testClusteringCommitDoesNotDecideTheEncoding(): Unit = {
+    basePath = tempDir.resolve("clustered_cow").toString
+    val opts = fixtureWriteOpts("clustered_cow") + (DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
+    val rowsIn = (ids: Seq[String], ts: Long, partition: String) => sparkSession.createDataFrame(ids.map(id => (id, s"${id}_$ts", ts, partition, "a")))
+      .toDF("id", "name", "ts", "partition", "category")
+    // a writer keying `id:<value>` fills the partition that gets clustered
+    rowsIn((1 to 8).map(i => s"id$i"), 1000L, "2023-01-01").write.format("org.apache.hudi").options(opts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL).mode(SaveMode.Overwrite).save(basePath)
+    // the last writer keys bare values, into another partition; inline clustering of the first partition follows it
+    setEncoding(ComplexKeyGenEncoding.VALUE_ONLY)
+    rowsIn(Seq("id9", "id10"), 2000L, "2023-01-02").write.format("org.apache.hudi").options(opts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(HoodieClusteringConfig.INLINE_CLUSTERING.key, "true")
+      .option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key, "1")
+      .option(HoodieClusteringConfig.PARTITION_SELECTED.key, "2023-01-01/a")
+      .mode(SaveMode.Append).save(basePath)
+    val newest = loadMetaClient().getActiveTimeline.getCommitsTimeline.filterCompletedInstants.lastInstant.get
+    assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, newest.getAction, "The newest commit must be the clustering")
+    assertEquals((10L, 10L, 2L, 8L), keyStatsRaw())
 
     HoodieTableConfig.delete(storage, loadMetaClient().getMetaPath, Set(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key).asJava)
     assertEquals(org.apache.hudi.common.util.Option.of(ComplexKeyGenEncoding.VALUE_ONLY),

@@ -23,10 +23,12 @@ import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -64,8 +66,10 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.config.HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING;
@@ -74,10 +78,17 @@ import static org.apache.hudi.config.HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VAL
 public class KeyGenUtils {
 
   /**
-   * How many of the most recent commits to inspect when deducing the record key encoding from data. Bounded so
+   * How many of the most recent ingesting commits to inspect when deducing the record key encoding from data. Bounded so
    * that a table whose latest commits wrote no data files does not turn a write into a full timeline scan.
    */
   private static final int MAX_INSTANTS_SCANNED_FOR_ENCODING = 20;
+
+  /**
+   * Operations that rewrite records other commits keyed (and stamped), so a record they wrote does not show how the
+   * table's last writer keys records.
+   */
+  private static final Set<WriteOperationType> REWRITING_OPERATIONS = new HashSet<>(Arrays.asList(
+      WriteOperationType.CLUSTER, WriteOperationType.COMPACT, WriteOperationType.LOG_COMPACT));
   private static final Logger LOG = LoggerFactory.getLogger(KeyGenUtils.class);
 
   protected static final String NULL_RECORDKEY_PLACEHOLDER = "__null__";
@@ -500,10 +511,18 @@ public class KeyGenUtils {
       // Nothing was ever written, so there is no stored key whose encoding could differ from the canonical one.
       return Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED);
     }
-    List<HoodieInstant> instantsToScan = completedTimeline.getReverseOrderedInstants()
-        .limit(MAX_INSTANTS_SCANNED_FOR_ENCODING).collect(Collectors.toList());
-    for (HoodieInstant instant : instantsToScan) {
-      for (HoodieWriteStat writeStat : getWriteStats(instant, completedTimeline)) {
+    int scanned = 0;
+    for (HoodieInstant instant : completedTimeline.getReverseOrderedInstants().collect(Collectors.toList())) {
+      if (scanned >= MAX_INSTANTS_SCANNED_FOR_ENCODING) {
+        break;
+      }
+      HoodieCommitMetadata commitMetadata = getCommitMetadata(instant, completedTimeline);
+      if (REWRITING_OPERATIONS.contains(commitMetadata.getOperationType())) {
+        // clustering and compaction rewrite records other commits keyed, so they say nothing about the last writer
+        continue;
+      }
+      scanned++;
+      for (HoodieWriteStat writeStat : commitMetadata.getWriteStats()) {
         if (StringUtils.isNullOrEmpty(writeStat.getPath())) {
           continue;
         }
@@ -518,9 +537,9 @@ public class KeyGenUtils {
         }
       }
     }
-    LOG.warn("The most recent {} commit(s) of table {} yielded no data file with a readable record key, so the "
+    LOG.warn("The most recent {} ingesting commit(s) of table {} yielded no data file with a readable record key, so the "
             + "complex keygen record key encoding cannot be deduced from the data.",
-        instantsToScan.size(), metaClient.getBasePath());
+        scanned, metaClient.getBasePath());
     return Option.empty();
   }
 
@@ -539,9 +558,9 @@ public class KeyGenUtils {
     return !getCompletedCommitsTimeline(metaClient).empty();
   }
 
-  private static List<HoodieWriteStat> getWriteStats(HoodieInstant instant, HoodieTimeline timeline) {
+  private static HoodieCommitMetadata getCommitMetadata(HoodieInstant instant, HoodieTimeline timeline) {
     try {
-      return TimelineUtils.getCommitMetadata(instant, timeline).getWriteStats();
+      return TimelineUtils.getCommitMetadata(instant, timeline);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read the commit metadata of " + instant, e);
     }
@@ -569,13 +588,15 @@ public class KeyGenUtils {
         Schema fileSchema = reader.getSchema();
         Schema projection = HoodieAvroUtils.generateProjectionSchema(fileSchema,
             Arrays.asList(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD));
+        int commitTimePos = projection.getField(HoodieRecord.COMMIT_TIME_METADATA_FIELD).pos();
+        int recordKeyPos = projection.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD).pos();
         String latestCommitTime = null;
         String latestRecordKey = null;
         try (ClosableIterator<HoodieRecord<IndexedRecord>> records = reader.getRecordIterator(fileSchema, projection)) {
           while (records.hasNext()) {
-            GenericRecord record = (GenericRecord) records.next().getData();
-            Object commitTime = record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
-            Object recordKey = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD);
+            IndexedRecord record = records.next().getData();
+            Object commitTime = record.get(commitTimePos);
+            Object recordKey = record.get(recordKeyPos);
             if (commitTime == null || recordKey == null) {
               continue;
             }
