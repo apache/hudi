@@ -30,6 +30,7 @@ import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.util.Objects;
+import java.util.Properties;
 
 import static org.apache.hudi.common.model.debezium.DebeziumConstants.FLATTENED_FILE_COL_NAME;
 import static org.apache.hudi.common.model.debezium.DebeziumConstants.FLATTENED_POS_COL_NAME;
@@ -77,6 +78,20 @@ public class MySqlDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
       return false;
     }
     return isCurrentSeqLatest(currentSourceSeqOpt.get(), insertSourceSeq);
+  }
+
+  @Override
+  protected Option<String[]> getConfiguredOrderingFields(Properties properties) {
+    Option<String[]> orderingFields = super.getConfiguredOrderingFields(properties);
+    // v8 tables carry ORDERING_FIELDS = _event_seq until the v9 upgrade rewrites it to
+    // "_event_bin_file,_event_pos". The seq's "file.pos" encoding needs the segment-wise numeric
+    // parser; a plain Comparable compare is lexicographic ("9.1" > "10.1"). Route that single
+    // legacy field to the connector comparison instead of the generic one.
+    if (orderingFields.isPresent() && orderingFields.get().length == 1
+        && DebeziumConstants.ADDED_SEQ_COL_NAME.equals(orderingFields.get()[0])) {
+      return Option.empty();
+    }
+    return orderingFields;
   }
 
   @Override
