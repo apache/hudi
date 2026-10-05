@@ -355,6 +355,40 @@ class TestComplexKeyGenExistingTableUpgrade extends HoodieSparkClientTestBase {
     assertEquals(FIXTURE_IDS.drop(3).toSet, readTable().select("id").collect().map(_.getString(0)).toSet)
   }
 
+  /**
+   * A commit that packs inserts into an existing small file rewrites the file with its older records first, keyed the
+   * way their writer keyed them. The encoding must come from a record the newest commit wrote, not from the file's
+   * first record.
+   */
+  @Test
+  def testEncodingDeducedFromTheRecordsTheNewestCommitWrote(): Unit = {
+    basePath = tempDir.resolve("mixed_cow").toString
+    val opts = fixtureWriteOpts("mixed_cow") + (DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
+    val partitionRows = (ids: Seq[String], ts: Long) => sparkSession.createDataFrame(ids.map(id => (id, s"${id}_$ts", ts, "2023-01-01", "a")))
+      .toDF("id", "name", "ts", "partition", "category")
+    // a new table keys `id:<value>`
+    partitionRows((1 to 8).map(i => s"id$i"), 1000L).write.format("org.apache.hudi").options(opts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL).mode(SaveMode.Overwrite).save(basePath)
+    assertEquals(Some(ComplexKeyGenEncoding.FIELD_PREFIXED.name), persistedEncoding())
+    // a writer keying bare values, as 0.14.1 to 1.0.2 did: its inserts are packed into the existing small file
+    val props = new java.util.Properties()
+    props.setProperty(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key, ComplexKeyGenEncoding.VALUE_ONLY.name)
+    HoodieTableConfig.update(storage, loadMetaClient().getMetaPath, props)
+    partitionRows(Seq("id9", "id10"), 2000L).write.format("org.apache.hudi").options(opts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL).mode(SaveMode.Append).save(basePath)
+    assertEquals((10L, 10L, 2L, 8L), keyStatsRaw())
+    val latestFile = storage.listFiles(new StoragePath(basePath)).asScala
+      .filter(f => f.getPath.getName.endsWith(".parquet") && !f.getPath.toString.contains("/.hoodie/"))
+      .maxBy(_.getModificationTime).getPath
+    val latestFileKeys = sparkSession.read.parquet(latestFile.toString).select("_hoodie_record_key").collect().map(_.getString(0))
+    assertEquals(10, latestFileKeys.length, "The newest commit must have rewritten the small file")
+    assertTrue(latestFileKeys.head.startsWith("id:"), s"The rewritten file must start with an older record: ${latestFileKeys.mkString(",")}")
+
+    removeEncodingProperty()
+    assertEquals(org.apache.hudi.common.util.Option.of(ComplexKeyGenEncoding.VALUE_ONLY),
+      KeyGenUtils.deduceComplexKeyGenEncodingFromData(loadMetaClient()))
+  }
+
   // Reads the table and returns (total, distinctKeys, bareKeys, prefixedKeys).
   private def keyStatsRaw(): (Long, Long, Long, Long) = {
     val rk = readTable().selectExpr("_hoodie_record_key as k").collect().map(_.getString(0))
