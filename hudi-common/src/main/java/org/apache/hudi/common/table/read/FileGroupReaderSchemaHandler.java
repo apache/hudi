@@ -171,7 +171,7 @@ public class FileGroupReaderSchemaHandler<T> {
 
   private Pair<HoodieSchema, Map<String, String>> getRequiredSchemaForInstantAndRenamedColumns(String instantTime) {
     long commitInstantTime = Long.parseLong(instantTime);
-    InternalSchema fileSchema = tableState.getInternalSchema(commitInstantTime, readerContext.getStorageConfiguration());
+    InternalSchema fileSchema = tableState.getInternalSchema(commitInstantTime);
     Pair<InternalSchema, Map<String, String>> mergedInternalSchema = new InternalSchemaMerger(fileSchema, internalSchema,
         true, false, false).mergeSchemaGetRenamed();
     HoodieSchema mergedAvroSchema = HoodieSchemaCache.intern(InternalSchemaConverter.convert(mergedInternalSchema.getLeft(), requiredSchema.getFullName()));

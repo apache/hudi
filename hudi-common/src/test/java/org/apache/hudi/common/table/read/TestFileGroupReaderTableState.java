@@ -146,16 +146,16 @@ class TestFileGroupReaderTableState {
     assertTrue(state.isCommitted("20240201000000000"));
     assertFalse(state.isCommitted("20240301000000000"));
     // A version resolves to the newest schema at or before it.
-    assertEquals("a", state.getInternalSchema(150L, null).getRecord().fields().get(0).name());
-    assertEquals("b", state.getInternalSchema(250L, null).getRecord().fields().get(0).name());
-    assertTrue(state.getInternalSchema(50L, null).isEmptySchema());
+    assertEquals("a", state.getInternalSchema(150L).getRecord().fields().get(0).name());
+    assertEquals("b", state.getInternalSchema(250L).getRecord().fields().get(0).name());
+    assertTrue(state.getInternalSchema(50L).isEmptySchema());
   }
 
   @Test
   void uncapturedValuesFailClearly() {
     FileGroupReaderTableState state = FileGroupReaderTableState.of(new StoragePath("/tmp/table"), new HoodieTableConfig(), Option.empty(), Option.empty());
     assertThrows(IllegalStateException.class, () -> state.isCommitted("20240201000000000"));
-    assertThrows(IllegalStateException.class, () -> state.getInternalSchema(100L, null));
+    assertThrows(IllegalStateException.class, () -> state.getInternalSchema(100L));
   }
 
   private static HoodieInstant completed(String requestedTime) {

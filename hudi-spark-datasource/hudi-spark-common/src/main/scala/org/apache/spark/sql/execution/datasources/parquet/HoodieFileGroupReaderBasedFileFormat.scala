@@ -351,8 +351,9 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     // format is used without a relation. The field is null rather than None on a deserialized format.
     val metaClient: HoodieTableMetaClient = Option(tableMetaClient).flatten.getOrElse(HoodieTableMetaClient
       .builder().setConf(augmentedStorageConf).setBasePath(tablePath).build)
-    // Only a MOR scan is given log files, the only files checked against the committed instants
-    val tableState = FileGroupReaderTableState.snapshotOf(metaClient, isMOR)
+    // Only a MOR scan is given log files, the only files checked against the committed instants or resolved
+    // through schema versions; base files resolve their schema-on-read versions in the parquet reader.
+    val tableState = FileGroupReaderTableState.snapshotOf(metaClient, isMOR, isMOR && internalSchemaOpt.isPresent)
     val readerProps = TypedProperties.copy(metaClient.getTableConfig.getProps)
     options.foreach(kv => readerProps.setProperty(kv._1, kv._2))
     readerProps.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction))

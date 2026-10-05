@@ -44,8 +44,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests that {@link FileGroupReaderTableState#snapshotOf} captures committed instants only where they are consulted and
- * leaves schema versions to the reader.
+ * Tests that {@link FileGroupReaderTableState#snapshotOf} captures committed instants and schema versions only where
+ * they are consulted.
  */
 class TestFileGroupReaderTableStateSnapshot {
 
@@ -55,26 +55,28 @@ class TestFileGroupReaderTableStateSnapshot {
   @Test
   void capturesCommittedInstantsOnlyForLogReadsBeforeVersionEight() throws Exception {
     HoodieTableMetaClient sixTable = tableWithCommit("six", HoodieTableVersion.SIX);
-    FileGroupReaderTableState withLogs = FileGroupReaderTableState.snapshotOf(sixTable, true);
+    FileGroupReaderTableState withLogs = FileGroupReaderTableState.snapshotOf(sixTable, true, false);
     assertTrue(withLogs.isCommitted("001"));
     assertFalse(withLogs.isCommitted("002"));
     assertThrows(IllegalStateException.class,
-        () -> FileGroupReaderTableState.snapshotOf(sixTable, false).isCommitted("001"));
+        () -> FileGroupReaderTableState.snapshotOf(sixTable, false, false).isCommitted("001"));
 
     HoodieTableMetaClient currentTable = tableWithCommit("current", HoodieTableVersion.current());
     assertThrows(IllegalStateException.class,
-        () -> FileGroupReaderTableState.snapshotOf(currentTable, true).isCommitted("001"));
+        () -> FileGroupReaderTableState.snapshotOf(currentTable, true, false).isCommitted("001"));
   }
 
   @Test
-  void resolvesSchemaVersionsWhereTheReaderRuns() throws Exception {
+  void carriesTheMetaClientOnlyToResolveSchemaVersions() throws Exception {
     HoodieTableMetaClient metaClient = tableWithCommit("schema", HoodieTableVersion.current());
     InternalSchema schema = new InternalSchema(1L,
         Types.RecordType.get(Collections.singletonList(Types.Field.get(1, true, "a", Types.LongType.get()))));
     new FileBasedInternalSchemaStorageManager(metaClient).persistHistorySchemaStr("001", SerDeHelper.inheritSchemas(schema, ""));
 
-    FileGroupReaderTableState shipped = roundTrip(FileGroupReaderTableState.snapshotOf(metaClient, true));
-    assertEquals("a", shipped.getInternalSchema(1L, metaClient.getStorageConf()).getRecord().fields().get(0).name());
+    FileGroupReaderTableState shipped = roundTrip(FileGroupReaderTableState.snapshotOf(metaClient, true, true));
+    assertEquals("a", shipped.getInternalSchema(1L).getRecord().fields().get(0).name());
+    assertThrows(IllegalStateException.class,
+        () -> roundTrip(FileGroupReaderTableState.snapshotOf(metaClient, true, false)).getInternalSchema(1L));
   }
 
   @SuppressWarnings("unchecked")

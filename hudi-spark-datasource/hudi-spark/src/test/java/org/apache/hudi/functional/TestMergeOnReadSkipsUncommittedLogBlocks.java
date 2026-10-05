@@ -40,7 +40,8 @@ import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -55,8 +56,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Log files of tables before version 8 are named after the base instant, so a file slice also lists log blocks of
- * delta commits that never completed. The snapshot read must skip those blocks by checking each block's instant
- * against the committed instants, including a block whose instant is older than the latest completed commit.
+ * delta commits that never completed. Snapshot and incremental reads must skip those blocks by checking each block's
+ * instant against the committed instants, including a block whose instant is older than the latest completed commit.
+ * A read-optimized read is planned without those instants and must still be served from the base files alone.
  */
 @Tag("functional")
 class TestMergeOnReadSkipsUncommittedLogBlocks extends SparkClientFunctionalTestHarness {
@@ -70,8 +72,9 @@ class TestMergeOnReadSkipsUncommittedLogBlocks extends SparkClientFunctionalTest
       DataTypes.createStructField("ts", DataTypes.LongType, false),
       DataTypes.createStructField("value", DataTypes.StringType, true)});
 
-  @Test
-  void testSnapshotReadSkipsLogBlocksOfInflightDeltaCommitOnTableVersionSix() throws IOException {
+  @ParameterizedTest
+  @ValueSource(strings = {"snapshot", "incremental", "read_optimized"})
+  void testReadSkipsLogBlocksOfInflightDeltaCommitOnTableVersionSix(String queryType) throws IOException {
     String basePath = basePath();
     Map<String, String> options = new HashMap<>();
     options.put(HoodieTableConfig.NAME.key(), "uncommitted_log_blocks");
@@ -95,10 +98,10 @@ class TestMergeOnReadSkipsUncommittedLogBlocks extends SparkClientFunctionalTest
     assertEquals(HoodieTableVersion.SIX, metaClient.getTableConfig().getTableVersion());
     List<HoodieInstant> deltaCommits = metaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().getInstants();
     assertEquals(3, deltaCommits.size());
-    Map<String, String> committedValues = readValues(basePath);
-    assertEquals(NUM_KEYS, committedValues.size());
-    assertTrue(committedValues.entrySet().stream().allMatch(e -> e.getValue().equals(keyIndex(e.getKey()) < NUM_KEYS / 2 ? "first_update" : "second_update")),
-        "With every delta commit completed, the read should see both updates: " + committedValues);
+    // The incremental read starts after the first update, so it stays valid once that update is inflight
+    String startCommit = deltaCommits.get(1).requestedTime();
+    assertEquals(expectedValues(queryType, true), readValues(basePath, queryType, startCommit),
+        "With every delta commit completed");
 
     // Turn the first update into a writer that has not completed: its log blocks stay on storage, and its instant is
     // older than the latest completed delta commit the read is planned against.
@@ -110,19 +113,35 @@ class TestMergeOnReadSkipsUncommittedLogBlocks extends SparkClientFunctionalTest
     assertTrue(commitsTimeline.filterInflights().containsInstant(firstUpdate.requestedTime()));
     assertEquals(deltaCommits.get(2).requestedTime(), commitsTimeline.filterCompletedInstants().lastInstant().get().requestedTime());
 
-    Map<String, String> values = readValues(basePath);
-    assertEquals(NUM_KEYS, values.size());
-    List<String> unexpected = values.entrySet().stream()
-        .filter(e -> !e.getValue().equals(keyIndex(e.getKey()) < NUM_KEYS / 2 ? "base" : "second_update"))
-        .map(e -> e.getKey() + "=" + e.getValue())
-        .collect(Collectors.toList());
-    assertTrue(unexpected.isEmpty(), "Log blocks of the inflight delta commit " + firstUpdate.requestedTime()
-        + " must not be read, but these keys returned other values: " + unexpected);
+    assertEquals(expectedValues(queryType, false), readValues(basePath, queryType, startCommit),
+        "Log blocks of the inflight delta commit " + firstUpdate.requestedTime() + " must not be read");
   }
 
-  private Map<String, String> readValues(String basePath) {
+  /**
+   * The value of each key a read returns: a read-optimized read sees only the base files, and an incremental read
+   * starting after the first update sees only the second.
+   */
+  private static Map<String, String> expectedValues(String queryType, boolean firstUpdateCompleted) {
+    Map<String, String> expected = new TreeMap<>();
+    for (int i = 0; i < NUM_KEYS; i++) {
+      boolean firstHalf = i < NUM_KEYS / 2;
+      if (queryType.equals(DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL())) {
+        expected.put(key(i), "base");
+      } else if (queryType.equals(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())) {
+        if (!firstHalf) {
+          expected.put(key(i), "second_update");
+        }
+      } else {
+        expected.put(key(i), !firstHalf ? "second_update" : firstUpdateCompleted ? "first_update" : "base");
+      }
+    }
+    return expected;
+  }
+
+  private Map<String, String> readValues(String basePath, String queryType, String startCommit) {
     return spark().read().format("hudi")
-        .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL())
+        .option(DataSourceReadOptions.QUERY_TYPE().key(), queryType)
+        .option(DataSourceReadOptions.START_COMMIT().key(), startCommit)
         .load(basePath)
         .select("key", "value")
         .collectAsList()
@@ -141,11 +160,11 @@ class TestMergeOnReadSkipsUncommittedLogBlocks extends SparkClientFunctionalTest
 
   private static List<Row> rows(int from, int to, long ts, String value) {
     return IntStream.range(from, to)
-        .mapToObj(i -> RowFactory.create(String.format("key%02d", i), "p" + (i % NUM_PARTITIONS), ts, value))
+        .mapToObj(i -> RowFactory.create(key(i), "p" + (i % NUM_PARTITIONS), ts, value))
         .collect(Collectors.toList());
   }
 
-  private static int keyIndex(String key) {
-    return Integer.parseInt(key.substring("key".length()));
+  private static String key(int i) {
+    return String.format("key%02d", i);
   }
 }
