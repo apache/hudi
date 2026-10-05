@@ -1049,7 +1049,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants)
     try {
       partitionPaths.map(partitionPath =>
-        partitionPath -> fileSystemView.getLatestFileSlices(partitionPath).iterator().asScala.toSeq).toMap
+        partitionPath -> fileSystemView.getLatestFileSlices(partitionPath).iterator().asScala.toList).toMap
     } finally {
       fileSystemView.close()
     }
