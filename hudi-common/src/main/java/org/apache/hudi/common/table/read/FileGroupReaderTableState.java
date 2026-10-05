@@ -20,7 +20,6 @@ package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.function.SerializableSupplier;
 import org.apache.hudi.common.schema.internal.InternalSchema;
-import org.apache.hudi.common.schema.internal.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.common.schema.internal.utils.InternalSchemaUtils;
 import org.apache.hudi.common.schema.internal.utils.SerDeHelper;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -29,6 +28,7 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import java.io.Serializable;
@@ -39,9 +39,9 @@ import java.util.TreeMap;
  *
  * <p>A reader needs the table config and base path for every read. Only two reads need more: log blocks of tables
  * before version 8 are checked against the committed instants, and schema-on-read resolves the schema a log block
- * or file was written with. A state built with {@link #snapshotOf} answers both from values captured where the
- * timeline is already loaded, so readers do no timeline or schema-history I/O and every reader of one query sees the
- * same snapshot. {@link #fromMetaClient} keeps the older behavior of loading them lazily from a meta client.
+ * or file was written with. A state built with {@link #snapshotOf} answers the first from instants captured where the
+ * timeline is already loaded, so every reader of one query sees the same snapshot, and resolves schema versions
+ * where the reader runs. {@link #fromMetaClient} keeps the older behavior of loading both lazily from a meta client.
  */
 public final class FileGroupReaderTableState implements Serializable {
 
@@ -64,18 +64,21 @@ public final class FileGroupReaderTableState implements Serializable {
   }
 
   /**
-   * Captures the state from a meta client whose timeline is loaded. Committed instants are captured only for tables
-   * before version 8, and the schema history only when {@code withSchemaHistory} is set.
+   * Captures the state from a meta client whose timeline is loaded. Schema versions are not captured: a reader that
+   * resolves one builds its own meta client on first use and searches the schema history through
+   * {@link InternalSchemaCache}.
+   *
+   * @param readsLogFiles whether the readers read log files; committed instants are captured only then, and only for
+   *                      tables before version 8
    */
-  public static FileGroupReaderTableState snapshotOf(HoodieTableMetaClient metaClient, boolean withSchemaHistory) {
+  public static FileGroupReaderTableState snapshotOf(HoodieTableMetaClient metaClient, boolean readsLogFiles) {
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    Option<CommittedInstants> committed = tableConfig.getTableVersion().lesserThan(HoodieTableVersion.EIGHT)
+    Option<CommittedInstants> committed = readsLogFiles && tableConfig.getTableVersion().lesserThan(HoodieTableVersion.EIGHT)
         ? Option.of(CommittedInstants.fromCommitsTimeline(metaClient.getCommitsTimeline()))
         : Option.empty();
-    Option<String> schemaHistory = withSchemaHistory
-        ? Option.of(new FileBasedInternalSchemaStorageManager(metaClient).getHistorySchemaStr())
-        : Option.empty();
-    return of(metaClient.getBasePath(), tableConfig, committed, schemaHistory);
+    String basePath = String.valueOf(metaClient.getBasePath());
+    return new FileGroupReaderTableState(metaClient.getBasePath(), tableConfig,
+        new CapturedCommittedInstants(basePath, committed.orElse(null)), new ReaderMetaClientSchemaResolver(basePath));
   }
 
   /**
@@ -126,14 +129,16 @@ public final class FileGroupReaderTableState implements Serializable {
 
   /**
    * The schema of the given schema version, i.e. the newest schema at or before the version.
+   *
+   * @param storageConf the reader's storage configuration, used when the schema history is loaded where the reader runs
    */
-  public InternalSchema getInternalSchema(long versionId) {
-    return internalSchemaResolver.resolve(versionId);
+  public InternalSchema getInternalSchema(long versionId, StorageConfiguration<?> storageConf) {
+    return internalSchemaResolver.resolve(versionId, storageConf);
   }
 
   @FunctionalInterface
   private interface InternalSchemaResolver extends Serializable {
-    InternalSchema resolve(long versionId);
+    InternalSchema resolve(long versionId, StorageConfiguration<?> storageConf);
   }
 
   private static final class CapturedCommittedInstants implements SerializableSupplier<CommittedInstants> {
@@ -185,8 +190,34 @@ public final class FileGroupReaderTableState implements Serializable {
     }
 
     @Override
-    public InternalSchema resolve(long versionId) {
+    public InternalSchema resolve(long versionId, StorageConfiguration<?> storageConf) {
       return InternalSchemaCache.searchSchemaAndCache(versionId, metaClient);
+    }
+  }
+
+  /**
+   * Builds a meta client where the reader runs, on first use, and searches the schema history through the JVM-wide
+   * {@link InternalSchemaCache}, so the state carries no meta client and the schema history is not read where the
+   * state is built.
+   */
+  private static final class ReaderMetaClientSchemaResolver implements InternalSchemaResolver {
+    private static final long serialVersionUID = 1L;
+
+    private final String basePath;
+    private transient volatile HoodieTableMetaClient metaClient;
+
+    private ReaderMetaClientSchemaResolver(String basePath) {
+      this.basePath = basePath;
+    }
+
+    @Override
+    public InternalSchema resolve(long versionId, StorageConfiguration<?> storageConf) {
+      HoodieTableMetaClient client = metaClient;
+      if (client == null) {
+        client = HoodieTableMetaClient.builder().setConf(storageConf.newInstance()).setBasePath(basePath).build();
+        metaClient = client;
+      }
+      return InternalSchemaCache.searchSchemaAndCache(versionId, client);
     }
   }
 
@@ -201,7 +232,7 @@ public final class FileGroupReaderTableState implements Serializable {
     }
 
     @Override
-    public InternalSchema resolve(long versionId) {
+    public InternalSchema resolve(long versionId, StorageConfiguration<?> storageConf) {
       TreeMap<Long, InternalSchema> parsed = schemas;
       if (parsed == null) {
         parsed = StringUtils.isNullOrEmpty(schemaHistory) ? new TreeMap<>() : SerDeHelper.parseSchemas(schemaHistory);
@@ -221,7 +252,7 @@ public final class FileGroupReaderTableState implements Serializable {
     }
 
     @Override
-    public InternalSchema resolve(long versionId) {
+    public InternalSchema resolve(long versionId, StorageConfiguration<?> storageConf) {
       throw new IllegalStateException("Schema history was not captured for table " + basePath);
     }
   }
