@@ -43,6 +43,7 @@ import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -118,7 +119,10 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
                               HoodieTable<T, I, K, O> hoodieTable, Option<HoodieSchema> overriddenSchema,
                               TaskContextSupplier taskContextSupplier, boolean preserveMetadata) {
     super(config, Option.of(instantTime), hoodieTable);
-    this.partitionPath = partitionPath;
+    // Reject directory-traversal partition paths once per handle (i.e. once per partition being
+    // written), rather than per record, so a record's partition field cannot make this handle
+    // create files outside the table base path.
+    this.partitionPath = PartitionPathEncodeUtils.validateNoPathTraversal(partitionPath);
     this.fileId = fileId;
     this.writeSchema = HoodieSchemaCache.intern(overriddenSchema.orElseGet(() -> getWriteSchema(config)));
     this.writeSchemaWithMetaFields = HoodieSchemaCache.intern(HoodieSchemaUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField()));

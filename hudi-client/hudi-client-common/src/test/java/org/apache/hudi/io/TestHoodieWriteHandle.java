@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.generic.GenericData;
@@ -43,6 +44,8 @@ import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -59,6 +62,7 @@ import java.util.Properties;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
@@ -306,12 +310,58 @@ class TestHoodieWriteHandle {
     return mockWriteHandle(isTrackingEventTimeMetadata, eventTimeField, false, HoodieRecord.HoodieRecordType.AVRO, RecordMergeMode.EVENT_TIME_ORDERING);
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = {
+      "..",
+      "../evil",
+      "../../../../tmp/hudi_escaped",
+      "2024/../../evil",
+      "..\\evil"
+  })
+  void testRejectsPathTraversalPartitionPath(String partitionPath) {
+    // A single check per handle (i.e. per partition) is enough to stop a record from writing
+    // Hudi files outside the table base path, so no per-record validation is needed.
+    assertThrows(HoodieKeyException.class, () -> mockWriteHandle(partitionPath));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {
+      "2024/01/01",
+      "2024-01-01",
+      "region=us-west-2",
+      "rider=../evil",
+      "..foo",
+      "a.b.c",
+      "files",
+      "column_stats",
+      ""
+  })
+  void testAllowsLegitimatePartitionPath(String partitionPath) {
+    assertEquals(partitionPath, mockWriteHandle(partitionPath).getPartitionPath());
+  }
+
+  private DummyHoodieWriteHandle mockWriteHandle(String partitionPath) {
+    return mockWriteHandle(true, "ts", false, HoodieRecord.HoodieRecordType.AVRO,
+        RecordMergeMode.EVENT_TIME_ORDERING, partitionPath);
+  }
+
   private DummyHoodieWriteHandle mockWriteHandle(
       boolean isTrackingEventTimeMetadata,
       String eventTimeField,
       boolean keepConsistentLogicalTimestamp,
       HoodieRecord.HoodieRecordType recordType,
       RecordMergeMode mergeMode) {
+    return mockWriteHandle(isTrackingEventTimeMetadata, eventTimeField, keepConsistentLogicalTimestamp,
+        recordType, mergeMode, "test_partition");
+  }
+
+  private DummyHoodieWriteHandle mockWriteHandle(
+      boolean isTrackingEventTimeMetadata,
+      String eventTimeField,
+      boolean keepConsistentLogicalTimestamp,
+      HoodieRecord.HoodieRecordType recordType,
+      RecordMergeMode mergeMode,
+      String partitionPath) {
     when(mockRecordMerger.getRecordType()).thenReturn(recordType);
     when(mockTableConfig.getRecordMergeMode()).thenReturn(mergeMode);
     TypedProperties props = new TypedProperties();
@@ -326,7 +376,7 @@ class TestHoodieWriteHandle {
     return new DummyHoodieWriteHandle(
         mockWriteConfig,
         "test_instant",
-        "test_partition",
+        partitionPath,
         "test_file_id",
         mockHoodieTable,
         taskContextSupplier,
@@ -347,6 +397,10 @@ class TestHoodieWriteHandle {
 
     public boolean isTrackingEventTimeWaterMarker() {
       return isTrackingEventTimeWatermark;
+    }
+
+    public String getPartitionPath() {
+      return partitionPath;
     }
 
     public Option<Map<String, String>> testAppendEventTimeMetadata(HoodieRecord record, HoodieSchema schema, Properties props) {

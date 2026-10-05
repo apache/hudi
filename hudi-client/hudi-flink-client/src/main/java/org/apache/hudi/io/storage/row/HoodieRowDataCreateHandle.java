@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.exception.HoodieException;
@@ -96,7 +97,10 @@ public class HoodieRowDataCreateHandle implements Serializable {
   public HoodieRowDataCreateHandle(HoodieTable table, HoodieWriteConfig writeConfig, String partitionPath, String fileId,
                                    String instantTime, int taskPartitionId, long taskId, long taskEpochId,
                                    HoodieSchema schema, boolean preserveHoodieMetadata, boolean skipMetadataWrite) {
-    this.partitionPath = partitionPath;
+    // Reject directory-traversal partition paths once per handle (i.e. once per partition being
+    // written), rather than per row, so a row's partition field cannot make this handle create
+    // files outside the table base path.
+    this.partitionPath = PartitionPathEncodeUtils.validateNoPathTraversal(partitionPath);
     this.table = table;
     this.writeConfig = writeConfig;
     this.instantTime = instantTime;
@@ -111,7 +115,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
     this.writerSchema = schema;
     this.currTimer = HoodieTimer.start();
     this.storage = table.getStorage();
-    this.path = makeNewPath(partitionPath);
+    this.path = makeNewPath(this.partitionPath);
     this.eventTimeFieldGetter = initEventTimeFieldGetter(writeConfig, HoodieSchemaConverter.convertToRowType(writerSchema));
 
     this.writeStatus = new WriteStatus(table.shouldTrackSuccessRecords(),
