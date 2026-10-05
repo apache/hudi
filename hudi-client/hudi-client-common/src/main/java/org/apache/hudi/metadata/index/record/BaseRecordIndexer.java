@@ -432,7 +432,7 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
             }
             // Process log file write stats
             if (!logFileWriteStats.isEmpty()) {
-              String partitionPath = logFileWriteStats.get(0).getPartitionPath();
+              String partitionPath = writeStatsByFileGroupIdEntry.getKey().getPartitionPath();
               List<String> currentLogFilePaths = logFileWriteStats.stream()
                   .map(writeStat -> new StoragePath(dataTableMetaClient.getBasePath(), writeStat.getPath()).toString())
                   .collect(Collectors.toList());

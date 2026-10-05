@@ -166,6 +166,19 @@ public class TestExternalFileRecordAndSecondaryIndex extends HoodieClientTestBas
     assertRecordIndex(tableMetadata, Option.empty(), chile, 3);
     assertEquals(mapOf("alice", setOf(brazil.key(0), chile.key(0)), "bob", setOf(brazil.key(1)), "carol", setOf(chile.key(1))),
         readSecondaryIndex(tableMetadata, secondaryIndexPartition(), Arrays.asList("alice", "bob", "carol")));
+
+    // the second commit drops the file in brazil and writes a file with the same name in a third partition, which must
+    // not keep the replaced file group in brazil in the secondary index
+    ExternalFile peru = new ExternalFile("americas/peru", Option.empty(), "part-00000.parquet");
+    commitReplace(Collections.singletonList(Pair.of(peru, rows(6, "erin"))),
+        Collections.singletonMap(PARTITION, Collections.singletonList(brazil.fileId())));
+
+    tableMetadata = tableMetadata(writeConfig);
+    assertTrue(readRecordIndex(tableMetadata, Option.empty(), brazil.keys(2)).isEmpty());
+    assertRecordIndex(tableMetadata, Option.empty(), chile, 3);
+    assertRecordIndex(tableMetadata, Option.empty(), peru, 1);
+    assertEquals(mapOf("alice", setOf(chile.key(0)), "carol", setOf(chile.key(1)), "erin", setOf(peru.key(0))),
+        readSecondaryIndex(tableMetadata, secondaryIndexPartition(), Arrays.asList("alice", "bob", "carol", "erin")));
   }
 
   @ParameterizedTest
