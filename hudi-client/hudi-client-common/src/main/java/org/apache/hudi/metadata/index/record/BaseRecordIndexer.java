@@ -399,6 +399,10 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
       // a table without record keys, e.g. one that registers files written outside Hudi, keys every row by file path and position
       boolean generateRecordKeys = !dataTableMetaClient.getTableConfig().hasRecordKey();
       Option<HoodieSchema> writerSchemaOpt = HoodieTableMetadataUtil.tryResolveSchemaForTable(dataTableMetaClient);
+      // log files are read with the table schema, without it their deletes would be missing from the index
+      if (writerSchemaOpt.isEmpty() && allWriteStats.stream().anyMatch(writeStat -> FSUtils.isLogFile(new StoragePath(writeStat.getPath())))) {
+        throw new HoodieException("No schema found for table " + basePath + " to read the log files written by " + instantTime);
+      }
       Option<HoodieSchema> finalWriterSchemaOpt = writerSchemaOpt;
       ReaderContextFactory<T> readerContextFactory = engineContext.getReaderContextFactory(dataTableMetaClient);
       HoodieData<HoodieRecord> recordIndexRecords = engineContext.parallelize(new ArrayList<>(writeStatsByFileId.entrySet()), parallelism)
