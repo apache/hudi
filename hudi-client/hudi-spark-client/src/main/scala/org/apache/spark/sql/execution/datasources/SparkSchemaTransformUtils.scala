@@ -25,7 +25,9 @@ import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjectio
 import org.apache.spark.sql.catalyst.expressions.{ArrayTransform, Attribute, AttributeReference, Cast, CreateNamedStruct, CreateStruct, Expression, GetStructField, If, IsNull, LambdaFunction, Literal, MapEntries, MapFromEntries, NamedLambdaVariable, UnsafeProjection}
 import org.apache.spark.sql.types.{ArrayType, DataType, DateType, DecimalType, DoubleType, FloatType, IntegerType, LongType, MapType, StringType, StructField, StructType, TimestampNTZType}
 
-import scala.util.Try
+import java.util.concurrent.atomic.AtomicLong
+
+import scala.util.{Failure, Success, Try}
 
 /**
  * Format-agnostic utilities for Spark schema transformations including NULL padding
@@ -494,10 +496,9 @@ object SparkSchemaTransformUtils {
         // Check if adapter can handle this comparison (e.g., VariantType in Spark 4.0+)
         // Use Try to gracefully handle ClassNotFoundException when adapter module
         // is not on the classpath (e.g., hudi-spark-client tests without hudi-spark3.5.x)
-        Try(
+        adapterCheck(
           HoodieSparkUtils.sparkAdapter.isDataTypeEqualForPhysicalSchema(requiredType, fileType)
-            .getOrElse(false)
-        ).getOrElse(false)
+            .getOrElse(false))
     }
   }
 
@@ -535,6 +536,24 @@ object SparkSchemaTransformUtils {
   // Same Try as in isDataTypeEqual: the adapter module may be absent from the classpath
   // (hudi-spark-client tests), in which case there is no projection struct to recognise anyway.
   private def isVariantProjectionOverVariant(requiredType: StructType, fileType: DataType): Boolean =
-    Try(HoodieSparkUtils.sparkAdapter.isVariantProjectionStruct(requiredType)
-      && HoodieSparkUtils.sparkAdapter.isVariantType(fileType)).getOrElse(false)
+    adapterCheck(HoodieSparkUtils.sparkAdapter.isVariantProjectionStruct(requiredType)
+      && HoodieSparkUtils.sparkAdapter.isVariantType(fileType))
+
+  private val adapterCheckFailures = new AtomicLong()
+
+  /**
+   * The number of adapter checks in this JVM that failed for a reason other than a missing adapter class. Such a
+   * failure answers the check with false, so callers that cache results derived from it compare this count before and
+   * after to skip caching them.
+   */
+  def adapterCheckFailureCount: Long = adapterCheckFailures.get()
+
+  /** Runs an adapter check, answering false when it fails. A missing adapter class fails the same way every time. */
+  private def adapterCheck(check: => Boolean): Boolean = Try(check) match {
+    case Success(result) => result
+    case Failure(_: ClassNotFoundException) => false
+    case Failure(_) =>
+      adapterCheckFailures.incrementAndGet()
+      false
+  }
 }
