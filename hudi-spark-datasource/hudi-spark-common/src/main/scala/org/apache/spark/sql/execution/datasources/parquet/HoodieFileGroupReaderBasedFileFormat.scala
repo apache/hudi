@@ -193,6 +193,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
           s.dataType, sparkSession.sessionState.conf.orcVectorizedReaderNestedColumnEnabled))
       // TODO: Implement columnar batch reading https://github.com/apache/hudi/issues/17736
       val lanceBatchSupported = false
+      // The Vortex reader returns rows only
+      val vortexBatchSupported = false
 
       val formatSupportsBatch = if (isMultipleBaseFileFormatsEnabled) {
         parquetBatchSupported && orcBatchSupported
@@ -202,6 +204,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
         orcBatchSupported
       } else if (hoodieFileFormat == HoodieFileFormat.LANCE) {
         lanceBatchSupported
+      } else if (hoodieFileFormat == HoodieFileFormat.VORTEX) {
+        vortexBatchSupported
       } else {
         throw new HoodieNotSupportedException("Unsupported file format: " + hoodieFileFormat)
       }
@@ -337,7 +341,9 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val dataStructTypeWithMandatoryPartitionFields = StructType(dataStructType.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name) && !isNestedPartitionField(f.name)))
     val dataSchema = HoodieSchemaUtils.pruneDataSchema(schema, HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(dataStructTypeWithMandatoryPartitionFields, sanitizedTableName), exclusionFields)
 
-    // Decide per scan: Spark skips supportBatch for scans wider than spark.sql.codegen.maxFields
+    // Decide per scan: Spark skips supportBatch for scans wider than spark.sql.codegen.maxFields.
+    // Never write it to spark.sql.parquet.enableVectorizedReader: Spark uses that conf to decide whether to
+    // convert the scan output to UnsafeRow, and skipping the conversion for vectorized rows fails.
     val vectorizedRead = canReadVectorized(spark, outputSchema)
 
     val baseFileReader = spark.sparkContext.broadcast(buildBaseFileReader(spark, options, augmentedStorageConf.unwrap(), dataStructType, vectorizedRead))
