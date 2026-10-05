@@ -363,8 +363,10 @@ class TestParquetSchemaEvolutionUtils {
     // cannot be evaluated must not skip any of the file's row groups.
     Assertions.assertEquals(AlwaysTrue, rebuild(IsNotNull("added")))
 
-    // Every leaf filter type takes both arms: re-spelled when the file holds the column under
-    // another name, AlwaysTrue when it does not hold it at all.
+    // Every leaf filter type takes all three arms: re-spelled when the file holds the column under
+    // another name, AlwaysTrue when it does not hold it at all, and AlwaysTrue when even the query
+    // schema does not hold the name, which is how a predicate on a PushVariantIntoScan projection
+    // member arrives (before, that threw IllegalArgumentException).
     val leafFilters: Seq[String => Filter] = Seq(
       EqualTo(_, "x"), EqualNullSafe(_, "x"), GreaterThan(_, "x"), GreaterThanOrEqual(_, "x"),
       LessThan(_, "x"), LessThanOrEqual(_, "x"), In(_, Array[Any]("x", "y")), IsNull(_), IsNotNull(_),
@@ -372,6 +374,7 @@ class TestParquetSchemaEvolutionUtils {
     leafFilters.foreach { leaf =>
       Assertions.assertEquals(leaf("original"), rebuild(leaf("renamed")))
       Assertions.assertEquals(AlwaysTrue, rebuild(leaf("added")), s"${leaf("added")} on an absent column")
+      Assertions.assertEquals(AlwaysTrue, rebuild(leaf("v.`0`")), s"${leaf("v.`0`")} on a name the query schema lacks")
     }
 
     // The constant filters reference no column and pass through as they are.
@@ -382,6 +385,9 @@ class TestParquetSchemaEvolutionUtils {
     Assertions.assertEquals(
       And(EqualTo("original", "x"), AlwaysTrue),
       rebuild(And(EqualTo("renamed", "x"), IsNull("added"))))
+    Assertions.assertEquals(
+      And(EqualTo("original", "x"), AlwaysTrue),
+      rebuild(And(EqualTo("renamed", "x"), GreaterThan("v.`0`", 5))))
     Assertions.assertEquals(
       Or(Not(EqualTo("original", "x")), GreaterThanOrEqual("id", 2)),
       rebuild(Or(Not(EqualTo("renamed", "x")), GreaterThanOrEqual("id", 2))))

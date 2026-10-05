@@ -962,6 +962,15 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
         checkNestedExceptionContains(
           () => spark.sql(s"select id, cast(v as string), note from $tableName").collect())(
           "pushVariantIntoScan")
+        // A variant_get predicate reaches the reader as a pushed filter on the projection struct's
+        // ordinal-named member, a name the query schema does not hold. The filter rebuild
+        // (ParquetSchemaEvolutionUtils.rebuildFilterFromParquet) runs before the guard and drops it
+        // rather than failing on the unknown name, so this read is rejected by the guard as well
+        // instead of an IllegalArgumentException from the rebuild.
+        val filtered = s"select id from $tableName where variant_get(v, '$$.a', 'int') > 0"
+        assert(scanPushedFilters(filtered) == "[IsNotNull(v), GreaterThan(v.`0`,0)]",
+          s"[$leg] PushedFilters of the scan of: $filtered")
+        checkNestedExceptionContains(() => spark.sql(filtered).collect())("pushVariantIntoScan")
         // The guard's empty-projection carve-out: count(*) reads no column data, and the query
         // schema it would be checked against is the UNPRUNED table schema, variant included, so
         // the guard must not run at all. Drop the requiredSchema.nonEmpty gate at any of its five
