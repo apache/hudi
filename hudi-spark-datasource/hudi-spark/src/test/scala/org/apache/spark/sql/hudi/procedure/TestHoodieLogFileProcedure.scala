@@ -159,6 +159,16 @@ class TestHoodieLogFileProcedure extends HoodieSparkProcedureTestBase {
         val dropAll = spark.sql(
           s"""call show_logfile_records(table => '$tableName', log_file_path_pattern => '$pattern', limit => 10, filter => "records LIKE '%__no_such_token__%'")""".stripMargin).collect()
         assertResult(0)(dropAll.length)
+
+        // `limit` has to bound the rows the filter matched, not the rows the filter was shown. Asserting
+        // it for both records keeps this independent of which one the scan returns first: whichever is
+        // not first is invisible to a filter applied after a limit of 1.
+        Seq("b1", "b2").foreach { name =>
+          val matched = spark.sql(
+            s"""call show_logfile_records(table => '$tableName', log_file_path_pattern => '$pattern', limit => 1, filter => "records LIKE '%$name%'")""".stripMargin).collect()
+          assertResult(1, s"limit => 1 must return the row matching $name, wherever it sits in the scan")(matched.length)
+          assert(matched.head.getString(0).contains(name))
+        }
       }
     }
   }
