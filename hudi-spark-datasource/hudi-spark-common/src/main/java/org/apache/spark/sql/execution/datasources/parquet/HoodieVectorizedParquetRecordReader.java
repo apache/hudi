@@ -94,8 +94,12 @@ public class HoodieVectorizedParquetRecordReader extends VectorizedParquetRecord
   @Override
   public void close() throws IOException {
     super.close();
-    for (Map.Entry<Integer, WritableColumnVector> e : idToColumnVectors.entrySet()) {
-      e.getValue().close();
+    // initBatch allocates these vectors. When initialize or initBatch throws, Spark closes the
+    // reader before they exist, so skip them rather than mask the original failure with an NPE.
+    if (idToColumnVectors != null) {
+      for (Map.Entry<Integer, WritableColumnVector> e : idToColumnVectors.entrySet()) {
+        e.getValue().close();
+      }
     }
     idToColumnVectors = null;
     columnarBatch = null;
