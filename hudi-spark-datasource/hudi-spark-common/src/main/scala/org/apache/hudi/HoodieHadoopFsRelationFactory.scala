@@ -247,7 +247,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
       HoodieTableSchema(tableStructSchema, tableSchema, internalSchemaOpt),
       tableConfig.getTableName, queryTimestamp.get, getMandatoryFields, isMOR, isBootstrap,
       isIncremental, validCommits, shouldUseRecordPosition, getRequiredFilters,
-      tableConfig.isMultipleBaseFileFormatsEnabled, tableConfig.getBaseFileFormat, getInstantRange)
+      tableConfig.isMultipleBaseFileFormatsEnabled, tableConfig.getBaseFileFormat, getInstantRange, Some(metaClient))
   }
 
   override def buildBucketSpec(): Option[BucketSpec] = None
