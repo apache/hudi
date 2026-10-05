@@ -36,6 +36,7 @@ import org.apache.spark.sql.execution.{FileSourceScanExec, WholeStageCodegenExec
 import org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanHelper
 
 import java.io.File
+import java.nio.file.{Files, Paths}
 import java.sql.Timestamp
 
 import scala.collection.JavaConverters._
@@ -59,22 +60,24 @@ class TestVectorizedReadDecisionPerScan extends HoodieSparkSqlTestBase with Adap
       withSQLConf(vectorizedReaderConf -> "true", "spark.sql.codegen.maxFields" -> "100") {
         withTempDir { tmp =>
           val tableName = generateTableName
-          createWideTable(tableName, tableType, tmp)
+          updateOneFileGroup(tableName, tableType, createWideTable(tableName, tableType, tmp))
 
           // The narrow scan is asked supportBatch and may read vectorized
+          checkNarrowScan(tableName, updatedRows)
           checkAnswer(s"select count(*) from $tableName")(Seq(3))
           assertResult("true")(spark.conf.get(vectorizedReaderConf))
 
           // The wide scan is never asked, and must not inherit the narrow scan's answer
           assert(!scanIsBatched(s"select * from $tableName"))
-          checkWideScan(tableName)
+          checkWideScan(tableName, updatedRows)
           assertResult("true")(spark.conf.get(vectorizedReaderConf))
 
           // With the vectorized reader disabled Spark skips the UnsafeRow conversion of the scan output, so a
           // wide scan handed a leftover vectorized reader fails with
           // ClassCastException: ColumnarBatchRow cannot be cast to UnsafeRow
           withSQLConf(vectorizedReaderConf -> "false") {
-            checkWideScan(tableName)
+            checkWideScan(tableName, updatedRows)
+            checkNarrowScan(tableName, updatedRows)
             assertResult("false")(spark.conf.get(vectorizedReaderConf))
           }
         }
@@ -85,15 +88,17 @@ class TestVectorizedReadDecisionPerScan extends HoodieSparkSqlTestBase with Adap
       withSQLConf(vectorizedReaderConf -> "true", "spark.sql.codegen.maxFields" -> "100") {
         withTempDir { tmp =>
           val tableName = generateTableName
-          createWideTable(tableName, tableType, tmp)
+          updateOneFileGroup(tableName, tableType, createWideTable(tableName, tableType, tmp))
 
-          checkWideScan(tableName)
+          checkWideScan(tableName, updatedRows)
           assertResult("true")(spark.conf.get(vectorizedReaderConf))
 
           // Only COW scans return batches; MOR merges rows, so its scans are never columnar
           if (tableType == "cow") {
+            assert(scanIsBatched(s"select id, name, dt from $tableName"))
             assert(scanIsBatched(s"select count(*) from $tableName"))
           }
+          checkNarrowScan(tableName, updatedRows)
           checkAnswer(s"select count(*) from $tableName")(Seq(3))
           assertResult("true")(spark.conf.get(vectorizedReaderConf))
         }
@@ -111,11 +116,10 @@ class TestVectorizedReadDecisionPerScan extends HoodieSparkSqlTestBase with Adap
           val tableName = generateTableName
           createWideTable(tableName, tableType, tmp, Map(HoodieTableConfig.BASE_FILE_FORMAT.key -> "VORTEX"))
 
-          val narrowScan = s"select id, name from $tableName"
-          assert(!scanIsBatched(narrowScan))
-          checkAnswer(s"$narrowScan order by id")(Seq(1, "a1"), Seq(2, "a2"), Seq(3, "a3"))
+          assert(!scanIsBatched(s"select id, name, dt from $tableName"))
+          checkNarrowScan(tableName, insertedRows)
           assert(!scanIsBatched(s"select * from $tableName"))
-          checkWideScan(tableName)
+          checkWideScan(tableName, insertedRows)
           assertResult("true")(spark.conf.get(vectorizedReaderConf))
         }
       }
@@ -231,8 +235,17 @@ class TestVectorizedReadDecisionPerScan extends HoodieSparkSqlTestBase with Adap
     }
   }
 
+  // Rows of the wide table as (id, name, dt). Partition p2 holds only id 3, so each partition is its own file group.
+  private val insertedRows = Seq((1, "a1", "p1"), (2, "a2", "p1"), (3, "a3", "p2"))
+  private val updatedRows = insertedRows.map {
+    case (3, _, dt) => (3, "a3_updated", dt)
+    case row => row
+  }
+
+  /** Creates and fills the wide table, and returns its path. */
   private def createWideTable(tableName: String, tableType: String, tmp: File,
-                              extraProps: Map[String, String] = Map.empty): Unit = {
+                              extraProps: Map[String, String] = Map.empty): String = {
+    val tablePath = s"${tmp.getCanonicalPath}/$tableName"
     val payloadType = (1 to payloadFieldCount).map(i => s"f$i int").mkString("struct<", ", ", ">")
     val extraTblProps = extraProps.map { case (k, v) => s",\n  '$k' = '$v'" }.mkString
     spark.sql(
@@ -241,31 +254,65 @@ class TestVectorizedReadDecisionPerScan extends HoodieSparkSqlTestBase with Adap
          |  id int,
          |  name string,
          |  payload $payloadType,
-         |  ts long
+         |  ts long,
+         |  dt string
          |) using hudi
-         | location '${tmp.getCanonicalPath}/$tableName'
+         | partitioned by (dt)
+         | location '$tablePath'
          | tblproperties (
          |  type = '$tableType',
          |  primaryKey = 'id',
          |  orderingFields = 'ts'$extraTblProps
          | )
        """.stripMargin)
-    val rows = (1 to 3).map { id =>
+    val rows = insertedRows.map { case (id, name, dt) =>
       val payload = (1 to payloadFieldCount).map(i => s"'f$i', ${id * 1000 + i}").mkString("named_struct(", ", ", ")")
-      s"select $id as id, 'a$id' as name, $payload as payload, ${id * 1000}L as ts"
+      s"select $id as id, '$name' as name, $payload as payload, ${id * 1000}L as ts, '$dt' as dt"
     }
     spark.sql(s"insert into $tableName ${rows.mkString(" union all ")}")
     assert(WholeStageCodegenExec.isTooManyFields(spark.sessionState.conf, spark.table(tableName).schema),
       "select * must be too wide for whole-stage codegen, otherwise Spark asks supportBatch for it as well")
+    tablePath
+  }
+
+  /**
+   * Renames id 3, so on a MOR table p2 gets a base+log file slice, read by the file group reader over the row
+   * base reader, while p1 keeps a base-only slice, read by the base reader, which is vectorized when the scan
+   * allows it. Every MOR scan after this mixes the two readers.
+   */
+  private def updateOneFileGroup(tableName: String, tableType: String, tablePath: String): Unit = {
+    spark.sql(s"update $tableName set name = 'a3_updated' where id = 3")
+    assertResult(if (tableType == "mor") Set("p2") else Set.empty[String])(partitionsWithLogFiles(tablePath))
+  }
+
+  private def partitionsWithLogFiles(tablePath: String): Set[String] = {
+    val files = Files.walk(Paths.get(tablePath))
+    try {
+      files.iterator().asScala
+        .filter(f => Files.isRegularFile(f) && f.getFileName.toString.contains(".log.") && !f.toString.contains("/.hoodie/"))
+        .map(_.getParent.getFileName.toString.stripPrefix("dt="))
+        .toSet
+    } finally {
+      files.close()
+    }
+  }
+
+  /** Runs a scan narrower than spark.sql.codegen.maxFields, and checks the rows that came back. */
+  private def checkNarrowScan(tableName: String, expected: Seq[(Int, String, String)]): Unit = {
+    val actual = spark.sql(s"select id, name, dt from $tableName").collect().map { row =>
+      (row.getAs[Int]("id"), row.getAs[String]("name"), row.getAs[String]("dt"))
+    }.sorted.toSeq
+    assertResult(expected)(actual)
   }
 
   /** Runs select * so that the scan stays wide, and checks the rows that came back. */
-  private def checkWideScan(tableName: String): Unit = {
+  private def checkWideScan(tableName: String, expected: Seq[(Int, String, String)]): Unit = {
     val actual = spark.sql(s"select * from $tableName").collect().map { row =>
       val payload = row.getAs[Row]("payload")
-      (row.getAs[Int]("id"), row.getAs[String]("name"), payload.getAs[Int]("f1"), payload.getAs[Int](s"f$payloadFieldCount"))
+      (row.getAs[Int]("id"), row.getAs[String]("name"), row.getAs[String]("dt"),
+        payload.getAs[Int]("f1"), payload.getAs[Int](s"f$payloadFieldCount"))
     }.sorted.toSeq
-    assertResult(Seq((1, "a1", 1001, 1120), (2, "a2", 2001, 2120), (3, "a3", 3001, 3120)))(actual)
+    assertResult(expected.map { case (id, name, dt) => (id, name, dt, id * 1000 + 1, id * 1000 + payloadFieldCount) })(actual)
   }
 
   private def scanIsBatched(sql: String): Boolean = {
