@@ -18,8 +18,12 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.util.ChangelogModes;
 import org.apache.hudi.util.DataModificationInfos;
 import org.apache.hudi.utils.TestConfigurations;
@@ -27,17 +31,80 @@ import org.apache.hudi.utils.TestConfigurations;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.connector.ChangelogMode;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.File;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests for {@link HoodieTableSink}.
  */
 class TestHoodieTableSink {
+
+  @TempDir
+  File tempFile;
+
+  @Test
+  void testGetSinkRuntimeProviderRejectsInsertOverwriteWithNonBlockingConcurrencyControl() {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(),
+        WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL.name());
+    conf.set(FlinkOptions.OPERATION, WriteOperationType.INSERT_OVERWRITE.value());
+
+    HoodieTableSink sink = new HoodieTableSink(conf, TestConfigurations.TABLE_SCHEMA);
+    // The invalid combination must be rejected up front, before the provider lambda runs
+    // StreamerUtil.initTableFromClientIfNecessary and creates the table on disk.
+    HoodieException exception = assertThrows(HoodieException.class,
+        () -> sink.getSinkRuntimeProvider(null));
+    assertTrue(exception.getMessage()
+        .contains(WriteConcurrencyMode.INSERT_OVERWRITE_NOT_SUPPORTED_ERROR));
+    assertFalse(new File(tempFile, HoodieTableMetaClient.METAFOLDER_NAME).exists(),
+        "The table should not be initialized when the write operation is rejected");
+  }
+
+  @Test
+  void testGetSinkRuntimeProviderRejectsInsertOverwriteInjectedViaApplyOverwrite() {
+    // Mirrors the SQL planner flow: INSERT OVERWRITE reaches the sink through applyOverwrite /
+    // applyStaticPartition rather than an explicit FlinkOptions.OPERATION setting. The guard must
+    // still reject the combination with non-blocking concurrency control.
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(),
+        WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL.name());
+
+    HoodieTableSink sink = new HoodieTableSink(conf, TestConfigurations.TABLE_SCHEMA);
+    // INSERT OVERWRITE TABLE injects INSERT_OVERWRITE_TABLE.
+    sink.applyOverwrite(true);
+    assertEquals(
+        WriteOperationType.INSERT_OVERWRITE_TABLE.value(),
+        conf.get(FlinkOptions.OPERATION));
+
+    HoodieException exception = assertThrows(HoodieException.class,
+        () -> sink.getSinkRuntimeProvider(null));
+    assertTrue(exception.getMessage()
+        .contains(WriteConcurrencyMode.INSERT_OVERWRITE_NOT_SUPPORTED_ERROR));
+    assertFalse(new File(tempFile, HoodieTableMetaClient.METAFOLDER_NAME).exists(),
+        "The table should not be initialized when the write operation is rejected");
+
+    // INSERT OVERWRITE with static partitions injects INSERT_OVERWRITE; it must be rejected too.
+    sink.applyStaticPartition(Collections.singletonMap("partition", "p1"));
+    assertEquals(
+        WriteOperationType.INSERT_OVERWRITE.value(),
+        conf.get(FlinkOptions.OPERATION));
+
+    exception = assertThrows(HoodieException.class,
+        () -> sink.getSinkRuntimeProvider(null));
+    assertTrue(exception.getMessage()
+        .contains(WriteConcurrencyMode.INSERT_OVERWRITE_NOT_SUPPORTED_ERROR));
+    assertFalse(new File(tempFile, HoodieTableMetaClient.METAFOLDER_NAME).exists(),
+        "The table should not be initialized when the write operation is rejected");
+  }
 
   @Test
   void testChangelogModeAndCopy() {
