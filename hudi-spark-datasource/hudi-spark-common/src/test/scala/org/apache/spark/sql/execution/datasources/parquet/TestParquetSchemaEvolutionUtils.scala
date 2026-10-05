@@ -19,11 +19,15 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
+import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaField, HoodieSchemaType}
 import org.apache.hudi.common.schema.internal.InternalSchema
 import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter
+import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.exception.HoodieException
 
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.parquet.hadoop.metadata.FileMetaData
 import org.apache.parquet.schema.{MessageType, Type, Types}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
@@ -385,6 +389,30 @@ class TestParquetSchemaEvolutionUtils {
       ParquetSchemaEvolutionUtils.rebuildFilterFromParquet(untouched, fileSchema, null))
     Assertions.assertSame(untouched,
       ParquetSchemaEvolutionUtils.rebuildFilterFromParquet(untouched, null, null))
+  }
+
+  /**
+   * An empty projection (count(*), select 1, a partition-only select) reads no column data, so it
+   * must bypass the schema-on-read merge. Its query schema is the UNPRUNED table schema, and merging
+   * that would request every column - a variant one as the plain struct the internal-schema
+   * converter emits, which Spark 4.x's vectorized reader rejects for a VARIANT-annotated group.
+   */
+  @Test
+  def testEmptyProjectionBypassesInternalSchema(): Unit = {
+    val tablePath = "/tmp/hudi_table"
+    val conf = new Configuration()
+    conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, tablePath)
+    val internalSchema = internalSchemaOf(
+      "id" -> HoodieSchema.create(HoodieSchemaType.INT),
+      "v" -> HoodieSchema.createVariant())
+    def utilsFor(requiredSchema: StructType): ParquetSchemaEvolutionUtils =
+      new ParquetSchemaEvolutionUtils(conf, new Path(s"$tablePath/f1_0-1-1_20260101000000000.parquet"),
+        requiredSchema, new StructType(), HOption.of(internalSchema))
+
+    Assertions.assertFalse(utilsFor(new StructType()).shouldUseInternalSchema,
+      "An empty projection must be read without the internal schema")
+    Assertions.assertTrue(utilsFor(new StructType().add("id", IntegerType)).shouldUseInternalSchema,
+      "A non-empty projection on a table with an internal schema must still use it")
   }
 
   /** An internal schema over the given top-level columns, in order; field ids are positional. */
