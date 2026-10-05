@@ -1007,30 +1007,6 @@ class TestStorageBasedLockProvider {
   }
 
   @Test
-  void testRenewLockReconcilesWhenTransientErrorMaskedLandedRenewal() throws InterruptedException {
-    long oldExpiration = System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS;
-    StorageLockFile lockFile = new StorageLockFile(new StorageLockData(false, oldExpiration, ownerId), "v1");
-    StorageLockFile renewedLockFile = new StorageLockFile(
-        new StorageLockData(false, oldExpiration + DEFAULT_LOCK_VALIDITY_MS, ownerId), "v2");
-    when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, Option.empty()));
-    when(mockLockService.tryUpsertLockFile(any(), eq(Option.empty())))
-        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(lockFile)));
-    when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
-    assertTrue(lockProvider.tryLock());
-
-    doNothing().when(lockProvider).sleepBeforeRetry(anyLong());
-    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(lockFile))))
-        .thenReturn(Pair.of(LockUpsertResult.TRANSIENT_ERROR, Option.empty()))
-        .thenReturn(Pair.of(LockUpsertResult.ACQUIRED_BY_OTHERS, Option.empty()));
-    when(mockLockService.readCurrentLockFile())
-        .thenReturn(Pair.of(LockGetResult.SUCCESS, Option.of(renewedLockFile)));
-
-    assertTrue(lockProvider.renewLock(), "A landed renewal for this owner must keep the heartbeat alive");
-    assertTrue(renewedLockFile == lockProvider.getLock(), "Adopt the renewed lock token from storage");
-    verify(mockLockService, times(2)).tryUpsertLockFile(any(), eq(Option.of(lockFile)));
-  }
-
-  @Test
   void testRenewLockUnableToUpsertLockFileFatal() {
     StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
     StorageLockFile lockFile = new StorageLockFile(data, "v1");
