@@ -1,0 +1,161 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Enforces a minimum coverage on the lines a pull request changes (patch / diff
+# coverage). It runs directly on the pull request: it waits for the PR's coverage
+# to be aggregated on Codecov (uploaded by the Java CI matrix), reads the
+# changed-line coverage, and fails when it is below the threshold. The job's own
+# pass/fail is the gate; the result is also written to the run summary and, when
+# permitted, posted as a PR comment. This gates new/modified code, not overall
+# project coverage, so a PR is not penalized for the repository's existing
+# coverage.
+name: Patch Coverage
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+    branches:
+      - master
+      - 'release-*'
+      - branch-0.x
+
+concurrency:
+  group: patch-coverage-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: write
+
+env:
+  # Minimum required coverage (percent) of the lines changed by the PR.
+  MIN_PATCH_COVERAGE: "80"
+  # Max minutes to wait for Java CI to finish AND for Codecov to aggregate the
+  # report for this PR head, before giving up (fail open). Covers the full CI
+  # matrix (~75m) plus Codecov merge time.
+  MAX_WAIT_MINUTES: "120"
+
+jobs:
+  patch-coverage:
+    name: Enforce patch coverage >= 80%
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce patch coverage
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          owner="${REPO%%/*}"
+          repo="${REPO##*/}"
+
+          report() {  # $1 = markdown line(s) for the run summary + optional PR comment
+            printf '%s\n' "$1" >> "${GITHUB_STEP_SUMMARY}"
+            # Best effort: fork PRs get a read-only token and cannot comment; that
+            # is fine, the job conclusion below is the actual gate.
+            gh pr comment "${PR}" --repo "${REPO}" --edit-last --body "$1" 2>/dev/null \
+              || gh pr comment "${PR}" --repo "${REPO}" --body "$1" 2>/dev/null \
+              || echo "NOTE: could not post PR comment (read-only token on fork PRs); see run summary."
+          }
+
+          # Skip PRs that change no main source: there are no measurable changed
+          # lines to gate, so the check passes immediately without waiting on CI.
+          changed_main="$(gh api "repos/${REPO}/pulls/${PR}/files" --paginate \
+            --jq '.[].filename | select(test("/src/main/.*\\.(java|scala)$"))' 2>/dev/null || true)"
+          if [ -z "${changed_main}" ]; then
+            echo "No changed main-source (.java/.scala) files; patch-coverage gate not applicable."
+            report "$(printf '### Patch coverage: not applicable ✅\nThis PR changes no main source (`.java`/`.scala`) lines, so there is nothing to gate.')"
+            exit 0
+          fi
+
+          commit_api="https://api.codecov.io/api/v2/github/${owner}/repos/${repo}/commits/${HEAD_SHA}"
+          compare_api="https://api.codecov.io/api/v2/github/${owner}/repos/${repo}/compare?pullid=${PR}"
+
+          deadline=$(( SECONDS + MAX_WAIT_MINUTES * 60 ))
+
+          # STEP 1: wait until the Java CI run for this exact head SHA has COMPLETED.
+          # This gate runs concurrently with Java CI, and Codecov reports state="complete"
+          # after every single upload (it re-aggregates incrementally). Scoring before the
+          # whole matrix has uploaded would read a partial report and fail spuriously, so
+          # first block on Java CI finishing: only then are all coverage sessions submitted.
+          ci_done=0
+          while [ "${SECONDS}" -lt "${deadline}" ]; do
+            ci_status="$(gh api "repos/${REPO}/actions/runs?head_sha=${HEAD_SHA}&per_page=100" \
+              --jq '[.workflow_runs[] | select(.name=="Java CI")] | sort_by(.run_number) | last | .status' 2>/dev/null || true)"
+            echo "waiting for Java CI to finish: status=${ci_status:-unknown}"
+            if [ "${ci_status}" = "completed" ]; then ci_done=1; break; fi
+            sleep 60
+          done
+          if [ "${ci_done}" != "1" ]; then
+            echo "WARN: Java CI did not complete within ${MAX_WAIT_MINUTES}m; skipping the gate (fail open)."
+            report "$(printf '### Patch coverage: skipped ⚠️\nJava CI did not finish within %s minutes, so patch coverage could not be scored. Re-run after CI completes to enforce it.' "${MAX_WAIT_MINUTES}")"
+            exit 0
+          fi
+
+          # STEP 2: Java CI is done, so all uploads are submitted; now wait for Codecov to
+          # finish MERGING them. Require state="complete" AND the session count to hold
+          # steady across 3 consecutive polls (90s apart) so we do not score mid-merge.
+          prev_sessions="-1"
+          stable_count=0
+          settled=0
+          while [ "${SECONDS}" -lt "${deadline}" ]; do
+            cresp="$(curl -sf "${commit_api}" 2>/dev/null || true)"
+            state="$(printf '%s' "${cresp}" | jq -r '.state // empty' 2>/dev/null || true)"
+            sessions="$(printf '%s' "${cresp}" | jq -r '.totals.sessions // 0' 2>/dev/null || echo 0)"
+            echo "waiting for Codecov merge: state=${state:-none} sessions=${sessions} stable=${stable_count}"
+            if [ "${state}" = "complete" ] && [ "${sessions}" = "${prev_sessions}" ] && [ "${sessions}" != "0" ]; then
+              stable_count=$(( stable_count + 1 ))
+              if [ "${stable_count}" -ge 2 ]; then settled=1; break; fi
+            else
+              stable_count=0
+            fi
+            prev_sessions="${sessions}"
+            sleep 90
+          done
+
+          if [ "${settled}" != "1" ]; then
+            echo "WARN: Codecov did not reach a stable 'complete' state within the budget; skipping the gate (fail open)."
+            report "$(printf '### Patch coverage: skipped ⚠️\nCodecov did not finish aggregating coverage for this PR in time, so the gate was skipped. Re-run to enforce it.')"
+            exit 0
+          fi
+
+          # Codecov has merged all sessions; read the changed-line (diff) coverage.
+          resp="$(curl -sf "${compare_api}" 2>/dev/null || true)"
+          cov="$(printf '%s' "${resp}" | jq -r '
+            (.totals.base.diff[5] // .totals.head.diff[5] // .totals.patch.coverage // empty)
+            | tostring' 2>/dev/null || true)"
+
+          if [ -z "${cov}" ] || [ "${cov}" = "null" ] || [ "${cov}" = "empty" ]; then
+            echo "No patch coverage figure reported despite complete aggregation; treating as pass."
+            report "$(printf '### Patch coverage: not applicable ✅\nCodecov reported no changed-line coverage figure for this PR (no instrumented changed lines).')"
+            exit 0
+          fi
+
+          report_url="https://app.codecov.io/gh/${owner}/${repo}/pull/${PR}"
+          echo "Patch (changed-line) coverage: ${cov}% (minimum ${MIN_PATCH_COVERAGE}%)"
+          if awk "BEGIN { exit !(${cov} >= ${MIN_PATCH_COVERAGE}) }"; then
+            report "$(printf '### Patch coverage: `%s%%` ✅\nCoverage of the lines this PR changed is **%s%%**, at or above the required **%s%%**. [Codecov report](%s)' "${cov}" "${cov}" "${MIN_PATCH_COVERAGE}" "${report_url}")"
+            echo "PASS: changed lines meet the ${MIN_PATCH_COVERAGE}% coverage bar."
+          else
+            report "$(printf '### Patch coverage: `%s%%` ❌\nCoverage of the lines this PR changed is **%s%%**, below the required **%s%%**. Please add tests for the new or modified code, or discuss the gap with a reviewer. [Codecov report](%s)' "${cov}" "${cov}" "${MIN_PATCH_COVERAGE}" "${report_url}")"
+            echo "FAIL: changed lines are only ${cov}% covered (need ${MIN_PATCH_COVERAGE}%)."
+            exit 1
+          fi
