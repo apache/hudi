@@ -88,19 +88,17 @@ A write can also come back with an *ambiguous* answer, where storage does not sa
 
 The lock file makes this resolvable. Each provider instance has a random `owner` UUID and no other instance writes it. A lock file that carries our owner was therefore written by this instance.
 
-**Rule.** After an ambiguous answer, the provider retries the operation with the same precondition (bounded attempts, with backoff). It also remembers that the write is unresolved until a definitive answer arrives. While a write is unresolved, a 412 on any later operation does not count as another writer's write straight away: that covers the in-cycle retry, the next heartbeat's renewal, and `unlock()`. The same goes for a lock that looks held on the next acquire attempt. The provider first reads the lock file back. Only if the read-back does not match one of the rows below is the result treated as another writer's.
+**Rule.** After an ambiguous answer, the provider retries the operation with the same precondition (bounded attempts, with backoff). It also remembers that the write is unresolved until a definitive answer arrives. While a write is unresolved, a 412 on any later operation does not count as another writer's write straight away: that covers the retry and a later `unlock()`. The same goes for a lock that looks held on the next acquire attempt. The provider first reads the lock file back. Only if the read-back does not match one of the rows below is the result treated as another writer's.
 
 | Operation | The read-back is our owner, and... | Outcome |
 |---|---|---|
 | `tryLock()` | `expired = false`, still valid (expiration plus the clock drift buffer is in the future), and the expiration this call wrote | The acquire write landed. Adopt that lock file, including its version tag, and start the heartbeat. |
-| `renewLock()` | `expired = false` and an expiration later than the one we hold | A renewal landed. Adopt it and keep the heartbeat running. |
 | `unlock()` | `expired = true` and the same expiration as the lock being released | The release landed. The release succeeded. |
 
 Any other read-back keeps the existing behaviour:
-- **A different owner** is not proof that our earlier write landed. On renew or unlock it is reported as the lock being acquired by others; on acquire it means the lock is held.
+- **A different owner** is not proof that our earlier write landed. On unlock it is reported as the lock being acquired by others; on acquire it means the lock is held.
 - **A failed read** (the read fails or finds no lock file) leaves the outcome unknown, and the result is treated as another writer's write:
   - `tryLock()` reports the lock as not acquired. If our acquire write did land, that lock has no heartbeat and stays held until its expiration.
-  - `renewLock()` treats the lock as lost: the heartbeat stops and the writer thread is interrupted.
   - `unlock()` reports the release as failed and clears the local lock state. The lock file then belongs to another writer, or is ours until its expiration.
 
 Notes:
@@ -108,7 +106,7 @@ Notes:
   - S3: the ETag and the content come from one GetObject response.
   - Azure: the ETag and the content come from one download response.
   - GCS: the content read is pinned to the generation returned with the metadata.
-- **Clock.** The renewal comparison uses this writer's own clock. A backward clock step can make it reject our own landed renewal. That fails safe: the renewal is reported as lost and the writer thread is interrupted.
+- **Renewal is out of scope.** A renewal that lands behind an ambiguous answer is not read back: the next renewal's precondition fails and the lock is treated as lost, as before. That fails safe, since the heartbeat stops and the writer thread is interrupted.
 - **Shutdown hook and heartbeat-start failure.** These release paths stay single-attempt and best-effort.
 - **Ownership unit.** Lock ownership, reentrancy and the read-back are per provider instance, not per thread. A second thread that uses the same instance while it holds the lock is treated as the holder, and the heartbeat monitors only the thread that acquired the lock. Callers that share one provider instance across threads must serialize their critical sections themselves.
 - **Per-client classification.** Each storage client must map timeouts and dropped connections to an ambiguous result, rather than rethrowing them or reporting them as unknown and unretried. The same applies to the S3 409 above. On Azure, a 409 on create means the blob already exists, so it is not a retriable conflict.
