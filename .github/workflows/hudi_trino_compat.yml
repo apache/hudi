@@ -113,6 +113,8 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ~/.m2/repository/io/trino
+          # Purged-cache exception lives in scheduled_workflow.yml: keep the
+          # exclusion prefix there in sync if this key ever changes.
           key: trino-m2-v2-${{ hashFiles('hudi/scripts/trino/bootstrap_trino.sh') }}-${{ steps.trino-head.outputs.head_sha }}
       - name: Open issue on failure
         # Only a connector compile or test failure is SPI drift. A bare failure() would also
