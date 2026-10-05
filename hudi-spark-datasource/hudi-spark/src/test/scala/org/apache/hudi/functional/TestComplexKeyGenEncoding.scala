@@ -300,6 +300,43 @@ class TestComplexKeyGenEncoding extends HoodieSparkClientTestBase {
     assertEquals(Some(ComplexKeyGenEncoding.VALUE_ONLY.name), persistedEncoding())
   }
 
+  /**
+   * A commit that packs inserts into an existing small file rewrites the file with its older records first, keyed the
+   * way their writer keyed them. The encoding must come from a record the newest commit wrote, not from the file's
+   * first record.
+   */
+  @Test
+  def testEncodingDeducedFromTheRecordsTheNewestCommitWrote(): Unit = {
+    basePath = tempDir.resolve("mixed_cow").toString
+    val opts = fixtureWriteOpts("mixed_cow") + (DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
+    val partitionRows = (ids: Seq[String], ts: Long) => sparkSession.createDataFrame(ids.map(id => (id, s"${id}_$ts", ts, "2023-01-01", "a")))
+      .toDF("id", "name", "ts", "partition", "category")
+    // a writer keying `id:<value>`, as 0.14.0 did
+    partitionRows((1 to 8).map(i => s"id$i"), 1000L).write.format("org.apache.hudi").options(opts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL).mode(SaveMode.Overwrite).save(basePath)
+    assertEquals(Some(ComplexKeyGenEncoding.FIELD_PREFIXED.name), persistedEncoding())
+    // a writer keying bare values, as 0.14.1 did: its inserts are packed into the existing small file
+    setEncoding(ComplexKeyGenEncoding.VALUE_ONLY)
+    partitionRows(Seq("id9", "id10"), 2000L).write.format("org.apache.hudi").options(opts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL).mode(SaveMode.Append).save(basePath)
+    assertEquals((10L, 10L, 2L, 8L), keyStatsRaw())
+    val baseFiles = storage.listFiles(new StoragePath(basePath)).asScala.filter(_.getPath.getName.endsWith(".parquet"))
+    val latestFile = baseFiles.maxBy(_.getModificationTime).getPath
+    val latestFileKeys = sparkSession.read.parquet(latestFile.toString).select("_hoodie_record_key").collect().map(_.getString(0))
+    assertEquals(10, latestFileKeys.length, "The newest commit must have rewritten the small file")
+    assertTrue(latestFileKeys.head.startsWith("id:"), s"The rewritten file must start with an older record: ${latestFileKeys.mkString(",")}")
+
+    HoodieTableConfig.delete(storage, loadMetaClient().getMetaPath, Set(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key).asJava)
+    assertEquals(org.apache.hudi.common.util.Option.of(ComplexKeyGenEncoding.VALUE_ONLY),
+      KeyGenUtils.deduceComplexKeyGenEncodingFromData(loadMetaClient()))
+  }
+
+  private def setEncoding(encoding: ComplexKeyGenEncoding): Unit = {
+    val props = new java.util.Properties()
+    props.setProperty(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key, encoding.name)
+    HoodieTableConfig.update(storage, loadMetaClient().getMetaPath, props)
+  }
+
   /** A new table records the encoding its writer produces: `id:<value>` by default. */
   @Test
   def testNewTableRecordsFieldPrefixedByDefault(): Unit = {

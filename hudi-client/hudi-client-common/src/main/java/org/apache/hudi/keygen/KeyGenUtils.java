@@ -23,7 +23,6 @@ import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -38,7 +37,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.ConfigUtils;
-import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -48,6 +46,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieKeyException;
+import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -56,7 +55,9 @@ import org.apache.hudi.keygen.parser.BaseHoodieDateTimeParser;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -486,10 +487,10 @@ public class KeyGenUtils {
 
   /**
    * Deduces the record key encoding of a single-field complex key generator table from the
-   * {@code _hoodie_record_key} stored in its most recently written data file.
+   * {@code _hoodie_record_key} of a record its most recent commit wrote.
    *
-   * @return {@link ComplexKeyGenEncoding#FIELD_PREFIXED} for a table that was never written to, the encoding
-   * read from the first readable base or log file among the most recent commits otherwise, or empty when none
+   * @return {@link ComplexKeyGenEncoding#FIELD_PREFIXED} for a table that was never written to, the encoding of a
+   * record the most recent commit with a readable data file wrote otherwise, or empty when none
    * of the commits inspected yields a record key
    */
   public static Option<ComplexKeyGenEncoding> deduceComplexKeyGenEncodingFromData(HoodieTableMetaClient metaClient) {
@@ -507,7 +508,7 @@ public class KeyGenUtils {
           continue;
         }
         StoragePath path = new StoragePath(metaClient.getBasePath(), writeStat.getPath());
-        Option<String> recordKey = readFirstRecordKey(metaClient, path);
+        Option<String> recordKey = readLatestRecordKey(metaClient, path, instant.getTimestamp());
         if (recordKey.isPresent()) {
           ComplexKeyGenEncoding encoding =
               ComplexKeyGenEncoding.fromUseNewEncoding(!recordKey.get().startsWith(expectedPrefix));
@@ -547,40 +548,77 @@ public class KeyGenUtils {
   }
 
   /**
-   * Reads the {@code _hoodie_record_key} of the first record in a base file or in the first data block of a
-   * log file; empty when the file is missing, holds no record, or cannot be read. A single unreadable file
+   * Reads the {@code _hoodie_record_key} of the record the given commit wrote, which is keyed the way that commit's
+   * writer keys records: in a base file, the record with the greatest {@code _hoodie_commit_time} (a commit that
+   * rewrites a file, e.g. one packing inserts into a small file, carries the file's older records with the keys
+   * their writers gave them); in a log file, the first record of the data block the commit appended, else of the
+   * newest data block. Empty when the file is missing, holds no record, or cannot be read: a single unreadable file
    * must not fail the deduction, which reports an undetermined encoding instead.
    */
-  private static Option<String> readFirstRecordKey(HoodieTableMetaClient metaClient, StoragePath path) {
+  private static Option<String> readLatestRecordKey(HoodieTableMetaClient metaClient, StoragePath path, String instantTime) {
     HoodieStorage storage = metaClient.getStorage();
     try {
       if (!storage.exists(path)) {
         return Option.empty();
       }
       if (FSUtils.isLogFile(path)) {
-        try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(path), null)) {
-          while (reader.hasNext()) {
-            HoodieLogBlock block = reader.next();
-            if (block instanceof HoodieDataBlock) {
-              HoodieDataBlock dataBlock = (HoodieDataBlock) block;
-              try (ClosableIterator<HoodieRecord<Object>> records = dataBlock.getRecordIterator(HoodieRecordType.AVRO)) {
-                if (records.hasNext()) {
-                  return Option.ofNullable(records.next().getRecordKey(dataBlock.getSchema(), HoodieRecord.RECORD_KEY_METADATA_FIELD));
-                }
-              }
+        return readRecordKeyFromLogFile(storage, path, instantTime);
+      }
+      try (HoodieFileReader<IndexedRecord> reader = HoodieIOFactory.getIOFactory(storage)
+          .getReaderFactory(HoodieRecordType.AVRO).getFileReader(new HoodieConfig(), path)) {
+        Schema fileSchema = reader.getSchema();
+        Schema projection = HoodieAvroUtils.generateProjectionSchema(fileSchema,
+            Arrays.asList(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD));
+        String latestCommitTime = null;
+        String latestRecordKey = null;
+        try (ClosableIterator<HoodieRecord<IndexedRecord>> records = reader.getRecordIterator(fileSchema, projection)) {
+          while (records.hasNext()) {
+            GenericRecord record = (GenericRecord) records.next().getData();
+            Object commitTime = record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
+            Object recordKey = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD);
+            if (commitTime == null || recordKey == null) {
+              continue;
+            }
+            if (latestCommitTime == null
+                || HoodieTimeline.compareTimestamps(commitTime.toString(), HoodieTimeline.GREATER_THAN, latestCommitTime)) {
+              latestCommitTime = commitTime.toString();
+              latestRecordKey = recordKey.toString();
+            }
+            if (latestCommitTime.equals(instantTime)) {
+              // nothing in this commit's file is newer than a record the commit itself wrote
+              break;
             }
           }
         }
-        return Option.empty();
-      }
-      FileFormatUtils fileFormatUtils = HoodieIOFactory.getIOFactory(storage)
-          .getFileFormatUtils(metaClient.getTableConfig().getBaseFileFormat());
-      try (ClosableIterator<HoodieKey> keys = fileFormatUtils.getHoodieKeyIterator(storage, path)) {
-        return keys.hasNext() ? Option.of(keys.next().getRecordKey()) : Option.empty();
+        return Option.ofNullable(latestRecordKey);
       }
     } catch (Exception e) {
       LOG.warn("Could not read a record key from {} to deduce the complex keygen record key encoding", path, e);
       return Option.empty();
     }
   }
+
+  private static Option<String> readRecordKeyFromLogFile(HoodieStorage storage, StoragePath path, String instantTime) throws IOException {
+    HoodieDataBlock chosen = null;
+    try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(path), null)) {
+      while (reader.hasNext()) {
+        HoodieLogBlock block = reader.next();
+        if (block instanceof HoodieDataBlock) {
+          chosen = (HoodieDataBlock) block;
+          if (instantTime.equals(block.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME))) {
+            break;
+          }
+        }
+      }
+      if (chosen == null) {
+        return Option.empty();
+      }
+      try (ClosableIterator<HoodieRecord<Object>> records = chosen.getRecordIterator(HoodieRecordType.AVRO)) {
+        return records.hasNext()
+            ? Option.ofNullable(records.next().getRecordKey(chosen.getSchema(), HoodieRecord.RECORD_KEY_METADATA_FIELD))
+            : Option.empty();
+      }
+    }
+  }
+
 }
