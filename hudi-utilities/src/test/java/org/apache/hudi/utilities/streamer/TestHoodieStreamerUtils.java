@@ -19,11 +19,14 @@
 
 package org.apache.hudi.utilities.streamer;
 
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
@@ -345,6 +348,63 @@ public class TestHoodieStreamerUtils extends UtilitiesTestBase {
     assertTrue(recordOpt.isPresent());
     SparkException sparkException = assertThrows(SparkException.class, () -> recordOpt.get().collect());
     assertEquals(HoodieRecordCreationException.class, sparkException.getCause().getClass());
+    Throwable rootCause = sparkException.getCause().getCause();
+    assertEquals(IllegalArgumentException.class, rootCause.getClass());
+    assertTrue(rootCause.getMessage().contains("Ordering fields '" + ORDERING_FIELD + "'"), rootCause.getMessage());
+  }
+
+  /**
+   * The gate's false side: when the merge mode or payload needs no ordering value, a null one is
+   * not an error, the record is written and nothing is quarantined.
+   */
+  @ParameterizedTest
+  @MethodSource("noOrderingValueRequired")
+  void testNullOrderingValueAllowedWhenNoOrderingValueRequired(RecordMergeMode mergeMode, String payloadClass) {
+    HoodieSchema schema = HoodieSchema.parse(NULLABLE_ORDERING_SCHEMA_STRING);
+    HoodieStreamer.Config cfg = nullOrderingConfig(ORDERING_FIELD);
+    cfg.recordMergeMode = mergeMode;
+    cfg.payloadClassName = payloadClass;
+
+    Option<JavaRDD<HoodieRecord>> recordOpt = HoodieStreamerUtils.createHoodieRecords(
+        cfg, nullOrderingProps(), Option.of(nullOrderingRecords(schema, false)),
+        new SimpleSchemaProvider(jsc, schema, nullOrderingProps()),
+        HoodieRecordType.AVRO, false, "000", Option.empty(), new HoodieTableConfig());
+
+    assertTrue(recordOpt.isPresent());
+    assertEquals(1, recordOpt.get().collect().size());
+  }
+
+  private static Stream<Arguments> noOrderingValueRequired() {
+    return Stream.of(
+        Arguments.of(RecordMergeMode.COMMIT_TIME_ORDERING, DefaultHoodieRecordPayload.class.getName()),
+        Arguments.of(RecordMergeMode.EVENT_TIME_ORDERING, OverwriteWithLatestAvroPayload.class.getName()));
+  }
+
+  /**
+   * The merge mode comes from the table, not from the streamer's own arguments: those are inferred
+   * from the CLI and never reconciled with the table, so a run that names no ordering field still
+   * has to honour an event-time table whose ordering field comes from the table config.
+   */
+  @Test
+  void testNullOrderingValueRejectedWhenOnlyTheTableSaysEventTime() {
+    HoodieSchema schema = HoodieSchema.parse(NULLABLE_ORDERING_SCHEMA_STRING);
+    HoodieStreamer.Config cfg = new HoodieStreamer.Config();
+    cfg.operation = WriteOperationType.UPSERT;
+    cfg.recordMergeMode = RecordMergeMode.COMMIT_TIME_ORDERING;   // what the CLI alone would infer
+
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    tableConfig.setValue(HoodieTableConfig.RECORD_MERGE_MODE, RecordMergeMode.EVENT_TIME_ORDERING.name());
+    tableConfig.setValue(HoodieTableConfig.ORDERING_FIELDS, ORDERING_FIELD);
+
+    Option<JavaRDD<HoodieRecord>> recordOpt = HoodieStreamerUtils.createHoodieRecords(
+        cfg, nullOrderingProps(), Option.of(nullOrderingRecords(schema, false)),
+        new SimpleSchemaProvider(jsc, schema, nullOrderingProps()),
+        HoodieRecordType.AVRO, false, "000", Option.empty(), tableConfig);
+
+    assertTrue(recordOpt.isPresent());
+    SparkException sparkException = assertThrows(SparkException.class, () -> recordOpt.get().collect());
+    assertEquals(HoodieRecordCreationException.class, sparkException.getCause().getClass());
+    assertEquals(IllegalArgumentException.class, sparkException.getCause().getCause().getClass());
   }
 
   private static TypedProperties nullOrderingProps() {

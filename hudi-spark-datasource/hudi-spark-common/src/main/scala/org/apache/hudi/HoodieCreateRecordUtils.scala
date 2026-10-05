@@ -83,6 +83,11 @@ object HoodieCreateRecordUtils {
     // Table version 6 may not have a merge mode set, so the payload class check is still needed.
     val requiresOrderingValue = !((recordMergeMode == RecordMergeMode.COMMIT_TIME_ORDERING)
       || classOf[OverwriteWithLatestAvroPayload].getName.equals(payloadClass))
+    val consistentLogicalTimestampEnabled = parameters.getOrElse(
+      DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
+      DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()).toBoolean
+    // Picked once rather than branching per record: requiresOrderingValue is fixed for the write.
+    val orderingValueOf = orderingValueExtractor(orderingFields, consistentLogicalTimestampEnabled, requiresOrderingValue)
 
     val shouldDropPartitionColumns = config.getBoolean(DataSourceWriteOptions.DROP_PARTITION_COLUMNS)
     val recordType = config.getRecordMerger.getRecordType
@@ -131,9 +136,6 @@ object HoodieCreateRecordUtils {
           }
           val keyGenerator : Option[BaseKeyGenerator] = if (usePreppedInsteadOfKeyGen) None else Some(HoodieSparkKeyGeneratorFactory.createKeyGenerator(keyGenProps).asInstanceOf[BaseKeyGenerator])
           val dataFileSchema = HoodieSchema.parse(dataFileSchemaStr)
-          val consistentLogicalTimestampEnabled = parameters.getOrElse(
-            DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
-            DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()).toBoolean
           val mergeProps = ConfigUtils.getMergeProps(config.getProps, args.tableConfig)
           val deleteContext = new DeleteContext(mergeProps, writerSchema).withReaderSchema(writerSchema);
 
@@ -154,8 +156,7 @@ object HoodieCreateRecordUtils {
               avroRecWithoutMeta
             }
             val hoodieRecord = if (shouldCombine && !orderingFields.isEmpty) {
-              val orderingVal = getOrderingValue(orderingFields, avroRec, hoodieKey.getRecordKey,
-                consistentLogicalTimestampEnabled, requiresOrderingValue)
+              val orderingVal = orderingValueOf(avroRec, hoodieKey.getRecordKey)
               HoodieRecordUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
                 config.getPayloadClass, null, recordLocation, isDelete)
             } else {
@@ -290,27 +291,41 @@ object HoodieCreateRecordUtils {
    * null values are allowed and a default ordering value is used.
    * Otherwise, throws IllegalArgumentException if any ordering field has a null value.
    */
-  private def getOrderingValue(orderingFields: java.util.List[String],
-                               avroRec: GenericRecord,
-                               recordKey: String,
-                               consistentLogicalTimestampEnabled: Boolean,
-                               requiresOrderingValue: Boolean): Comparable[_] = {
-    OrderingValues.create(
-      orderingFields,
-      JFunction.toJavaFunction[String, Comparable[_]](field => {
-        val fieldVal = HoodieAvroUtils.getNestedFieldVal(avroRec, field, false, consistentLogicalTimestampEnabled)
-        if (OrderingValues.isMissing(fieldVal.asInstanceOf[Comparable[_]])) {
-          if (requiresOrderingValue) {
-            throw new IllegalArgumentException(
-              s"Ordering field '$field' has null value for record key '$recordKey'. " +
-                s"Please ensure all records have non-null values for the ordering field, " +
-                s"or use a payload class that doesn't require ordering (e.g., OverwriteWithLatestAvroPayload).")
-          }
-          // Return default ordering value for payloads that don't require ordering
-          OrderingValues.getDefault.asInstanceOf[Comparable[_]]
-        } else {
-          fieldVal.asInstanceOf[Comparable[_]]
-        }
-      }))
+  /**
+   * Returns the function that reads the ordering value off a record, chosen once for the write
+   * rather than per record: when an ordering value is required a missing one is an error, and when
+   * it is not (COMMIT_TIME_ORDERING or OverwriteWithLatestAvroPayload) it is replaced by the
+   * default ordering value.
+   */
+  private def orderingValueExtractor(orderingFields: java.util.List[String],
+                                     consistentLogicalTimestampEnabled: Boolean,
+                                     requiresOrderingValue: Boolean): (GenericRecord, String) => Comparable[_] = {
+    if (requiresOrderingValue) {
+      (avroRec, recordKey) =>
+        OrderingValues.create(
+          orderingFields,
+          JFunction.toJavaFunction[String, Comparable[_]](field => {
+            val fieldVal = HoodieAvroUtils.getNestedFieldVal(avroRec, field, false, consistentLogicalTimestampEnabled)
+            if (OrderingValues.isMissing(fieldVal.asInstanceOf[Comparable[_]])) {
+              throw new IllegalArgumentException(
+                s"Ordering field '$field' has null value for record key '$recordKey'. " +
+                  s"Please ensure all records have non-null values for the ordering field, " +
+                  s"or use a payload class that doesn't require ordering (e.g., OverwriteWithLatestAvroPayload).")
+            }
+            fieldVal.asInstanceOf[Comparable[_]]
+          }))
+    } else {
+      (avroRec, _) =>
+        OrderingValues.create(
+          orderingFields,
+          JFunction.toJavaFunction[String, Comparable[_]](field => {
+            val fieldVal = HoodieAvroUtils.getNestedFieldVal(avroRec, field, false, consistentLogicalTimestampEnabled)
+            if (OrderingValues.isMissing(fieldVal.asInstanceOf[Comparable[_]])) {
+              OrderingValues.getDefault.asInstanceOf[Comparable[_]]
+            } else {
+              fieldVal.asInstanceOf[Comparable[_]]
+            }
+          }))
+    }
   }
 }

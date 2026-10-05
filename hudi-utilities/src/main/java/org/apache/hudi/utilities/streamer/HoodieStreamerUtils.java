@@ -96,11 +96,19 @@ public class HoodieStreamerUtils {
     boolean useConsistentLogicalTimestamp = ConfigUtils.getBooleanWithAltKeys(
         props, KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED);
     Set<String> partitionColumns = getPartitionColumns(props);
-    String payloadClassName = StringUtils.isNullOrEmpty(cfg.payloadClassName)
-        ? HoodieRecordPayload.getAvroPayloadForMergeMode(cfg.recordMergeMode, cfg.payloadClassName)
-        : cfg.payloadClassName;
+    // Prefer the table, like orderingFieldsStr above. cfg.recordMergeMode is inferred from the
+    // streamer's own arguments and never reconciled with the table, so a run that omits
+    // --source-ordering-fields on an event-time table reads COMMIT_TIME_ORDERING here and leaves the
+    // ordering value unchecked. The payload has to follow the same mode, or a stale
+    // COMMIT_TIME_ORDERING resolves it to OverwriteWithLatestAvroPayload and skips the check anyway.
+    RecordMergeMode mergeMode = tableConfig.getRecordMergeMode() != null
+        ? tableConfig.getRecordMergeMode() : cfg.recordMergeMode;
+    String payloadClassName = tableConfig.getPayloadClassIfPresent()
+        .orElseGet(() -> StringUtils.isNullOrEmpty(cfg.payloadClassName)
+            ? HoodieRecordPayload.getAvroPayloadForMergeMode(mergeMode, cfg.payloadClassName)
+            : cfg.payloadClassName);
     boolean requiresOrderingValue = shouldUseOrderingField
-        && cfg.recordMergeMode != RecordMergeMode.COMMIT_TIME_ORDERING
+        && mergeMode != RecordMergeMode.COMMIT_TIME_ORDERING
         && !OverwriteWithLatestAvroPayload.class.getName().equals(payloadClassName);
 
     return avroRDDOptional.map(avroRDD -> {

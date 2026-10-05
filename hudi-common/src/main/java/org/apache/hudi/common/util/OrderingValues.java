@@ -92,6 +92,10 @@ public class OrderingValues {
   /**
    * Returns whether the given {@code orderingValue} is default.
    */
+  public static boolean isDefault(Comparable orderingValue) {
+    return DEFAULT_VALUE.equals(orderingValue);
+  }
+
   /**
    * Whether a required ordering value is missing, meaning there is nothing the mergers can compare.
    * A single ordering field resolves to the field value itself, so a null field yields a null
@@ -105,10 +109,6 @@ public class OrderingValues {
     }
     return orderingValue instanceof ArrayComparable
         && ((ArrayComparable) orderingValue).getValues().stream().anyMatch(Objects::isNull);
-  }
-
-  public static boolean isDefault(Comparable orderingValue) {
-    return DEFAULT_VALUE.equals(orderingValue);
   }
 
   /**
