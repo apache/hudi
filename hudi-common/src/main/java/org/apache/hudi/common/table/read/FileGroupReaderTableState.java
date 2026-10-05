@@ -31,37 +31,35 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+
 import java.io.Serializable;
 import java.util.TreeMap;
 
 /**
  * The table-level state a file group reader needs, in place of a {@link HoodieTableMetaClient}.
  *
- * <p>A reader needs the table config and base path for every read. Only two reads need more: log blocks of tables
+ * <p>A reader needs the table config and base path for every read. Only two cases need more: log blocks of tables
  * before version 8 are checked against the committed instants, and schema-on-read resolves the schema a log block
  * or file was written with. A state built with {@link #snapshotOf} answers the first from instants captured where the
  * timeline is already loaded, so every reader of one query sees the same snapshot, and resolves schema versions
  * where the reader runs. {@link #fromMetaClient} keeps the older behavior of loading both lazily from a meta client.
  */
+@RequiredArgsConstructor(access = AccessLevel.PRIVATE)
 public final class FileGroupReaderTableState implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
+  @Getter
   private final StoragePath basePath;
+  @Getter
   private final HoodieTableConfig tableConfig;
   private final SerializableSupplier<CommittedInstants> committedInstantsSupplier;
   private final InternalSchemaResolver internalSchemaResolver;
   private transient volatile CommittedInstants committedInstants;
-
-  private FileGroupReaderTableState(StoragePath basePath,
-                                    HoodieTableConfig tableConfig,
-                                    SerializableSupplier<CommittedInstants> committedInstantsSupplier,
-                                    InternalSchemaResolver internalSchemaResolver) {
-    this.basePath = basePath;
-    this.tableConfig = tableConfig;
-    this.committedInstantsSupplier = committedInstantsSupplier;
-    this.internalSchemaResolver = internalSchemaResolver;
-  }
 
   /**
    * Captures the state from a meta client whose timeline is loaded. Schema versions are not captured: a reader that
@@ -107,22 +105,20 @@ public final class FileGroupReaderTableState implements Serializable {
         new MetaClientCommittedInstants(metaClient), new MetaClientSchemaResolver(metaClient));
   }
 
-  public StoragePath getBasePath() {
-    return basePath;
-  }
-
-  public HoodieTableConfig getTableConfig() {
-    return tableConfig;
-  }
-
   /**
    * Whether the instant of a log block counts as committed; only consulted for tables before version 8.
    */
   public boolean isCommitted(String instantTime) {
     CommittedInstants committed = committedInstants;
     if (committed == null) {
-      committed = committedInstantsSupplier.get();
-      committedInstants = committed;
+      // Readers of one executor share a broadcast state, so the instants are loaded once for all of them
+      synchronized (this) {
+        committed = committedInstants;
+        if (committed == null) {
+          committed = committedInstantsSupplier.get();
+          committedInstants = committed;
+        }
+      }
     }
     return committed.isCommitted(instantTime);
   }
@@ -141,17 +137,13 @@ public final class FileGroupReaderTableState implements Serializable {
     InternalSchema resolve(long versionId, StorageConfiguration<?> storageConf);
   }
 
+  @AllArgsConstructor(access = AccessLevel.PRIVATE)
   private static final class CapturedCommittedInstants implements SerializableSupplier<CommittedInstants> {
     private static final long serialVersionUID = 1L;
 
     private final String basePath;
     // Null when the instants were not captured.
     private final CommittedInstants committedInstants;
-
-    private CapturedCommittedInstants(String basePath, CommittedInstants committedInstants) {
-      this.basePath = basePath;
-      this.committedInstants = committedInstants;
-    }
 
     @Override
     public CommittedInstants get() {
@@ -165,14 +157,11 @@ public final class FileGroupReaderTableState implements Serializable {
   /**
    * Loads the committed instants from the meta client, which travels with this supplier when it is serialized.
    */
+  @AllArgsConstructor(access = AccessLevel.PRIVATE)
   private static final class MetaClientCommittedInstants implements SerializableSupplier<CommittedInstants> {
     private static final long serialVersionUID = 1L;
 
     private final HoodieTableMetaClient metaClient;
-
-    private MetaClientCommittedInstants(HoodieTableMetaClient metaClient) {
-      this.metaClient = metaClient;
-    }
 
     @Override
     public CommittedInstants get() {
@@ -180,14 +169,11 @@ public final class FileGroupReaderTableState implements Serializable {
     }
   }
 
+  @AllArgsConstructor(access = AccessLevel.PRIVATE)
   private static final class MetaClientSchemaResolver implements InternalSchemaResolver {
     private static final long serialVersionUID = 1L;
 
     private final HoodieTableMetaClient metaClient;
-
-    private MetaClientSchemaResolver(HoodieTableMetaClient metaClient) {
-      this.metaClient = metaClient;
-    }
 
     @Override
     public InternalSchema resolve(long versionId, StorageConfiguration<?> storageConf) {
@@ -200,56 +186,58 @@ public final class FileGroupReaderTableState implements Serializable {
    * {@link InternalSchemaCache}, so the state carries no meta client and the schema history is not read where the
    * state is built.
    */
+  @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
   private static final class ReaderMetaClientSchemaResolver implements InternalSchemaResolver {
     private static final long serialVersionUID = 1L;
 
     private final String basePath;
     private transient volatile HoodieTableMetaClient metaClient;
 
-    private ReaderMetaClientSchemaResolver(String basePath) {
-      this.basePath = basePath;
-    }
-
     @Override
     public InternalSchema resolve(long versionId, StorageConfiguration<?> storageConf) {
       HoodieTableMetaClient client = metaClient;
       if (client == null) {
-        client = HoodieTableMetaClient.builder().setConf(storageConf.newInstance()).setBasePath(basePath).build();
-        metaClient = client;
+        synchronized (this) {
+          client = metaClient;
+          if (client == null) {
+            client = HoodieTableMetaClient.builder().setConf(storageConf.newInstance()).setBasePath(basePath).build();
+            metaClient = client;
+          }
+        }
       }
       return InternalSchemaCache.searchSchemaAndCache(versionId, client);
     }
   }
 
+  @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
   private static final class SchemaHistoryResolver implements InternalSchemaResolver {
     private static final long serialVersionUID = 1L;
 
     private final String schemaHistory;
     private transient volatile TreeMap<Long, InternalSchema> schemas;
 
-    private SchemaHistoryResolver(String schemaHistory) {
-      this.schemaHistory = schemaHistory;
-    }
-
     @Override
     public InternalSchema resolve(long versionId, StorageConfiguration<?> storageConf) {
       TreeMap<Long, InternalSchema> parsed = schemas;
       if (parsed == null) {
-        parsed = StringUtils.isNullOrEmpty(schemaHistory) ? new TreeMap<>() : SerDeHelper.parseSchemas(schemaHistory);
-        schemas = parsed;
+        // Readers of one executor share a broadcast state, so the history is parsed once for all of them
+        synchronized (this) {
+          parsed = schemas;
+          if (parsed == null) {
+            parsed = StringUtils.isNullOrEmpty(schemaHistory) ? new TreeMap<>() : SerDeHelper.parseSchemas(schemaHistory);
+            schemas = parsed;
+          }
+        }
       }
       return InternalSchemaUtils.searchSchema(versionId, parsed);
     }
   }
 
+  @AllArgsConstructor(access = AccessLevel.PRIVATE)
   private static final class UnavailableSchemaResolver implements InternalSchemaResolver {
     private static final long serialVersionUID = 1L;
 
     private final String basePath;
-
-    private UnavailableSchemaResolver(String basePath) {
-      this.basePath = basePath;
-    }
 
     @Override
     public InternalSchema resolve(long versionId, StorageConfiguration<?> storageConf) {
