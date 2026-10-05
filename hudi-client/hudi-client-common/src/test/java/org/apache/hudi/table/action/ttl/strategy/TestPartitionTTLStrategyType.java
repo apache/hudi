@@ -52,6 +52,16 @@ public class TestPartitionTTLStrategyType {
   }
 
   @Test
+  public void resolvesKeepByEventTimeFromType() {
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTTLConfig.PARTITION_TTL_STRATEGY_TYPE,
+        PartitionTTLStrategyType.KEEP_BY_EVENT_TIME.name());
+
+    assertEquals(PartitionTTLStrategyType.KEEP_BY_EVENT_TIME.getClassName(),
+        PartitionTTLStrategyType.getPartitionTTLStrategyClassName(config));
+  }
+
+  @Test
   public void throwsOnUnknownType() {
     HoodieConfig config = new HoodieConfig();
     config.setValue(HoodieTTLConfig.PARTITION_TTL_STRATEGY_TYPE, "NOT_A_REAL_TYPE");
