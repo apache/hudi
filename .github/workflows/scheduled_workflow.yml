@@ -42,9 +42,10 @@ jobs:
           echo "Fetching list of cache key"
           # Keep the exclusions anchored on version-independent prefixes: the
           # keys they protect live in other workflows (spark archives in
-          # bot.yml, Trino m2 in hudi_trino_ci.yml), so pinning a literal
-          # version here would silently re-arm the purge on the next key bump.
-          cacheKeysForPR=$(gh actions-cache list -R $REPO -L 100 | cut -f 1 | grep -v '^spark-archive-' | grep -v '^trino-m2-v2-' || true)
+          # bot.yml, Trino m2 in hudi_trino_ci.yml and hudi_trino_compat.yml),
+          # so pinning a literal version here would silently re-arm the purge
+          # on the next key bump.
+          cacheKeysForPR=$(gh actions-cache list -R $REPO -L 100 | cut -f 1 | grep -v '^spark-archive-' | grep -v '^trino-m2-' || true)
 
           ## Setting this to not fail the workflow while deleting cache keys.
           set +e
