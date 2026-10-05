@@ -93,6 +93,10 @@ public class HoodieCDCExtractor {
 
   private HoodieTableFileSystemView fsView;
 
+  private HoodieInstant avroCommitMetadataInstant;
+
+  private org.apache.hudi.avro.model.HoodieCommitMetadata avroCommitMetadata;
+
   private final boolean consumeChangesFromCompaction;
 
   public HoodieCDCExtractor(
@@ -158,6 +162,8 @@ public class HoodieCDCExtractor {
         }
       }
     }
+    avroCommitMetadataInstant = null;
+    avroCommitMetadata = null;
     return fgToCommitChanges;
   }
 
@@ -319,6 +325,22 @@ public class HoodieCDCExtractor {
   }
 
   /**
+   * Returns the commit metadata of the instant in its Avro model, which keeps the base file and log files of
+   * delta write stats. It is read once for all the log files the instant writes.
+   */
+  private org.apache.hudi.avro.model.HoodieCommitMetadata getAvroCommitMetadata(HoodieInstant instant) {
+    if (!instant.equals(avroCommitMetadataInstant)) {
+      try {
+        avroCommitMetadata = metaClient.getActiveTimeline().readCommitMetadataToAvro(instant);
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to read the commit metadata of instant " + instant, e);
+      }
+      avroCommitMetadataInstant = instant;
+    }
+    return avroCommitMetadata;
+  }
+
+  /**
    * For a mor log file, get the completed previous file slice from the related commit metadata.
    * This file slice will be used when we extract the change data from this mor log file.
    */
@@ -330,8 +352,7 @@ public class HoodieCDCExtractor {
     if (instant.getAction().equals(DELTA_COMMIT_ACTION)) {
       String currentLogFileName = new StoragePath(currentLogFile).getName();
       Option<Pair<String, List<String>>> fileSliceOpt =
-          HoodieCommitMetadata.getDependentFileSliceForFileGroupFromDeltaCommit(
-              metaClient.getActiveTimeline().getInstantContentStream(instant), fgId, currentLogFileName);
+          HoodieCommitMetadata.getDependentFileSliceForFileGroupFromDeltaCommit(getAvroCommitMetadata(instant), fgId, currentLogFileName);
       if (fileSliceOpt.isPresent()) {
         Pair<String, List<String>> fileSlice = fileSliceOpt.get();
         try {

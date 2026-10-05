@@ -2408,6 +2408,45 @@ public class ITTestHoodieDataSource {
     assertRowsEquals(result2.subList(result2.size() - 2, result2.size()), "[-U[1], +U[2]]");
   }
 
+  /**
+   * The deleted images of an insert overwrite on a MERGE_ON_READ table include the updates in log files,
+   * whose names carry the base instant of the file slice before table version 8.
+   */
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "TEN"})
+  void testReadChangelogOfInsertOverwriteOnMergeOnRead(HoodieTableVersion tableVersion) {
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .options(getDefaultKeys())
+        .option(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ)
+        .option(FlinkOptions.WRITE_TABLE_VERSION, tableVersion.versionCode() + "")
+        .option(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(), HoodieTableConfig.TableStorageLayout.DEFAULT.configValue())
+        .option(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true)
+        .option(FlinkOptions.CDC_ENABLED, true)
+        .option(FlinkOptions.READ_CDC_FROM_CHANGELOG, false)
+        .option(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_INCREMENTAL)
+        .end();
+    batchTableEnv.executeSql(hoodieTableDDL);
+    streamTableEnv.executeSql(hoodieTableDDL);
+
+    execInsertSql(batchTableEnv, "insert into t1 values\n"
+        + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:01','par1'),\n"
+        + "('id2','Stephen',33,TIMESTAMP '1970-01-01 00:00:02','par1')");
+    execInsertSql(batchTableEnv, "insert into t1 values\n"
+        + "('id1','Danny',24,TIMESTAMP '1970-01-01 00:00:03','par1'),\n"
+        + "('id2','Stephen',34,TIMESTAMP '1970-01-01 00:00:04','par1')");
+    execInsertSql(batchTableEnv, "insert overwrite t1 partition(`partition`='par1') values\n"
+        + "('id3','Julian',53,TIMESTAMP '1970-01-01 00:00:05')");
+
+    String replaceCommit = TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath(), HoodieTimeline.REPLACE_COMMIT_ACTION);
+    final String query = String.format("select * from t1/*+ options('read.start-commit'='%s')*/", replaceCommit);
+    List<Row> result = CollectionUtil.iterableToList(() -> streamTableEnv.sqlQuery(query).execute().collect());
+    assertRowsEquals(result, "["
+        + "-D[id1, Danny, 24, 1970-01-01T00:00:03, par1], "
+        + "-D[id2, Stephen, 34, 1970-01-01T00:00:04, par1], "
+        + "+I[id3, Julian, 53, 1970-01-01T00:00:05, par1]]");
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void  testChangelogCompactionSchedule(Boolean compactionEnabled) throws Exception {

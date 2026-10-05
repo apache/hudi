@@ -1080,13 +1080,18 @@ public class TestInputFormat {
     testReadChangelogInternal(commits);
   }
 
-  @Test
-  void testReadChangelogIncrementallyForMor() throws Exception {
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "TEN"})
+  void testReadChangelogIncrementallyForMor(HoodieTableVersion tableVersion) throws Exception {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.QUERY_TYPE.key(), FlinkOptions.QUERY_TYPE_INCREMENTAL);
     options.put(FlinkOptions.CDC_ENABLED.key(), "true");
     options.put(FlinkOptions.INDEX_BOOTSTRAP_ENABLED.key(), "true");  // for batch update
     options.put(FlinkOptions.READ_CDC_FROM_CHANGELOG.key(), "false"); // infers the data changes on the fly
+    options.put(FlinkOptions.WRITE_TABLE_VERSION.key(), String.valueOf(tableVersion.versionCode()));
+    if (tableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
+      options.put(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(), HoodieTableConfig.TableStorageLayout.DEFAULT.configValue());
+    }
     beforeEach(HoodieTableType.MERGE_ON_READ, options);
 
     // write 3 commits first
@@ -1098,8 +1103,11 @@ public class TestInputFormat {
 
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
         new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf)), tempFile.getAbsolutePath());
+    assertSame(tableVersion, metaClient.getTableConfig().getTableVersion());
+    // incremental queries on tables before version 8 take requested instant times
     List<String> commits = metaClient.getCommitsTimeline().filterCompletedInstants().getInstantsAsStream()
-        .map(HoodieInstant::getCompletionTime).collect(Collectors.toList());
+        .map(instant -> tableVersion.lesserThan(HoodieTableVersion.EIGHT) ? instant.requestedTime() : instant.getCompletionTime())
+        .collect(Collectors.toList());
 
     assertThat(commits.size(), is(3));
 
