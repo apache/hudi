@@ -189,7 +189,7 @@ class TestHoodieTimelineArchiver extends HoodieCommonTestHarness {
   }
 
   @Test
-  void archiveIfRequired_failedLockAcquisitionDoesNotCloseProvider() throws Exception {
+  void archiveIfRequired_failedLockAcquisitionClosesProviderWithoutReleasing() throws Exception {
     HoodieWriteConfig writeConfig = getLockedWriteConfig();
     HoodieEngineContext context = new HoodieLocalEngineContext(metaClient.getStorageConf());
     TimelineArchiverV1 archiver = new TimelineArchiverV1<>(writeConfig, setupMockHoodieTable(context, writeConfig));
@@ -197,11 +197,13 @@ class TestHoodieTimelineArchiver extends HoodieCommonTestHarness {
     FaultInjectingLockProvider.setFailTryLock(true);
     assertThrows(HoodieLockException.class, () -> archiver.archiveIfRequired(context, true));
     assertEquals(1, FaultInjectingLockProvider.getInstances().size());
-    assertFalse(FaultInjectingLockProvider.getInstances().get(0).isClosed());
+    FaultInjectingLockProvider provider = FaultInjectingLockProvider.getInstances().get(0);
+    assertTrue(provider.isClosed(), "the provider created for the failed attempt must not leak");
+    assertEquals(0, provider.getUnlockCalls(), "a lock this call never acquired must not be released");
   }
 
   @Test
-  void archiveIfRequiredV2_failedLockAcquisitionDoesNotCloseProvider() throws Exception {
+  void archiveIfRequiredV2_failedLockAcquisitionClosesProviderWithoutReleasing() throws Exception {
     HoodieWriteConfig writeConfig = getLockedWriteConfig();
     HoodieEngineContext context = new HoodieLocalEngineContext(metaClient.getStorageConf());
     TimelineArchiverV2 archiver = new TimelineArchiverV2<>(writeConfig, setupMockHoodieTable(context, writeConfig));
@@ -209,7 +211,9 @@ class TestHoodieTimelineArchiver extends HoodieCommonTestHarness {
     FaultInjectingLockProvider.setFailTryLock(true);
     assertEquals(0, archiver.archiveIfRequired(context, true));
     assertEquals(1, FaultInjectingLockProvider.getInstances().size());
-    assertFalse(FaultInjectingLockProvider.getInstances().get(0).isClosed());
+    FaultInjectingLockProvider provider = FaultInjectingLockProvider.getInstances().get(0);
+    assertTrue(provider.isClosed(), "the provider created for the failed attempt must not leak");
+    assertEquals(0, provider.getUnlockCalls(), "a lock this call never acquired must not be released");
   }
 
   private HoodieWriteConfig getLockedWriteConfig() {

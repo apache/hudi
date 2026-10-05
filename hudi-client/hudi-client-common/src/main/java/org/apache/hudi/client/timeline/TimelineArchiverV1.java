@@ -177,11 +177,9 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
           txnManager.endStateChange(Option.empty());
         }
       } finally {
-        // A no-op after endStateChange; releases the provider when a failed writer close skipped it.
-        // Some providers delete the lock on close, so never close a lock this call did not acquire.
-        if (lockAcquired) {
-          txnManager.close();
-        }
+        // Also releases the provider after a failed acquisition or a failed writer close. Closing without
+        // the lock is safe: this call's provider instance holds no lock to release.
+        txnManager.close();
       }
     }
   }

@@ -39,6 +39,7 @@ public class FaultInjectingLockProvider implements LockProvider<String> {
 
   private volatile boolean held = false;
   private volatile boolean closed = false;
+  private volatile int unlockCalls = 0;
 
   public FaultInjectingLockProvider(LockConfiguration lockConfiguration, StorageConfiguration<?> conf) {
     INSTANCES.add(this);
@@ -76,6 +77,7 @@ public class FaultInjectingLockProvider implements LockProvider<String> {
 
   @Override
   public void unlock() {
+    unlockCalls++;
     if (failUnlock) {
       throw new HoodieLockException("Injected unlock failure");
     }
@@ -94,6 +96,10 @@ public class FaultInjectingLockProvider implements LockProvider<String> {
 
   public boolean isHeld() {
     return held;
+  }
+
+  public int getUnlockCalls() {
+    return unlockCalls;
   }
 
   public boolean isClosed() {

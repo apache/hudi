@@ -103,6 +103,8 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
       }
     } catch (HoodieLockException e) {
       log.error("Fail to begin transaction", e);
+      // Release the provider this attempt created; it holds no lock, so nothing else is released.
+      txnManager.close();
       return 0;
     }
 
@@ -141,14 +143,13 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
       metrics.put(failureMetricName, 1L);
       throw e;
     } finally {
-      if (lockAcquired) {
-        try {
+      try {
+        if (lockAcquired) {
           txnManager.endStateChange(Option.empty());
-        } finally {
-          // A no-op after endStateChange. Some providers delete the lock on close, so never
-          // close a lock this call did not acquire.
-          txnManager.close();
         }
+      } finally {
+        // A no-op after a successful endStateChange; otherwise releases the provider.
+        txnManager.close();
       }
     }
   }
