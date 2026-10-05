@@ -69,7 +69,11 @@ import java.util.stream.Collectors;
  *
  * <p>The recorder state is static because Hadoop creates a new instance per {@code FileSystem.get}
  * call once caching is disabled, which is needed for the implementation to be picked up regardless
- * of what the file system cache already holds.
+ * of what the file system cache already holds. Every test in the JVM shares that state, so tests
+ * using this file system must not run concurrently.
+ *
+ * <p>It extends {@link RawLocalFileSystem}, not {@code LocalFileSystem}: it writes no checksum
+ * ({@code .crc}) files, and its listings include the ones the stock local file system wrote.
  */
 public class RecordingLocalFileSystem extends RawLocalFileSystem {
 
