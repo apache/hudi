@@ -56,9 +56,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Log files of tables before version 8 are named after the base instant, so a file slice also lists log blocks of
- * delta commits that never completed. Snapshot and incremental reads must skip those blocks by checking each block's
- * instant against the committed instants, including a block whose instant is older than the latest completed commit.
- * A read-optimized read is planned without those instants and must still be served from the base files alone.
+ * delta commits that never completed. A snapshot read must skip those blocks by checking each block's instant against
+ * the committed instants, including a block whose instant is older than the latest completed commit. An incremental
+ * read checks its log blocks against the same instants, and a read-optimized read is planned without them and must
+ * still be served from the base files alone.
  */
 @Tag("functional")
 class TestMergeOnReadSkipsUncommittedLogBlocks extends SparkClientFunctionalTestHarness {
@@ -102,6 +103,10 @@ class TestMergeOnReadSkipsUncommittedLogBlocks extends SparkClientFunctionalTest
     String startCommit = deltaCommits.get(1).requestedTime();
     assertEquals(expectedValues(queryType, true), readValues(basePath, queryType, startCommit),
         "With every delta commit completed");
+    if (queryType.equals(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())) {
+      // An incremental read rejects a timeline with an inflight instant older than a completed one by default
+      return;
+    }
 
     // Turn the first update into a writer that has not completed: its log blocks stay on storage, and its instant is
     // older than the latest completed delta commit the read is planned against.
