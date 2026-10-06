@@ -26,6 +26,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.SparkContext;
 import org.apache.spark.SparkEnv;
 import org.apache.spark.TaskContext;
+import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.plugin.DriverPlugin;
 import org.apache.spark.api.plugin.ExecutorPlugin;
 import org.apache.spark.api.plugin.SparkPlugin;
@@ -36,17 +37,22 @@ import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
+import java.net.URL;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -62,10 +68,11 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Guards for what Spark tasks do on executors: that they do not touch a table's {@code .hoodie}
- * folder, and that they do not deserialize heavy driver-side objects with the task closure.
+ * folder, that they do not deserialize heavy driver-side objects with the task closure, and that
+ * they do not parse the Hadoop default resources for every file they read.
  *
- * <p>Both guards need the work under test to run as Spark tasks in this JVM, which a
- * {@code local[*]} session does.
+ * <p>The guards need the work under test to run as Spark tasks in this JVM, which a local session
+ * does.
  */
 public final class SparkExecutorGuards {
 
@@ -93,6 +100,8 @@ public final class SparkExecutorGuards {
   private static final Pattern TASK_THREAD_STAGE = Pattern.compile("^Executor task launch worker .* in stage (\\d+)\\.");
 
   private static final int MAX_WRITTEN_BEFORE = 12;
+  private static final int MAX_LOAD_SITES = 3;
+  private static final int MAX_LOAD_SITE_FRAMES = 40;
 
   private static volatile Runnable taskStartHook = () -> { };
 
@@ -179,8 +188,8 @@ public final class SparkExecutorGuards {
   }
 
   /**
-   * Sets code to run on the task thread at the start of every Spark task, before the task reads
-   * anything. It takes effect only in a session whose {@code spark.plugins} includes
+   * Sets code to run on the task thread at the start of every Spark task, after the task and its
+   * partition are deserialized and before the task runs. It takes effect only in a session whose {@code spark.plugins} includes
    * {@link TaskStartHookPlugin}, see {@link #TASK_START_HOOK_PLUGIN}.
    */
   public static void setTaskStartHook(Runnable hook) {
@@ -204,6 +213,84 @@ public final class SparkExecutorGuards {
           taskStartHook.run();
         }
       };
+    }
+  }
+
+  /**
+   * Runs {@code action} and fails if Spark tasks parsed the Hadoop default resources more than
+   * {@code maxLoads} times, which every {@link Configuration} created with defaults does on its first
+   * read. A task must reuse the configuration it was given instead, since the parse is repeated for
+   * every configuration created this way, typically once per file read.
+   *
+   * <p>Each task's context class loader is wrapped, once the task starts running, to count the lookups
+   * of {@code core-default.xml}. A new configuration takes the context class loader of the thread that
+   * creates it, so the count covers configurations the task creates while it runs; a copy keeps the
+   * class loader of the configuration it copies. Needs a session with {@link #TASK_START_HOOK_PLUGIN}.
+   * After {@code action}, a single task that creates a configuration checks that the count is live.
+   */
+  public static <T> T assertTaskHadoopDefaultResourceLoadsAtMost(String description, SparkContext sparkContext,
+                                                                 int maxLoads, Supplier<T> action) {
+    AtomicInteger tasks = new AtomicInteger();
+    AtomicInteger loads = new AtomicInteger();
+    Queue<Throwable> loadSites = new ConcurrentLinkedQueue<>();
+    T result;
+    setTaskStartHook(() -> {
+      tasks.incrementAndGet();
+      Thread thread = Thread.currentThread();
+      thread.setContextClassLoader(
+          new DefaultResourceCountingClassLoader(thread.getContextClassLoader(), loads, loadSites));
+    });
+    try {
+      result = action.get();
+      int actionTasks = tasks.get();
+      int actionLoads = loads.get();
+      List<Throwable> actionLoadSites = new ArrayList<>(loadSites);
+      JavaSparkContext.fromSparkContext(sparkContext).parallelize(Collections.singletonList(1), 1)
+          .foreach(i -> new Configuration().get("fs.defaultFS"));
+      assertTrue(actionTasks > 0 && loads.get() > actionLoads,
+          description + ": the Hadoop default resource count is not live (tasks of the action: " + actionTasks
+              + "); run the session with " + TASK_START_HOOK_PLUGIN + " in spark.plugins");
+      if (actionLoads > maxLoads) {
+        fail(description + ": Spark tasks parsed the Hadoop default resources " + actionLoads + " times in "
+            + actionTasks + " tasks, more than " + maxLoads + ". A reader must use the configuration of the task,"
+            + " not create one per file, which parses core-default.xml and core-site.xml each time. First parses:\n"
+            + actionLoadSites.stream().map(SparkExecutorGuards::describeLoadSite)
+                .collect(Collectors.joining("\n")));
+      }
+    } finally {
+      setTaskStartHook(() -> { });
+    }
+    return result;
+  }
+
+  private static String describeLoadSite(Throwable site) {
+    return Arrays.stream(site.getStackTrace())
+        .skip(1)
+        .limit(MAX_LOAD_SITE_FRAMES)
+        .map(frame -> "    at " + frame)
+        .collect(Collectors.joining("\n"));
+  }
+
+  /**
+   * Counts lookups of {@code core-default.xml}, which a {@link Configuration} makes once per parse of
+   * its default resources, and keeps the stack of the first few.
+   */
+  private static final class DefaultResourceCountingClassLoader extends ClassLoader {
+    private final AtomicInteger loads;
+    private final Queue<Throwable> loadSites;
+
+    private DefaultResourceCountingClassLoader(ClassLoader parent, AtomicInteger loads, Queue<Throwable> loadSites) {
+      super(parent);
+      this.loads = loads;
+      this.loadSites = loadSites;
+    }
+
+    @Override
+    public URL getResource(String name) {
+      if ("core-default.xml".equals(name) && loads.incrementAndGet() <= MAX_LOAD_SITES) {
+        loadSites.add(new Throwable());
+      }
+      return super.getResource(name);
     }
   }
 
@@ -281,15 +368,17 @@ public final class SparkExecutorGuards {
 
   /**
    * Fails if the task binary holds, or tasks deserialized outside broadcast fetches, an instance of
-   * any class that is or extends one of {@code forbiddenClassNames}, or if the task binary is larger
-   * than {@code maxTaskBinaryBytes}. Also fails if no Spark RDD was recorded, which means the
+   * any class that is or extends one of {@code forbiddenClassNames}, if the task binary is larger
+   * than {@code maxTaskBinaryBytes}, or if a task stream larger than {@code maxTaskStreamBytes} was
+   * deserialized. Also fails if no Spark RDD was recorded, which means the
    * recorder did not see the task binary.
    */
   public static void assertTaskDeserializationFootprint(String description,
                                                         TaskDeserializationRecorder.Result result,
                                                         TaskBinary taskBinary,
                                                         Collection<String> forbiddenClassNames,
-                                                        long maxTaskBinaryBytes) {
+                                                        long maxTaskBinaryBytes,
+                                                        long maxTaskStreamBytes) {
     assertEquals(0, result.getErrors(), description + ": the deserialization recorder failed on some callbacks");
     assertTrue(!result.namesOfSubtypesOf("org.apache.spark.rdd.RDD").isEmpty(),
         description + ": no RDD was deserialized on a task thread, so the recorder did not see the task binary."
@@ -312,9 +401,13 @@ public final class SparkExecutorGuards {
     if (taskBinary.getBytes() > maxTaskBinaryBytes) {
       violations.add("the task binary is " + taskBinary.getBytes() + " bytes, over the budget of " + maxTaskBinaryBytes + " bytes");
     }
+    if (result.getMaxStreamBytes() > maxTaskStreamBytes) {
+      violations.add("a task stream of " + result.getMaxStreamBytes() + " bytes was deserialized, over the budget of "
+          + maxTaskStreamBytes + " bytes");
+    }
     if (!violations.isEmpty()) {
-      fail(description + ": Spark tasks deserialize heavy driver-side state with the task closure; it is"
-          + " paid again by every task. Move it to a broadcast or out of the closure.\n  "
+      fail(description + ": Spark tasks deserialize heavy driver-side state or more bytes than budgeted with"
+          + " every task; it is paid again by every task. Move it to a broadcast or out of the closure.\n  "
           + String.join("\n  ", violations)
           + "\nTask binary: " + taskBinary.getBytes() + " bytes (largest task stream seen by the filter: "
           + result.getMaxStreamBytes() + " bytes)"

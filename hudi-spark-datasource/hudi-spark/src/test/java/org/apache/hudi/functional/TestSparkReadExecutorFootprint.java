@@ -23,6 +23,7 @@ import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -74,9 +75,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Guards what Spark tasks do on the executors when reading a Hudi table through the file group
- * reader: they must not access the table's {@code .hoodie} folder, and they must not deserialize
- * heavy driver-side objects (meta client, timeline, Hadoop configuration, the file format itself)
- * with every task closure. Both costs scale with the number of tasks, not with the data.
+ * reader: they must not access the table's {@code .hoodie} folder, they must not deserialize heavy
+ * driver-side objects (meta client, timeline, Hadoop configuration, the file format itself) with
+ * every task, what every task deserializes must stay within a size budget, and they must not parse
+ * the Hadoop default resources for every file they read. These costs scale with the number of tasks
+ * or files, not with the data.
  *
  * <p>Each table is written once per class and read by every case that needs it. The table has
  * several partitions so that a read runs several tasks; on MERGE_ON_READ the second commit
@@ -91,13 +94,6 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
   private static final int NUM_UPDATED_RECORDS = 100;
   private static final int NUM_PARTITIONS = 4;
 
-  /**
-   * Budget for the task binary, the Java-serialized closure every task deserializes.
-   */
-  private static final long MAX_TASK_BINARY_BYTES = 24 * 1024;
-  private static final String TASK_BINARY_BUDGET_BASIS =
-      "the budget is about 1.4x the largest task binary measured for these reads with the scan state broadcast:"
-          + " 17544 bytes for the base file only reads, 10194 to 11046 bytes for the others";
 
   /**
    * Driver-side classes that a read task must not deserialize with its closure.
@@ -109,6 +105,13 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
       "org.apache.spark.util.SerializableConfiguration",
       "org.apache.spark.sql.execution.datasources.parquet.HoodieFileGroupReaderBasedFileFormat",
       "org.apache.hudi.config.HoodieWriteConfig");
+
+  /**
+   * Hadoop default resource parses allowed in the tasks of a read. A base file read converts the table
+   * schema in the scan state with a new configuration once per JVM instance of the state, so once per
+   * executor, and local mode runs one executor; a merging read does not parse them.
+   */
+  private static final int MAX_HADOOP_DEFAULT_RESOURCE_LOADS = 1;
 
   private static final StructType SCHEMA = DataTypes.createStructType(new StructField[] {
       DataTypes.createStructField("key", DataTypes.StringType, false),
@@ -124,7 +127,29 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
   static Path tablesDir;
 
   enum TableKind {
-    PLAIN, CDC
+    PLAIN, CDC, PARQUET_LOG_BLOCKS
+  }
+
+  /**
+   * What every task of a read may deserialize: the task binary, the Java-serialized closure, and the
+   * largest task stream, which is the larger of the binary and the task with its partition. Any state
+   * added to the closure or to a task's partition is paid again by every task, so the budgets are about
+   * 1.4x the sizes measured on Spark 3.5, whatever the state is. A base file read carries the columnar
+   * reader in its closure, so it gets a larger budget than a merging read.
+   */
+  enum TaskBudget {
+    // measured: task binary 17555 bytes, largest task stream 18647 bytes
+    BASE_FILE_READ(25 * 1024, 26 * 1024),
+    // measured: task binary 10205 to 11051 bytes, largest task stream 12225 to 12488 bytes
+    MERGING_READ(16 * 1024, 18 * 1024);
+
+    private final long maxTaskBinaryBytes;
+    private final long maxTaskStreamBytes;
+
+    TaskBudget(long maxTaskBinaryBytes, long maxTaskStreamBytes) {
+      this.maxTaskBinaryBytes = maxTaskBinaryBytes;
+      this.maxTaskStreamBytes = maxTaskStreamBytes;
+    }
   }
 
   enum ReadQuery {
@@ -192,16 +217,23 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
     return (int) values[0] == 6 && values[1] == MERGE_ON_READ;
   }
 
+  static Stream<Arguments> readsForHadoopDefaultResources() {
+    return Stream.of(6, CURRENT_VERSION).flatMap(version -> Stream.of(
+        Arguments.of(version, COPY_ON_WRITE, TableKind.PLAIN),
+        Arguments.of(version, MERGE_ON_READ, TableKind.PLAIN),
+        Arguments.of(version, MERGE_ON_READ, TableKind.PARQUET_LOG_BLOCKS)));
+  }
+
   static Stream<Arguments> readsForDeserialization() {
     return Stream.of(
-        Arguments.of(CURRENT_VERSION, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.SNAPSHOT),
-        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.SNAPSHOT),
-        Arguments.of(6, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.SNAPSHOT),
-        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.READ_OPTIMIZED),
-        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.INCREMENTAL),
-        Arguments.of(6, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.INCREMENTAL),
-        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.TIME_TRAVEL),
-        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.CDC, ReadQuery.CDC));
+        Arguments.of(CURRENT_VERSION, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.SNAPSHOT, TaskBudget.BASE_FILE_READ),
+        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.SNAPSHOT, TaskBudget.MERGING_READ),
+        Arguments.of(6, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.SNAPSHOT, TaskBudget.MERGING_READ),
+        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.READ_OPTIMIZED, TaskBudget.BASE_FILE_READ),
+        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.INCREMENTAL, TaskBudget.MERGING_READ),
+        Arguments.of(6, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.INCREMENTAL, TaskBudget.MERGING_READ),
+        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.TIME_TRAVEL, TaskBudget.MERGING_READ),
+        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.CDC, ReadQuery.CDC, TaskBudget.MERGING_READ));
   }
 
   @ParameterizedTest(name = "[{index}] version={0}, type={1}, query={2}, metadata={3}")
@@ -221,10 +253,6 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
   @ParameterizedTest(name = "[{index}] version={0}, type={1}")
   @MethodSource("cdcTableVersionsAndTypes")
   void testNoExecutorMetaFolderAccessForCdcQuery(int tableVersion, HoodieTableType tableType) {
-    assertNoExecutorMetaFolderAccessForCdcQuery(tableVersion, tableType);
-  }
-
-  private void assertNoExecutorMetaFolderAccessForCdcQuery(int tableVersion, HoodieTableType tableType) {
     TestTable table = getOrWriteTable(tableVersion, tableType, TableKind.CDC);
     List<Row> rows = SparkExecutorGuards.assertNoExecutorMetaFolderAccess(
         table.name + " CDC read",
@@ -234,15 +262,12 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
 
   /**
    * Tasks must not deserialize the meta client, timeline, Hadoop configuration, write config or the
-   * file format with their closure, and the task binary must stay within budget.
+   * file format with their closure, and what every task deserializes must stay within budget.
    */
-  @ParameterizedTest(name = "[{index}] version={0}, type={1}, table={2}, query={3}")
+  @ParameterizedTest(name = "[{index}] version={0}, type={1}, table={2}, query={3}, budget={4}")
   @MethodSource("readsForDeserialization")
-  void testTaskDeserializationFootprint(int tableVersion, HoodieTableType tableType, TableKind kind, ReadQuery query) {
-    assertTaskDeserializationFootprint(tableVersion, tableType, kind, query);
-  }
-
-  private void assertTaskDeserializationFootprint(int tableVersion, HoodieTableType tableType, TableKind kind, ReadQuery query) {
+  void testTaskDeserializationFootprint(int tableVersion, HoodieTableType tableType, TableKind kind, ReadQuery query,
+                                        TaskBudget budget) {
     TestTable table = getOrWriteTable(tableVersion, tableType, kind);
     Dataset<Row> df = read(table, query, new HashMap<>());
     // Plan and list files on the driver first, so that the recorded window holds only the scan.
@@ -255,8 +280,22 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
     log.info("{} read of {}: task binary {} bytes, largest task stream seen {} bytes, stages kept {}, ignored {}",
         query, table.name, taskBinary.getBytes(), result.getMaxStreamBytes(), result.getKeptScopes(), result.getIgnoredScopes());
     SparkExecutorGuards.assertTaskDeserializationFootprint(
-        table.name + " " + query + " read (" + TASK_BINARY_BUDGET_BASIS + ")", result, taskBinary,
-        CLASSES_NOT_DESERIALIZED_PER_TASK, MAX_TASK_BINARY_BYTES);
+        table.name + " " + query + " read", result, taskBinary, CLASSES_NOT_DESERIALIZED_PER_TASK,
+        budget.maxTaskBinaryBytes, budget.maxTaskStreamBytes);
+  }
+
+  /**
+   * Tasks must read base files and log blocks with the configuration they are given rather than
+   * create one per file, which parses the Hadoop default resources every time.
+   */
+  @ParameterizedTest(name = "[{index}] version={0}, type={1}, table={2}")
+  @MethodSource("readsForHadoopDefaultResources")
+  void testNoHadoopDefaultResourceLoadsPerFile(int tableVersion, HoodieTableType tableType, TableKind kind) {
+    TestTable table = getOrWriteTable(tableVersion, tableType, kind);
+    Dataset<Row> df = read(table, ReadQuery.SNAPSHOT, new HashMap<>());
+    List<Row> rows = SparkExecutorGuards.assertTaskHadoopDefaultResourceLoadsAtMost(
+        table.name + " snapshot read", spark().sparkContext(), MAX_HADOOP_DEFAULT_RESOURCE_LOADS, df::collectAsList);
+    assertEquals(NUM_RECORDS, rows.size());
   }
 
   /**
@@ -322,6 +361,9 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
     if (kind == TableKind.CDC) {
       options.put(HoodieTableConfig.CDC_ENABLED.key(), "true");
     }
+    if (kind == TableKind.PARQUET_LOG_BLOCKS) {
+      options.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet");
+    }
 
     List<Row> inserts = IntStream.range(0, NUM_RECORDS)
         .mapToObj(i -> RowFactory.create(key(i), "p" + (i % NUM_PARTITIONS), 1L, "v1"))
@@ -339,7 +381,7 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
     assertEquals(2, commits.size(), "Expected two completed commits in " + name);
     if (tableType == MERGE_ON_READ) {
       assertTrue(countLogFiles(tablesDir.resolve(name)) >= NUM_PARTITIONS,
-          "Every file group of " + name + " should have log files to merge");
+          "The updates of " + name + " should write log files in every partition");
     }
     return new TestTable(name, basePath, tableVersion, commits.get(0), commits.get(1));
   }
