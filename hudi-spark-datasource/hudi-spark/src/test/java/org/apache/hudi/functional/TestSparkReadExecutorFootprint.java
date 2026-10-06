@@ -274,15 +274,15 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
   }
 
   /**
-   * A read returns columnar batches when it scans only base files: snapshot reads of COPY_ON_WRITE
-   * tables, read optimized reads, and time travel to the first commit, before any log file.
+   * A read returns columnar batches when it scans base files without merging: snapshot and time
+   * travel reads of COPY_ON_WRITE tables, and read optimized reads.
    */
   private static ReadShape readShape(HoodieTableType type, ReadQuery query) {
     switch (query) {
       case READ_OPTIMIZED:
-      case TIME_TRAVEL:
         return ReadShape.COLUMNAR;
       case SNAPSHOT:
+      case TIME_TRAVEL:
         return type == COPY_ON_WRITE ? ReadShape.COLUMNAR : ReadShape.ROW;
       default:
         return ReadShape.ROW;
@@ -301,6 +301,10 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
         table.name + " " + query + " read with metadata " + metadataOnRead,
         () -> read(table, query, options).collectAsList());
     assertFalse(rows.isEmpty(), "The read must return rows for the guard to be meaningful");
+    if (query == ReadQuery.TIME_TRAVEL) {
+      assertTrue(rows.stream().allMatch(row -> "v1".equals(row.getAs("value"))),
+          table.name + ": time travel to the first commit must not see the updates of the second");
+    }
   }
 
   @ParameterizedTest(name = "[{index}] version={0}, type={1}")
