@@ -22,18 +22,22 @@ package org.apache.hudi.functional;
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.SparkAdapterSupport$;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.testutils.SparkExecutorGuards;
 import org.apache.hudi.testutils.TaskDeserializationRecorder;
 
+import com.github.benmanes.caffeine.cache.Cache;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.SparkConf;
 import org.apache.spark.sql.DataFrameReader;
@@ -55,6 +59,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -63,6 +68,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -119,6 +125,9 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
       DataTypes.createStructField("ts", DataTypes.LongType, false),
       DataTypes.createStructField("value", DataTypes.StringType, true)});
 
+  private static final StructType EVOLVED_SCHEMA = SCHEMA.add(
+      DataTypes.createStructField("extra", DataTypes.StringType, true));
+
   private static final String VECTORIZED_READER_ENABLED = "spark.sql.parquet.enableVectorizedReader";
 
   private static final Map<String, TestTable> TABLES = new HashMap<>();
@@ -127,7 +136,7 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
   static Path tablesDir;
 
   enum TableKind {
-    PLAIN, CDC, PARQUET_LOG_BLOCKS
+    PLAIN, SCHEMA_ON_READ, CDC, PARQUET_LOG_BLOCKS
   }
 
   /**
@@ -205,18 +214,6 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
     return args.stream();
   }
 
-  /**
-   * A CDC read of a version 6 MERGE_ON_READ table fails on the driver, so it is left out.
-   */
-  static Stream<Arguments> cdcTableVersionsAndTypes() {
-    return tableVersionsAndTypes().filter(args -> !isVersion6MergeOnRead(args));
-  }
-
-  private static boolean isVersion6MergeOnRead(Arguments args) {
-    Object[] values = args.get();
-    return (int) values[0] == 6 && values[1] == MERGE_ON_READ;
-  }
-
   static Stream<Arguments> readsForHadoopDefaultResources() {
     return Stream.of(6, CURRENT_VERSION).flatMap(version -> Stream.of(
         Arguments.of(version, COPY_ON_WRITE, TableKind.PLAIN),
@@ -233,7 +230,8 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
         Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.INCREMENTAL, TaskBudget.MERGING_READ),
         Arguments.of(6, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.INCREMENTAL, TaskBudget.MERGING_READ),
         Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.TIME_TRAVEL, TaskBudget.MERGING_READ),
-        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.CDC, ReadQuery.CDC, TaskBudget.MERGING_READ));
+        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.CDC, ReadQuery.CDC, TaskBudget.MERGING_READ),
+        Arguments.of(6, MERGE_ON_READ, TableKind.CDC, ReadQuery.CDC, TaskBudget.MERGING_READ));
   }
 
   @ParameterizedTest(name = "[{index}] version={0}, type={1}, query={2}, metadata={3}")
@@ -250,8 +248,37 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
     assertFalse(rows.isEmpty(), "The read must return rows for the guard to be meaningful");
   }
 
+  /**
+   * With schema on read, every base and log file needs the internal schema of the commit that wrote
+   * it. The schema history has to reach the tasks from the driver rather than be looked up in
+   * {@code .hoodie} by each task.
+   */
   @ParameterizedTest(name = "[{index}] version={0}, type={1}")
-  @MethodSource("cdcTableVersionsAndTypes")
+  @MethodSource("tableVersionsAndTypes")
+  void testNoExecutorMetaFolderAccessWithSchemaOnRead(int tableVersion, HoodieTableType tableType) {
+    TestTable table = getOrWriteTable(tableVersion, tableType, TableKind.SCHEMA_ON_READ);
+    Map<String, String> options = new HashMap<>();
+    options.put(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), "true");
+    AtomicInteger tasksStarted = new AtomicInteger();
+    SparkExecutorGuards.setTaskStartHook(() -> {
+      tasksStarted.incrementAndGet();
+      clearHistoricalSchemaCache();
+    });
+    List<Row> rows;
+    try {
+      rows = SparkExecutorGuards.assertNoExecutorMetaFolderAccess(
+          table.name + " schema-on-read snapshot read",
+          () -> read(table, ReadQuery.SNAPSHOT, options).collectAsList());
+    } finally {
+      SparkExecutorGuards.setTaskStartHook(() -> { });
+    }
+    assertTrue(tasksStarted.get() > 0, "The task start hook must run so that every task starts with an empty"
+        + " schema history cache, as it does on an executor that the driver does not share a JVM with");
+    assertEquals(NUM_RECORDS, rows.size());
+  }
+
+  @ParameterizedTest(name = "[{index}] version={0}, type={1}")
+  @MethodSource("tableVersionsAndTypes")
   void testNoExecutorMetaFolderAccessForCdcQuery(int tableVersion, HoodieTableType tableType) {
     TestTable table = getOrWriteTable(tableVersion, tableType, TableKind.CDC);
     List<Row> rows = SparkExecutorGuards.assertNoExecutorMetaFolderAccess(
@@ -358,6 +385,11 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
     options.put(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key(), "false");
     options.put("hoodie.insert.shuffle.parallelism", "2");
     options.put("hoodie.upsert.shuffle.parallelism", "2");
+    if (kind == TableKind.SCHEMA_ON_READ) {
+      // Reconciling makes the writer record an internal schema in the commit metadata.
+      options.put(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), "true");
+      options.put(DataSourceWriteOptions.RECONCILE_SCHEMA().key(), "true");
+    }
     if (kind == TableKind.CDC) {
       options.put(HoodieTableConfig.CDC_ENABLED.key(), "true");
     }
@@ -369,16 +401,28 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
         .mapToObj(i -> RowFactory.create(key(i), "p" + (i % NUM_PARTITIONS), 1L, "v1"))
         .collect(Collectors.toList());
     write(inserts, SCHEMA, options, basePath);
-    // The second commit updates half of the keys.
-    List<Row> updates = IntStream.range(0, NUM_UPDATED_RECORDS)
-        .mapToObj(i -> RowFactory.create(key(i), "p" + (i % NUM_PARTITIONS), 2L, "v2"))
-        .collect(Collectors.toList());
-    write(updates, SCHEMA, options, basePath);
+    // The second commit updates half of the keys; with schema on read it also adds a column, so
+    // that the files of the two commits carry different schema versions.
+    if (kind == TableKind.SCHEMA_ON_READ) {
+      List<Row> updates = IntStream.range(0, NUM_UPDATED_RECORDS)
+          .mapToObj(i -> RowFactory.create(key(i), "p" + (i % NUM_PARTITIONS), 2L, "v2", "e2"))
+          .collect(Collectors.toList());
+      write(updates, EVOLVED_SCHEMA, options, basePath);
+    } else {
+      List<Row> updates = IntStream.range(0, NUM_UPDATED_RECORDS)
+          .mapToObj(i -> RowFactory.create(key(i), "p" + (i % NUM_PARTITIONS), 2L, "v2"))
+          .collect(Collectors.toList());
+      write(updates, SCHEMA, options, basePath);
+    }
 
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf()).build();
     assertEquals(tableVersion, metaClient.getTableConfig().getTableVersion().versionCode());
     List<HoodieInstant> commits = metaClient.getCommitsTimeline().filterCompletedInstants().getInstants();
     assertEquals(2, commits.size(), "Expected two completed commits in " + name);
+    if (kind == TableKind.SCHEMA_ON_READ) {
+      assertTrue(new TableSchemaResolver(metaClient).getTableInternalSchemaFromCommitMetadata().isPresent(),
+          "The schema-on-read table " + name + " should carry an internal schema");
+    }
     if (tableType == MERGE_ON_READ) {
       assertTrue(countLogFiles(tablesDir.resolve(name)) >= NUM_PARTITIONS,
           "The updates of " + name + " should write log files in every partition");
@@ -400,6 +444,20 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
       return files.filter(p -> !p.toString().contains("/.hoodie/") && p.getFileName().toString().contains(".log.")).count();
     } catch (IOException e) {
       throw new UncheckedIOException(e);
+    }
+  }
+
+  /**
+   * Empties the JVM-wide cache of historical internal schemas. In local mode the driver and the
+   * executors share it, which would hide executor-side schema history reads.
+   */
+  private static void clearHistoricalSchemaCache() {
+    try {
+      Field field = InternalSchemaCache.class.getDeclaredField("HISTORICAL_SCHEMA_CACHE");
+      field.setAccessible(true);
+      ((Cache<?, ?>) field.get(null)).invalidateAll();
+    } catch (ReflectiveOperationException e) {
+      throw new IllegalStateException("Cannot clear the historical schema cache", e);
     }
   }
 
