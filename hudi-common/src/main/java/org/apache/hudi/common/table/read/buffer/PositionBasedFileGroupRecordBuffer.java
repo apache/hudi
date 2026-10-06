@@ -67,6 +67,21 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
   private boolean needToDoHybridStrategy = false;
 
   public PositionBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
+                                            RecordMergeMode recordMergeMode,
+                                            Option<PartialUpdateMode> partialUpdateModeOpt,
+                                            String baseFileInstantTime,
+                                            TypedProperties props,
+                                            List<String> orderingFieldNames,
+                                            UpdateProcessor<T> updateProcessor) {
+    super(readerContext, recordMergeMode, partialUpdateModeOpt, props, orderingFieldNames, updateProcessor);
+    this.baseFileInstantTime = baseFileInstantTime;
+  }
+
+  /**
+   * @deprecated the meta client is not used; use the constructor without it.
+   */
+  @Deprecated
+  public PositionBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                             HoodieTableMetaClient hoodieTableMetaClient,
                                             RecordMergeMode recordMergeMode,
                                             Option<PartialUpdateMode> partialUpdateModeOpt,
@@ -74,8 +89,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
                                             TypedProperties props,
                                             List<String> orderingFieldNames,
                                             UpdateProcessor<T> updateProcessor) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateModeOpt, props, orderingFieldNames, updateProcessor);
-    this.baseFileInstantTime = baseFileInstantTime;
+    this(readerContext, recordMergeMode, partialUpdateModeOpt, baseFileInstantTime, props, orderingFieldNames, updateProcessor);
   }
 
   @Override
