@@ -29,7 +29,11 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
+import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.testutils.SparkExecutorGuards;
 import org.apache.hudi.testutils.TaskDeserializationRecorder;
@@ -83,7 +87,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p>Each table is written once per class and read by every case that needs it. The table has
  * several partitions so that a read runs several tasks; on MERGE_ON_READ the second commit
- * updates half of the keys so that every file group has log files to merge.
+ * updates half of the keys so that every file group has log files to merge. The two commits
+ * follow a history of empty commits, so that every read plans against a timeline of tens of
+ * instants and per-task state that grows with the timeline shows in the guards.
  */
 @Slf4j
 @Tag("functional")
@@ -93,6 +99,7 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
   private static final int NUM_RECORDS = 200;
   private static final int NUM_UPDATED_RECORDS = 100;
   private static final int NUM_PARTITIONS = 4;
+  private static final int NUM_HISTORY_COMMITS = 48;
 
 
   /**
@@ -228,6 +235,10 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
     return Stream.of(
         Arguments.of(CURRENT_VERSION, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.SNAPSHOT, TaskBudget.BASE_FILE_READ),
         Arguments.of(6, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.SNAPSHOT, TaskBudget.BASE_FILE_READ),
+        Arguments.of(CURRENT_VERSION, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.INCREMENTAL, TaskBudget.BASE_FILE_READ),
+        Arguments.of(6, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.INCREMENTAL, TaskBudget.BASE_FILE_READ),
+        Arguments.of(CURRENT_VERSION, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.TIME_TRAVEL, TaskBudget.BASE_FILE_READ),
+        Arguments.of(6, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.TIME_TRAVEL, TaskBudget.BASE_FILE_READ),
         Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.SNAPSHOT, TaskBudget.MERGING_READ),
         Arguments.of(6, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.SNAPSHOT, TaskBudget.MERGING_READ),
         Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.READ_OPTIMIZED, TaskBudget.BASE_FILE_READ),
@@ -359,6 +370,9 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
     options.put(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key(), "false");
     options.put("hoodie.insert.shuffle.parallelism", "2");
     options.put("hoodie.upsert.shuffle.parallelism", "2");
+    // Keep the whole history on the active timeline.
+    options.put(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), String.valueOf(NUM_HISTORY_COMMITS + 10));
+    options.put(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), String.valueOf(NUM_HISTORY_COMMITS + 20));
     if (kind == TableKind.CDC) {
       options.put(HoodieTableConfig.CDC_ENABLED.key(), "true");
     }
@@ -366,6 +380,7 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
       options.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet");
     }
 
+    initTableWithHistory(name, basePath, tableVersion, tableType, kind);
     List<Row> inserts = IntStream.range(0, NUM_RECORDS)
         .mapToObj(i -> RowFactory.create(key(i), "p" + (i % NUM_PARTITIONS), 1L, "v1"))
         .collect(Collectors.toList());
@@ -379,12 +394,43 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf()).build();
     assertEquals(tableVersion, metaClient.getTableConfig().getTableVersion().versionCode());
     List<HoodieInstant> commits = metaClient.getCommitsTimeline().filterCompletedInstants().getInstants();
-    assertEquals(2, commits.size(), "Expected two completed commits in " + name);
+    assertEquals(NUM_HISTORY_COMMITS + 2, commits.size(), "Expected the history and two completed commits in " + name);
     if (tableType == MERGE_ON_READ) {
       assertTrue(countLogFiles(tablesDir.resolve(name)) >= NUM_PARTITIONS,
           "The updates of " + name + " should write log files in every partition");
     }
-    return new TestTable(name, basePath, tableVersion, commits.get(0), commits.get(1));
+    return new TestTable(name, basePath, tableVersion, commits.get(NUM_HISTORY_COMMITS), commits.get(NUM_HISTORY_COMMITS + 1));
+  }
+
+  /**
+   * Creates the table with the configuration the writes use and {@link #NUM_HISTORY_COMMITS} empty
+   * completed commits.
+   */
+  private void initTableWithHistory(String name, String basePath, int tableVersion, HoodieTableType tableType,
+                                    TableKind kind) {
+    try {
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.newTableBuilder()
+          .setTableType(tableType)
+          .setTableName(name)
+          .setTableVersion(tableVersion)
+          .setRecordKeyFields("key")
+          .setPartitionFields("part")
+          .setOrderingFields("ts")
+          .setKeyGeneratorClassProp(SimpleKeyGenerator.class.getName())
+          .setCDCEnabled(kind == TableKind.CDC)
+          .initTable(storageConf(), basePath);
+      HoodieTestTable history = HoodieTestTable.of(metaClient);
+      for (int i = 0; i < NUM_HISTORY_COMMITS; i++) {
+        String instantTime = InProcessTimeGenerator.createNewInstantTime();
+        if (tableType == COPY_ON_WRITE) {
+          history.addCommit(instantTime);
+        } else {
+          history.addDeltaCommit(instantTime);
+        }
+      }
+    } catch (Exception e) {
+      throw new IllegalStateException("Cannot create the history of " + name, e);
+    }
   }
 
   private void write(List<Row> rows, StructType schema, Map<String, String> options, String basePath) {
