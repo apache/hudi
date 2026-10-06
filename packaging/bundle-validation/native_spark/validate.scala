@@ -27,12 +27,12 @@ val outputDir = "/tmp/native-spark-bundle"
 spark.conf.set("spark.sql.autoBroadcastJoinThreshold", "-1")
 
 // Deterministic input, so the query result can be asserted exactly. 300 rows spread evenly over
-// three partitions, fare equal to the row id.
-def rows(from: Int, to: Int) = spark.range(from, to).selectExpr(
+// three partitions, fare equal to the row id plus the offset.
+def rows(from: Int, to: Int, offset: Int = 0) = spark.range(from, to).selectExpr(
   "concat('id-', cast(id as string)) as uuid",
   "cast(id % 3 as string) as partitionpath",
-  "cast(id as double) as fare",
-  "id as ts")
+  s"cast(id + $offset as double) as fare",
+  s"id + $offset as ts")
 
 def write(name: String, tableType: String, mode: org.apache.spark.sql.SaveMode,
           df: org.apache.spark.sql.DataFrame): String = {
@@ -75,11 +75,12 @@ def probe(label: String, leftPath: String, rightPath: String): Unit = {
 probe("cow", write("native_cow_1", "COPY_ON_WRITE", Overwrite, rows(0, 300)),
              write("native_cow_2", "COPY_ON_WRITE", Overwrite, rows(0, 300)))
 
-// Merge-on-read with a second commit, so the snapshot read merges base files with log files.
+// Merge-on-read with a second commit that updates the fare of half the rows, so the snapshot read
+// returns the expected sums only if it merges base files with log files.
 val morLeft = write("native_mor_1", "MERGE_ON_READ", Overwrite, rows(0, 300))
-write("native_mor_1", "MERGE_ON_READ", Append, rows(0, 150))
+write("native_mor_1", "MERGE_ON_READ", Append, rows(0, 150, 1000))
 val morRight = write("native_mor_2", "MERGE_ON_READ", Overwrite, rows(0, 300))
-write("native_mor_2", "MERGE_ON_READ", Append, rows(0, 150))
+write("native_mor_2", "MERGE_ON_READ", Append, rows(0, 150, 1000))
 probe("mor", morLeft, morRight)
 
 System.exit(0)

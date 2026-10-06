@@ -81,6 +81,10 @@ use_default_java_runtime () {
 # Comet ships class file version 61 bytecode and a glibc linked libcomet.so, so this only runs on
 # the Java 17 pass.
 #
+# A Hudi path read looks its table up in the session catalog, and the Hive metastore configured in
+# hive-site.xml only runs inside test_spark_hadoop_mr_bundles, so the session uses the in-memory
+# catalog.
+#
 # env vars (defined in container):
 #   SPARK_HOME: path to the spark directory
 ##
@@ -100,7 +104,9 @@ test_native_spark_bundle () {
       --conf 'spark.comet.metrics.enabled=true' \
       --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
       --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar' \
-      --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' < $WORKDIR/native_spark/validate.scala
+      --conf 'spark.sql.catalogImplementation=in-memory' < $WORKDIR/native_spark/validate.scala
+
+    use_default_java_runtime
 
     # 300 rows per table over three partitions: 100 * 100 joined rows per partition, and each cow
     # fare summed 100 times (100 * 14850, 100 * 14950, 100 * 15050).
@@ -113,17 +119,22 @@ test_native_spark_bundle () {
         echo "::error::validate.sh native spark bundle copy-on-write query returned unexpected results"
         echo "expected:"; echo "$expectedRows"
         echo "actual:";   echo "$actualRows"
-        exit 1
+        return 1
     fi
 
-    # Merge-on-read with log files reads row by row, so the same query must still be correct.
+    # The second merge-on-read commit adds 1000 to the fare of 50 rows per partition, and it lands
+    # in log files, so a read that skips the logs returns the copy-on-write sums instead
+    # (100 * (14850 + 50000), 100 * (14950 + 50000), 100 * (15050 + 50000)).
+    local expectedMorRows='0,10000,6485000.0
+1,10000,6495000.0
+2,10000,6505000.0'
     local actualMorRows
     actualMorRows=$(cat $outputDir/mor_rows/part-*)
-    if [ "$actualMorRows" != "$expectedRows" ]; then
+    if [ "$actualMorRows" != "$expectedMorRows" ]; then
         echo "::error::validate.sh native spark bundle merge-on-read query returned unexpected results"
-        echo "expected:"; echo "$expectedRows"
+        echo "expected:"; echo "$expectedMorRows"
         echo "actual:";   echo "$actualMorRows"
-        exit 1
+        return 1
     fi
 
     # Comet declines what it cannot accelerate and hands it back to Spark, so correct results on
@@ -133,15 +144,20 @@ test_native_spark_bundle () {
     if ! grep -q 'CometSortMergeJoin' $outputDir/cow_plan/part-*; then
         echo "::error::validate.sh join over copy-on-write Hudi tables was not executed natively by Comet"
         cat $outputDir/cow_plan/part-*
-        exit 1
+        return 1
+    fi
+    if ! grep -q 'CometSparkColumnarToColumnar' $outputDir/cow_plan/part-* \
+        || grep -q 'CometSparkRowToColumnar' $outputDir/cow_plan/part-*; then
+        echo "::error::validate.sh copy-on-write scan was not bridged into Comet columnar to columnar"
+        cat $outputDir/cow_plan/part-*
+        return 1
     fi
     if ! grep -q 'CometSparkRowToColumnar' $outputDir/mor_plan/part-*; then
         echo "::error::validate.sh merge-on-read scan was not bridged into Comet"
         cat $outputDir/mor_plan/part-*
-        exit 1
+        return 1
     fi
     echo "::warning::validate.sh native spark bundle validation was successful"
-    use_default_java_runtime
 }
 
 ##
@@ -452,17 +468,6 @@ if [ "$?" -ne 0 ]; then
 fi
 echo "::warning::validate.sh done validating spark & hadoop-mr bundle"
 
-if [ -e $JARS_DIR/native-spark.jar ] && [[ ${JAVA_RUNTIME_VERSION} == 'openjdk17' ]]; then
-  echo "::warning::validate.sh validating native spark bundle"
-  test_native_spark_bundle
-  if [ "$?" -ne 0 ]; then
-      exit 1
-  fi
-  echo "::warning::validate.sh done validating native spark bundle"
-else
-  echo "::warning::validate.sh skip validating native spark bundle, needs openjdk17 and a Spark version Comet releases for"
-fi
-
 if [[ $SPARK_HOME == *"spark-3.5"* || $SPARK_HOME == *"spark-4.0"* || $SPARK_HOME == *"spark-4.1"* ]]
 then
   echo "::warning::validate.sh validating cli bundle"
@@ -517,4 +522,16 @@ if [[ ${SCALA_PROFILE} != 'scala-2.13' ]]; then
       exit 1
   fi
   echo "::warning::validate.sh done validating metaserver bundle"
+fi
+
+# Runs last, so a failure here cannot skip the validation of another bundle.
+if [ -e $JARS_DIR/native-spark.jar ] && [[ ${JAVA_RUNTIME_VERSION} == 'openjdk17' ]]; then
+  echo "::warning::validate.sh validating native spark bundle"
+  test_native_spark_bundle
+  if [ "$?" -ne 0 ]; then
+      exit 1
+  fi
+  echo "::warning::validate.sh done validating native spark bundle"
+else
+  echo "::warning::validate.sh skip validating native spark bundle, needs openjdk17 and a Spark version Comet releases for"
 fi
