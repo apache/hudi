@@ -199,8 +199,18 @@ trait HoodieIncrementalRelationV2Trait extends HoodieBaseRelation {
     val fallbackToFullTableScan = optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.key,
       DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.defaultValue).toBoolean
 
-    fallbackToFullTableScan && (startInstantArchived
-      || affectedFilesInCommits.asScala.exists(fileStatus => !metaClient.getStorage.exists(fileStatus.getPath)))
+    if (!fallbackToFullTableScan) {
+      false
+    } else if (startInstantArchived) {
+      true
+    } else {
+      val missingFileFound = HoodieBaseRelation.checkIfAnyFilesMissing(
+        sqlContext, metaClient, affectedFilesInCommits.asScala.map(_.getPath.toString))
+      if (missingFileFound) {
+        logInfo("Falling back to full table scan as some files cannot be found.")
+      }
+      missingFileFound
+    }
   }
 
   protected val rangeType: RangeType
