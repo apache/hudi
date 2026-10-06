@@ -22,15 +22,22 @@ import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.lang.reflect.Modifier;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.hudi.common.util.ConfigUtils.getRawValueWithAltKeys;
@@ -47,6 +54,11 @@ public class HoodieConfig implements Serializable {
   protected static final int MAX_READ_RETRIES = 5;
   // Delay between retries while reading the properties file
   protected static final int READ_RETRY_DELAY_MSEC = 1000;
+
+  // Matches the value computed from the members of this class in earlier releases, so their serialized configs stay readable.
+  private static final long serialVersionUID = 449277607721112139L;
+  // The props of the enclosing config and their snapshot, while it writes its nested configs on this thread
+  private static final ThreadLocal<Pair<TypedProperties, TypedProperties>> NESTED_CONFIG_BASE_PROPS = new ThreadLocal<>();
 
   @Getter
   protected TypedProperties props;
@@ -277,5 +289,102 @@ public class HoodieConfig implements Serializable {
 
   public static HoodieConfig copy(Properties props) {
     return new HoodieConfig(props);
+  }
+
+  /**
+   * Writes the fields of the calling subclass as {@link ObjectOutputStream#defaultWriteObject()} does, except that
+   * the props of each {@link HoodieConfig} written meanwhile are written as their difference from a snapshot of
+   * the props of this config when that is smaller. Call it from the {@code writeObject} method of a config that
+   * holds nested configs built from its own props, so that the stream carries the shared entries once.
+   */
+  protected final void defaultWriteObjectSharingProps(ObjectOutputStream out) throws IOException {
+    Pair<TypedProperties, TypedProperties> previous = NESTED_CONFIG_BASE_PROPS.get();
+    NESTED_CONFIG_BASE_PROPS.set(Pair.of(props, PropertiesDelta.snapshot(props)));
+    try {
+      out.defaultWriteObject();
+    } finally {
+      if (previous == null) {
+        NESTED_CONFIG_BASE_PROPS.remove();
+      } else {
+        NESTED_CONFIG_BASE_PROPS.set(previous);
+      }
+    }
+  }
+
+  private void writeObject(ObjectOutputStream out) throws IOException {
+    Pair<TypedProperties, TypedProperties> base = NESTED_CONFIG_BASE_PROPS.get();
+    // A nested config sharing the props instance of the enclosing config keeps sharing it after deserialization.
+    PropertiesDelta delta = base == null || base.getLeft() == props ? null : PropertiesDelta.of(base.getRight(), props);
+    // The delta takes the place of the props field, so a reader without PropertiesDelta fails to resolve it
+    // instead of leaving props unset.
+    ObjectOutputStream.PutField fields = out.putFields();
+    fields.put("props", delta == null ? props : delta);
+    out.writeFields();
+  }
+
+  private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
+    Object value = in.readFields().get("props", null);
+    props = value instanceof PropertiesDelta ? ((PropertiesDelta) value).apply() : (TypedProperties) value;
+  }
+
+  /**
+   * Serialized form of properties as their difference from a base that is never modified.
+   */
+  private static final class PropertiesDelta implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    private final TypedProperties base;
+    private final HashMap<Object, Object> changed;
+    private final ArrayList<Object> removed;
+
+    private PropertiesDelta(TypedProperties base, HashMap<Object, Object> changed, ArrayList<Object> removed) {
+      this.base = base;
+      this.changed = changed;
+      this.removed = removed;
+    }
+
+    static TypedProperties snapshot(TypedProperties props) {
+      if (props == null) {
+        return null;
+      }
+      TypedProperties snapshot = new TypedProperties();
+      // Properties synchronizes its mutators on itself, so this copies a consistent view.
+      synchronized (props) {
+        snapshot.putAll(props);
+      }
+      return snapshot;
+    }
+
+    /**
+     * Returns the difference of {@code props} from {@code base}, or null if {@code props} should be written in full.
+     */
+    static PropertiesDelta of(TypedProperties base, TypedProperties props) {
+      if (base == null || props == null || props.getClass() != TypedProperties.class) {
+        return null;
+      }
+      HashMap<Object, Object> changed = new HashMap<>();
+      ArrayList<Object> removed = new ArrayList<>();
+      synchronized (props) {
+        for (Map.Entry<Object, Object> entry : props.entrySet()) {
+          if (!entry.getValue().equals(base.get(entry.getKey()))) {
+            changed.put(entry.getKey(), entry.getValue());
+          }
+        }
+        for (Object key : base.keySet()) {
+          if (!props.containsKey(key)) {
+            removed.add(key);
+          }
+        }
+        return changed.size() + removed.size() < props.size() ? new PropertiesDelta(base, changed, removed) : null;
+      }
+    }
+
+    TypedProperties apply() {
+      TypedProperties props = new TypedProperties();
+      props.putAll(base);
+      removed.forEach(props::remove);
+      props.putAll(changed);
+      return props;
+    }
   }
 }

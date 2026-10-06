@@ -21,6 +21,7 @@ package org.apache.hudi.config;
 import org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
@@ -33,6 +34,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig.Builder;
 import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
@@ -50,6 +52,11 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
@@ -57,11 +64,14 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -1041,5 +1051,125 @@ public class TestHoodieWriteConfig {
         .withProperties(props)
         .build();
     assertEquals(customStrategy, writeConfig.getClusteringUpdatesStrategyClass());
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {0, 200})
+  void testSerializedSizeIsDominatedByProps(int numUserProps) throws IOException {
+    HoodieWriteConfig config = buildWriteConfigWithUserProps(numUserProps);
+    int configSize = serialize(config).length;
+    int propsSize = serialize(config.getProps()).length;
+    int nestedConfigs = countWrittenConfigs(config) - 1;
+    int bytesPerNestedConfig = (configSize - propsSize) / nestedConfigs;
+    assertTrue(bytesPerNestedConfig < propsSize / 10, "Each of the " + nestedConfigs + " nested configs adds "
+        + bytesPerNestedConfig + " bytes to the serialized write config, expected a small fraction of its props of "
+        + propsSize + " bytes");
+  }
+
+  private static int countWrittenConfigs(Object object) throws IOException {
+    AtomicInteger count = new AtomicInteger();
+    try (ObjectOutputStream out = new ObjectOutputStream(new ByteArrayOutputStream()) {
+      {
+        enableReplaceObject(true);
+      }
+
+      @Override
+      protected Object replaceObject(Object obj) {
+        if (obj instanceof HoodieConfig) {
+          count.incrementAndGet();
+        }
+        return obj;
+      }
+    }) {
+      out.writeObject(object);
+    }
+    return count.get();
+  }
+
+  @Test
+  void testJavaSerializationRoundTripPreservesConfigs() throws Exception {
+    HoodieWriteConfig config = buildWriteConfigWithUserProps(20);
+    HoodieWriteConfig copy = roundTrip(config);
+    assertGettersEqual(config, copy);
+    assertSame(copy.getClientSpecifiedViewStorageConfig(), copy.getViewStorageConfig());
+
+    config.setValue("hoodie.test.write.config.only", "value");
+    config.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE, "false");
+    config.getStorageConfig().clearValue(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE);
+    config.setViewStorageConfig(FileSystemViewStorageConfig.newBuilder()
+        .withStorageType(FileSystemViewStorageType.REMOTE_FIRST).withRemoteServerHost("host").withRemoteServerPort(1234).build());
+    copy = roundTrip(config);
+    assertGettersEqual(config, copy);
+    assertFalse(copy.getMetadataConfig().isEnabled());
+    assertEquals(FileSystemViewStorageType.REMOTE_FIRST, copy.getViewStorageConfig().getStorageType());
+
+    copy.getMetadataConfig().setValue("hoodie.test.metadata.config.only", "value");
+    copy.setValue(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE, "1");
+    assertFalse(copy.contains("hoodie.test.metadata.config.only"));
+    assertFalse(copy.getCommonConfig().contains("hoodie.test.metadata.config.only"));
+    assertFalse(copy.getStorageConfig().contains(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE));
+    assertFalse(copy.getCommonConfig().contains("hoodie.test.write.config.only"));
+  }
+
+  private static HoodieWriteConfig buildWriteConfigWithUserProps(int numUserProps) {
+    Properties props = new Properties();
+    for (int i = 0; i < numUserProps; i++) {
+      props.setProperty("hoodie.test.user.prop" + i, "value" + i);
+    }
+    return HoodieWriteConfig.newBuilder().withPath("/tmp/hudi_table").forTable("hudi_table").withProperties(props).build();
+  }
+
+  /**
+   * Compares the results of the public no-arg getters of the write config, and of each config it returns.
+   */
+  private static void assertGettersEqual(HoodieWriteConfig expected, HoodieWriteConfig actual) throws Exception {
+    int compared = 0;
+    for (Method method : HoodieWriteConfig.class.getMethods()) {
+      if (method.getParameterCount() > 0 || Modifier.isStatic(method.getModifiers()) || method.getReturnType() == void.class
+          || !HoodieConfig.class.isAssignableFrom(method.getDeclaringClass())) {
+        continue;
+      }
+      Object expectedValue = invokeGetter(method, expected);
+      Object actualValue = invokeGetter(method, actual);
+      if (expectedValue instanceof HoodieConfig) {
+        HoodieConfig expectedConfig = (HoodieConfig) expectedValue;
+        HoodieConfig actualConfig = (HoodieConfig) actualValue;
+        assertSame(expectedConfig.getClass(), actualConfig.getClass(), method.getName());
+        assertEquals(expectedConfig.getProps(), actualConfig.getProps(), method.getName());
+        assertNotSame(actual.getProps(), actualConfig.getProps(), method.getName());
+      } else if (expectedValue == null || overridesEquals(expectedValue.getClass())) {
+        assertEquals(expectedValue, actualValue, method.getName());
+      } else {
+        assertSame(expectedValue.getClass(), actualValue.getClass(), method.getName());
+      }
+      compared++;
+    }
+    assertTrue(compared > 300, "Only compared " + compared + " getters");
+  }
+
+  private static Object invokeGetter(Method method, Object target) throws IllegalAccessException {
+    try {
+      return method.invoke(target);
+    } catch (InvocationTargetException e) {
+      return e.getCause().getClass();
+    }
+  }
+
+  private static boolean overridesEquals(Class<?> clazz) throws NoSuchMethodException {
+    return clazz.getMethod("equals", Object.class).getDeclaringClass() != Object.class;
+  }
+
+  private static byte[] serialize(Object object) throws IOException {
+    ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+    try (ObjectOutputStream out = new ObjectOutputStream(bytes)) {
+      out.writeObject(object);
+    }
+    return bytes.toByteArray();
+  }
+
+  private static HoodieWriteConfig roundTrip(HoodieWriteConfig config) throws Exception {
+    try (ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(serialize(config)))) {
+      return (HoodieWriteConfig) in.readObject();
+    }
   }
 }
