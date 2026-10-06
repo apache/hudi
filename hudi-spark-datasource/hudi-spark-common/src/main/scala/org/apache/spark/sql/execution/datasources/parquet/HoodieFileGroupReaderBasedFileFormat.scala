@@ -231,7 +231,10 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       // (COW snapshot, COW incremental, MOR snapshot) either have no log merging or handle it via
       // a separate non-vectorized fileGroupBaseFileReader while the base file reader stays vectorized.
       supportVectorizedRead = !(isIncremental && (isMOR || isCDC)) && !isBootstrap && supportBatch
-      supportReturningBatch = !isMOR && supportVectorizedRead
+      // Required filters (the commit-time range of an incremental query) must hold for every row, but the
+      // vectorized reader only uses them to prune row groups. Return rows rather than batches so that the
+      // base file read can evaluate them row by row; decoding stays vectorized.
+      supportReturningBatch = !isMOR && supportVectorizedRead && requiredFilters.isEmpty
       logDebug(s"supportReturningBatch: $supportReturningBatch, supportVectorizedRead: $supportVectorizedRead, isIncremental: $isIncremental, " +
         s"isCDC: $isCDC, isBootstrap: $isBootstrap, superSupportBatch: $supportBatch")
       supportReturningBatch
@@ -367,21 +370,6 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     }
 
     val broadcastedStorageConf = spark.sparkContext.broadcast(new SerializableConfiguration(augmentedStorageConf.unwrap()))
-
-    // Build stock Spark ParquetFileFormat reader for COW base-file-only bypass.
-    // When a file slice has only a base file (no log files), this avoids the overhead of
-    // HoodieFileGroupReader (schema handler, record merger, row copy/seal) by using Spark's
-    // native parquet reader directly.
-    val stockParquetReader: Option[PartitionedFile => Iterator[InternalRow]] = if (!isMOR && !isBootstrap) {
-      val stockFormat = new ParquetFileFormat()
-      val allFilters = filters ++ requiredFilters
-      Some(stockFormat.buildReaderWithPartitionValues(spark, dataStructType, partitionSchema,
-        requiredSchema, allFilters, options, augmentedStorageConf.unwrap()))
-    } else {
-      None
-    }
-    val broadcastStockReader = stockParquetReader.map(r => spark.sparkContext.broadcast(r))
-
     val cdcProps: TypedProperties = HoodieFileIndex.getConfigProperties(spark, options, null)
     cdcProps.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_KEY, tableName)
 
@@ -411,8 +399,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val state = new HoodieFileGroupReadState(tableState, tableSchema, queryTimestamp, readerProps, cdcProps,
       dataSchema, requestedSchema, internalSchemaOpt, instantRangeOpt, shouldUseRecordPosition, isCount, filters,
       requiredFilters, requiredSchema, partitionSchema, remainingPartitionSchema, fixedPartitionIndexes, outputSchema,
-      projectionInputSchema, baseFileReadSchemas)
-    new HoodieFileGroupReaderFunction(baseFileReader, fileGroupBaseFileReader, broadcastStockReader, broadcastedStorageConf,
+      projectionInputSchema, baseFileReadSchemas, readBaseOnlySlicesDirectly = !isMOR && !isBootstrap)
+    new HoodieFileGroupReaderFunction(baseFileReader, fileGroupBaseFileReader, broadcastedStorageConf,
       spark.sparkContext.broadcast(JavaSerializedValue(state)))
   }
 
