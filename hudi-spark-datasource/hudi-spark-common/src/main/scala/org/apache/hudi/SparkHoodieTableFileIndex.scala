@@ -250,8 +250,22 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   }
 
   /**
-   * Prune the partition by the filter.This implementation is fork from
+   * Lists the partitions of the table matching the partition predicates. The pruning is forked from
    * org.apache.spark.sql.execution.datasources.PartitioningAwareFileIndex#prunePartitions.
+   *
+   * Whether this lists the table depends on the predicates and the query:
+   *  - No partition predicate: returns [[getAllQueryPartitionPaths]]. For an incremental query whose start
+   *    is inside the active timeline these are the partitions written by the instants in range, read from
+   *    the commit metadata. Otherwise (snapshot query, or an incremental query starting from `earliest` or
+   *    before the active timeline) every partition of the table is listed.
+   *  - Equality predicates on all partition columns: a single existence check, no listing.
+   *  - Equality predicates on the leading partition columns: only the partitions under that prefix are listed.
+   *  - No bound leading prefix: hive-style, URL-encoded tables list from the table root, evaluating the
+   *    predicates through the metadata table, with no incremental shortcut. Other tables fall back to
+   *    [[getAllQueryPartitionPaths]] as above.
+   *
+   * Callers that already hold the candidate partitions (e.g. incremental reads, which know the partitions
+   * modified by the commits in range) should use [[filterPartitionPaths]] instead, which never lists the table.
    *
    * @param predicates The filter condition.
    * @return The pruned partition paths.
@@ -262,7 +276,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
 
     if (partitionPruningPredicates.isEmpty) {
       val queryPartitionPaths = getAllQueryPartitionPaths.asScala.toSeq
-      logInfo(s"No partition predicates provided, listing full table (${queryPartitionPaths.size} partitions)")
+      logInfo(s"No partition predicates provided, using all query partitions (${queryPartitionPaths.size} partitions)")
       queryPartitionPaths
     } else {
       // NOTE: We fallback to already cached partition-paths only in cases when we can subsequently
