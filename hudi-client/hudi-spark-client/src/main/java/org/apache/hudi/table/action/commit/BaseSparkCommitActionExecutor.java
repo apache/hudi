@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.client.CommitMetadataProperties;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -156,7 +157,8 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
           String commitTime;
           try {
             commitTime = table.getMetaClient().createNewInstantTime(false);
-            table.scheduleRollback(context, commitTime, instant, false, config.shouldRollbackUsingMarkers(), false, Option.empty());
+            table.scheduleRollback(context, commitTime, instant, false, config.shouldRollbackUsingMarkers(), false,
+                CommitMetadataProperties.enrich(Option.empty(), config, context));
           } finally {
             transactionManager.endStateChange(Option.empty());
           }
