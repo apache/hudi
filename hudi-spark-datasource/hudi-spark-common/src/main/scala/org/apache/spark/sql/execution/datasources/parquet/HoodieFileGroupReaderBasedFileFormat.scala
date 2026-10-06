@@ -70,6 +70,8 @@ trait HoodieFormatTrait {
  * @param instantRangeOpt optional requested-time range applied before file-group record merging;
  *                        unlike Spark's required filters, this prevents a later out-of-range log
  *                        record from masking an earlier in-range version of the same key
+ * @param isCDC           whether this is a CDC query; CDC rows are produced by the CDC iterator rather than read
+ *                        directly from base files, so CDC reads are neither vectorized nor split
  */
 class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                                            tableSchema: HoodieTableSchema,
@@ -85,7 +87,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                                            isMultipleBaseFileFormatsEnabled: Boolean,
                                            hoodieFileFormat: HoodieFileFormat,
                                            instantRangeOpt: HOption[InstantRange] = HOption.empty(),
-                                           @transient tableMetaClient: Option[HoodieTableMetaClient] = None)
+                                           @transient tableMetaClient: Option[HoodieTableMetaClient] = None,
+                                           isCDC: Boolean = false)
   extends ParquetFileFormat with SparkAdapterSupport with HoodieFormatTrait with Logging with Serializable {
 
   private lazy val schema = tableSchema.schema
@@ -223,13 +226,14 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
         throw new HoodieNotSupportedException("Unsupported file format: " + hoodieFileFormat)
       }
       // MOR incremental embeds file slices that may contain log files requiring row-level
-      // merging, so vectorized reading must be disabled. All other combinations (COW snapshot,
-      // COW incremental, MOR snapshot) either have no log merging or handle it via a separate
-      // non-vectorized fileGroupBaseFileReader while the base file reader stays vectorized.
-      supportVectorizedRead = !(isMOR && isIncremental) && !isBootstrap && supportBatch
+      // merging, and CDC rows are built by a row-based iterator that reads base files through
+      // the same reader, so vectorized reading must be disabled for both. All other combinations
+      // (COW snapshot, COW incremental, MOR snapshot) either have no log merging or handle it via
+      // a separate non-vectorized fileGroupBaseFileReader while the base file reader stays vectorized.
+      supportVectorizedRead = !(isIncremental && (isMOR || isCDC)) && !isBootstrap && supportBatch
       supportReturningBatch = !isMOR && supportVectorizedRead
       logDebug(s"supportReturningBatch: $supportReturningBatch, supportVectorizedRead: $supportVectorizedRead, isIncremental: $isIncremental, " +
-        s"isBootstrap: $isBootstrap, superSupportBatch: $supportBatch")
+        s"isCDC: $isCDC, isBootstrap: $isBootstrap, superSupportBatch: $supportBatch")
       supportReturningBatch
     }
   }
@@ -282,9 +286,10 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val superSplitable = super.isSplitable(sparkSession, options, path)
     val isLance = hoodieFileFormat == HoodieFileFormat.LANCE
     // COW incremental reads have no log files to merge, so file splitting is safe.
-    // Only MOR and bootstrap reads need to disable splitting.
-    val splitable = !isMOR && !isBootstrap && !isLance && superSplitable
-    logDebug(s"isSplitable: $splitable, super.isSplitable: $superSplitable, isMOR: $isMOR, isIncremental: $isIncremental, isBootstrap: $isBootstrap")
+    // MOR, CDC and bootstrap reads need to disable splitting.
+    val splitable = !isMOR && !isCDC && !isBootstrap && !isLance && superSplitable
+    logDebug(s"isSplitable: $splitable, super.isSplitable: $superSplitable, isMOR: $isMOR, isIncremental: $isIncremental, " +
+      s"isCDC: $isCDC, isBootstrap: $isBootstrap")
     splitable
   }
 
