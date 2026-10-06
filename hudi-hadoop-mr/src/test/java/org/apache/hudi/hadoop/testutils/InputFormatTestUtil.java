@@ -547,7 +547,7 @@ public class InputFormatTestUtil {
               new StoragePath(partitionPath.toAbsolutePath().toString()),
               Option.of(HoodieFileFormat.PARQUET));
 
-      partitionMetadata.trySave();
+      partitionMetadata.trySave(basePath.toAbsolutePath().relativize(partitionPath.toAbsolutePath()).toString());
     }
   }
 
