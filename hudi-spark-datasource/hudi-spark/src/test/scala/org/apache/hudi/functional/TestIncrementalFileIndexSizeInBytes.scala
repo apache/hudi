@@ -21,8 +21,9 @@ import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieInc
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
+import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.testutils.HoodieSparkClientTestBase
+import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
 
 import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
@@ -70,29 +71,49 @@ class TestIncrementalFileIndexSizeInBytes extends HoodieSparkClientTestBase {
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieTableType])
   def testIncrementalFileIndexSizeInBytes(tableType: HoodieTableType): Unit = {
-    val records = recordsToStrings(dataGen.generateInserts("001", 100)).asScala.toList
+    writeRecords(recordsToStrings(dataGen.generateInserts("001", 100)).asScala.toList, tableType,
+      DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+    val commit1CompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+    // The upsert writes log files on MOR and new base file versions on COW.
+    writeRecords(recordsToStrings(dataGen.generateUniqueUpdates("002", 50)).asScala.toList, tableType,
+      DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+    val commit2CompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+    val commit2Range = Map(
+      DataSourceReadOptions.START_COMMIT.key -> commit1CompletionTime,
+      DataSourceReadOptions.END_COMMIT.key -> commit2CompletionTime)
+
+    // Reports spark.sql.defaultSizeInBytes by default, matching the pre-1.0 IncrementalRelation.
+    assertEquals(spark.sessionState.conf.defaultSizeInBytes, incrementalFileIndexOf(commit2Range).sizeInBytes)
+
+    // Reports the size of the files written by the commits in range when size estimation is enabled.
+    val fileIndex = incrementalFileIndexOf(commit2Range ++ Map(
+      DataSourceReadOptions.INCREMENTAL_SIZE_ESTIMATION_ENABLE.key -> "true",
+      DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.key -> "false"))
+    assertEquals(latestCommitWrittenFilesSize(), fileIndex.sizeInBytes)
+  }
+
+  private def writeRecords(records: List[String], tableType: HoodieTableType, operation: String): Unit = {
     spark.read.json(spark.sparkContext.parallelize(records, 2)).write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType.name())
-      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.OPERATION.key, operation)
       .mode(SaveMode.Append)
       .save(basePath)
+  }
 
-    // Reports Long.MaxValue by default, matching the pre-1.0 IncrementalRelation.
-    assertEquals(Long.MaxValue, incrementalFileIndexOf(Map.empty).sizeInBytes)
-
-    // Reports the size of the files affected by the commits in range when disabled.
-    val fileIndex = incrementalFileIndexOf(Map(
-      DataSourceReadOptions.INCREMENTAL_REPORT_MAX_FILE_SIZE.key -> "false",
-      DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.key -> "false"))
-    val size = fileIndex.sizeInBytes
-    assertTrue(size > 0 && size < Long.MaxValue, s"Expected the affected files size but got $size")
+  private def latestCommitWrittenFilesSize(): Long = {
+    val metaClient = HoodieTestUtils.createMetaClient(storage, basePath)
+    val timeline = metaClient.getActiveTimeline
+    val commitMetadata = timeline.readCommitMetadata(
+      timeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get())
+    val writeStats = commitMetadata.getPartitionToWriteStats.values().asScala.flatMap(_.asScala)
+    assertTrue(writeStats.nonEmpty, "Expected the latest commit to write files")
+    writeStats.map(stat => stat.getPath -> stat.getFileSizeInBytes).toMap.values.sum
   }
 
   private def incrementalFileIndexOf(opts: Map[String, String]): HoodieIncrementalFileIndex = {
     val df: DataFrame = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, "000")
       .options(opts)
       .load(basePath)
     df.queryExecution.analyzed.collectFirst {

@@ -20,7 +20,7 @@ package org.apache.hudi
 import org.apache.hudi.common.model.HoodieLogFile
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.storage.StoragePathInfo
-import org.apache.hudi.util.JFunction
+import org.apache.hudi.util.{JFunction, SparkConfigUtils}
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.Expression
@@ -69,17 +69,17 @@ class HoodieIncrementalFileIndex(override val spark: SparkSession,
     }).map(fileStatus => fileStatus.getPath.toString).toArray
   }
 
-  private val reportMaxFileSize: Boolean = options.getOrElse(
-    DataSourceReadOptions.INCREMENTAL_REPORT_MAX_FILE_SIZE.key,
-    DataSourceReadOptions.INCREMENTAL_REPORT_MAX_FILE_SIZE.defaultValue.toString
-  ).toBoolean
+  private val sizeEstimationEnabled: Boolean = SparkConfigUtils.getStringWithAltKeys(
+    options, DataSourceReadOptions.INCREMENTAL_SIZE_ESTIMATION_ENABLE).toBoolean
 
   override def sizeInBytes: Long = {
-    if (reportMaxFileSize) {
-      Long.MaxValue
-    } else {
+    lazy val defaultSizeInBytes = spark.sessionState.conf.defaultSizeInBytes
+    if (sizeEstimationEnabled) {
+      // Long.MaxValue means the relation falls back to a full table scan, whose size is unknown here.
       val actualSize = mergeOnReadIncrementalRelation.getIncrementalFilesSize
-      if (actualSize > 0) actualSize else Long.MaxValue
+      if (actualSize > 0 && actualSize < Long.MaxValue) actualSize else defaultSizeInBytes
+    } else {
+      defaultSizeInBytes
     }
   }
 
