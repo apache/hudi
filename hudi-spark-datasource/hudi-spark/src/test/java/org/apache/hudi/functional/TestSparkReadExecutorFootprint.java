@@ -32,7 +32,10 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.config.HoodieArchivalConfig;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hadoop.fs.RecordingLocalFileSystem;
+import org.apache.hudi.hadoop.fs.RecordingLocalFileSystem.Call;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.testutils.SparkExecutorGuards;
@@ -107,7 +110,7 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
    */
   private static final List<String> CLASSES_NOT_DESERIALIZED_PER_TASK = Arrays.asList(
       "org.apache.hudi.common.table.HoodieTableMetaClient",
-      "org.apache.hudi.common.table.timeline.HoodieActiveTimeline",
+      "org.apache.hudi.common.table.timeline.HoodieTimeline",
       "org.apache.hudi.storage.StorageConfiguration",
       "org.apache.spark.util.SerializableConfiguration",
       "org.apache.spark.sql.execution.datasources.parquet.HoodieFileGroupReaderBasedFileFormat",
@@ -311,8 +314,9 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
   }
 
   /**
-   * With data skipping, file pruning consults the column stats in the metadata table. The tasks of
-   * the scan must still not read the timeline or table config of either table.
+   * With data skipping, file pruning consults the column stats in the metadata table on the driver.
+   * The tasks of the scan must still not access {@code .hoodie} of either table. A column stats lookup
+   * forced onto the engine reads the metadata table from the executors by design and is not covered.
    */
   @ParameterizedTest(name = "[{index}] version={0}, type={1}")
   @MethodSource("tableVersionsAndTypes")
@@ -324,6 +328,8 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
         table.name + " snapshot read with data skipping",
         () -> read(table, ReadQuery.SNAPSHOT, options).filter("value = 'v2'").collectAsList());
     assertEquals(NUM_UPDATED_RECORDS, rows.size());
+    assertTrue(RecordingLocalFileSystem.count(Call.inScope().negate().and(Call.pathContains("/.hoodie/metadata/column_stats/"))) > 0,
+        table.name + ": the driver must read the column stats index for the read to exercise data skipping");
   }
 
   private Dataset<Row> read(TestTable table, ReadQuery query, Map<String, String> options) {
@@ -370,9 +376,12 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
     options.put(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key(), "false");
     options.put("hoodie.insert.shuffle.parallelism", "2");
     options.put("hoodie.upsert.shuffle.parallelism", "2");
-    // Keep the whole history on the active timeline.
+    // Keep the whole history on the active timeline and the log files of MERGE_ON_READ uncompacted.
     options.put(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), String.valueOf(NUM_HISTORY_COMMITS + 10));
     options.put(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), String.valueOf(NUM_HISTORY_COMMITS + 20));
+    options.put(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), String.valueOf(NUM_HISTORY_COMMITS + 10));
+    // Index column stats, so that data skipping has an index to consult.
+    options.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
     if (kind == TableKind.CDC) {
       options.put(HoodieTableConfig.CDC_ENABLED.key(), "true");
     }
