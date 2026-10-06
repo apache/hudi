@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.HoodieAvroParquetReaderIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
+import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -44,11 +45,13 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.avro.HoodieAvroParquetReaderBuilder;
 import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.parquet.hadoop.ParquetReader;
+import org.apache.parquet.hadoop.util.HadoopInputFile;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -199,10 +202,10 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
       AvroReadSupport.setAvroReadSchema(hadoopConf, readSchema.toAvroSchema());
       AvroReadSupport.setRequestedProjection(hadoopConf, readSchema.toAvroSchema());
     }
+    HadoopInputFile inputFile = HadoopInputFile.fromPath(new Path(path.toUri()), hadoopConf);
     ParquetReader<IndexedRecord> reader =
-        new HoodieAvroParquetReaderBuilder<IndexedRecord>(path)
-            .withTableSchema(getAvroSchemaConverter(hadoopConf).convert(readSchema))
-            .withConf(hadoopConf)
+        ParquetUtils.withHadoopReadOptions(new HoodieAvroParquetReaderBuilder<IndexedRecord>(inputFile)
+                .withTableSchema(getAvroSchemaConverter(hadoopConf).convert(readSchema)), inputFile)
             .set(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS, hadoopConf.get(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS))
             .set(ParquetInputFormat.STRICT_TYPE_CHECKING, hadoopConf.get(ParquetInputFormat.STRICT_TYPE_CHECKING))
             .build();
