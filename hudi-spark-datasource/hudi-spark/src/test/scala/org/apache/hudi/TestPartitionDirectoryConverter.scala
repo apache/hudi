@@ -19,7 +19,7 @@ package org.apache.hudi
 
 import org.apache.hudi.common.config.{HoodieConfig, HoodieStorageConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieFileGroupId, HoodieLogFile}
+import org.apache.hudi.common.model.{BaseFile, FileSlice, HoodieBaseFile, HoodieFileGroupId, HoodieLogFile}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
 
@@ -28,6 +28,7 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.PartitionedFileUtil
 import org.apache.spark.sql.execution.datasources.FilePartition
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -111,6 +112,49 @@ class TestPartitionDirectoryConverter extends SparkAdapterSupport {
     val directory = PartitionDirectoryConverter.convertFileSliceToPartitionDirectory(
       InternalRow.fromSeq(Seq("2025-01-01")), slice, config)
     assert(directory.files.head.getLen == recordCount * fixedSizePerRecordWithParquetFormat)
+  }
+
+  /**
+   * Base-file-only slices of a partition share one directory with plain partition values, while slices
+   * with log files or a bootstrap base each keep a directory whose partition values map only that slice.
+   */
+  @Test
+  def testConvertFileSlicesToPartitionDirectories(): Unit = {
+    val logFraction = 0.5
+    val config = new HoodieConfig(TypedProperties.fromMap(Map(
+      HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO_FRACTION.key() -> logFraction.toString).asJava))
+    val partitionValues = InternalRow.fromSeq(Seq("2025-01-01"))
+    val baseOnlySlices = (0 until 3).map(i => buildFileSlice(s"base-$i", 100 + i, Seq(), logFraction))
+    val baseAndLogSlice = buildFileSlice("base-and-log", 200, Seq(30, 40), logFraction)
+    val logOnlySlice = buildFileSlice("log-only", 0, Seq(50), logFraction)
+    val bootstrapSlice = new FileSlice(new HoodieFileGroupId(partitionPath, "bootstrap"), baseInstant)
+    bootstrapSlice.setBaseFile(new HoodieBaseFile(buildHoodieBaseFile("bootstrap", 300).getPathInfo,
+      new BaseFile(buildHoodieBaseFile("bootstrap-source", 300).getPathInfo)))
+    val slices = Seq(baseOnlySlices(0), baseAndLogSlice, baseOnlySlices(1), logOnlySlice, bootstrapSlice, baseOnlySlices(2))
+
+    val directories = PartitionDirectoryConverter.convertFileSlicesToPartitionDirectories(partitionValues, slices, config)
+
+    assertEquals(4, directories.size)
+    val baseOnlyDirectory = directories.head
+    assertFalse(baseOnlyDirectory.values.isInstanceOf[HoodiePartitionFileSliceMapping])
+    assertEquals(partitionValues, baseOnlyDirectory.values)
+    assertEquals(baseOnlySlices.map(_.getBaseFile.get.getPath), baseOnlyDirectory.files.map(_.getPath.toString))
+    assertEquals(baseOnlySlices.map(_.getBaseFile.get.getFileSize), baseOnlyDirectory.files.map(_.getLen))
+
+    val slicesReadAsFileSlice = Seq(baseAndLogSlice, logOnlySlice, bootstrapSlice)
+    directories.tail.zip(slicesReadAsFileSlice).foreach { case (directory, slice) =>
+      val perSliceDirectory = PartitionDirectoryConverter.convertFileSliceToPartitionDirectory(partitionValues, slice, config)
+      assertEquals(perSliceDirectory.files.map(f => (f.getPath, f.getLen)), directory.files.map(f => (f.getPath, f.getLen)))
+      assertEquals(1, directory.files.size)
+      val mapping = directory.values.asInstanceOf[HoodiePartitionFileSliceMapping]
+      assertEquals(partitionValues, mapping.getPartitionValues)
+      assertTrue(mapping.getSlice(slice.getFileId).contains(slice))
+      slices.filter(_ != slice).foreach(other => assertTrue(mapping.getSlice(other.getFileId).isEmpty))
+    }
+
+    assertEquals(1, PartitionDirectoryConverter.convertFileSlicesToPartitionDirectories(partitionValues, baseOnlySlices, config).size)
+    assertEquals(3, PartitionDirectoryConverter.convertFileSlicesToPartitionDirectories(partitionValues, slicesReadAsFileSlice, config).size)
+    assertTrue(PartitionDirectoryConverter.convertFileSlicesToPartitionDirectories(partitionValues, Seq(), config).isEmpty)
   }
 
   private def verifyBalanceByNum(tasks: Seq[FilePartition], totalRecordNum: Int, logFraction: Double): Unit = {
