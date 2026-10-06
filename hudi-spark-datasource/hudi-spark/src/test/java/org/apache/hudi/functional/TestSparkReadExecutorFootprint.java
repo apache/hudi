@@ -231,7 +231,6 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
     assertNoExecutorMetaFolderAccessForRead(tableVersion, tableType, query, metadataOnRead);
   }
 
-  @Disabled("Enabled by #20080: the partition listing job probes .hoodie for partition metadata on the executors")
   @ParameterizedTest(name = "[{index}] version={0}, type={1}, query={2}, metadata={3}")
   @MethodSource("readQueriesListingPartitionsFromFileSystem")
   void testNoExecutorMetaFolderAccessListingPartitionsFromFileSystem(int tableVersion, HoodieTableType tableType,
