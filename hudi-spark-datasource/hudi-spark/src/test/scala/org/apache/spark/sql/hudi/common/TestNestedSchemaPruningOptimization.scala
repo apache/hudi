@@ -307,7 +307,15 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase {
         val tableName = generateTableName
         val tablePath = s"${tmp.getCanonicalPath}/$tableName"
 
-        createTableWithNestedStructSchema(tableType, tableName, tablePath)
+        // NOTE: Meta fields stay enabled since the SQL UPDATE on MOR needs them to locate the file group
+        createTableWithNestedStructSchema(tableType, tableName, tablePath, populateMetaFields = true)
+        // Move id 1 off the filtered value and add id 2 on it; for MOR the update lands in a log
+        // file, so the read has to merge a base record that matches with a log record that does not.
+        spark.sql(s"INSERT INTO $tableName SELECT 2 AS id, named_struct('name', 'a1', 'price', 20) AS item, 123457 AS ts")
+        spark.sql(s"UPDATE $tableName SET item = named_struct('name', 'zz', 'price', 10) WHERE id = 1")
+        if (tableType == "mor") {
+          assertHasLogFiles(tablePath)
+        }
 
         val query = s"SELECT id FROM $tableName WHERE item.name = 'a1' AND item.price > 5"
         // NOTE: Spark infers a top-level IsNotNull(item) from the nested predicates and pushes it
@@ -318,7 +326,8 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase {
         nestedFilters.foreach { f =>
           assertTrue(pushedFilters.contains(f), s"[$tableType] $f should be pushed down, got $pushedFilters")
         }
-        checkAnswer(query)(Seq(1))
+        checkAnswer(query)(Seq(2))
+        checkAnswer(s"SELECT id FROM $tableName WHERE item.name = 'zz'")(Seq(1))
 
         // Negative leg: with an empty allowlist the nested predicates must not be pushed.
         withSQLConf(SQLConf.NESTED_PREDICATE_PUSHDOWN_FILE_SOURCE_LIST.key -> "") {
@@ -326,7 +335,7 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase {
           nestedFilters.foreach { f =>
             assertFalse(prunedFilters.contains(f), s"[$tableType] $f should not be pushed down, got $prunedFilters")
           }
-          checkAnswer(query)(Seq(1))
+          checkAnswer(query)(Seq(2))
         }
       }
     }
@@ -339,8 +348,14 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase {
           val tableName = generateTableName
           val tablePath = s"${tmp.getCanonicalPath}/$tableName"
 
-          createTableWithNestedStructSchema(tableType, tableName, tablePath)
+          createTableWithNestedStructSchema(tableType, tableName, tablePath, populateMetaFields = true)
           spark.sql(s"ALTER TABLE $tableName RENAME COLUMN item.name TO title")
+          // For MOR, also merge in a log file written under the new name. COW is left alone so its
+          // base file keeps the old name (an update would rewrite it under the new one).
+          if (tableType == "mor") {
+            spark.sql(s"UPDATE $tableName SET ts = ts + 1 WHERE id = 1")
+            assertHasLogFiles(tablePath)
+          }
 
           // The base file still stores item.name, so the pushed filter must be rewritten to the
           // file-side name rather than dropped or failing the read.
@@ -350,6 +365,50 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase {
             s"[$tableType] EqualTo(item.title,a1) should be pushed down, got $pushedFilters")
           checkAnswer(query)(Seq(1))
           checkAnswer(s"SELECT id FROM $tableName WHERE item.title = 'a2'")()
+        }
+      }
+    }
+  }
+
+  test("Nested struct predicate pushdown with schema on read and quoted column names") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        // NOTE: A top-level rename fails the incoming-schema check unless column drops are allowed
+        withSQLConf("hoodie.schema.on.read.enable" -> "true",
+          "hoodie.datasource.write.schema.allow.auto.evolution.column.drop" -> "true") {
+          val tableName = generateTableName
+          val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+          // Names that are not plain identifiers reach the reader backtick-quoted (`名字`,
+          // item.`名称`) once nested predicate pushdown is enabled for the source. Only names
+          // Avro accepts can be written, so hyphens and dots are covered by the unit tests.
+          spark.sql(
+            s"""
+               |CREATE TABLE $tableName USING HUDI
+               |TBLPROPERTIES (type = '$tableType', primaryKey = 'id', orderingFields = 'ts')
+               |LOCATION '$tablePath'
+               |AS SELECT
+               |  1 AS id,
+               |  '李明' AS `名字`,
+               |  10 AS `旧分数`,
+               |  named_struct('名称', 'a1', 'price', 10) AS item,
+               |  123456 AS ts
+               """.stripMargin)
+          spark.sql(s"ALTER TABLE $tableName RENAME COLUMN `旧分数` TO `新分数`")
+          spark.sql(s"ALTER TABLE $tableName RENAME COLUMN item.`名称` TO `标题`")
+          if (tableType == "mor") {
+            spark.sql(s"UPDATE $tableName SET ts = ts + 1 WHERE id = 1")
+            assertHasLogFiles(tablePath)
+          }
+
+          val nestedQuery = s"SELECT id FROM $tableName WHERE item.`标题` = 'a1'"
+          val pushedFilters = pushedFiltersOf(spark.sql(nestedQuery))
+          assertTrue(pushedFilters.contains("EqualTo(item.`标题`,a1)"),
+            s"[$tableType] EqualTo(item.`标题`,a1) should be pushed down, got $pushedFilters")
+          checkAnswer(nestedQuery)(Seq(1))
+          checkAnswer(s"SELECT id FROM $tableName WHERE item.`标题` = 'a2'")()
+          checkAnswer(s"SELECT id FROM $tableName WHERE `名字` = '李明'")(Seq(1))
+          checkAnswer(s"SELECT id FROM $tableName WHERE `新分数` > 5")(Seq(1))
+          checkAnswer(s"SELECT id FROM $tableName WHERE `新分数` > 50")()
         }
       }
     }
@@ -372,6 +431,18 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase {
 
   private def pushedFiltersOf(selectDF: DataFrame): String =
     findFileScan(selectDF.queryExecution.executedPlan).metadata.getOrElse("PushedFilters", "")
+
+  private def assertHasLogFiles(tablePath: String): Unit = {
+    val stream = java.nio.file.Files.walk(java.nio.file.Paths.get(tablePath))
+    try {
+      val hasLogFile = stream.iterator().asScala.exists { p =>
+        !p.toString.contains("/.hoodie/") && p.getFileName.toString.contains(".log.")
+      }
+      assertTrue(hasLogFile, s"Expected log files under $tablePath")
+    } finally {
+      stream.close()
+    }
+  }
 
   private def findFileScan(plan: SparkPlan): FileSourceScanExec = {
     val scans = plan.collect { case f: FileSourceScanExec => f }

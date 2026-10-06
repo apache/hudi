@@ -44,6 +44,8 @@ import org.apache.parquet.schema.{GroupType, MessageType, Type => ParquetType}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.spark.sql.HoodieSchemaUtils
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, UnsafeProjection}
+import org.apache.spark.sql.catalyst.parser.CatalystSqlParser
+import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.MultipartIdentifierHelper
 import org.apache.spark.sql.execution.datasources.SparkSchemaTransformUtils
 import org.apache.spark.sql.execution.datasources.parquet.ParquetSchemaEvolutionUtils.pruneInternalSchema
 import org.apache.spark.sql.sources._
@@ -52,6 +54,7 @@ import org.apache.spark.sql.types.{ArrayType, AtomicType, BinaryType, DataType, 
 import java.time.ZoneId
 
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
+import scala.util.Try
 
 class ParquetSchemaEvolutionUtils(readConf: Configuration,
                                   filePath: Path,
@@ -192,31 +195,31 @@ object ParquetSchemaEvolutionUtils {
     } else {
       oldFilter match {
         case eq: EqualTo =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(eq.attribute, fileSchema, querySchema)
+          val newAttribute = rebuildFilterName(eq.attribute, fileSchema, querySchema)
           if (newAttribute.isEmpty) AlwaysTrue else eq.copy(attribute = newAttribute)
         case eqs: EqualNullSafe =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(eqs.attribute, fileSchema, querySchema)
+          val newAttribute = rebuildFilterName(eqs.attribute, fileSchema, querySchema)
           if (newAttribute.isEmpty) AlwaysTrue else eqs.copy(attribute = newAttribute)
         case gt: GreaterThan =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(gt.attribute, fileSchema, querySchema)
+          val newAttribute = rebuildFilterName(gt.attribute, fileSchema, querySchema)
           if (newAttribute.isEmpty) AlwaysTrue else gt.copy(attribute = newAttribute)
         case gtr: GreaterThanOrEqual =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(gtr.attribute, fileSchema, querySchema)
+          val newAttribute = rebuildFilterName(gtr.attribute, fileSchema, querySchema)
           if (newAttribute.isEmpty) AlwaysTrue else gtr.copy(attribute = newAttribute)
         case lt: LessThan =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(lt.attribute, fileSchema, querySchema)
+          val newAttribute = rebuildFilterName(lt.attribute, fileSchema, querySchema)
           if (newAttribute.isEmpty) AlwaysTrue else lt.copy(attribute = newAttribute)
         case lte: LessThanOrEqual =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(lte.attribute, fileSchema, querySchema)
+          val newAttribute = rebuildFilterName(lte.attribute, fileSchema, querySchema)
           if (newAttribute.isEmpty) AlwaysTrue else lte.copy(attribute = newAttribute)
         case i: In =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(i.attribute, fileSchema, querySchema)
+          val newAttribute = rebuildFilterName(i.attribute, fileSchema, querySchema)
           if (newAttribute.isEmpty) AlwaysTrue else i.copy(attribute = newAttribute)
         case isn: IsNull =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(isn.attribute, fileSchema, querySchema)
+          val newAttribute = rebuildFilterName(isn.attribute, fileSchema, querySchema)
           if (newAttribute.isEmpty) AlwaysTrue else isn.copy(attribute = newAttribute)
         case isnn: IsNotNull =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(isnn.attribute, fileSchema, querySchema)
+          val newAttribute = rebuildFilterName(isnn.attribute, fileSchema, querySchema)
           if (newAttribute.isEmpty) AlwaysTrue else isnn.copy(attribute = newAttribute)
         case And(left, right) =>
           And(rebuildFilterFromParquet(left, fileSchema, querySchema), rebuildFilterFromParquet(right, fileSchema, querySchema))
@@ -225,13 +228,13 @@ object ParquetSchemaEvolutionUtils {
         case Not(child) =>
           Not(rebuildFilterFromParquet(child, fileSchema, querySchema))
         case ssw: StringStartsWith =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(ssw.attribute, fileSchema, querySchema)
+          val newAttribute = rebuildFilterName(ssw.attribute, fileSchema, querySchema)
           if (newAttribute.isEmpty) AlwaysTrue else ssw.copy(attribute = newAttribute)
         case ses: StringEndsWith =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(ses.attribute, fileSchema, querySchema)
+          val newAttribute = rebuildFilterName(ses.attribute, fileSchema, querySchema)
           if (newAttribute.isEmpty) AlwaysTrue else ses.copy(attribute = newAttribute)
         case sc: StringContains =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(sc.attribute, fileSchema, querySchema)
+          val newAttribute = rebuildFilterName(sc.attribute, fileSchema, querySchema)
           if (newAttribute.isEmpty) AlwaysTrue else sc.copy(attribute = newAttribute)
         case AlwaysTrue =>
           AlwaysTrue
@@ -240,6 +243,34 @@ object ParquetSchemaEvolutionUtils {
         case _ =>
           AlwaysTrue
       }
+    }
+  }
+
+  /**
+   * Re-spells one filter column name onto the file schema. With nested predicate pushdown, Spark
+   * names a column by its multipart path with every part that is not a plain identifier quoted
+   * (`名字`, item.`my-name`, `a.b`), while the internal schema keys fields by their dot-joined
+   * parts. The name is parsed into parts for the lookup, and the file's name is quoted back the
+   * same way, which is how ParquetFilters keys its columns. A name that does not parse is one
+   * Spark passed through raw (nested pushdown off) and is looked up as it is.
+   */
+  private def rebuildFilterName(name: String, fileSchema: InternalSchema, querySchema: InternalSchema): String = {
+    Try(CatalystSqlParser.parseMultipartIdentifier(name)).toOption match {
+      case Some(parts) =>
+        val fullName = parts.mkString(".")
+        val fileFullName = InternalSchemaUtils.reBuildFilterName(fullName, fileSchema, querySchema)
+        if (fileFullName.isEmpty) {
+          ""
+        } else if (fileFullName == fullName) {
+          name
+        } else {
+          // Any level of the path may have been renamed, so resolve each prefix by field id.
+          parts.indices.map { i =>
+            fileSchema.findField(querySchema.findIdByName(parts.take(i + 1).mkString("."))).name()
+          }.quoted
+        }
+      case None =>
+        InternalSchemaUtils.reBuildFilterName(name, fileSchema, querySchema)
     }
   }
 

@@ -20,8 +20,10 @@
 package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaField, HoodieSchemaType}
-import org.apache.hudi.common.schema.internal.InternalSchema
+import org.apache.hudi.common.schema.internal.{InternalSchema, Type => InternalType, Types => InternalTypes}
+import org.apache.hudi.common.schema.internal.action.TableChanges
 import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter
+import org.apache.hudi.common.schema.internal.utils.SchemaChangeUtils
 import org.apache.hudi.common.util
 import org.apache.hudi.exception.HoodieException
 
@@ -393,6 +395,79 @@ class TestParquetSchemaEvolutionUtils {
     Assertions.assertSame(untouched,
       ParquetSchemaEvolutionUtils.rebuildFilterFromParquet(untouched, null, null))
   }
+
+  /**
+   * A nested field renamed under schema-on-read is re-spelled onto the file's name, as a dotted
+   * path, rather than collapsing to AlwaysTrue (which would read correctly but skip nothing).
+   */
+  @Test
+  def testRebuildFilterFromParquetRespellsNestedFilters(): Unit = {
+    val intType = HoodieSchema.create(HoodieSchemaType.INT)
+    val stringType = HoodieSchema.create(HoodieSchemaType.STRING)
+    val fileSchema = internalSchemaOf(("id", intType),
+      ("item", recordOf("item", ("name", stringType), ("price", intType))))
+    val querySchema = evolve(fileSchema, renames = Seq("item.name" -> "title"), adds = Seq(("item", "added")))
+
+    def rebuild(filter: Filter): Filter =
+      ParquetSchemaEvolutionUtils.rebuildFilterFromParquet(filter, fileSchema, querySchema)
+
+    Assertions.assertEquals(EqualTo("item.name", "a1"), rebuild(EqualTo("item.title", "a1")))
+    Assertions.assertEquals(GreaterThan("item.price", 5), rebuild(GreaterThan("item.price", 5)))
+    Assertions.assertEquals(AlwaysTrue, rebuild(IsNotNull("item.added")))
+  }
+
+  /**
+   * With nested predicate pushdown, Spark quotes every name part that is not a plain identifier
+   * (non-ASCII, hyphens, dots), so the filter carries e.g. `名字` or item.`my-title`. The rebuild
+   * must resolve those against the internal schema and hand ParquetFilters the file's name quoted
+   * the same way, since that is how ParquetFilters keys its columns.
+   */
+  @Test
+  def testRebuildFilterFromParquetHandlesQuotedNames(): Unit = {
+    // Built from internal types directly, since these names are not valid Avro names.
+    def field(id: Int, name: String, fieldType: InternalType): InternalTypes.Field =
+      InternalTypes.Field.get(id, true, name, fieldType)
+    val fileSchema = new InternalSchema(InternalTypes.RecordType.get(
+      field(0, "名字", InternalTypes.StringType.get()),
+      field(1, "old col", InternalTypes.IntType.get()),
+      field(2, "a.b", InternalTypes.IntType.get()),
+      field(3, "item", InternalTypes.RecordType.get(
+        field(4, "my-name", InternalTypes.StringType.get()),
+        field(5, "price", InternalTypes.IntType.get())))))
+    val querySchema = evolve(fileSchema,
+      renames = Seq("old col" -> "new-col", "item.my-name" -> "my-title"), adds = Seq(("", "新增")))
+
+    def rebuild(filter: Filter): Filter =
+      ParquetSchemaEvolutionUtils.rebuildFilterFromParquet(filter, fileSchema, querySchema)
+
+    // Untouched columns keep their quoted spelling.
+    Assertions.assertEquals(EqualTo("`名字`", "x"), rebuild(EqualTo("`名字`", "x")))
+    Assertions.assertEquals(EqualTo("`a.b`", 1), rebuild(EqualTo("`a.b`", 1)))
+    // Renamed columns are re-spelled onto the file's name, quoted where it needs to be.
+    Assertions.assertEquals(GreaterThan("`old col`", 1), rebuild(GreaterThan("`new-col`", 1)))
+    Assertions.assertEquals(EqualTo("item.`my-name`", "x"), rebuild(EqualTo("item.`my-title`", "x")))
+    // A quoted column the file does not hold collapses to AlwaysTrue.
+    Assertions.assertEquals(AlwaysTrue, rebuild(IsNotNull("`新增`")))
+    // Without nested pushdown Spark passes top-level names through raw, which must keep working.
+    Assertions.assertEquals(EqualTo("名字", "x"), rebuild(EqualTo("名字", "x")))
+    Assertions.assertEquals(GreaterThan("old col", 1), rebuild(GreaterThan("new-col", 1)))
+  }
+
+  /** Applies schema-on-read renames, then adds int columns under the given parent ("" for top level). */
+  private def evolve(schema: InternalSchema,
+                     renames: Seq[(String, String)],
+                     adds: Seq[(String, String)]): InternalSchema = {
+    val updates = TableChanges.ColumnUpdateChange.get(schema)
+    renames.foreach { case (name, newName) => updates.renameColumn(name, newName) }
+    val renamed = SchemaChangeUtils.applyTableChanges2Schema(schema, updates)
+    val addChange = TableChanges.ColumnAddChange.get(renamed)
+    adds.foreach { case (parent, name) => addChange.addColumns(parent, name, InternalTypes.IntType.get(), null) }
+    SchemaChangeUtils.applyTableChanges2Schema(renamed, addChange)
+  }
+
+  private def recordOf(name: String, fields: (String, HoodieSchema)*): HoodieSchema =
+    HoodieSchema.createRecord(name, "org.apache.hudi.test", null,
+      Arrays.asList(fields.map { case (n, schema) => HoodieSchemaField.of(n, schema) }: _*))
 
   /**
    * The read configuration may be shared by other readers: a file that needs its own requested schema or a
