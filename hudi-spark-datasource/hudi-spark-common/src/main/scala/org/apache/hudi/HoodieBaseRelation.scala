@@ -805,21 +805,22 @@ object HoodieBaseRelation extends SparkAdapterSupport {
    */
   def checkIfAnyFilesMissing(sqlContext: SQLContext,
                              metaClient: HoodieTableMetaClient,
-                             filePaths: java.util.List[StoragePathInfo]): Boolean = {
+                             filePaths: Iterable[String]): Boolean = {
     val sc = sqlContext.sparkContext
-    val allFilesToCheck = filePaths.asScala.map(_.getPath.toString)
-    val storageConf = HadoopFSUtils.getStorageConfWithCopy(sc.hadoopConfiguration)
+    val allFilesToCheck = filePaths.toSeq
+    // Use the meta client's storage conf so that session-scoped fs.* settings reach the executors
+    val storageConf = metaClient.getStorageConf
     val localBasePathStr = metaClient.getBasePath.toString
     val numPartitions = Math.max(1, Math.min(allFilesToCheck.size, sc.defaultParallelism))
     val previousJobDescription = sc.getLocalProperty("spark.job.description")
     try {
-      sc.setJobDescription(s"Checking existence of ${allFilesToCheck.size} files for incremental fallback scan")
-      val missingFileFound = sc.parallelize(allFilesToCheck.toSeq, numPartitions)
-        .map(path => {
+      sc.setJobDescription(s"Checking existence of ${allFilesToCheck.size} files for incremental query")
+      // Instantiate the storage once per Spark partition and stop at the first missing file
+      sc.parallelize(allFilesToCheck, numPartitions)
+        .mapPartitions(paths => {
           val storage = HoodieStorageUtils.getStorage(localBasePathStr, storageConf)
-          storage.exists(new StoragePath(path))
-        }).collect().exists(v => !v)
-      missingFileFound
+          Iterator.single(paths.forall(path => storage.exists(new StoragePath(path))))
+        }).collect().exists(allExist => !allExist)
     } finally {
       sc.setJobDescription(previousJobDescription)
     }

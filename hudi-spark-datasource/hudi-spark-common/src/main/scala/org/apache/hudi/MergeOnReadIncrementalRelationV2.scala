@@ -204,7 +204,8 @@ trait HoodieIncrementalRelationV2Trait extends HoodieBaseRelation {
     } else if (startInstantArchived) {
       true
     } else {
-      val missingFileFound = HoodieBaseRelation.checkIfAnyFilesMissing(sqlContext, metaClient, affectedFilesInCommits)
+      val missingFileFound = HoodieBaseRelation.checkIfAnyFilesMissing(
+        sqlContext, metaClient, affectedFilesInCommits.asScala.map(_.getPath.toString))
       if (missingFileFound) {
         logInfo("Falling back to full table scan as some files cannot be found.")
       }
