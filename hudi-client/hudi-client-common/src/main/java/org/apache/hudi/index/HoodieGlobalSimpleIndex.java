@@ -19,6 +19,7 @@
 
 package org.apache.hudi.index;
 
+import org.apache.hudi.common.data.HoodieBroadcast;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -27,11 +28,14 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.HoodieKeyLocationFetchHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.List;
@@ -84,15 +88,26 @@ public class HoodieGlobalSimpleIndex extends HoodieSimpleIndex {
     return taggedRecords;
   }
 
-  private HoodiePairData<String, HoodieRecordGlobalLocation> fetchRecordGlobalLocations(
+  @VisibleForTesting
+  HoodiePairData<String, HoodieRecordGlobalLocation> fetchRecordGlobalLocations(
       HoodieEngineContext context, HoodieTable hoodieTable,
       List<Pair<String, HoodieBaseFile>> baseFiles) {
     int parallelism = getParallelism(config.getGlobalSimpleIndexParallelism(), baseFiles.size());
+    return fetchRecordGlobalLocations(context, hoodieTable.getMetaClient(), baseFiles, parallelism, keyGeneratorOpt);
+  }
 
+  /**
+   * Static so that the tasks capture only the arguments, not the index or the table.
+   */
+  private static HoodiePairData<String, HoodieRecordGlobalLocation> fetchRecordGlobalLocations(
+      HoodieEngineContext context, HoodieTableMetaClient metaClient, List<Pair<String, HoodieBaseFile>> baseFiles,
+      int parallelism, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    HoodieBroadcast<StorageConfiguration<?>> storageConf = context.broadcast(metaClient.getStorageConf());
+    String basePath = metaClient.getBasePath().toString();
     return context.parallelize(baseFiles, parallelism)
-        .flatMap(partitionPathBaseFile -> new HoodieKeyLocationFetchHandle(config, hoodieTable, partitionPathBaseFile, keyGeneratorOpt)
-            .globalLocations())
-        .mapToPair(e -> (Pair<String, HoodieRecordGlobalLocation>) e);
+        .flatMap(partitionPathBaseFile -> HoodieKeyLocationFetchHandle.globalLocations(
+            HoodieStorageUtils.getStorage(basePath, storageConf.value()), partitionPathBaseFile, keyGeneratorOpt))
+        .mapToPair(pair -> pair);
   }
 
   /**

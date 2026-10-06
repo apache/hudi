@@ -18,17 +18,32 @@
 
 package org.apache.hudi.index;
 
+import org.apache.hudi.common.config.HoodieMetaserverConfig;
+import org.apache.hudi.common.data.HoodieListData;
+import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
+import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.SyncableFileSystemView;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieMetadataIndexException;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockedConstruction;
 import org.mockito.Mockito;
@@ -38,17 +53,29 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP;
 import static org.apache.hudi.index.HoodieIndexUtils.isSecondaryIndexSupportedType;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -729,5 +756,74 @@ public class TestHoodieIndexUtils {
       assertTrue(ex.getMessage().contains("Column 'nonExistentField' does not exist"));
       assertTrue(ex.getMessage().contains("verify the column name"));
     }
+  }
+
+  @Test
+  void testGetExistingRecordsLooksUpOnlyTheRequestedFileGroup() {
+    HoodieInstant lastCompleted = mock(HoodieInstant.class);
+    when(lastCompleted.requestedTime()).thenReturn("002");
+    HoodieActiveTimeline activeTimeline = mock(HoodieActiveTimeline.class);
+    HoodieTimeline completedTimeline = mock(HoodieTimeline.class);
+    when(mockMetaClient.getActiveTimeline()).thenReturn(activeTimeline);
+    when(activeTimeline.filterCompletedInstants()).thenReturn(completedTimeline);
+    when(completedTimeline.lastInstant()).thenReturn(Option.of(lastCompleted));
+    SyncableFileSystemView view = mock(SyncableFileSystemView.class);
+    when(view.getLatestMergedFileSliceBeforeOrOn(anyString(), anyString(), anyString())).thenReturn(Option.empty());
+    HoodieTable table = mock(HoodieTable.class);
+    when(table.getMetaClient()).thenReturn(mockMetaClient);
+    when(table.getHoodieView()).thenReturn(view);
+
+    List<HoodieRecord<Object>> records = HoodieIndexUtils.<Object>getExistingRecords(
+        HoodieListData.eager(Arrays.asList(Pair.of("p1", "file1"), Pair.of("p1", "file2"))),
+        mock(HoodieWriteConfig.class), table, mock(ReaderContextFactory.class), null).collectAsList();
+
+    assertTrue(records.isEmpty());
+    verify(view).getLatestMergedFileSliceBeforeOrOn("p1", "002", "file1");
+    verify(view).getLatestMergedFileSliceBeforeOrOn("p1", "002", "file2");
+    verify(view, never()).getLatestMergedFileSlicesBeforeOrOn(anyString(), anyString());
+  }
+
+  /**
+   * With the metadata table the base files come from the table's view, loaded in batches after a first read
+   * that syncs the embedded timeline server to the timeline the write handles send later.
+   */
+  @Test
+  void testLatestBaseFilesForAllPartitionsReadTheTableView() {
+    HoodieWriteConfig config = mock(HoodieWriteConfig.class);
+    when(config.isMetadataTableEnabled()).thenReturn(true);
+    when(mockTableConfig.isMetadataTableAvailable()).thenReturn(true);
+    HoodieMetaserverConfig metaserverConfig = mock(HoodieMetaserverConfig.class);
+    when(mockMetaClient.getMetaserverConfig()).thenReturn(metaserverConfig);
+    HoodieInstant lastCompleted = mock(HoodieInstant.class);
+    when(lastCompleted.requestedTime()).thenReturn("002");
+    HoodieTimeline commitsTimeline = mock(HoodieTimeline.class);
+    HoodieTimeline completedCommitsTimeline = mock(HoodieTimeline.class);
+    when(mockMetaClient.getCommitsTimeline()).thenReturn(commitsTimeline);
+    when(commitsTimeline.filterCompletedInstants()).thenReturn(completedCommitsTimeline);
+    when(completedCommitsTimeline.lastInstant()).thenReturn(Option.of(lastCompleted));
+    HoodieBaseFile baseFile = mock(HoodieBaseFile.class);
+    SyncableFileSystemView view = mock(SyncableFileSystemView.class);
+    when(view.getLatestBaseFilesBeforeOrOn(anyString(), eq("002"))).thenAnswer(invocation -> Stream.of(baseFile));
+    HoodieTable table = mock(HoodieTable.class);
+    when(table.getConfig()).thenReturn(config);
+    when(table.getMetaClient()).thenReturn(mockMetaClient);
+    when(table.getHoodieView()).thenReturn(view);
+    // 97 characters with the JSON quotes and separator, so 20 fit in one load request
+    List<String> partitions = IntStream.range(0, 31).mapToObj(i -> String.format("%094d", i)).collect(Collectors.toList());
+    HoodieEngineContext engineContext = mock(HoodieEngineContext.class);
+
+    List<Pair<String, HoodieBaseFile>> baseFiles =
+        HoodieIndexUtils.getLatestBaseFilesForAllPartitions(partitions, engineContext, table);
+
+    assertEquals(partitions, baseFiles.stream().map(Pair::getKey).collect(Collectors.toList()));
+    // The first read syncs the timeline server before the loads, which it does not sync on.
+    InOrder inOrder = inOrder(view);
+    inOrder.verify(view).getLatestBaseFilesBeforeOrOn(partitions.get(0), "002");
+    inOrder.verify(view).loadPartitions(partitions.subList(1, 21));
+    inOrder.verify(view).loadPartitions(partitions.subList(21, 31));
+    inOrder.verify(view).getLatestBaseFilesBeforeOrOn(partitions.get(1), "002");
+    verify(view, never()).loadPartitions(Collections.singletonList(partitions.get(0)));
+    verify(table, never()).refreshAndGetTableMetadata();
+    verifyNoInteractions(engineContext);
   }
 }
