@@ -601,7 +601,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     String rollbackInstant = WriteClientTestUtils.createNewInstantTime();
     BaseRollbackPlanActionExecutor copyOnWriteRollbackPlanActionExecutor =
         new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, rollbackInstant, needRollBackInstant, false,
-            table.getConfig().shouldRollbackUsingMarkers(), false, Option.empty());
+            !table.getConfig().shouldRollbackUsingMarkers(), false, Option.empty());
     copyOnWriteRollbackPlanActionExecutor.execute().get();
 
     // execute CopyOnWriteRollbackActionExecutor with filelisting mode

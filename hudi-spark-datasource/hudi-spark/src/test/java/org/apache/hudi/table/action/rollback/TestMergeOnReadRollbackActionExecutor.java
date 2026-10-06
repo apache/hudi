@@ -612,7 +612,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     HoodieInstant rollBackInstant = INSTANT_GENERATOR.createNewInstant(
         HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, commitTime2);
     BaseRollbackPlanActionExecutor rollbackPlanExecutor = new BaseRollbackPlanActionExecutor(
-        context, cfg, table, rollbackTime, rollBackInstant, false, true, false);
+        context, cfg, table, rollbackTime, rollBackInstant, false, true, false, Option.empty());
     rollbackPlanExecutor.execute().get();
 
     MergeOnReadRollbackActionExecutor rollbackExecutor = new MergeOnReadRollbackActionExecutor(

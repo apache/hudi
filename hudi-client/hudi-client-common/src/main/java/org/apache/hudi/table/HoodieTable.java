@@ -29,6 +29,7 @@ import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
+import org.apache.hudi.client.CommitMetadataProperties;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -706,7 +707,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       transactionManager.beginStateChange(Option.empty(), Option.empty());
       try {
         instantTime = getMetaClient().createNewInstantTime(false);
-        scheduleRollback(context, instantTime, inflightInstant, false, config.shouldRollbackUsingMarkers(), false, Option.empty());
+        scheduleRollback(context, instantTime, inflightInstant, false, config.shouldRollbackUsingMarkers(), false,
+            CommitMetadataProperties.enrich(Option.empty(), config, context));
       } finally {
         transactionManager.endStateChange(Option.empty());
       }
@@ -734,7 +736,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
               -> entry.getRollbackInstant().requestedTime())
           .orElseGet(() -> getMetaClient().createNewInstantTime(false));
       scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers(),
-          false, Option.empty());
+          false, CommitMetadataProperties.enrich(Option.empty(), config, context));
     } finally {
       transactionManager.endStateChange(Option.empty());
     }

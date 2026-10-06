@@ -47,6 +47,7 @@ import static org.apache.hudi.client.CommitMetadataProperties.WRITE_CONFIG_KEYS_
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -186,7 +187,7 @@ class TestCommitMetadataProperties {
         new HoodieInstantInfo("001", "commit"),
         Collections.emptyList(), 1, null);
 
-    assertEquals(null, plan.getExtraMetadata());
+    assertNull(plan.getExtraMetadata());
   }
 
   @Test
@@ -214,7 +215,7 @@ class TestCommitMetadataProperties {
     HoodieRollbackMetadata metadata = TimelineMetadataUtils.convertRollbackMetadata(
         "002", Option.of(100L), Collections.singletonList(instant), Collections.emptyList());
 
-    assertEquals(null, metadata.getExtraMetadata());
+    assertNull(metadata.getExtraMetadata());
   }
 
   @Test
@@ -236,7 +237,7 @@ class TestCommitMetadataProperties {
     HoodieSavepointMetadata metadata = TimelineMetadataUtils.convertSavepointMetadata(
         "user", "test comment", Collections.emptyMap());
 
-    assertEquals(null, metadata.getExtraMetadata());
+    assertNull(metadata.getExtraMetadata());
   }
 
   @Test
@@ -275,7 +276,7 @@ class TestCommitMetadataProperties {
     HoodieRestoreMetadata metadata = TimelineMetadataUtils.convertRestoreMetadata(
         "002", 100L, Collections.singletonList(instant), Collections.emptyMap());
 
-    assertEquals(null, metadata.getExtraMetadata());
+    assertNull(metadata.getExtraMetadata());
   }
 
   private static HoodieWriteConfig newConfig(Properties overrides) {
