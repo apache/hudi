@@ -51,7 +51,7 @@ import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
-import org.apache.hudi.keygen.{BaseKeyGenerator, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
+import org.apache.hudi.keygen.{BaseKeyGenerator, KeyGenUtils, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.metrics.Metrics
 import org.apache.hudi.storage.HoodieStorage
 import org.apache.hudi.sync.common.HoodieSyncConfig
@@ -291,6 +291,7 @@ class HoodieSparkSqlWriterInternal {
           .setPartitionFields(partitionColumns)
           .setPopulateMetaFields(populateMetaFields)
           .setRecordKeyFields(hoodieConfig.getString(RECORDKEY_FIELD))
+          .setComplexKeyGenEncoding(KeyGenUtils.getDeclaredComplexKeyGenEncoding(new TypedProperties(hoodieConfig.getProps)))
           .setCDCEnabled(hoodieConfig.getBooleanOrDefault(HoodieTableConfig.CDC_ENABLED))
           .setCDCSupplementalLoggingMode(hoodieConfig.getStringOrDefault(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE))
           .setKeyGeneratorClassProp(hoodieConfig.getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key))
@@ -342,19 +343,6 @@ class HoodieSparkSqlWriterInternal {
         operation match {
           case WriteOperationType.DELETE | WriteOperationType.DELETE_PREPPED =>
             mayBeValidateParamsForAutoGenerationOfRecordKeys(parameters, hoodieConfig)
-            val genericRecords = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace)
-            // Convert to RDD[HoodieKey]
-            val hoodieKeysAndLocationsToDelete = genericRecords.mapPartitions(it => {
-              val keyGenerator: Option[BaseKeyGenerator] = if (preppedSparkSqlWrites || preppedWriteOperation) {
-                None
-              } else {
-                Some(HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(hoodieConfig.getProps))
-                  .asInstanceOf[BaseKeyGenerator])
-              }
-              it.map { avroRec =>
-                HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, avroRec, preppedSparkSqlWrites || preppedWriteOperation, preppedSparkSqlWrites || preppedSparkSqlMergeInto || preppedWriteOperation)
-              }
-            }).toJavaRDD()
 
             if (!tableExists) {
               throw new HoodieException(s"hoodie table at $basePath does not exist")
@@ -364,7 +352,7 @@ class HoodieSparkSqlWriterInternal {
             val internalSchemaOpt = HoodieSchemaUtils.getLatestTableInternalSchema(hoodieConfig, tableMetaClient)
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
               null, path, tblName,
-                (addSchemaEvolutionParameters(parameters, internalSchemaOpt) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key).asJava))
+                (addSchemaEvolutionParameters(parameters, internalSchemaOpt) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key).asJava, true))
               .asInstanceOf[SparkRDDWriteClient[_]]
 
             if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
@@ -373,6 +361,21 @@ class HoodieSparkSqlWriterInternal {
             if (isAsyncClusteringEnabled(client, parameters)) {
               streamingWritesParamsOpt.map(_.asyncClusteringTriggerFn.get.apply(client))
             }
+
+            // The client carries the table's record key encoding, recorded when it was created if it was missing.
+            val deleteKeyGenProps = new TypedProperties(client.getConfig.getProps)
+            val genericRecords = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace)
+            // Convert to RDD[HoodieKey]
+            val hoodieKeysAndLocationsToDelete = genericRecords.mapPartitions(it => {
+              val keyGenerator: Option[BaseKeyGenerator] = if (preppedSparkSqlWrites || preppedWriteOperation) {
+                None
+              } else {
+                Some(HoodieSparkKeyGeneratorFactory.createKeyGenerator(deleteKeyGenProps).asInstanceOf[BaseKeyGenerator])
+              }
+              it.map { avroRec =>
+                HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, avroRec, preppedSparkSqlWrites || preppedWriteOperation, preppedSparkSqlWrites || preppedSparkSqlMergeInto || preppedWriteOperation)
+              }
+            }).toJavaRDD()
 
             // Issue deletes
             client.startCommitWithTime(instantTime, commitActionType)
@@ -447,7 +450,7 @@ class HoodieSparkSqlWriterInternal {
               // Apply legacy format override for small-precision decimals so Parquet files can be read by AvroParquetReader
               DataSourceUtils.tryOverrideParquetWriteLegacyFormatProperty(finalOpts.asJava, convertAvroSchemaToStructType(writerSchema))
               // TODO(HUDI-4772) proper writer-schema has to be specified here
-              DataSourceUtils.createHoodieClient(jsc, processedDataSchema.toString, path, tblName, finalOpts.asJava)
+              DataSourceUtils.createHoodieClient(jsc, processedDataSchema.toString, path, tblName, finalOpts.asJava, true)
             }
 
             if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
@@ -461,6 +464,10 @@ class HoodieSparkSqlWriterInternal {
             // Short-circuit if bulk_insert via row is enabled.
             // scalastyle:off
             if (hoodieConfig.getBoolean(ENABLE_ROW_WRITER) && operation == WriteOperationType.BULK_INSERT) {
+              // the row writer builds its own write config from hoodieConfig: hand it the table's record key encoding
+              if (client.getConfig.contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING)) {
+                hoodieConfig.setValue(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING, client.getConfig.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING))
+              }
               return bulkInsertAsRow(client, parameters, hoodieConfig, df, mode, tblName, basePath,
                 instantTime, writerSchema, tableConfig)
             }
@@ -845,6 +852,7 @@ class HoodieSparkSqlWriterInternal {
           .setTableType(HoodieTableType.valueOf(tableType))
           .setTableName(tableName)
           .setRecordKeyFields(recordKeyFields)
+          .setComplexKeyGenEncoding(KeyGenUtils.getDeclaredComplexKeyGenEncoding(new TypedProperties(hoodieConfig.getProps)))
           .setArchiveLogFolder(archiveLogFolder)
           .setPayloadClassName(hoodieConfig.getStringOrDefault(PAYLOAD_CLASS_NAME))
           .setPreCombineField(hoodieConfig.getStringOrDefault(PRECOMBINE_FIELD, null))
@@ -866,7 +874,7 @@ class HoodieSparkSqlWriterInternal {
 
       val jsc = new JavaSparkContext(sqlContext.sparkContext)
       val writeClient = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
-        schema, path, tableName, parameters.asJava))
+        schema, path, tableName, parameters.asJava, true))
       try {
         writeClient.bootstrap(org.apache.hudi.common.util.Option.empty())
       } finally {

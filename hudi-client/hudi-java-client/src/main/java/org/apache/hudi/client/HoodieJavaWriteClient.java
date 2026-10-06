@@ -53,6 +53,15 @@ import java.util.stream.Collectors;
 public class HoodieJavaWriteClient<T> extends
     BaseHoodieWriteClient<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
 
+  /**
+   * The Java client has no ingestion setup of its own: callers key their records with this client's config, so
+   * the client records the encoding of a table that predates it from the table's data.
+   */
+  @Override
+  protected boolean recordsComplexKeyGenEncodingFromData() {
+    return true;
+  }
+
   public HoodieJavaWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
     super(context, writeConfig, JavaUpgradeDowngradeHelper.getInstance());
     this.tableServiceClient = new HoodieJavaTableServiceClient<>(context, writeConfig, getTimelineServer());

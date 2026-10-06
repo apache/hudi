@@ -85,6 +85,15 @@ public class HoodieFlinkWriteClient<T> extends
    */
   private final Map<String, Path> bucketToHandles;
 
+  /**
+   * Flink keys records in its operators with the job configuration, which takes the table's recorded encoding when
+   * the job is planned, so the client records the encoding of a table that predates it from the table's data.
+   */
+  @Override
+  protected boolean recordsComplexKeyGenEncodingFromData() {
+    return true;
+  }
+
   public HoodieFlinkWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
     super(context, writeConfig, FlinkUpgradeDowngradeHelper.getInstance());
     this.bucketToHandles = new HashMap<>();

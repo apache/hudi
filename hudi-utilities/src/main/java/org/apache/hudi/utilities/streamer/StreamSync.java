@@ -409,6 +409,7 @@ public class StreamSync implements Serializable, Closeable {
         .setBaseFileFormat(cfg.baseFileFormat)
         .setPartitionFields(partitionColumns)
         .setRecordKeyFields(props.getProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key()))
+        .setComplexKeyGenEncoding(KeyGenUtils.getDeclaredComplexKeyGenEncoding(props))
         .setPopulateMetaFields(props.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key(),
             HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))
         .setKeyGeneratorClassProp(keyGenClassName)
@@ -584,6 +585,8 @@ public class StreamSync implements Serializable, Closeable {
     // handle empty batch with change in checkpoint
     hoodieSparkContext.setJobStatus(this.getClass().getSimpleName(), "Checking if input is empty: " + cfg.targetTableName);
 
+    // the records are keyed below, before the write client exists, so the encoding is settled here
+    applyComplexKeyGenEncoding(metaClient);
     if (useRowWriter) { // no additional processing required for row writer.
       return inputBatch;
     } else {
@@ -1065,6 +1068,22 @@ public class StreamSync implements Serializable, Closeable {
     } else {
       LOG.info("[MetaSync] SyncTool class {} completed successfully {}", impl.trim(), timeString);
     }
+  }
+
+  /**
+   * Records the record key encoding of a single-field complex key generator table that predates it, and puts the
+   * table's encoding on the props every key generator and write config of this sync is built from, so that records
+   * are keyed the way the table stores them rather than the way a write option of the same name says.
+   */
+  private void applyComplexKeyGenEncoding(HoodieTableMetaClient metaClient) {
+    if (metaClient == null || !KeyGenUtils.requireComplexKeyGenEncodingTracked(metaClient.getTableConfig())) {
+      return;
+    }
+    if (!metaClient.getTableConfig().getComplexKeyGenEncoding().isPresent()) {
+      KeyGenUtils.recordComplexKeygenEncodingIfMissing(metaClient, getHoodieClientConfig());
+    }
+    metaClient.getTableConfig().getComplexKeyGenEncoding().ifPresent(encoding ->
+        props.setProperty(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), encoding.name()));
   }
 
   /**
