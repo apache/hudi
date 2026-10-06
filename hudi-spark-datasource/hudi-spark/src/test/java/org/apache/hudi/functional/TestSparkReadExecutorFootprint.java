@@ -74,10 +74,13 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import scala.util.Properties;
+
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -141,26 +144,38 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
   }
 
   /**
-   * What every task of a read may deserialize: the task binary, the Java-serialized closure, and the
-   * largest task stream, which is the larger of the binary and the task with its partition. Any state
-   * added to the closure or to a task's partition is paid again by every task, so the budgets are about
-   * 1.4x the largest sizes measured on Spark 3.5 (Scala 2.12) and Spark 4.0 (Scala 2.13), whatever the
-   * state is. A read that returns columnar batches of base files measures larger than a read that
-   * returns rows.
+   * The kind of read a task size budget applies to: a read that returns columnar batches of base
+   * files measures larger than a read that returns rows.
    */
-  enum TaskBudget {
-    // measured: task binary 17555 (Spark 3.5) to 18524 (Spark 4.0) bytes, largest task stream 18647 to 19457 bytes
-    COLUMNAR_READ(26 * 1024, 28 * 1024),
-    // measured: task binary 10205 to 12434 bytes, largest task stream 12225 to 13618 bytes
-    ROW_READ(18 * 1024, 20 * 1024);
+  enum ReadShape {
+    COLUMNAR, ROW
+  }
 
-    private final long maxTaskBinaryBytes;
-    private final long maxTaskStreamBytes;
+  /**
+   * What every task of a read may deserialize, by Spark and Scala binary version: the task binary,
+   * the Java-serialized closure, and the largest task stream, which is the larger of the binary and
+   * the task with its partition. Any state added to the closure or to a task's partition is paid
+   * again by every task, whatever the state is. Spark and Scala versions serialize the plan
+   * differently, so each budget is about 1.1x the largest size measured on that version, given as
+   * task binary / task stream bytes.
+   */
+  private static final Map<String, TaskBudgets> TASK_BUDGETS = new HashMap<>();
 
-    TaskBudget(long maxTaskBinaryBytes, long maxTaskStreamBytes) {
-      this.maxTaskBinaryBytes = maxTaskBinaryBytes;
-      this.maxTaskStreamBytes = maxTaskStreamBytes;
-    }
+  static {
+    // measured: columnar 15587 / 16679, row 9787 / 12233
+    TASK_BUDGETS.put("3.3_2.12", new TaskBudgets(17152, 18432, 11008, 13568));
+    // measured: columnar 15968 / 17060, row 10040 / 12367
+    TASK_BUDGETS.put("3.4_2.12", new TaskBudgets(17664, 18944, 11264, 13824));
+    // measured: columnar 17555 / 18647, row 11051 / 12488
+    TASK_BUDGETS.put("3.5_2.12", new TaskBudgets(19456, 20736, 12288, 13824));
+    // measured: columnar 17766 / 18989, row 11212 / 12793
+    TASK_BUDGETS.put("3.5_2.13", new TaskBudgets(19712, 20992, 12544, 14080));
+    // measured: columnar 18524 / 19457, row 12434 / 13618
+    TASK_BUDGETS.put("4.0_2.13", new TaskBudgets(20480, 21504, 13824, 15104));
+    // measured: columnar 18491 / 19424, row 12401 / 13618
+    TASK_BUDGETS.put("4.1_2.13", new TaskBudgets(20480, 21504, 13824, 15104));
+    // measured: columnar 18778 / 19712, row 12706 / 13812
+    TASK_BUDGETS.put("4.2_2.13", new TaskBudgets(20736, 21760, 14080, 15360));
   }
 
   enum ReadQuery {
@@ -237,19 +252,19 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
 
   static Stream<Arguments> readsForDeserialization() {
     return Stream.of(
-        Arguments.of(CURRENT_VERSION, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.SNAPSHOT, TaskBudget.COLUMNAR_READ),
-        Arguments.of(6, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.SNAPSHOT, TaskBudget.COLUMNAR_READ),
-        Arguments.of(CURRENT_VERSION, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.INCREMENTAL, TaskBudget.ROW_READ),
-        Arguments.of(6, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.INCREMENTAL, TaskBudget.ROW_READ),
-        Arguments.of(CURRENT_VERSION, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.TIME_TRAVEL, TaskBudget.COLUMNAR_READ),
-        Arguments.of(6, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.TIME_TRAVEL, TaskBudget.COLUMNAR_READ),
-        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.SNAPSHOT, TaskBudget.ROW_READ),
-        Arguments.of(6, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.SNAPSHOT, TaskBudget.ROW_READ),
-        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.READ_OPTIMIZED, TaskBudget.COLUMNAR_READ),
-        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.INCREMENTAL, TaskBudget.ROW_READ),
-        Arguments.of(6, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.INCREMENTAL, TaskBudget.ROW_READ),
-        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.TIME_TRAVEL, TaskBudget.ROW_READ),
-        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.CDC, ReadQuery.CDC, TaskBudget.ROW_READ));
+        Arguments.of(CURRENT_VERSION, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.SNAPSHOT, ReadShape.COLUMNAR),
+        Arguments.of(6, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.SNAPSHOT, ReadShape.COLUMNAR),
+        Arguments.of(CURRENT_VERSION, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.INCREMENTAL, ReadShape.ROW),
+        Arguments.of(6, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.INCREMENTAL, ReadShape.ROW),
+        Arguments.of(CURRENT_VERSION, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.TIME_TRAVEL, ReadShape.COLUMNAR),
+        Arguments.of(6, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.TIME_TRAVEL, ReadShape.COLUMNAR),
+        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.SNAPSHOT, ReadShape.ROW),
+        Arguments.of(6, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.SNAPSHOT, ReadShape.ROW),
+        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.READ_OPTIMIZED, ReadShape.COLUMNAR),
+        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.INCREMENTAL, ReadShape.ROW),
+        Arguments.of(6, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.INCREMENTAL, ReadShape.ROW),
+        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.TIME_TRAVEL, ReadShape.ROW),
+        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.CDC, ReadQuery.CDC, ReadShape.ROW));
   }
 
   @ParameterizedTest(name = "[{index}] version={0}, type={1}, query={2}, metadata={3}")
@@ -280,10 +295,14 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
    * Tasks must not deserialize the meta client, timeline, Hadoop configuration, write config or the
    * file format with their closure, and what every task deserializes must stay within budget.
    */
-  @ParameterizedTest(name = "[{index}] version={0}, type={1}, table={2}, query={3}, budget={4}")
+  @ParameterizedTest(name = "[{index}] version={0}, type={1}, table={2}, query={3}, shape={4}")
   @MethodSource("readsForDeserialization")
   void testTaskDeserializationFootprint(int tableVersion, HoodieTableType tableType, TableKind kind, ReadQuery query,
-                                        TaskBudget budget) {
+                                        ReadShape shape) {
+    String sparkVersion = sparkAndScalaBinaryVersion();
+    TaskBudgets budgets = TASK_BUDGETS.get(sparkVersion);
+    assertNotNull(budgets, "No task size budget for Spark and Scala " + sparkVersion
+        + "; add one from the task sizes this test logs for each read");
     TestTable table = getOrWriteTable(tableVersion, tableType, kind);
     Dataset<Row> df = read(table, query, new HashMap<>());
     // Plan and list files on the driver first, so that the recorded window holds only the scan.
@@ -296,8 +315,8 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
     log.info("{} read of {}: task binary {} bytes, largest task stream seen {} bytes, stages kept {}, ignored {}",
         query, table.name, taskBinary.getBytes(), result.getMaxStreamBytes(), result.getKeptScopes(), result.getIgnoredScopes());
     SparkExecutorGuards.assertTaskDeserializationFootprint(
-        table.name + " " + query + " read", result, taskBinary, CLASSES_NOT_DESERIALIZED_PER_TASK,
-        budget.maxTaskBinaryBytes, budget.maxTaskStreamBytes);
+        table.name + " " + query + " read on Spark and Scala " + sparkVersion, result, taskBinary,
+        CLASSES_NOT_DESERIALIZED_PER_TASK, budgets.maxTaskBinaryBytes(shape), budgets.maxTaskStreamBytes(shape));
   }
 
   /**
@@ -460,8 +479,40 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
     }
   }
 
+  /**
+   * The running Spark version and Scala binary version, such as {@code 3.5_2.12}.
+   */
+  private String sparkAndScalaBinaryVersion() {
+    String[] spark = spark().version().split("\\.");
+    String[] scala = Properties.versionNumberString().split("\\.");
+    return spark[0] + "." + spark[1] + "_" + scala[0] + "." + scala[1];
+  }
+
   private static String key(int i) {
     return String.format("key%03d", i);
+  }
+
+  private static final class TaskBudgets {
+    private final long columnarTaskBinaryBytes;
+    private final long columnarTaskStreamBytes;
+    private final long rowTaskBinaryBytes;
+    private final long rowTaskStreamBytes;
+
+    private TaskBudgets(long columnarTaskBinaryBytes, long columnarTaskStreamBytes, long rowTaskBinaryBytes,
+                        long rowTaskStreamBytes) {
+      this.columnarTaskBinaryBytes = columnarTaskBinaryBytes;
+      this.columnarTaskStreamBytes = columnarTaskStreamBytes;
+      this.rowTaskBinaryBytes = rowTaskBinaryBytes;
+      this.rowTaskStreamBytes = rowTaskStreamBytes;
+    }
+
+    private long maxTaskBinaryBytes(ReadShape shape) {
+      return shape == ReadShape.COLUMNAR ? columnarTaskBinaryBytes : rowTaskBinaryBytes;
+    }
+
+    private long maxTaskStreamBytes(ReadShape shape) {
+      return shape == ReadShape.COLUMNAR ? columnarTaskStreamBytes : rowTaskStreamBytes;
+    }
   }
 
   private static final class TestTable {
