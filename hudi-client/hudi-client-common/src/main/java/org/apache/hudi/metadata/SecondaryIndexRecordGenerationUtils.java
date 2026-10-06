@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -118,14 +119,17 @@ public class SecondaryIndexRecordGenerationUtils {
     }
 
     HoodieSchema tableSchema = resolveTableSchema(dataMetaClient, commitMetadata);
-    Map<String, List<HoodieWriteStat>> writeStatsByFileId = allWriteStats.stream().collect(Collectors.groupingBy(HoodieWriteStat::getFileId));
-    int parallelism = Math.max(Math.min(writeStatsByFileId.size(), metadataConfig.getSecondaryIndexParallelism()), 1);
+    // a file group is identified by its partition and file id, the file id alone is only unique within a partition for files
+    // written outside Hudi, e.g. Spark names a file part-00048-<job uuid> in every partition its task writes
+    Map<HoodieFileGroupId, List<HoodieWriteStat>> writeStatsByFileGroupId = allWriteStats.stream()
+        .collect(Collectors.groupingBy(writeStat -> new HoodieFileGroupId(writeStat.getPartitionPath(), writeStat.getFileId())));
+    int parallelism = Math.max(Math.min(writeStatsByFileGroupId.size(), metadataConfig.getSecondaryIndexParallelism()), 1);
 
     ReaderContextFactory<T> readerContextFactory = engineContext.getReaderContextFactory(dataMetaClient);
-    HoodieData<HoodieRecord> secondaryIndexRecords = engineContext.parallelize(new ArrayList<>(writeStatsByFileId.entrySet()), parallelism).flatMap(writeStatsByFileIdEntry -> {
-      String fileId = writeStatsByFileIdEntry.getKey();
-      List<HoodieWriteStat> writeStats = writeStatsByFileIdEntry.getValue();
-      String partition = writeStats.get(0).getPartitionPath();
+    HoodieData<HoodieRecord> secondaryIndexRecords = engineContext.parallelize(new ArrayList<>(writeStatsByFileGroupId.entrySet()), parallelism).flatMap(writeStatsByFileGroupIdEntry -> {
+      String fileId = writeStatsByFileGroupIdEntry.getKey().getFileId();
+      List<HoodieWriteStat> writeStats = writeStatsByFileGroupIdEntry.getValue();
+      String partition = writeStatsByFileGroupIdEntry.getKey().getPartitionPath();
       StoragePath basePath = dataMetaClient.getBasePath();
 
       // validate that for a given fileId, either we have 1 parquet file or N log files.
@@ -209,7 +213,7 @@ public class SecondaryIndexRecordGenerationUtils {
       // a replace commit without a known operation type registers files written outside Hudi and drops the replaced
       // file groups without rewriting their records under the same key
       secondaryIndexRecords = secondaryIndexRecords.union(convertReplacedFileGroupsToSecondaryIndexRecords(
-          (HoodieReplaceCommitMetadata) commitMetadata, writeStatsByFileId.keySet(), instantTime, indexDefinition, metadataConfig,
+          (HoodieReplaceCommitMetadata) commitMetadata, writeStatsByFileGroupId.keySet(), instantTime, indexDefinition, metadataConfig,
           dataMetaClient, engineContext, writeConfig, tableSchema));
     }
 
@@ -253,7 +257,7 @@ public class SecondaryIndexRecordGenerationUtils {
    * A table without record keys never writes a file group it replaces, because the record index rejects such a commit.
    */
   private static <T> HoodieData<HoodieRecord> convertReplacedFileGroupsToSecondaryIndexRecords(HoodieReplaceCommitMetadata replaceCommitMetadata,
-                                                                                               Set<String> writtenFileIds,
+                                                                                               Set<HoodieFileGroupId> writtenFileGroupIds,
                                                                                                String instantTime,
                                                                                                HoodieIndexDefinition indexDefinition,
                                                                                                HoodieMetadataConfig metadataConfig,
@@ -263,7 +267,7 @@ public class SecondaryIndexRecordGenerationUtils {
                                                                                                HoodieSchema tableSchema) {
     List<Pair<String, String>> replacedFileGroups = replaceCommitMetadata.getPartitionToReplaceFileIds().entrySet().stream()
         .flatMap(partitionAndFileIds -> partitionAndFileIds.getValue().stream()
-            .filter(fileId -> !writtenFileIds.contains(fileId))
+            .filter(fileId -> !writtenFileGroupIds.contains(new HoodieFileGroupId(partitionAndFileIds.getKey(), fileId)))
             .map(fileId -> Pair.of(partitionAndFileIds.getKey(), fileId)))
         .collect(Collectors.toList());
     if (replacedFileGroups.isEmpty()) {
