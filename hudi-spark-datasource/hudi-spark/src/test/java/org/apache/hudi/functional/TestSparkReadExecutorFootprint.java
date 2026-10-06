@@ -70,6 +70,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -133,6 +134,7 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
       DataTypes.createStructField("value", DataTypes.StringType, true)});
 
   private static final String VECTORIZED_READER_ENABLED = "spark.sql.parquet.enableVectorizedReader";
+  private static final String DATA_SKIPPING_FAILURE_MODE = "hoodie.fileIndex.dataSkippingFailureMode";
 
   private static final Map<String, TestTable> TABLES = new HashMap<>();
 
@@ -250,21 +252,41 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
         Arguments.of(version, MERGE_ON_READ, TableKind.PARQUET_LOG_BLOCKS)));
   }
 
+  /**
+   * Every query on both table versions and types, except the CDC read of a version 6 MERGE_ON_READ
+   * table, see {@link #cdcTableVersionsAndTypes}.
+   */
   static Stream<Arguments> readsForDeserialization() {
-    return Stream.of(
-        Arguments.of(CURRENT_VERSION, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.SNAPSHOT, ReadShape.COLUMNAR),
-        Arguments.of(6, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.SNAPSHOT, ReadShape.COLUMNAR),
-        Arguments.of(CURRENT_VERSION, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.INCREMENTAL, ReadShape.ROW),
-        Arguments.of(6, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.INCREMENTAL, ReadShape.ROW),
-        Arguments.of(CURRENT_VERSION, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.TIME_TRAVEL, ReadShape.COLUMNAR),
-        Arguments.of(6, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.TIME_TRAVEL, ReadShape.COLUMNAR),
-        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.SNAPSHOT, ReadShape.ROW),
-        Arguments.of(6, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.SNAPSHOT, ReadShape.ROW),
-        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.READ_OPTIMIZED, ReadShape.COLUMNAR),
-        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.INCREMENTAL, ReadShape.ROW),
-        Arguments.of(6, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.INCREMENTAL, ReadShape.ROW),
-        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.TIME_TRAVEL, ReadShape.ROW),
-        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.CDC, ReadQuery.CDC, ReadShape.ROW));
+    List<Arguments> args = new ArrayList<>();
+    for (int version : new int[] {6, CURRENT_VERSION}) {
+      for (HoodieTableType type : HoodieTableType.values()) {
+        for (ReadQuery query : ReadQuery.values()) {
+          if ((query == ReadQuery.READ_OPTIMIZED && type == COPY_ON_WRITE)
+              || (query == ReadQuery.CDC && version == 6 && type == MERGE_ON_READ)) {
+            continue;
+          }
+          TableKind kind = query == ReadQuery.CDC ? TableKind.CDC : TableKind.PLAIN;
+          args.add(Arguments.of(version, type, kind, query, readShape(type, query)));
+        }
+      }
+    }
+    return args.stream();
+  }
+
+  /**
+   * A read returns columnar batches when it scans only base files: snapshot reads of COPY_ON_WRITE
+   * tables, read optimized reads, and time travel to the first commit, before any log file.
+   */
+  private static ReadShape readShape(HoodieTableType type, ReadQuery query) {
+    switch (query) {
+      case READ_OPTIMIZED:
+      case TIME_TRAVEL:
+        return ReadShape.COLUMNAR;
+      case SNAPSHOT:
+        return type == COPY_ON_WRITE ? ReadShape.COLUMNAR : ReadShape.ROW;
+      default:
+        return ReadShape.ROW;
+    }
   }
 
   @ParameterizedTest(name = "[{index}] version={0}, type={1}, query={2}, metadata={3}")
@@ -335,8 +357,11 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
 
   /**
    * With data skipping, file pruning consults the column stats in the metadata table on the driver.
-   * The tasks of the scan must still not access {@code .hoodie} of either table. A column stats lookup
-   * forced onto the engine reads the metadata table from the executors by design and is not covered.
+   * The tasks of the scan must still not access {@code .hoodie} of either table. Every partition holds
+   * the keys {@code i} with the same {@code i % NUM_PARTITIONS}, so a lookup of the first key prunes the
+   * files of all partitions but the first by their key ranges; strict mode fails the read if data
+   * skipping cannot be applied. A column stats lookup forced onto the engine reads the metadata table
+   * from the executors by design and is not covered.
    */
   @ParameterizedTest(name = "[{index}] version={0}, type={1}")
   @MethodSource("tableVersionsAndTypes")
@@ -344,12 +369,25 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
     TestTable table = getOrWriteTable(tableVersion, tableType, TableKind.PLAIN);
     Map<String, String> options = new HashMap<>();
     options.put(DataSourceReadOptions.ENABLE_DATA_SKIPPING().key(), "true");
-    List<Row> rows = SparkExecutorGuards.assertNoExecutorMetaFolderAccess(
-        table.name + " snapshot read with data skipping",
-        () -> read(table, ReadQuery.SNAPSHOT, options).filter("value = 'v2'").collectAsList());
-    assertEquals(NUM_UPDATED_RECORDS, rows.size());
+    List<Row> rows;
+    spark().conf().set(DATA_SKIPPING_FAILURE_MODE, "strict");
+    try {
+      rows = SparkExecutorGuards.assertNoExecutorMetaFolderAccess(
+          table.name + " snapshot read with data skipping",
+          () -> read(table, ReadQuery.SNAPSHOT, options).filter("key = '" + key(0) + "'").collectAsList());
+    } finally {
+      spark().conf().unset(DATA_SKIPPING_FAILURE_MODE);
+    }
+    assertEquals(1, rows.size());
     assertTrue(RecordingLocalFileSystem.count(Call.inScope().negate().and(Call.pathContains("/.hoodie/metadata/column_stats/"))) > 0,
         table.name + ": the driver must read the column stats index for the read to exercise data skipping");
+    assertTrue(RecordingLocalFileSystem.count(Call.inScope().and(Call.pathContains("/p0/"))) > 0,
+        table.name + ": the tasks must read the files of the partition that holds the key");
+    Predicate<Call> prunedFileAccess = Call.inScope().and(
+        IntStream.range(1, NUM_PARTITIONS).mapToObj(i -> Call.pathContains("/p" + i + "/")).reduce(call -> false, Predicate::or));
+    assertEquals(0, RecordingLocalFileSystem.count(prunedFileAccess),
+        table.name + ": data skipping must prune the files of the partitions without the key, but the tasks read:\n"
+            + RecordingLocalFileSystem.describe(prunedFileAccess));
   }
 
   private Dataset<Row> read(TestTable table, ReadQuery query, Map<String, String> options) {
@@ -362,7 +400,7 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
         reader.option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL());
         break;
       case TIME_TRAVEL:
-        reader.option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT().key(), table.lastInstant.requestedTime());
+        reader.option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT().key(), table.firstInstant.requestedTime());
         break;
       case INCREMENTAL:
       case CDC:
