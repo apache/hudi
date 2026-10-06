@@ -18,7 +18,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{DataSourceUtils, DataSourceWriteOptions, HoodieWriterUtils}
+import org.apache.hudi.{DataSourceUtils, DataSourceWriteOptions, HoodieWriterUtils, ScalaAssertionSupport}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.testutils.HoodieTestUtils
@@ -32,7 +32,7 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql.{DataFrame, SaveMode}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
 import scala.collection.JavaConverters._
 import scala.io.Source
@@ -45,7 +45,7 @@ import scala.io.Source
  * writer would choose. The next write must deduce the encoding the data carries, record it, and keep matching the
  * existing keys; new tables record the encoding their writer produces.
  */
-class TestComplexKeyGenEncoding extends HoodieSparkClientTestBase {
+class TestComplexKeyGenEncoding extends HoodieSparkClientTestBase with ScalaAssertionSupport {
 
   @BeforeEach
   override def setUp(): Unit = {
@@ -177,8 +177,9 @@ class TestComplexKeyGenEncoding extends HoodieSparkClientTestBase {
     assertEquals(Some(ComplexKeyGenEncoding.VALUE_ONLY.name), persistedEncoding())
 
     // once recorded, a contradicting option is a table config conflict and nothing is written
-    val thrown = assertThrows(classOf[Throwable], () =>
-      upsertFixtureRecords(opts + (HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key -> ComplexKeyGenEncoding.FIELD_PREFIXED.name), 20000L))
+    val thrown = assertThrows(classOf[Throwable]) {
+      upsertFixtureRecords(opts + (HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key -> ComplexKeyGenEncoding.FIELD_PREFIXED.name), 20000L)
+    }
     assertTrue(rootCauses(thrown).exists(t => Option(t.getMessage).exists(_.contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key))),
       s"Expected a config conflict on the encoding, got: ${rootCauses(thrown).map(_.getMessage).mkString(" | ")}")
     assertEquals((8L, 8L, 8L, 0L), keyStatsRaw())
@@ -240,7 +241,9 @@ class TestComplexKeyGenEncoding extends HoodieSparkClientTestBase {
     val opts = loadBareFixture()
     assertTrue(corruptDataFiles(name => name.endsWith(".parquet") || name.contains(".log.")) > 0)
 
-    val thrown = assertThrows(classOf[Throwable], () => upsertFixtureRecords(opts, 10000L))
+    val thrown = assertThrows(classOf[Throwable]) {
+      upsertFixtureRecords(opts, 10000L)
+    }
     assertTrue(rootCauses(thrown).exists(t => Option(t.getMessage).exists(_.contains("complex key generator with a single record key field"))),
       s"Expected the complex keygen guidance, got: ${rootCauses(thrown).map(_.getMessage).mkString(" | ")}")
     assertEquals(None, persistedEncoding(), "Nothing is recorded when the encoding stays undetermined")
