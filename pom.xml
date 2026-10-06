@@ -922,12 +922,6 @@
         <version>${fasterxml.version}</version>
       </dependency>
 
-      <dependency>
-        <groupId>com.fasterxml.jackson.module</groupId>
-        <artifactId>jackson-module-afterburner</artifactId>
-        <version>${fasterxml.jackson.databind.version}</version>
-      </dependency>
-
       <!-- Glassfish -->
       <dependency>
         <groupId>org.glassfish.jersey.core</groupId>

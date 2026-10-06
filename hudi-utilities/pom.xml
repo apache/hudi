@@ -167,7 +167,6 @@
     <dependency>
       <groupId>org.apache.httpcomponents</groupId>
       <artifactId>httpcore</artifactId>
-      <version>${aws.sdk.httpcore.version}</version>
     </dependency>
 
     <dependency>
@@ -414,12 +413,6 @@
       <groupId>org.apache.kafka</groupId>
       <artifactId>kafka-streams-test-utils</artifactId>
       <scope>test</scope>
-    </dependency>
-
-    <!-- Httpcomponents -->
-    <dependency>
-      <groupId>org.apache.httpcomponents</groupId>
-      <artifactId>httpcore</artifactId>
     </dependency>
 
     <!-- Hadoop -->

@@ -22,14 +22,21 @@ package org.apache.spark.sql.execution.datasources.parquet
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaField, HoodieSchemaType}
 import org.apache.hudi.common.schema.internal.InternalSchema
 import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter
+import org.apache.hudi.common.util
 import org.apache.hudi.exception.HoodieException
 
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
+import org.apache.parquet.filter2.compat.FilterCompat
+import org.apache.parquet.filter2.predicate.{FilterApi, FilterPredicate}
+import org.apache.parquet.hadoop.ParquetInputFormat
 import org.apache.parquet.hadoop.metadata.FileMetaData
 import org.apache.parquet.schema.{MessageType, Type, Types}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.spark.sql.execution.datasources.parquet.VariantParquetTestFixtures.{shreddedVariant, stringKeyMap, threeLevelList, twoLevelList, unshreddedVariant}
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.{AlwaysFalse, AlwaysTrue, And, EqualNullSafe, EqualTo, Filter, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Not, Or, StringContains, StringEndsWith, StringStartsWith}
-import org.apache.spark.sql.types.{ArrayType, BinaryType, IntegerType, MapType, MetadataBuilder, StringType, StructField, StructType}
+import org.apache.spark.sql.types.{ArrayType, BinaryType, IntegerType, LongType, MapType, MetadataBuilder, StringType, StructField, StructType}
 import org.junit.jupiter.api.{Assertions, Test}
 
 import java.util.{Arrays, Collections, HashMap}
@@ -385,6 +392,48 @@ class TestParquetSchemaEvolutionUtils {
       ParquetSchemaEvolutionUtils.rebuildFilterFromParquet(untouched, fileSchema, null))
     Assertions.assertSame(untouched,
       ParquetSchemaEvolutionUtils.rebuildFilterFromParquet(untouched, null, null))
+  }
+
+  /**
+   * The read configuration may be shared by other readers: a file that needs its own requested schema or a
+   * pushed filter gets a copy, and any other file reads with the read configuration itself.
+   */
+  @Test
+  def testGetFileReadConfNeverModifiesTheReadConf(): Unit = {
+    val readConf = new Configuration(false)
+    // The flags ParquetToSparkSchemaConverter needs, as SparkParquetReaderBase.read sets them
+    readConf.setBoolean(SQLConf.CASE_SENSITIVE.key, false)
+    readConf.setBoolean(SQLConf.PARQUET_BINARY_AS_STRING.key, false)
+    readConf.setBoolean(SQLConf.PARQUET_INT96_AS_TIMESTAMP.key, true)
+    readConf.setBoolean(SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.key, false)
+    readConf.setBoolean("spark.sql.parquet.inferTimestampNTZ.enabled", true)
+    val requiredSchema = new StructType().add("id", LongType)
+    readConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, requiredSchema.json)
+
+    def fileReadConf(fileType: PrimitiveTypeName, pushedFilter: Option[FilterPredicate]): Configuration =
+      new ParquetSchemaEvolutionUtils(readConf, new Path("/tmp/file.parquet"), requiredSchema, new StructType(), util.Option.empty())
+        .getFileReadConf(footerOf(Types.optional(fileType).named("id")), enableVectorizedReader = false, pushedFilter)
+
+    def pushedFilterOf(conf: Configuration): FilterPredicate = ParquetInputFormat.getFilter(conf) match {
+      case predicate: FilterCompat.FilterPredicateCompat => predicate.getFilterPredicate
+      case _ => null
+    }
+
+    val filter = FilterApi.eq(FilterApi.longColumn("id"), java.lang.Long.valueOf(1L))
+    Assertions.assertSame(readConf, fileReadConf(PrimitiveTypeName.INT64, None))
+    val filtered = fileReadConf(PrimitiveTypeName.INT64, Some(filter))
+    Assertions.assertNotSame(readConf, filtered)
+    Assertions.assertEquals(requiredSchema.json, filtered.get(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA))
+    Assertions.assertEquals(filter, pushedFilterOf(filtered))
+    // An int file read as long gets a copy that requests the int column
+    for (pushedFilter <- Seq(None, Some(filter))) {
+      val promoted = fileReadConf(PrimitiveTypeName.INT32, pushedFilter)
+      Assertions.assertNotSame(readConf, promoted)
+      Assertions.assertEquals(new StructType().add("id", IntegerType).json, promoted.get(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA))
+      Assertions.assertEquals(pushedFilter.orNull, pushedFilterOf(promoted))
+    }
+    Assertions.assertEquals(requiredSchema.json, readConf.get(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA))
+    Assertions.assertNull(pushedFilterOf(readConf))
   }
 
   /** An internal schema over the given top-level columns, in order; field ids are positional. */

@@ -27,7 +27,7 @@ import org.apache.hudi.common.model.{PartitionBucketIndexHashingConfig, WriteOpe
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.schema.internal.InternalSchema
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.table.read.HoodieFileGroupReader
+import org.apache.hudi.common.table.read.{HoodieFileGroupReader, TableState}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util.{Option, ValidationUtils}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig}
@@ -220,6 +220,9 @@ class PartitionBucketIndexManager extends BaseProcedure
         spark.sparkContext.emptyRDD
       } else {
         val latestInstantTime = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get()
+        // Built here, so the tasks carry the table state rather than the meta client
+        val tableState = TableState.snapshotOf(metaClient, true, false)
+        val readerProps = metaClient.getTableConfig.getProps
 
         spark.sparkContext.parallelize(allFileSlice, allFileSlice.size).flatMap(fileSlice => {
           // instantiate other supporting cast
@@ -227,7 +230,7 @@ class PartitionBucketIndexManager extends BaseProcedure
           // instantiate FG reader
           val fileGroupReader = HoodieFileGroupReader.builder()
             .withReaderContext(readerContextFactory.getContext)
-            .withHoodieTableMetaClient(metaClient)
+            .withTableState(tableState)
             .withLatestCommitTime(latestInstantTime.requestedTime())
             .withBaseFileOption(fileSlice.getBaseFile)
             .withLogFiles(fileSlice.getLogFiles)
@@ -235,7 +238,7 @@ class PartitionBucketIndexManager extends BaseProcedure
             .withDataSchema(tableSchemaWithMetaFields)
             .withRequestedSchema(tableSchemaWithMetaFields)
             .withInternalSchemaOpt(internalSchemaOption) // not support evolution of schema for now
-            .withProps(metaClient.getTableConfig.getProps)
+            .withProps(readerProps)
             .withShouldUseRecordPosition(false)
             .build()
           val iterator = fileGroupReader.getClosableIterator

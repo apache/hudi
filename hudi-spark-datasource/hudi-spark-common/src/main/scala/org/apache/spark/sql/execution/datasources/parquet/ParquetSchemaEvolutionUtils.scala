@@ -36,6 +36,9 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+import org.apache.hadoop.mapred.JobConf
+import org.apache.parquet.filter2.predicate.FilterPredicate
+import org.apache.parquet.hadoop.ParquetInputFormat
 import org.apache.parquet.hadoop.metadata.FileMetaData
 import org.apache.parquet.schema.{GroupType, MessageType, Type => ParquetType}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
@@ -50,7 +53,7 @@ import java.time.ZoneId
 
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 
-class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
+class ParquetSchemaEvolutionUtils(readConf: Configuration,
                                   filePath: Path,
                                   requiredSchema: StructType,
                                   partitionSchema: StructType,
@@ -62,14 +65,14 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
 
   private lazy val schemaUtils: HoodieSchemaUtils = sparkAdapter.getSchemaUtils
 
-  private lazy val tablePath: String = sharedConf.get(SparkInternalSchemaConverter.HOODIE_TABLE_PATH)
+  private lazy val tablePath: String = readConf.get(SparkInternalSchemaConverter.HOODIE_TABLE_PATH)
   private lazy val fileSchema: InternalSchema = if (shouldUseInternalSchema) {
     val commitInstantTime = FSUtils.getCommitTime(filePath.getName).toLong
     //TODO: HARDCODED TIMELINE OBJECT
-    val validCommits = sharedConf.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST)
+    val validCommits = readConf.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST)
     val layout = TimelineLayout.fromVersion(TimelineLayoutVersion.CURR_LAYOUT_VERSION)
     InternalSchemaCache.getInternalSchemaByVersionId(commitInstantTime, tablePath,
-      HoodieStorageUtils.getStorage(tablePath, HadoopFSUtils.getStorageConf(sharedConf)), if (validCommits == null) "" else validCommits, layout)
+      HoodieStorageUtils.getStorage(tablePath, HadoopFSUtils.getStorageConf(readConf)), if (validCommits == null) "" else validCommits, layout)
   } else {
     null
   }
@@ -80,9 +83,26 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
 
   protected var typeChangeInfos: java.util.Map[Integer, Pair[DataType, DataType]] = null
 
-  def getHadoopConfClone(footerFileMetaData: FileMetaData, enableVectorizedReader: Boolean): Configuration = {
-    // Clone new conf
-    val hadoopAttemptConf = new Configuration(sharedConf)
+  /**
+   * Returns the configuration to read the file with: the read configuration itself when the file needs no
+   * keys of its own, otherwise a copy with the file's requested schema or the pushed row-group filter. The
+   * read configuration is never modified, since other readers may share it, so callers must not modify the
+   * returned configuration either.
+   */
+  def getFileReadConf(footerFileMetaData: FileMetaData,
+                      enableVectorizedReader: Boolean,
+                      pushedFilter: Option[FilterPredicate]): Configuration = {
+    var fileReadConf: Configuration = readConf
+    def fileOwnConf(): Configuration = {
+      if (fileReadConf eq readConf) {
+        // A JobConf, so the task attempt context built on it does not copy it again: JobContextImpl reuses a
+        // JobConf and copies any other Configuration
+        fileReadConf = new JobConf(readConf)
+      }
+      fileReadConf
+    }
+    def setRequestedSchema(schema: StructType): Unit =
+      fileOwnConf().set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, schema.json)
     typeChangeInfos = if (shouldUseInternalSchema) {
       // Empty projections (count(*), select 1) read no column data, so there is nothing to
       // reconstruct - and querySchemaOption is the UNPRUNED table schema in that case (see
@@ -93,14 +113,14 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
       val mergedInternalSchema = new InternalSchemaMerger(fileSchema, querySchemaOption.get(), true, true).mergeSchema()
       val mergedSchema = SparkInternalSchemaConverter.constructSparkSchemaFromInternalSchema(mergedInternalSchema)
 
-      hadoopAttemptConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, mergedSchema.json)
+      setRequestedSchema(mergedSchema)
 
       SparkInternalSchemaConverter.collectTypeChangedCols(querySchemaOption.get(), mergedInternalSchema)
     } else {
-      val (implicitTypeChangeInfo, sparkRequestSchema) = HoodieParquetFileFormatHelper.buildImplicitSchemaChangeInfo(hadoopAttemptConf, footerFileMetaData, requiredSchema)
+      val (implicitTypeChangeInfo, sparkRequestSchema) = HoodieParquetFileFormatHelper.buildImplicitSchemaChangeInfo(readConf, footerFileMetaData, requiredSchema)
       if (!implicitTypeChangeInfo.isEmpty) {
         shouldUseInternalSchema = true
-        hadoopAttemptConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, sparkRequestSchema.json)
+        setRequestedSchema(sparkRequestSchema)
       }
       implicitTypeChangeInfo
     }
@@ -112,7 +132,9 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
           "To workaround this issue, set spark.sql.parquet.enableVectorizedReader=false.")
     }
 
-    hadoopAttemptConf
+    // Row-group level push-down, not individual records
+    pushedFilter.foreach(ParquetInputFormat.setFilterPredicate(fileOwnConf(), _))
+    fileReadConf
   }
 
   def generateUnsafeProjection(fullSchema: Seq[AttributeReference], timeZoneId: Option[String]): UnsafeProjection = {
@@ -255,7 +277,7 @@ object ParquetSchemaEvolutionUtils {
    * names both routes rather than blaming pushVariantIntoScan on a read that never set it.
    * Real support is #18285.
    *
-   * Shared by [[ParquetSchemaEvolutionUtils.getHadoopConfClone]] and the per-version legacy
+   * Shared by [[ParquetSchemaEvolutionUtils.getFileReadConf]] and the per-version legacy
    * file formats, which carry a copy of the same schema-merge block. Callers gate on a
    * non-empty projection: empty-projection queries (count(*), select 1) read no column data
    * and must keep working, and the query schema is unpruned in that case.
