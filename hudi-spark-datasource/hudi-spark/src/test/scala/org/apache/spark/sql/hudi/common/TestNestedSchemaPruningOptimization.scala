@@ -426,6 +426,7 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase {
     assertEquals("parquet", formatFor(HoodieFileFormat.PARQUET).shortName())
     assertEquals("orc", formatFor(HoodieFileFormat.ORC).shortName())
     assertEquals("lance", formatFor(HoodieFileFormat.LANCE).shortName())
+    assertEquals("vortex", formatFor(HoodieFileFormat.VORTEX).shortName())
     assertEquals("parquet", formatFor(HoodieFileFormat.ORC, multipleBaseFileFormats = true).shortName())
   }
 

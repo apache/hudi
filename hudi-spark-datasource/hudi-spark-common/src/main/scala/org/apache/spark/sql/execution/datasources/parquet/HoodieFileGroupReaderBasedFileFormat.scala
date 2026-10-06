@@ -52,6 +52,8 @@ import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
 import org.apache.spark.util.SerializableConfiguration
 
+import java.util.Locale
+
 import scala.collection.JavaConverters.mapAsJavaMapConverter
 
 trait HoodieFormatTrait {
@@ -94,17 +96,14 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
    * Returns the base file format's short name so that Spark's nested predicate pushdown allowlist
    * (spark.sql.optimizer.nestedPredicatePushdown.supportedFileSources, default "parquet,orc")
    * matches on every read path. Tables with multiple base file formats report "parquet", since
-   * both the Parquet and ORC filter translation resolve nested column names.
+   * both the Parquet and ORC filter translation resolve nested column names. Other formats (Lance,
+   * Vortex) report their own name, which keeps them off the default allowlist.
    */
   override def shortName(): String = {
-    if (isMultipleBaseFileFormatsEnabled) {
+    if (isMultipleBaseFileFormatsEnabled || hoodieFileFormat == null) {
       "parquet"
     } else {
-      hoodieFileFormat match {
-        case HoodieFileFormat.ORC => "orc"
-        case HoodieFileFormat.LANCE => "lance"
-        case _ => "parquet"
-      }
+      hoodieFileFormat.name().toLowerCase(Locale.ROOT)
     }
   }
 
