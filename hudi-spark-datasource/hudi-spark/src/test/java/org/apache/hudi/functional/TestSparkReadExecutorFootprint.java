@@ -144,14 +144,15 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
    * What every task of a read may deserialize: the task binary, the Java-serialized closure, and the
    * largest task stream, which is the larger of the binary and the task with its partition. Any state
    * added to the closure or to a task's partition is paid again by every task, so the budgets are about
-   * 1.4x the sizes measured on Spark 3.5, whatever the state is. A base file read carries the columnar
-   * reader in its closure, so it gets a larger budget than a merging read.
+   * 1.4x the largest sizes measured on Spark 3.5 (Scala 2.12) and Spark 4.0 (Scala 2.13), whatever the
+   * state is. A read that returns columnar batches of base files measures larger than a read that
+   * returns rows.
    */
   enum TaskBudget {
-    // measured: task binary 17555 bytes, largest task stream 18647 bytes
-    BASE_FILE_READ(25 * 1024, 26 * 1024),
-    // measured: task binary 10205 to 11051 bytes, largest task stream 12225 to 12488 bytes
-    MERGING_READ(16 * 1024, 18 * 1024);
+    // measured: task binary 17555 (Spark 3.5) to 18524 (Spark 4.0) bytes, largest task stream 18647 to 19457 bytes
+    COLUMNAR_READ(26 * 1024, 28 * 1024),
+    // measured: task binary 10205 to 12434 bytes, largest task stream 12225 to 13618 bytes
+    ROW_READ(18 * 1024, 20 * 1024);
 
     private final long maxTaskBinaryBytes;
     private final long maxTaskStreamBytes;
@@ -236,19 +237,19 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
 
   static Stream<Arguments> readsForDeserialization() {
     return Stream.of(
-        Arguments.of(CURRENT_VERSION, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.SNAPSHOT, TaskBudget.BASE_FILE_READ),
-        Arguments.of(6, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.SNAPSHOT, TaskBudget.BASE_FILE_READ),
-        Arguments.of(CURRENT_VERSION, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.INCREMENTAL, TaskBudget.BASE_FILE_READ),
-        Arguments.of(6, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.INCREMENTAL, TaskBudget.BASE_FILE_READ),
-        Arguments.of(CURRENT_VERSION, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.TIME_TRAVEL, TaskBudget.BASE_FILE_READ),
-        Arguments.of(6, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.TIME_TRAVEL, TaskBudget.BASE_FILE_READ),
-        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.SNAPSHOT, TaskBudget.MERGING_READ),
-        Arguments.of(6, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.SNAPSHOT, TaskBudget.MERGING_READ),
-        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.READ_OPTIMIZED, TaskBudget.BASE_FILE_READ),
-        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.INCREMENTAL, TaskBudget.MERGING_READ),
-        Arguments.of(6, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.INCREMENTAL, TaskBudget.MERGING_READ),
-        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.TIME_TRAVEL, TaskBudget.MERGING_READ),
-        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.CDC, ReadQuery.CDC, TaskBudget.MERGING_READ));
+        Arguments.of(CURRENT_VERSION, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.SNAPSHOT, TaskBudget.COLUMNAR_READ),
+        Arguments.of(6, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.SNAPSHOT, TaskBudget.COLUMNAR_READ),
+        Arguments.of(CURRENT_VERSION, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.INCREMENTAL, TaskBudget.ROW_READ),
+        Arguments.of(6, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.INCREMENTAL, TaskBudget.ROW_READ),
+        Arguments.of(CURRENT_VERSION, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.TIME_TRAVEL, TaskBudget.COLUMNAR_READ),
+        Arguments.of(6, COPY_ON_WRITE, TableKind.PLAIN, ReadQuery.TIME_TRAVEL, TaskBudget.COLUMNAR_READ),
+        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.SNAPSHOT, TaskBudget.ROW_READ),
+        Arguments.of(6, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.SNAPSHOT, TaskBudget.ROW_READ),
+        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.READ_OPTIMIZED, TaskBudget.COLUMNAR_READ),
+        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.INCREMENTAL, TaskBudget.ROW_READ),
+        Arguments.of(6, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.INCREMENTAL, TaskBudget.ROW_READ),
+        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.PLAIN, ReadQuery.TIME_TRAVEL, TaskBudget.ROW_READ),
+        Arguments.of(CURRENT_VERSION, MERGE_ON_READ, TableKind.CDC, ReadQuery.CDC, TaskBudget.ROW_READ));
   }
 
   @ParameterizedTest(name = "[{index}] version={0}, type={1}, query={2}, metadata={3}")
