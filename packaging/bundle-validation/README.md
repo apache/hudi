@@ -20,7 +20,7 @@
 # Bundle Validation for Hudi
 
 This directory contains scripts for running bundle validation in GitHub Actions (`validate-bundles`
-specified in `.github/workflows/bot.yml`) and build profile for Docker images used.
+specified in `.github/workflows/java_ci_engines.yml`) and build profile for Docker images used.
 
 ## Docker Image for Bundle Validation
 
