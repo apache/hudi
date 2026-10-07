@@ -21,7 +21,7 @@ import org.apache.spark.sql.SaveMode._
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.config.HoodieWriteConfig._
 
-val outputDir = "/tmp/native-spark-bundle"
+val outputDir = "/tmp/spark-native-bundle"
 
 // Force a real join rather than a broadcast, so the plan exercises Comet's join, shuffle and sort.
 spark.conf.set("spark.sql.autoBroadcastJoinThreshold", "-1")
