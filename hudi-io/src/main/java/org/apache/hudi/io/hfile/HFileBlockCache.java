@@ -26,6 +26,7 @@ import com.github.benmanes.caffeine.cache.stats.CacheStats;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.Duration;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
@@ -144,7 +145,7 @@ public class HFileBlockCache {
 
   static String statsString(String entryName, Cache<?, ?> cache) {
     CacheStats stats = cache.stats();
-    return String.format("%s=%d hitRate=%.3f hits=%d misses=%d evictions=%d",
+    return String.format(Locale.ROOT, "%s=%d hitRate=%.3f hits=%d misses=%d evictions=%d",
         entryName, cache.estimatedSize(), stats.hitRate(), stats.hitCount(), stats.missCount(), stats.evictionCount());
   }
 

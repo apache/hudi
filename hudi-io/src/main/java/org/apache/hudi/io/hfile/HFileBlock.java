@@ -224,20 +224,17 @@ public abstract class HFileBlock {
   }
 
   /**
-   * Returns this block's content span for byte-weighted caching. The backing array can hold
-   * several blocks, so weighing its full length would over-count a block sliced from it.
+   * Returns the bytes this block's header and uncompressed content span, for byte-weighted
+   * caching. The backing array can hold several blocks, so weighing its full length would
+   * over-count a block sliced from it.
    */
   public int heapSize() {
-    int contentSpan = HFILEBLOCK_HEADER_SIZE + Math.max(0, uncompressedSizeWithoutHeader);
-    if (contentSpan > HFILEBLOCK_HEADER_SIZE) {
-      return contentSpan;
-    }
-    return byteBuff != null ? byteBuff.length : getOnDiskSizeWithHeader();
+    return HFILEBLOCK_HEADER_SIZE + Math.max(0, uncompressedSizeWithoutHeader);
   }
 
   /**
-   * Returns the byte arrays this block keeps alive: the array it was sliced from and, for a
-   * compressed block, the buffer it unpacked into.
+   * Returns the byte arrays this block keeps alive: the array holding its uncompressed content
+   * and, for a compressed block that is not unpacked yet, the array holding its compressed bytes.
    */
   List<byte[]> retainedBuffers() {
     List<byte[]> buffers = new ArrayList<>(2);
@@ -282,6 +279,9 @@ public abstract class HFileBlock {
               HFILEBLOCK_HEADER_SIZE,
               uncompressedSizeWithoutHeader);
         }
+        // The compressed bytes are not needed again; release them so a cached block only retains its
+        // uncompressed content.
+        compressedByteBuff = null;
       }
       isUnpacked = true;
     }

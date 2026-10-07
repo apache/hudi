@@ -22,6 +22,7 @@ package org.apache.hudi.io.hfile;
 import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
 
 import lombok.AccessLevel;
@@ -46,6 +47,9 @@ import static org.apache.hudi.io.hfile.HFileByteUtils.readMajorVersion;
  */
 public class HFileReaderImpl implements HFileReader {
 
+  // Both are resolved on first use, so a reader whose blocks are all cached never touches storage.
+  // A supplier can only surface an open or size lookup failure as a HoodieIOException, which
+  // getStream() unwraps to keep the reader's IOException contract.
   protected final Lazy<SeekableDataInputStream> lazyStream;
   protected final Lazy<Long> lazyFileSize;
 
@@ -78,27 +82,62 @@ public class HFileReaderImpl implements HFileReader {
       return;
     }
 
-    // Read Trailer (serialized in Proto)
-    SeekableDataInputStream stream = lazyStream.get();
-    this.trailer = readTrailer(stream, lazyFileSize.get());
+    HFileTrailerAndLoadOnOpenBlocks blocks = getTrailerAndLoadOnOpenBlocks();
+    this.trailer = blocks.trailer;
     this.context = HFileContext.builder()
         .compressionCodec(trailer.getCompressionCodec())
         .build();
+    this.dataBlockIndexEntryMap = readDataBlockIndex(
+        blocks.rootDataIndexBlock, trailer.getDataIndexCount(), trailer.getNumDataIndexLevels());
+    this.metaBlockIndexEntryMap = blocks.metaRootIndexBlock.readBlockIndex(trailer.getMetaIndexCount(), true);
+    this.fileInfo = blocks.fileInfoBlock.readFileInfo();
+    this.isMetadataInitialized = true;
+  }
+
+  /**
+   * Returns the trailer and the "load-on-open" section of the file. Subclasses override this to
+   * decide where the blocks come from; the base implementation reads them from the file.
+   */
+  protected HFileTrailerAndLoadOnOpenBlocks getTrailerAndLoadOnOpenBlocks() throws IOException {
+    return readTrailerAndLoadOnOpenBlocks();
+  }
+
+  /**
+   * Reads the trailer and the three blocks of the "load-on-open" section from the file.
+   */
+  protected final HFileTrailerAndLoadOnOpenBlocks readTrailerAndLoadOnOpenBlocks() throws IOException {
+    SeekableDataInputStream stream = getStream();
+    long fileSize = lazyFileSize.get();
+    // Read Trailer (serialized in Proto)
+    HFileTrailer loadedTrailer = readTrailer(stream, fileSize);
+    HFileContext loadOnOpenContext = HFileContext.builder()
+        .compressionCodec(loadedTrailer.getCompressionCodec())
+        .build();
     HFileBlockReader blockReader = new HFileBlockReader(
-        context, stream, trailer.getLoadOnOpenDataOffset(),
-        lazyFileSize.get() - HFileTrailer.getTrailerSize());
-    // Parse root data index block
+        loadOnOpenContext, stream, loadedTrailer.getLoadOnOpenDataOffset(),
+        fileSize - HFileTrailer.getTrailerSize());
     HFileRootIndexBlock rootDataIndexBlock =
         (HFileRootIndexBlock) blockReader.nextBlock(HFileBlockType.ROOT_INDEX);
-    this.dataBlockIndexEntryMap = readDataBlockIndex(
-        rootDataIndexBlock, trailer.getDataIndexCount(), trailer.getNumDataIndexLevels());
-    HFileRootIndexBlock metaIndexBlock =
+    HFileRootIndexBlock metaRootIndexBlock =
         (HFileRootIndexBlock) blockReader.nextBlock(HFileBlockType.ROOT_INDEX);
-    this.metaBlockIndexEntryMap = metaIndexBlock.readBlockIndex(trailer.getMetaIndexCount(), true);
     HFileFileInfoBlock fileInfoBlock =
         (HFileFileInfoBlock) blockReader.nextBlock(HFileBlockType.FILE_INFO);
-    this.fileInfo = fileInfoBlock.readFileInfo();
-    this.isMetadataInitialized = true;
+    return new HFileTrailerAndLoadOnOpenBlocks(loadedTrailer, rootDataIndexBlock, metaRootIndexBlock, fileInfoBlock);
+  }
+
+  /**
+   * Opens the underlying stream on first use, surfacing an open or size lookup failure as the
+   * original {@link IOException}.
+   */
+  protected SeekableDataInputStream getStream() throws IOException {
+    try {
+      return lazyStream.get();
+    } catch (HoodieIOException e) {
+      if (e.getIOException() != null) {
+        throw e.getIOException();
+      }
+      throw e;
+    }
   }
 
   @Override
@@ -115,7 +154,7 @@ public class HFileReaderImpl implements HFileReader {
       return Option.empty();
     }
     HFileBlockReader blockReader = new HFileBlockReader(
-        context, lazyStream.get(), blockIndexEntry.getOffset(),
+        context, getStream(), blockIndexEntry.getOffset(),
         blockIndexEntry.getOffset() + blockIndexEntry.getSize());
     HFileMetaBlock block = (HFileMetaBlock) blockReader.nextBlock(HFileBlockType.META);
     return Option.of(block.readContent());
@@ -331,7 +370,7 @@ public class HFileReaderImpl implements HFileReader {
    */
   public HFileDataBlock instantiateHFileDataBlock(BlockIndexEntry blockToRead) throws IOException {
     HFileBlockReader blockReader = new HFileBlockReader(
-        context, lazyStream.get(), blockToRead.getOffset(),
+        context, getStream(), blockToRead.getOffset(),
         blockToRead.getOffset() + (long) blockToRead.getSize());
     return (HFileDataBlock) blockReader.nextBlock(HFileBlockType.DATA);
   }
@@ -408,7 +447,7 @@ public class HFileReaderImpl implements HFileReader {
   protected List<BlockIndexEntry> readDataBlockIndexEntries(BlockIndexEntry indexEntry,
                                                             HFileBlockType blockType) throws IOException {
     HFileBlockReader blockReader = new HFileBlockReader(
-        context, lazyStream.get(), indexEntry.getOffset(), indexEntry.getOffset() + indexEntry.getSize());
+        context, getStream(), indexEntry.getOffset(), indexEntry.getOffset() + indexEntry.getSize());
     HFileBlock tempBlock = blockReader.nextBlock(blockType);
     return ((HFileLeafIndexBlock) tempBlock).readBlockIndex();
   }

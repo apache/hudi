@@ -21,7 +21,6 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
 
 import java.io.IOException;
@@ -34,39 +33,37 @@ import java.util.List;
  */
 public class CachingHFileReaderImpl extends HFileReaderImpl {
 
-  private final String filePath;
+  private final String fileIdentity;
+  private final boolean cacheTrailerAndLoadOnOpenBlocks;
   private final HFileReaderCacheManager cacheManager;
 
+  /**
+   * @param lazyStream                      the file content, opened on first use
+   * @param lazyFileSize                    the file size, resolved on first use
+   * @param fileIdentity                    identifies the file content in the shared caches; it must
+   *                                        change when a different file is written to the same path
+   * @param cacheTrailerAndLoadOnOpenBlocks whether to cache the trailer and the "load-on-open"
+   *                                        section as well as the blocks; false for content that is
+   *                                        already in memory, where there is no I/O to save
+   * @param cacheManager                    the shared caches
+   */
   public CachingHFileReaderImpl(Lazy<SeekableDataInputStream> lazyStream,
                                 Lazy<Long> lazyFileSize,
-                                String filePath,
-                                int blockCacheSize,
-                                long cacheMaxWeightBytes,
-                                int loadOnOpenCacheSize,
-                                int cacheTtlMinutes) {
+                                String fileIdentity,
+                                boolean cacheTrailerAndLoadOnOpenBlocks,
+                                HFileReaderCacheManager cacheManager) {
     super(lazyStream, lazyFileSize);
-    this.filePath = filePath;
-    this.cacheManager = HFileReaderCacheManager.getInstance(
-        blockCacheSize, cacheMaxWeightBytes, loadOnOpenCacheSize, cacheTtlMinutes);
+    this.fileIdentity = fileIdentity;
+    this.cacheTrailerAndLoadOnOpenBlocks = cacheTrailerAndLoadOnOpenBlocks;
+    this.cacheManager = cacheManager;
   }
 
   @Override
-  public synchronized void initializeMetadata() throws IOException {
-    if (this.isMetadataInitialized) {
-      return;
+  protected HFileTrailerAndLoadOnOpenBlocks getTrailerAndLoadOnOpenBlocks() throws IOException {
+    if (!cacheTrailerAndLoadOnOpenBlocks) {
+      return readTrailerAndLoadOnOpenBlocks();
     }
-
-    HFileReaderCacheManager.LoadOnOpenBlocks loadOnOpenBlocks = getOrComputeLoadOnOpenData();
-    this.trailer = loadOnOpenBlocks.trailer;
-    this.context = HFileContext.builder()
-        .compressionCodec(trailer.getCompressionCodec())
-        .build();
-    this.dataBlockIndexEntryMap =
-        readDataBlockIndex(loadOnOpenBlocks.rootDataIndexBlock, trailer.getDataIndexCount(), trailer.getNumDataIndexLevels());
-    this.metaBlockIndexEntryMap =
-        loadOnOpenBlocks.metaRootIndexBlock.readBlockIndex(trailer.getMetaIndexCount(), true);
-    this.fileInfo = loadOnOpenBlocks.fileInfoBlock.readFileInfo();
-    this.isMetadataInitialized = true;
+    return cacheManager.getOrLoadTrailerAndLoadOnOpenBlocks(fileIdentity, this::readTrailerAndLoadOnOpenBlocks);
   }
 
   @Override
@@ -113,46 +110,13 @@ public class CachingHFileReaderImpl extends HFileReaderImpl {
     HFileReaderCacheManager.reset();
   }
 
-  private HFileReaderCacheManager.LoadOnOpenBlocks getOrComputeLoadOnOpenData() throws IOException {
-    return cacheManager.getOrComputeLoadOnOpenData(filePath, () -> {
-      SeekableDataInputStream stream = getStream();
-      long fileSize = lazyFileSize.get();
-      HFileTrailer loadedTrailer = readTrailer(stream, fileSize);
-      HFileContext loadOnOpenContext = HFileContext.builder()
-          .compressionCodec(loadedTrailer.getCompressionCodec())
-          .build();
-      HFileBlockReader blockReader = new HFileBlockReader(loadOnOpenContext, stream,
-          loadedTrailer.getLoadOnOpenDataOffset(), fileSize - HFileTrailer.getTrailerSize());
-      HFileRootIndexBlock rootDataIndexBlock = (HFileRootIndexBlock) blockReader.nextBlock(HFileBlockType.ROOT_INDEX);
-      HFileRootIndexBlock metaRootIndexBlock = (HFileRootIndexBlock) blockReader.nextBlock(HFileBlockType.ROOT_INDEX);
-      HFileFileInfoBlock fileInfoBlock = (HFileFileInfoBlock) blockReader.nextBlock(HFileBlockType.FILE_INFO);
-      return new HFileReaderCacheManager.LoadOnOpenBlocks(
-          loadedTrailer, rootDataIndexBlock, metaRootIndexBlock, fileInfoBlock);
-    });
-  }
-
   private <T extends HFileBlock> T getOrComputeBlock(long offset,
                                                      int size,
                                                      HFileBlockType expectedBlockType,
                                                      Class<T> blockClass) throws IOException {
-    return cacheManager.getOrComputeBlock(filePath, offset, size, blockClass, () -> {
+    return cacheManager.getOrComputeBlock(fileIdentity, offset, size, blockClass, () -> {
       HFileBlockReader blockReader = new HFileBlockReader(context, getStream(), offset, offset + size);
       return blockReader.nextBlock(expectedBlockType);
     });
-  }
-
-  /**
-   * Opens the underlying stream on first use. The lazy supplier can only surface an open failure
-   * as a {@link HoodieIOException}, so it is unwrapped here to keep the reader's {@link IOException} contract.
-   */
-  private SeekableDataInputStream getStream() throws IOException {
-    try {
-      return lazyStream.get();
-    } catch (HoodieIOException e) {
-      if (e.getIOException() != null) {
-        throw e.getIOException();
-      }
-      throw e;
-    }
   }
 }

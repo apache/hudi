@@ -106,17 +106,17 @@ public class HoodieReaderConfig extends HoodieConfig {
       .defaultValue(100)
       .markAdvanced()
       .sinceVersion("1.3.0")
-      .withDocumentation("Maximum number of HFiles whose load-on-open region (trailer, root data index block, "
-          + "meta index block, and file info block) is cached in memory, so that reopening a file does not "
-          + "re-read it. Only effective when hfile.block.cache.enabled is true.");
+      .withDocumentation("Maximum number of HFiles whose trailer and load-on-open section (root data index block, "
+          + "meta index block, and file info block) are cached in memory, so that reopening a file does not "
+          + "re-read them. Only effective when hfile.block.cache.enabled is true.");
 
   public static final ConfigProperty<Integer> HFILE_BLOCK_CACHE_MAX_WEIGHT_MB = ConfigProperty
       .key("hoodie.hfile.block.cache.max.weight.mb")
       .defaultValue(0)
       .markAdvanced()
       .sinceVersion("1.3.0")
-      .withDocumentation("When greater than 0, each of the shared HFile block cache and the load-on-open "
-          + "cache is bounded by this many megabytes of retained bytes instead of a fixed entry count. "
+      .withDocumentation("When greater than 0, each of the shared HFile block cache and the trailer and "
+          + "load-on-open cache is bounded by this many megabytes of retained bytes instead of a fixed entry count. "
           + "Byte weighting bounds heap use when block and index sizes vary widely. "
           + "Only effective when hfile.block.cache.enabled is true.");
 

@@ -65,6 +65,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
+import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -78,6 +79,7 @@ import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResou
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
 import static org.apache.hudi.core.io.storage.HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_META_BLOCK;
 import static org.apache.hudi.core.io.storage.HoodieAvroHFileReaderImplBase.SCHEMA_KEY;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -156,86 +158,84 @@ public class TestHoodieNativeAvroHFileReaderCaching {
   public void testMetadataInitializationDoesNotOpenStreamOnCacheHit() throws Exception {
     StorageAccessCounter counter = new StorageAccessCounter();
     HoodieStorage countingStorage = createCountingStorage(counter);
-    HFileReaderFactory readerFactory = createCachingReaderFactory(countingStorage);
 
-    try (HFileReader reader = readerFactory.createHFileReader()) {
-      assertTrue(reader.getMetaInfo(new UTF8StringKey(SCHEMA_KEY)).isPresent());
+    byte[] schema;
+    try (HFileReader reader = createCachingReaderFactory(countingStorage).createHFileReader()) {
+      schema = reader.getMetaInfo(new UTF8StringKey(SCHEMA_KEY)).get();
     }
     assertTrue(counter.getOpenCount() > 0, "Initial metadata load should open the HFile stream");
 
     counter.reset();
-    try (HFileReader reader = readerFactory.createHFileReader()) {
-      assertTrue(reader.getMetaInfo(new UTF8StringKey(SCHEMA_KEY)).isPresent());
+    try (HFileReader reader = createCachingReaderFactory(countingStorage).createHFileReader()) {
+      assertArrayEquals(schema, reader.getMetaInfo(new UTF8StringKey(SCHEMA_KEY)).get());
     }
 
-    assertEquals(0, counter.getOpenCount(), "Metadata cache hit should not reopen the HFile stream");
-    assertEquals(0, counter.getReadCount(), "Metadata cache hit should not read from the HFile stream");
+    assertNoStorageAccess(counter, "Metadata cache hit");
   }
 
   @Test
-  public void testInitializeMetadataDoesNotOpenStreamWhenLoadOnOpenBlocksCached() throws Exception {
+  public void testInitializeMetadataDoesNotOpenStreamWhenTrailerAndLoadOnOpenBlocksCached() throws Exception {
     StorageAccessCounter counter = new StorageAccessCounter();
     HoodieStorage countingStorage = createCountingStorage(counter);
-    HFileReaderFactory readerFactory = createCachingReaderFactory(countingStorage);
 
-    try (HFileReader reader = readerFactory.createHFileReader()) {
+    long numEntries;
+    try (HFileReader reader = createCachingReaderFactory(countingStorage).createHFileReader()) {
       reader.initializeMetadata();
+      numEntries = reader.getNumKeyValueEntries();
     }
     assertTrue(counter.getOpenCount() > 0, "Initial metadata initialization should open the HFile stream");
 
     counter.reset();
-    try (HFileReader reader = readerFactory.createHFileReader()) {
+    try (HFileReader reader = createCachingReaderFactory(countingStorage).createHFileReader()) {
       reader.initializeMetadata();
+      assertEquals(numEntries, reader.getNumKeyValueEntries());
     }
 
-    assertEquals(0, counter.getOpenCount(), "Cached load-on-open metadata should not reopen the HFile stream");
-    assertEquals(0, counter.getReadCount(), "Cached load-on-open metadata should not read from the HFile stream");
+    assertNoStorageAccess(counter, "Cached trailer and load-on-open blocks");
   }
 
   @Test
   public void testDataBlockReadDoesNotOpenStreamOnFullCacheHit() throws Exception {
     StorageAccessCounter counter = new StorageAccessCounter();
     HoodieStorage countingStorage = createCountingStorage(counter);
-    HFileReaderFactory readerFactory = createCachingReaderFactory(countingStorage);
 
-    try (HFileReader reader = readerFactory.createHFileReader()) {
+    String firstKey;
+    try (HFileReader reader = createCachingReaderFactory(countingStorage).createHFileReader()) {
       assertTrue(reader.seekTo());
-      assertTrue(reader.getKeyValue().isPresent());
+      firstKey = reader.getKeyValue().get().getKey().getContentInString();
     }
     assertTrue(counter.getOpenCount() > 0, "Initial data read should open the HFile stream");
 
     counter.reset();
-    try (HFileReader reader = readerFactory.createHFileReader()) {
+    try (HFileReader reader = createCachingReaderFactory(countingStorage).createHFileReader()) {
       assertTrue(reader.seekTo());
-      assertTrue(reader.getKeyValue().isPresent());
+      assertEquals(firstKey, reader.getKeyValue().get().getKey().getContentInString());
     }
 
-    assertEquals(0, counter.getOpenCount(), "Data block cache hit should not reopen the HFile stream");
-    assertEquals(0, counter.getReadCount(), "Data block cache hit should not read from the HFile stream");
+    assertNoStorageAccess(counter, "Data block cache hit");
   }
 
   @Test
   public void testMetaBlockReadDoesNotOpenStreamOnCacheHit() throws Exception {
     StorageAccessCounter counter = new StorageAccessCounter();
     HoodieStorage countingStorage = createCountingStorage(counter);
-    HFileReaderFactory readerFactory = createCachingReaderFactory(countingStorage);
 
-    try (HFileReader reader = readerFactory.createHFileReader()) {
-      assertTrue(reader.getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK).isPresent());
+    ByteBuffer bloomFilter;
+    try (HFileReader reader = createCachingReaderFactory(countingStorage).createHFileReader()) {
+      bloomFilter = reader.getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK).get();
     }
     assertTrue(counter.getOpenCount() > 0, "Initial meta block read should open the HFile stream");
 
     counter.reset();
-    try (HFileReader reader = readerFactory.createHFileReader()) {
-      assertTrue(reader.getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK).isPresent());
+    try (HFileReader reader = createCachingReaderFactory(countingStorage).createHFileReader()) {
+      assertEquals(bloomFilter, reader.getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK).get());
     }
 
-    assertEquals(0, counter.getOpenCount(), "Meta block cache hit should not reopen the HFile stream");
-    assertEquals(0, counter.getReadCount(), "Meta block cache hit should not read from the HFile stream");
+    assertNoStorageAccess(counter, "Meta block cache hit");
   }
 
   @Test
-  public void testInitializeMetadataReloadsLoadOnOpenDataAfterLoadOnOpenCacheCleared() throws Exception {
+  public void testInitializeMetadataReloadsTrailerAndLoadOnOpenBlocksAfterCacheCleared() throws Exception {
     StorageAccessCounter counter = new StorageAccessCounter();
     HoodieStorage countingStorage = createCountingStorage(counter);
     HFileReaderFactory readerFactory = createCachingReaderFactory(countingStorage);
@@ -245,9 +245,9 @@ public class TestHoodieNativeAvroHFileReaderCaching {
     }
     HFileReaderCacheManager cacheManager = HFileReaderCacheManager.getInstanceIfInitialized().get();
     String cacheKey = getFilePath().toString();
-    assertTrue(cacheManager.containsLoadOnOpenData(cacheKey));
-    cacheManager.invalidateLoadOnOpenData(cacheKey);
-    assertFalse(cacheManager.containsLoadOnOpenData(cacheKey));
+    assertTrue(cacheManager.containsTrailerAndLoadOnOpenBlocks(cacheKey));
+    cacheManager.invalidateTrailerAndLoadOnOpenBlocks(cacheKey);
+    assertFalse(cacheManager.containsTrailerAndLoadOnOpenBlocks(cacheKey));
 
     counter.reset();
     try (HFileReader reader = readerFactory.createHFileReader()) {
@@ -256,7 +256,7 @@ public class TestHoodieNativeAvroHFileReaderCaching {
 
     assertTrue(counter.getOpenCount() > 0, "Clearing load-on-open cache should force stream reopen");
     assertTrue(counter.getReadCount() > 0, "Clearing load-on-open cache should force stream reads");
-    assertTrue(cacheManager.containsLoadOnOpenData(cacheKey));
+    assertTrue(cacheManager.containsTrailerAndLoadOnOpenBlocks(cacheKey));
   }
 
   @Test
@@ -285,6 +285,12 @@ public class TestHoodieNativeAvroHFileReaderCaching {
         assertSame(firstManager, secondManager, "Cached readers should share the same cache manager instance");
       }
     }
+  }
+
+  private static void assertNoStorageAccess(StorageAccessCounter counter, String operation) {
+    assertEquals(0, counter.getPathInfoCount(), operation + " should not look up the file size");
+    assertEquals(0, counter.getOpenCount(), operation + " should not reopen the HFile stream");
+    assertEquals(0, counter.getReadCount(), operation + " should not read from the HFile stream");
   }
 
   private void testExistingKeysLookup() throws Exception {
@@ -452,8 +458,17 @@ public class TestHoodieNativeAvroHFileReaderCaching {
   }
 
   private static class StorageAccessCounter {
+    private final AtomicInteger pathInfoCount = new AtomicInteger();
     private final AtomicInteger openCount = new AtomicInteger();
     private final AtomicInteger readCount = new AtomicInteger();
+
+    private void recordPathInfo() {
+      pathInfoCount.incrementAndGet();
+    }
+
+    private int getPathInfoCount() {
+      return pathInfoCount.get();
+    }
 
     private void recordOpen() {
       openCount.incrementAndGet();
@@ -472,6 +487,7 @@ public class TestHoodieNativeAvroHFileReaderCaching {
     }
 
     private synchronized void reset() {
+      pathInfoCount.set(0);
       openCount.set(0);
       readCount.set(0);
     }
@@ -648,6 +664,7 @@ public class TestHoodieNativeAvroHFileReaderCaching {
 
     @Override
     public StoragePathInfo getPathInfo(StoragePath path) throws IOException {
+      counter.recordPathInfo();
       return delegate.getPathInfo(path);
     }
 
