@@ -47,6 +47,7 @@ trait MergeOnReadIncrementalRelation {
   def listFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Map[InternalRow, Seq[FileSlice]]
   def getRequiredFilters: Seq[Filter]
   def getInstantRange: HOption[InstantRange] = HOption.empty()
+  def getIncrementalFilesSize: Long
 }
 
 case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
@@ -160,6 +161,11 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
    */
   override def getInstantRange: HOption[InstantRange] =
     if (fullTableScan) queryContext.getInstantRange else HOption.empty()
+
+  override def getIncrementalFilesSize: Long = {
+    // A full table scan lists the whole table, so the affected files would underestimate its size.
+    if (fullTableScan) Long.MaxValue else affectedFilesInCommits.asScala.map(_.getLength).sum
+  }
 
   override def shouldIncludeLogFiles(): Boolean = fullTableScan
 
