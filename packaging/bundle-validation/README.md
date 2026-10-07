@@ -22,11 +22,11 @@
 This directory contains scripts for running bundle validation in GitHub Actions (`validate-bundles`
 specified in `.github/workflows/bot.yml`) and build profile for Docker images used.
 
-## Native Spark Bundle
+## Spark native bundle
 
-`hudi-native-spark-bundle` goes through the same flow, but is validated only on the Java 17 pass:
+`hudi-spark-native-bundle` goes through the same flow, but is validated only on the Java 17 pass:
 Apache DataFusion Comet ships class file version 61 bytecode and a glibc linked `libcomet.so`, so
-it cannot load under the Alpine based image's musl JVMs. Its query lives in `native_spark/`, and it
+it cannot load under the Alpine based image's musl JVMs. Its query lives in `spark_native/`, and it
 asserts Comet operators in the plan rather than row counts alone, because Comet declines what it
 cannot accelerate and falls back to Spark silently.
 

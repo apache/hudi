@@ -40,11 +40,12 @@ if [[ "$SCALA_PROFILE" != 'scala-2.13' ]]; then
   ln -sf $JARS_DIR/hudi-flink*.jar $JARS_DIR/flink.jar
   ln -sf $JARS_DIR/hudi-kafka-connect-bundle*.jar $JARS_DIR/kafka-connect.jar
 fi
-ln -sf $JARS_DIR/hudi-spark*.jar $JARS_DIR/spark.jar
+# The spark native bundle shares the hudi-spark prefix, so match the plain spark bundle only.
+ln -sf $(ls $JARS_DIR/hudi-spark*.jar | grep -v -- '-native-bundle_') $JARS_DIR/spark.jar
 # Only present for the Spark versions Apache DataFusion Comet releases for.
-for nativeBundle in $JARS_DIR/hudi-native-spark*.jar; do
+for nativeBundle in $JARS_DIR/hudi-spark*-native-bundle_*.jar; do
   if [ -f "$nativeBundle" ]; then
-    ln -sf "$nativeBundle" $JARS_DIR/native-spark.jar
+    ln -sf "$nativeBundle" $JARS_DIR/spark-native.jar
   fi
 done
 ln -sf $JARS_DIR/hudi-utilities-bundle*.jar $JARS_DIR/utilities.jar
@@ -76,7 +77,7 @@ use_default_java_runtime () {
 }
 
 ##
-# Function to test the native spark bundle, which carries Apache DataFusion Comet.
+# Function to test the spark native bundle, which carries Apache DataFusion Comet.
 #
 # Comet ships class file version 61 bytecode and a glibc linked libcomet.so, so this only runs on
 # the Java 17 pass.
@@ -88,12 +89,12 @@ use_default_java_runtime () {
 # env vars (defined in container):
 #   SPARK_HOME: path to the spark directory
 ##
-test_native_spark_bundle () {
-    local outputDir=/tmp/native-spark-bundle
+test_spark_native_bundle () {
+    local outputDir=/tmp/spark-native-bundle
     rm -rf $outputDir
     change_java_runtime_version
     echo "::warning::validate.sh Writing and querying Hudi tables with Comet enabled"
-    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/native-spark.jar \
+    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark-native.jar \
       --conf 'spark.plugins=org.apache.spark.CometPlugin' \
       --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension,org.apache.comet.CometSparkSessionExtensions' \
       --conf 'spark.shuffle.manager=org.apache.spark.sql.comet.execution.shuffle.CometShuffleManager' \
@@ -104,7 +105,7 @@ test_native_spark_bundle () {
       --conf 'spark.comet.metrics.enabled=true' \
       --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
       --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar' \
-      --conf 'spark.sql.catalogImplementation=in-memory' < $WORKDIR/native_spark/validate.scala
+      --conf 'spark.sql.catalogImplementation=in-memory' < $WORKDIR/spark_native/validate.scala
 
     use_default_java_runtime
 
@@ -116,7 +117,7 @@ test_native_spark_bundle () {
     local actualRows
     actualRows=$(cat $outputDir/cow_rows/part-*)
     if [ "$actualRows" != "$expectedRows" ]; then
-        echo "::error::validate.sh native spark bundle copy-on-write query returned unexpected results"
+        echo "::error::validate.sh spark native bundle copy-on-write query returned unexpected results"
         echo "expected:"; echo "$expectedRows"
         echo "actual:";   echo "$actualRows"
         return 1
@@ -131,7 +132,7 @@ test_native_spark_bundle () {
     local actualMorRows
     actualMorRows=$(cat $outputDir/mor_rows/part-*)
     if [ "$actualMorRows" != "$expectedMorRows" ]; then
-        echo "::error::validate.sh native spark bundle merge-on-read query returned unexpected results"
+        echo "::error::validate.sh spark native bundle merge-on-read query returned unexpected results"
         echo "expected:"; echo "$expectedMorRows"
         echo "actual:";   echo "$actualMorRows"
         return 1
@@ -157,7 +158,7 @@ test_native_spark_bundle () {
         cat $outputDir/mor_plan/part-*
         return 1
     fi
-    echo "::warning::validate.sh native spark bundle validation was successful"
+    echo "::warning::validate.sh spark native bundle validation was successful"
 }
 
 ##
@@ -525,13 +526,13 @@ if [[ ${SCALA_PROFILE} != 'scala-2.13' ]]; then
 fi
 
 # Runs last, so a failure here cannot skip the validation of another bundle.
-if [ -e $JARS_DIR/native-spark.jar ] && [[ ${JAVA_RUNTIME_VERSION} == 'openjdk17' ]]; then
-  echo "::warning::validate.sh validating native spark bundle"
-  test_native_spark_bundle
+if [ -e $JARS_DIR/spark-native.jar ] && [[ ${JAVA_RUNTIME_VERSION} == 'openjdk17' ]]; then
+  echo "::warning::validate.sh validating spark native bundle"
+  test_spark_native_bundle
   if [ "$?" -ne 0 ]; then
       exit 1
   fi
-  echo "::warning::validate.sh done validating native spark bundle"
+  echo "::warning::validate.sh done validating spark native bundle"
 else
-  echo "::warning::validate.sh skip validating native spark bundle, needs openjdk17 and a Spark version Comet releases for"
+  echo "::warning::validate.sh skip validating spark native bundle, needs openjdk17 and a Spark version Comet releases for"
 fi

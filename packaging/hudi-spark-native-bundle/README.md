@@ -15,7 +15,7 @@
  limitations under the License.
 -->
 
-# hudi-native-spark-bundle
+# hudi-spark-native-bundle
 
 Everything in `hudi-spark-bundle`, plus [Apache DataFusion Comet](https://datafusion.apache.org/comet/)
 for native vectorized execution. Use it in place of `hudi-spark-bundle`, not alongside it.
@@ -32,10 +32,10 @@ against. The bundle is produced only where Comet has a matching release:
 
 | Spark | Scala      | Bundle                              |
 |-------|------------|-------------------------------------|
-| 3.4   | 2.12       | `hudi-native-spark3.4-bundle_2.12`  |
-| 3.5   | 2.12, 2.13 | `hudi-native-spark3.5-bundle_<scala>` |
-| 4.0   | 2.13       | `hudi-native-spark4.0-bundle_2.13`  |
-| 4.1   | 2.13       | `hudi-native-spark4.1-bundle_2.13`  |
+| 3.4   | 2.12       | `hudi-spark3.4-native-bundle_2.12`  |
+| 3.5   | 2.12, 2.13 | `hudi-spark3.5-native-bundle_<scala>` |
+| 4.0   | 2.13       | `hudi-spark4.0-native-bundle_2.13`  |
+| 4.1   | 2.13       | `hudi-spark4.1-native-bundle_2.13`  |
 
 Building with `-Dspark3.3` or `-Dspark4.2` produces no bundle at all: Comet dropped Spark 3.3
 after 0.7.0 and has no Spark 4.2 release. Those builds succeed and simply skip this module.
@@ -96,7 +96,7 @@ partition column) is not bridged at all, and that branch stays on Spark.
 Comet is not enabled by the bundle being on the classpath. These settings turn it on:
 
 ```
-spark-shell --jars hudi-native-spark3.5-bundle_2.12-<version>.jar \
+spark-shell --jars hudi-spark3.5-native-bundle_2.12-<version>.jar \
   --conf spark.plugins=org.apache.spark.CometPlugin \
   --conf spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension,org.apache.comet.CometSparkSessionExtensions \
   --conf spark.shuffle.manager=org.apache.spark.sql.comet.execution.shuffle.CometShuffleManager \

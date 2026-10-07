@@ -485,7 +485,7 @@ CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
  This product includes software from Apache DataFusion Comet
 
- * The hudi-native-spark-bundle artifacts bundle
+ * The hudi-spark-native-bundle artifacts bundle
    org.apache.datafusion:comet-spark-spark<spark version>_<scala binary version>, including these
    pre-built native libraries:
 

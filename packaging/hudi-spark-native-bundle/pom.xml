@@ -23,7 +23,7 @@
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
-  <artifactId>hudi-native-spark${sparkbundle.version}-bundle_${scala.binary.version}</artifactId>
+  <artifactId>hudi-spark${sparkbundle.version}-native-bundle_${scala.binary.version}</artifactId>
   <packaging>jar</packaging>
 
   <properties>
@@ -36,10 +36,10 @@
          build for an uncovered Spark version yields no bundle rather than one named "native" that
          carries no native code. A sources jar is still produced, but nothing is installed or
          deployed. The comet-spark<version> profiles below opt in. -->
-    <hudi.native.bundle.skip>true</hudi.native.bundle.skip>
-    <hudi.native.bundle.jar.phase>none</hudi.native.bundle.jar.phase>
-    <maven.install.skip>${hudi.native.bundle.skip}</maven.install.skip>
-    <maven.deploy.skip>${hudi.native.bundle.skip}</maven.deploy.skip>
+    <hudi.spark.native.bundle.skip>true</hudi.spark.native.bundle.skip>
+    <hudi.spark.native.bundle.jar.phase>none</hudi.spark.native.bundle.jar.phase>
+    <maven.install.skip>${hudi.spark.native.bundle.skip}</maven.install.skip>
+    <maven.deploy.skip>${hudi.spark.native.bundle.skip}</maven.deploy.skip>
   </properties>
 
   <build>
@@ -57,7 +57,7 @@
             <!-- none when this module produces no bundle. Without it maven-jar-plugin still emits
                  a jar named as if it were a bundle, holding nothing but the generated META-INF.
                  skipIfEmpty does not help: remote-resources populates target/classes regardless. -->
-            <phase>${hudi.native.bundle.jar.phase}</phase>
+            <phase>${hudi.spark.native.bundle.jar.phase}</phase>
           </execution>
         </executions>
       </plugin>
@@ -72,7 +72,7 @@
               <goal>shade</goal>
             </goals>
             <configuration>
-              <skip>${hudi.native.bundle.skip}</skip>
+              <skip>${hudi.spark.native.bundle.skip}</skip>
               <createSourcesJar>${shadeSources}</createSourcesJar>
               <dependencyReducedPomLocation>${project.build.directory}/dependency-reduced-pom.xml
               </dependencyReducedPomLocation>
@@ -377,7 +377,7 @@
   <profiles>
     <!-- Comet publishes comet-spark-spark<X.Y>_<scala binary version> per Spark minor release.
          Spark 3.3 is not covered (Comet dropped it after 0.7.0) and Spark 4.2 has no release yet,
-         so those builds fall through to hudi.native.bundle.skip=true above and emit no bundle. -->
+         so those builds fall through to hudi.spark.native.bundle.skip=true above and emit no bundle. -->
     <profile>
       <id>comet-spark3.4</id>
       <activation>
@@ -386,8 +386,8 @@
         </property>
       </activation>
       <properties>
-        <hudi.native.bundle.skip>false</hudi.native.bundle.skip>
-        <hudi.native.bundle.jar.phase>package</hudi.native.bundle.jar.phase>
+        <hudi.spark.native.bundle.skip>false</hudi.spark.native.bundle.skip>
+        <hudi.spark.native.bundle.jar.phase>package</hudi.spark.native.bundle.jar.phase>
       </properties>
       <dependencies>
         <dependency>
@@ -406,8 +406,8 @@
         </property>
       </activation>
       <properties>
-        <hudi.native.bundle.skip>false</hudi.native.bundle.skip>
-        <hudi.native.bundle.jar.phase>package</hudi.native.bundle.jar.phase>
+        <hudi.spark.native.bundle.skip>false</hudi.spark.native.bundle.skip>
+        <hudi.spark.native.bundle.jar.phase>package</hudi.spark.native.bundle.jar.phase>
       </properties>
       <dependencies>
         <dependency>
@@ -426,8 +426,8 @@
         </property>
       </activation>
       <properties>
-        <hudi.native.bundle.skip>false</hudi.native.bundle.skip>
-        <hudi.native.bundle.jar.phase>package</hudi.native.bundle.jar.phase>
+        <hudi.spark.native.bundle.skip>false</hudi.spark.native.bundle.skip>
+        <hudi.spark.native.bundle.jar.phase>package</hudi.spark.native.bundle.jar.phase>
       </properties>
       <dependencies>
         <dependency>
@@ -446,8 +446,8 @@
         </property>
       </activation>
       <properties>
-        <hudi.native.bundle.skip>false</hudi.native.bundle.skip>
-        <hudi.native.bundle.jar.phase>package</hudi.native.bundle.jar.phase>
+        <hudi.spark.native.bundle.skip>false</hudi.spark.native.bundle.skip>
+        <hudi.spark.native.bundle.jar.phase>package</hudi.spark.native.bundle.jar.phase>
       </properties>
       <dependencies>
         <dependency>
