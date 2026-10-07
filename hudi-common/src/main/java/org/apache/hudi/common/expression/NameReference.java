@@ -26,7 +26,7 @@ import lombok.Getter;
 
 @AllArgsConstructor
 @Getter
-@EqualsAndHashCode
+@EqualsAndHashCode(callSuper = false)
 public class NameReference extends LeafExpression {
 
   private final String name;

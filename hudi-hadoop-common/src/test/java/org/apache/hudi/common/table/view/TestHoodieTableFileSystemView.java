@@ -831,10 +831,10 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
       assertEquals(srcFileStatus.getPath(),
           HadoopFSUtils.fromPath(new Path(bootstrapBaseFile.get().getPath())));
       assertEquals(srcFileStatus.getModificationTime(),
-          new Long(bootstrapBaseFile.get().getPathInfo().getModificationTime()));
-      assertEquals(srcFileStatus.getBlockSize(), new Long(bootstrapBaseFile.get().getPathInfo().getBlockSize()));
+          Long.valueOf(bootstrapBaseFile.get().getPathInfo().getModificationTime()));
+      assertEquals(srcFileStatus.getBlockSize(), Long.valueOf(bootstrapBaseFile.get().getPathInfo().getBlockSize()));
       assertEquals(srcFileStatus.getLength(),
-          new Long(bootstrapBaseFile.get().getPathInfo().getLength()));
+          Long.valueOf(bootstrapBaseFile.get().getPathInfo().getLength()));
       assertEquals(srcFileStatus.getIsDir() != null && srcFileStatus.getIsDir(),
           bootstrapBaseFile.get().getPathInfo().isDirectory());
     } else {

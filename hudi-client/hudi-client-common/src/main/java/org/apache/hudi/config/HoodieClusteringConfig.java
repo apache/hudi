@@ -306,6 +306,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
    * @deprecated this setting has no effect. Please refer to clustering configuration, as well as
    * {@link #LAYOUT_OPTIMIZE_STRATEGY} config to enable advanced record layout optimization strategies
    */
+  @Deprecated
   public static final ConfigProperty LAYOUT_OPTIMIZE_ENABLE = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "enable")
       .defaultValue(false)
@@ -381,6 +382,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
   /**
    * @deprecated this setting has no effect
    */
+  @Deprecated
   public static final ConfigProperty LAYOUT_OPTIMIZE_DATA_SKIPPING_ENABLE = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "data.skipping.enable")
       .defaultValue(true)
