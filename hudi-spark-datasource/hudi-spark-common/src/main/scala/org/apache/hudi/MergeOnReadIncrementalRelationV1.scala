@@ -130,8 +130,10 @@ case class MergeOnReadIncrementalRelationV1(override val sqlContext: SQLContext,
         val fsView = new HoodieTableFileSystemView(metaClient, timeline, affectedFilesInCommits)
         val modifiedPartitions = getWritePartitionPaths(commitsMetadata)
 
-        fileIndex.listMatchingPartitionPaths(HoodieFileIndex.convertFilterForTimestampKeyGenerator(metaClient, partitionFilters))
-          .map(p => p.getPath).filter(p => modifiedPartitions.contains(p))
+        // Evaluate the partition predicates against the modified partitions only, rather than listing
+        // every partition of the table.
+        fileIndex.filterPartitionPaths(modifiedPartitions.asScala.toSeq,
+          HoodieFileIndex.convertFilterForTimestampKeyGenerator(metaClient, partitionFilters))
           .flatMap { relativePartitionPath =>
             fsView.getLatestMergedFileSlicesBeforeOrOn(relativePartitionPath, latestCommit).iterator().asScala
           }
