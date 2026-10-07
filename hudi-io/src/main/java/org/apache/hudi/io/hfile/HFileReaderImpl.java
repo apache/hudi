@@ -49,7 +49,7 @@ public class HFileReaderImpl implements HFileReader {
 
   // Both are resolved on first use, so a reader whose blocks are all cached never touches storage.
   // A supplier can only surface an open or size lookup failure as a HoodieIOException, which
-  // getStream() unwraps to keep the reader's IOException contract.
+  // getStream() and getFileSize() unwrap to keep the reader's IOException contract.
   protected final Lazy<SeekableDataInputStream> lazyStream;
   protected final Lazy<Long> lazyFileSize;
 
@@ -107,7 +107,7 @@ public class HFileReaderImpl implements HFileReader {
    */
   protected final HFileTrailerAndLoadOnOpenBlocks readTrailerAndLoadOnOpenBlocks() throws IOException {
     SeekableDataInputStream stream = getStream();
-    long fileSize = lazyFileSize.get();
+    long fileSize = getFileSize();
     // Read Trailer (serialized in Proto)
     HFileTrailer loadedTrailer = readTrailer(stream, fileSize);
     HFileContext loadOnOpenContext = HFileContext.builder()
@@ -133,11 +133,26 @@ public class HFileReaderImpl implements HFileReader {
     try {
       return lazyStream.get();
     } catch (HoodieIOException e) {
-      if (e.getIOException() != null) {
-        throw e.getIOException();
-      }
-      throw e;
+      throw unwrapped(e);
     }
+  }
+
+  /**
+   * Resolves the file size on first use, surfacing a lookup failure as the original {@link IOException}.
+   */
+  protected long getFileSize() throws IOException {
+    try {
+      return lazyFileSize.get();
+    } catch (HoodieIOException e) {
+      throw unwrapped(e);
+    }
+  }
+
+  private static IOException unwrapped(HoodieIOException e) throws HoodieIOException {
+    if (e.getIOException() != null) {
+      return e.getIOException();
+    }
+    throw e;
   }
 
   @Override
