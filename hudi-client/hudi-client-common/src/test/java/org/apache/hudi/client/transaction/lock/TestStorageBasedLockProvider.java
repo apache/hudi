@@ -535,7 +535,7 @@ class TestStorageBasedLockProvider {
 
     HoodieLockException exception = assertThrows(HoodieLockException.class, () -> lockProvider.unlock());
     assertTrue(exception.getMessage().contains("FAILED_TO_RELEASE"));
-    assertTrue(exception.getMessage().contains(StorageBasedLockProvider.CAUSE_INTERRUPTED_DURING_THROTTLE_BACKOFF),
+    assertTrue(exception.getMessage().contains(StorageBasedLockProvider.CAUSE_INTERRUPTED_DURING_RETRY_BACKOFF),
         exception.getMessage());
     // The interrupt flag must be re-set so callers up the stack still observe it. Clear it here
     // so the flag does not leak into subsequent tests on this thread.

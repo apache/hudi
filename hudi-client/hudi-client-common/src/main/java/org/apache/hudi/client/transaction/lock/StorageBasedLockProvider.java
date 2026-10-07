@@ -108,9 +108,9 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
   // The heartbeat task would not stop, so the lock is deliberately left un-expired.
   @VisibleForTesting
   static final String CAUSE_HEARTBEAT_STOP_FAILED = "HEARTBEAT_STOP_FAILED";
-  // Interrupted while backing off between throttled expire-write attempts.
+  // Interrupted while backing off between retriable (throttled or 5xx) expire-write attempts.
   @VisibleForTesting
-  static final String CAUSE_INTERRUPTED_DURING_THROTTLE_BACKOFF = "INTERRUPTED_DURING_THROTTLE_BACKOFF";
+  static final String CAUSE_INTERRUPTED_DURING_RETRY_BACKOFF = "INTERRUPTED_DURING_RETRY_BACKOFF";
   // Every expire-write attempt was throttled by storage; the retry budget ran out.
   @VisibleForTesting
   static final String CAUSE_THROTTLE_RETRIES_EXHAUSTED = "THROTTLE_RETRIES_EXHAUSTED";
@@ -445,8 +445,8 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
           hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockTransientErrorMetric);
           return AcquireAttemptResult.RETRIABLE_FAILURE;
         case UNKNOWN_ERROR:
-          // Lock state is unknown after the upsert attempt; surface it as such. We must not
-          // retry: the write may have landed, and a retry could steal our own lock.
+          // Lock state is unknown after the upsert attempt; surface it as such. An inner retry
+          // would not help: it re-reads the lock first, so a landed write shows up as held.
           hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockStateUnknownMetric);
           return AcquireAttemptResult.NOT_ACQUIRED;
         default:
@@ -583,7 +583,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
             ownerId, lockFilePath, expireResult, attempt, RELEASE_MAX_RETRIES, ie);
         hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockReleaseFailureMetric);
         throw new HoodieLockException(
-            generateLockStateMessage(FAILED_TO_RELEASE, CAUSE_INTERRUPTED_DURING_THROTTLE_BACKOFF));
+            generateLockStateMessage(FAILED_TO_RELEASE, CAUSE_INTERRUPTED_DURING_RETRY_BACKOFF));
       }
       synchronized (this) {
         // Bail out if the lock was either cleared by another path (e.g. shutdown hook,
