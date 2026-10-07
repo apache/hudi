@@ -41,6 +41,8 @@ public class DistributedRegistry extends AccumulatorV2<Map<String, Long>, Map<St
 
   private final String name;
   ConcurrentHashMap<String, Long> counters = new ConcurrentHashMap<>();
+  // The registered accumulator that replaced this one if it went stale, see register().
+  private transient volatile DistributedRegistry replacement;
   /** Driver-only, to detect a SparkContext restart in the same JVM (shells, notebooks, Spark Connect). */
   private transient String registeredAppId;
 
@@ -53,13 +55,43 @@ public class DistributedRegistry extends AccumulatorV2<Map<String, Long>, Map<St
     return name;
   }
 
-  public void register(JavaSparkContext jsc) {
-    if (!isRegistered()) {
+  /**
+   * Registers this accumulator with the given SparkContext if it is not registered yet.
+   *
+   * <p>A cached instance that was registered to a previous SparkContext can no longer be registered
+   * (AccumulatorV2 rejects a second registration). In that case a fresh accumulator sharing the same
+   * counters is registered instead and swapped into {@link Registry#REGISTRY_MAP}. Callers should use the
+   * returned instance; updates made through the stale instance are still reported via the shared counters.
+   *
+   * @return this instance, or its registered replacement.
+   */
+  public synchronized DistributedRegistry register(JavaSparkContext jsc) {
+    if (isRegistered()) {
+      return this;
+    }
+    if (registeredAppId == null) {
       jsc.sc().register(this);
       // Only when this call actually registers: stamping unconditionally would re-brand an accumulator
       // bound to a dead context and mask the staleness this field exists to detect.
       this.registeredAppId = jsc.sc().applicationId();
+      return this;
     }
+    // Stale: registered to a previous SparkContext that no longer exists, so the id is gone from the
+    // current AccumulatorContext but AccumulatorV2 refuses to register this instance again.
+    if (replacement != null) {
+      // Another cache still holds this stale instance after it was already replaced. Delegate, so a
+      // replacement that went stale in turn (another SparkContext restart) is replaced the same way.
+      replacement = replacement.register(jsc);
+      return replacement;
+    }
+    DistributedRegistry fresh = new DistributedRegistry(this.name);
+    // Share the counters rather than copying them, so updates made through a caller that still holds
+    // this stale instance are reported by the replacement too.
+    fresh.counters = this.counters;
+    fresh.register(jsc);
+    Registry.REGISTRY_MAP.replaceAll((key, registry) -> registry == this ? fresh : registry);
+    replacement = fresh;
+    return fresh;
   }
 
   /** False when bound to a different (typically stopped) context, meaning it must be recreated. */
