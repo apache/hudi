@@ -235,7 +235,14 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
             new Class<?>[] {HiveSyncConfig.class},
             config);
       }
-      return IMetaStoreClientUtil.getMSC(config.getHiveConf());
+      IMetaStoreClient metaStoreClient = IMetaStoreClientUtil.getMSC(config.getHiveConf());
+      // Hive caches the instance that owns this client for the thread, and replaces it, closing
+      // this client, whenever a Hive session on the thread brings a different metastore conf. A
+      // HiveQL-mode Driver's session does, by setting the metastore filter hook for authorization.
+      // Taken out of the cache, the client is left to this class, which closes it in close().
+      // Hive.closeCurrent() would close the client too, hence the set.
+      Hive.set(null);
+      return metaStoreClient;
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to create HiveMetaStoreClient", e);
     }
@@ -696,13 +703,10 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
           partitionClientPool = Option.empty();
         }
         if (client != null) {
-          // Close the proxied IMetaStoreClient directly before Hive.closeCurrent().
-          // When RetryingMetaStoreClient rebuilds the underlying client on a transient
-          // TException, the fresh MSC is reachable only through this proxy, while the
-          // thread-local Hive singleton still references the older instance. So
-          // Hive.closeCurrent() alone closes the stale MSC and orphans the retry-created
-          // one, leaking a connection per sync cycle. client.close() releases the live
-          // MSC by identity; Hive.closeCurrent() remains a fallback for the singleton path.
+          // The client is not in Hive's thread cache (see createMetaStoreClient), so only
+          // closing it directly releases it, including an underlying client that
+          // RetryingMetaStoreClient rebuilt after a transient TException. Hive.closeCurrent()
+          // closes whatever instance a Hive session left in the cache.
           try {
             client.close();
           } catch (Exception e) {

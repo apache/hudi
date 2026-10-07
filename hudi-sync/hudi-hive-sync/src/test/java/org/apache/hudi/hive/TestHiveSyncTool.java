@@ -58,6 +58,7 @@ import org.apache.hudi.sync.common.model.PartitionEvent;
 import org.apache.hudi.sync.common.model.PartitionEvent.PartitionEventType;
 
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.hive.metastore.api.Table;
@@ -402,6 +403,30 @@ public class TestHiveSyncTool {
     reSyncHiveTable();
     assertEquals(partitionCount + 4, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
         "Incremental add via parallel HiveQL batching should sync the new partitions");
+  }
+
+  /**
+   * The first statement the Hive Driver compiles sets up its session's authorization, which changes
+   * the session's metastore filter hook. If the sync client's metastore client were the one Hive
+   * caches for the thread, Hive would close it then, and the sync's next metastore call would fail.
+   */
+  @Test
+  void testHiveQLSyncKeepsItsMetastoreClientOpen() throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), HiveSyncMode.HIVEQL.name());
+    HiveTestUtil.createCOWTable("100", 5, true);
+    HiveConf hiveConf = new HiveConf(getHiveConf());
+    // a client's conf, as opposed to the test server's, which has had authorization applied to it
+    hiveConf.unset("hive.internal.ss.authz.settings.applied.marker");
+    hiveConf.setVar(HiveConf.ConfVars.METASTORE_FILTER_HOOK, HiveConf.ConfVars.METASTORE_FILTER_HOOK.getDefaultValue());
+    // without the retry that would reconnect it, a closed metastore client fails the call
+    hiveConf.setIntVar(HiveConf.ConfVars.METASTORETHRIFTFAILURERETRIES, 0);
+
+    try (HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, hiveConf)) {
+      tool.syncHoodieTable();
+    }
+
+    reInitHiveSyncClient();
+    assertEquals(5, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size());
   }
 
   /**
