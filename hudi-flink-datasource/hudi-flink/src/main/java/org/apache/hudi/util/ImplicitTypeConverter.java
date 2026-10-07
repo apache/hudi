@@ -61,7 +61,7 @@ public class ImplicitTypeConverter {
           if (literal instanceof Long) {
             return literal;
           } else if (literal instanceof Integer) {
-            return new Long((Integer) literal);
+            return Long.valueOf((Integer) literal);
           } else {
             return Long.valueOf(String.valueOf(literal));
           }
@@ -117,7 +117,7 @@ public class ImplicitTypeConverter {
           } else if (literal instanceof Long) {
             return literal;
           } else if (literal instanceof Integer) {
-            return new Long((Integer) literal);
+            return Long.valueOf((Integer) literal);
           } else {
             return LocalDateTime.parse(String.valueOf(literal)).toInstant(ZoneOffset.UTC).toEpochMilli();
           }
