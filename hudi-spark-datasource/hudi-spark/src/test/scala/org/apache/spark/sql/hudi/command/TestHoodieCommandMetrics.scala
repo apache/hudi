@@ -19,10 +19,10 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.common.model.HoodieCommitMetadata
 
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.common.{ExclusiveSuite, HoodieSparkSqlTestBase}
 import org.mockito.Mockito.{mock, when}
 
-class TestHoodieCommandMetrics extends HoodieSparkSqlTestBase {
+class TestHoodieCommandMetrics extends HoodieSparkSqlTestBase with ExclusiveSuite {
 
   override def beforeAll(): Unit = {
     spark.sparkContext

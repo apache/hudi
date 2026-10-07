@@ -38,7 +38,8 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getMetaClientAndF
 import org.apache.spark.sql.types.{DoubleType, IntegerType, StringType, StructField}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
-import java.util.{Collections, List, Optional}
+import java.util.{List, Optional}
+import java.util.stream.Collectors
 
 import scala.collection.JavaConverters._
 
@@ -743,8 +744,12 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
       })
       .findFirst()
     assertTrue(fileSlice.isPresent)
-    val logFilePathList: List[String] = HoodieTestUtils.getLogFileListFromFileSlice(fileSlice.get)
-    Collections.sort(logFilePathList)
+    // Oldest first. A string sort of the paths orders by the Spark write token, which precedes the
+    // instant in the file name and compares stage ids as text.
+    val logFilePathList: List[String] = fileSlice.get.getLogFiles
+      .sorted(HoodieLogFile.getLogFileComparator)
+      .map[String](logFile => logFile.getPath.toString)
+      .collect(Collectors.toList[String])
 
     val schema = new TableSchemaResolver(metaClient).getTableSchema
     for (i <- 0 until expectedNumLogFile) {

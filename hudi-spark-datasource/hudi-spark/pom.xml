@@ -31,6 +31,8 @@
 
   <properties>
     <main.basedir>${project.parent.parent.basedir}</main.basedir>
+    <!-- ScalaTest tags excluded from this module's scalatest runs; CI overrides it with -Dhudi.scalatest.tagsToExclude -->
+    <hudi.scalatest.tagsToExclude>org.apache.hudi.functional.SparkSQLCoreFlow</hudi.scalatest.tagsToExclude>
   </properties>
 
   <build>
@@ -116,7 +118,7 @@
         <groupId>org.scalatest</groupId>
         <artifactId>scalatest-maven-plugin</artifactId>
         <configuration>
-          <tagsToExclude>org.apache.hudi.functional.SparkSQLCoreFlow</tagsToExclude>
+          <tagsToExclude>${hudi.scalatest.tagsToExclude}</tagsToExclude>
         </configuration>
       </plugin>
       <plugin>
