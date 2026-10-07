@@ -108,17 +108,26 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
   private static final int NUM_PARTITIONS = 4;
   private static final int NUM_HISTORY_COMMITS = 48;
 
-
   /**
-   * Driver-side classes that a read task must not deserialize with its closure.
+   * Driver-side classes that neither a read task nor the broadcast scan state may deserialize.
    */
-  private static final List<String> CLASSES_NOT_DESERIALIZED_PER_TASK = Arrays.asList(
+  private static final List<String> HEAVY_DRIVER_CLASSES = Arrays.asList(
       "org.apache.hudi.common.table.HoodieTableMetaClient",
       "org.apache.hudi.common.table.timeline.HoodieTimeline",
       "org.apache.hudi.storage.StorageConfiguration",
       "org.apache.spark.util.SerializableConfiguration",
       "org.apache.spark.sql.execution.datasources.parquet.HoodieFileGroupReaderBasedFileFormat",
       "org.apache.hudi.config.HoodieWriteConfig");
+
+  /**
+   * Classes that a read task must not deserialize with its closure or partition: the heavy driver-side
+   * ones, and the table config and committed instants, which reach the tasks in the broadcast scan
+   * state that every executor deserializes once. The instants grow with the timeline.
+   */
+  private static final List<String> CLASSES_NOT_DESERIALIZED_PER_TASK = Stream.concat(HEAVY_DRIVER_CLASSES.stream(), Stream.of(
+      "org.apache.hudi.common.table.timeline.HoodieInstant",
+      "org.apache.hudi.common.table.read.CommittedInstants",
+      "org.apache.hudi.common.table.HoodieTableConfig")).collect(Collectors.toList());
 
   /**
    * Hadoop default resource parses allowed in the tasks of a read. A base file read converts the table
@@ -133,6 +142,7 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
       DataTypes.createStructField("ts", DataTypes.LongType, false),
       DataTypes.createStructField("value", DataTypes.StringType, true)});
 
+  private static final String SCAN_STATE_CLASS = "org.apache.spark.sql.execution.datasources.parquet.HoodieFileGroupReadState";
   private static final String VECTORIZED_READER_ENABLED = "spark.sql.parquet.enableVectorizedReader";
   private static final String DATA_SKIPPING_FAILURE_MODE = "hoodie.fileIndex.dataSkippingFailureMode";
 
@@ -342,7 +352,11 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
         query, table.name, taskBinary.getBytes(), result.getMaxStreamBytes(), result.getKeptScopes(), result.getIgnoredScopes());
     SparkExecutorGuards.assertTaskDeserializationFootprint(
         table.name + " " + query + " read on Spark and Scala " + sparkVersion, result, taskBinary,
-        CLASSES_NOT_DESERIALIZED_PER_TASK, budgets.maxTaskBinaryBytes(shape), budgets.maxTaskStreamBytes(shape));
+        CLASSES_NOT_DESERIALIZED_PER_TASK, HEAVY_DRIVER_CLASSES, budgets.maxTaskBinaryBytes(shape), budgets.maxTaskStreamBytes(shape));
+    // Local mode runs one executor, so the broadcast scan state is deserialized at most once.
+    assertTrue(result.getExemptDeserializations(SparkExecutorGuards.SCAN_STATE, SCAN_STATE_CLASS) <= 1, table.name + " " + query
+        + " read: the scan state must be deserialized once per executor, not per task or file, but was deserialized "
+        + result.getExemptDeserializations(SparkExecutorGuards.SCAN_STATE, SCAN_STATE_CLASS) + " times");
   }
 
   /**

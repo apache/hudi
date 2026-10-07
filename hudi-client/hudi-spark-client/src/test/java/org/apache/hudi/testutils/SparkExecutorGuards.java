@@ -23,9 +23,11 @@ import org.apache.hudi.hadoop.fs.RecordingLocalFileSystem;
 import org.apache.hudi.hadoop.fs.RecordingLocalFileSystem.Call;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.SparkContext;
 import org.apache.spark.SparkEnv;
 import org.apache.spark.TaskContext;
+import org.apache.spark.TaskFailedReason;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.plugin.DriverPlugin;
 import org.apache.spark.api.plugin.ExecutorPlugin;
@@ -37,6 +39,7 @@ import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
+import java.net.URI;
 import java.net.URL;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -77,17 +80,39 @@ import static org.junit.jupiter.api.Assertions.fail;
 public final class SparkExecutorGuards {
 
   /**
-   * Whether the current thread runs a Spark task. The thread name also covers the part of a task
-   * run that precedes its {@link TaskContext}, namely deserializing the task and its partition.
+   * The attempt id of the Spark task that is running on, or that started, the current thread, set
+   * by {@link TaskStartHookPlugin}. Threads a task creates inherit it.
    */
-  public static final BooleanSupplier IN_SPARK_TASK = () -> TaskContext.get() != null
-      || Thread.currentThread().getName().startsWith("Executor task launch worker");
+  private static final InheritableThreadLocal<Long> TASK_ATTEMPT = new InheritableThreadLocal<>();
+  private static final Set<Long> RUNNING_TASK_ATTEMPTS = ConcurrentHashMap.newKeySet();
 
   /**
-   * Stack frames of this class mark a broadcast variable fetch, which is deserialized once per
-   * executor rather than once per task.
+   * Whether the current thread runs a Spark task, or was started by a Spark task that is still
+   * running (needs {@link TaskStartHookPlugin}). The thread name also covers the part of a task run
+   * that precedes its {@link TaskContext}, namely deserializing the task and its partition.
    */
+  public static final BooleanSupplier IN_SPARK_TASK = () -> {
+    if (TaskContext.get() != null || Thread.currentThread().getName().startsWith("Executor task launch worker")) {
+      return true;
+    }
+    Long startedBy = TASK_ATTEMPT.get();
+    return startedBy != null && RUNNING_TASK_ATTEMPTS.contains(startedBy);
+  };
+
+  /**
+   * The kind of deserialization a broadcast variable fetch is, which happens once per executor rather
+   * than once per task.
+   */
+  public static final String BROADCAST_FETCH = "broadcast fetch";
+
+  /**
+   * The kind of deserialization the value of the file group reader's broadcast
+   * {@code JavaSerializedValue} is: the scan state, deserialized once per JVM instance of the holder.
+   */
+  public static final String SCAN_STATE = "scan state";
+
   private static final String BROADCAST_CLASS = "org.apache.spark.broadcast.TorrentBroadcast";
+  private static final String SCAN_STATE_HOLDER_CLASS = "org.apache.spark.sql.execution.datasources.parquet.JavaSerializedValue";
 
   /**
    * The {@code spark.plugins} value that enables {@link #setTaskStartHook}.
@@ -103,6 +128,8 @@ public final class SparkExecutorGuards {
   private static final int MAX_LOAD_SITES = 3;
   private static final int MAX_LOAD_SITE_FRAMES = 40;
 
+  private static final URI LOCAL_FILE_SYSTEM = URI.create("file:///");
+
   private static volatile Runnable taskStartHook = () -> { };
 
   private SparkExecutorGuards() {
@@ -113,10 +140,27 @@ public final class SparkExecutorGuards {
    * from {@code hadoopConf} (use the Spark context's Hadoop configuration), with Spark tasks as the
    * recording scope. Register it before writing the table too, so that all files are written and read
    * by the same file system implementation.
+   *
+   * <p>The recording file system also replaces the cached {@code file} file system, so that a reader
+   * that resolves its file system from another configuration, such as a new one, is recorded too.
    */
   public static void enableFileSystemCallRecording(Configuration hadoopConf) {
     RecordingLocalFileSystem.setScope(IN_SPARK_TASK);
     RecordingLocalFileSystem.register(hadoopConf);
+    try {
+      FileSystem cached = FileSystem.get(LOCAL_FILE_SYSTEM, new Configuration());
+      if (!(cached instanceof RecordingLocalFileSystem)) {
+        // Closing removes it from the cache, so that the next lookup caches the recording file system.
+        cached.close();
+        Configuration recording = new Configuration();
+        recording.set(RecordingLocalFileSystem.FILE_IMPL_KEY, RecordingLocalFileSystem.class.getName());
+        FileSystem.get(LOCAL_FILE_SYSTEM, recording);
+      }
+      assertTrue(FileSystem.get(LOCAL_FILE_SYSTEM, new Configuration()) instanceof RecordingLocalFileSystem,
+          "The cached file system of the file scheme must be the recording one");
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
   }
 
   /**
@@ -125,6 +169,14 @@ public final class SparkExecutorGuards {
   public static void disableFileSystemCallRecording(Configuration hadoopConf) {
     RecordingLocalFileSystem.unregister(hadoopConf);
     RecordingLocalFileSystem.setScope(() -> false);
+    try {
+      FileSystem cached = FileSystem.get(LOCAL_FILE_SYSTEM, new Configuration());
+      if (cached instanceof RecordingLocalFileSystem) {
+        cached.close();
+      }
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
   }
 
   /**
@@ -174,7 +226,7 @@ public final class SparkExecutorGuards {
     String previousDescription = sparkContext.getLocalProperty(SPARK_JOB_DESCRIPTION);
     String previousInterrupt = sparkContext.getLocalProperty(SPARK_JOB_INTERRUPT_ON_CANCEL);
     sparkContext.setJobGroup(jobGroup, "task deserialization recording", false);
-    recorder.start(stageScope, frameClass -> frameClass.startsWith(BROADCAST_CLASS));
+    recorder.start(stageScope, SparkExecutorGuards::oncePerExecutorKind);
     TaskDeserializationRecorder.Result result;
     try {
       action.run();
@@ -187,6 +239,13 @@ public final class SparkExecutorGuards {
     return result;
   }
 
+  private static String oncePerExecutorKind(String frameClass) {
+    if (frameClass.startsWith(BROADCAST_CLASS)) {
+      return BROADCAST_FETCH;
+    }
+    return frameClass.startsWith(SCAN_STATE_HOLDER_CLASS) ? SCAN_STATE : null;
+  }
+
   /**
    * Sets code to run on the task thread at the start of every Spark task, after the task and its
    * partition are deserialized and before the task runs. It takes effect only in a session whose {@code spark.plugins} includes
@@ -197,7 +256,8 @@ public final class SparkExecutorGuards {
   }
 
   /**
-   * A Spark plugin that runs the hook set by {@link #setTaskStartHook} when a task starts.
+   * A Spark plugin that runs the hook set by {@link #setTaskStartHook} when a task starts and tracks
+   * the running tasks for the threads they start, see {@link #IN_SPARK_TASK}.
    */
   public static final class TaskStartHookPlugin implements SparkPlugin {
     @Override
@@ -210,7 +270,31 @@ public final class SparkExecutorGuards {
       return new ExecutorPlugin() {
         @Override
         public void onTaskStart() {
+          TaskContext context = TaskContext.get();
+          if (context != null) {
+            RUNNING_TASK_ATTEMPTS.add(context.taskAttemptId());
+            TASK_ATTEMPT.set(context.taskAttemptId());
+          }
           taskStartHook.run();
+        }
+
+        @Override
+        public void onTaskSucceeded() {
+          taskEnded();
+        }
+
+        @Override
+        public void onTaskFailed(TaskFailedReason failureReason) {
+          taskEnded();
+        }
+
+        // Spark may unset the task context before these callbacks, so the attempt comes from the thread.
+        private void taskEnded() {
+          Long attempt = TASK_ATTEMPT.get();
+          if (attempt != null) {
+            RUNNING_TASK_ATTEMPTS.remove(attempt);
+          }
+          TASK_ATTEMPT.remove();
         }
       };
     }
@@ -367,16 +451,18 @@ public final class SparkExecutorGuards {
   }
 
   /**
-   * Fails if the task binary holds, or tasks deserialized outside broadcast fetches, an instance of
-   * any class that is or extends one of {@code forbiddenClassNames}, if the task binary is larger
-   * than {@code maxTaskBinaryBytes}, or if a task stream larger than {@code maxTaskStreamBytes} was
-   * deserialized. Also fails if no Spark RDD was recorded, which means the
-   * recorder did not see the task binary.
+   * Fails if the task binary holds, or tasks deserialized outside once per executor deserializations,
+   * an instance of any class that is or extends one of {@code forbiddenClassNames}, if the scan state
+   * holds an instance of any class that is or extends one of {@code forbiddenInScanState}, if the task
+   * binary is larger than {@code maxTaskBinaryBytes}, or if a task stream larger than
+   * {@code maxTaskStreamBytes} was deserialized. Also fails if no Spark RDD was recorded, which means
+   * the recorder did not see the task binary.
    */
   public static void assertTaskDeserializationFootprint(String description,
                                                         TaskDeserializationRecorder.Result result,
                                                         TaskBinary taskBinary,
                                                         Collection<String> forbiddenClassNames,
+                                                        Collection<String> forbiddenInScanState,
                                                         long maxTaskBinaryBytes,
                                                         long maxTaskStreamBytes) {
     assertEquals(0, result.getErrors(), description + ": the deserialization recorder failed on some callbacks");
@@ -396,6 +482,12 @@ public final class SparkExecutorGuards {
       if (!deserialized.isEmpty()) {
         violations.add("deserialized per task: " + deserialized + " (forbidden: " + forbidden + "), first at:\n"
             + result.getFirstStack(deserialized.get(0)));
+      }
+    }
+    for (String forbidden : forbiddenInScanState) {
+      List<String> inScanState = result.exemptNamesOfSubtypesOf(SCAN_STATE, forbidden);
+      if (!inScanState.isEmpty()) {
+        violations.add("in the broadcast scan state: " + inScanState + " (forbidden: " + forbidden + ")");
       }
     }
     if (taskBinary.getBytes() > maxTaskBinaryBytes) {

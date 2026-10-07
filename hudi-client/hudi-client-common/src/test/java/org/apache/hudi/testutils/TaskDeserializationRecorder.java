@@ -27,10 +27,12 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -90,15 +92,15 @@ public final class TaskDeserializationRecorder implements ObjectInputFilter {
    * Starts recording, keeping what each task scope deserializes apart so that {@link #stop(Predicate)}
    * can keep only the scopes of the work under test, for example the stages of one job.
    *
-   * @param taskScope         the scope of the task the current thread runs, or null outside tasks
-   * @param isExemptFrameClass whether a stack frame of the given class marks a deserialization
-   *                          that is not per task, such as a broadcast variable fetch
+   * @param taskScope     the scope of the task the current thread runs, or null outside tasks
+   * @param exemptFrameKind the kind of deserialization that is not per task, such as a broadcast
+   *                      variable fetch, that a stack frame of the given class marks, or null
    */
-  public synchronized void start(Supplier<String> taskScope, Predicate<String> isExemptFrameClass) {
+  public synchronized void start(Supplier<String> taskScope, Function<String, String> exemptFrameKind) {
     if (session != null) {
       throw new IllegalStateException("A recording is already in progress");
     }
-    session = new Session(taskScope, isExemptFrameClass);
+    session = new Session(taskScope, exemptFrameKind);
   }
 
   /**
@@ -125,11 +127,21 @@ public final class TaskDeserializationRecorder implements ObjectInputFilter {
       if (scope != null) {
         ScopeRecord record = current.scopes.computeIfAbsent(scope, s -> new ScopeRecord());
         Class<?> clazz = filterInfo.serialClass();
-        boolean exempt = StackWalker.getInstance().walk(
-            frames -> frames.anyMatch(frame -> current.isExemptFrameClass.test(frame.getClassName())));
-        if (!exempt) {
-          // A Class object in the stream, such as the runtime class of a ClassTag, is not an instance.
-          if (clazz != null && !isClassReference() && record.classes.add(clazz)) {
+        String exemptKind = StackWalker.getInstance().walk(frames -> frames
+            .map(frame -> current.exemptFrameKind.apply(frame.getClassName()))
+            .filter(Objects::nonNull)
+            .findFirst()
+            .orElse(null));
+        // A Class object in the stream, such as the runtime class of a ClassTag, is not an instance.
+        boolean instance = clazz != null && !isClassReference();
+        if (exemptKind != null) {
+          // A stream reports a class once, so this counts the exempt deserializations reading the class.
+          if (instance) {
+            record.exemptDeserializations.computeIfAbsent(exemptKind, kind -> new ConcurrentHashMap<>())
+                .computeIfAbsent(clazz, c -> new AtomicLong()).incrementAndGet();
+          }
+        } else {
+          if (instance && record.classes.add(clazz)) {
             record.firstStacks.putIfAbsent(clazz, stackOfCaller());
           }
           record.maxStreamBytes.accumulateAndGet(filterInfo.streamBytes(), Math::max);
@@ -186,19 +198,20 @@ public final class TaskDeserializationRecorder implements ObjectInputFilter {
 
   private static final class Session {
     private final Supplier<String> taskScope;
-    private final Predicate<String> isExemptFrameClass;
+    private final Function<String, String> exemptFrameKind;
     private final Map<String, ScopeRecord> scopes = new ConcurrentHashMap<>();
     private final AtomicLong errors = new AtomicLong();
 
-    private Session(Supplier<String> taskScope, Predicate<String> isExemptFrameClass) {
+    private Session(Supplier<String> taskScope, Function<String, String> exemptFrameKind) {
       this.taskScope = taskScope;
-      this.isExemptFrameClass = isExemptFrameClass;
+      this.exemptFrameKind = exemptFrameKind;
     }
   }
 
   private static final class ScopeRecord {
     private final Set<Class<?>> classes = ConcurrentHashMap.newKeySet();
     private final Map<Class<?>, String> firstStacks = new ConcurrentHashMap<>();
+    private final Map<String, Map<Class<?>, AtomicLong>> exemptDeserializations = new ConcurrentHashMap<>();
     private final AtomicLong maxStreamBytes = new AtomicLong();
   }
 
@@ -208,6 +221,7 @@ public final class TaskDeserializationRecorder implements ObjectInputFilter {
   public static final class Result {
     private final Set<Class<?>> classes;
     private final Map<Class<?>, String> firstStacks;
+    private final Map<String, Map<Class<?>, Long>> exemptDeserializations;
     private final Set<String> keptScopes;
     private final Set<String> ignoredScopes;
     private final long maxStreamBytes;
@@ -216,6 +230,7 @@ public final class TaskDeserializationRecorder implements ObjectInputFilter {
     private Result(Session session, Predicate<String> keepScope) {
       Set<Class<?>> keptClasses = new HashSet<>();
       Map<Class<?>, String> keptFirstStacks = new HashMap<>();
+      Map<String, Map<Class<?>, Long>> keptExemptDeserializations = new HashMap<>();
       Set<String> kept = new TreeSet<>();
       Set<String> ignored = new TreeSet<>();
       long maxBytes = 0;
@@ -224,6 +239,8 @@ public final class TaskDeserializationRecorder implements ObjectInputFilter {
           kept.add(entry.getKey());
           keptClasses.addAll(entry.getValue().classes);
           entry.getValue().firstStacks.forEach(keptFirstStacks::putIfAbsent);
+          entry.getValue().exemptDeserializations.forEach((kind, counts) -> counts.forEach((clazz, count) ->
+              keptExemptDeserializations.computeIfAbsent(kind, k -> new HashMap<>()).merge(clazz, count.get(), Long::sum)));
           maxBytes = Math.max(maxBytes, entry.getValue().maxStreamBytes.get());
         } else {
           ignored.add(entry.getKey());
@@ -231,10 +248,34 @@ public final class TaskDeserializationRecorder implements ObjectInputFilter {
       }
       this.classes = Collections.unmodifiableSet(keptClasses);
       this.firstStacks = Collections.unmodifiableMap(keptFirstStacks);
+      this.exemptDeserializations = Collections.unmodifiableMap(keptExemptDeserializations);
       this.keptScopes = Collections.unmodifiableSet(kept);
       this.ignoredScopes = Collections.unmodifiableSet(ignored);
       this.maxStreamBytes = maxBytes;
       this.errors = session.errors.get();
+    }
+
+    /**
+     * How many deserializations of the given exempt kind read an instance of the class named
+     * {@code className}.
+     */
+    public long getExemptDeserializations(String kind, String className) {
+      return exemptDeserializations.getOrDefault(kind, Collections.emptyMap()).entrySet().stream()
+          .filter(entry -> entry.getKey().getName().equals(className))
+          .mapToLong(Map.Entry::getValue)
+          .sum();
+    }
+
+    /**
+     * Names of the classes that are or extend {@code className} and that deserializations of the
+     * given exempt kind read an instance of.
+     */
+    public List<String> exemptNamesOfSubtypesOf(String kind, String className) {
+      return exemptDeserializations.getOrDefault(kind, Collections.emptyMap()).keySet().stream()
+          .filter(clazz -> isSubtypeOf(clazz, className))
+          .map(Class::getName)
+          .sorted()
+          .collect(Collectors.toList());
     }
 
     /**
