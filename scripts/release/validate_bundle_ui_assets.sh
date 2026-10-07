@@ -32,7 +32,7 @@
 #   dir  Optional directory to search for built bundle jars.
 #        Defaults to the repo "packaging" directory (scans packaging/*/target/).
 #
-# CI: invoked by the validate-bundles* jobs in .github/workflows/bot.yml right after the bundle build.
+# CI: invoked by the validate-bundles* jobs in .github/workflows/java_ci_engines.yml right after the bundle build.
 #
 
 set -u
