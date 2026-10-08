@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$comment": "Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE file. Licensed under the Apache License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0). Distributed on an AS IS BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND.",
+  "type": "object",
+  "properties": {
+    "spark": {
+      "type": "object",
+      "properties": {
+        "cores": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "driverMemory": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*[gm]$"
+        },
+        "shufflePartitions": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "extraConf": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          }
+        }
+      }
+    },
+    "catalog": {
+      "type": "object",
+      "properties": {
+        "metastoreUri": {
+          "type": "string",
+          "pattern": "^$|^thrift://[^\\s]+$"
+        },
+        "warehouse": {
+          "type": "string",
+          "pattern": "^$|^s3a://[^\\s]+$"
+        }
+      }
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "properties": {
+        "s3": {
+          "type": "object",
+          "properties": {
+            "pathStyleAccess": {
+              "type": "boolean"
+            },
+            "endpoint": {
+              "type": "string",
+              "pattern": "^$|^https?://[^\\s]+$"
+            },
+            "existingSecret": {
+              "type": "string"
+            },
+            "accessKeyKey": {
+              "type": "string",
+              "minLength": 1
+            },
+            "secretKeyKey": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sessionTokenKey": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}
