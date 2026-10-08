@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.RemotePartitionHelper;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -59,6 +60,8 @@ import org.apache.hadoop.security.UserGroupInformation;
 import javax.annotation.Nonnull;
 
 import java.io.IOException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.PrivilegedExceptionAction;
 import java.util.Arrays;
 import java.util.List;
@@ -793,14 +796,49 @@ public class RequestHandler {
       // exempt an exact prefix before one of those trailing cleans; other differences still
       // require a sync and must fail the final check if they remain afterward.
       List<HoodieInstant> instants = localTimeline.getInstants();
-      for (int i = instants.size() - 1; i >= 0; i--) {
-        HoodieInstant instant = instants.get(i);
-        if (!HoodieTimeline.CLEAN_ACTION.equals(instant.getAction())) {
-          break;
+      int firstTrailingClean = instants.size();
+      while (firstTrailingClean > 0 && HoodieTimeline.CLEAN_ACTION.equals(instants.get(firstTrailingClean - 1).getAction())) {
+        firstTrailingClean--;
+      }
+      if (firstTrailingClean == instants.size()) {
+        return true;
+      }
+
+      try {
+        // Match BaseHoodieTimeline's hash encoding in one pass instead of rebuilding and
+        // hashing the entire prefix for each trailing clean under the view lock.
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        String firstTrailingCleanTime = instants.get(firstTrailingClean).requestedTime();
+        String previousTime = null;
+        String prefixHashBeforeTime = null;
+        for (int i = 0; i < instants.size(); i++) {
+          HoodieInstant instant = instants.get(i);
+          String instantTime = instant.requestedTime();
+          if (previousTime != null && instantTime.compareTo(previousTime) < 0) {
+            return true;
+          }
+          if (!instantTime.equals(previousTime)) {
+            // findInstantsBefore excludes every instant with the clean's timestamp, even
+            // if a different action at that timestamp precedes the clean in the list.
+            if (i >= firstTrailingClean || instantTime.equals(firstTrailingCleanTime)) {
+              try {
+                prefixHashBeforeTime = StringUtils.toHexString(((MessageDigest) digest.clone()).digest());
+              } catch (CloneNotSupportedException e) {
+                // Preserve the conservative refresh and final-check behavior on providers
+                // that cannot snapshot digest state.
+                return true;
+              }
+            }
+            previousTime = instantTime;
+          }
+          if (i >= firstTrailingClean && prefixHashBeforeTime.equals(timelineHashFromClient)) {
+            return false;
+          }
+          digest.update(StringUtils.getUTF8Bytes(StringUtils.joinUsingDelim("_", instantTime,
+              instant.getAction(), instant.getState().name())));
         }
-        if (localTimeline.findInstantsBefore(instant.requestedTime()).getTimelineHash().equals(timelineHashFromClient)) {
-          return false;
-        }
+      } catch (NoSuchAlgorithmException e) {
+        throw new HoodieException("Failed to hash the timeline", e);
       }
       return true;
     }
