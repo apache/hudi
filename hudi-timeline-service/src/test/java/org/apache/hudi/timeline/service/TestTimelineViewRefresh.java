@@ -429,6 +429,95 @@ class TestTimelineViewRefresh extends HoodieCommonTestHarness {
     verify(view).sync();
   }
 
+  @Test
+  void testStaleClientsShareASingleSync() throws Exception {
+    // A concurrent writer leaves many executors pinned to an older timeline. Re-reading storage
+    // cannot bring the server back to their hash, so only the first request should pay for a reload.
+    HoodieTimeline staleClientTimeline = timeline(instant(COMPLETED, COMMIT_ACTION, "001"));
+    HoodieTimeline serverTimeline =
+        timeline(instant(COMPLETED, COMMIT_ACTION, "001"), instant(COMPLETED, COMMIT_ACTION, "002"));
+    when(view.getTimeline()).thenReturn(serverTimeline);
+
+    assertThrows(IOException.class, () -> request(staleClientTimeline, "001", "partition"));
+    verify(view).sync();
+    clearInvocations(view);
+
+    ExecutorService executor = Executors.newFixedThreadPool(8);
+    try {
+      List<Future<?>> requests = new ArrayList<>();
+      for (int i = 0; i < 32; i++) {
+        requests.add(executor.submit(() -> assertThrows(IOException.class, () -> request(staleClientTimeline, "001", "partition"))));
+      }
+      for (Future<?> request : requests) {
+        request.get(60, TimeUnit.SECONDS);
+      }
+    } finally {
+      executor.shutdownNow();
+    }
+    // The server timeline never changed, so repeating the reload could not have changed the outcome.
+    verify(view, never()).sync();
+  }
+
+  @Test
+  void testServerTimelineChangeStillSyncsForAKnownClient() throws Exception {
+    HoodieTimeline staleClientTimeline = timeline(instant(COMPLETED, COMMIT_ACTION, "001"));
+    when(view.getTimeline()).thenReturn(
+        timeline(instant(COMPLETED, COMMIT_ACTION, "001"), instant(COMPLETED, COMMIT_ACTION, "002")));
+    assertThrows(IOException.class, () -> request(staleClientTimeline, "001", "partition"));
+    verify(view).sync();
+    clearInvocations(view);
+
+    assertThrows(IOException.class, () -> request(staleClientTimeline, "001", "partition"));
+    verify(view, never()).sync();
+
+    // The client now advances past what the server has, which the earlier record must not suppress.
+    HoodieTimeline aheadClientTimeline = timeline(instant(COMPLETED, COMMIT_ACTION, "001"),
+        instant(COMPLETED, COMMIT_ACTION, "002"), instant(COMPLETED, COMMIT_ACTION, "003"));
+    assertThrows(IOException.class, () -> request(aheadClientTimeline, "003", "partition"));
+    verify(view).sync();
+  }
+
+  @Test
+  void testDeletedInstantsDropRecordedSyncs() throws Exception {
+    HoodieTimeline staleClientTimeline = timeline(instant(COMPLETED, COMMIT_ACTION, "001"));
+    HoodieTimeline serverTimeline =
+        timeline(instant(COMPLETED, COMMIT_ACTION, "001"), instant(COMPLETED, COMMIT_ACTION, "002"));
+    when(view.getTimeline()).thenReturn(serverTimeline);
+    assertThrows(IOException.class, () -> request(staleClientTimeline, "001", "partition"));
+    verify(view).sync();
+    clearInvocations(view);
+
+    // Restore deletes completed instants from storage, moving the server timeline backwards while
+    // still differing from the client. The recorded reload described a timeline that no longer
+    // exists, so it must not suppress the reload that recovers the server.
+    when(view.getTimeline()).thenReturn(
+        timeline(instant(COMPLETED, COMMIT_ACTION, "001"), instant(COMPLETED, COMMIT_ACTION, "003")));
+    assertThrows(IOException.class, () -> request(staleClientTimeline, "001", "partition"));
+    verify(view).sync();
+  }
+
+  @Test
+  void testRecordedSyncsAreBounded() throws Exception {
+    // Distinct client timelines must not accumulate without bound; the oldest records are dropped.
+    HoodieTimeline serverTimeline = timeline(instant(COMPLETED, CLEAN_ACTION, "900"));
+    when(view.getTimeline()).thenReturn(serverTimeline);
+    List<HoodieTimeline> clientTimelines = new ArrayList<>();
+    for (int i = 0; i < 12; i++) {
+      clientTimelines.add(timeline(instant(COMPLETED, COMMIT_ACTION, String.format("%03d", i))));
+    }
+    for (HoodieTimeline clientTimeline : clientTimelines) {
+      assertThrows(IOException.class, () -> request(clientTimeline, "900", "partition"));
+    }
+    verify(view, times(clientTimelines.size())).sync();
+    clearInvocations(view);
+
+    // The most recent entry is still remembered, the oldest has been evicted.
+    assertThrows(IOException.class, () -> request(clientTimelines.get(11), "900", "partition"));
+    verify(view, never()).sync();
+    assertThrows(IOException.class, () -> request(clientTimelines.get(0), "900", "partition"));
+    verify(view).sync();
+  }
+
   private List<String> request(HoodieTimeline timeline, String boundary, String partition) throws IOException {
     Map<String, String> params = new HashMap<>();
     params.put(BASEPATH_PARAM, basePath);

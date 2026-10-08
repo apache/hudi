@@ -135,6 +135,13 @@ public class TimelineService {
     public boolean enableRemotePartitioner = false;
 
     @Builder.Default
+    @Parameter(names = {"--stale-client-timeline-cache-size"}, description =
+        "Number of client timeline hashes to remember for which a refresh has already been performed. "
+            + "When many executors share a stale timeline, only the first request triggers a reload; "
+            + "the rest are served from the already-synced view. Set to 0 to disable.")
+    public int staleClientTimelineCacheSize = 10;
+
+    @Builder.Default
     @Parameter(names = {"--marker-batch-threads", "-mbt"}, description = "Number of threads to use for batch processing marker creation requests")
     public int markerBatchNumThreads = 20;
 
