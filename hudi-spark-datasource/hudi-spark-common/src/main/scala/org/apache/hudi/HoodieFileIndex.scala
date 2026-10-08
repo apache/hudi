@@ -656,13 +656,26 @@ object HoodieFileIndex extends Logging {
       properties.setProperty(HoodieTableConfig.PARTITION_EXTRACTOR_CLASS.key(), tableConfig.getPartitionExtractorClass.orElse(""))
 
       // for simple bucket index, we need to set the INDEX_TYPE, BUCKET_INDEX_HASH_FIELD, BUCKET_INDEX_NUM_BUCKETS
-      val database = getDatabaseName(tableConfig, spark.catalog.currentDatabase)
       val tableName = tableConfig.getTableName
 
-      if (spark.catalog.tableExists(database, tableName)) {
-        val tableIdentifier = TableIdentifier(tableName, Some(database))
-        val table = HoodieCatalogTable(spark, tableIdentifier)
-        table.catalogProperties.foreach(kv => properties.setProperty(kv._1, kv._2))
+      def mergeCatalogProperties(database: String): Unit = {
+        if (spark.catalog.tableExists(database, tableName)) {
+          val tableIdentifier = TableIdentifier(tableName, Some(database))
+          val table = HoodieCatalogTable(spark, tableIdentifier)
+          table.catalogProperties.foreach(kv => properties.setProperty(kv._1, kv._2))
+        }
+      }
+
+      if (StringUtils.isNullOrEmpty(tableConfig.getDatabaseName)) {
+        // The database is guessed from the session, so a catalog that cannot resolve it must not fail the read.
+        try {
+          mergeCatalogProperties(getDatabaseName(tableConfig, spark.catalog.currentDatabase))
+        } catch {
+          case NonFatal(e) =>
+            logWarning(s"Skipping catalog properties for table $tableName: lookup in the session's current database failed", e)
+        }
+      } else {
+        mergeCatalogProperties(tableConfig.getDatabaseName)
       }
     }
 
