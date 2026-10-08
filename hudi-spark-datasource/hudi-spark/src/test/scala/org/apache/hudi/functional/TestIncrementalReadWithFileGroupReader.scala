@@ -180,32 +180,49 @@ class TestIncrementalReadWithFileGroupReader extends SparkClientFunctionalTestHa
 
   @Test
   def testCowIncrementalReadDoesNotMutateVectorizedReaderSessionConf(): Unit = {
-    spark.conf.set("spark.sql.parquet.enableVectorizedReader", "true")
+    val configs = Seq(
+      "spark.sql.parquet.enableVectorizedReader" -> "true"
+    )
 
-    write(
-      batches.head._1,
-      "COPY_ON_WRITE",
-      8,
-      batches.head._2,
-      SaveMode.Overwrite)
+    val previousConfigs = configs.map { case (key, _) =>
+      key -> spark.conf.getOption(key)
+    }
 
-    val metaClient = HoodieTableMetaClient.builder()
-      .setConf(storageConf().newInstance())
-      .setBasePath(basePath())
-      .build()
+    try {
+      configs.foreach { case (key, value) =>
+        spark.conf.set(key, value)
+      }
 
-    val instant = metaClient.getActiveTimeline
-      .getCommitsTimeline
-      .filterCompletedInstants
-      .lastInstant()
-      .get()
-      .getCompletionTime
+      write(
+        batches.head._1,
+        "COPY_ON_WRITE",
+        8,
+        batches.head._2,
+        SaveMode.Overwrite)
 
-    readIncremental(8, "000", instant).collect()
+      val metaClient = HoodieTableMetaClient.builder()
+        .setConf(storageConf().newInstance())
+        .setBasePath(basePath())
+        .build()
 
-    assertTrue(
-      spark.conf.get("spark.sql.parquet.enableVectorizedReader").toBoolean,
-      "COW incremental read must not mutate the Spark session vectorized-reader config")
+      val instant = metaClient.getActiveTimeline
+        .getCommitsTimeline
+        .filterCompletedInstants
+        .lastInstant()
+        .get()
+        .getCompletionTime
+
+      readIncremental(8, "000", instant).collect()
+
+      assertTrue(
+        spark.conf.get("spark.sql.parquet.enableVectorizedReader").toBoolean,
+        "COW incremental read must preserve the session vectorized-reader setting")
+    } finally {
+      previousConfigs.foreach {
+        case (key, Some(value)) => spark.conf.set(key, value)
+        case (key, None) => spark.conf.unset(key)
+      }
+    }
   }
 
   private def assertFullTableScanRange(metaClient: HoodieTableMetaClient,
