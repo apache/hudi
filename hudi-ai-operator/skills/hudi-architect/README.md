@@ -50,7 +50,7 @@ Copy this directory into your Claude Code skills location:
 
 ```bash
 # From the root of a Hudi checkout.
-SKILL=hudi-agent-gateway/skills/hudi-architect
+SKILL=hudi-ai-operator/skills/hudi-architect
 
 # User-level (available in every project)
 mkdir -p ~/.claude/skills && cp -r "$SKILL" ~/.claude/skills/
@@ -94,7 +94,7 @@ baseline.
 Every `hoodie.*` key mentioned in `SKILL.md` and `references/` is checked against the actual `ConfigProperty` definitions in the Hudi source tree:
 
 ```bash
-python3 hudi-agent-gateway/skills/hudi-architect/validate_config_keys.py
+python3 hudi-ai-operator/skills/hudi-architect/validate_config_keys.py
 ```
 
 Run it after any edit to the reference files (exit 1 lists unknown keys). Intentional exceptions — e.g. future-version keys the references discuss but never emit — live in `validate_config_keys_allowlist.txt` with a comment each.
@@ -102,7 +102,7 @@ Run it after any edit to the reference files (exit 1 lists unknown keys). Intent
 Validate the Flink baseline manifest without consulting the current checkout:
 
 ```bash
-python3 hudi-agent-gateway/skills/hudi-architect/validate_flink_capabilities.py
+python3 hudi-ai-operator/skills/hudi-architect/validate_flink_capabilities.py
 ```
 
 Maintainers with the pinned release commit available locally can additionally verify every source
@@ -112,7 +112,7 @@ Flink PR1 assessment.
 Credential-bearing evidence can be sanitized without executing or parsing it as configuration:
 
 ```bash
-python3 hudi-agent-gateway/skills/hudi-architect/redact_sensitive_values.py < evidence.txt
+python3 hudi-ai-operator/skills/hudi-architect/redact_sensitive_values.py < evidence.txt
 ```
 
 ## What to look for during review

@@ -49,8 +49,8 @@ Copy the `hudi-architect` directory into a Claude Code skills location:
 
 ```bash
 # The skill ships inside a Hudi checkout at:
-#   hudi-agent-gateway/skills/hudi-architect
-SKILL=/path/to/hudi/hudi-agent-gateway/skills/hudi-architect
+#   hudi-ai-operator/skills/hudi-architect
+SKILL=/path/to/hudi/hudi-ai-operator/skills/hudi-architect
 
 # Option A — user-level: available in every project on your machine
 mkdir -p ~/.claude/skills

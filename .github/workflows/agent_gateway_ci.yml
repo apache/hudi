@@ -23,6 +23,7 @@ on:
       - 'release-*'
     paths:
       - 'hudi-agent-gateway/**'
+      - 'hudi-ai-operator/**'
       - 'hudi-lakehouse/**'
       - '.github/workflows/agent_gateway_ci.yml'
   pull_request:
@@ -30,6 +31,7 @@ on:
       - master
     paths:
       - 'hudi-agent-gateway/**'
+      - 'hudi-ai-operator/**'
       - 'hudi-lakehouse/**'
       - '.github/workflows/agent_gateway_ci.yml'
 
@@ -66,17 +68,17 @@ jobs:
           refs/tags/release-1.2.0:refs/tags/release-1.2.0
       - name: Validate Hudi Architect references
         run: |
-          python skills/hudi-architect/validate_config_keys.py
-          python skills/hudi-architect/validate_flink_capabilities.py --verify-source
+          python ../hudi-ai-operator/skills/hudi-architect/validate_config_keys.py
+          python ../hudi-ai-operator/skills/hudi-architect/validate_flink_capabilities.py --verify-source
       - name: Test
         run: python -m pytest tests -q
       - name: Lint
         run: >-
           ruff check src tests
-          skills/hudi-architect/redact_sensitive_values.py
-          skills/hudi-architect/validate_flink_capabilities.py
+          ../hudi-ai-operator/skills/hudi-architect/redact_sensitive_values.py
+          ../hudi-ai-operator/skills/hudi-architect/validate_flink_capabilities.py
       - name: Type-check
-        run: mypy src skills/hudi-architect/validate_flink_capabilities.py
+        run: mypy src ../hudi-ai-operator/skills/hudi-architect/validate_flink_capabilities.py
 
   chart-lint:
     name: helm lint + template

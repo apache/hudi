@@ -28,7 +28,7 @@ import pytest
 
 GATEWAY_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = GATEWAY_DIR.parent
-SKILL_DIR = GATEWAY_DIR / "skills" / "hudi-architect"
+SKILL_DIR = REPO_ROOT / "hudi-ai-operator" / "skills" / "hudi-architect"
 REFERENCES_DIR = SKILL_DIR / "references"
 CAPABILITY_MANIFEST = REFERENCES_DIR / "flink-1.20-hudi-1.2.0-capabilities.toml"
 GATE_FIXTURE = (
