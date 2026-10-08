@@ -21,8 +21,12 @@ package org.apache.hudi.io.hfile;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.stats.CacheStats;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.time.Duration;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
@@ -30,16 +34,27 @@ import java.util.concurrent.TimeUnit;
 /**
  * Least Frequently Used (LFU) cache for HFile blocks to improve read performance by avoiding repeated block reads.
  * Uses Caffeine cache with configurable size and TTL. Thread-safe for concurrent access.
+ * The cache is bounded by entry count, or by retained bytes when a positive max weight is configured.
  */
 public class HFileBlockCache {
 
   private final Cache<BlockCacheKey, HFileBlock> cache;
 
   public HFileBlockCache(int maxCacheSize, long expireAfterWrite, TimeUnit timeUnit) {
-    this.cache = Caffeine.newBuilder()
-        .maximumSize(maxCacheSize)
+    this(maxCacheSize, 0L, expireAfterWrite, timeUnit);
+  }
+
+  public HFileBlockCache(int maxCacheSize, long maxWeightBytes, long expireAfterWrite, TimeUnit timeUnit) {
+    Caffeine<Object, Object> builder = Caffeine.newBuilder()
         .expireAfterAccess(Duration.ofMillis(timeUnit.toMillis(expireAfterWrite)))
-        .build();
+        .recordStats();
+    if (maxWeightBytes > 0L) {
+      this.cache = builder.maximumWeight(maxWeightBytes)
+          .weigher((BlockCacheKey key, HFileBlock block) -> Math.max(1, block.heapSize()))
+          .build();
+    } else {
+      this.cache = builder.maximumSize(maxCacheSize).build();
+    }
   }
 
   /**
@@ -68,17 +83,41 @@ public class HFileBlockCache {
    * @param key      the cache key
    * @param loader   callable to load the block if not in cache
    * @return cached or newly computed block
-   * @throws Exception if the loader throws an exception
+   * @throws IOException if the loader fails, in which case nothing is cached for the key
    */
-  public HFileBlock getOrCompute(BlockCacheKey key, Callable<HFileBlock> loader) throws Exception {
-    // Caffeine uses Function instead of Callable, so we need to wrap the Callable
-    return cache.get(key, (k) -> {
-      try {
-        return loader.call();
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    });
+  public HFileBlock getOrCompute(BlockCacheKey key, Callable<HFileBlock> loader) throws IOException {
+    return getOrLoad(cache, key, loader);
+  }
+
+  /**
+   * Gets a value from a cache, or loads and caches it if not present.
+   *
+   * <p>Caffeine only accepts a {@link java.util.function.Function} as the loader, so a checked
+   * exception has to cross the cache boundary wrapped; it is unwrapped here so that callers keep
+   * the {@link IOException} the loader threw. Unchecked exceptions propagate as they are.
+   *
+   * @param cache  the cache
+   * @param key    the cache key
+   * @param loader callable to load the value if not in cache
+   * @return cached or newly loaded value
+   * @throws IOException if the loader fails, in which case nothing is cached for the key
+   */
+  static <K, V> V getOrLoad(Cache<K, V> cache, K key, Callable<? extends V> loader) throws IOException {
+    try {
+      return cache.get(key, k -> {
+        try {
+          return loader.call();
+        } catch (IOException e) {
+          throw new UncheckedIOException(e);
+        } catch (RuntimeException e) {
+          throw e;
+        } catch (Exception e) {
+          throw new UncheckedIOException(new IOException("Failed to load HFile block", e));
+        }
+      });
+    } catch (UncheckedIOException e) {
+      throw e.getCause();
+    }
   }
 
   /**
@@ -95,6 +134,19 @@ public class HFileBlockCache {
    */
   public long size() {
     return cache.estimatedSize();
+  }
+
+  /**
+   * Returns a human-readable snapshot of the cache size, hit rate, hits, misses, and evictions.
+   */
+  public String statsString() {
+    return statsString("blocks", cache);
+  }
+
+  static String statsString(String entryName, Cache<?, ?> cache) {
+    CacheStats stats = cache.stats();
+    return String.format(Locale.ROOT, "%s=%d hitRate=%.3f hits=%d misses=%d evictions=%d",
+        entryName, cache.estimatedSize(), stats.hitRate(), stats.hitCount(), stats.missCount(), stats.evictionCount());
   }
 
   /**

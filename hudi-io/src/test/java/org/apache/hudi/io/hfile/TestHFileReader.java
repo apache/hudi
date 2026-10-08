@@ -19,9 +19,11 @@
 
 package org.apache.hudi.io.hfile;
 
+import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 import org.apache.hudi.io.ByteBufferBackedInputStream;
+import org.apache.hudi.io.SeekableDataInputStream;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -36,9 +38,11 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.io.hfile.HFileBlock.HFILEBLOCK_HEADER_SIZE;
 import static org.apache.hudi.io.hfile.HFileByteUtils.getValue;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_BEFORE_BLOCK_FIRST_KEY;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_BEFORE_FILE_FIRST_KEY;
@@ -683,6 +687,54 @@ public class TestHFileReader {
     verifyHFileRead(filename, numEntries, keyCreator, VALUE_CREATOR, keyLookUpInfoList);
   }
 
+  /**
+   * Reads each fixture through {@link CachingHFileReaderImpl} twice: the first reader fills the
+   * caches from the file, the second must be served entirely from them, including the leaf index
+   * blocks of the multi-level fixtures.
+   */
+  @ParameterizedTest
+  @MethodSource("testArgsReadHFilePointAndPrefixLookup")
+  public void testReadHFilePointAndPrefixLookupThroughCache(String filename,
+                                                            int numEntries,
+                                                            Function<Integer, String> keyCreator,
+                                                            List<KeyLookUpInfo> keyLookUpInfoList) throws IOException {
+    HFileReaderCacheManager.reset();
+    try {
+      byte[] content = readHFileFromResources(filename);
+      Lazy<SeekableDataInputStream> fileStream = Lazy.lazily(
+          () -> new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(content)));
+      Lazy<SeekableDataInputStream> failingStream = Lazy.lazily(() -> {
+        throw new IllegalStateException("A fully cached read must not open the file");
+      });
+      for (Lazy<SeekableDataInputStream> stream : Arrays.asList(fileStream, failingStream)) {
+        try (HFileReader reader = new CachingHFileReaderImpl(stream, Lazy.eagerly((long) content.length), filename, true,
+            HFileReaderCacheManager.getInstance(100_000, 0L, 100, 30, true))) {
+          reader.initializeMetadata();
+          verifyHFileMetadata(reader, numEntries);
+          verifyHFileValuesInSequentialReads(reader, numEntries, Option.of(keyCreator), Option.of(VALUE_CREATOR));
+          verifyHFileSeekToReads(reader, keyLookUpInfoList);
+        }
+      }
+    } finally {
+      HFileReaderCacheManager.reset();
+    }
+  }
+
+  @Test
+  public void testUnpackedCompressedBlockRetainsOnlyUncompressedBytes() throws IOException {
+    try (HFileReaderImpl reader = (HFileReaderImpl) getHFileReader("/hfile/hudi_1_0_hbase_2_4_9_16KB_GZ_20000.hfile")) {
+      reader.initializeMetadata();
+      BlockIndexEntry firstEntry = reader.getDataBlockIndexMap().values().iterator().next();
+      HFileDataBlock block = reader.instantiateHFileDataBlock(firstEntry);
+
+      List<byte[]> retained = block.retainedBuffers();
+      assertEquals(1, retained.size(), "An unpacked block must release its compressed bytes");
+      assertTrue(block.heapSize() > HFILEBLOCK_HEADER_SIZE);
+      assertTrue(block.heapSize() <= retained.get(0).length,
+          "heapSize must not exceed the retained array: " + block.heapSize() + " > " + retained.get(0).length);
+    }
+  }
+
   @Test
   public void testReadHFileWithNonUniqueKeys() throws IOException {
     try (HFileReader reader = getHFileReader("/hfile/hudi_1_0_hbase_2_4_9_16KB_GZ_200_20_non_unique.hfile")) {
@@ -827,6 +879,19 @@ public class TestHFileReader {
       assertEquals(SEEK_TO_EOF, reader.seekTo(new UTF8StringKey("random")));
       assertFalse(reader.next());
     }
+  }
+
+  @Test
+  public void testCloseDoesNotInitializeLazyStream() throws IOException {
+    AtomicBoolean streamOpened = new AtomicBoolean(false);
+    HFileReaderImpl reader = new HFileReaderImpl(Lazy.lazily(() -> {
+      streamOpened.set(true);
+      return new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(new byte[0]));
+    }), Lazy.eagerly(0L));
+
+    reader.close();
+
+    assertFalse(streamOpened.get());
   }
 
   @ParameterizedTest

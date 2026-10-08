@@ -59,7 +59,7 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
                                                 Option<HoodieSchema> schemaOption) {
     HFileReaderFactory readerFactory = HFileReaderFactory.builder()
         .withStorage(storage).withProps(hoodieConfig.getProps())
-        .withPath(pathInfo.getPath()).withFileSize(pathInfo.getLength()).build();
+        .withPathInfo(pathInfo).build();
     return newNativeHFileReader(hoodieConfig, readerFactory, pathInfo.getPath(), schemaOption);
   }
 

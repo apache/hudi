@@ -19,8 +19,10 @@
 
 package org.apache.hudi.io.hfile;
 
+import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
 
 import lombok.AccessLevel;
@@ -45,8 +47,11 @@ import static org.apache.hudi.io.hfile.HFileByteUtils.readMajorVersion;
  */
 public class HFileReaderImpl implements HFileReader {
 
-  protected final SeekableDataInputStream stream;
-  protected final long fileSize;
+  // Both are resolved on first use, so a reader whose blocks are all cached never touches storage.
+  // A supplier can only surface an open or size lookup failure as a HoodieIOException, which
+  // getStream() and getFileSize() unwrap to keep the reader's IOException contract.
+  protected final Lazy<SeekableDataInputStream> lazyStream;
+  protected final Lazy<Long> lazyFileSize;
 
   protected final HFileCursor cursor;
   protected boolean isMetadataInitialized = false;
@@ -60,8 +65,12 @@ public class HFileReaderImpl implements HFileReader {
   protected Option<HFileDataBlock> currentDataBlock;
 
   public HFileReaderImpl(SeekableDataInputStream stream, long fileSize) {
-    this.stream = stream;
-    this.fileSize = fileSize;
+    this(Lazy.eagerly(stream), Lazy.eagerly(fileSize));
+  }
+
+  public HFileReaderImpl(Lazy<SeekableDataInputStream> lazyStream, Lazy<Long> lazyFileSize) {
+    this.lazyStream = lazyStream;
+    this.lazyFileSize = lazyFileSize;
     this.cursor = new HFileCursor();
     this.currentDataBlockEntry = Option.empty();
     this.currentDataBlock = Option.empty();
@@ -73,23 +82,77 @@ public class HFileReaderImpl implements HFileReader {
       return;
     }
 
-    // Read Trailer (serialized in Proto)
-    this.trailer = readTrailer(stream, fileSize);
+    HFileTrailerAndLoadOnOpenBlocks blocks = getTrailerAndLoadOnOpenBlocks();
+    this.trailer = blocks.trailer;
     this.context = HFileContext.builder()
         .compressionCodec(trailer.getCompressionCodec())
         .build();
-    HFileBlockReader blockReader = new HFileBlockReader(
-        context, stream, trailer.getLoadOnOpenDataOffset(),
-        fileSize - HFileTrailer.getTrailerSize());
     this.dataBlockIndexEntryMap = readDataBlockIndex(
-        blockReader, trailer.getDataIndexCount(), trailer.getNumDataIndexLevels());
-    HFileRootIndexBlock metaIndexBlock =
+        blocks.rootDataIndexBlock, trailer.getDataIndexCount(), trailer.getNumDataIndexLevels());
+    this.metaBlockIndexEntryMap = blocks.metaRootIndexBlock.readBlockIndex(trailer.getMetaIndexCount(), true);
+    this.fileInfo = blocks.fileInfoBlock.readFileInfo();
+    this.isMetadataInitialized = true;
+  }
+
+  /**
+   * Returns the trailer and the "load-on-open" section of the file. Subclasses override this to
+   * decide where the blocks come from; the base implementation reads them from the file.
+   */
+  protected HFileTrailerAndLoadOnOpenBlocks getTrailerAndLoadOnOpenBlocks() throws IOException {
+    return readTrailerAndLoadOnOpenBlocks();
+  }
+
+  /**
+   * Reads the trailer and the three blocks of the "load-on-open" section from the file.
+   */
+  protected final HFileTrailerAndLoadOnOpenBlocks readTrailerAndLoadOnOpenBlocks() throws IOException {
+    SeekableDataInputStream stream = getStream();
+    long fileSize = getFileSize();
+    // Read Trailer (serialized in Proto)
+    HFileTrailer loadedTrailer = readTrailer(stream, fileSize);
+    HFileContext loadOnOpenContext = HFileContext.builder()
+        .compressionCodec(loadedTrailer.getCompressionCodec())
+        .build();
+    HFileBlockReader blockReader = new HFileBlockReader(
+        loadOnOpenContext, stream, loadedTrailer.getLoadOnOpenDataOffset(),
+        fileSize - HFileTrailer.getTrailerSize());
+    HFileRootIndexBlock rootDataIndexBlock =
         (HFileRootIndexBlock) blockReader.nextBlock(HFileBlockType.ROOT_INDEX);
-    this.metaBlockIndexEntryMap = metaIndexBlock.readBlockIndex(trailer.getMetaIndexCount(), true);
+    HFileRootIndexBlock metaRootIndexBlock =
+        (HFileRootIndexBlock) blockReader.nextBlock(HFileBlockType.ROOT_INDEX);
     HFileFileInfoBlock fileInfoBlock =
         (HFileFileInfoBlock) blockReader.nextBlock(HFileBlockType.FILE_INFO);
-    this.fileInfo = fileInfoBlock.readFileInfo();
-    this.isMetadataInitialized = true;
+    return new HFileTrailerAndLoadOnOpenBlocks(loadedTrailer, rootDataIndexBlock, metaRootIndexBlock, fileInfoBlock);
+  }
+
+  /**
+   * Opens the underlying stream on first use, surfacing an open or size lookup failure as the
+   * original {@link IOException}.
+   */
+  protected SeekableDataInputStream getStream() throws IOException {
+    try {
+      return lazyStream.get();
+    } catch (HoodieIOException e) {
+      throw unwrapped(e);
+    }
+  }
+
+  /**
+   * Resolves the file size on first use, surfacing a lookup failure as the original {@link IOException}.
+   */
+  protected long getFileSize() throws IOException {
+    try {
+      return lazyFileSize.get();
+    } catch (HoodieIOException e) {
+      throw unwrapped(e);
+    }
+  }
+
+  private static IOException unwrapped(HoodieIOException e) throws HoodieIOException {
+    if (e.getIOException() != null) {
+      return e.getIOException();
+    }
+    throw e;
   }
 
   @Override
@@ -106,7 +169,7 @@ public class HFileReaderImpl implements HFileReader {
       return Option.empty();
     }
     HFileBlockReader blockReader = new HFileBlockReader(
-        context, stream, blockIndexEntry.getOffset(),
+        context, getStream(), blockIndexEntry.getOffset(),
         blockIndexEntry.getOffset() + blockIndexEntry.getSize());
     HFileMetaBlock block = (HFileMetaBlock) blockReader.nextBlock(HFileBlockType.META);
     return Option.of(block.readContent());
@@ -265,7 +328,9 @@ public class HFileReaderImpl implements HFileReader {
     currentDataBlockEntry = Option.empty();
     currentDataBlock = Option.empty();
     cursor.setEof();
-    stream.close();
+    if (lazyStream.isInitialized()) {
+      lazyStream.get().close();
+    }
   }
 
   Map<Key, BlockIndexEntry> getDataBlockIndexMap() {
@@ -280,8 +345,8 @@ public class HFileReaderImpl implements HFileReader {
    * @return {@link HFileTrailer} instance.
    * @throws IOException upon error.
    */
-  private static HFileTrailer readTrailer(SeekableDataInputStream stream,
-                                          long fileSize) throws IOException {
+  protected static HFileTrailer readTrailer(SeekableDataInputStream stream,
+                                            long fileSize) throws IOException {
     int bufferSize = HFileTrailer.getTrailerSize();
     long seekPos = fileSize - bufferSize;
     if (seekPos < 0) {
@@ -320,7 +385,7 @@ public class HFileReaderImpl implements HFileReader {
    */
   public HFileDataBlock instantiateHFileDataBlock(BlockIndexEntry blockToRead) throws IOException {
     HFileBlockReader blockReader = new HFileBlockReader(
-        context, stream, blockToRead.getOffset(),
+        context, getStream(), blockToRead.getOffset(),
         blockToRead.getOffset() + (long) blockToRead.getSize());
     return (HFileDataBlock) blockReader.nextBlock(HFileBlockType.DATA);
   }
@@ -335,17 +400,16 @@ public class HFileReaderImpl implements HFileReader {
   /**
    * Read single-level or multiple-level data block index, and load all data block information into memory in BFS fashion.
    *
-   * @param rootBlockReader a {@link HFileBlockReader} used to read root data index block; this reader will be used to read subsequent meta index block afterward
-   * @param numEntries      the number of entries in the root index block
-   * @param levels          the level of the indexes
+   * @param rootDataIndexBlock a {@link HFileRootIndexBlock}
+   * @param numEntries         the number of entries in the root index block
+   * @param levels             the level of the indexes
    * @return single/multiple-level data block index
    */
-  private TreeMap<Key, BlockIndexEntry> readDataBlockIndex(HFileBlockReader rootBlockReader, int numEntries, int levels) throws IOException {
+  protected TreeMap<Key, BlockIndexEntry> readDataBlockIndex(HFileRootIndexBlock rootDataIndexBlock,
+                                                             int numEntries,
+                                                             int levels) throws IOException {
     ValidationUtils.checkArgument(levels > 0,
         "levels of data block index must be greater than 0");
-    // Parse root data index block
-    HFileRootIndexBlock rootDataIndexBlock =
-        (HFileRootIndexBlock) rootBlockReader.nextBlock(HFileBlockType.ROOT_INDEX);
     if (levels == 1) {
       // Single-level data block index
       return rootDataIndexBlock.readBlockIndex(numEntries, false);
@@ -367,12 +431,9 @@ public class HFileReaderImpl implements HFileReader {
       // (3) BFS
       while (!queue.isEmpty()) {
         BlockIndexEntry indexEntry = queue.poll();
-        HFileBlockReader blockReader = new HFileBlockReader(
-            context, stream, indexEntry.getOffset(), indexEntry.getOffset() + indexEntry.getSize());
         HFileBlockType blockType = levels > 1
             ? HFileBlockType.INTERMEDIATE_INDEX : HFileBlockType.LEAF_INDEX;
-        HFileBlock tempBlock = blockReader.nextBlock(blockType);
-        indexEntryList.addAll(((HFileLeafIndexBlock) tempBlock).readBlockIndex());
+        indexEntryList.addAll(readDataBlockIndexEntries(indexEntry, blockType));
       }
 
       // (4) Lower index level
@@ -396,5 +457,13 @@ public class HFileReaderImpl implements HFileReader {
 
     // (6) Returns the combined index entry map
     return blockIndexEntryMap;
+  }
+
+  protected List<BlockIndexEntry> readDataBlockIndexEntries(BlockIndexEntry indexEntry,
+                                                            HFileBlockType blockType) throws IOException {
+    HFileBlockReader blockReader = new HFileBlockReader(
+        context, getStream(), indexEntry.getOffset(), indexEntry.getOffset() + indexEntry.getSize());
+    HFileBlock tempBlock = blockReader.nextBlock(blockType);
+    return ((HFileLeafIndexBlock) tempBlock).readBlockIndex();
   }
 }
