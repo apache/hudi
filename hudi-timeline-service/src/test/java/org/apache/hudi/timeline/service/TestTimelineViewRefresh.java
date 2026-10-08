@@ -43,12 +43,19 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -110,27 +117,31 @@ class TestTimelineViewRefresh extends HoodieCommonTestHarness {
   }
 
   @Test
-  void testRepeatedRequestsWithExactExtensionDoNotSync() throws IOException {
+  void testConcurrentRequestsWithTrailingCleanDoNotSync() throws Exception {
     HoodieTimeline clientTimeline = timeline(instant(COMPLETED, COMMIT_ACTION, "001"));
     when(view.getTimeline()).thenReturn(timeline(instant(COMPLETED, COMMIT_ACTION, "001"), instant(COMPLETED, CLEAN_ACTION, "002")));
-    for (int i = 0; i < 32; i++) {
-      assertEquals(0, request(clientTimeline, "001", "partition-" + i).size());
+    ExecutorService executor = Executors.newFixedThreadPool(8);
+    try {
+      List<Future<List<String>>> requests = new ArrayList<>();
+      for (int i = 0; i < 32; i++) {
+        requests.add(executor.submit(() -> request(clientTimeline, "001", "partition")));
+      }
+      for (Future<List<String>> request : requests) {
+        assertEquals(0, request.get(60, TimeUnit.SECONDS).size());
+      }
+    } finally {
+      executor.shutdownNow();
     }
     verify(view, never()).sync();
   }
 
-  @Test
-  void testExactExtensionSkipsRefreshButFinalCheckStaysStrict() throws IOException {
+  @ParameterizedTest
+  @ValueSource(strings = {COMMIT_ACTION, REPLACE_COMMIT_ACTION, COMPACTION_ACTION, LOG_COMPACTION_ACTION})
+  void testOtherExtensionsStillSyncAndFailFinalCheck(String action) {
     HoodieTimeline clientTimeline = timeline(instant(COMPLETED, COMMIT_ACTION, "001"));
-    for (String action : Arrays.asList(COMMIT_ACTION, CLEAN_ACTION, REPLACE_COMMIT_ACTION, COMPACTION_ACTION, LOG_COMPACTION_ACTION)) {
-      when(view.getTimeline()).thenReturn(timeline(instant(COMPLETED, COMMIT_ACTION, "001"), instant(COMPLETED, action, "002")));
-      if (CLEAN_ACTION.equals(action)) {
-        assertEquals(0, request(clientTimeline, "001", "partition").size(), action);
-      } else {
-        assertThrows(IOException.class, () -> request(clientTimeline, "001", "partition"), action);
-      }
-    }
-    verify(view, never()).sync();
+    when(view.getTimeline()).thenReturn(timeline(instant(COMPLETED, COMMIT_ACTION, "001"), instant(COMPLETED, action, "002")));
+    assertThrows(IOException.class, () -> request(clientTimeline, "001", "partition"));
+    verify(view).sync();
   }
 
   @Test
@@ -138,10 +149,10 @@ class TestTimelineViewRefresh extends HoodieCommonTestHarness {
     HoodieInstant commit = instant(COMPLETED, COMMIT_ACTION, "001");
     HoodieInstant clean = instant(COMPLETED, CLEAN_ACTION, "001");
     HoodieTimeline clientTimeline = timeline(commit, clean);
-    when(view.getTimeline()).thenReturn(timeline(commit, clean, instant(COMPLETED, COMMIT_ACTION, "002")));
-    assertThrows(IOException.class, () -> request(clientTimeline, "001", "partition"));
+    when(view.getTimeline()).thenReturn(timeline(commit, clean, instant(COMPLETED, CLEAN_ACTION, "002")));
+    request(clientTimeline, "001", "partition");
     verify(view, never()).sync();
-    when(view.getTimeline()).thenReturn(timeline(commit, instant(COMPLETED, COMMIT_ACTION, "002")));
+    when(view.getTimeline()).thenReturn(timeline(commit, instant(COMPLETED, CLEAN_ACTION, "002")));
     doAnswer(invocation -> {
       when(view.getTimeline()).thenReturn(clientTimeline);
       return null;
@@ -166,7 +177,7 @@ class TestTimelineViewRefresh extends HoodieCommonTestHarness {
   void testDivergentPrefixesStillSync() throws IOException {
     HoodieInstant first = instant(COMPLETED, COMMIT_ACTION, "001");
     HoodieInstant boundary = instant(COMPLETED, CLEAN_ACTION, "003");
-    HoodieInstant newer = instant(COMPLETED, COMMIT_ACTION, "004");
+    HoodieInstant newer = instant(COMPLETED, CLEAN_ACTION, "004");
     HoodieTimeline clientTimeline = timeline(first, boundary);
     List<HoodieTimeline> divergent = Arrays.asList(
         timeline(first), // server behind
@@ -203,8 +214,13 @@ class TestTimelineViewRefresh extends HoodieCommonTestHarness {
     HoodieTimeline rawClient = timeline(commit, instant(INFLIGHT, COMMIT_ACTION, "002"), clean);
     HoodieTimeline filteredClient = rawClient.filterCompletedAndCompactionInstants();
     when(view.getTimeline()).thenReturn(timeline(commit, instant(REQUESTED, CLEAN_ACTION, "002"), clean, instant(COMPLETED, COMMIT_ACTION, "004")));
-    assertThrows(IOException.class, () -> request(filteredClient, "003", "partition"));
-    verify(view, never()).sync();
+    doAnswer(invocation -> {
+      when(view.getTimeline()).thenReturn(filteredClient);
+      return null;
+    }).when(view).sync();
+    request(filteredClient, "003", "partition");
+    verify(view).sync();
+    clearInvocations(view);
 
     // A pending log compaction is included by the server's existing filter but not the remote client's.
     // It must not be silently dropped from the prefix to manufacture a match.
@@ -266,6 +282,24 @@ class TestTimelineViewRefresh extends HoodieCommonTestHarness {
   }
 
   @Test
+  void testRealViewRefreshesAfterCommitIsDeleted() throws Exception {
+    FileCreateUtils.createCommit(metaClient, "001");
+    FileCreateUtils.createBaseFile(metaClient, "partition", "001", "file");
+    FileCreateUtils.createCommit(metaClient, "002");
+    FileCreateUtils.createBaseFile(metaClient, "partition", "002", "file");
+    HoodieTimeline initial = metaClient.reloadActiveTimeline();
+    view = spy(HoodieTableFileSystemView.fileListingBasedFileSystemView(new HoodieLocalEngineContext(metaClient.getStorageConf()), metaClient, initial));
+    assertEquals(Arrays.asList("002"), request(initial, "002", "partition"));
+
+    // Restore can delete completed instants without publishing each rollback. The server's
+    // extra commit is now stale, even though the client's timeline is an exact prefix.
+    FileCreateUtils.deleteCommit(metaClient, "002");
+    HoodieTimeline restored = metaClient.reloadActiveTimeline();
+    assertEquals(Arrays.asList("001"), request(restored, "001", "partition"));
+    verify(view).sync();
+  }
+
+  @Test
   void testExactExtensionPreservesLocalFallback() throws Exception {
     FileCreateUtils.createCommit(metaClient, "001");
     FileCreateUtils.createBaseFile(metaClient, "partition", "001", "file");
@@ -289,7 +323,7 @@ class TestTimelineViewRefresh extends HoodieCommonTestHarness {
           .map(HoodieBaseFile::getCommitTime).collect(Collectors.toList()));
       assertEquals(Arrays.asList("001"), priorityView.getLatestFileSlicesBeforeOrOn("partition", "001", false)
           .map(slice -> slice.getBaseInstantTime()).collect(Collectors.toList()));
-      verify(view, never()).sync();
+      verify(view).sync();
     } finally {
       priorityView.close();
       secondary.close();
@@ -314,7 +348,7 @@ class TestTimelineViewRefresh extends HoodieCommonTestHarness {
       assertEquals(1, priorityView.getLatestFileSlicesBeforeOrOn("partition", "001", false).count());
       assertEquals(Arrays.asList("001"), priorityView.getLatestFileSlicesBeforeOrOn("partition", "001", true)
           .map(slice -> slice.getBaseInstantTime()).collect(Collectors.toList()));
-      verify(view, never()).sync();
+      verify(view).sync();
     } finally {
       priorityView.close();
       secondary.close();
