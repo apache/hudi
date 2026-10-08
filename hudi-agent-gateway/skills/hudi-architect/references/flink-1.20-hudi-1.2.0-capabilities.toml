@@ -72,9 +72,21 @@ parameterized = [
 
 [physical_schema_constraints]
 field_name_pattern = "^[A-Za-z_][A-Za-z0-9_]*$"
+reserved_target_field_names = [
+  "_hoodie_commit_seqno",
+  "_hoodie_commit_time",
+  "_hoodie_file_name",
+  "_hoodie_operation",
+  "_hoodie_partition_path",
+  "_hoodie_record_key",
+]
 temporal_precision_min = 0
 temporal_precision_max = 6
 temporal_types = ["TIME", "TIMESTAMP", "TIMESTAMP_LTZ"]
+
+[runtime_constraints]
+checkpoint_interval_min_ms = 1000
+flink_checkpoint_interval_min_ms = 10
 
 [[source_anchors]]
 id = "root_pom"
@@ -93,6 +105,18 @@ id = "hoodie_schema_converter"
 path = "hudi-client/hudi-flink-client/src/main/java/org/apache/hudi/util/HoodieSchemaConverter.java"
 sha256 = "9fc500632bd250be48b0c9fa08faff7eb6cdb1ce9ad5ecce03a2532a69952e72"
 purpose = "Flink logical-type conversion limits and Avro-backed physical field construction"
+
+[[source_anchors]]
+id = "hoodie_record"
+path = "hudi-common/src/main/java/org/apache/hudi/common/model/HoodieRecord.java"
+sha256 = "11587947231d5a5727fea25169c986a20a3079d7f62787d3efe44c1f6e3f066e"
+purpose = "Canonical Hudi metadata field names reserved by the write path"
+
+[[source_anchors]]
+id = "flink_data_type_utils"
+path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/util/DataTypeUtils.java"
+sha256 = "62e99e81fede5fdf1e6b50ce81553812f4149502e821db300e227c03dce2c240"
+purpose = "Writer-side prepending of Hudi metadata fields to the Flink row type"
 
 [[source_anchors]]
 id = "options_resolver"
@@ -212,3 +236,15 @@ id = "FLINK_SCHEMA_FIELD_NAME_UNSUPPORTED"
 requirement = "Reject physical field names that cannot be represented by the Avro-backed Hudi sink schema."
 python_test = "test_pr2_rejects_non_avro_physical_field_names"
 java_test = "testPinnedPlannerRejectsNonAvroFieldName"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_HUDI_METADATA_FIELD_CONFLICT"
+requirement = "Reject target physical field names reserved for Hudi metadata before the append writer prepends them."
+python_test = "test_pr2_rejects_reserved_hudi_metadata_field_names"
+java_test = "testPinnedWriterRejectsReservedHudiMetadataField"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_CHECKPOINT_INTERVAL_UNSUPPORTED"
+requirement = "Reject checkpoint intervals below the 1000 ms Architect safety floor while preserving the pinned Flink 10 ms runtime boundary as evidence."
+python_test = "test_pr2_enforces_checkpoint_interval_safety_floor"
+java_test = "testPinnedRuntimeCheckpointIntervalBoundary"

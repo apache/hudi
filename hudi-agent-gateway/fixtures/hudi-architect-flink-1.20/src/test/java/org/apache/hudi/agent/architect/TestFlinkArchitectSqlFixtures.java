@@ -18,9 +18,11 @@
 
 package org.apache.hudi.agent.architect;
 
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.table.HoodieTableFactory;
+import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.HoodieSchemaConverter;
 
 import org.apache.flink.api.common.RuntimeExecutionMode;
@@ -35,8 +37,10 @@ import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.ExplainDetail;
 import org.apache.flink.table.api.Schema;
 import org.apache.flink.table.api.Table;
+import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
 import org.apache.flink.table.connector.ChangelogMode;
+import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimeType;
 import org.apache.flink.types.Row;
 import org.junit.jupiter.api.Test;
@@ -48,6 +52,7 @@ import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.util.Collections;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -258,6 +263,50 @@ class TestFlinkArchitectSqlFixtures {
     assertTrue(
         failureMessages(failure).contains("Illegal character in: user-id"),
         failureMessages(failure));
+  }
+
+  @Test
+  void testPinnedWriterRejectsReservedHudiMetadataField() {
+    assertPinnedArtifacts();
+    Set<String> reservedNames = Set.of(
+        "_hoodie_commit_seqno",
+        "_hoodie_commit_time",
+        "_hoodie_file_name",
+        "_hoodie_operation",
+        "_hoodie_partition_path",
+        "_hoodie_record_key");
+    assertEquals(reservedNames, HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION);
+
+    for (String reservedName : reservedNames) {
+      RowType physicalRowType = (RowType) DataTypes.ROW(
+          DataTypes.FIELD(reservedName, DataTypes.STRING())).getLogicalType();
+      boolean withOperationField =
+          HoodieRecord.OPERATION_METADATA_FIELD.equals(reservedName);
+
+      ValidationException failure = assertThrows(
+          ValidationException.class,
+          () -> DataTypeUtils.addMetadataFields(physicalRowType, withOperationField));
+
+      assertTrue(
+          failure.getMessage().contains("Field names must be unique"),
+          failure.getMessage());
+    }
+  }
+
+  @Test
+  void testPinnedRuntimeCheckpointIntervalBoundary() {
+    assertPinnedArtifacts();
+    StreamExecutionEnvironment invalidEnvironment =
+        StreamExecutionEnvironment.getExecutionEnvironment();
+    IllegalArgumentException failure = assertThrows(
+        IllegalArgumentException.class,
+        () -> invalidEnvironment.enableCheckpointing(9L));
+    assertTrue(failure.getMessage().contains("larger than or equal to 10 ms"));
+
+    StreamExecutionEnvironment validEnvironment =
+        StreamExecutionEnvironment.getExecutionEnvironment();
+    validEnvironment.enableCheckpointing(10L);
+    assertEquals(10L, validEnvironment.getCheckpointConfig().getCheckpointInterval());
   }
 
   private static void assertPinnedArtifacts() {

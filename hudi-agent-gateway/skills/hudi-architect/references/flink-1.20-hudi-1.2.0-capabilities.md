@@ -73,9 +73,10 @@ the current checkout contains it.
 | Physical-schema availability detection | Supported |
 | Bounded scalar physical-schema validation | Supported |
 | Avro-compatible physical field names | Required; incompatible names are `BLOCKED` |
+| Hudi fixed metadata field names in the target schema | `BLOCKED`; six exact names are reserved case-insensitively |
 | `TIME`, `TIMESTAMP`, and `TIMESTAMP_LTZ` precision 0 through 6 | Supported |
 | Temporal precision above 6 | `BLOCKED` by the pinned connector limit |
-| Nested, computed, metadata, and watermark columns | `REVIEW_REQUIRED` |
+| Other nested, computed, metadata, and watermark columns | `REVIEW_REQUIRED` |
 | Append-only record-key posture detection | Supported |
 | Auto-generated-key durability warning | Supported |
 | Replay-idempotence classification | Supported |
@@ -84,7 +85,7 @@ the current checkout contains it.
 | New-table, single-writer, append-only COW SQL | Supported after static validation |
 | Stable-key DDL | `PRIMARY KEY (...) NOT ENFORCED` |
 | Explicitly accepted auto-generated keys | Supported with durable warning |
-| Streaming checkpoint contract | Required |
+| Streaming checkpoint contract | Required; interval must be at least 1000 ms |
 | Declared source schema and `INSERT_ONLY` changelog | Required |
 | Flink SQL DDL and connector options | Validator-rendered for eligible requests |
 | Executable sink-side `INSERT INTO` | Validator-rendered for eligible requests |
@@ -131,6 +132,22 @@ not sufficient. The design validator requires every source and target field name
 `^[A-Za-z_][A-Za-z0-9_]*$` before rendering. Python tests cover valid and invalid boundaries, and
 the pinned planner fixture preserves the connector failure as regression evidence. The validator
 does not silently sanitize names because doing so would alter schema, key, and partition semantics.
+
+### `FLINK_HUDI_METADATA_FIELD_CONFLICT`
+
+The pinned Hudi write path prepends the six names in
+`HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION`. The design validator therefore rejects those
+exact target names case-insensitively before SQL emission, while allowing other `_hoodie_`-prefixed
+names. Python tests cover all six names, case-insensitive matching, and the non-reserved prefix
+boundary. The pinned writer-path fixture reproduces Flink's duplicate-field failure for all six
+names and anchors the canonical reserved-name set.
+
+### `FLINK_CHECKPOINT_INTERVAL_UNSUPPORTED`
+
+Flink 1.20.1 rejects checkpoint intervals below its 10 ms runtime minimum. The bounded Architect
+path deliberately applies a stricter 1000 ms safety floor and blocks lower values instead of
+silently increasing them. The pinned runtime test preserves the 9/10 ms dependency boundary, and
+the Python validator tests preserve the 999/1000 ms Architect boundary.
 
 ## Status vocabulary
 

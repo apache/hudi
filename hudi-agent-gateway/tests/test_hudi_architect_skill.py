@@ -177,9 +177,21 @@ def test_flink_baseline_is_fixed_and_pr2_has_bounded_executable_contract() -> No
     }
     assert manifest["physical_schema_constraints"] == {
         "field_name_pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+        "reserved_target_field_names": [
+            "_hoodie_commit_seqno",
+            "_hoodie_commit_time",
+            "_hoodie_file_name",
+            "_hoodie_operation",
+            "_hoodie_partition_path",
+            "_hoodie_record_key",
+        ],
         "temporal_precision_min": 0,
         "temporal_precision_max": 6,
         "temporal_types": ["TIME", "TIMESTAMP", "TIMESTAMP_LTZ"],
+    }
+    assert manifest["runtime_constraints"] == {
+        "checkpoint_interval_min_ms": 1000,
+        "flink_checkpoint_interval_min_ms": 10,
     }
     assert "first executable" in capability
     assert "`CONFIG_VALIDATED`" in decisions
@@ -269,6 +281,11 @@ def test_flink_capability_validation_rejects_manifest_revision_drift(
             "temporal_precision_max = 9",
             "physical_schema_constraints does not match",
         ),
+        (
+            "checkpoint_interval_min_ms = 1000",
+            "checkpoint_interval_min_ms = 10",
+            "runtime_constraints does not match",
+        ),
     ],
 )
 def test_flink_capability_validation_rejects_executable_contract_drift(
@@ -283,7 +300,7 @@ def test_flink_capability_validation_rejects_executable_contract_drift(
     assert expected_message in result.stderr
 
 
-def test_flink_capability_manifest_records_dannys_pr2_acceptance_contract() -> None:
+def test_flink_capability_manifest_records_pr2_acceptance_contract() -> None:
     manifest = _load_toml(CAPABILITY_MANIFEST)
     python_tests = {
         node.name
@@ -325,6 +342,14 @@ def test_flink_capability_manifest_records_dannys_pr2_acceptance_contract() -> N
         "FLINK_SCHEMA_FIELD_NAME_UNSUPPORTED": (
             "test_pr2_rejects_non_avro_physical_field_names",
             "testPinnedPlannerRejectsNonAvroFieldName",
+        ),
+        "FLINK_HUDI_METADATA_FIELD_CONFLICT": (
+            "test_pr2_rejects_reserved_hudi_metadata_field_names",
+            "testPinnedWriterRejectsReservedHudiMetadataField",
+        ),
+        "FLINK_CHECKPOINT_INTERVAL_UNSUPPORTED": (
+            "test_pr2_enforces_checkpoint_interval_safety_floor",
+            "testPinnedRuntimeCheckpointIntervalBoundary",
         ),
     }
     for check in manifest["implemented_acceptance_checks"]:
@@ -724,6 +749,75 @@ def test_pr2_accepts_avro_physical_field_name_boundaries(
     assessment = json.loads(result.stdout)
     assert assessment["status"] == "CONFIG_VALIDATED"
     assert f"`{field_name}` STRING" in assessment["artifacts"]["combined_sql"]
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    [
+        "_hoodie_commit_seqno",
+        "_hoodie_commit_time",
+        "_hoodie_file_name",
+        "_hoodie_operation",
+        "_hoodie_partition_path",
+        "_hoodie_record_key",
+        "_HOODIE_COMMIT_TIME",
+    ],
+)
+def test_pr2_rejects_reserved_hudi_metadata_field_names(
+    tmp_path: Path, field_name: str
+) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "auto_key.json"))
+    design["table"]["columns"][0]["name"] = field_name
+    design["source"]["columns"][0]["name"] = field_name
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == ["FLINK_HUDI_METADATA_FIELD_CONFLICT"]
+    assert assessment["status"] == "BLOCKED"
+    assert assessment["executable_eligible"] is False
+    assert "artifacts" not in assessment
+
+
+def test_pr2_does_not_reject_the_entire_hoodie_field_prefix(tmp_path: Path) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "auto_key.json"))
+    design["table"]["columns"][0]["name"] = "_hoodie_custom"
+    design["source"]["columns"][0]["name"] = "_hoodie_custom"
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 0, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "CONFIG_VALIDATED"
+    assert "`_hoodie_custom` STRING" in assessment["artifacts"]["combined_sql"]
+
+
+@pytest.mark.parametrize(
+    ("interval_ms", "accepted"), [(9, False), (10, False), (999, False), (1000, True)]
+)
+def test_pr2_enforces_checkpoint_interval_safety_floor(
+    tmp_path: Path, interval_ms: int, accepted: bool
+) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "auto_key.json"))
+    design["runtime"]["checkpoint_interval_ms"] = interval_ms
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+    assessment = json.loads(result.stdout)
+
+    if accepted:
+        assert result.returncode == 0, result.stderr
+        assert assessment["finding_codes"] == []
+        assert assessment["status"] == "CONFIG_VALIDATED"
+        assert f"'{interval_ms} ms'" in assessment["artifacts"]["runtime_sql"]
+    else:
+        assert result.returncode == 1
+        assert assessment["finding_codes"] == [
+            "FLINK_CHECKPOINT_INTERVAL_UNSUPPORTED"
+        ]
+        assert assessment["status"] == "BLOCKED"
+        assert assessment["executable_eligible"] is False
+        assert "artifacts" not in assessment
 
 
 @pytest.mark.parametrize(

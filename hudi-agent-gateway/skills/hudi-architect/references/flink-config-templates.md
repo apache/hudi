@@ -88,7 +88,7 @@ Target contract:
 
 Runtime contract:
 - Execution: streaming
-- Checkpoint interval: <positive duration>
+- Checkpoint interval: <concrete duration of at least 1000 ms>
 - A completed checkpoint coordinates a Hudi commit; this is not an end-to-end exactly-once claim.
 
 Validation summary:
@@ -108,8 +108,11 @@ The runtime block contains concrete streaming and checkpoint settings:
 
 ```sql
 SET 'execution.runtime-mode' = 'streaming';
-SET 'execution.checkpointing.interval' = '<positive milliseconds> ms';
+SET 'execution.checkpointing.interval' = '<milliseconds, minimum 1000> ms';
 ```
+
+Flink 1.20.1 has a lower runtime boundary of 10 ms, but the bounded Architect path intentionally
+requires at least 1000 ms and never raises a supplied value implicitly.
 
 The generated `CREATE TABLE` contains a Hudi `WITH` block with exactly the bounded load-bearing
 settings:

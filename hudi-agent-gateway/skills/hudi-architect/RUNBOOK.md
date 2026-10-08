@@ -142,7 +142,7 @@ Hudi 1.2.0 source revision plus Flink 1.20.1 fixture version. Any unresolved gat
 `INCOMPLETE`, `BLOCKED`, or `REVIEW_REQUIRED` without SQL. A design in the bounded executable
 surface reaches `CONFIG_VALIDATED` only after the physical target and source schemas, identity,
 `INSERT_ONLY` source changelog, COW insert append mode (`write.insert.cluster=false`), and a
-positive checkpoint interval pass deterministic validation. Its artifacts are runtime `SET`
+checkpoint interval of at least 1000 ms pass deterministic validation. Its artifacts are runtime `SET`
 statements, Hudi `CREATE TABLE`, and an explicit-column `INSERT INTO`; deployment remains manual.
 
 Then: land a first commit in a staging path, run your real read patterns against it, and check the ADR's operational playbook section for what to monitor from day one (commit duration, pending compactions, active timeline size, small-file ratio).

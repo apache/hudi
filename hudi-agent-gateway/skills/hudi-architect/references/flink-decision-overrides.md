@@ -37,6 +37,12 @@ do not replace the shared table-design rules and do not form a standalone planne
 - Do not sanitize physical field names or reduce temporal precision. Field names must match the
   pinned Avro-backed schema rule, and `TIME`, `TIMESTAMP`, and `TIMESTAMP_LTZ` precision must be
   between 0 and 6.
+- Do not emit a target field whose case-insensitive name matches one of Hudi's six reserved
+  metadata fields. Reject the conflict instead of renaming the field or relying on the writer to
+  prepend a duplicate metadata column.
+- Require a checkpoint interval of at least 1000 ms for the bounded Architect path. The pinned
+  Flink 1.20.1 runtime minimum of 10 ms remains explicit dependency evidence, not the Architect
+  safety floor.
 - Do not equate a stable record key with replay idempotence.
 - Do not reuse this baseline for another Hudi or Flink version.
 - Emit executable output only when `validate_flink_design.py` returns `CONFIG_VALIDATED` for the
@@ -68,6 +74,7 @@ do not replace the shared table-design rules and do not form a standalone planne
 | PRIMARY KEY syntax conflicts with a record-key option | `FLINK_PRIMARY_KEY_RECORD_KEY_CONFLICT` | `BLOCKED` | No |
 | Partition field is absent from the physical schema | `FLINK_PARTITION_FIELD_MISSING` | `BLOCKED` | No |
 | Physical field name is not representable by the Avro-backed Hudi schema | `FLINK_SCHEMA_FIELD_NAME_UNSUPPORTED` | `BLOCKED` | No |
+| Target physical field conflicts with a fixed Hudi metadata name | `FLINK_HUDI_METADATA_FIELD_CONFLICT` | `BLOCKED` | No |
 | `TIME`, `TIMESTAMP`, or `TIMESTAMP_LTZ` precision is outside 0 through 6 | `FLINK_TEMPORAL_PRECISION_UNSUPPORTED` | `BLOCKED` | No |
 | Physical type is outside the pinned PR2 scalar surface | `FLINK_SCHEMA_TYPE_UNVERIFIED` | `REVIEW_REQUIRED` | No |
 | Source table contract is missing | `FLINK_SOURCE_CONTRACT_REQUIRED` | `INCOMPLETE` | No |
@@ -77,6 +84,7 @@ do not replace the shared table-design rules and do not form a standalone planne
 | Table type, operation, or execution mode is outside PR2 | `FLINK_PR2_WRITE_PATH_UNSUPPORTED` | `BLOCKED` | No |
 | Checkpointing is explicitly disabled | `FLINK_CHECKPOINTING_REQUIRED` | `BLOCKED` | No |
 | Checkpoint interval is absent or non-positive | `FLINK_CHECKPOINT_INTERVAL_REQUIRED` | `INCOMPLETE` | No |
+| Positive checkpoint interval is below the 1000 ms Architect safety floor | `FLINK_CHECKPOINT_INTERVAL_UNSUPPORTED` | `BLOCKED` | No |
 | Target table, target path, source table, or another load-bearing value is a placeholder | `FLINK_LOAD_BEARING_VALUE_REQUIRED` | `INCOMPLETE` | No |
 | Design-contract structure is malformed or contains an ignored field | `FLINK_DESIGN_CONTRACT_INVALID` | `INCOMPLETE` | No |
 | A connector option is outside the pinned allowlist | `FLINK_OPTION_NOT_VERIFIED` | `REVIEW_REQUIRED` | No |
@@ -176,7 +184,7 @@ to the executable contract just like `F10_SAFE_APPEND`.
 - Target and source schemas are explicit. The generated `INSERT INTO` names every column and never
   uses `SELECT *` or an inferred cast.
 - The source contract is `INSERT_ONLY`, execution is streaming, and checkpointing has a concrete
-  positive interval.
+  interval of at least 1000 ms.
 - Target table, path, and source table are concrete. A `CONFIG_VALIDATED` output contains no
   unresolved load-bearing placeholder.
 - The Hudi 1.2.0 / Flink 1.20.1 factory and planner fixtures consume the same SQL golden files as

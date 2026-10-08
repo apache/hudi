@@ -90,9 +90,21 @@ EXPECTED_PHYSICAL_TYPES = {
 }
 EXPECTED_PHYSICAL_SCHEMA_CONSTRAINTS = {
     "field_name_pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+    "reserved_target_field_names": [
+        "_hoodie_commit_seqno",
+        "_hoodie_commit_time",
+        "_hoodie_file_name",
+        "_hoodie_operation",
+        "_hoodie_partition_path",
+        "_hoodie_record_key",
+    ],
     "temporal_precision_min": 0,
     "temporal_precision_max": 6,
     "temporal_types": ["TIME", "TIMESTAMP", "TIMESTAMP_LTZ"],
+}
+EXPECTED_RUNTIME_CONSTRAINTS = {
+    "checkpoint_interval_min_ms": 1000,
+    "flink_checkpoint_interval_min_ms": 10,
 }
 EXPECTED_ACCEPTANCE_EVIDENCE = {
     "FLINK_APPEND_MODE_CLUSTERING_ENABLED": (
@@ -114,6 +126,14 @@ EXPECTED_ACCEPTANCE_EVIDENCE = {
     "FLINK_SCHEMA_FIELD_NAME_UNSUPPORTED": (
         "test_pr2_rejects_non_avro_physical_field_names",
         "testPinnedPlannerRejectsNonAvroFieldName",
+    ),
+    "FLINK_HUDI_METADATA_FIELD_CONFLICT": (
+        "test_pr2_rejects_reserved_hudi_metadata_field_names",
+        "testPinnedWriterRejectsReservedHudiMetadataField",
+    ),
+    "FLINK_CHECKPOINT_INTERVAL_UNSUPPORTED": (
+        "test_pr2_enforces_checkpoint_interval_safety_floor",
+        "testPinnedRuntimeCheckpointIntervalBoundary",
     ),
 }
 SHA1_PATTERN = re.compile(r"[0-9a-f]{40}")
@@ -308,6 +328,10 @@ def validate_manifest(manifest: dict[str, Any]) -> list[str]:
         errors.append(
             "physical_schema_constraints does not match the pinned Hudi connector limits"
         )
+
+    runtime_constraints = manifest.get("runtime_constraints")
+    if runtime_constraints != EXPECTED_RUNTIME_CONSTRAINTS:
+        errors.append("runtime_constraints does not match the bounded PR2 runtime limits")
 
     implemented_checks = manifest.get("implemented_acceptance_checks")
     implemented_ids: list[str] = []

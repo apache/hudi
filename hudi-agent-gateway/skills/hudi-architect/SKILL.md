@@ -141,7 +141,7 @@ Internal labels for these four tiers: `EXPLORATION`, `PROTOTYPING`, `PRODUCTIONI
 **What fires per tier:**
 
 - **EXPLORATION** — Round 1 abbreviated, concept-explanation focused. May not produce a full ADR — often a "here's what your workload would look like as a Hudi table" narrative. Replace hard questions with explanations ("Hudi supports Spark and Flink — Spark is most common; I'll assume Spark unless you say otherwise").
-- **PROTOTYPING** — Round 1, then a **disclosed-defaults consent block** for table size / partitioning / retention, then **hard-ask the non-defaultable facts**: record key and ordering field when mutable, and whether anything else writes the table. On an implemented executable route, the goal is a genuinely runnable first table, not a sketch, and a prototyping ADR must not ship placeholder values. The Flink PR2 path additionally requires a concrete target, source contract, and checkpoint interval.
+- **PROTOTYPING** — Round 1, then a **disclosed-defaults consent block** for table size / partitioning / retention, then **hard-ask the non-defaultable facts**: record key and ordering field when mutable, and whether anything else writes the table. On an implemented executable route, the goal is a genuinely runnable first table, not a sketch, and a prototyping ADR must not ship placeholder values. The Flink PR2 path additionally requires a concrete target, source contract, and a checkpoint interval of at least 1000 ms.
 - **PRODUCTIONIZING_INITIAL** — Rounds 1 + 2. Full mutation/identity/partitioning questions. Production-safe defaults.
 - **PRODUCTION_AT_SCALE** — All rounds. Full rubric. Guardrails strict. All revisit conditions surfaced.
 

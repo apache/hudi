@@ -217,6 +217,13 @@ Avro-backed Hudi schema constraint. `TIME`, `TIMESTAMP`, and `TIMESTAMP_LTZ` pre
 between 0 and 6 for the pinned connector. Reject violations instead of renaming a field or
 reducing its precision.
 
+The target schema must also exclude, case-insensitively, Hudi's fixed metadata names:
+`_hoodie_commit_time`, `_hoodie_commit_seqno`, `_hoodie_record_key`,
+`_hoodie_partition_path`, `_hoodie_file_name`, and `_hoodie_operation`. Reject only those six
+names, not the entire `_hoodie_` prefix. The writer prepends these fields, so allowing one in the
+target contract would defer a duplicate-field failure until writer initialization. Do not silently
+rename it.
+
 Use `PRIMARY KEY (...) NOT ENFORCED` for the canonical stable-key DDL. Do not also generate
 `hoodie.datasource.write.recordkey.field`. If supplied evidence contains both forms, reject a
 conflict rather than relying on the factory's precedence warning. The auto-key path emits neither
@@ -251,7 +258,14 @@ latency.
 - Checkpointing explicitly disabled → `BLOCKED` with `FLINK_CHECKPOINTING_REQUIRED`.
 - Checkpoint interval missing, zero, or still unknown → `INCOMPLETE` with
   `FLINK_CHECKPOINT_INTERVAL_REQUIRED`.
-- Enabled with a concrete positive interval → continue and record the value as load-bearing.
+- Positive interval below 1000 ms → `BLOCKED` with
+  `FLINK_CHECKPOINT_INTERVAL_UNSUPPORTED`.
+- Enabled with a concrete interval of at least 1000 ms → continue and record the value as
+  load-bearing.
+
+Flink 1.20.1 itself accepts intervals beginning at 10 ms; the 1000 ms requirement is the stricter
+Architect safety floor for this bounded executable path. Preserve both values in pinned evidence
+and never silently increase a supplied interval.
 
 State that a completed checkpoint coordinates the Hudi commit. Do not claim end-to-end
 exactly-once: the source, checkpoint storage, restart behavior, and the rest of the pipeline remain

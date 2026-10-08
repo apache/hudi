@@ -62,9 +62,11 @@ FINDING_STATUS = {
     "FLINK_CATALOG_REQUIREMENT_UNRESOLVED": "REVIEW_REQUIRED",
     "FLINK_CHECKPOINTING_REQUIRED": "BLOCKED",
     "FLINK_CHECKPOINT_INTERVAL_REQUIRED": "INCOMPLETE",
+    "FLINK_CHECKPOINT_INTERVAL_UNSUPPORTED": "BLOCKED",
     "FLINK_DESIGN_CONTRACT_INVALID": "INCOMPLETE",
     "FLINK_EXISTING_TABLE_DEFERRED": "BLOCKED",
     "FLINK_EXTERNAL_CATALOG_REVIEW": "REVIEW_REQUIRED",
+    "FLINK_HUDI_METADATA_FIELD_CONFLICT": "BLOCKED",
     "FLINK_LOAD_BEARING_VALUE_REQUIRED": "INCOMPLETE",
     "FLINK_MULTI_WRITER_REVIEW": "REVIEW_REQUIRED",
     "FLINK_MUTABILITY_REQUIRED": "INCOMPLETE",
@@ -215,6 +217,8 @@ def _columns(
     field: str,
     manifest: dict[str, Any],
     assessment: Assessment,
+    *,
+    reject_hudi_metadata_fields: bool = False,
 ) -> list[dict[str, Any]]:
     columns: list[dict[str, Any]] = []
     names: set[str] = set()
@@ -235,6 +239,14 @@ def _columns(
                 "Avro-backed Hudi sink schema",
             )
             continue
+        reserved_names = manifest["physical_schema_constraints"][
+            "reserved_target_field_names"
+        ]
+        if reject_hudi_metadata_fields and name.lower() in reserved_names:
+            assessment.add(
+                "FLINK_HUDI_METADATA_FIELD_CONFLICT",
+                f"{field}[{index}].name {name!r} is reserved for Hudi metadata",
+            )
         if name in names:
             assessment.add(
                 "FLINK_DESIGN_CONTRACT_INVALID", f"Duplicate field {name!r} in {field}"
@@ -468,7 +480,13 @@ def assess_design(
             "FLINK_LOAD_BEARING_VALUE_REQUIRED",
             path_error,
         )
-    table_columns = _columns(table.get("columns"), "table.columns", manifest, assessment)
+    table_columns = _columns(
+        table.get("columns"),
+        "table.columns",
+        manifest,
+        assessment,
+        reject_hudi_metadata_fields=True,
+    )
     table_by_name = {column["name"]: column for column in table_columns}
     partition_fields = _string_list(
         table.get("partition_fields"), "table.partition_fields", assessment
@@ -717,6 +735,13 @@ def assess_design(
     if not isinstance(interval, int) or isinstance(interval, bool) or interval <= 0:
         assessment.add(
             "FLINK_CHECKPOINT_INTERVAL_REQUIRED", "A positive checkpoint interval is required"
+        )
+    elif interval < manifest["runtime_constraints"]["checkpoint_interval_min_ms"]:
+        assessment.add(
+            "FLINK_CHECKPOINT_INTERVAL_UNSUPPORTED",
+            "The checkpoint interval must be at least "
+            f"{manifest['runtime_constraints']['checkpoint_interval_min_ms']} ms for the "
+            "bounded PR2 path",
         )
     target_freshness = runtime.get("target_commit_freshness_ms")
     if target_freshness is not None and (

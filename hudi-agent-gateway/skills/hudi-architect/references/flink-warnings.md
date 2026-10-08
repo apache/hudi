@@ -260,6 +260,18 @@ the Avro-backed physical schema.
 
 **Action:** `BLOCKED`; require an authoritative compatible field name. Do not silently rename it.
 
+## FLINK_HUDI_METADATA_FIELD_CONFLICT
+
+**Trigger:** A target physical field name case-insensitively matches one of Hudi's six fixed
+metadata fields.
+
+**Message:** The Hudi write path prepends these metadata fields, so the supplied target name would
+produce a duplicate physical field. Other names beginning with `_hoodie_` are not rejected by this
+rule.
+
+**Action:** `BLOCKED`; require an authoritative non-conflicting target field name. Do not silently
+rename it.
+
 ## FLINK_TEMPORAL_PRECISION_UNSUPPORTED
 
 **Trigger:** A `TIME`, `TIMESTAMP`, or `TIMESTAMP_LTZ` field declares precision outside 0 through
@@ -327,6 +339,15 @@ Checking only `write.operation=insert` is insufficient.
 **Message:** The executable runtime contract needs a concrete positive checkpoint interval.
 
 **Action:** `INCOMPLETE`; withhold runtime SQL.
+
+## FLINK_CHECKPOINT_INTERVAL_UNSUPPORTED
+
+**Trigger:** The checkpoint interval is positive but below the 1000 ms Architect safety floor.
+
+**Message:** Flink 1.20.1 has a 10 ms runtime minimum, while this bounded executable path applies
+the stricter 1000 ms minimum before rendering SQL.
+
+**Action:** `BLOCKED`; require an interval of at least 1000 ms. Do not silently increase it.
 
 ## FLINK_LOAD_BEARING_VALUE_REQUIRED
 
