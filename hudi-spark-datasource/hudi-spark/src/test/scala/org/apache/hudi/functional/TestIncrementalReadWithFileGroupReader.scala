@@ -31,6 +31,7 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.{DataFrame, SaveMode}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
@@ -307,6 +308,53 @@ class TestIncrementalReadWithFileGroupReader extends SparkClientFunctionalTestHa
     assertFullTableScanRange(metaClient, useLegacyRdd, "000", c5Boundary, expectedThroughC5)
     assertFullTableScanRange(metaClient, useLegacyRdd, c3Boundary, c5Boundary,
       Set(("k1", 5), ("k2", 4), ("k3", 5), ("k4", 5)))
+  }
+
+  @Test
+  def testCowIncrementalReadDoesNotMutateVectorizedReaderSessionConf(): Unit = {
+    val configs = Seq(
+      "spark.sql.parquet.enableVectorizedReader" -> "true"
+    )
+
+    val previousConfigs = configs.map { case (key, _) =>
+      key -> spark.conf.getOption(key)
+    }
+
+    try {
+      configs.foreach { case (key, value) =>
+        spark.conf.set(key, value)
+      }
+
+      write(
+        batches.head._1,
+        "COPY_ON_WRITE",
+        8,
+        batches.head._2,
+        SaveMode.Overwrite)
+
+      val metaClient = HoodieTableMetaClient.builder()
+        .setConf(storageConf().newInstance())
+        .setBasePath(basePath())
+        .build()
+
+      val instant = metaClient.getActiveTimeline
+        .getCommitsTimeline
+        .filterCompletedInstants
+        .lastInstant()
+        .get()
+        .getCompletionTime
+
+      readIncremental(8, "000", instant).collect()
+
+      assertTrue(
+        spark.conf.get("spark.sql.parquet.enableVectorizedReader").toBoolean,
+        "COW incremental read must preserve the session vectorized-reader setting")
+    } finally {
+      previousConfigs.foreach {
+        case (key, Some(value)) => spark.conf.set(key, value)
+        case (key, None) => spark.conf.unset(key)
+      }
+    }
   }
 
   private def assertFullTableScanRange(metaClient: HoodieTableMetaClient,
