@@ -58,9 +58,12 @@ class TestCatalogPropertiesOnRead extends HoodieSparkSqlTestBase {
     f(name, path)
   }
 
+  // Matches on the type, not the extractor: LogicalRelation's arity differs across Spark versions.
   private def fileIndexOf(df: DataFrame): HoodieFileIndex = df.queryExecution.optimizedPlan.collectFirst {
-    case LogicalRelation(r: HadoopFsRelation, _, _, _) => r.location.asInstanceOf[HoodieFileIndex]
-    case LogicalRelation(r: HoodieBaseRelation, _, _, _) => r.fileIndex
+    case lr: LogicalRelation if lr.relation.isInstanceOf[HadoopFsRelation] =>
+      lr.relation.asInstanceOf[HadoopFsRelation].location.asInstanceOf[HoodieFileIndex]
+    case lr: LogicalRelation if lr.relation.isInstanceOf[HoodieBaseRelation] =>
+      lr.relation.asInstanceOf[HoodieBaseRelation].fileIndex
   }.get
 
   /** The marker getConfigProperties merges for this read, recomputed with the inputs HoodieFileIndex used. */
