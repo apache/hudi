@@ -22,18 +22,20 @@
 # For minikube, run `eval "$(minikube docker-env)"` first so images land in
 # the cluster's Docker daemon.
 #
-# Usage: build-images.sh [--registry <prefix>] [--push]
+# Usage: build-images.sh [--registry <prefix>] [--push] [--spark-only]
 
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="$(cd "$HERE/.." && pwd)"
 REGISTRY=""
 PUSH=0
+SPARK_ONLY=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --registry)      REGISTRY="${2%/}/"; shift 2 ;;
     --push)          PUSH=1; shift ;;
+    --spark-only)    SPARK_ONLY=1; shift ;;
     *) echo "unknown arg: $1" >&2; exit 1 ;;
   esac
 done
@@ -45,25 +47,29 @@ SPARK_IMAGE_TAG="3.5.7-scala2.12-java17-python3-ubuntu"
 HADOOP_AWS_VERSION="3.3.4" AWS_SDK_VERSION="1.12.772"
 
 BUNDLE_JAR=$(ls "$REPO_ROOT"/packaging/hudi-spark-bundle/target/hudi-spark${SPARK_VERSION}-bundle_${SCALA_VERSION}-*.jar 2>/dev/null | grep -v sources | grep -v original | head -1 || true)
-PLUGIN_DIR=$(ls -d "$REPO_ROOT"/hudi-trino-plugin/target/trino-hudi-*/ 2>/dev/null | head -1 || true)
 
 [[ -n "$BUNDLE_JAR" ]] || { echo "ERROR: spark bundle not found; run scripts/build-jars.sh first" >&2; exit 1; }
-[[ -n "$PLUGIN_DIR" ]] || { echo "ERROR: trino plugin not found; run scripts/build-jars.sh first" >&2; exit 1; }
+if [[ "$SPARK_ONLY" == 0 ]]; then
+  PLUGIN_DIR=$(ls -d "$REPO_ROOT"/hudi-trino-plugin/target/trino-hudi-*/ 2>/dev/null | head -1 || true)
+  [[ -n "$PLUGIN_DIR" ]] || { echo "ERROR: trino plugin not found; run scripts/build-jars.sh first" >&2; exit 1; }
+fi
 
 TRINO_IMAGE="${REGISTRY}hudi-lakehouse-trino:472"
 SPARK_IMAGE="${REGISTRY}hudi-lakehouse-spark:${SPARK_VERSION}"
 GATEWAY_IMAGE="${REGISTRY}hudi-lakehouse-agent-gateway:0.1.0"
 
-# The gateway image needs no maven artifacts -- its build context is the
-# python module itself.
-echo ">>> Building $GATEWAY_IMAGE"
-docker build -t "$GATEWAY_IMAGE" "$REPO_ROOT/hudi-agent-gateway"
+if [[ "$SPARK_ONLY" == 0 ]]; then
+  # The gateway image needs no maven artifacts -- its build context is the
+  # python module itself.
+  echo ">>> Building $GATEWAY_IMAGE"
+  docker build -t "$GATEWAY_IMAGE" "$REPO_ROOT/hudi-agent-gateway"
 
-echo ">>> Staging trino plugin: $(basename "${PLUGIN_DIR%/}")"
-rm -rf "$HERE/images/trino/target" && mkdir -p "$HERE/images/trino/target"
-cp -R "${PLUGIN_DIR%/}" "$HERE/images/trino/target/"
-echo ">>> Building $TRINO_IMAGE"
-docker build -t "$TRINO_IMAGE" "$HERE/images/trino"
+  echo ">>> Staging trino plugin: $(basename "${PLUGIN_DIR%/}")"
+  rm -rf "$HERE/images/trino/target" && mkdir -p "$HERE/images/trino/target"
+  cp -R "${PLUGIN_DIR%/}" "$HERE/images/trino/target/"
+  echo ">>> Building $TRINO_IMAGE"
+  docker build -t "$TRINO_IMAGE" "$HERE/images/trino"
+fi
 
 echo ">>> Staging spark bundle: $(basename "$BUNDLE_JAR")"
 rm -rf "$HERE/images/spark/target" && mkdir -p "$HERE/images/spark/target"
@@ -78,9 +84,15 @@ docker build -t "$SPARK_IMAGE" \
 
 if [[ "$PUSH" == 1 ]]; then
   [[ -n "$REGISTRY" ]] || { echo "ERROR: --push requires --registry" >&2; exit 1; }
-  docker push "$TRINO_IMAGE"
   docker push "$SPARK_IMAGE"
-  docker push "$GATEWAY_IMAGE"
+  if [[ "$SPARK_ONLY" == 0 ]]; then
+    docker push "$TRINO_IMAGE"
+    docker push "$GATEWAY_IMAGE"
+  fi
 fi
 
-echo ">>> Images ready: $TRINO_IMAGE, $SPARK_IMAGE, $GATEWAY_IMAGE"
+if [[ "$SPARK_ONLY" == 1 ]]; then
+  echo ">>> Image ready: $SPARK_IMAGE"
+else
+  echo ">>> Images ready: $TRINO_IMAGE, $SPARK_IMAGE, $GATEWAY_IMAGE"
+fi

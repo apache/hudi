@@ -46,6 +46,29 @@ table, registers it in the metastore, and queries it back through Trino:
 
 Tear down with `./hudi-lakehouse/local-dev/scripts/down.sh`.
 
+To query the same example through Spark Connect instead of Trino:
+
+```bash
+./hudi-lakehouse/scripts/quickstart.sh --run-example --spark-connect
+```
+
+`--run-example` writes and registers `default.trips`, then prints the city counts
+above. Queries use Trino by default, or Spark Connect with `--spark-connect`;
+the data-writing flow is the same.
+
+To deploy only MinIO, HMS, and Spark Connect, without writing or querying data:
+
+```bash
+./hudi-lakehouse/scripts/quickstart.sh --spark-connect
+```
+
+This deployment-only mode requires Docker, minikube, Helm, and kubectl.
+Existing releases remain installed. The Connect image includes
+`pyspark-client==4.1.3` and `pyarrow==18.1.0` for the example query. 
+Running without `--spark-connect` uses the legacy full stack, whose Trino
+build chain needs a separate update for the current module. See the
+[Connect quickstart and ADBC CRUD/restart test](charts/hudi-spark-connect/README.md).
+
 ## Layout: two separated concerns
 
 A lakehouse is a decoupled architecture — writers, object storage, the
@@ -59,6 +82,7 @@ catalog, and query engines are independent. This directory keeps the
    | Chart | What it deploys | Points at |
    |---|---|---|
    | `hudi-trino` | Trino (server 472) with the Hudi connector built from this repository | your Hive Metastore or AWS Glue; your S3/GCS |
+   | `hudi-spark-connect` | optional Spark Connect 4.1.3 with Hudi 1.2.0; one shared local-mode driver | your Hive Metastore and S3-compatible storage |
    | `hudi-agent-gateway` | the [Hudi AI gateway](../hudi-agent-gateway): agent chat API (sessions + SSE), MCP server, and chat UI over guarded lakehouse tools | your `hudi-trino`; your LLM (see below) |
    | `vllm` | optional: vLLM serving one open-weight model (default `Qwen/Qwen3-8B`, ungated) behind an OpenAI-compatible API; GPU required | — (the gateway points at it) |
 
@@ -81,12 +105,14 @@ catalog, and query engines are independent. This directory keeps the
 
 | Script | Purpose |
 |---|---|
-| `scripts/quickstart.sh` | one-command idempotent bring-up (everything below, in order) |
+| `scripts/quickstart.sh` | one-command bring-up; `--spark-connect` starts MinIO/HMS/Connect independently of the legacy full stack |
 | `scripts/build-jars.sh` | maven builds: hudi-spark bundle (JDK 11/17) + hudi-trino-plugin (JDK 23) |
 | `scripts/build-images.sh` | stages jars and builds the two container images; `--registry`/`--push` for clusters |
+| `scripts/build-connect-image.sh` | builds the optional, release-pinned Spark Connect image; `--registry`/`--push` for clusters |
 | `local-dev/scripts/up.sh` | manifests + spark-operator + hudi-trino chart onto the current kube context |
 | `local-dev/scripts/run-example.sh` | uploads the example job and submits it as a `SparkApplication` |
 | `local-dev/scripts/smoke-test.sh` | end-to-end assert: up → example → Trino row counts |
+| `local-dev/scripts/test-spark-connect.sh --restart-endpoint` | opt-in ADBC CRUD, endpoint restart, and persistence assertions against an existing Connect deployment |
 | `local-dev/scripts/down.sh` | full teardown |
 
 ## Deploying `hudi-trino` against real infrastructure
@@ -110,6 +136,43 @@ helm install hudi-trino hudi-lakehouse/charts/hudi-trino \
 values surface. No binaries are ever committed: image builds stage locally
 built jars into gitignored `images/*/target/` directories.
 
+## Deploying `hudi-spark-connect` against existing infrastructure
+
+Use your existing Kubernetes cluster, Hive Metastore, and S3-compatible storage.
+The chart deploys one shared Spark Connect driver in local mode: SQL execution
+runs within a single pod, with no distributed executor pods or Spark Operator
+dependency. Compute capacity is limited to that pod's resources.
+
+From the repository root, build and push the image to your registry:
+
+```bash
+./hudi-lakehouse/scripts/build-connect-image.sh --registry my.registry/team --push
+```
+
+Install the endpoint, replacing the registry, metastore, warehouse, and Secret
+name with your own values. The referenced Secret must already exist in the
+`hudi-lakehouse` namespace with `accessKey` and `secretKey` keys.
+
+```bash
+helm upgrade --install hudi-spark-connect hudi-lakehouse/charts/hudi-spark-connect \
+  --namespace hudi-lakehouse --create-namespace \
+  --set image.repository=my.registry/team/hudi-lakehouse-spark-connect \
+  --set catalog.metastoreUri=thrift://my-hms.example.internal:9083 \
+  --set catalog.warehouse=s3a://my-bucket/connect \
+  --set storage.s3.existingSecret=my-s3-credentials \
+  --wait --timeout 10m
+```
+
+The endpoint is exposed through a ClusterIP Service without authentication or
+TLS; use it on a trusted network. See the [chart installation guide](charts/hudi-spark-connect/README.md#install-against-existing-infrastructure)
+for storage, credentials, and resource settings, and the [ADBC client guide](charts/hudi-spark-connect/README.md#connect-and-validate-with-adbc)
+for connection setup and CRUD/restart validation.
+
+## BI clients on Spark Connect
+
+See the [BI client notes](charts/hudi-spark-connect/README.md#spark-connect-client-tutorials)
+for Superset and Zeppelin connection requirements and ADBC limitations.
+
 ## Version compatibility notes
 
 - **Trino server is pinned to 472**: the `hudi-trino-plugin` performs a strict
@@ -122,7 +185,7 @@ built jars into gitignored `images/*/target/` directories.
   `hoodie.write.auto.upgrade=false` (the local-dev example does this). This
   pin goes away once the plugin's Hudi dependency is upgraded to a release
   that reads the current table version.
-- **One Spark line**: the quickstart builds and runs Spark 3.5 / Scala 2.12
-  only (`apache/spark:3.5.x` ↔ `-Dspark3.5`), matching the pinned example
-  manifest. Everything runs dockerised, so there is no version matrix to
-  support here.
+- **Separate Spark runtimes**: the default writer uses Spark 3.5 / Scala 2.12
+  (`apache/spark:3.5.x` ↔ `-Dspark3.5`). The optional Connect endpoint pins
+  Spark 4.1.3 / Scala 2.13 and the released Hudi 1.2.0 bundle; it does not
+  overwrite the writer artifact. See its chart README for the full matrix.
