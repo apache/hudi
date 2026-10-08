@@ -119,7 +119,8 @@ class TestTimelineViewRefresh extends HoodieCommonTestHarness {
   @Test
   void testConcurrentRequestsWithTrailingCleanDoNotSync() throws Exception {
     HoodieTimeline clientTimeline = timeline(instant(COMPLETED, COMMIT_ACTION, "001"));
-    when(view.getTimeline()).thenReturn(timeline(instant(COMPLETED, COMMIT_ACTION, "001"), instant(COMPLETED, CLEAN_ACTION, "002")));
+    when(view.getTimeline()).thenReturn(timeline(instant(COMPLETED, COMMIT_ACTION, "001"),
+        instant(COMPLETED, CLEAN_ACTION, "002"), instant(COMPLETED, CLEAN_ACTION, "003")));
     ExecutorService executor = Executors.newFixedThreadPool(8);
     try {
       List<Future<List<String>>> requests = new ArrayList<>();
@@ -132,6 +133,17 @@ class TestTimelineViewRefresh extends HoodieCommonTestHarness {
     } finally {
       executor.shutdownNow();
     }
+    verify(view, never()).sync();
+  }
+
+  @Test
+  void testClientCanHaveSeenSomeTrailingCleans() throws IOException {
+    HoodieInstant commit = instant(COMPLETED, COMMIT_ACTION, "001");
+    HoodieInstant firstClean = instant(COMPLETED, CLEAN_ACTION, "002");
+    HoodieTimeline clientTimeline = timeline(commit, firstClean);
+    when(view.getTimeline()).thenReturn(timeline(commit, firstClean,
+        instant(COMPLETED, CLEAN_ACTION, "003"), instant(COMPLETED, CLEAN_ACTION, "004")));
+    request(clientTimeline, "002", "partition");
     verify(view, never()).sync();
   }
 
@@ -381,8 +393,9 @@ class TestTimelineViewRefresh extends HoodieCommonTestHarness {
     }
   }
 
-  @Test
-  void testRealViewAvoidsRedundantReloadsAndListings() throws Exception {
+  @ParameterizedTest
+  @ValueSource(ints = {1, 2})
+  void testRealViewAvoidsRedundantReloadsAndListings(int trailingCleans) throws Exception {
     FileCreateUtils.createCommit(metaClient, "001");
     for (int i = 0; i < 8; i++) {
       FileCreateUtils.createBaseFile(metaClient, "partition-" + i, "001", "file");
@@ -390,6 +403,9 @@ class TestTimelineViewRefresh extends HoodieCommonTestHarness {
     metaClient.reloadActiveTimeline();
     RemoteHoodieTableFileSystemView remoteView = new RemoteHoodieTableFileSystemView("localhost", server.getServerPort(), metaClient);
     FileCreateUtils.createCleanFile(metaClient, "002", Option.empty(), null, true);
+    if (trailingCleans == 2) {
+      FileCreateUtils.createCleanFile(metaClient, "003", Option.empty(), null, true);
+    }
     HoodieTimeline serverTimeline = metaClient.reloadActiveTimeline();
     metaClient = spy(metaClient);
     HoodieStorage storage = spy(metaClient.getStorage());

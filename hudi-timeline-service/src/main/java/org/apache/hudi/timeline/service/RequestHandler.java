@@ -33,7 +33,6 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.HoodieTimer;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.RemotePartitionHelper;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -770,7 +769,7 @@ public class RequestHandler {
         if (isLocalViewBehind(ctx)) {
           String lastKnownInstantFromClient = getLastInstantTsParam(ctx);
           HoodieTimeline localTimeline = viewManager.getFileSystemView(basePath).getTimeline();
-          // The final check already accepts a trailing clean with an otherwise matching timeline.
+          // The final check already accepts trailing cleans with an otherwise matching timeline.
           // Other extensions still need a sync: restore may have deleted their extra instants.
           if (!shouldThrowExceptionIfLocalViewBehind(localTimeline, getTimelineHashParam(ctx))) {
             return false;
@@ -790,11 +789,20 @@ public class RequestHandler {
      * Determine whether to throw an exception when local view of table's timeline is behind that of client's view.
      */
     private boolean shouldThrowExceptionIfLocalViewBehind(HoodieTimeline localTimeline, String timelineHashFromClient) {
-      Option<HoodieInstant> lastInstant = localTimeline.lastInstant();
-      // When performing async clean, we may have one more .clean.completed after lastInstantTs.
-      // In this case, we do not need to throw an exception.
-      return !lastInstant.isPresent() || !lastInstant.get().getAction().equals(HoodieTimeline.CLEAN_ACTION)
-          || !localTimeline.findInstantsBefore(lastInstant.get().requestedTime()).getTimelineHash().equals(timelineHashFromClient);
+      // Async cleaning may add several completed cleans after the client's timeline. Only
+      // exempt an exact prefix before one of those trailing cleans; other differences still
+      // require a sync and must fail the final check if they remain afterward.
+      List<HoodieInstant> instants = localTimeline.getInstants();
+      for (int i = instants.size() - 1; i >= 0; i--) {
+        HoodieInstant instant = instants.get(i);
+        if (!HoodieTimeline.CLEAN_ACTION.equals(instant.getAction())) {
+          break;
+        }
+        if (localTimeline.findInstantsBefore(instant.requestedTime()).getTimelineHash().equals(timelineHashFromClient)) {
+          return false;
+        }
+      }
+      return true;
     }
 
     private boolean isRefreshCheckDisabledInQuery(Context ctx) {
