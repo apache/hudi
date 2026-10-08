@@ -64,6 +64,9 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
     try {
       HoodieTimer sourceReadAndIndexTimer = HoodieTimer.start();
       // De-dupe/merge if needed
+      if (shouldCombine) {
+        context.setJobStatus(this.getClass().getSimpleName(), "Deduplicating records: " + table.getConfig().getTableName());
+      }
       I dedupedRecords =
           combineOnCondition(shouldCombine, inputRecords, configuredShuffleParallelism, table);
 
