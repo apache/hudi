@@ -33,7 +33,6 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.HoodieTimer;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.RemotePartitionHelper;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -691,14 +690,11 @@ public class RequestHandler {
             long beginFinalCheck = System.currentTimeMillis();
             if (isLocalViewBehind(context)) {
               String lastKnownInstantFromClient = getLastInstantTsParam(context);
-              String timelineHashFromClient = getTimelineHashParam(context);
               HoodieTimeline localTimeline =
                   viewManager.getFileSystemView(context.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM)).getTimeline();
-              if (shouldThrowExceptionIfLocalViewBehind(localTimeline, timelineHashFromClient)) {
-                String errMsg = String.format("Last known instant from client was %s but server has the following timeline %s",
-                        lastKnownInstantFromClient, localTimeline.getInstants());
-                throw new BadRequestResponse(errMsg);
-              }
+              String errMsg = String.format("Last known instant from client was %s but server has the following timeline %s",
+                      lastKnownInstantFromClient, localTimeline.getInstants());
+              throw new BadRequestResponse(errMsg);
             }
             long endFinalCheck = System.currentTimeMillis();
             finalCheckTimeTaken = endFinalCheck - beginFinalCheck;
@@ -750,9 +746,9 @@ public class RequestHandler {
       }
 
       String localTimelineHash = localTimeline.getTimelineHash();
-      // refresh if timeline hash mismatches
+      // refresh if timeline hash mismatches, unless the local timeline is only ahead by cleans
       if (!localTimelineHash.equals(timelineHashFromClient)) {
-        return true;
+        return !isLocalTimelineAheadOnlyByCleans(localTimeline, timelineHashFromClient);
       }
 
       // As a safety check, even if hash is same, ensure instant is present
@@ -774,6 +770,7 @@ public class RequestHandler {
                 lastKnownInstantFromClient, localTimeline.lastInstant());
           }
           view.sync();
+          metricsRegistry.add("VIEW_SYNC", 1);
           return true;
         }
       }
@@ -781,14 +778,34 @@ public class RequestHandler {
     }
 
     /**
-     * Determine whether to throw an exception when local view of table's timeline is behind that of client's view.
+     * Determines if the local timeline is the client's timeline followed only by completed clean instants.
+     *
+     * <p>Async cleans can complete while a write is in progress, after the writer loaded the timeline it shipped
+     * to its executors. The local timeline then ends with one or more cleans the client does not know about, e.g.
+     * <pre>
+     *   client timeline: [c1, c2, c3]               (hash H)
+     *   local timeline:  [c1, c2, c3, clean4, clean5]
+     * </pre>
+     * The local view is not behind the client in that case, and the trailing cleans do not change the file slices
+     * served to the client. Syncing the local view cannot make the timelines match either, so treating this as
+     * "behind" makes every request from such a client do a full timeline reload under the view lock. With a large
+     * number of executors the requests serialize behind those reloads and time out.
+     *
+     * <p>The client may also have seen some of the trailing cleans (e.g. its timeline is {@code [c1, c2, c3, clean4]}),
+     * so the client's hash is compared against the local timeline cut before each of the trailing cleans.
+     *
+     * <p>Any other difference (e.g. a commit missing on the client because it was rolled back by a restore) is not
+     * covered and the local view is still considered behind.
      */
-    private boolean shouldThrowExceptionIfLocalViewBehind(HoodieTimeline localTimeline, String timelineHashFromClient) {
-      Option<HoodieInstant> lastInstant = localTimeline.lastInstant();
-      // When performing async clean, we may have one more .clean.completed after lastInstantTs.
-      // In this case, we do not need to throw an exception.
-      return !lastInstant.isPresent() || !lastInstant.get().getAction().equals(HoodieTimeline.CLEAN_ACTION)
-          || !localTimeline.findInstantsBefore(lastInstant.get().requestedTime()).getTimelineHash().equals(timelineHashFromClient);
+    private boolean isLocalTimelineAheadOnlyByCleans(HoodieTimeline localTimeline, String timelineHashFromClient) {
+      List<HoodieInstant> instants = localTimeline.getInstants();
+      // walk back over the trailing cleans, newest first
+      for (int i = instants.size() - 1; i >= 0 && instants.get(i).getAction().equals(HoodieTimeline.CLEAN_ACTION); i--) {
+        if (localTimeline.findInstantsBefore(instants.get(i).requestedTime()).getTimelineHash().equals(timelineHashFromClient)) {
+          return true;
+        }
+      }
+      return false;
     }
 
     private boolean isRefreshCheckDisabledInQuery(Context ctx) {
