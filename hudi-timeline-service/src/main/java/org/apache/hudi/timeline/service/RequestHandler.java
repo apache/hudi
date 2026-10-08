@@ -35,6 +35,7 @@ import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.RemotePartitionHelper;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -62,10 +63,12 @@ import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.security.PrivilegedExceptionAction;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -104,6 +107,12 @@ public class RequestHandler {
   private RemotePartitionerHandler partitionerHandler;
   private final Registry metricsRegistry = Registry.getRegistry("TimelineService");
   private final ScheduledExecutorService asyncResultService;
+  /**
+   * Per-table record of client timeline hashes the server has already reloaded in response to, each
+   * mapped to the server timeline hash that the reload produced. Guarded by the per-table view lock
+   * held in {@link ViewHandler#syncIfLocalViewBehind}.
+   */
+  private final Map<String, Map<String, String>> syncedClientTimelineHashes = new ConcurrentHashMap<>();
 
   public RequestHandler(Javalin app, StorageConfiguration<?> conf, TimelineService.Config timelineServiceConfig,
                         FileSystemViewManager viewManager) {
@@ -526,7 +535,10 @@ public class RequestHandler {
 
     app.post(RemoteHoodieTableFileSystemView.REFRESH_TABLE_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("REFRESH_TABLE", 1);
-      boolean success = sliceHandler.refreshTable(getBasePathParam(ctx));
+      String basePath = getBasePathParam(ctx);
+      // The view is rebuilt from storage, so previously recorded reloads no longer describe it.
+      syncedClientTimelineHashes.remove(basePath);
+      boolean success = sliceHandler.refreshTable(basePath);
       writeValueAsString(ctx, success);
     }, false));
 
@@ -750,7 +762,8 @@ public class RequestHandler {
       }
 
       String localTimelineHash = localTimeline.getTimelineHash();
-      // refresh if timeline hash mismatches
+      // Keep the final consistency check strict so server-ahead responses still activate
+      // PriorityBasedFileSystemView's local fallback (apart from the trailing-clean exception).
       if (!localTimelineHash.equals(timelineHashFromClient)) {
         return true;
       }
@@ -764,20 +777,119 @@ public class RequestHandler {
      */
     private boolean syncIfLocalViewBehind(Context ctx) {
       String basePath = ctx.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM);
+      String timelineHashFromClient = getTimelineHashParam(ctx);
       SyncableFileSystemView view = viewManager.getFileSystemView(basePath);
       synchronized (view) {
+        HoodieTimeline localTimeline = view.getTimeline();
+        // The final check already accepts a trailing clean with an otherwise matching timeline, so a
+        // reload would be discarded work. Checked before isLocalViewBehind, which hashes the whole
+        // timeline, because this only inspects the last instant.
+        // Other extensions still need a sync: restore may have deleted their extra instants.
+        if (!shouldThrowExceptionIfLocalViewBehind(localTimeline, timelineHashFromClient)) {
+          return false;
+        }
+        // A reload already performed for this exact client timeline cannot produce a different
+        // outcome while the server timeline is unchanged, so skip it for the remaining stale clients.
+        if (hasAlreadySyncedFor(basePath, localTimeline, timelineHashFromClient, getLastInstantTsParam(ctx))) {
+          return false;
+        }
         if (isLocalViewBehind(ctx)) {
           String lastKnownInstantFromClient = getLastInstantTsParam(ctx);
-          HoodieTimeline localTimeline = viewManager.getFileSystemView(basePath).getTimeline();
           if (log.isInfoEnabled()) {
             log.info("Syncing view as client passed last known instant {} as last known instant but server has the following last instant on timeline: {}",
                 lastKnownInstantFromClient, localTimeline.lastInstant());
           }
+          Option<HoodieInstant> lastInstantBeforeSync = localTimeline.lastInstant();
           view.sync();
+          recordSyncedClientTimeline(basePath, view.getTimeline(), lastInstantBeforeSync, timelineHashFromClient,
+              lastKnownInstantFromClient);
           return true;
         }
       }
       return false;
+    }
+
+    /**
+     * Whether a reload has already been performed for this client timeline and can be skipped.
+     *
+     * <p>Only a previously observed reload is treated as evidence; the client hash itself is never
+     * interpreted as proof that the server is ahead. The client's last known instant is re-checked
+     * on every hit so that a restore, which deletes completed instants from storage and moves the
+     * server timeline backwards, drops the entry instead of suppressing a reload that is now needed.
+     */
+    private boolean hasAlreadySyncedFor(String basePath, HoodieTimeline localTimeline,
+                                        String timelineHashFromClient, String lastKnownInstantFromClient) {
+      if (!isCacheableClientTimeline(lastKnownInstantFromClient)) {
+        return false;
+      }
+      Map<String, String> syncedHashes = syncedClientTimelineHashes.get(basePath);
+      if (syncedHashes == null) {
+        return false;
+      }
+      String serverHashWhenSynced = syncedHashes.get(cacheKey(timelineHashFromClient, lastKnownInstantFromClient));
+      // Only the reload observed against this exact server timeline is evidence. Once the server
+      // timeline moves, for any reason, a reload may produce a different result and must run again.
+      if (serverHashWhenSynced == null || !serverHashWhenSynced.equals(localTimeline.getTimelineHash())) {
+        return false;
+      }
+      if (!localTimeline.containsOrBeforeTimelineStarts(lastKnownInstantFromClient)) {
+        syncedHashes.remove(cacheKey(timelineHashFromClient, lastKnownInstantFromClient));
+        return false;
+      }
+      return true;
+    }
+
+    /**
+     * The refresh decision depends on the client's last known instant as well as its timeline hash,
+     * so both identify a recorded reload.
+     */
+    private String cacheKey(String timelineHashFromClient, String lastKnownInstantFromClient) {
+      return timelineHashFromClient + "_" + lastKnownInstantFromClient;
+    }
+
+    /**
+     * Whether a reload for this client is worth recording.
+     *
+     * <p>A client that sent no last known instant has not said where it stands, which only happens
+     * before its timeline holds a completed instant. There are no file slices to serve from a stale
+     * view at that point, so nothing is recorded rather than treating the absent value as an
+     * identity shared by unrelated clients.
+     */
+    private boolean isCacheableClientTimeline(String lastKnownInstantFromClient) {
+      return timelineServiceConfig.staleClientTimelineCacheSize > 0
+          && !HoodieTimeline.INVALID_INSTANT_TS.equals(lastKnownInstantFromClient)
+          && !StringUtils.isNullOrEmpty(lastKnownInstantFromClient);
+    }
+
+    /**
+     * Records that a reload was performed for this client timeline, so that the remaining stale
+     * clients sharing it do not each trigger another one.
+     *
+     * <p>Nothing is recorded when the reload dropped instants, which indicates the server timeline
+     * moved backwards rather than forwards and the previous records can no longer be trusted.
+     */
+    private void recordSyncedClientTimeline(String basePath, HoodieTimeline syncedTimeline,
+                                            Option<HoodieInstant> lastInstantBeforeSync, String timelineHashFromClient,
+                                            String lastKnownInstantFromClient) {
+      int cacheSize = timelineServiceConfig.staleClientTimelineCacheSize;
+      if (!isCacheableClientTimeline(lastKnownInstantFromClient)) {
+        return;
+      }
+      if (lastInstantBeforeSync.isPresent()
+          && !syncedTimeline.containsInstant(lastInstantBeforeSync.get().requestedTime())) {
+        // Instants were deleted from storage, e.g. by a restore. Earlier records described a
+        // timeline that no longer exists, so discard them rather than reason about what survived.
+        syncedClientTimelineHashes.remove(basePath);
+        return;
+      }
+      syncedClientTimelineHashes
+          .computeIfAbsent(basePath, ignored -> new LinkedHashMap<String, String>(cacheSize + 1, 0.75f, false) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
+              return size() > cacheSize;
+            }
+          })
+          .put(cacheKey(timelineHashFromClient, lastKnownInstantFromClient), syncedTimeline.getTimelineHash());
     }
 
     /**
