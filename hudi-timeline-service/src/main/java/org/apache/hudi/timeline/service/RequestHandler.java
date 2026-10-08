@@ -761,49 +761,20 @@ public class RequestHandler {
     }
 
     /**
-     * Determines whether the local view needs to be refreshed before handling the request.
-     *
-     * <p>An exact extension does not require a refresh because reloading cannot make the
-     * server timeline equal the older client timeline. The final consistency check remains
-     * strict and can still reject the response so the client falls back to its local view.
-     */
-    private boolean shouldRefreshLocalView(Context ctx) {
-      String basePath = ctx.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM);
-      String lastKnownInstantFromClient = getLastInstantTsParam(ctx);
-      String timelineHashFromClient = getTimelineHashParam(ctx);
-      HoodieTimeline localTimeline =
-          viewManager.getFileSystemView(basePath).getTimeline().filterCompletedOrMajorOrMinorCompactionInstants();
-
-      if ((!localTimeline.getInstantsAsStream().findAny().isPresent())
-          && HoodieTimeline.INVALID_INSTANT_TS.equals(lastKnownInstantFromClient)) {
-        return false;
-      }
-
-      String localTimelineHash = localTimeline.getTimelineHash();
-      if (!localTimelineHash.equals(timelineHashFromClient)) {
-        if (HoodieTimeline.INVALID_INSTANT_TS.equals(lastKnownInstantFromClient)
-            || !localTimeline.containsInstant(lastKnownInstantFromClient)) {
-          return true;
-        }
-        // A newer last instant alone is insufficient: all actions and states through the
-        // client boundary must match before the server can be treated as an exact extension.
-        return !localTimeline.findInstantsBeforeOrEquals(lastKnownInstantFromClient)
-            .getTimelineHash().equals(timelineHashFromClient);
-      }
-
-      return !localTimeline.containsOrBeforeTimelineStarts(lastKnownInstantFromClient);
-    }
-
-    /**
      * Syncs data-set view if local view is behind.
      */
     private boolean syncIfLocalViewBehind(Context ctx) {
       String basePath = ctx.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM);
       SyncableFileSystemView view = viewManager.getFileSystemView(basePath);
       synchronized (view) {
-        if (shouldRefreshLocalView(ctx)) {
+        if (isLocalViewBehind(ctx)) {
           String lastKnownInstantFromClient = getLastInstantTsParam(ctx);
           HoodieTimeline localTimeline = viewManager.getFileSystemView(basePath).getTimeline();
+          // The final check already accepts a trailing clean with an otherwise matching timeline.
+          // Other extensions still need a sync: restore may have deleted their extra instants.
+          if (!shouldThrowExceptionIfLocalViewBehind(localTimeline, getTimelineHashParam(ctx))) {
+            return false;
+          }
           if (log.isInfoEnabled()) {
             log.info("Syncing view as client passed last known instant {} as last known instant but server has the following last instant on timeline: {}",
                 lastKnownInstantFromClient, localTimeline.lastInstant());
