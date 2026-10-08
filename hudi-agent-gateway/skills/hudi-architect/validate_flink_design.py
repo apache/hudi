@@ -77,10 +77,12 @@ FINDING_STATUS = {
     "FLINK_RECORD_KEY_NULLABLE": "BLOCKED",
     "FLINK_REPLAY_BEHAVIOR_UNRESOLVED": "REVIEW_REQUIRED",
     "FLINK_REPLAY_IDEMPOTENCE_DEFERRED": "BLOCKED",
+    "FLINK_SCHEMA_FIELD_NAME_UNSUPPORTED": "BLOCKED",
     "FLINK_SOURCE_CHANGELOG_NOT_APPEND_ONLY": "BLOCKED",
     "FLINK_SOURCE_CONTRACT_REQUIRED": "INCOMPLETE",
     "FLINK_SOURCE_SCHEMA_MISMATCH": "BLOCKED",
     "FLINK_TABLE_LIFECYCLE_REQUIRED": "INCOMPLETE",
+    "FLINK_TEMPORAL_PRECISION_UNSUPPORTED": "BLOCKED",
     "FLINK_VERSION_REQUIRED": "INCOMPLETE",
     "FLINK_VERSION_UNVERIFIED": "REVIEW_REQUIRED",
     "FLINK_WRITER_MODEL_UNRESOLVED": "REVIEW_REQUIRED",
@@ -184,8 +186,21 @@ def _normalize_type(
         )
     elif type_name in {"CHAR", "VARCHAR", "BINARY", "VARBINARY"}:
         valid = len(arguments) == 1 and 1 <= arguments[0] <= MAX_TYPE_LENGTH
-    elif type_name in {"TIME", "TIMESTAMP", "TIMESTAMP_LTZ"}:
-        valid = len(arguments) == 1 and 0 <= arguments[0] <= 9
+    elif type_name in manifest["physical_schema_constraints"]["temporal_types"]:
+        constraints = manifest["physical_schema_constraints"]
+        if len(arguments) == 1 and not (
+            constraints["temporal_precision_min"]
+            <= arguments[0]
+            <= constraints["temporal_precision_max"]
+        ):
+            assessment.add(
+                "FLINK_TEMPORAL_PRECISION_UNSUPPORTED",
+                f"Hudi 1.2.0 supports {type_name} precision only between "
+                f"{constraints['temporal_precision_min']} and "
+                f"{constraints['temporal_precision_max']}",
+            )
+            return None
+        valid = len(arguments) == 1
     if not valid:
         assessment.add(
             "FLINK_SCHEMA_TYPE_UNVERIFIED",
@@ -210,6 +225,15 @@ def _columns(
         nullable = column.get("nullable")
         if not _non_empty_string(name):
             assessment.add("FLINK_PHYSICAL_SCHEMA_REQUIRED", f"{field}[{index}] needs a name")
+            continue
+        if re.fullmatch(
+            manifest["physical_schema_constraints"]["field_name_pattern"], name
+        ) is None:
+            assessment.add(
+                "FLINK_SCHEMA_FIELD_NAME_UNSUPPORTED",
+                f"{field}[{index}].name {name!r} cannot be represented by the "
+                "Avro-backed Hudi sink schema",
+            )
             continue
         if name in names:
             assessment.add(

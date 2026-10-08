@@ -21,6 +21,7 @@ package org.apache.hudi.agent.architect;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.table.HoodieTableFactory;
+import org.apache.hudi.util.HoodieSchemaConverter;
 
 import org.apache.flink.api.common.RuntimeExecutionMode;
 import org.apache.flink.api.common.typeinfo.Types;
@@ -36,6 +37,7 @@ import org.apache.flink.table.api.Schema;
 import org.apache.flink.table.api.Table;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
 import org.apache.flink.table.connector.ChangelogMode;
+import org.apache.flink.table.types.logical.TimeType;
 import org.apache.flink.types.Row;
 import org.junit.jupiter.api.Test;
 
@@ -52,6 +54,7 @@ import java.util.regex.Pattern;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -147,6 +150,116 @@ class TestFlinkArchitectSqlFixtures {
     assertFalse(OptionsResolver.isAppendMode(conf));
   }
 
+  @Test
+  void testPinnedPlannerAcceptsTemporalPrecisionSix() {
+    TestContext context = newTestContext();
+    context.tableEnv.executeSql(
+        "CREATE TEMPORARY VIEW `temporal_boundary_source` AS SELECT\n"
+            + "  CAST(NULL AS TIME(6)) AS `time_value`,\n"
+            + "  CAST(NULL AS TIMESTAMP(6)) AS `timestamp_value`,\n"
+            + "  CAST(NULL AS TIMESTAMP_LTZ(6)) AS `local_timestamp_value`");
+    context.tableEnv.executeSql(
+        "CREATE TABLE `temporal_boundary_sink` (\n"
+            + "  `time_value` TIME(6),\n"
+            + "  `timestamp_value` TIMESTAMP(6),\n"
+            + "  `local_timestamp_value` TIMESTAMP_LTZ(6)\n"
+            + ") WITH (\n"
+            + "  'connector' = 'hudi',\n"
+            + "  'path' = 'file:///tmp/hudi-architect-temporal-boundary',\n"
+            + "  'table.type' = 'COPY_ON_WRITE',\n"
+            + "  'write.operation' = 'insert',\n"
+            + "  'write.insert.cluster' = 'false'\n"
+            + ")");
+
+    String plan = context.tableEnv.explainSql(
+        "INSERT INTO `temporal_boundary_sink` "
+            + "SELECT `time_value`, `timestamp_value`, `local_timestamp_value` "
+            + "FROM `temporal_boundary_source`",
+        ExplainDetail.CHANGELOG_MODE,
+        ExplainDetail.JSON_EXECUTION_PLAN);
+
+    assertTrue(plan.contains("temporal_boundary_sink"), plan);
+    assertTrue(plan.contains("changelogMode=[I]"), plan);
+  }
+
+  @Test
+  void testPinnedPlannerRejectsTemporalPrecisionAboveSix() {
+    String[] temporalTypes = {"TIMESTAMP", "TIMESTAMP_LTZ"};
+    for (String temporalType : temporalTypes) {
+      for (int precision : new int[] {7, 9}) {
+        TestContext context = newTestContext();
+        String suffix = temporalType.toLowerCase() + "_" + precision;
+        context.tableEnv.executeSql(
+            "CREATE TEMPORARY VIEW `source_" + suffix + "` AS SELECT "
+                + "CAST(NULL AS " + temporalType + "(" + precision + ")) AS `value`");
+
+        RuntimeException failure = assertThrows(
+            RuntimeException.class,
+            () -> {
+              context.tableEnv.executeSql(
+                  "CREATE TABLE `sink_" + suffix + "` (\n"
+                      + "  `value` " + temporalType + "(" + precision + ")\n"
+                      + ") WITH (\n"
+                      + "  'connector' = 'hudi',\n"
+                      + "  'path' = 'file:///tmp/hudi-architect-" + suffix + "',\n"
+                      + "  'table.type' = 'COPY_ON_WRITE',\n"
+                      + "  'write.operation' = 'insert',\n"
+                      + "  'write.insert.cluster' = 'false'\n"
+                      + ")");
+              context.tableEnv.explainSql(
+                  "INSERT INTO `sink_" + suffix + "` SELECT `value` FROM `source_"
+                      + suffix + "`");
+            });
+
+        assertTrue(
+            failureMessages(failure).contains("only supports precisions <= 6"),
+            failureMessages(failure));
+      }
+    }
+  }
+
+  @Test
+  void testPinnedSchemaConverterRejectsTimePrecisionAboveSix() {
+    HoodieSchemaConverter.convertToSchema(new TimeType(6));
+    for (int precision : new int[] {7, 9}) {
+      IllegalArgumentException failure = assertThrows(
+          IllegalArgumentException.class,
+          () -> HoodieSchemaConverter.convertToSchema(new TimeType(precision)));
+      assertTrue(
+          failure.getMessage().contains("maximum precision is 6"),
+          failure.getMessage());
+    }
+  }
+
+  @Test
+  void testPinnedPlannerRejectsNonAvroFieldName() {
+    TestContext context = newTestContext();
+    context.tableEnv.executeSql(
+        "CREATE TEMPORARY VIEW `invalid_name_source` AS SELECT "
+            + "CAST('alice' AS STRING) AS `user-id`");
+
+    RuntimeException failure = assertThrows(
+        RuntimeException.class,
+        () -> {
+          context.tableEnv.executeSql(
+              "CREATE TABLE `invalid_name_sink` (\n"
+                  + "  `user-id` STRING\n"
+                  + ") WITH (\n"
+                  + "  'connector' = 'hudi',\n"
+                  + "  'path' = 'file:///tmp/hudi-architect-invalid-name',\n"
+                  + "  'table.type' = 'COPY_ON_WRITE',\n"
+                  + "  'write.operation' = 'insert',\n"
+                  + "  'write.insert.cluster' = 'false'\n"
+                  + ")");
+          context.tableEnv.explainSql(
+              "INSERT INTO `invalid_name_sink` SELECT `user-id` FROM `invalid_name_source`");
+        });
+
+    assertTrue(
+        failureMessages(failure).contains("Illegal character in: user-id"),
+        failureMessages(failure));
+  }
+
   private static void assertPinnedArtifacts() {
     assertNotNull(HoodieTableFactory.class.getProtectionDomain().getCodeSource());
     assertEquals("1.2.0", HoodieTableFactory.class.getPackage().getImplementationVersion());
@@ -222,6 +335,16 @@ class TestFlinkArchitectSqlFixtures {
     assertEquals(
         Duration.ofSeconds(60),
         configuration.get(ExecutionCheckpointingOptions.CHECKPOINTING_INTERVAL));
+  }
+
+  private static String failureMessages(Throwable failure) {
+    StringBuilder messages = new StringBuilder();
+    for (Throwable current = failure; current != null; current = current.getCause()) {
+      if (current.getMessage() != null) {
+        messages.append(current.getMessage()).append('\n');
+      }
+    }
+    return messages.toString();
   }
 
   private static final class SqlFixture {

@@ -175,6 +175,12 @@ def test_flink_baseline_is_fixed_and_pr2_has_bounded_executable_contract() -> No
         "flink_version": "1.20.1",
         "java_version": 11,
     }
+    assert manifest["physical_schema_constraints"] == {
+        "field_name_pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+        "temporal_precision_min": 0,
+        "temporal_precision_max": 6,
+        "temporal_types": ["TIME", "TIMESTAMP", "TIMESTAMP_LTZ"],
+    }
     assert "first executable" in capability
     assert "`CONFIG_VALIDATED`" in decisions
     assert "Executable eligible: true" in output
@@ -258,6 +264,11 @@ def test_flink_capability_validation_rejects_manifest_revision_drift(
             'java_test = "testSinkOnly"',
             "implemented_acceptance_checks does not match",
         ),
+        (
+            "temporal_precision_max = 6",
+            "temporal_precision_max = 9",
+            "physical_schema_constraints does not match",
+        ),
     ],
 )
 def test_flink_capability_validation_rejects_executable_contract_drift(
@@ -306,6 +317,14 @@ def test_flink_capability_manifest_records_dannys_pr2_acceptance_contract() -> N
         "FLINK_SOURCE_CHANGELOG_NOT_APPEND_ONLY": (
             "test_pr2_rejects_non_append_source_changelog",
             "testStableKeySinkAndInsertPlan",
+        ),
+        "FLINK_TEMPORAL_PRECISION_UNSUPPORTED": (
+            "test_pr2_enforces_pinned_temporal_precision_limits",
+            "testPinnedPlannerRejectsTemporalPrecisionAboveSix",
+        ),
+        "FLINK_SCHEMA_FIELD_NAME_UNSUPPORTED": (
+            "test_pr2_rejects_non_avro_physical_field_names",
+            "testPinnedPlannerRejectsNonAvroFieldName",
         ),
     }
     for check in manifest["implemented_acceptance_checks"]:
@@ -643,6 +662,68 @@ def test_pr2_rejects_out_of_range_physical_type_parameters(tmp_path: Path) -> No
     assert "FLINK_SCHEMA_TYPE_UNVERIFIED" in assessment["finding_codes"]
     assert assessment["status"] == "REVIEW_REQUIRED"
     assert assessment["executable_eligible"] is False
+
+
+@pytest.mark.parametrize("type_name", ["TIME", "TIMESTAMP", "TIMESTAMP_LTZ"])
+@pytest.mark.parametrize(("precision", "accepted"), [(6, True), (7, False), (9, False)])
+def test_pr2_enforces_pinned_temporal_precision_limits(
+    tmp_path: Path, type_name: str, precision: int, accepted: bool
+) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "auto_key.json"))
+    temporal_type = f"{type_name}({precision})"
+    design["table"]["columns"][1]["type"] = temporal_type
+    design["source"]["columns"][1]["type"] = temporal_type
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+    assessment = json.loads(result.stdout)
+
+    if accepted:
+        assert result.returncode == 0, result.stderr
+        assert assessment["finding_codes"] == []
+        assert assessment["status"] == "CONFIG_VALIDATED"
+        assert temporal_type in assessment["artifacts"]["combined_sql"]
+    else:
+        assert result.returncode == 1
+        assert assessment["finding_codes"] == [
+            "FLINK_TEMPORAL_PRECISION_UNSUPPORTED"
+        ]
+        assert assessment["status"] == "BLOCKED"
+        assert assessment["executable_eligible"] is False
+        assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize("field_name", ["user-id", "1user", "user.id"])
+def test_pr2_rejects_non_avro_physical_field_names(
+    tmp_path: Path, field_name: str
+) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "auto_key.json"))
+    design["table"]["columns"][0]["name"] = field_name
+    design["source"]["columns"][0]["name"] = field_name
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == ["FLINK_SCHEMA_FIELD_NAME_UNSUPPORTED"]
+    assert assessment["status"] == "BLOCKED"
+    assert assessment["executable_eligible"] is False
+    assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize("field_name", ["_user", "user_1"])
+def test_pr2_accepts_avro_physical_field_name_boundaries(
+    tmp_path: Path, field_name: str
+) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "auto_key.json"))
+    design["table"]["columns"][0]["name"] = field_name
+    design["source"]["columns"][0]["name"] = field_name
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 0, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "CONFIG_VALIDATED"
+    assert f"`{field_name}` STRING" in assessment["artifacts"]["combined_sql"]
 
 
 @pytest.mark.parametrize(

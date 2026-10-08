@@ -70,6 +70,12 @@ parameterized = [
   "VARCHAR",
 ]
 
+[physical_schema_constraints]
+field_name_pattern = "^[A-Za-z_][A-Za-z0-9_]*$"
+temporal_precision_min = 0
+temporal_precision_max = 6
+temporal_types = ["TIME", "TIMESTAMP", "TIMESTAMP_LTZ"]
+
 [[source_anchors]]
 id = "root_pom"
 path = "pom.xml"
@@ -81,6 +87,12 @@ id = "flink_options"
 path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/configuration/FlinkOptions.java"
 sha256 = "090f69445ce8baa700b06356c0165a7d0dc35cf57c12052d91813af0427d2f71"
 purpose = "Flink DynamicTable option keys and defaults"
+
+[[source_anchors]]
+id = "hoodie_schema_converter"
+path = "hudi-client/hudi-flink-client/src/main/java/org/apache/hudi/util/HoodieSchemaConverter.java"
+sha256 = "9fc500632bd250be48b0c9fa08faff7eb6cdb1ce9ad5ecce03a2532a69952e72"
+purpose = "Flink logical-type conversion limits and Avro-backed physical field construction"
 
 [[source_anchors]]
 id = "options_resolver"
@@ -188,3 +200,15 @@ id = "FLINK_SOURCE_CHANGELOG_NOT_APPEND_ONLY"
 requirement = "Validate generated INSERT INTO with a declared source schema and append-only changelog contract through a planner fixture."
 python_test = "test_pr2_rejects_non_append_source_changelog"
 java_test = "testStableKeySinkAndInsertPlan"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_TEMPORAL_PRECISION_UNSUPPORTED"
+requirement = "Reject TIME, TIMESTAMP, and TIMESTAMP_LTZ precision above the Hudi 1.2.0 connector limit of 6."
+python_test = "test_pr2_enforces_pinned_temporal_precision_limits"
+java_test = "testPinnedPlannerRejectsTemporalPrecisionAboveSix"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_SCHEMA_FIELD_NAME_UNSUPPORTED"
+requirement = "Reject physical field names that cannot be represented by the Avro-backed Hudi sink schema."
+python_test = "test_pr2_rejects_non_avro_physical_field_names"
+java_test = "testPinnedPlannerRejectsNonAvroFieldName"

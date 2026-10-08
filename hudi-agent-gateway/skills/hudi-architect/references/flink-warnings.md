@@ -250,6 +250,25 @@ the pinned PR2 scalar validation surface.
 
 **Action:** `REVIEW_REQUIRED`; withhold executable output instead of passing through unchecked DDL.
 
+## FLINK_SCHEMA_FIELD_NAME_UNSUPPORTED
+
+**Trigger:** A physical source or target field name does not match
+`^[A-Za-z_][A-Za-z0-9_]*$`.
+
+**Message:** Flink can quote the identifier, but the pinned Hudi connector cannot represent it in
+the Avro-backed physical schema.
+
+**Action:** `BLOCKED`; require an authoritative compatible field name. Do not silently rename it.
+
+## FLINK_TEMPORAL_PRECISION_UNSUPPORTED
+
+**Trigger:** A `TIME`, `TIMESTAMP`, or `TIMESTAMP_LTZ` field declares precision outside 0 through
+6.
+
+**Message:** The pinned Hudi 1.2.0 schema converter supports temporal precision no greater than 6.
+
+**Action:** `BLOCKED`; require an authoritative compatible type. Do not silently reduce precision.
+
 ## FLINK_SOURCE_CONTRACT_REQUIRED
 
 **Trigger:** The source table, expected physical schema, or changelog semantics are unavailable.

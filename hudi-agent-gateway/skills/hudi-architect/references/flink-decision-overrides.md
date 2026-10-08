@@ -34,6 +34,9 @@ do not replace the shared table-design rules and do not form a standalone planne
 - Do not infer `SINGLE_WRITER`; it must be confirmed by the user.
 - Do not infer that no external catalog is needed; ask the outcome gate.
 - Do not infer a physical schema.
+- Do not sanitize physical field names or reduce temporal precision. Field names must match the
+  pinned Avro-backed schema rule, and `TIME`, `TIMESTAMP`, and `TIMESTAMP_LTZ` precision must be
+  between 0 and 6.
 - Do not equate a stable record key with replay idempotence.
 - Do not reuse this baseline for another Hudi or Flink version.
 - Emit executable output only when `validate_flink_design.py` returns `CONFIG_VALIDATED` for the
@@ -64,6 +67,8 @@ do not replace the shared table-design rules and do not form a standalone planne
 | Stable record-key field is nullable | `FLINK_RECORD_KEY_NULLABLE` | `BLOCKED` | No |
 | PRIMARY KEY syntax conflicts with a record-key option | `FLINK_PRIMARY_KEY_RECORD_KEY_CONFLICT` | `BLOCKED` | No |
 | Partition field is absent from the physical schema | `FLINK_PARTITION_FIELD_MISSING` | `BLOCKED` | No |
+| Physical field name is not representable by the Avro-backed Hudi schema | `FLINK_SCHEMA_FIELD_NAME_UNSUPPORTED` | `BLOCKED` | No |
+| `TIME`, `TIMESTAMP`, or `TIMESTAMP_LTZ` precision is outside 0 through 6 | `FLINK_TEMPORAL_PRECISION_UNSUPPORTED` | `BLOCKED` | No |
 | Physical type is outside the pinned PR2 scalar surface | `FLINK_SCHEMA_TYPE_UNVERIFIED` | `REVIEW_REQUIRED` | No |
 | Source table contract is missing | `FLINK_SOURCE_CONTRACT_REQUIRED` | `INCOMPLETE` | No |
 | Source and target projected schemas differ | `FLINK_SOURCE_SCHEMA_MISMATCH` | `BLOCKED` | No |

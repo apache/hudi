@@ -88,6 +88,12 @@ EXPECTED_PHYSICAL_TYPES = {
         "VARCHAR",
     ],
 }
+EXPECTED_PHYSICAL_SCHEMA_CONSTRAINTS = {
+    "field_name_pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+    "temporal_precision_min": 0,
+    "temporal_precision_max": 6,
+    "temporal_types": ["TIME", "TIMESTAMP", "TIMESTAMP_LTZ"],
+}
 EXPECTED_ACCEPTANCE_EVIDENCE = {
     "FLINK_APPEND_MODE_CLUSTERING_ENABLED": (
         "test_pr2_rejects_insert_clustering_override",
@@ -100,6 +106,14 @@ EXPECTED_ACCEPTANCE_EVIDENCE = {
     "FLINK_SOURCE_CHANGELOG_NOT_APPEND_ONLY": (
         "test_pr2_rejects_non_append_source_changelog",
         "testStableKeySinkAndInsertPlan",
+    ),
+    "FLINK_TEMPORAL_PRECISION_UNSUPPORTED": (
+        "test_pr2_enforces_pinned_temporal_precision_limits",
+        "testPinnedPlannerRejectsTemporalPrecisionAboveSix",
+    ),
+    "FLINK_SCHEMA_FIELD_NAME_UNSUPPORTED": (
+        "test_pr2_rejects_non_avro_physical_field_names",
+        "testPinnedPlannerRejectsNonAvroFieldName",
     ),
 }
 SHA1_PATTERN = re.compile(r"[0-9a-f]{40}")
@@ -288,6 +302,12 @@ def validate_manifest(manifest: dict[str, Any]) -> list[str]:
                 or len(values) != len(set(values))
             ):
                 errors.append(f"physical_types.{type_group} must be sorted unique strings")
+
+    physical_schema_constraints = manifest.get("physical_schema_constraints")
+    if physical_schema_constraints != EXPECTED_PHYSICAL_SCHEMA_CONSTRAINTS:
+        errors.append(
+            "physical_schema_constraints does not match the pinned Hudi connector limits"
+        )
 
     implemented_checks = manifest.get("implemented_acceptance_checks")
     implemented_ids: list[str] = []

@@ -211,7 +211,11 @@ Enter this stage only when F0-F6 have no status-contributing finding. Collect, w
 PR2 validates a bounded scalar Flink SQL type surface recorded in the capability manifest.
 Nested, computed, metadata, and watermark columns remain `REVIEW_REQUIRED` with
 `FLINK_SCHEMA_TYPE_UNVERIFIED` until covered by a pinned fixture. A field referenced by the
-record key or partition list must exist. Stable-key columns must be `NOT NULL`.
+record key or partition list must exist. Stable-key columns must be `NOT NULL`. Every physical
+field name must match `^[A-Za-z_][A-Za-z0-9_]*$`; quoted SQL identifiers do not bypass the
+Avro-backed Hudi schema constraint. `TIME`, `TIMESTAMP`, and `TIMESTAMP_LTZ` precision must be
+between 0 and 6 for the pinned connector. Reject violations instead of renaming a field or
+reducing its precision.
 
 Use `PRIMARY KEY (...) NOT ENFORCED` for the canonical stable-key DDL. Do not also generate
 `hoodie.datasource.write.recordkey.field`. If supplied evidence contains both forms, reject a

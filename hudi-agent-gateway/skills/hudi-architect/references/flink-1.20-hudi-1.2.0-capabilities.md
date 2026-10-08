@@ -72,6 +72,9 @@ the current checkout contains it.
 | Catalog or metastore composition | `REVIEW_REQUIRED`; deferred to PR6 |
 | Physical-schema availability detection | Supported |
 | Bounded scalar physical-schema validation | Supported |
+| Avro-compatible physical field names | Required; incompatible names are `BLOCKED` |
+| `TIME`, `TIMESTAMP`, and `TIMESTAMP_LTZ` precision 0 through 6 | Supported |
+| Temporal precision above 6 | `BLOCKED` by the pinned connector limit |
 | Nested, computed, metadata, and watermark columns | `REVIEW_REQUIRED` |
 | Append-only record-key posture detection | Supported |
 | Auto-generated-key durability warning | Supported |
@@ -112,6 +115,22 @@ an incompatible `true` override. Checking only `write.operation = insert` is ins
 The generated `INSERT INTO` is consumed by a Flink 1.20.1 planner fixture with a declared physical
 source schema and `ChangelogMode.insertOnly()`. The Python validator independently rejects a
 non-`INSERT_ONLY` source contract. The fixture is local and requires no external source service.
+
+### `FLINK_TEMPORAL_PRECISION_UNSUPPORTED`
+
+The pinned `HoodieSchemaConverter` maps `TIME`, `TIMESTAMP`, and `TIMESTAMP_LTZ` only through
+precision 6. The design validator blocks higher precision before SQL emission. Python tests cover
+the 6, 7, and 9 boundaries for all three types, and the pinned planner fixture reproduces the
+connector rejection at 7 and 9 for both timestamp forms. A direct pinned-converter test covers
+the same boundaries for `TIME`, closing the adjacent path governed by the same connector limit.
+
+### `FLINK_SCHEMA_FIELD_NAME_UNSUPPORTED`
+
+The Hudi sink builds an Avro-backed physical schema, so a Flink-quoted name such as `user-id` is
+not sufficient. The design validator requires every source and target field name to match
+`^[A-Za-z_][A-Za-z0-9_]*$` before rendering. Python tests cover valid and invalid boundaries, and
+the pinned planner fixture preserves the connector failure as regression evidence. The validator
+does not silently sanitize names because doing so would alter schema, key, and partition semantics.
 
 ## Status vocabulary
 

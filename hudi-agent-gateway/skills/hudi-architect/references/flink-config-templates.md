@@ -75,7 +75,7 @@ Confirmed facts:
 
 Source contract:
 - Existing table: <source identifier>
-- Expected physical schema: <fields, types, nullability>
+- Expected physical schema: <Avro-compatible field names, bounded types, nullability>
 - Changelog: INSERT_ONLY
 - The source connector and live source availability were not validated.
 
