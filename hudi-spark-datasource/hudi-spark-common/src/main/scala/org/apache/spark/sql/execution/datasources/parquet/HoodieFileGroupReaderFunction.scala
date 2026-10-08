@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.read.lsm.{HoodieLsmFileGroupReader, LsmReade
 import org.apache.hudi.common.util.{ConfigUtils, Option => HOption}
 import org.apache.hudi.common.util.collection.ClosableIterator
 import org.apache.hudi.data.CloseableIteratorListener
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.io.storage.HoodieSparkParquetReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR
 import org.apache.hudi.io.storage.VectorConversionUtils
 import org.apache.hudi.storage.StorageConfiguration
@@ -39,9 +40,10 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.parquet.schema.MessageType
 import org.apache.spark.SparkEnv
 import org.apache.spark.broadcast.Broadcast
+import org.apache.spark.sql.HoodieCatalystExpressionUtils
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{JoinedRow, UnsafeProjection}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, In, InSet, JoinedRow, Literal, Predicate, UnsafeProjection}
 import org.apache.spark.sql.execution.datasources.{PartitionedFile, SparkColumnarFileReader, SparkSchemaTransformUtils}
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
@@ -78,7 +80,8 @@ private[parquet] class HoodieFileGroupReadState(val tableState: TableState,
                                                  val fixedPartitionIndexes: Set[Int],
                                                  val outputSchema: StructType,
                                                  val projectionInputSchema: StructType,
-                                                 val baseFileReadSchemas: BaseFileReadSchemas) extends Serializable {
+                                                 val baseFileReadSchemas: BaseFileReadSchemas,
+                                                 val evaluateRequiredFiltersPerRow: Boolean) extends Serializable {
 
   /**
    * Parquet form of the table schema for base file reads. The conversion reads Hadoop's default resources, so it is
@@ -233,6 +236,7 @@ private[parquet] class HoodieFileGroupReaderFunction(baseFileReader: Broadcast[S
     val hasVectors = schemas.readVectorColumns.nonEmpty
     val parquetFileReader = baseFileReader.value
     val filters = state.filters ++ state.requiredFilters
+    val requiredFilters = if (state.evaluateRequiredFiltersPerRow) state.requiredFilters else Seq.empty
     val partitionSchema = state.partitionSchema
     val remainingPartitionSchema = state.remainingPartitionSchema
 
@@ -240,7 +244,8 @@ private[parquet] class HoodieFileGroupReaderFunction(baseFileReader: Broadcast[S
       //none of partition fields are read from the file, so the reader will do the appending for us
       val iter = parquetFileReader.read(file, schemas.readRequiredSchema, partitionSchema, state.internalSchemaOpt, filters, conf,
         state.tableSchemaAsMessageType)
-      projectIfNeeded(iter, StructType(schemas.readRequiredSchema.fields ++ partitionSchema.fields), schemas.outputSchema)
+      val readSchema = StructType(schemas.readRequiredSchema.fields ++ partitionSchema.fields)
+      projectIfNeeded(applyRequiredFilters(iter, readSchema, requiredFilters), readSchema, schemas.outputSchema)
     } else if (remainingPartitionSchema.fields.length == 0) {
       //we read all of the partition fields from the file
       val pfileUtils = sparkAdapter.getSparkPartitionedFileUtils
@@ -250,7 +255,7 @@ private[parquet] class HoodieFileGroupReaderFunction(baseFileReader: Broadcast[S
       //and we pass an empty schema for the partition schema
       val iter = parquetFileReader.read(modifiedFile, readSchema, new StructType(), state.internalSchemaOpt, filters, conf,
         state.tableSchemaAsMessageType)
-      projectIfNeeded(iter, readSchema, schemas.outputSchema)
+      projectIfNeeded(applyRequiredFilters(iter, readSchema, requiredFilters), readSchema, schemas.outputSchema)
     } else {
       //need to do an additional projection here. The case in mind is that partition schema is "a,b,c" mandatoryFields is "a,c",
       //then we will read (dataSchema + a + c) and append b. So the final schema will be (data schema + a + c +b)
@@ -260,7 +265,8 @@ private[parquet] class HoodieFileGroupReaderFunction(baseFileReader: Broadcast[S
       val modifiedFile = pfileUtils.createPartitionedFile(partitionValues, pfileUtils.getPathFromPartitionedFile(file), file.start, file.length)
       val iter = parquetFileReader.read(modifiedFile, schemas.requestedSchema, remainingPartitionSchema, state.internalSchemaOpt, filters, conf,
         state.tableSchemaAsMessageType)
-      projectIter(iter, StructType(schemas.requestedSchema.fields ++ remainingPartitionSchema.fields), schemas.outputSchema)
+      val readSchema = StructType(schemas.requestedSchema.fields ++ remainingPartitionSchema.fields)
+      projectIter(applyRequiredFilters(iter, readSchema, requiredFilters), readSchema, schemas.outputSchema)
     }
 
     if (hasVectors) {
@@ -347,6 +353,37 @@ private[parquet] object HoodieFileGroupReaderFunction {
       vectorCols.map { case (k, v) => (Integer.valueOf(k), v) }.asJava
     val mapper = VectorConversionUtils.buildRowMapper(readSchema, javaVectorCols, vectorProjection.apply(_))
     iter.map(mapper.apply(_))
+  }
+
+  /**
+   * Evaluates `requiredFilters` on every row. Pushed-down filters only prune row groups in the vectorized reader,
+   * so when the plan does not filter on them (the Hudi session extension is not registered), the commit-time
+   * range of an incremental query is enforced here. The scan returns rows rather than batches in that case.
+   */
+  private def applyRequiredFilters(iter: Iterator[InternalRow],
+                                   schema: StructType,
+                                   requiredFilters: Seq[Filter]): Iterator[InternalRow] = {
+    if (requiredFilters.isEmpty) {
+      iter
+    } else {
+      val attrs = SparkAdapterSupport.sparkAdapter.getSchemaUtils.toAttributes(schema)
+      val condition = requiredFilters.map { filter =>
+        HoodieCatalystExpressionUtils.convertToCatalystExpression(filter, schema).getOrElse(
+          throw new HoodieException(s"Cannot evaluate required filter: $filter"))
+      }.reduce(And).transform {
+        case a: AttributeReference => attrs(schema.fieldIndex(a.name))
+      }.transform {
+        // A set lookup rather than a chain of comparisons for the commit times of an incremental range
+        case In(child, list) if list.forall(_.isInstanceOf[Literal]) && list.nonEmpty =>
+          InSet(child, list.map(_.eval()).toSet)
+      }
+      val predicate = Predicate.create(condition, attrs)
+      predicate.initialize(0)
+      iter.asInstanceOf[Iterator[Any]].filter {
+        case _: ColumnarBatch => throw new IllegalStateException("Required filters cannot be evaluated on columnar batches")
+        case row: InternalRow => predicate.eval(row)
+      }.asInstanceOf[Iterator[InternalRow]]
+    }
   }
 
   private def projectIter(iter: Iterator[Any], from: StructType, to: StructType): Iterator[InternalRow] = {

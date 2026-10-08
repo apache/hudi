@@ -60,6 +60,8 @@ trait HoodieFormatTrait {
 
   // Used so that the planner only projects once and does not stack overflow
   var isProjected: Boolean = false
+  // Set when the plan already wraps the scan in a Filter on the required filters, so the scan need not enforce them
+  var requiredFiltersAppliedInPlan: Boolean = false
   def getRequiredFilters: Seq[Filter]
 }
 
@@ -70,6 +72,8 @@ trait HoodieFormatTrait {
  * @param instantRangeOpt optional requested-time range applied before file-group record merging;
  *                        unlike Spark's required filters, this prevents a later out-of-range log
  *                        record from masking an earlier in-range version of the same key
+ * @param isCDC           whether this is a CDC query; CDC rows are produced by the CDC iterator rather than read
+ *                        directly from base files, so CDC reads are neither vectorized nor split
  */
 class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                                            tableSchema: HoodieTableSchema,
@@ -85,7 +89,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                                            isMultipleBaseFileFormatsEnabled: Boolean,
                                            hoodieFileFormat: HoodieFileFormat,
                                            instantRangeOpt: HOption[InstantRange] = HOption.empty(),
-                                           @transient tableMetaClient: Option[HoodieTableMetaClient] = None)
+                                           @transient tableMetaClient: Option[HoodieTableMetaClient] = None,
+                                           isCDC: Boolean = false)
   extends ParquetFileFormat with SparkAdapterSupport with HoodieFormatTrait with Logging with Serializable {
 
   private lazy val schema = tableSchema.schema
@@ -112,6 +117,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
   def getRequiredFilters: Seq[Filter] = requiredFilters
 
   private val sanitizedTableName = HoodieSchemaUtils.getRecordQualifiedName(tableName)
+
+  private def evaluateRequiredFiltersPerRow: Boolean = requiredFilters.nonEmpty && !requiredFiltersAppliedInPlan
 
   /**
    * Flag saying whether vectorized reading is supported.
@@ -222,10 +229,18 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       } else {
         throw new HoodieNotSupportedException("Unsupported file format: " + hoodieFileFormat)
       }
-      supportVectorizedRead = !isIncremental && !isBootstrap && supportBatch
-      supportReturningBatch = !isMOR && supportVectorizedRead
+      // MOR incremental embeds file slices that may contain log files requiring row-level
+      // merging, and CDC rows are built by a row-based iterator that reads base files through
+      // the same reader, so vectorized reading must be disabled for both. All other combinations
+      // (COW snapshot, COW incremental, MOR snapshot) either have no log merging or handle it via
+      // a separate non-vectorized fileGroupBaseFileReader while the base file reader stays vectorized.
+      supportVectorizedRead = !(isIncremental && (isMOR || isCDC)) && !isBootstrap && supportBatch
+      // Required filters (the commit-time range of an incremental query) must hold for every row, but the
+      // vectorized reader only uses them to prune row groups. Unless the plan already filters on them, return
+      // rows rather than batches so that the base file read can evaluate them row by row; decoding stays vectorized.
+      supportReturningBatch = !isMOR && supportVectorizedRead && !evaluateRequiredFiltersPerRow
       logDebug(s"supportReturningBatch: $supportReturningBatch, supportVectorizedRead: $supportVectorizedRead, isIncremental: $isIncremental, " +
-        s"isBootstrap: $isBootstrap, superSupportBatch: $supportBatch")
+        s"isCDC: $isCDC, isBootstrap: $isBootstrap, superSupportBatch: $supportBatch")
       supportReturningBatch
     }
   }
@@ -277,8 +292,11 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     // For overly large single files, we can use multiple concurrent tasks to read them, thereby reducing the overall job reading time consumption
     val superSplitable = super.isSplitable(sparkSession, options, path)
     val isLance = hoodieFileFormat == HoodieFileFormat.LANCE
-    val splitable = !isMOR && !isIncremental && !isBootstrap && !isLance && superSplitable
-    logDebug(s"isSplitable: $splitable, super.isSplitable: $superSplitable, isMOR: $isMOR, isIncremental: $isIncremental, isBootstrap: $isBootstrap")
+    // COW incremental reads have no log files to merge, so file splitting is safe.
+    // MOR, CDC and bootstrap reads need to disable splitting.
+    val splitable = !isMOR && !isCDC && !isBootstrap && !isLance && superSplitable
+    logDebug(s"isSplitable: $splitable, super.isSplitable: $superSplitable, isMOR: $isMOR, isIncremental: $isIncremental, " +
+      s"isCDC: $isCDC, isBootstrap: $isBootstrap")
     splitable
   }
 
@@ -385,7 +403,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val state = new HoodieFileGroupReadState(tableState, tableSchema, queryTimestamp, readerProps, cdcProps,
       dataSchema, requestedSchema, internalSchemaOpt, instantRangeOpt, shouldUseRecordPosition, isCount, filters,
       requiredFilters, requiredSchema, partitionSchema, remainingPartitionSchema, fixedPartitionIndexes, outputSchema,
-      projectionInputSchema, baseFileReadSchemas)
+      projectionInputSchema, baseFileReadSchemas, evaluateRequiredFiltersPerRow)
     new HoodieFileGroupReaderFunction(baseFileReader, fileGroupBaseFileReader, broadcastedStorageConf,
       spark.sparkContext.broadcast(JavaSerializedValue(state)))
   }
