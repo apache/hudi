@@ -39,7 +39,8 @@ import scala.collection.JavaConverters._
 class CatalogBackedTableMetadata(engineContext: HoodieEngineContext,
                                  tableConfig: HoodieTableConfig,
                                  storage: HoodieStorage,
-                                 datasetBasePath: String) extends
+                                 datasetBasePath: String,
+                                 resolvedIdentifier: Option[TableIdentifier] = None) extends
   FileSystemBackedTableMetadata(engineContext, tableConfig, storage, datasetBasePath) with Logging {
 
   private val sparkSession = engineContext.asInstanceOf[HoodieSparkEngineContext].getSqlContext.sparkSession
@@ -50,7 +51,8 @@ class CatalogBackedTableMetadata(engineContext: HoodieEngineContext,
     } else {
       tableConfig.getDatabaseName
     }
-  private lazy val tableIdentifier = TableIdentifier(catalogTableName, Some(catalogDatabaseName))
+  private lazy val tableIdentifier =
+    resolvedIdentifier.getOrElse(TableIdentifier(catalogTableName, Some(catalogDatabaseName)))
   private lazy val catalogTable = sparkSession.sessionState.catalog.getTableMetadata(tableIdentifier)
 
   private def isPartitionedTable: Boolean = {
@@ -67,7 +69,7 @@ class CatalogBackedTableMetadata(engineContext: HoodieEngineContext,
       util.Collections.emptyList()
     } else if (shouldUseCatalogPartitions) {
       sparkSession.sessionState.catalog.externalCatalog
-        .listPartitions(catalogDatabaseName, catalogTableName)
+        .listPartitions(tableIdentifier.database.get, tableIdentifier.table)
         .map(catalogTablePartition => {
           val partitionPathURI = new StoragePath(catalogTablePartition.location)
           FSUtils.getRelativePartitionPath(dataBasePath, partitionPathURI)
@@ -83,7 +85,7 @@ class CatalogBackedTableMetadata(engineContext: HoodieEngineContext,
     } else if (shouldUseCatalogPartitions) {
       filterPartitionsBasedOnRelativePathPrefixes(relativePathPrefixes,
         sparkSession.sessionState.catalog.externalCatalog
-          .listPartitions(catalogDatabaseName, catalogTableName))
+          .listPartitions(tableIdentifier.database.get, tableIdentifier.table))
     } else {
       super.getPartitionPathWithPathPrefixes(relativePathPrefixes)
     }
@@ -99,7 +101,7 @@ class CatalogBackedTableMetadata(engineContext: HoodieEngineContext,
       val partitionPredicateExpressionSeq = partitionPredicateExpressions.asScala.map(_.asInstanceOf[Expression]).toSeq
       filterPartitionsBasedOnRelativePathPrefixes(relativePathPrefix,
         sparkSession.sessionState.catalog.externalCatalog
-          .listPartitionsByFilter(catalogDatabaseName, catalogTableName, partitionPredicateExpressionSeq,
+          .listPartitionsByFilter(tableIdentifier.database.get, tableIdentifier.table, partitionPredicateExpressionSeq,
             SQLConf.get.sessionLocalTimeZone))
     } else {
       super.getPartitionPathWithPathPrefixUsingFilterExpression(relativePathPrefix, partitionFields, pushedExpr)

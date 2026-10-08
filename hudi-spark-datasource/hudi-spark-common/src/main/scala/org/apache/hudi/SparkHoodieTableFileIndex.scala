@@ -534,7 +534,8 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
 
   override protected def createMetadataTable(engineContext: HoodieEngineContext): HoodieTableMetadata = {
     if (isPartitionListingViaCatalogEnabled) {
-      new CatalogBackedTableMetadata(engineContext, metaClient.getTableConfig, metaClient.getStorage, getBasePath.toString)
+      new CatalogBackedTableMetadata(engineContext, metaClient.getTableConfig, metaClient.getStorage, getBasePath.toString,
+        HoodieFileIndex.resolvedCatalogIdentifier(configProperties.asScala.toMap))
     } else {
       super.createMetadataTable(engineContext)
     }

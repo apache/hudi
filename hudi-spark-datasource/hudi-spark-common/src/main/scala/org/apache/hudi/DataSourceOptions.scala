@@ -218,6 +218,24 @@ object DataSourceReadOptions {
   val FILE_INDEX_LISTING_MODE_EAGER = "eager"
   val FILE_INDEX_LISTING_MODE_LAZY = "lazy"
 
+  // Set by Hudi's catalog integration on reads that resolved a catalog entry (HoodieInternalV2Table). HoodieFileIndex
+  // merges that entry's TBLPROPERTIES instead of guessing one from the session database. Not meant to be set by users.
+  val CATALOG_TABLE_DATABASE: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.read.catalog.table.database")
+    .noDefaultValue()
+    .markAdvanced()
+    .sinceVersion("1.3.0")
+    .withDocumentation("Database of the catalog entry this read was resolved from. Set internally by Hudi's Spark catalog integration.")
+
+  val CATALOG_TABLE_NAME: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.read.catalog.table.name")
+    .noDefaultValue()
+    .markAdvanced()
+    .sinceVersion("1.3.0")
+    .withDocumentation("Name of the catalog entry this read was resolved from. Set internally by Hudi's Spark catalog integration.")
+
+  val CATALOG_IDENTITY_KEYS: Set[String] = Set(CATALOG_TABLE_DATABASE.key, CATALOG_TABLE_NAME.key)
+
   val FILE_INDEX_LISTING_MODE_OVERRIDE: ConfigProperty[String] =
     ConfigProperty.key("hoodie.datasource.read.file.index.listing.mode")
       .defaultValue(FILE_INDEX_LISTING_MODE_LAZY)

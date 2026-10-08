@@ -37,6 +37,7 @@ import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
+import org.apache.spark.sql.catalyst.analysis.{NoSuchDatabaseException, NoSuchTableException}
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, GetStructField, Literal}
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
@@ -97,7 +98,7 @@ case class HoodieFileIndex(spark: SparkSession,
     spark = spark,
     metaClient = metaClient,
     schemaSpec = schemaSpec,
-    configProperties = getConfigProperties(spark, options, metaClient.getTableConfig),
+    configProperties = getConfigProperties(spark, options, metaClient.getTableConfig, Some(metaClient.getBasePath)),
     queryPaths = HoodieFileIndex.getQueryPaths(options),
     specifiedQueryInstant = options.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key).map(HoodieSqlCommonUtils.formatQueryInstant),
     fileStatusCache = fileStatusCache,
@@ -601,7 +602,8 @@ object HoodieFileIndex extends Logging {
     schema.fieldNames.filter { colName => refs.exists(r => resolver.apply(colName, r.name)) }
   }
 
-  def getConfigProperties(spark: SparkSession, options: Map[String, String], tableConfig: HoodieTableConfig): TypedProperties = {
+  def getConfigProperties(spark: SparkSession, options: Map[String, String], tableConfig: HoodieTableConfig,
+                          basePath: Option[StoragePath] = None): TypedProperties = {
     val sqlConf: SQLConf = spark.sessionState.conf
     val properties = TypedProperties.fromMap(options.filter(p => p._2 != null).asJava)
 
@@ -655,27 +657,14 @@ object HoodieFileIndex extends Logging {
       properties.setProperty(PARTITIONPATH_FIELD.key, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(tableConfig).orElse(""))
       properties.setProperty(HoodieTableConfig.PARTITION_EXTRACTOR_CLASS.key(), tableConfig.getPartitionExtractorClass.orElse(""))
 
-      // for simple bucket index, we need to set the INDEX_TYPE, BUCKET_INDEX_HASH_FIELD, BUCKET_INDEX_NUM_BUCKETS
-      val tableName = tableConfig.getTableName
-
-      def mergeCatalogProperties(database: String): Unit = {
-        if (spark.catalog.tableExists(database, tableName)) {
-          val tableIdentifier = TableIdentifier(tableName, Some(database))
-          val table = HoodieCatalogTable(spark, tableIdentifier)
-          table.catalogProperties.foreach(kv => properties.setProperty(kv._1, kv._2))
-        }
-      }
-
-      if (StringUtils.isNullOrEmpty(tableConfig.getDatabaseName)) {
-        // The database is guessed from the session, so a catalog that cannot resolve it must not fail the read.
-        try {
-          mergeCatalogProperties(getDatabaseName(tableConfig, spark.catalog.currentDatabase))
-        } catch {
-          case NonFatal(e) =>
-            logWarning(s"Skipping catalog properties for table $tableName: lookup in the session's current database failed", e)
-        }
-      } else {
-        mergeCatalogProperties(tableConfig.getDatabaseName)
+      // for simple bucket index, we need to set the INDEX_TYPE, BUCKET_INDEX_HASH_FIELD, BUCKET_INDEX_NUM_BUCKETS.
+      // They come from the catalog entry this read resolved to. The session database is a last resort: a catalog may
+      // reject it, and a same-named table there may be a different table.
+      resolvedCatalogIdentifier(options) match {
+        case Some(id) => mergeResolvedCatalogProperties(spark, id, properties)
+        case None if !StringUtils.isNullOrEmpty(tableConfig.getDatabaseName) =>
+          mergeCatalogPropertiesIfExists(spark, TableIdentifier(tableConfig.getTableName, Some(tableConfig.getDatabaseName)), properties)
+        case None => mergeGuessedCatalogProperties(spark, tableConfig, basePath, properties)
       }
     }
 
@@ -732,6 +721,47 @@ object HoodieFileIndex extends Logging {
     val path = options.getOrElse("path",
           throw new IllegalArgumentException("'path' or 'glob paths' option required"))
     Seq(new StoragePath(path))
+  }
+
+  private[hudi] def resolvedCatalogIdentifier(options: Map[String, String]): Option[TableIdentifier] = for {
+    db <- options.get(DataSourceReadOptions.CATALOG_TABLE_DATABASE.key).filter(_.nonEmpty)
+    table <- options.get(DataSourceReadOptions.CATALOG_TABLE_NAME.key).filter(_.nonEmpty)
+  } yield TableIdentifier(table, Some(db))
+
+  // The analyzer resolved this entry moments ago; only a concurrent drop can make it vanish, and that is not a read error.
+  private def mergeResolvedCatalogProperties(spark: SparkSession, id: TableIdentifier, properties: TypedProperties): Unit = {
+    try {
+      HoodieCatalogTable(spark, id).catalogProperties.foreach(kv => properties.setProperty(kv._1, kv._2))
+    } catch {
+      case e @ (_: NoSuchTableException | _: NoSuchDatabaseException) =>
+        logInfo(s"Catalog entry $id no longer exists; reading without its properties", e)
+    }
+  }
+
+  // A recorded database is trusted: catalog errors here fail the read as before.
+  private def mergeCatalogPropertiesIfExists(spark: SparkSession, id: TableIdentifier, properties: TypedProperties): Unit = {
+    if (spark.catalog.tableExists(id.database.get, id.table)) {
+      HoodieCatalogTable(spark, id).catalogProperties.foreach(kv => properties.setProperty(kv._1, kv._2))
+    }
+  }
+
+  private def mergeGuessedCatalogProperties(spark: SparkSession, tableConfig: HoodieTableConfig, basePath: Option[StoragePath],
+                                            properties: TypedProperties): Unit = {
+    val tableName = tableConfig.getTableName
+    val id = TableIdentifier(tableName, Some(getDatabaseName(tableConfig, spark.catalog.currentDatabase)))
+    try {
+      if (spark.catalog.tableExists(id.database.get, id.table)) {
+        val table = HoodieCatalogTable(spark, id)
+        if (basePath.forall(_ == new StoragePath(table.tableLocation))) {
+          table.catalogProperties.foreach(kv => properties.setProperty(kv._1, kv._2))
+        } else {
+          logInfo(s"Skipping catalog properties for table $tableName: $id is at ${table.tableLocation}, not ${basePath.get}")
+        }
+      }
+    } catch {
+      case NonFatal(e) =>
+        logWarning(s"Skipping catalog properties for table $tableName: lookup of $id in the session's current database failed", e)
+    }
   }
 
   // if database name is not set, fall back to use 'default' instead of failing
