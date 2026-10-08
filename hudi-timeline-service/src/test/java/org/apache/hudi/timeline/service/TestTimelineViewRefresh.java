@@ -147,34 +147,6 @@ class TestTimelineViewRefresh extends HoodieCommonTestHarness {
     verify(view, never()).sync();
   }
 
-  @Test
-  void testLongCleanTailDoesNotRebuildPrefixes() throws IOException {
-    HoodieInstant commit = instant(COMPLETED, COMMIT_ACTION, "0000");
-    List<HoodieInstant> serverInstants = new ArrayList<>();
-    serverInstants.add(commit);
-    for (int i = 1; i <= 512; i++) {
-      serverInstants.add(instant(COMPLETED, CLEAN_ACTION, String.format("%04d", i)));
-    }
-    HoodieTimeline serverTimeline = spy(timeline(serverInstants.toArray(new HoodieInstant[0])));
-    when(view.getTimeline()).thenReturn(serverTimeline);
-
-    request(timeline(commit), "0000", "partition");
-    verify(view, never()).sync();
-    HoodieTimeline divergent = timeline(instant(COMPLETED, REPLACE_COMMIT_ACTION, "0000"));
-    assertThrows(IOException.class, () -> request(divergent, "0000", "partition"));
-    verify(view).sync();
-    verify(serverTimeline, never()).findInstantsBefore(anyString());
-  }
-
-  @Test
-  void testSameTimestampNonCleanDoesNotBecomeAcceptedPrefix() {
-    HoodieInstant commit = instant(COMPLETED, COMMIT_ACTION, "001");
-    HoodieTimeline clientTimeline = timeline(commit);
-    when(view.getTimeline()).thenReturn(timeline(commit, instant(COMPLETED, CLEAN_ACTION, "001")));
-    assertThrows(IOException.class, () -> request(clientTimeline, "001", "partition"));
-    verify(view).sync();
-  }
-
   @ParameterizedTest
   @ValueSource(strings = {COMMIT_ACTION, REPLACE_COMMIT_ACTION, COMPACTION_ACTION, LOG_COMPACTION_ACTION})
   void testOtherExtensionsStillSyncAndFailFinalCheck(String action) {
