@@ -344,8 +344,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val dataStructTypeWithMandatoryPartitionFields = StructType(dataStructType.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name) && !isNestedPartitionField(f.name)))
     val dataSchema = HoodieSchemaUtils.pruneDataSchema(schema, HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(dataStructTypeWithMandatoryPartitionFields, sanitizedTableName), exclusionFields)
 
-    // Keep vectorization query-local; mutating the session configuration here leaks this
-    // reader's fallback into subsequent queries.
+    // Pass the query-local vectorization decision to buildBaseFileReader through
+    // supportVectorizedRead; do not mutate the Spark session configuration.
     val baseFileReader = spark.sparkContext.broadcast(buildBaseFileReader(spark, options, augmentedStorageConf.unwrap(), dataStructType, supportVectorizedRead))
     val fileGroupBaseFileReader = if (isMOR && supportVectorizedRead) {
       // for file group reader to perform read, we always need to read the record without vectorized reader because our merging is based on row level.

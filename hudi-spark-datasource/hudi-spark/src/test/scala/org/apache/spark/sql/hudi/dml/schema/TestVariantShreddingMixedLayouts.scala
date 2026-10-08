@@ -942,9 +942,11 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
         checkNestedExceptionContains(
           () => spark.sql(s"select id, cast(v as string), note from $tableName").collect())(
           "pushVariantIntoScan")
-        // count(*) is deliberately not pinned: it fails on any schema-on-read variant table once
-        // an internal schema is committed (#20139). Previously this stayed green only because #20140
-        // leaked the query-local vectorization fallback into the Spark session.
+        // Empty-projection carve-out: count(*) reads no column data, so the guard must not run.
+        // Pin this on the row-based reader only; the vectorized arm is independently broken by #20139.
+        withSQLConf("spark.sql.parquet.enableVectorizedReader" -> "false") {
+          checkAnswer(s"select count(*) from $tableName")(Seq(1))
+        }
       }
 
       // Known #18285 residue, documented rather than pinned: the schema-on-read DDL also
@@ -1042,9 +1044,6 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
           withSQLConf("spark.sql.variant.pushVariantIntoScan" -> "false") {
             checkAnswer(s"select id, ts from $tableName order by id")(Seq(1, 1000), Seq(2, 1000))
           }
-          // count(*) is deliberately not pinned: it fails on any schema-on-read variant table once
-          // an internal schema is committed, rename or not (#20139), and the existing pin in
-          // "Schema-on-read reads of shredded variant files fail fast" is green only through #20140.
         }
       }
     }
@@ -2331,8 +2330,6 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
         s"""insert into $tableName values (1, parse_json('{"key":"v1"}'), 1000)""")
 
       withSQLConf("spark.sql.parquet.enableVectorizedReader" -> "true") {
-        assert(spark.conf.get("spark.sql.parquet.enableVectorizedReader") == "true")
-
         checkAnswer(
           s"select id, cast(v as string) from $tableName")(
           Seq(1, """{"key":"v1"}"""))
