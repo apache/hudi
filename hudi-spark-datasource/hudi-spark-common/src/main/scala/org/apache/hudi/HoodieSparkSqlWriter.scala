@@ -271,7 +271,8 @@ class HoodieSparkSqlWriterInternal {
     } else {
       // Handle various save modes
       val saveModeOperation =
-        if (operation == WriteOperationType.BULK_INSERT
+        if (hoodieConfig.getBoolean(ENABLE_ROW_WRITER)
+          && operation == WriteOperationType.BULK_INSERT
           && hoodieConfig.getStringOrDefault(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE, "") ==
           WriteOperationType.INSERT_OVERWRITE_TABLE.value()) {
           WriteOperationType.INSERT_OVERWRITE_TABLE
