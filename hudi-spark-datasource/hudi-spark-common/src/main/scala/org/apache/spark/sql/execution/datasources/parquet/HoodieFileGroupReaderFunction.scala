@@ -43,7 +43,7 @@ import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql.HoodieCatalystExpressionUtils
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, JoinedRow, Predicate, UnsafeProjection}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, In, InSet, JoinedRow, Literal, Predicate, UnsafeProjection}
 import org.apache.spark.sql.execution.datasources.{PartitionedFile, SparkColumnarFileReader, SparkSchemaTransformUtils}
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
@@ -81,7 +81,7 @@ private[parquet] class HoodieFileGroupReadState(val tableState: TableState,
                                                  val outputSchema: StructType,
                                                  val projectionInputSchema: StructType,
                                                  val baseFileReadSchemas: BaseFileReadSchemas,
-                                                 val readBaseOnlySlicesDirectly: Boolean) extends Serializable {
+                                                 val evaluateRequiredFiltersPerRow: Boolean) extends Serializable {
 
   /**
    * Parquet form of the table schema for base file reads. The conversion reads Hadoop's default resources, so it is
@@ -148,11 +148,6 @@ private[parquet] class HoodieFileGroupReaderFunction(baseFileReader: Broadcast[S
         val fileGroupName = FSUtils.getFileIdFromFilePath(sparkAdapter
           .getSparkPartitionedFileUtils.getPathFromPartitionedFile(file))
         fileSliceMapping.getSlice(fileGroupName) match {
-          case Some(fileSlice) if state.readBaseOnlySlicesDirectly && !fileSlice.getLogFiles.findAny().isPresent =>
-            // A COW file slice without log files has nothing to merge, so read the base file with the base file
-            // reader directly rather than through HoodieFileGroupReader
-            readBaseFile(file, state, conf)
-
           case Some(fileSlice) if !state.isCount && (state.requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
             val tableConfig = state.tableState.getTableConfig
             // requiredFilters preserve Spark's row-level filtering semantics, while instantRangeOpt
@@ -241,7 +236,7 @@ private[parquet] class HoodieFileGroupReaderFunction(baseFileReader: Broadcast[S
     val hasVectors = schemas.readVectorColumns.nonEmpty
     val parquetFileReader = baseFileReader.value
     val filters = state.filters ++ state.requiredFilters
-    val requiredFilters = state.requiredFilters
+    val requiredFilters = if (state.evaluateRequiredFiltersPerRow) state.requiredFilters else Seq.empty
     val partitionSchema = state.partitionSchema
     val remainingPartitionSchema = state.remainingPartitionSchema
 
@@ -362,9 +357,8 @@ private[parquet] object HoodieFileGroupReaderFunction {
 
   /**
    * Evaluates `requiredFilters` on every row. Pushed-down filters only prune row groups in the vectorized reader,
-   * and the plan-level filter for them is only added when the Hudi session extension is registered, so the
-   * commit-time range of an incremental query is enforced here. The scan returns rows rather than batches
-   * whenever required filters are present.
+   * so when the plan does not filter on them (the Hudi session extension is not registered), the commit-time
+   * range of an incremental query is enforced here. The scan returns rows rather than batches in that case.
    */
   private def applyRequiredFilters(iter: Iterator[InternalRow],
                                    schema: StructType,
@@ -378,6 +372,10 @@ private[parquet] object HoodieFileGroupReaderFunction {
           throw new HoodieException(s"Cannot evaluate required filter: $filter"))
       }.reduce(And).transform {
         case a: AttributeReference => attrs(schema.fieldIndex(a.name))
+      }.transform {
+        // A set lookup rather than a chain of comparisons for the commit times of an incremental range
+        case In(child, list) if list.forall(_.isInstanceOf[Literal]) && list.nonEmpty =>
+          InSet(child, list.map(_.eval()).toSet)
       }
       val predicate = Predicate.create(condition, attrs)
       predicate.initialize(0)

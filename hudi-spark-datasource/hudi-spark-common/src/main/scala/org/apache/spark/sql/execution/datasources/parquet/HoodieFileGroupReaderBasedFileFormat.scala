@@ -60,6 +60,8 @@ trait HoodieFormatTrait {
 
   // Used so that the planner only projects once and does not stack overflow
   var isProjected: Boolean = false
+  // Set when the plan already wraps the scan in a Filter on the required filters, so the scan need not enforce them
+  var requiredFiltersAppliedInPlan: Boolean = false
   def getRequiredFilters: Seq[Filter]
 }
 
@@ -115,6 +117,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
   def getRequiredFilters: Seq[Filter] = requiredFilters
 
   private val sanitizedTableName = HoodieSchemaUtils.getRecordQualifiedName(tableName)
+
+  private def evaluateRequiredFiltersPerRow: Boolean = requiredFilters.nonEmpty && !requiredFiltersAppliedInPlan
 
   /**
    * Flag saying whether vectorized reading is supported.
@@ -232,9 +236,9 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       // a separate non-vectorized fileGroupBaseFileReader while the base file reader stays vectorized.
       supportVectorizedRead = !(isIncremental && (isMOR || isCDC)) && !isBootstrap && supportBatch
       // Required filters (the commit-time range of an incremental query) must hold for every row, but the
-      // vectorized reader only uses them to prune row groups. Return rows rather than batches so that the
-      // base file read can evaluate them row by row; decoding stays vectorized.
-      supportReturningBatch = !isMOR && supportVectorizedRead && requiredFilters.isEmpty
+      // vectorized reader only uses them to prune row groups. Unless the plan already filters on them, return
+      // rows rather than batches so that the base file read can evaluate them row by row; decoding stays vectorized.
+      supportReturningBatch = !isMOR && supportVectorizedRead && !evaluateRequiredFiltersPerRow
       logDebug(s"supportReturningBatch: $supportReturningBatch, supportVectorizedRead: $supportVectorizedRead, isIncremental: $isIncremental, " +
         s"isCDC: $isCDC, isBootstrap: $isBootstrap, superSupportBatch: $supportBatch")
       supportReturningBatch
@@ -399,7 +403,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val state = new HoodieFileGroupReadState(tableState, tableSchema, queryTimestamp, readerProps, cdcProps,
       dataSchema, requestedSchema, internalSchemaOpt, instantRangeOpt, shouldUseRecordPosition, isCount, filters,
       requiredFilters, requiredSchema, partitionSchema, remainingPartitionSchema, fixedPartitionIndexes, outputSchema,
-      projectionInputSchema, baseFileReadSchemas, readBaseOnlySlicesDirectly = !isMOR && !isBootstrap)
+      projectionInputSchema, baseFileReadSchemas, evaluateRequiredFiltersPerRow)
     new HoodieFileGroupReaderFunction(baseFileReader, fileGroupBaseFileReader, broadcastedStorageConf,
       spark.sparkContext.broadcast(JavaSerializedValue(state)))
   }
