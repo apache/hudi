@@ -28,8 +28,11 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.List;
@@ -68,6 +71,31 @@ final class TestHudiTableInitializer
         assertThat(tableConfig.getPartitionFields().get()).containsExactly("city");
         assertThat(tableConfig.getProps()).containsEntry(
                 HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key(), "true");
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "0, 0", "0, 1", "0, 2",
+            "1, 0", "1, 1", "1, 2",
+            "2, 0", "2, 1", "2, 2"})
+    void testInferredKeyGeneratorTypeMatchesHudi(int keyCount, int partitionCount)
+    {
+        List<String> primaryKey = ImmutableList.of("id", "event_time").subList(0, keyCount);
+        List<String> partitionedBy = ImmutableList.of("city", "region").subList(0, partitionCount);
+        ConnectorTableMetadata tableMetadata = new ConnectorTableMetadata(
+                new SchemaTableName("sales", "trips"),
+                columns(),
+                ImmutableMap.of(
+                        PRIMARY_KEY_PROPERTY, primaryKey,
+                        PARTITIONED_BY_PROPERTY, partitionedBy));
+        TrinoFileSystem fileSystem = new MemoryFileSystem();
+
+        HudiTableInitializer.initializeTable(fileSystem, BASE_PATH, tableMetadata, schema());
+
+        assertThat(loadMetaClient(fileSystem).getTableConfig().getString(HoodieTableConfig.KEY_GENERATOR_TYPE))
+                .isEqualTo(KeyGenUtils.inferKeyGeneratorType(
+                        Option.ofNullable(primaryKey.isEmpty() ? null : String.join(",", primaryKey)),
+                        String.join(",", partitionedBy)).name());
     }
 
     @Test
@@ -183,7 +211,8 @@ final class TestHudiTableInitializer
         return ImmutableList.of(
                 ColumnMetadata.builder().setName("id").setType(BIGINT).build(),
                 ColumnMetadata.builder().setName("event_time").setType(createTimestampType(6)).build(),
-                ColumnMetadata.builder().setName("city").setType(VARCHAR).build());
+                ColumnMetadata.builder().setName("city").setType(VARCHAR).build(),
+                ColumnMetadata.builder().setName("region").setType(VARCHAR).build());
     }
 
     private static HoodieSchema schema()
