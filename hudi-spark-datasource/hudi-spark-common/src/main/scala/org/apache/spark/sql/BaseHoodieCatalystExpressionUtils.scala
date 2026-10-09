@@ -64,8 +64,9 @@ abstract class BaseHoodieCatalystExpressionUtils extends HoodieCatalystExpressio
         case DateFormatClass(OrderPreservingTransformation(attrRef), _, _) => Some(attrRef)
         case DateAdd(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
         case DateSub(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
+        // NOTE: DateDiff(end, start) is end - start, so it reverses the ordering of its start date,
+        //       which hence must not be matched
         case DateDiff(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
-        case DateDiff(_, OrderPreservingTransformation(attrRef)) => Some(attrRef)
         case FromUnixTime(OrderPreservingTransformation(attrRef), _, _) => Some(attrRef)
         case FromUTCTimestamp(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
         case ToUnixTimestamp(OrderPreservingTransformation(attrRef), _, _, _) => Some(attrRef)
