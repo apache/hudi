@@ -144,16 +144,11 @@ public class HiveDriverPool implements AutoCloseable {
    * indices {@code w, w + N, w + 2N, ...}. Each worker drains its own queue
    * independently, which is why abort has to be observed by the tasks themselves
    * rather than by the awaiting thread — see {@link ParallelDispatch}.
+   *
+   * <p>{@code onStatementSucceeded} is given the index of each statement that succeeds. It is
+   * called on the worker threads, so from several at once and out of order.
    */
-  public ParallelDispatch dispatchAll(List<String> sqls) {
-    return dispatchAll(sqls, index -> { });
-  }
-
-  /**
-   * Like {@link #dispatchAll(List)}, and gives {@code onStatementRun} the index of each statement
-   * once it has run. It is called on the worker threads, so from several at once and out of order.
-   */
-  public ParallelDispatch dispatchAll(List<String> sqls, IntConsumer onStatementRun) {
+  public ParallelDispatch dispatchAll(List<String> sqls, IntConsumer onStatementSucceeded) {
     if (closed) {
       throw new IllegalStateException("Cannot dispatch to a closed HiveDriverPool");
     }
@@ -164,7 +159,7 @@ public class HiveDriverPool implements AutoCloseable {
       Worker worker = workers.get(i % workers.size());
       dispatch.add(worker.executor.submit(dispatch.guard(() -> {
         HiveStatementExecutor.executeOrThrow(worker.driver, sql);
-        onStatementRun.accept(index);
+        onStatementSucceeded.accept(index);
         return null;
       }, "Skipped after an earlier statement failed")));
     }

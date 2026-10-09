@@ -69,27 +69,15 @@ public interface DDLExecutor extends AutoCloseable {
   Map<String, String> getTableSchema(String tableName);
 
   /**
-   * Adds partition to table.
-   *
-   * @param tableName
-   * @param partitionsToAdd
-   */
-  void addPartitionsToTable(String tableName, List<String> partitionsToAdd);
-
-  /**
    * Adds partitions to table, reporting them as the metastore takes them.
    *
    * @param tableName
    * @param partitionsToAdd
    * @param onPartitionsAdded given the number of partitions each time some are added, so that when
    *                          adding fails part way, the partitions added before the failure are still
-   *                          reported. It may be called from several threads at once. By default it
-   *                          is called once, after all the partitions are added.
+   *                          reported. It may be called from several threads at once.
    */
-  default void addPartitionsToTable(String tableName, List<String> partitionsToAdd, IntConsumer onPartitionsAdded) {
-    addPartitionsToTable(tableName, partitionsToAdd);
-    onPartitionsAdded.accept(partitionsToAdd.size());
-  }
+  void addPartitionsToTable(String tableName, List<String> partitionsToAdd, IntConsumer onPartitionsAdded);
 
   /**
    * Updates partitions for a given table.

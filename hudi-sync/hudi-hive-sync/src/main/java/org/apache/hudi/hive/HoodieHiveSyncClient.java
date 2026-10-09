@@ -297,7 +297,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
 
   @Override
   public void addPartitionsToTable(String tableName, List<String> partitionsToAdd) {
-    ddlExecutor.addPartitionsToTable(tableName, partitionsToAdd);
+    ddlExecutor.addPartitionsToTable(tableName, partitionsToAdd, added -> { });
   }
 
   @Override

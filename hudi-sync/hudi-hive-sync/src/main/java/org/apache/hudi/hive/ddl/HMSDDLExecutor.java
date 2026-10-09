@@ -197,11 +197,6 @@ public class HMSDDLExecutor implements DDLExecutor {
   }
 
   @Override
-  public void addPartitionsToTable(String tableName, List<String> partitionsToAdd) {
-    addPartitionsToTable(tableName, partitionsToAdd, added -> { });
-  }
-
-  @Override
   public void addPartitionsToTable(String tableName, List<String> partitionsToAdd, IntConsumer onPartitionsAdded) {
     if (partitionsToAdd.isEmpty()) {
       log.info("No partitions to add for {}", tableName);

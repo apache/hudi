@@ -131,12 +131,12 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
    * session Driver when no pool is configured.
    */
   @Override
-  protected void runSQLs(List<String> sqls, IntConsumer onStatementRun) {
+  protected void runSQLs(List<String> sqls, IntConsumer onStatementSucceeded) {
     if (sqls.isEmpty()) {
       return;
     }
     if (!driverPool.isPresent()) {
-      updateHiveSQLs(sqls, onStatementRun);
+      updateHiveSQLs(sqls, onStatementSucceeded);
       return;
     }
     HiveDriverPool pool = driverPool.get();
@@ -148,7 +148,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       List<String> setupStatements = sqls.subList(0, useStatementCount);
       pool.runOnEachWorker(setupStatements);
       for (int i = 0; i < useStatementCount; i++) {
-        onStatementRun.accept(i);
+        onStatementSucceeded.accept(i);
       }
     }
     List<String> partitionStatements = sqls.subList(useStatementCount, sqls.size());
@@ -156,12 +156,12 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       return;
     }
     int offset = useStatementCount;
-    pool.awaitAll(pool.dispatchAll(partitionStatements, i -> onStatementRun.accept(offset + i)));
+    pool.awaitAll(pool.dispatchAll(partitionStatements, i -> onStatementSucceeded.accept(offset + i)));
   }
 
   /**
    * Splits TOUCH into batches of {@code HIVE_BATCH_SYNC_PARTITION_NUM} only when a
-   * driver pool is actually present — i.e. only when {@link #runSQLs(List)} will
+   * driver pool is actually present — i.e. only when {@link #runSQLs(List, IntConsumer)} will
    * dispatch those batches in parallel. Keyed on pool presence rather than on the
    * {@code batching.enabled} config so the split can never take effect on a path
    * that would just execute the batches serially (the base class, and therefore
@@ -186,7 +186,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
    * bound for the duration, and the thread handed back as found: it may belong to another executor
    * or to an application that embeds this sync and holds a session of its own.
    */
-  private void updateHiveSQLs(List<String> sqls, IntConsumer onStatementRun) {
+  private void updateHiveSQLs(List<String> sqls, IntConsumer onStatementSucceeded) {
     HoodieTimer timer = HoodieTimer.start();
     SessionState previousSession = SessionState.get();
     ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
@@ -194,7 +194,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       SessionState.setCurrentSessionState(sessionState);
       for (int i = 0; i < sqls.size(); i++) {
         HiveStatementExecutor.executeOrThrow(hiveDriver, sqls.get(i));
-        onStatementRun.accept(i);
+        onStatementSucceeded.accept(i);
       }
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed in executing SQL", e);
