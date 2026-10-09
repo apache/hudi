@@ -72,6 +72,8 @@ the current checkout contains it.
 | Catalog or metastore composition | `REVIEW_REQUIRED`; deferred to PR6 |
 | Physical-schema availability detection | Supported |
 | Bounded scalar physical-schema validation | Supported |
+| Binary payload columns | Supported |
+| `BYTES`, `BINARY`, or `VARBINARY` record-key and partition fields | `BLOCKED`; deterministic routing encoding is not available |
 | Avro-compatible physical field names | Required; incompatible names are `BLOCKED` |
 | Hudi fixed metadata field names in the target schema | `BLOCKED`; six exact names are reserved case-insensitively |
 | `TIME`, `TIMESTAMP`, and `TIMESTAMP_LTZ` precision 0 through 6 | Supported |
@@ -98,6 +100,15 @@ the current checkout contains it.
 The first executable path cannot claim `CONFIG_VALIDATED` using only a successful sink-factory
 construction. The stable identifiers and their Python and Java evidence are recorded in the
 machine-readable manifest.
+
+### `FLINK_BINARY_ROUTING_FIELD_UNSUPPORTED`
+
+The pinned Hudi 1.2.0 `RowDataKeyGen` converts Flink binary values through Java array
+`toString()`, producing object-identity strings such as `[B@...`. Equal byte sequences can
+therefore produce different record keys or partition directories. The design validator blocks
+`BYTES`, `BINARY`, and `VARBINARY` only when used in either routing role; those types remain
+available for payload columns. Python tests cover all three types in both roles, and the pinned
+bundle fixture preserves the object-identity behavior as regression evidence.
 
 ### `FLINK_RECORD_KEY_FIELD_MISSING`
 

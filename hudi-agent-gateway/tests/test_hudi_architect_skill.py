@@ -176,6 +176,7 @@ def test_flink_baseline_is_fixed_and_pr2_has_bounded_executable_contract() -> No
         "java_version": 11,
     }
     assert manifest["physical_schema_constraints"] == {
+        "binary_routing_types": ["BINARY", "BYTES", "VARBINARY"],
         "field_name_pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
         "reserved_target_field_names": [
             "_hoodie_commit_seqno",
@@ -326,6 +327,10 @@ def test_flink_capability_manifest_records_pr2_acceptance_contract() -> None:
         "FLINK_APPEND_MODE_CLUSTERING_ENABLED": (
             "test_pr2_rejects_insert_clustering_override",
             "testPinnedAppendModeRequiresInsertClusteringDisabled",
+        ),
+        "FLINK_BINARY_ROUTING_FIELD_UNSUPPORTED": (
+            "test_pr2_rejects_binary_routing_fields",
+            "testPinnedBinaryValuesUseObjectIdentityForRouting",
         ),
         "FLINK_RECORD_KEY_FIELD_MISSING": (
             "test_pr2_rejects_record_key_missing_from_append_schema",
@@ -689,6 +694,51 @@ def test_pr2_rejects_out_of_range_physical_type_parameters(tmp_path: Path) -> No
     assert assessment["executable_eligible"] is False
 
 
+@pytest.mark.parametrize("binary_type", ["BYTES", "BINARY(16)", "VARBINARY(16)"])
+@pytest.mark.parametrize(
+    ("field_name", "expected_message"),
+    [
+        ("id", "Record-key field 'id'"),
+        ("partition_date", "Partition field 'partition_date'"),
+    ],
+)
+def test_pr2_rejects_binary_routing_fields(
+    tmp_path: Path, binary_type: str, field_name: str, expected_message: str
+) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    for section in ("table", "source"):
+        column = next(
+            column
+            for column in design[section]["columns"]
+            if column["name"] == field_name
+        )
+        column["type"] = binary_type
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == ["FLINK_BINARY_ROUTING_FIELD_UNSUPPORTED"]
+    assert assessment["status"] == "BLOCKED"
+    assert assessment["executable_eligible"] is False
+    assert "artifacts" not in assessment
+    assert expected_message in assessment["findings"][0]["message"]
+
+
+@pytest.mark.parametrize("binary_type", ["BYTES", "BINARY(16)", "VARBINARY(16)"])
+def test_pr2_accepts_binary_payload_fields(tmp_path: Path, binary_type: str) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "auto_key.json"))
+    for section in ("table", "source"):
+        design[section]["columns"][0]["type"] = binary_type
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 0, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "CONFIG_VALIDATED"
+    assert f"`payload` {binary_type}" in assessment["artifacts"]["combined_sql"]
+
+
 @pytest.mark.parametrize("type_name", ["TIME", "TIMESTAMP", "TIMESTAMP_LTZ"])
 @pytest.mark.parametrize(("precision", "accepted"), [(6, True), (7, False), (9, False)])
 def test_pr2_enforces_pinned_temporal_precision_limits(
@@ -858,6 +908,90 @@ def test_pr2_withholds_sql_when_load_bearing_contract_is_invalid(
     assert expected_code in assessment["finding_codes"]
     assert assessment["executable_eligible"] is False
     assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize("scheme", ["abfs", "abfss"])
+def test_pr2_accepts_standard_abfs_filesystem_authority(
+    tmp_path: Path, scheme: str
+) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    design["table"]["path"] = (
+        f"{scheme}://container@account.dfs.core.windows.net/orders"
+    )
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 0, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "CONFIG_VALIDATED"
+    assert design["table"]["path"] in assessment["artifacts"]["table_ddl"]
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "abfss://user:password@account.dfs.core.windows.net/orders",
+        "abfss://user@non-azure.example.com/orders",
+        "s3://user@bucket/orders",
+    ],
+)
+def test_pr2_rejects_actual_uri_credentials(tmp_path: Path, path: str) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    design["table"]["path"] = path
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert "FLINK_LOAD_BEARING_VALUE_REQUIRED" in assessment["finding_codes"]
+    assert assessment["executable_eligible"] is False
+    assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize(
+    "sas_query",
+    [
+        "sv=2025-01-05&sp=rw&sig=EXAMPLE_SIGNATURE",
+        "sv=2025-01-05&sp=rw&SIG=",
+    ],
+)
+def test_pr2_rejects_azure_sas_signatures(tmp_path: Path, sas_query: str) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    design["table"]["path"] = (
+        "https://account.blob.core.windows.net/container/orders?" + sas_query
+    )
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert "FLINK_LOAD_BEARING_VALUE_REQUIRED" in assessment["finding_codes"]
+    assert assessment["executable_eligible"] is False
+    assert "artifacts" not in assessment
+    assert "EXAMPLE_SIGNATURE" not in result.stdout
+    assert "EXAMPLE_SIGNATURE" not in result.stderr
+
+
+@pytest.mark.parametrize("replay_behavior", [[], {}])
+def test_pr2_reports_non_string_replay_behavior_without_losing_findings(
+    tmp_path: Path, replay_behavior: object
+) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    design["safety"]["replay_behavior"] = replay_behavior
+    design["write"]["insert_cluster"] = True
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == [
+        "FLINK_REPLAY_BEHAVIOR_UNRESOLVED",
+        "FLINK_APPEND_MODE_CLUSTERING_ENABLED",
+    ]
+    assert assessment["status"] == "BLOCKED"
+    assert assessment["executable_eligible"] is False
+    assert "artifacts" not in assessment
+    assert "Traceback" not in result.stderr
 
 
 def test_pr2_sql_renderer_escapes_identifiers_and_literals(tmp_path: Path) -> None:

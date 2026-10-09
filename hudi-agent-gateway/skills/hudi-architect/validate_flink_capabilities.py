@@ -89,6 +89,7 @@ EXPECTED_PHYSICAL_TYPES = {
     ],
 }
 EXPECTED_PHYSICAL_SCHEMA_CONSTRAINTS = {
+    "binary_routing_types": ["BINARY", "BYTES", "VARBINARY"],
     "field_name_pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
     "reserved_target_field_names": [
         "_hoodie_commit_seqno",
@@ -110,6 +111,10 @@ EXPECTED_ACCEPTANCE_EVIDENCE = {
     "FLINK_APPEND_MODE_CLUSTERING_ENABLED": (
         "test_pr2_rejects_insert_clustering_override",
         "testPinnedAppendModeRequiresInsertClusteringDisabled",
+    ),
+    "FLINK_BINARY_ROUTING_FIELD_UNSUPPORTED": (
+        "test_pr2_rejects_binary_routing_fields",
+        "testPinnedBinaryValuesUseObjectIdentityForRouting",
     ),
     "FLINK_RECORD_KEY_FIELD_MISSING": (
         "test_pr2_rejects_record_key_missing_from_append_schema",

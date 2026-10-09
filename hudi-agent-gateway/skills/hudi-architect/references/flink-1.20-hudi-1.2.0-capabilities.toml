@@ -71,6 +71,7 @@ parameterized = [
 ]
 
 [physical_schema_constraints]
+binary_routing_types = ["BINARY", "BYTES", "VARBINARY"]
 field_name_pattern = "^[A-Za-z_][A-Za-z0-9_]*$"
 reserved_target_field_names = [
   "_hoodie_commit_seqno",
@@ -206,6 +207,12 @@ applies_to = "pr2-append-only-cow"
 key = "write.operation"
 value = "insert"
 applies_to = "pr2-append-only-cow"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_BINARY_ROUTING_FIELD_UNSUPPORTED"
+requirement = "Reject binary record-key and partition fields whose Hudi 1.2.0 routing strings depend on Java object identity."
+python_test = "test_pr2_rejects_binary_routing_fields"
+java_test = "testPinnedBinaryValuesUseObjectIdentityForRouting"
 
 [[implemented_acceptance_checks]]
 id = "FLINK_RECORD_KEY_FIELD_MISSING"

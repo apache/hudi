@@ -73,6 +73,7 @@ do not replace the shared table-design rules and do not form a standalone planne
 | Stable record-key field is nullable | `FLINK_RECORD_KEY_NULLABLE` | `BLOCKED` | No |
 | PRIMARY KEY syntax conflicts with a record-key option | `FLINK_PRIMARY_KEY_RECORD_KEY_CONFLICT` | `BLOCKED` | No |
 | Partition field is absent from the physical schema | `FLINK_PARTITION_FIELD_MISSING` | `BLOCKED` | No |
+| Binary field is used as a stable record key or partition field | `FLINK_BINARY_ROUTING_FIELD_UNSUPPORTED` | `BLOCKED` | No |
 | Physical field name is not representable by the Avro-backed Hudi schema | `FLINK_SCHEMA_FIELD_NAME_UNSUPPORTED` | `BLOCKED` | No |
 | Target physical field conflicts with a fixed Hudi metadata name | `FLINK_HUDI_METADATA_FIELD_CONFLICT` | `BLOCKED` | No |
 | `TIME`, `TIMESTAMP`, or `TIMESTAMP_LTZ` precision is outside 0 through 6 | `FLINK_TEMPORAL_PRECISION_UNSUPPORTED` | `BLOCKED` | No |

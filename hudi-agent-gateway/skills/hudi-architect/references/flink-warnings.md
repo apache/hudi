@@ -215,6 +215,18 @@ must reject this mismatch before factory validation.
 
 **Action:** `BLOCKED`; emit no DDL or `INSERT INTO`.
 
+## FLINK_BINARY_ROUTING_FIELD_UNSUPPORTED
+
+**Trigger:** A `BYTES`, `BINARY`, or `VARBINARY` field is used as a stable record key or
+partition field.
+
+**Message:** The pinned Hudi 1.2.0 routing path converts the backing Java byte array with
+`toString()`. Equal byte sequences can therefore produce different `[B@...` record keys or
+partition directories. Binary payload columns are not affected.
+
+**Action:** `BLOCKED`; choose a deterministically encoded routing field or wait until a verified
+binary encoding is supported. Do not silently encode or cast the supplied value.
+
 ## FLINK_RECORD_KEY_NULLABLE
 
 **Trigger:** A stable record-key field is nullable.
@@ -352,7 +364,9 @@ the stricter 1000 ms minimum before rendering SQL.
 ## FLINK_LOAD_BEARING_VALUE_REQUIRED
 
 **Trigger:** The target table, target path, source table, or another load-bearing value is missing,
-a placeholder, or contains credentials that must be redacted.
+a placeholder, or contains credentials that must be redacted. Standard ABFS/ABFSS
+`filesystem@account.dfs.core.windows.net` authorities are filesystem identifiers, not userinfo;
+Azure SAS `sig` query parameters are credentials and must be rejected.
 
 **Message:** `CONFIG_VALIDATED` cannot contain a value that still needs substitution.
 

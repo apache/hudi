@@ -217,6 +217,16 @@ Avro-backed Hudi schema constraint. `TIME`, `TIMESTAMP`, and `TIMESTAMP_LTZ` pre
 between 0 and 6 for the pinned connector. Reject violations instead of renaming a field or
 reducing its precision.
 
+`BYTES`, `BINARY`, and `VARBINARY` remain valid payload types, but must not be used as stable
+record-key or partition fields. The pinned Hudi 1.2.0 routing path converts their Java arrays to
+object-identity strings, so equal byte sequences do not have deterministic routing values. Add
+`FLINK_BINARY_ROUTING_FIELD_UNSUPPORTED` with a `BLOCKED` contribution instead of emitting SQL.
+
+Treat target-path authorities according to their scheme. In standard `abfs` and `abfss` URIs,
+the `filesystem@account.dfs.core.windows.net` authority is not a credential. Continue rejecting
+actual URI userinfo and sensitive query parameters, including Azure SAS `sig`; never copy those
+values into generated artifacts.
+
 The target schema must also exclude, case-insensitively, Hudi's fixed metadata names:
 `_hoodie_commit_time`, `_hoodie_commit_seqno`, `_hoodie_record_key`,
 `_hoodie_partition_path`, `_hoodie_file_name`, and `_hoodie_operation`. Reject only those six

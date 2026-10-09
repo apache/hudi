@@ -21,6 +21,7 @@ package org.apache.hudi.agent.architect;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.table.HoodieTableFactory;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.HoodieSchemaConverter;
@@ -40,6 +41,8 @@ import org.apache.flink.table.api.Table;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
 import org.apache.flink.table.connector.ChangelogMode;
+import org.apache.flink.table.data.GenericRowData;
+import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimeType;
 import org.apache.flink.types.Row;
@@ -47,6 +50,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.sql.Timestamp;
@@ -58,6 +62,7 @@ import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -153,6 +158,37 @@ class TestFlinkArchitectSqlFixtures {
 
     conf.set(FlinkOptions.INSERT_CLUSTER, true);
     assertFalse(OptionsResolver.isAppendMode(conf));
+  }
+
+  @Test
+  void testPinnedBinaryValuesUseObjectIdentityForRouting() throws Exception {
+    assertPinnedArtifacts();
+    DataType[] binaryTypes = {
+        DataTypes.BYTES(), DataTypes.BINARY(2), DataTypes.VARBINARY(2)
+    };
+    for (DataType binaryType : binaryTypes) {
+      Configuration conf = new Configuration();
+      conf.set(FlinkOptions.RECORD_KEY_FIELD, "id");
+      conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition_bytes");
+      RowType rowType = (RowType) DataTypes.ROW(
+          DataTypes.FIELD("id", binaryType.notNull()),
+          DataTypes.FIELD("partition_bytes", binaryType.notNull())).getLogicalType();
+      RowDataKeyGen keyGen = newRowDataKeyGen(conf, rowType);
+
+      byte[] firstKey = {1, 2};
+      byte[] secondKey = {1, 2};
+      byte[] firstPartition = {3, 4};
+      byte[] secondPartition = {3, 4};
+      GenericRowData first = GenericRowData.of(firstKey, firstPartition);
+      GenericRowData second = GenericRowData.of(secondKey, secondPartition);
+
+      assertEquals(firstKey.toString(), keyGen.getRecordKey(first));
+      assertEquals(secondKey.toString(), keyGen.getRecordKey(second));
+      assertNotEquals(keyGen.getRecordKey(first), keyGen.getRecordKey(second));
+      assertEquals(firstPartition.toString(), keyGen.getPartitionPath(first));
+      assertEquals(secondPartition.toString(), keyGen.getPartitionPath(second));
+      assertNotEquals(keyGen.getPartitionPath(first), keyGen.getPartitionPath(second));
+    }
   }
 
   @Test
@@ -313,6 +349,14 @@ class TestFlinkArchitectSqlFixtures {
     assertNotNull(HoodieTableFactory.class.getProtectionDomain().getCodeSource());
     assertEquals("1.2.0", HoodieTableFactory.class.getPackage().getImplementationVersion());
     assertEquals("1.20.1", EnvironmentSettings.class.getPackage().getImplementationVersion());
+  }
+
+  private static RowDataKeyGen newRowDataKeyGen(Configuration conf, RowType rowType)
+      throws Exception {
+    Method factory = RowDataKeyGen.class.getDeclaredMethod(
+        "instance", Configuration.class, RowType.class);
+    factory.setAccessible(true);
+    return (RowDataKeyGen) factory.invoke(null, conf, rowType);
   }
 
   private static TestContext newTestContext() {

@@ -31,7 +31,7 @@ import re
 import sys
 from pathlib import Path
 from typing import Any, TypeGuard
-from urllib.parse import parse_qsl, urlsplit
+from urllib.parse import SplitResult, parse_qsl, urlsplit
 
 from validate_flink_capabilities import (
     DEFAULT_MANIFEST,
@@ -44,6 +44,13 @@ from validate_flink_capabilities import (
 CONTRACT_SCHEMA_VERSION = 1
 MAX_TYPE_LENGTH = 2_147_483_647
 STATUS_PRIORITY = {"INCOMPLETE": 0, "REVIEW_REQUIRED": 1, "BLOCKED": 2}
+AZURE_FILESYSTEM_SCHEMES = frozenset({"abfs", "abfss"})
+AZURE_FILESYSTEM_NAME = re.compile(
+    r"^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$", re.IGNORECASE
+)
+AZURE_DFS_HOST = re.compile(
+    r"^[a-z0-9]{3,24}\.dfs\.core\.windows\.net$", re.IGNORECASE
+)
 SENSITIVE_QUERY_KEY = re.compile(
     r"(?:access[_-]?key|api[_-]?key|credential|password|secret|signature|token)",
     re.IGNORECASE,
@@ -59,6 +66,7 @@ FINDING_STATUS = {
     "FLINK_AUTO_KEY_ACCEPTANCE_REQUIRED": "INCOMPLETE",
     "FLINK_AUTO_KEY_DECLINED": "BLOCKED",
     "FLINK_BASELINE_EVIDENCE_INVALID": "BLOCKED",
+    "FLINK_BINARY_ROUTING_FIELD_UNSUPPORTED": "BLOCKED",
     "FLINK_CATALOG_REQUIREMENT_UNRESOLVED": "REVIEW_REQUIRED",
     "FLINK_CHECKPOINTING_REQUIRED": "BLOCKED",
     "FLINK_CHECKPOINT_INTERVAL_REQUIRED": "INCOMPLETE",
@@ -282,6 +290,29 @@ def _check_concrete_value(value: Any) -> TypeGuard[str]:
     return _non_empty_string(value) and PLACEHOLDER.search(value) is None
 
 
+def _is_binary_routing_type(type_name: str, manifest: dict[str, Any]) -> bool:
+    return type_name.partition("(")[0] in manifest["physical_schema_constraints"][
+        "binary_routing_types"
+    ]
+
+
+def _is_standard_abfs_authority(parsed: SplitResult) -> bool:
+    return (
+        parsed.scheme.lower() in AZURE_FILESYSTEM_SCHEMES
+        and parsed.username is not None
+        and parsed.password is None
+        and AZURE_FILESYSTEM_NAME.fullmatch(parsed.username) is not None
+        and parsed.hostname is not None
+        and AZURE_DFS_HOST.fullmatch(parsed.hostname) is not None
+    )
+
+
+def _is_sensitive_query_key(key: str) -> bool:
+    # Azure SAS uses the exact, abbreviated key "sig". Keep it exact so benign
+    # keys such as "design" do not become false positives.
+    return key.casefold() == "sig" or SENSITIVE_QUERY_KEY.search(key) is not None
+
+
 def _path_validation_error(path: str) -> str | None:
     if any(ord(character) < 32 for character in path):
         return "The target path must not contain control characters"
@@ -289,10 +320,15 @@ def _path_validation_error(path: str) -> str | None:
         parsed = urlsplit(path)
     except ValueError:
         return "The target path must be a valid URI or filesystem path"
-    if parsed.username is not None or parsed.password is not None:
+    if (parsed.username is not None or parsed.password is not None) and not (
+        _is_standard_abfs_authority(parsed)
+    ):
         return "The target path must not contain credentials or secret query parameters"
-    parameters = [*parse_qsl(parsed.query), *parse_qsl(parsed.fragment)]
-    if any(SENSITIVE_QUERY_KEY.search(key) for key, _ in parameters):
+    parameters = [
+        *parse_qsl(parsed.query, keep_blank_values=True),
+        *parse_qsl(parsed.fragment, keep_blank_values=True),
+    ]
+    if any(_is_sensitive_query_key(key) for key, _ in parameters):
         return "The target path must not contain credentials or secret query parameters"
     return None
 
@@ -460,7 +496,9 @@ def assess_design(
     elif mutability != "append_only":
         assessment.add("FLINK_MUTABILITY_REQUIRED", "Append-only input must be confirmed")
     replay_behavior = safety.get("replay_behavior")
-    if replay_behavior == "must_collapse":
+    if not _non_empty_string(replay_behavior):
+        assessment.add("FLINK_REPLAY_BEHAVIOR_UNRESOLVED", "Replay behavior is unresolved")
+    elif replay_behavior == "must_collapse":
         assessment.add("FLINK_REPLAY_IDEMPOTENCE_DEFERRED", "Replay deduplication needs upsert")
     elif replay_behavior not in {"cannot_occur", "duplicates_acceptable"}:
         assessment.add("FLINK_REPLAY_BEHAVIOR_UNRESOLVED", "Replay behavior is unresolved")
@@ -496,6 +534,12 @@ def assess_design(
             assessment.add(
                 "FLINK_PARTITION_FIELD_MISSING",
                 f"Partition field {field!r} is absent from the physical schema",
+            )
+        elif _is_binary_routing_type(table_by_name[field]["type"], manifest):
+            assessment.add(
+                "FLINK_BINARY_ROUTING_FIELD_UNSUPPORTED",
+                f"Partition field {field!r} cannot use binary type "
+                f"{table_by_name[field]['type']!r} until deterministic encoding is verified",
             )
 
     identity = _dict(contract.get("identity"), "identity", assessment)
@@ -570,10 +614,19 @@ def assess_design(
                     "FLINK_RECORD_KEY_FIELD_MISSING",
                     f"Record-key field {field!r} is absent from the physical schema",
                 )
-            elif table_by_name[field]["nullable"]:
-                assessment.add(
-                    "FLINK_RECORD_KEY_NULLABLE", f"Record-key field {field!r} must be NOT NULL"
-                )
+            else:
+                if table_by_name[field]["nullable"]:
+                    assessment.add(
+                        "FLINK_RECORD_KEY_NULLABLE",
+                        f"Record-key field {field!r} must be NOT NULL",
+                    )
+                if _is_binary_routing_type(table_by_name[field]["type"], manifest):
+                    assessment.add(
+                        "FLINK_BINARY_ROUTING_FIELD_UNSUPPORTED",
+                        f"Record-key field {field!r} cannot use binary type "
+                        f"{table_by_name[field]['type']!r} until deterministic encoding "
+                        "is verified",
+                    )
         if option_fields:
             assessment.add(
                 "FLINK_PRIMARY_KEY_RECORD_KEY_CONFLICT",
