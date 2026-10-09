@@ -19,6 +19,8 @@
 package org.apache.hudi.sink.partitioner.index;
 
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
+import org.apache.hudi.common.serialization.DefaultSerializer;
+import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.utils.TestConfigurations;
@@ -192,6 +194,73 @@ public class TestRecordIndexCache {
     assertTrue(cache.getCaches().containsKey(2L));
     assertTrue(cache.getCaches().containsKey(3L));
     assertTrue(cache.getCaches().containsKey(4L));
+  }
+
+  @Test
+  void testEmptyCheckpointsDoNotAccumulate() {
+    for (long checkpointId = 2L; checkpointId <= 1000L; checkpointId++) {
+      cache.addCheckpointCache(checkpointId);
+      cache.markAsEvictable(checkpointId);
+      assertEquals(2, cache.getCaches().size(), "Cleanup on checkpoint creation retains the previous and current checkpoints");
+      assertTrue(cache.getCaches().containsKey(checkpointId - 1));
+      assertTrue(cache.getCaches().containsKey(checkpointId));
+    }
+    assertNull(cache.get("missing"));
+    HoodieRecordGlobalLocation location = new HoodieRecordGlobalLocation("partition1", "1001", "file_id1");
+    cache.update("key", location);
+    assertEquals(location, cache.get("key"));
+  }
+
+  @Test
+  void testEmptyCheckpointCleanupPreservesNonEmptyAndInflightCaches() {
+    HoodieRecordGlobalLocation oldLocation = new HoodieRecordGlobalLocation("partition1", "1001", "file_id1");
+    HoodieRecordGlobalLocation newLocation = new HoodieRecordGlobalLocation("partition1", "1002", "file_id2");
+    cache.update("key", oldLocation);
+    cache.update("old_key", oldLocation);
+    cache.addCheckpointCache(2L);
+    ExternalSpillableMap<String, HoodieRecordGlobalLocation> emptyCache = Mockito.spy(cache.getCaches().get(2L));
+    cache.getCaches().put(2L, emptyCache);
+    cache.addCheckpointCache(3L);
+    cache.update("key", newLocation);
+    cache.addCheckpointCache(4L);
+
+    // An older non-empty cache must not prevent cleanup of newer evictable empty caches.
+    cache.markAsEvictable(3L);
+    cache.addCheckpointCache(5L);
+    assertEquals(4, cache.getCaches().size());
+    assertFalse(cache.getCaches().containsKey(2L));
+    Mockito.verify(emptyCache).close();
+    assertTrue(cache.getCaches().containsKey(4L), "Empty inflight checkpoints must be retained");
+    assertTrue(cache.getCaches().containsKey(5L));
+    assertEquals(oldLocation, cache.get("old_key"));
+    assertEquals(newLocation, cache.get("key"));
+
+    cache.markAsEvictable(5L);
+    cache.addCheckpointCache(6L);
+    assertEquals(4, cache.getCaches().size());
+    assertFalse(cache.getCaches().containsKey(4L));
+    assertTrue(cache.getCaches().containsKey(5L), "The checkpoint at the retention boundary must remain");
+    assertTrue(cache.getCaches().containsKey(6L));
+    assertEquals(oldLocation, cache.get("old_key"));
+    assertEquals(newLocation, cache.get("key"));
+  }
+
+  @Test
+  void testEmptyCheckpointCleanupPreservesDiskOnlyCache() throws IOException {
+    ExternalSpillableMap<String, HoodieRecordGlobalLocation> diskOnlyCache = new ExternalSpillableMap<>(
+        0L, tempDir.getAbsolutePath(), new DefaultSizeEstimator<>(), new DefaultSizeEstimator<>(),
+        ExternalSpillableMap.DiskMapType.ROCKS_DB, new DefaultSerializer<>(), false, "disk-only-cache");
+    cache.getCaches().put(1L, diskOnlyCache).close();
+    HoodieRecordGlobalLocation location = new HoodieRecordGlobalLocation("partition1", "1001", "file_id1");
+    cache.update("key", location);
+    assertEquals(0L, diskOnlyCache.getCurrentInMemoryMapSize());
+    assertEquals(1, diskOnlyCache.getDiskBasedMapNumEntries());
+
+    cache.addCheckpointCache(2L);
+    cache.markAsEvictable(2L);
+    cache.addCheckpointCache(3L);
+    assertTrue(cache.getCaches().containsKey(1L), "A cache with spilled records is not empty");
+    assertEquals(location, cache.get("key"));
   }
 
   @Test

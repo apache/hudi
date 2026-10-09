@@ -36,7 +36,8 @@ import org.apache.flink.configuration.Configuration;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Comparator;
-import java.util.NavigableMap;
+import java.util.Iterator;
+import java.util.Map;
 import java.util.TreeMap;
 
 /**
@@ -182,16 +183,29 @@ public class RecordIndexCache implements Closeable {
   }
 
   /**
-   * Performs the actual cleaning to release memory for new caches.
+   * Removes evictable empty caches and releases memory for new caches when needed.
    *
    * @param nextCacheSize the size for the next new cache
    */
   private void cleanIfNecessary(long nextCacheSize) {
-    while (!caches.isEmpty() && caches.lastKey() < minRetainedCheckpointId
-        && getInMemoryMapSize() + nextCacheSize > this.maxCacheSizeInBytes) {
-      NavigableMap.Entry<Long, ExternalSpillableMap<String, HoodieRecordGlobalLocation>> lastEntry = caches.pollLastEntry();
-      lastEntry.getValue().close();
-      log.info("Clean record index cache for checkpoint: {}", lastEntry.getKey());
+    long usedMemory = getInMemoryMapSize();
+    // The map is reverse ordered; traverse its descending view to evict the oldest checkpoints first.
+    Iterator<Map.Entry<Long, ExternalSpillableMap<String, HoodieRecordGlobalLocation>>> iterator =
+        caches.descendingMap().entrySet().iterator();
+    while (iterator.hasNext()) {
+      Map.Entry<Long, ExternalSpillableMap<String, HoodieRecordGlobalLocation>> entry = iterator.next();
+      long checkpointId = entry.getKey();
+      if (checkpointId >= minRetainedCheckpointId) {
+        break;
+      }
+      ExternalSpillableMap<String, HoodieRecordGlobalLocation> cache = entry.getValue();
+      // Keep scanning for empty generations even after memory pressure is relieved.
+      if (cache.isEmpty() || usedMemory + nextCacheSize > maxCacheSizeInBytes) {
+        usedMemory -= cache.getCurrentInMemoryMapSize();
+        cache.close();
+        iterator.remove();
+        log.info("Clean record index cache for checkpoint: {}", checkpointId);
+      }
     }
   }
 
