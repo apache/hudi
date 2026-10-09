@@ -122,6 +122,15 @@ public class UnstructuredFileSourceConfig extends HoodieConfig {
       .sinceVersion("1.2.0")
       .withDocumentation("Number of characters consecutive chunks overlap by.");
 
+  public static final ConfigProperty<Integer> MAX_FILES_PER_BATCH = ConfigProperty
+      .key(PREFIX + "max.files.per.batch")
+      .defaultValue(10000)
+      .sinceVersion("1.3.0")
+      .withDocumentation("Maximum number of files a single sync ingests. --source-limit bounds "
+          + "bytes but never file count, and file count is what drives driver memory and task "
+          + "count, so a folder of many small files can otherwise pull an entire corpus into one "
+          + "batch. Files beyond the cap are picked up by the next sync.");
+
   public static final ConfigProperty<Integer> LISTING_PARALLELISM = ConfigProperty
       .key(PREFIX + "listing.parallelism")
       .defaultValue(0)
