@@ -52,8 +52,9 @@ import org.apache.spark.sql.{functions, Column, SaveMode}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.resolveExpr
 import org.apache.spark.sql.catalyst.analysis.{Analyzer, UnresolvedAttribute}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, FromUnixTime, Literal, Upper}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, Expression, FromUnixTime, IsNotNull, Literal, Upper}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
+import org.apache.spark.sql.catalyst.plans.logical.Filter
 import org.apache.spark.sql.functions.lit
 import org.apache.spark.sql.hudi.command.{CreateIndexCommand, ShowIndexesCommand}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
@@ -1860,6 +1861,113 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
             verifyFilePruning(opts, dataFilter, metaClient, isDataSkippingExpected = true)
             spark.sql(s"drop index idx_regexp_extract on $tableName")
           }
+        }
+      }
+    }
+  }
+
+  /**
+   * Filters on a different function of the indexed column must not be evaluated against the expression index.
+   */
+  test("Test Expression Index Is Not Used For Filters On Another Function") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName + s"_other_function_$tableType"
+        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+        withSQLConf("hoodie.fileIndex.dataSkippingFailureMode" -> "strict",
+          "hoodie.metadata.enable" -> "true",
+          "hoodie.enable.data.skipping" -> "true",
+          "hoodie.parquet.small.file.limit" -> "0") {
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id string,
+               |  rider string,
+               |  ts long
+               |) using hudi
+               | options (
+               |  primaryKey ='id',
+               |  type = '$tableType',
+               |  preCombineField = 'ts'
+               | )
+               | location '$basePath'
+               |""".stripMargin)
+          spark.sql(s"insert into $tableName values ('trip1', 'rider-A', 1), ('trip2', 'rider-C', 2)")
+          spark.sql(s"insert into $tableName values ('trip3', 'rider-E', 3), ('trip4', 'rider-C', 4)")
+          spark.sql(s"update $tableName set ts = 10 where id = 'trip4'")
+          spark.sql(s"create index idx_lower on $tableName using column_stats(rider) options(expr='lower')")
+          val metaClient = createMetaClient(spark, basePath)
+          if (tableType == "mor") {
+            assertTrue(getLatestDataFilesCount(metaClient = metaClient) > getLatestDataFilesCount(includeLogFiles = false, metaClient = metaClient))
+          }
+
+          checkAnswer(s"select id from $tableName where upper(rider) = 'RIDER-C'")(Seq("trip2"), Seq("trip4"))
+          checkAnswer(s"select id from $tableName where upper(rider) in ('RIDER-A', 'RIDER-E')")(Seq("trip1"), Seq("trip3"))
+          checkAnswer(s"select id from $tableName where length(rider) = 7")(Seq("trip1"), Seq("trip2"), Seq("trip3"), Seq("trip4"))
+          checkAnswer(s"select id from $tableName where lower(rider) = 'rider-c'")(Seq("trip2"), Seq("trip4"))
+
+          val tableSchema = StructType(Seq(StructField("id", StringType), StructField("rider", StringType), StructField("ts", LongType)))
+          val opts = Map(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true")
+          val lowerExpr = resolveExpr(spark, sparkAdapter.getExpressionFromColumn(functions.lower(functions.col("rider"))), tableSchema)
+          verifyFilePruning(opts, EqualTo(lowerExpr, Literal.create("rider-e")), metaClient, isDataSkippingExpected = true)
+        }
+      }
+    }
+  }
+
+  /**
+   * Filters on the index's own function prune files, using the filters of the optimized plan (where, for example,
+   * to_date without a format is a cast).
+   */
+  test("Test Expression Index Prunes Files For Filters On Its Own Function") {
+    withTempDir { tmp =>
+      val tableName = generateTableName + "_own_function"
+      val basePath = s"${tmp.getCanonicalPath}/$tableName"
+      withSQLConf("hoodie.fileIndex.dataSkippingFailureMode" -> "strict",
+        "hoodie.metadata.enable" -> "true",
+        "hoodie.enable.data.skipping" -> "true",
+        "hoodie.parquet.small.file.limit" -> "0") {
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id string,
+             |  rider string,
+             |  event_time timestamp,
+             |  dt string,
+             |  ts long
+             |) using hudi
+             | options (
+             |  primaryKey ='id',
+             |  preCombineField = 'ts',
+             |  hoodie.metadata.index.column.stats.enable = 'false'
+             | )
+             | location '$basePath'
+             |""".stripMargin)
+        spark.sql(s"insert into $tableName values ('trip1', 'rider-A', timestamp'2020-01-01 10:00:00', '2020-01-01', 1), " +
+          s"('trip2', 'rider-C', timestamp'2020-06-01 11:00:00', '2020-06-01', 2)")
+        spark.sql(s"insert into $tableName values ('trip3', 'rider-EE', timestamp'2023-01-01 20:00:00', '2023-01-01', 3), " +
+          s"('trip4', 'rider-FF', timestamp'2023-06-01 21:00:00', '2023-06-01', 4)")
+        val opts = Map(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true")
+        def splitConjuncts(expr: Expression): Seq[Expression] = expr match {
+          case And(left, right) => splitConjuncts(left) ++ splitConjuncts(right)
+          case other => Seq(other)
+        }
+
+        Seq(
+          ("column_stats(rider) options(expr='upper')", "upper(rider) = 'RIDER-EE'", Seq("trip3")),
+          ("column_stats(rider) options(expr='length')", "length(rider) = 8", Seq("trip3", "trip4")),
+          ("column_stats(event_time) options(expr='year')", "year(event_time) = 2023", Seq("trip3", "trip4")),
+          ("column_stats(event_time) options(expr='hour')", "hour(event_time) = 21", Seq("trip4")),
+          ("column_stats(dt) options(expr='to_date')", "to_date(dt) in (date'2023-01-01', date'2023-06-01')", Seq("trip3", "trip4"))
+        ).zipWithIndex.foreach { case ((indexDef, filter, expectedIds), i) =>
+          spark.sql(s"create index idx_own_$i on $tableName using $indexDef")
+          val query = s"select id from $tableName where $filter"
+          checkAnswer(query)(expectedIds.map(Seq(_)): _*)
+          val dataFilters = spark.sql(query).queryExecution.optimizedPlan
+            .collect { case f: Filter => splitConjuncts(f.condition) }.flatten.filterNot(_.isInstanceOf[IsNotNull])
+          assertEquals(1, dataFilters.size)
+          verifyFilePruning(opts, dataFilters.head, createMetaClient(spark, basePath), isDataSkippingExpected = true)
+          spark.sql(s"drop index idx_own_$i on $tableName")
         }
       }
     }

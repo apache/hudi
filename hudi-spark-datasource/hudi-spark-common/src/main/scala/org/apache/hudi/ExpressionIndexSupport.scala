@@ -42,7 +42,7 @@ import org.apache.hudi.util.JFunction
 
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{And, DateAdd, DateFormatClass, DateSub, EqualTo, Expression, FromUnixTime, In, Literal, ParseToDate, ParseToTimestamp, RegExpExtract, RegExpReplace, StringSplit, StringTrim, StringTrimLeft, StringTrimRight, Substring, UnaryExpression, UnixTimestamp}
+import org.apache.spark.sql.catalyst.expressions.{And, Cast, DateAdd, DateFormatClass, DateSub, DayOfMonth, EqualTo, Expression, FromUnixTime, Hour, In, Length, Literal, Lower, Month, ParseToDate, ParseToTimestamp, RegExpExtract, RegExpReplace, StringSplit, StringTrim, StringTrimLeft, StringTrimRight, Substring, UnixTimestamp, Upper, Year}
 import org.apache.spark.sql.catalyst.util.TimestampFormatter
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
@@ -443,43 +443,55 @@ class ExpressionIndexSupport(spark: SparkSession,
    * column name.
    */
   private def extractQueryAndLiterals(queryFilters: Seq[Expression], indexDefinition: HoodieIndexDefinition): Option[(Expression, List[String])] = {
+    val indexFunction = indexDefinition.getIndexFunction
     val attributeFetcher = (expr: Expression) => {
       expr match {
-        case expression: UnaryExpression => expression.child
-        case expression: DateFormatClass if expression.right.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexFormatOption()) =>
+        case expression: Upper if indexFunction.equals("upper") => expression.child
+        case expression: Lower if indexFunction.equals("lower") => expression.child
+        case expression: Length if indexFunction.equals("length") => expression.child
+        case expression: Year if indexFunction.equals("year") => expression.child
+        case expression: Month if indexFunction.equals("month") => expression.child
+        case expression: DayOfMonth if indexFunction.equals("day") => expression.child
+        case expression: Hour if indexFunction.equals("hour") => expression.child
+        // The optimizer replaces to_date and to_timestamp without a format by a cast
+        case expression: Cast if indexFunction.equals("to_date") && expression.dataType == DateType
+          && StringUtils.isNullOrEmpty(indexDefinition.getExpressionIndexFormatOption()) => expression.child
+        case expression: Cast if indexFunction.equals("to_timestamp") && expression.dataType == TimestampType
+          && StringUtils.isNullOrEmpty(indexDefinition.getExpressionIndexFormatOption()) => expression.child
+        case expression: DateFormatClass if indexFunction.equals("date_format") && expression.right.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexFormatOption()) =>
           expression.left
         case expression: FromUnixTime
-          if expression.format.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexFormatOption(TimestampFormatter.defaultPattern())) =>
+          if indexFunction.equals("from_unixtime") && expression.format.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexFormatOption(TimestampFormatter.defaultPattern())) =>
           expression.sec
-        case expression: UnixTimestamp if expression.right.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexFormatOption(TimestampFormatter.defaultPattern())) =>
+        case expression: UnixTimestamp if indexFunction.equals("unix_timestamp") && expression.right.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexFormatOption(TimestampFormatter.defaultPattern())) =>
           expression.timeExp
-        case expression: ParseToDate if (expression.format.isEmpty && StringUtils.isNullOrEmpty(indexDefinition.getExpressionIndexFormatOption()))
-          || (expression.format.isDefined && expression.format.get.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexFormatOption())) =>
+        case expression: ParseToDate if indexFunction.equals("to_date") && ((expression.format.isEmpty && StringUtils.isNullOrEmpty(indexDefinition.getExpressionIndexFormatOption()))
+          || (expression.format.isDefined && expression.format.get.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexFormatOption()))) =>
           expression.left
-        case expression: ParseToTimestamp if (expression.format.isEmpty && StringUtils.isNullOrEmpty(indexDefinition.getExpressionIndexFormatOption()))
-          || (expression.format.isDefined && expression.format.get.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexFormatOption())) =>
+        case expression: ParseToTimestamp if indexFunction.equals("to_timestamp") && ((expression.format.isEmpty && StringUtils.isNullOrEmpty(indexDefinition.getExpressionIndexFormatOption()))
+          || (expression.format.isDefined && expression.format.get.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexFormatOption()))) =>
           expression.left
-        case expression: DateAdd if expression.days.isInstanceOf[Literal] && expression.days.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexDaysOption) =>
+        case expression: DateAdd if indexFunction.equals("date_add") && expression.days.isInstanceOf[Literal] && expression.days.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexDaysOption) =>
           expression.startDate
-        case expression: DateSub if expression.days.isInstanceOf[Literal] && expression.days.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexDaysOption) =>
+        case expression: DateSub if indexFunction.equals("date_sub") && expression.days.isInstanceOf[Literal] && expression.days.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexDaysOption) =>
           expression.startDate
-        case expression: Substring if expression.pos.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexPositionOption)
+        case expression: Substring if indexFunction.equals("substring") && expression.pos.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexPositionOption)
           && expression.len.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexLengthOption)=>
           expression.str
-        case expression: StringTrim if (expression.trimStr.isEmpty && StringUtils.isNullOrEmpty(indexDefinition.getExpressionIndexTrimStringOption))
-          || (expression.trimStr.isDefined && expression.trimStr.get.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexTrimStringOption))  => expression.srcStr
-        case expression: StringTrimLeft if (expression.trimStr.isEmpty && StringUtils.isNullOrEmpty(indexDefinition.getExpressionIndexTrimStringOption))
-          || (expression.trimStr.isDefined && expression.trimStr.get.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexTrimStringOption))  => expression.srcStr
-        case expression: StringTrimRight if (expression.trimStr.isEmpty && StringUtils.isNullOrEmpty(indexDefinition.getExpressionIndexTrimStringOption))
-          || (expression.trimStr.isDefined && expression.trimStr.get.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexTrimStringOption)) => expression.srcStr
-        case expression: RegExpReplace if expression.pos.asInstanceOf[Literal].value.toString.equals("1")
+        case expression: StringTrim if indexFunction.equals("trim") && ((expression.trimStr.isEmpty && StringUtils.isNullOrEmpty(indexDefinition.getExpressionIndexTrimStringOption))
+          || (expression.trimStr.isDefined && expression.trimStr.get.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexTrimStringOption)))  => expression.srcStr
+        case expression: StringTrimLeft if indexFunction.equals("ltrim") && ((expression.trimStr.isEmpty && StringUtils.isNullOrEmpty(indexDefinition.getExpressionIndexTrimStringOption))
+          || (expression.trimStr.isDefined && expression.trimStr.get.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexTrimStringOption)))  => expression.srcStr
+        case expression: StringTrimRight if indexFunction.equals("rtrim") && ((expression.trimStr.isEmpty && StringUtils.isNullOrEmpty(indexDefinition.getExpressionIndexTrimStringOption))
+          || (expression.trimStr.isDefined && expression.trimStr.get.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexTrimStringOption))) => expression.srcStr
+        case expression: RegExpReplace if indexFunction.equals("regexp_replace") && expression.pos.asInstanceOf[Literal].value.toString.equals("1")
           && expression.regexp.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexPatternOption)
           && expression.rep.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexReplacementOption) =>
           expression.subject
-        case expression: RegExpExtract if expression.regexp.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexPatternOption)
+        case expression: RegExpExtract if indexFunction.equals("regexp_extract") && expression.regexp.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexPatternOption)
           && expression.idx.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexIndexOption) =>
           expression.subject
-        case expression: StringSplit if expression.limit.asInstanceOf[Literal].value.toString.equals("-1")
+        case expression: StringSplit if indexFunction.equals("split") && expression.limit.asInstanceOf[Literal].value.toString.equals("-1")
           && expression.regex.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexPatternOption) =>
           expression.str
         case other => other
