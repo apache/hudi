@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -170,15 +171,15 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
       keyLookupResultRDD = fileComparisonsRDD.mapToPair(fileGroupAndRecordKey -> new Tuple2<>(fileGroupAndRecordKey, false))
           .repartitionAndSortWithinPartitions(partitioner, new FileGroupIdComparator())
           .map(Tuple2::_1)
-          .mapPartitions(new HoodieSparkBloomIndexCheckFunction(hoodieTable, config), true);
+          .mapPartitions(newCheckFunction(context, hoodieTable, config, partitionToFileInfo), true);
     } else if (config.isBloomIndexFileGroupIdKeySortingEnabled()) {
       keyLookupResultRDD = fileComparisonsRDD.mapToPair(fileGroupAndRecordKey -> new Tuple2<>(fileGroupAndRecordKey, false))
           .sortByKey(new FileGroupIdAndRecordKeyComparator(), true, targetParallelism)
           .map(Tuple2::_1)
-          .mapPartitions(new HoodieSparkBloomIndexCheckFunction(hoodieTable, config), true);
+          .mapPartitions(newCheckFunction(context, hoodieTable, config, partitionToFileInfo), true);
     } else {
       keyLookupResultRDD = fileComparisonsRDD.sortByKey(true, targetParallelism)
-          .mapPartitions(new HoodieSparkBloomIndexCheckFunction(hoodieTable, config), true);
+          .mapPartitions(newCheckFunction(context, hoodieTable, config, partitionToFileInfo), true);
     }
 
     return HoodieJavaPairRDD.of(keyLookupResultRDD
@@ -189,6 +190,14 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
                 new HoodieRecordLocation(lookupResult.getBaseInstantTime(), lookupResult.getFileId(),
                     recordKeyAndPosition.getRight())))
             .iterator()));
+  }
+
+  private static HoodieSparkBloomIndexCheckFunction newCheckFunction(HoodieEngineContext context, HoodieTable hoodieTable,
+                                                                     HoodieWriteConfig config,
+                                                                     Map<String, List<BloomIndexFileInfo>> partitionToFileInfo) {
+    Broadcast<Map<HoodieFileGroupId, HoodieBaseFile>> baseFilesBroadcast =
+        ((HoodieSparkEngineContext) context).getJavaSparkContext().broadcast(getBaseFilesByFileGroup(partitionToFileInfo));
+    return new HoodieSparkBloomIndexCheckFunction(hoodieTable, config, baseFilesBroadcast);
   }
 
   private static class FileGroupIdComparator implements Comparator<Tuple2<HoodieFileGroupId, String>>, Serializable {
@@ -329,8 +338,10 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
       implements FlatMapFunction<Iterator<Tuple2<HoodieFileGroupId, String>>, HoodieKeyLookupResult> {
 
     public HoodieSparkBloomIndexCheckFunction(HoodieTable hoodieTable,
-                                              HoodieWriteConfig config) {
-      super(hoodieTable, config, t -> t._1, t -> t._2);
+                                              HoodieWriteConfig config,
+                                              Broadcast<Map<HoodieFileGroupId, HoodieBaseFile>> baseFilesBroadcast) {
+      super(hoodieTable, config, t -> t._1, t -> t._2,
+          fileGroupId -> Option.ofNullable(baseFilesBroadcast.value().get(fileGroupId)));
     }
 
     @Override

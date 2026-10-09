@@ -18,6 +18,11 @@
 
 package org.apache.hudi.index.bloom;
 
+import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.util.Option;
+
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
 import lombok.Value;
 
 import java.io.Serializable;
@@ -35,16 +40,42 @@ public class BloomIndexFileInfo implements Serializable {
 
   String maxRecordKey;
 
+  /**
+   * The latest base file of the file group, when the loader resolved it. It is not part of the
+   * equality, which covers the file group and its key range.
+   */
+  @EqualsAndHashCode.Exclude
+  @ToString.Exclude
+  Option<HoodieBaseFile> baseFile;
+
   public BloomIndexFileInfo(String fileId, String minRecordKey, String maxRecordKey) {
-    this.fileId = fileId;
-    this.minRecordKey = minRecordKey;
-    this.maxRecordKey = maxRecordKey;
+    this(fileId, minRecordKey, maxRecordKey, Option.empty());
   }
 
   public BloomIndexFileInfo(String fileId) {
+    this(fileId, null, null, Option.empty());
+  }
+
+  public BloomIndexFileInfo(HoodieBaseFile baseFile, String minRecordKey, String maxRecordKey) {
+    this(baseFile.getFileId(), minRecordKey, maxRecordKey, Option.of(baseFile));
+  }
+
+  public BloomIndexFileInfo(HoodieBaseFile baseFile) {
+    this(baseFile.getFileId(), null, null, Option.of(baseFile));
+  }
+
+  private BloomIndexFileInfo(String fileId, String minRecordKey, String maxRecordKey, Option<HoodieBaseFile> baseFile) {
     this.fileId = fileId;
-    this.minRecordKey = null;
-    this.maxRecordKey = null;
+    this.minRecordKey = minRecordKey;
+    this.maxRecordKey = maxRecordKey;
+    this.baseFile = baseFile;
+  }
+
+  /**
+   * Returns this file info without the base file, for when only the file group and its key range are needed.
+   */
+  public BloomIndexFileInfo withoutBaseFile() {
+    return baseFile.isPresent() ? new BloomIndexFileInfo(fileId, minRecordKey, maxRecordKey) : this;
   }
 
   public boolean hasKeyRanges() {

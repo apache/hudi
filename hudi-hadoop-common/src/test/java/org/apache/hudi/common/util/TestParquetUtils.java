@@ -36,7 +36,9 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -67,6 +69,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.schema.HoodieSchemaUtils.METADATA_FIELD_SCHEMA;
 import static org.apache.hudi.metadata.HoodieIndexVersion.V1;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -145,6 +148,46 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     HoodieException missingKey = assertThrows(HoodieException.class,
         () -> parquetUtils.readRowKeys(HoodieTestUtils.getStorage(filePath), new StoragePath(filePath)));
     assertTrue(missingKey.getMessage().startsWith("Record key is missing in row 0 of "));
+  }
+
+  /**
+   * The reads given the file length return what the reads given only the file path return.
+   */
+  @Test
+  void testReadsWithKnownFileLength() throws Exception {
+    List<String> rowKeys = new ArrayList<>();
+    Set<String> filter = new HashSet<>();
+    for (int i = 0; i < 100; i++) {
+      String rowKey = String.format("key%03d", i);
+      rowKeys.add(rowKey);
+      if (i % 10 == 0) {
+        filter.add(rowKey);
+      }
+    }
+    filter.add("missing");
+    String filePath = Paths.get(basePath, "test.parquet").toUri().toString();
+    writeParquetFile(BloomFilterTypeCode.DYNAMIC_V0.name(), filePath, rowKeys);
+    HoodieStorage storage = HoodieTestUtils.getStorage(filePath);
+    StoragePath path = new StoragePath(filePath);
+    StoragePathInfo pathInfo = storage.getPathInfo(path);
+
+    assertEquals(parquetUtils.readBloomFilterFromMetadata(storage, path).serializeToString(),
+        parquetUtils.readBloomFilterFromMetadata(storage, pathInfo).serializeToString());
+    assertArrayEquals(new String[] {"key000", "key099"}, parquetUtils.readMinMaxRecordKeys(storage, pathInfo));
+    Set<Pair<String, Long>> filtered = parquetUtils.filterRowKeys(storage, pathInfo, filter);
+    assertEquals(parquetUtils.filterRowKeys(storage, path, filter), filtered);
+    assertEquals(filter.size() - 1, filtered.size());
+    assertEquals(readKeysWithPositions(parquetUtils.fetchRecordKeysWithPositions(storage, path, Option.empty(), Option.of("p1"))),
+        readKeysWithPositions(parquetUtils.fetchRecordKeysWithPositions(storage, pathInfo, Option.empty(), Option.of("p1"))));
+  }
+
+  private static List<Pair<HoodieKey, Long>> readKeysWithPositions(ClosableIterator<Pair<HoodieKey, Long>> iterator) {
+    List<Pair<HoodieKey, Long>> keys = new ArrayList<>();
+    try (ClosableIterator<Pair<HoodieKey, Long>> it = iterator) {
+      it.forEachRemaining(keys::add);
+    }
+    assertEquals(100, keys.size());
+    return keys;
   }
 
   @ParameterizedTest

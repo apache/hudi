@@ -172,13 +172,14 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
 
     context.setJobStatus(this.getClass().getName(), "Obtain key ranges for file slices (range pruning=on): " + config.getTableName());
     List<Pair<String, BloomIndexFileInfo>> result = context.map(partitionPathFileIDList, pf -> {
+      HoodieBaseFile baseFile = pf.getValue().getValue();
       try {
         HoodieRangeInfoHandle rangeInfoHandle = new HoodieRangeInfoHandle(config, hoodieTable, Pair.of(pf.getKey(), pf.getValue().getKey()));
-        String[] minMaxKeys = rangeInfoHandle.getMinMaxKeys(pf.getValue().getValue());
-        return Pair.of(pf.getKey(), new BloomIndexFileInfo(pf.getValue().getKey(), minMaxKeys[0], minMaxKeys[1]));
+        String[] minMaxKeys = rangeInfoHandle.getMinMaxKeys(baseFile);
+        return Pair.of(pf.getKey(), new BloomIndexFileInfo(baseFile, minMaxKeys[0], minMaxKeys[1]));
       } catch (MetadataNotFoundException me) {
         log.warn("Unable to find range metadata in file :{}", pf);
-        return Pair.of(pf.getKey(), new BloomIndexFileInfo(pf.getValue().getKey()));
+        return Pair.of(pf.getKey(), new BloomIndexFileInfo(baseFile));
       }
     }, Math.max(partitionPathFileIDList.size(), 1));
     context.clearJobStatus();
@@ -195,12 +196,9 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
    */
   private List<Pair<String, BloomIndexFileInfo>> getFileInfoForLatestBaseFiles(
       List<String> partitions, final HoodieEngineContext context, final HoodieTable hoodieTable) {
-    List<Pair<String, String>> partitionPathFileIDList = getLatestBaseFilesForAllPartitions(partitions, context,
-        hoodieTable).stream()
-        .map(pair -> Pair.of(pair.getKey(), pair.getValue().getFileId()))
+    return getLatestBaseFilesForAllPartitions(partitions, context, hoodieTable).stream()
+        .map(pair -> Pair.of(pair.getKey(), new BloomIndexFileInfo(pair.getValue())))
         .collect(toList());
-    return partitionPathFileIDList.stream()
-        .map(pf -> Pair.of(pf.getKey(), new BloomIndexFileInfo(pf.getValue()))).collect(toList());
   }
 
   /**
@@ -221,11 +219,11 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
     List<Pair<String, HoodieBaseFile>> baseFilesForAllPartitions = HoodieIndexUtils.getLatestBaseFilesForAllPartitions(partitions, context, hoodieTable);
     // Partition and file name pairs
     List<Pair<String, String>> partitionFileNameList = new ArrayList<>(baseFilesForAllPartitions.size());
-    Map<Pair<String, String>, String> partitionAndFileNameToFileId = new HashMap<>(baseFilesForAllPartitions.size(), 1);
+    Map<Pair<String, String>, HoodieBaseFile> partitionAndFileNameToBaseFile = new HashMap<>(baseFilesForAllPartitions.size(), 1);
     baseFilesForAllPartitions.forEach(pair -> {
       Pair<String, String> partitionAndFileName = Pair.of(pair.getKey(), pair.getValue().getFileName());
       partitionFileNameList.add(partitionAndFileName);
-      partitionAndFileNameToFileId.put(partitionAndFileName, pair.getValue().getFileId());
+      partitionAndFileNameToBaseFile.put(partitionAndFileName, pair.getValue());
     });
 
     if (partitionFileNameList.isEmpty()) {
@@ -241,7 +239,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
       ValueMetadata valueMetadata = ValueMetadata.getValueMetadata(entry.getValue().getValueType());
       result.add(Pair.of(entry.getKey().getLeft(),
           new BloomIndexFileInfo(
-              partitionAndFileNameToFileId.get(entry.getKey()),
+              partitionAndFileNameToBaseFile.get(entry.getKey()),
               // NOTE: Here we assume that the type of the primary key field is string
               valueMetadata.unwrapValue(entry.getValue().getMinValue()).toString(),
               valueMetadata.unwrapValue(entry.getValue().getMaxValue()).toString()

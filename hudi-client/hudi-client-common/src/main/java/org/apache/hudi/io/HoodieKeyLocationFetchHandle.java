@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
 
 /**
@@ -52,7 +53,11 @@ public class HoodieKeyLocationFetchHandle<T, I, K, O> extends HoodieReadHandle<T
   private ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieBaseFile baseFile) {
     FileFormatUtils fileFormatUtils = HoodieIOFactory.getIOFactory(hoodieTable.getStorage())
         .getFileFormatUtils(baseFile.getStoragePath());
-    return fileFormatUtils.fetchRecordKeysWithPositions(hoodieTable.getStorage(), baseFile.getStoragePath(), keyGeneratorOpt, Option.of(partitionPathBaseFilePair.getKey()));
+    Option<StoragePathInfo> pathInfo = baseFile.getPathInfoWithKnownSize();
+    Option<String> partitionPath = Option.of(partitionPathBaseFilePair.getKey());
+    return pathInfo.isPresent()
+        ? fileFormatUtils.fetchRecordKeysWithPositions(hoodieTable.getStorage(), pathInfo.get(), keyGeneratorOpt, partitionPath)
+        : fileFormatUtils.fetchRecordKeysWithPositions(hoodieTable.getStorage(), baseFile.getStoragePath(), keyGeneratorOpt, partitionPath);
   }
 
   public ClosableIterator<Pair<HoodieKey, HoodieRecordLocation>> locations() {

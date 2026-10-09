@@ -67,6 +67,7 @@ import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.io.storage.HoodieFileReader;
+import org.apache.hudi.core.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
@@ -77,6 +78,7 @@ import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
 
 import lombok.extern.slf4j.Slf4j;
@@ -246,14 +248,36 @@ public class HoodieIndexUtils {
   public static Collection<Pair<String, Long>> filterKeysFromFile(StoragePath filePath,
                                                                   Set<String> candidateRecordKeys,
                                                                   HoodieStorage storage) throws HoodieIndexException {
+    return filterKeysFromFile(filePath, Option.empty(), candidateRecordKeys, storage);
+  }
+
+  /**
+   * Given a list of row keys and one base file, return only row keys existing in that file.
+   *
+   * @param baseFile            - Base file to filter keys from
+   * @param candidateRecordKeys - Candidate keys to filter
+   * @param storage             - Storage to read the file with
+   * @return List of pairs of candidate keys and positions that are available in the file
+   */
+  public static Collection<Pair<String, Long>> filterKeysFromFile(HoodieBaseFile baseFile,
+                                                                  Set<String> candidateRecordKeys,
+                                                                  HoodieStorage storage) throws HoodieIndexException {
+    return filterKeysFromFile(baseFile.getStoragePath(), baseFile.getPathInfoWithKnownSize(), candidateRecordKeys, storage);
+  }
+
+  private static Collection<Pair<String, Long>> filterKeysFromFile(StoragePath filePath,
+                                                                   Option<StoragePathInfo> pathInfo,
+                                                                   Set<String> candidateRecordKeys,
+                                                                   HoodieStorage storage) throws HoodieIndexException {
     checkArgument(FSUtils.isBaseFile(filePath));
     if (candidateRecordKeys.isEmpty()) {
       return Collections.emptyList();
     }
     log.info("Going to filter {} keys from file {}", candidateRecordKeys.size(), filePath);
-    try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(storage)
-        .getReaderFactory(HoodieRecordType.AVRO)
-        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, filePath)) {
+    HoodieFileReaderFactory readerFactory = HoodieIOFactory.getIOFactory(storage).getReaderFactory(HoodieRecordType.AVRO);
+    try (HoodieFileReader fileReader = pathInfo.isPresent()
+        ? readerFactory.getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, pathInfo.get())
+        : readerFactory.getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, filePath)) {
       // Load all rowKeys from the file, to double-confirm
       HoodieTimer timer = HoodieTimer.start();
       Set<Pair<String, Long>> fileRowKeys = fileReader.filterRowKeys(candidateRecordKeys);

@@ -28,6 +28,7 @@ import org.apache.hudi.core.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.spark.sql.internal.SQLConf;
 
@@ -41,6 +42,17 @@ public class HoodieSparkFileReaderFactory extends HoodieFileReaderFactory {
 
   @Override
   public HoodieFileReader newParquetFileReader(StoragePath path) {
+    setParquetReadConfigs();
+    return new HoodieSparkParquetReader(storage, path);
+  }
+
+  @Override
+  protected HoodieFileReader newParquetFileReader(StoragePathInfo pathInfo) {
+    setParquetReadConfigs();
+    return new HoodieSparkParquetReader(storage, pathInfo);
+  }
+
+  private void setParquetReadConfigs() {
     storage.getConf().setIfUnset(SQLConf.PARQUET_BINARY_AS_STRING().key(), SQLConf.PARQUET_BINARY_AS_STRING().defaultValueString());
     storage.getConf().setIfUnset(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), SQLConf.PARQUET_INT96_AS_TIMESTAMP().defaultValueString());
     storage.getConf().setIfUnset(SQLConf.CASE_SENSITIVE().key(), SQLConf.CASE_SENSITIVE().defaultValueString());
@@ -49,7 +61,6 @@ public class HoodieSparkFileReaderFactory extends HoodieFileReaderFactory {
     // This is a required config since Spark 3.4.0: SQLConf.PARQUET_INFER_TIMESTAMP_NTZ_ENABLED
     // Using string value of this conf to preserve compatibility across spark versions.
     storage.getConf().setIfUnset("spark.sql.parquet.inferTimestampNTZ.enabled", "true");
-    return new HoodieSparkParquetReader(storage, path);
   }
 
   @Override
