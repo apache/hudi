@@ -157,7 +157,8 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
           .mapPartitionsToPair(new HoodieMetadataBloomFilterProbingFunction(baseFileOnlyViewBroadcast, hoodieTable))
           // Second, we use [[HoodieFileProbingFunction]] to open actual file and check whether it
           // contains the records with candidate keys that were filtered in by the Bloom Filter
-          .mapPartitions(new HoodieFileProbingFunction(baseFileOnlyViewBroadcast, storageConf), true);
+          .mapPartitions(new HoodieFileProbingFunction(
+              baseFileOnlyViewBroadcast, storageConf, config.getRecordMerger().getRecordType()), true);
 
     } else if (config.useBloomIndexBucketizedChecking()) {
       Map<HoodieFileGroupId, Long> comparisonsPerFileGroup = computeComparisonsPerFileGroup(

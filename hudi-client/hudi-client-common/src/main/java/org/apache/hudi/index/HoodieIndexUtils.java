@@ -30,6 +30,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -246,13 +247,23 @@ public class HoodieIndexUtils {
   public static Collection<Pair<String, Long>> filterKeysFromFile(StoragePath filePath,
                                                                   Set<String> candidateRecordKeys,
                                                                   HoodieStorage storage) throws HoodieIndexException {
+    return filterKeysFromFile(filePath, candidateRecordKeys, storage, HoodieRecordType.AVRO);
+  }
+
+  public static Collection<Pair<String, Long>> filterKeysFromFile(StoragePath filePath,
+                                                                  Set<String> candidateRecordKeys,
+                                                                  HoodieStorage storage,
+                                                                  HoodieRecordType fallbackRecordType)
+      throws HoodieIndexException {
     checkArgument(FSUtils.isBaseFile(filePath));
     if (candidateRecordKeys.isEmpty()) {
       return Collections.emptyList();
     }
     log.info("Going to filter {} keys from file {}", candidateRecordKeys.size(), filePath);
+    HoodieRecordType recordType = HoodieFileFormat.resolveRecordTypeForExtension(
+        FSUtils.getFileExtension(filePath.toString()), fallbackRecordType);
     try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(storage)
-        .getReaderFactory(HoodieRecordType.AVRO)
+        .getReaderFactory(recordType)
         .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, filePath)) {
       // Load all rowKeys from the file, to double-confirm
       HoodieTimer timer = HoodieTimer.start();
