@@ -119,7 +119,8 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
         instantTime,
         Option.of(rollbackTimer.endTimer()),
         Collections.singletonList(instantToRollback),
-        stats);
+        stats,
+        rollbackPlan.getExtraMetadata());
     finishRollback(inflightInstant, rollbackMetadata);
 
     // Finally, remove the markers post rollback.
