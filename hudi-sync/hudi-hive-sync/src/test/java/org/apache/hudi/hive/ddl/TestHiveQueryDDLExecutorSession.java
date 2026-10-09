@@ -453,6 +453,7 @@ class TestHiveQueryDDLExecutorSession {
     setField(executor, "driverPool", Option.empty());
     setField(executor, "metaStoreClientPool", Option.empty());
     setField(executor, "metaStoreClient", null);
+    setField(executor, "beforeSessionStatements", (Runnable) () -> { });
     setField(executor, "hiveDriver", driver);
     setField(executor, "sessionState", sessionState);
     return executor;
