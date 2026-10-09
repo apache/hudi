@@ -29,6 +29,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -132,6 +133,30 @@ final class TestHudiMetastoreTables
                 .satisfies(failure -> assertThat(((TrinoException) failure).getErrorCode())
                         .isEqualTo(NOT_SUPPORTED.toErrorCode()))
                 .hasMessageContaining("Unsupported Hive type");
+    }
+
+    @ParameterizedTest
+    @CsvSource({"record, value.timestamp", "array, value.element"})
+    void testRejectsNestedLocalTimestamp(String nestedType, String columnPath)
+    {
+        Schema localTimestamp = LogicalTypes.localTimestampMicros().addToSchema(Schema.create(Schema.Type.LONG));
+        Schema fieldType = switch (nestedType) {
+            case "record" -> SchemaBuilder.record("nested").fields()
+                    .name("timestamp").type(localTimestamp).noDefault()
+                    .endRecord();
+            case "array" -> Schema.createArray(localTimestamp);
+            default -> throw new AssertionError("Unexpected nested type: " + nestedType);
+        };
+        HoodieSchema schema = HoodieSchema.fromAvroSchema(SchemaBuilder.record("trips").fields()
+                .name("value").type(fieldType).noDefault()
+                .endRecord());
+
+        assertThatThrownBy(() -> buildTable(HoodieTableType.COPY_ON_WRITE, ImmutableList.of(), schema))
+                .isInstanceOf(TrinoException.class)
+                .satisfies(failure -> assertThat(((TrinoException) failure).getErrorCode())
+                        .isEqualTo(NOT_SUPPORTED.toErrorCode()))
+                .hasMessageContaining(columnPath)
+                .hasMessageContaining("local-timestamp-micros");
     }
 
     private static Table buildTable(HoodieTableType tableType, List<String> partitionedBy, HoodieSchema schema)

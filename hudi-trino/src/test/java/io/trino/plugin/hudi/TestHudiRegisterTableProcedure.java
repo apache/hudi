@@ -19,12 +19,11 @@ import io.trino.metastore.HiveMetastore;
 import io.trino.metastore.HiveMetastoreFactory;
 import io.trino.plugin.hudi.procedure.RegisterTableProcedure;
 import io.trino.plugin.hudi.procedure.UnregisterTableProcedure;
+import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ConnectorAccessControl;
 import io.trino.spi.connector.ConnectorSecurityContext;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.security.AccessDeniedException;
-import io.trino.testing.AbstractTestQueryFramework;
-import io.trino.testing.QueryRunner;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.InvocationHandler;
@@ -34,28 +33,26 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static io.trino.spi.StandardErrorCode.PERMISSION_DENIED;
 import static io.trino.testing.TestingConnectorSession.SESSION;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 final class TestHudiRegisterTableProcedure
-        extends AbstractTestQueryFramework
 {
-    @Override
-    protected QueryRunner createQueryRunner()
-            throws Exception
-    {
-        return HudiQueryRunner.builder()
-                .setDataLoader((queryRunner, externalLocation, schemaName) -> {})
-                .build();
-    }
-
     @Test
     void testDisabledByDefaultBeforeValidatingArguments()
     {
-        assertQueryFails(
-                "CALL hudi.system.register_table(NULL, NULL, NULL)",
-                ".*register_table procedure is disabled.*");
+        RegisterTableProcedure procedure = new RegisterTableProcedure(
+                HiveMetastoreFactory.ofInstance(failOnMetastoreAccess(), false),
+                failOnFileSystemAccess(),
+                new HudiConfig());
+
+        assertThatThrownBy(() -> procedure.registerTable(SESSION, allowTableDdl(), null, null, null))
+                .isInstanceOf(TrinoException.class)
+                .satisfies(failure -> assertThat(((TrinoException) failure).getErrorCode())
+                        .isEqualTo(PERMISSION_DENIED.toErrorCode()))
+                .hasMessageContaining("register_table procedure is disabled");
     }
 
     @Test

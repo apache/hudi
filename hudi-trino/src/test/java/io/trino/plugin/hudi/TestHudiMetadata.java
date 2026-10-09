@@ -48,6 +48,7 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 import static com.google.common.base.Throwables.getCausalChain;
@@ -151,54 +152,40 @@ final class TestHudiMetadata
     void testCreateTableInitializationConflictPreservesExistingMetadata()
     {
         SchemaTableName tableName = new SchemaTableName("test_schema", "concurrent_create");
-        ConnectorTableMetadata tableMetadata = createTableMetadata(tableName);
-        String basePath = "local:///test_schema/concurrent_create";
-        LocalFileSystemFactory localFileSystemFactory = new LocalFileSystemFactory(temporaryDirectory);
-        TrinoFileSystem localFileSystem = localFileSystemFactory.create(SESSION);
-        HoodieSchema tableSchema = HudiSchemaConverter.toTableSchema(tableMetadata.getColumns(), tableName.getTableName());
+        TableFixture fixture = tableFixture(createTableMetadata(tableName));
         AtomicBoolean winnerInitialized = new AtomicBoolean();
         TrinoFileSystem racingFileSystem = (TrinoFileSystem) Proxy.newProxyInstance(
                 TrinoFileSystem.class.getClassLoader(),
                 new Class<?>[] {TrinoFileSystem.class},
                 (proxy, method, arguments) -> {
                     if (method.getName().equals("listFiles") && winnerInitialized.compareAndSet(false, true)) {
-                        HudiTableInitializer.initializeTable(localFileSystem, basePath, tableMetadata, tableSchema);
+                        initializeTable(fixture);
                         return FileIterator.empty();
                     }
                     try {
-                        return method.invoke(localFileSystem, arguments);
+                        return method.invoke(fixture.fileSystem(), arguments);
                     }
                     catch (InvocationTargetException e) {
                         throw e.getCause();
                     }
                 });
         TrinoFileSystemFactory racingFileSystemFactory = identity -> racingFileSystem;
-        HiveMetastore metastore = (HiveMetastore) Proxy.newProxyInstance(
-                HiveMetastore.class.getClassLoader(),
-                new Class<?>[] {HiveMetastore.class},
-                (proxy, method, arguments) -> switch (method.getName()) {
-                    case "getDatabase" -> Optional.of(Database.builder()
-                            .setDatabaseName(tableName.getSchemaName())
-                            .setLocation(Optional.of("local:///test_schema"))
-                            .setOwnerName(Optional.of("public"))
-                            .setOwnerType(Optional.of(PrincipalType.ROLE))
-                            .build());
-                    case "getTable" -> Optional.empty();
-                    default -> throw new AssertionError("Unexpected metastore call: " + method);
-                });
+        HiveMetastore metastore = fakeMetastore(Map.of(
+                "getDatabase", arguments -> Optional.of(database(tableName)),
+                "getTable", arguments -> Optional.empty()));
         HudiMetadata metadata = new HudiMetadata(
                 metastore,
                 racingFileSystemFactory,
                 unusedTypeManager(),
                 newDirectExecutorService());
 
-        assertThatThrownBy(() -> metadata.createTable(SESSION, tableMetadata, SaveMode.FAIL))
+        assertThatThrownBy(() -> metadata.createTable(SESSION, fixture.tableMetadata(), SaveMode.FAIL))
                 .isInstanceOf(TrinoException.class)
                 .satisfies(failure -> assertThat(getCausalChain(failure))
                         .anyMatch(FileAlreadyExistsException.class::isInstance));
 
         assertThat(winnerInitialized).isTrue();
-        assertThat(HudiUtil.hudiMetadataExists(localFileSystem, Location.of(basePath)))
+        assertThat(HudiUtil.hudiMetadataExists(fixture.fileSystem(), Location.of(fixture.basePath())))
                 .isTrue();
     }
 
@@ -206,87 +193,62 @@ final class TestHudiMetadata
     void testDropTreatsExternalTableTypeAsSufficientToPreserveStorage()
     {
         SchemaTableName tableName = new SchemaTableName("test_schema", "external_by_type");
-        ConnectorTableMetadata tableMetadata = createTableMetadata(tableName);
-        String basePath = "local:///test_schema/external_by_type";
-        LocalFileSystemFactory fileSystemFactory = new LocalFileSystemFactory(temporaryDirectory);
-        TrinoFileSystem fileSystem = fileSystemFactory.create(SESSION);
-        HoodieSchema tableSchema = HudiSchemaConverter.toTableSchema(
-                tableMetadata.getColumns(), tableName.getTableName());
-        HudiTableInitializer.initializeTable(fileSystem, basePath, tableMetadata, tableSchema);
+        TableFixture fixture = initializedTable(createTableMetadata(tableName));
 
         Table table = Table.builder(HudiMetastoreTables.buildTable(
                         tableName,
-                        basePath,
+                        fixture.basePath(),
                         HoodieTableType.COPY_ON_WRITE,
-                        tableSchema,
+                        fixture.tableSchema(),
                         List.of(),
                         false,
                         Optional.empty(),
                         Optional.empty()))
                 // Some metastores use only the type signal for external tables.
                 .setTableType(EXTERNAL_TABLE.name())
+                .setParameter(HudiMetadata.TRINO_MANAGED_TABLE_PARAMETER, "true")
                 .build();
         AtomicReference<Boolean> deleteData = new AtomicReference<>();
-        HiveMetastore metastore = (HiveMetastore) Proxy.newProxyInstance(
-                HiveMetastore.class.getClassLoader(),
-                new Class<?>[] {HiveMetastore.class},
-                (proxy, method, arguments) -> switch (method.getName()) {
-                    case "getTable" -> Optional.of(table);
-                    case "dropTable" -> {
-                        deleteData.set((Boolean) arguments[2]);
-                        yield null;
-                    }
-                    default -> throw new AssertionError("Unexpected metastore call: " + method);
-                });
+        HiveMetastore metastore = fakeMetastore(Map.of(
+                "getTable", arguments -> Optional.of(table),
+                "dropTable", arguments -> {
+                    deleteData.set((Boolean) arguments[2]);
+                    return null;
+                }));
         HudiMetadata metadata = new HudiMetadata(
                 metastore,
-                fileSystemFactory,
+                fixture.fileSystemFactory(),
                 unusedTypeManager(),
                 newDirectExecutorService());
-        HudiTableHandle tableHandle = new HudiTableHandle(
-                tableName.getSchemaName(),
-                tableName.getTableName(),
-                basePath,
-                HoodieTableType.COPY_ON_WRITE,
-                List.of(),
-                List.of(),
-                TupleDomain.all(),
-                TupleDomain.all(),
-                OptionalLong.empty(),
-                tableSchema.toAvroSchema().toString(),
-                "0");
 
-        metadata.dropTable(SESSION, tableHandle);
+        metadata.dropTable(SESSION, tableHandle(tableName, fixture, HoodieTableType.COPY_ON_WRITE));
 
         assertThat(table.getParameters()).doesNotContainKey("EXTERNAL");
         assertThat(deleteData).hasValue(false);
-        assertThat(HudiUtil.hudiMetadataExists(fileSystem, Location.of(basePath))).isTrue();
+        assertThat(HudiUtil.hudiMetadataExists(fixture.fileSystem(), Location.of(fixture.basePath()))).isTrue();
     }
 
     @Test
     void testDropManagedHiveSyncViewsPreservesSharedStorage()
             throws IOException
     {
-        String basePath = "local:///test_schema/shared_mor";
-        LocalFileSystemFactory fileSystemFactory = new LocalFileSystemFactory(temporaryDirectory);
-        TrinoFileSystem fileSystem = fileSystemFactory.create(SESSION);
         SchemaTableName physicalName = new SchemaTableName("test_schema", "shared_mor");
         ConnectorTableMetadata tableMetadata = new ConnectorTableMetadata(
                 physicalName, createTableMetadata(physicalName).getColumns(), Map.of(TABLE_TYPE_PROPERTY, MERGE_ON_READ));
-        HoodieSchema tableSchema = HudiSchemaConverter.toTableSchema(tableMetadata.getColumns(), physicalName.getTableName());
-        HudiTableInitializer.initializeTable(fileSystem, basePath, tableMetadata, tableSchema);
-        Location dataFile = Location.of(basePath).appendPath("existing.parquet");
-        fileSystem.newOutputFile(dataFile).createOrOverwrite(new byte[] {1});
+        TableFixture fixture = initializedTable(tableMetadata);
+        Location dataFile = Location.of(fixture.basePath()).appendPath("existing.parquet");
+        fixture.fileSystem().newOutputFile(dataFile).createOrOverwrite(new byte[] {1});
 
         Map<String, Table> tables = new HashMap<>();
-        for (String viewName : List.of("shared_mor_ro", "shared_mor_rt")) {
+        // With skip_ro_suffix=true, the read-optimized view has the physical table's name.
+        for (String viewName : List.of("shared_mor", "shared_mor_rt")) {
             SchemaTableName name = new SchemaTableName("test_schema", viewName);
-            Table table = HudiMetastoreTables.buildTable(name, basePath, MERGE_ON_READ, tableSchema,
+            Table table = HudiMetastoreTables.buildTable(name, fixture.basePath(), MERGE_ON_READ, fixture.tableSchema(),
                     List.of(), false, Optional.empty(), Optional.empty());
             tables.put(viewName, table);
         }
         // Even a copied ownership marker must not let a read-optimized alias delete the base path.
-        tables.put("shared_mor_ro", Table.builder(tables.get("shared_mor_ro"))
+        tables.put("shared_mor", Table.builder(tables.get("shared_mor"))
                 .setParameter(HudiMetadata.TRINO_MANAGED_TABLE_PARAMETER, "true")
                 .withStorage(storage -> storage.setSerdeParameters(Map.of(IS_QUERY_AS_RO_TABLE, "true")))
                 .build());
@@ -295,29 +257,22 @@ final class TestHudiMetadata
                 .build());
 
         AtomicReference<Boolean> deleteData = new AtomicReference<>();
-        HiveMetastore metastore = (HiveMetastore) Proxy.newProxyInstance(
-                HiveMetastore.class.getClassLoader(),
-                new Class<?>[] {HiveMetastore.class},
-                (proxy, method, arguments) -> switch (method.getName()) {
-                    case "getTable" -> Optional.ofNullable(tables.get(arguments[1]));
-                    case "dropTable" -> {
-                        deleteData.set((Boolean) arguments[2]);
-                        tables.remove(arguments[1]);
-                        yield null;
-                    }
-                    default -> throw new AssertionError("Unexpected metastore call: " + method);
-                });
-        HudiMetadata metadata = new HudiMetadata(metastore, fileSystemFactory, unusedTypeManager(), newDirectExecutorService());
+        HiveMetastore metastore = fakeMetastore(Map.of(
+                "getTable", arguments -> Optional.ofNullable(tables.get(arguments[1])),
+                "dropTable", arguments -> {
+                    deleteData.set((Boolean) arguments[2]);
+                    tables.remove(arguments[1]);
+                    return null;
+                }));
+        HudiMetadata metadata = new HudiMetadata(metastore, fixture.fileSystemFactory(), unusedTypeManager(), newDirectExecutorService());
 
-        for (String viewName : List.of("shared_mor_ro", "shared_mor_rt")) {
-            metadata.dropTable(SESSION, new HudiTableHandle(
-                    "test_schema", viewName, basePath, MERGE_ON_READ, List.of(), List.of(),
-                    TupleDomain.all(), TupleDomain.all(), OptionalLong.empty(), tableSchema.toAvroSchema().toString(), "0"));
+        for (String viewName : List.of("shared_mor", "shared_mor_rt")) {
+            metadata.dropTable(SESSION, tableHandle(new SchemaTableName("test_schema", viewName), fixture, MERGE_ON_READ));
             assertThat(deleteData).hasValue(false);
-            assertThat(HudiUtil.hudiMetadataExists(fileSystem, Location.of(basePath))).isTrue();
-            assertThat(fileSystem.newInputFile(dataFile).exists()).isTrue();
+            assertThat(HudiUtil.hudiMetadataExists(fixture.fileSystem(), Location.of(fixture.basePath()))).isTrue();
+            assertThat(fixture.fileSystem().newInputFile(dataFile).exists()).isTrue();
             assertThat(tables).doesNotContainKey(viewName);
-            if (viewName.equals("shared_mor_ro")) {
+            if (viewName.equals("shared_mor")) {
                 assertThat(tables).containsKey("shared_mor_rt");
             }
         }
@@ -333,32 +288,22 @@ final class TestHudiMetadata
         SchemaTableName tableName = new SchemaTableName("test_schema", "concurrent_create");
         AtomicReference<Table> attemptedTable = new AtomicReference<>();
         AtomicReference<Table> winningTable = new AtomicReference<>();
-        HiveMetastore metastore = (HiveMetastore) Proxy.newProxyInstance(
-                HiveMetastore.class.getClassLoader(),
-                new Class<?>[] {HiveMetastore.class},
-                (proxy, method, arguments) -> switch (method.getName()) {
-                    case "getDatabase" -> Optional.of(Database.builder()
-                            .setDatabaseName(tableName.getSchemaName())
-                            .setLocation(Optional.of("local:///test_schema"))
-                            .setOwnerName(Optional.of("public"))
-                            .setOwnerType(Optional.of(PrincipalType.ROLE))
-                            .build());
-                    case "getTable" -> {
-                        if (failWinnerLookup && attemptedTable.get() != null) {
-                            throw new IllegalStateException("metastore unavailable during ownership check");
-                        }
-                        yield Optional.ofNullable(winningTable.get());
+        HiveMetastore metastore = fakeMetastore(Map.of(
+                "getDatabase", arguments -> Optional.of(database(tableName)),
+                "getTable", arguments -> {
+                    if (failWinnerLookup && attemptedTable.get() != null) {
+                        throw new IllegalStateException("metastore unavailable during ownership check");
                     }
-                    case "createTable" -> {
-                        Table table = (Table) arguments[0];
-                        attemptedTable.set(table);
-                        if (registerWinner) {
-                            winningTable.set(winningTableFactory.apply(table));
-                        }
-                        throw new TableAlreadyExistsException(tableName);
+                    return Optional.ofNullable(winningTable.get());
+                },
+                "createTable", arguments -> {
+                    Table table = (Table) arguments[0];
+                    attemptedTable.set(table);
+                    if (registerWinner) {
+                        winningTable.set(winningTableFactory.apply(table));
                     }
-                    default -> throw new AssertionError("Unexpected metastore call: " + method);
-                });
+                    throw new TableAlreadyExistsException(tableName);
+                }));
         TrinoFileSystemFactory fileSystemFactory = new LocalFileSystemFactory(temporaryDirectory);
         HudiMetadata metadata = new HudiMetadata(
                 metastore,
@@ -367,6 +312,61 @@ final class TestHudiMetadata
                 newDirectExecutorService());
         ConnectorTableMetadata tableMetadata = createTableMetadata(tableName);
         return new CreateRace(metadata, fileSystemFactory, tableMetadata, attemptedTable, winningTable);
+    }
+
+    private TableFixture tableFixture(ConnectorTableMetadata tableMetadata)
+    {
+        SchemaTableName tableName = tableMetadata.getTable();
+        String basePath = "local:///" + tableName.getSchemaName() + "/" + tableName.getTableName();
+        LocalFileSystemFactory fileSystemFactory = new LocalFileSystemFactory(temporaryDirectory);
+        TrinoFileSystem fileSystem = fileSystemFactory.create(SESSION);
+        HoodieSchema tableSchema = HudiSchemaConverter.toTableSchema(tableMetadata.getColumns(), tableName.getTableName());
+        return new TableFixture(tableMetadata, tableSchema, basePath, fileSystemFactory, fileSystem);
+    }
+
+    private TableFixture initializedTable(ConnectorTableMetadata tableMetadata)
+    {
+        TableFixture fixture = tableFixture(tableMetadata);
+        initializeTable(fixture);
+        return fixture;
+    }
+
+    private static void initializeTable(TableFixture fixture)
+    {
+        HudiTableInitializer.initializeTable(
+                fixture.fileSystem(), fixture.basePath(), fixture.tableMetadata(), fixture.tableSchema());
+    }
+
+    private static HudiTableHandle tableHandle(SchemaTableName tableName, TableFixture fixture, HoodieTableType tableType)
+    {
+        return new HudiTableHandle(
+                tableName.getSchemaName(), tableName.getTableName(), fixture.basePath(), tableType,
+                List.of(), List.of(), TupleDomain.all(), TupleDomain.all(), OptionalLong.empty(),
+                fixture.tableSchema().toAvroSchema().toString(), "0");
+    }
+
+    private static HiveMetastore fakeMetastore(Map<String, Function<Object[], Object>> methods)
+    {
+        return (HiveMetastore) Proxy.newProxyInstance(
+                HiveMetastore.class.getClassLoader(),
+                new Class<?>[] {HiveMetastore.class},
+                (proxy, method, arguments) -> {
+                    Function<Object[], Object> handler = methods.get(method.getName());
+                    if (handler == null) {
+                        throw new AssertionError("Unexpected metastore call: " + method);
+                    }
+                    return handler.apply(arguments);
+                });
+    }
+
+    private static Database database(SchemaTableName tableName)
+    {
+        return Database.builder()
+                .setDatabaseName(tableName.getSchemaName())
+                .setLocation(Optional.of("local:///" + tableName.getSchemaName()))
+                .setOwnerName(Optional.of("public"))
+                .setOwnerType(Optional.of(PrincipalType.ROLE))
+                .build();
     }
 
     private static ConnectorTableMetadata createTableMetadata(SchemaTableName tableName)
@@ -409,4 +409,11 @@ final class TestHudiMetadata
             ConnectorTableMetadata tableMetadata,
             AtomicReference<Table> attemptedTable,
             AtomicReference<Table> winningTable) {}
+
+    private record TableFixture(
+            ConnectorTableMetadata tableMetadata,
+            HoodieSchema tableSchema,
+            String basePath,
+            LocalFileSystemFactory fileSystemFactory,
+            TrinoFileSystem fileSystem) {}
 }
