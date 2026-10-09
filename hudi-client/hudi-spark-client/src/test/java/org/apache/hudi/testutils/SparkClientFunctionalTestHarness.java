@@ -81,6 +81,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.net.URI;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -126,8 +127,23 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     return sqlConf;
   }
 
+  /**
+   * The table path with no scheme, matching {@code HoodieCommonTestHarness#initPath}.
+   * <p>
+   * Helpers that hand this to {@code java.nio.file.Paths#get} need it unqualified: a "file:" prefix
+   * is read as an ordinary directory name there, which makes the result a relative path and puts
+   * the files under the working directory instead of the intended one, without failing. Use
+   * {@link #baseUri()} where a scheme is wanted.
+   */
   public String basePath() {
-    return tempDir.toAbsolutePath().toUri().toString();
+    return tempDir.toAbsolutePath().toString();
+  }
+
+  /**
+   * The table path as a URI, so callers that need the scheme still have it.
+   */
+  public URI baseUri() {
+    return tempDir.toAbsolutePath().toUri();
   }
 
   @Override
