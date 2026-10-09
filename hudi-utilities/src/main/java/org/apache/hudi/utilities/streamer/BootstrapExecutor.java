@@ -201,8 +201,11 @@ public class BootstrapExecutor implements Serializable {
       throw new IllegalArgumentException("Bootstrap source base path and Hudi table base path must be different");
     }
 
+    // A new table never persists the writer's database.
+    TypedProperties tableProps = TypedProperties.copy(props);
+    tableProps.remove(HoodieTableConfig.DATABASE_NAME.key());
     HoodieTableMetaClient.TableBuilder builder = HoodieTableMetaClient.newTableBuilder()
-        .fromProperties(props)
+        .fromProperties(tableProps)
         .setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)
         .setRecordKeyFields(props.getString(RECORDKEY_FIELD_NAME.key()))

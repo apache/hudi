@@ -64,7 +64,6 @@ class TestTimelineUtilsBackComp extends HoodieCommonTestHarness {
     
     metaClient =
       HoodieTableMetaClient.newTableBuilder()
-        .setDatabaseName("dataset")
         .setTableName("testTable")
         .setTimelineLayoutVersion(timelineLayoutVersion)
         .setTableVersion(tableVersion)

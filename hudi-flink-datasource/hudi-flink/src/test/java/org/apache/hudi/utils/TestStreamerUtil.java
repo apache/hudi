@@ -242,10 +242,12 @@ class TestStreamerUtil {
     // Test for partitioned table.
     conf.set(FlinkOptions.ORDERING_FIELDS, "ts");
     conf.set(FlinkOptions.PARTITION_PATH_FIELD, "p0,p1");
+    conf.set(FlinkOptions.DATABASE_NAME, "db1");
     StreamerUtil.initTableIfNotExists(conf);
 
     // Validate the partition fields & preCombineField in hoodie.properties.
     HoodieTableMetaClient metaClient1 = HoodieTestUtils.createMetaClient(tempFile.getAbsolutePath());
+    assertFalse(metaClient1.getTableConfig().contains(HoodieTableConfig.DATABASE_NAME));
     assertTrue(metaClient1.getTableConfig().getPartitionFields().isPresent(),
         "Missing partition columns in the hoodie.properties.");
     assertArrayEquals(metaClient1.getTableConfig().getPartitionFields().get(), new String[] {"p0", "p1"});

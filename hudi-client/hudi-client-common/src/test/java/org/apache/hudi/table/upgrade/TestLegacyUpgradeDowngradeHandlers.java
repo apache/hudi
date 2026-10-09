@@ -20,6 +20,8 @@
 package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.HoodieRollbackStat;
+import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -53,6 +55,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -61,6 +64,7 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEPRECATED_DEFAULT_PARTITION_PATH;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -216,6 +220,23 @@ class TestLegacyUpgradeDowngradeHandlers {
       assertThrows(HoodieException.class,
           () -> new TwoToOneDowngradeHandler().downgrade(config, context, null, helper));
     }
+  }
+
+  @Test
+  void testThreeToFourChecksumsTheTableWithoutTheDatabase() {
+    Properties props = new Properties();
+    props.setProperty(HoodieTableConfig.NAME.key(), "tbl");
+    props.setProperty(HoodieTableConfig.DATABASE_NAME.key(), "db1");
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/table").withProps(props)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build()).build();
+
+    Map<ConfigProperty, String> updates = new ThreeToFourUpgradeHandler()
+        .upgrade(config, mock(HoodieEngineContext.class), null, mock(SupportsUpgradeDowngrade.class)).propertiesToUpdate();
+
+    Properties persisted = new Properties();
+    persisted.setProperty(HoodieTableConfig.NAME.key(), "tbl");
+    assertEquals(Collections.singleton(HoodieTableConfig.TABLE_CHECKSUM), updates.keySet());
+    assertEquals(String.valueOf(HoodieTableConfig.generateChecksum(persisted)), updates.get(HoodieTableConfig.TABLE_CHECKSUM));
   }
 
   @Test

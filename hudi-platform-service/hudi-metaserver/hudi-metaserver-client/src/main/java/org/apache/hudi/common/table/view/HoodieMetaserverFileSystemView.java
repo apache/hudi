@@ -31,9 +31,6 @@ import org.apache.hudi.metaserver.client.HoodieMetaserverClientProxy;
  * is specifically for hoodie table whose metadata is stored in the hoodie metaserver.
  */
 public class HoodieMetaserverFileSystemView extends HoodieTableFileSystemView {
-  private final String databaseName;
-  private final String tableName;
-
   private final HoodieMetaserverClient metaserverClient;
 
   public HoodieMetaserverFileSystemView(HoodieTableMetaClient metaClient,
@@ -41,7 +38,5 @@ public class HoodieMetaserverFileSystemView extends HoodieTableFileSystemView {
     super(new FileSystemBackedTableMetadata(new HoodieLocalEngineContext(metaClient.getStorageConf()), metaClient.getTableConfig(), metaClient.getStorage(),
         metaClient.getBasePath().toString()), metaClient, visibleActiveTimeline);
     this.metaserverClient = HoodieMetaserverClientProxy.getProxy(config);
-    this.databaseName = metaClient.getTableConfig().getDatabaseName();
-    this.tableName = metaClient.getTableConfig().getTableName();
   }
 }

@@ -47,11 +47,15 @@ class TestHoodieWriterUtils extends HoodieClientTestBase {
 
   @Test
   void validateTableConfig() throws IOException {
-    HoodieTableMetaClient tableMetaClient = getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, new Properties(), "")
+    HoodieTableMetaClient tableMetaClient = getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, new Properties())
         .initTable(storageConf, tempDir.resolve("table1").toString());
     HoodieTableConfig tableConfig = tableMetaClient.getTableConfig();
     TypedProperties properties = TypedProperties.copy(tableConfig.getProps());
     properties.put(HoodieTableConfig.DATABASE_NAME.key(), "databaseFromCatalog");
+    Assertions.assertDoesNotThrow(() -> HoodieWriterUtils.validateTableConfig(sparkSession, JavaScalaConverters.convertJavaPropertiesToScalaMap(properties), tableConfig));
+
+    // A table that persisted its database and is now registered under another one still accepts writes.
+    tableConfig.setValue(HoodieTableConfig.DATABASE_NAME, "databaseAtCreation");
     Assertions.assertDoesNotThrow(() -> HoodieWriterUtils.validateTableConfig(sparkSession, JavaScalaConverters.convertJavaPropertiesToScalaMap(properties), tableConfig));
   }
 
@@ -68,7 +72,7 @@ class TestHoodieWriterUtils extends HoodieClientTestBase {
     Properties props = new Properties();
     props.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), "datestr,city");
     props.setProperty(HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING.key(), "true");
-    HoodieTableMetaClient tableMetaClient = getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, props, "")
+    HoodieTableMetaClient tableMetaClient = getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, props)
         .initTable(storageConf, tempDir.resolve("legacyMultiFieldSlashTable").toString());
     HoodieTableConfig tableConfig = tableMetaClient.getTableConfig();
 
@@ -104,7 +108,7 @@ class TestHoodieWriterUtils extends HoodieClientTestBase {
     // Start from a legacy boolean and verify table construction records the corresponding mode.
     tableProps.put(HoodieTableConfig.POPULATE_META_FIELDS.key(),
         String.valueOf(tableMode.toLegacyPopulateMetaFields()));
-    HoodieTableMetaClient metaClient = getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, tableProps, "")
+    HoodieTableMetaClient metaClient = getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, tableProps)
         .initTable(storageConf, tempDir.resolve(tableDir).toString());
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
     assertEquals(tableMode, tableConfig.getMetaFieldsMode(),

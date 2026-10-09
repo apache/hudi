@@ -21,6 +21,7 @@ package org.apache.hudi.connect.writers;
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
@@ -91,6 +92,9 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
 
       log.info("Setting record key {} and partition fields {} for table {}", recordKeyFields, partitionColumns, tableBasePath + tableName);
 
+      // A new table never persists the writer's database.
+      TypedProperties tableProps = TypedProperties.copy(connectConfigs.getProps());
+      tableProps.remove(HoodieTableConfig.DATABASE_NAME.key());
       tableMetaClient = Option.of(HoodieTableMetaClient.newTableBuilder()
           .setTableType(HoodieTableType.COPY_ON_WRITE.name())
           .setTableName(tableName)
@@ -100,7 +104,7 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
           .setTableVersion(writeConfig.getWriteVersion())
           .setTableFormat(connectConfigs.getStringOrDefault(HoodieTableConfig.TABLE_FORMAT))
           .setKeyGeneratorClassProp(writeConfig.getKeyGeneratorClass())
-          .fromProperties(connectConfigs.getProps())
+          .fromProperties(tableProps)
           .initTable(storageConf.newInstance(), tableBasePath));
 
       javaClient = new HoodieJavaWriteClient<>(context, writeConfig);

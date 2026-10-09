@@ -43,7 +43,7 @@ import org.apache.spark.sql.hudi.command.CreateHoodieTableCommand
 import org.apache.spark.sql.hudi.common.{ExtendedParserTestHelpers, HoodieSparkSqlTestBase}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMetadata
 import org.apache.spark.sql.types._
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNull, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
 import scala.collection.JavaConverters._
 
@@ -91,7 +91,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
     val tablePath = table.storage.properties("path")
     val metaClient = createMetaClient(spark, tablePath)
     val tableConfig = metaClient.getTableConfig
-    assertResult(databaseName)(tableConfig.getDatabaseName)
+    assertFalse(tableConfig.contains(HoodieTableConfig.DATABASE_NAME))
     assertResult(tableName)(tableConfig.getTableName)
     assertFalse(tableConfig.contains(OPERATION.key()))
 
@@ -151,7 +151,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
     assertResult("id")(tableConfig(HoodieTableConfig.RECORDKEY_FIELDS.key))
     assertResult("ts")(tableConfig(HoodieTableConfig.ORDERING_FIELDS.key))
     assertResult(KeyGeneratorType.SIMPLE.name())(tableConfig(HoodieTableConfig.KEY_GENERATOR_TYPE.key))
-    assertResult("default")(tableConfig(HoodieTableConfig.DATABASE_NAME.key()))
+    assertFalse(tableConfig.contains(HoodieTableConfig.DATABASE_NAME.key()))
     assertResult(tableName)(tableConfig(HoodieTableConfig.NAME.key()))
     assertFalse(tableConfig.contains(OPERATION.key()))
   }
@@ -917,7 +917,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
       val tablePath = table.storage.properties("path")
       val metaClient = createMetaClient(spark, tablePath)
       val tableConfig = metaClient.getTableConfig.getProps.asScala.toMap
-      assertResult("default")(tableConfig(HoodieTableConfig.DATABASE_NAME.key()))
+      assertFalse(tableConfig.contains(HoodieTableConfig.DATABASE_NAME.key()))
       assertResult(tableName)(tableConfig(HoodieTableConfig.NAME.key()))
       assertFalse(tableConfig.contains(OPERATION.key()))
     }
@@ -953,7 +953,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
       val tablePath = table.storage.properties("path")
       val metaClient = createMetaClient(spark, tablePath)
       val tableConfig = metaClient.getTableConfig.getProps.asScala.toMap
-      assertResult("default")(tableConfig(HoodieTableConfig.DATABASE_NAME.key()))
+      assertFalse(tableConfig.contains(HoodieTableConfig.DATABASE_NAME.key()))
       assertResult(tableName)(tableConfig(HoodieTableConfig.NAME.key()))
       assertFalse(tableConfig.contains(OPERATION.key()))
     }
@@ -1032,7 +1032,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
         val properties = metaClient.getTableConfig.getProps.asScala.toMap
         assertResult("dt")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
         assertResult("ts")(properties(HoodieTableConfig.ORDERING_FIELDS.key))
-        assertNull(metaClient.getTableConfig.getDatabaseName)
+        assertFalse(metaClient.getTableConfig.contains(HoodieTableConfig.DATABASE_NAME))
         assertResult(s"original_$tableName")(metaClient.getTableConfig.getTableName)
 
         // Test insert into
@@ -2034,7 +2034,6 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
         .setTableName(tableName)
         .setRecordKeyFields("id")
         .setOrderingFields("ts")
-        // IMPORTANT: NOT calling .setDatabaseName() here.
         .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
       // 2. Insert records.

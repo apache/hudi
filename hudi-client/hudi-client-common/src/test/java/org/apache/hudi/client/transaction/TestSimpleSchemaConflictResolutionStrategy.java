@@ -116,7 +116,7 @@ public class TestSimpleSchemaConflictResolutionStrategy {
                              int writeTableVersion) throws Exception {
     Properties tableProperties = new Properties();
     tableProperties.setProperty(WRITE_TABLE_VERSION.key(), String.valueOf(writeTableVersion));
-    metaClient = HoodieTestUtils.getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, tableProperties, "")
+    metaClient = HoodieTestUtils.getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, tableProperties)
         .setTableCreateSchema(tableCreateSchema)
         .initTable(getDefaultStorageConf(), basePath.toString());
     dummyInstantGenerator = HoodieTestTable.of(metaClient);

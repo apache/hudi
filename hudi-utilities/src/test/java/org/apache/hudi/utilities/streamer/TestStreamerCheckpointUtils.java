@@ -423,7 +423,6 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     // Create metaclient with older version
     metaClient =
         HoodieTableMetaClient.newTableBuilder()
-            .setDatabaseName("dataset")
             .setTableName("testTable")
             .setTimelineLayoutVersion(TimelineLayoutVersion.VERSION_1)
             .setTableVersion(HoodieTableVersion.SIX)
@@ -445,7 +444,6 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
   public void testAssertNoCheckpointOverrideDuringUpgradeFailure() throws IOException {
     metaClient =
         HoodieTableMetaClient.newTableBuilder()
-            .setDatabaseName("dataset")
             .setTableName("testTable")
             .setTimelineLayoutVersion(TimelineLayoutVersion.VERSION_1)
             .setTableVersion(HoodieTableVersion.SIX)
@@ -474,7 +472,6 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
   public void testAssertNoCheckpointOverrideDuringUpgradeWithIgnoreCheckpoint() throws IOException {
     // Create metaclient with older version
     metaClient = HoodieTableMetaClient.newTableBuilder()
-        .setDatabaseName("dataset")
         .setTableName("testTable")
         .setTimelineLayoutVersion(TimelineLayoutVersion.VERSION_1)
         .setTableVersion(HoodieTableVersion.SIX)
@@ -499,7 +496,6 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
   public void testAssertNoCheckpointOverrideDuringUpgradeWithAutoUpgradeDisabledVersion6() throws IOException {
     // Test case 1: Version 6 table with version 6 write config
     metaClient = HoodieTableMetaClient.newTableBuilder()
-        .setDatabaseName("dataset")
         .setTableName("testTable")
         .setTimelineLayoutVersion(TimelineLayoutVersion.VERSION_1)
         .setTableVersion(HoodieTableVersion.SIX)
@@ -520,7 +516,6 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
   @Test
   public void testAssertNoCheckpointOverrideDuringUpgradeWithAutoUpgradeDisabledVersion8() throws IOException {
     metaClient = HoodieTableMetaClient.newTableBuilder()
-        .setDatabaseName("dataset")
         .setTableName("testTable")
         .setTimelineLayoutVersion(TimelineLayoutVersion.VERSION_1)
         .setTableVersion(HoodieTableVersion.EIGHT)

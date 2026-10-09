@@ -350,7 +350,6 @@ public class StreamerUtil {
           .setRecordMergeMode(getMergeMode(conf))
           .setRecordMergeStrategyId(getMergeStrategyId(conf))
           .setPayloadClassName(getPayloadClass(conf))
-          .setDatabaseName(conf.get(FlinkOptions.DATABASE_NAME))
           .setRecordKeyFields(conf.getString(FlinkOptions.RECORD_KEY_FIELD.key(), null))
           .setComplexKeyGenEncoding(conf.containsKey(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key())
               ? ComplexKeyGenEncoding.fromString(conf.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null)) : null)
