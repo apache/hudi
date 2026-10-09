@@ -128,7 +128,7 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
       return;
     }
     HoodieRecord populatedRecord = hoodieRecord.prependMetaFields(
-        schema, writeSchemaWithMetaFields, populateMetadataFields(hoodieRecord), recordProperties);
+        schema, writeSchemaWithMetaFields, populateMetadataFields(hoodieRecord, isUpdateRecord), recordProperties);
     if (!canWriteDataFile()) {
       flushAppend();
     }

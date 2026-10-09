@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -40,8 +41,10 @@ import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -96,6 +99,23 @@ public class TestCommitUtils {
     assertEquals("f2", commitMetadata.getPartitionToWriteStats().get("p2").get(0).getFileId());
     assertEquals(WriteOperationType.INSERT, commitMetadata.getOperationType());
     assertEquals(TRIP_SCHEMA, commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY));
+  }
+
+  @Test
+  public void testCommitMetadataSkipsWriteStatWithoutFile() {
+    // An append handle whose records all failed reports its errors with a stat that has no file.
+    HoodieWriteStat failedWriteStat = createWriteStat("p2", "f2");
+    failedWriteStat.setPath(null);
+    failedWriteStat.setTotalWriteErrors(1);
+    HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(
+        Arrays.asList(createWriteStat("p1", "f1"), failedWriteStat), Collections.emptyMap(), Option.empty(),
+        WriteOperationType.UPSERT, TRIP_SCHEMA, HoodieTimeline.DELTA_COMMIT_ACTION);
+
+    assertEquals(Collections.singleton("p1"), commitMetadata.getPartitionToWriteStats().keySet());
+    assertEquals(Collections.singletonList("/base/p1/f1.parquet"), commitMetadata.getFullPathsByPartitionPath("/base", "p1"));
+    assertTrue(commitMetadata.getFullPathsByPartitionPath("/base", "p2").isEmpty());
+    assertEquals(Collections.singleton("/base/p1/f1.parquet"),
+        new HashSet<>(commitMetadata.getFileIdAndFullPaths(new StoragePath("/base")).values()));
   }
 
   @Test
@@ -191,6 +211,7 @@ public class TestCommitUtils {
     HoodieWriteStat writeStat1 = new HoodieWriteStat();
     writeStat1.setPartitionPath(partition);
     writeStat1.setFileId(fileId);
+    writeStat1.setPath(partition + "/" + fileId + ".parquet");
     return writeStat1;
   }
 

@@ -68,8 +68,9 @@ public class HoodieTablePreCommitFileSystemView {
     List<String> replacedFileIdsForPartition = partitionToReplaceFileIds.getOrDefault(partitionStr, Collections.emptyList());
     
     // get new files written by current inflight commit
+    // A stat without a path reports the failed records of a handle that wrote no file.
     Map<String, HoodieBaseFile> newFilesWrittenForPartition = filesWritten.stream()
-        .filter(file -> partitionStr.equals(file.getPartitionPath()))
+        .filter(file -> partitionStr.equals(file.getPartitionPath()) && file.getPath() != null)
         .collect(Collectors.toMap(HoodieWriteStat::getFileId, writeStat -> 
             new HoodieBaseFile(new StoragePath(tableMetaClient.getBasePath(), writeStat.getPath()).toString(), writeStat.getFileId(), preCommitInstantTime, null)));
 

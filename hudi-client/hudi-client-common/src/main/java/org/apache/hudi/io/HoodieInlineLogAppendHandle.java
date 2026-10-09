@@ -269,7 +269,7 @@ public class HoodieInlineLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
     }
 
     // Prepend meta-fields into the record
-    MetadataValues metadataValues = populateMetadataFields(hoodieRecord);
+    MetadataValues metadataValues = populateMetadataFields(hoodieRecord, isUpdateRecord);
     HoodieRecord populatedRecord =
         hoodieRecord.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, recordProperties);
 
