@@ -21,6 +21,7 @@ package org.apache.spark.sql.hudi.blob
 
 import org.apache.spark.sql.catalyst.FunctionIdentifier
 import org.apache.spark.sql.catalyst.expressions.{Expression, ExpressionInfo}
+import org.apache.spark.sql.hudi.fulltext.TokenPredicates
 
 /**
  * Registry of scalar functions for Hudi SQL integration.
@@ -95,5 +96,5 @@ object ScalarFunctions {
         ReadBlobExpression(args.head)
       }
     )
-  )
+  ) ++ TokenPredicates.funcs
 }
