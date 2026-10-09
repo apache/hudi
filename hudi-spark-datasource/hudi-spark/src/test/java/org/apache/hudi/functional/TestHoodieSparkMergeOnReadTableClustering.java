@@ -89,8 +89,8 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
       WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 400);
-      Stream<HoodieBaseFile> dataFiles = insertRecordsToMORTable(metaClient, records.subList(0, 200), client, cfg, newCommitTime);
-      assertTrue(dataFiles.findAny().isPresent(), "should list the base files we wrote in the delta commit");
+      Stream<HoodieBaseFile> baseFiles = insertRecordsToMORTable(metaClient, records.subList(0, 200), client, cfg, newCommitTime);
+      assertTrue(baseFiles.findAny().isPresent(), "should list the base files we wrote in the delta commit");
 
       /*
        * Write 2 (more inserts to create new files)
@@ -98,8 +98,8 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
       // we already set small file size to small number to force inserts to go into new file.
       newCommitTime = "002";
       WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
-      dataFiles = insertRecordsToMORTable(metaClient, records.subList(200, 400), client, cfg, newCommitTime);
-      assertTrue(dataFiles.findAny().isPresent(), "should list the base files we wrote in the delta commit");
+      baseFiles = insertRecordsToMORTable(metaClient, records.subList(200, 400), client, cfg, newCommitTime);
+      assertTrue(baseFiles.findAny().isPresent(), "should list the base files we wrote in the delta commit");
 
       if (doUpdates) {
         /*
@@ -185,12 +185,12 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
       String newCommitTime = "001";
       WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 400);
-      Stream<HoodieBaseFile> dataFiles = insertRecordsToMORTable(metaClient, records.subList(0, 200), client, cfg, newCommitTime);
-      assertTrue(!dataFiles.findAny().isPresent(), "should not have any base files");
+      Stream<HoodieBaseFile> baseFiles = insertRecordsToMORTable(metaClient, records.subList(0, 200), client, cfg, newCommitTime);
+      assertTrue(!baseFiles.findAny().isPresent(), "should not have any base files");
       newCommitTime = "002";
       WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
-      dataFiles = insertRecordsToMORTable(metaClient, records.subList(200, 400), client, cfg, newCommitTime);
-      assertTrue(!dataFiles.findAny().isPresent(), "should not have any base files");
+      baseFiles = insertRecordsToMORTable(metaClient, records.subList(200, 400), client, cfg, newCommitTime);
+      assertTrue(!baseFiles.findAny().isPresent(), "should not have any base files");
       // run updates
       if (doUpdates) {
         newCommitTime = "003";
@@ -260,9 +260,9 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
     metaClient = HoodieTableMetaClient.reload(metaClient);
     final HoodieTable clusteredTable = HoodieSparkTable.create(cfg, context(), metaClient);
     clusteredTable.getHoodieView().sync();
-    Stream<HoodieBaseFile> dataFilesToRead = Arrays.stream(dataGen.getPartitionPaths())
+    Stream<HoodieBaseFile> baseFilesToRead = Arrays.stream(dataGen.getPartitionPaths())
         .flatMap(p -> clusteredTable.getBaseFileOnlyView().getLatestBaseFiles(p));
-    assertEquals(dataGen.getPartitionPaths().length, dataFilesToRead.count());
+    assertEquals(dataGen.getPartitionPaths().length, baseFilesToRead.count());
     HoodieTimeline timeline = metaClient.getCommitTimeline().filterCompletedInstants();
     assertEquals(1, timeline.findInstantsAfter("003", Integer.MAX_VALUE).countInstants(),
         "Expecting a single commit.");

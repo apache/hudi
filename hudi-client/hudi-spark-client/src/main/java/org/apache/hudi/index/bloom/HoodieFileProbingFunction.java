@@ -136,16 +136,16 @@ public class HoodieFileProbingFunction implements
 
             // TODO add assertion that file is checked only once
 
-            final HoodieBaseFile dataFile = fileIDBaseFileMap.get(fileId);
+            final HoodieBaseFile baseFile = fileIDBaseFileMap.get(fileId);
             Collection<Pair<String, Long>> matchingKeysAndPositions = HoodieIndexUtils.filterKeysFromFile(
-                dataFile.getStoragePath(), candidateRecordKeys, HoodieStorageUtils.getStorage(dataFile.getStoragePath(), storageConf));
+                baseFile.getStoragePath(), candidateRecordKeys, HoodieStorageUtils.getStorage(baseFile.getStoragePath(), storageConf));
 
             log.debug(
                 "Bloom filter candidates ({}) / false positives ({}), actual matches ({})",
                     candidateRecordKeys.size(), candidateRecordKeys.size() - matchingKeysAndPositions.size(),
                     matchingKeysAndPositions.size());
 
-            return new HoodieKeyLookupResult(fileId, partitionPath, dataFile.getCommitTime(), matchingKeysAndPositions);
+            return new HoodieKeyLookupResult(fileId, partitionPath, baseFile.getCommitTime(), matchingKeysAndPositions);
           })
           .iterator();
     }

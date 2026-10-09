@@ -536,10 +536,10 @@ public class HiveTestUtil {
       String partitionPath = wEntry.getKey();
       for (HoodieWriteStat wStat : wEntry.getValue()) {
         StoragePath path = new StoragePath(wStat.getPath());
-        HoodieBaseFile dataFile = new HoodieBaseFile(storage.getPathInfo(path));
+        HoodieBaseFile baseFile = new HoodieBaseFile(storage.getPathInfo(path));
         HoodieLogFile logFile = generateLogData(path, isLogSchemaSimple);
         HoodieDeltaWriteStat writeStat = new HoodieDeltaWriteStat();
-        writeStat.setFileId(dataFile.getFileId());
+        writeStat.setFileId(baseFile.getFileId());
         writeStat.setPath(logFile.getPath().toString());
         writeStat.setNumUpdateWrites(10);
         commitMetadata.addWriteStat(partitionPath, writeStat);
@@ -557,10 +557,10 @@ public class HiveTestUtil {
       String partitionPath = wEntry.getKey();
       for (HoodieWriteStat wStat : wEntry.getValue()) {
         StoragePath path = new StoragePath(wStat.getPath());
-        HoodieBaseFile dataFile = new HoodieBaseFile(storage.getPathInfo(path));
+        HoodieBaseFile baseFile = new HoodieBaseFile(storage.getPathInfo(path));
         HoodieLogFile logFile = generateLogData(path, logSchemaPath, dataPath);
         HoodieDeltaWriteStat writeStat = new HoodieDeltaWriteStat();
-        writeStat.setFileId(dataFile.getFileId());
+        writeStat.setFileId(baseFile.getFileId());
         writeStat.setPath(logFile.getPath().toString());
         writeStat.setNumUpdateWrites(10);
         commitMetadata.addWriteStat(partitionPath, writeStat);
@@ -727,18 +727,18 @@ public class HiveTestUtil {
                                                boolean isLogSchemaSimple)
       throws IOException, InterruptedException, URISyntaxException {
     HoodieSchema schema = getTestDataSchema(isLogSchemaSimple);
-    HoodieBaseFile dataFile = new HoodieBaseFile(storage.getPathInfo(parquetFilePath));
+    HoodieBaseFile baseFile = new HoodieBaseFile(storage.getPathInfo(parquetFilePath));
     // Write a log file for this parquet file
     Writer logWriter = HoodieLogFormatWriter.builder()
         .withParentPath(parquetFilePath.getParent())
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-        .withLogFileId(dataFile.getFileId())
-        .withInstantTime(dataFile.getCommitTime()).withStorage(storage).build();
+        .withLogFileId(baseFile.getFileId())
+        .withInstantTime(baseFile.getCommitTime()).withStorage(storage).build();
     List<HoodieRecord> records = (isLogSchemaSimple ? SchemaTestUtil.generateTestRecords(0, 100)
         : SchemaTestUtil.generateEvolvedTestRecords(100, 100)).stream()
         .map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
     Map<HeaderMetadataType, String> header = new HashMap<>(2);
-    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, dataFile.getCommitTime());
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, baseFile.getCommitTime());
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
     logWriter.appendBlock(dataBlock);
@@ -749,18 +749,18 @@ public class HiveTestUtil {
   private static HoodieLogFile generateLogData(StoragePath parquetFilePath, String logSchemaPath, String dataPath)
       throws IOException, InterruptedException, URISyntaxException {
     HoodieSchema schema = SchemaTestUtil.getSchema(logSchemaPath);
-    HoodieBaseFile dataFile = new HoodieBaseFile(storage.getPathInfo(parquetFilePath));
+    HoodieBaseFile baseFile = new HoodieBaseFile(storage.getPathInfo(parquetFilePath));
     // Write a log file for this parquet file
     Writer logWriter = HoodieLogFormatWriter.builder()
         .withParentPath(parquetFilePath.getParent())
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-        .withLogFileId(dataFile.getFileId())
-        .withInstantTime(dataFile.getCommitTime())
+        .withLogFileId(baseFile.getFileId())
+        .withInstantTime(baseFile.getCommitTime())
         .withStorage(storage)
         .build();
     List<HoodieRecord> records = SchemaTestUtil.generateTestRecords(logSchemaPath, dataPath).stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
     Map<HeaderMetadataType, String> header = new HashMap<>(2);
-    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, dataFile.getCommitTime());
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, baseFile.getCommitTime());
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
     logWriter.appendBlock(dataBlock);

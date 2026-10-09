@@ -126,8 +126,8 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
-      Stream<HoodieBaseFile> dataFiles = insertRecordsToMORTable(metaClient, records, client, cfg, newCommitTime);
-      assertTrue(dataFiles.findAny().isPresent(), "should list the base files we wrote in the delta commit");
+      Stream<HoodieBaseFile> baseFiles = insertRecordsToMORTable(metaClient, records, client, cfg, newCommitTime);
+      assertTrue(baseFiles.findAny().isPresent(), "should list the base files we wrote in the delta commit");
 
       /*
        * Write 2 (updates)
@@ -147,8 +147,8 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
       HoodieTableFileSystemView tableView =
           getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
-      Stream<HoodieBaseFile> dataFilesToRead = tableView.getLatestBaseFiles();
-      assertTrue(dataFilesToRead.findAny().isPresent());
+      Stream<HoodieBaseFile> baseFilesToRead = tableView.getLatestBaseFiles();
+      assertTrue(baseFilesToRead.findAny().isPresent());
 
       // verify that there is a commit
       metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -189,8 +189,8 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
-      Stream<HoodieBaseFile> dataFiles = insertRecordsToMORTable(metaClient, records, client, cfg, newCommitTime, true);
-      assertTrue(dataFiles.findAny().isPresent(), "should list the base files we wrote in the delta commit");
+      Stream<HoodieBaseFile> baseFiles = insertRecordsToMORTable(metaClient, records, client, cfg, newCommitTime, true);
+      assertTrue(baseFiles.findAny().isPresent(), "should list the base files we wrote in the delta commit");
 
       /*
        * Write 2 (updates)
@@ -231,8 +231,8 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
-      Stream<HoodieBaseFile> dataFiles = insertRecordsToMORTable(metaClient, records, client, cfg, newCommitTime, true);
-      assertTrue(dataFiles.findAny().isPresent(), "should list the base files we wrote in the delta commit");
+      Stream<HoodieBaseFile> baseFiles = insertRecordsToMORTable(metaClient, records, client, cfg, newCommitTime, true);
+      assertTrue(baseFiles.findAny().isPresent(), "should list the base files we wrote in the delta commit");
 
       /*
        * Write 2 (updates)
@@ -309,12 +309,12 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       HoodieTableFileSystemView tableView =
           getHoodieTableFileSystemView(metaClient, metaClient.getCommitTimeline().filterCompletedInstants(),
               allFiles);
-      Stream<HoodieBaseFile> dataFilesToRead = tableView.getLatestBaseFiles();
-      assertFalse(dataFilesToRead.findAny().isPresent());
+      Stream<HoodieBaseFile> baseFilesToRead = tableView.getLatestBaseFiles();
+      assertFalse(baseFilesToRead.findAny().isPresent());
 
       tableView = getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
-      dataFilesToRead = tableView.getLatestBaseFiles();
-      assertTrue(dataFilesToRead.findAny().isPresent(),
+      baseFilesToRead = tableView.getLatestBaseFiles();
+      assertTrue(baseFilesToRead.findAny().isPresent(),
           "should list the base files we wrote in the delta commit");
 
       /*
@@ -352,8 +352,8 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
 
       allFiles = listAllBaseFilesInPath(hoodieTable);
       tableView = getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
-      dataFilesToRead = tableView.getLatestBaseFiles();
-      assertTrue(dataFilesToRead.findAny().isPresent());
+      baseFilesToRead = tableView.getLatestBaseFiles();
+      assertTrue(baseFilesToRead.findAny().isPresent());
 
       List<String> inputPaths = tableView.getLatestBaseFiles()
           .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
