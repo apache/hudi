@@ -19,12 +19,51 @@
 
 package org.apache.hudi.io.hfile;
 
+import org.apache.hudi.io.compress.CompressionCodec;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.Random;
+
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class TestHfileBlock {
+  @ParameterizedTest
+  @EnumSource(value = CompressionCodec.class, names = {"NONE", "GZIP", "ZSTD"})
+  void testBlockRoundTripWithChecksums(CompressionCodec codec) throws IOException {
+    HFileContext context = HFileContext.builder().compressionCodec(codec).build();
+    for (int size : new int[] {0, 16384 - HFileBlock.HFILEBLOCK_HEADER_SIZE, 65536}) {
+      byte[] content = new byte[size];
+      new Random(42).nextBytes(content);
+      ByteBuffer serialized = HFileMetaBlock.createMetaBlockToWrite(
+          context, new KeyValueEntry(new byte[] {1}, content)).serialize();
+      // Parse a block embedded at a nonzero offset, followed by unrelated bytes.
+      byte[] bytes = new byte[serialized.remaining() + 20];
+      Arrays.fill(bytes, (byte) 0x7f);
+      serialized.get(bytes, 7, serialized.remaining());
+      HFileMetaBlock block = (HFileMetaBlock) HFileBlock.parse(context, bytes, 7);
+      assertEquals(HFileBlock.numChecksumBytes(block.onDiskDataSizeWithHeader, 16384), block.sizeCheckSum);
+      if (codec == CompressionCodec.NONE && size == 16384 - HFileBlock.HFILEBLOCK_HEADER_SIZE) {
+        // Checksums must not add an extra chunk when the data ends exactly at the boundary.
+        assertEquals(4, block.sizeCheckSum);
+      }
+      block.unpack();
+      ByteBuffer decoded = block.readContent();
+      byte[] actual = new byte[decoded.remaining()];
+      decoded.get(actual);
+      assertArrayEquals(content, actual);
+      block.unpack();
+    }
+  }
+
   @Test
   void testNumChecksumChunksZeroBytes() {
     Assertions.assertEquals(0, HFileBlock.numChecksumChunks(0L, 512));
