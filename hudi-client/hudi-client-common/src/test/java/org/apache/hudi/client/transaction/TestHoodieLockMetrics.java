@@ -34,6 +34,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.mockito.Mockito.mock;
@@ -377,6 +378,44 @@ public class TestHoodieLockMetrics {
   }
 
   @Test
+  public void testLockTransientErrorMetric() {
+    HoodieStorage storage = mock(HoodieStorage.class);
+    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder().withPath("/test")
+        .withReporterType(MetricsReporterType.INMEMORY.name()).withLockingMetrics(true).build();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .forTable("testTable").withPath("/test/path")
+        .withMetricsConfig(metricsConfig)
+        .build();
+    HoodieLockMetrics lockMetrics = new HoodieLockMetrics(writeConfig, storage);
+
+    Metrics metrics = Metrics.getInstance(metricsConfig, storage);
+    MetricRegistry registry = metrics.getRegistry();
+    String metricName =
+        writeConfig.getMetricReporterMetricsNamePrefix() + "." + HoodieLockMetrics.LOCK_TRANSIENT_ERROR_COUNTER_NAME;
+
+    assertDoesNotThrow(lockMetrics::updateLockTransientErrorMetric,
+        "updateLockTransientErrorMetric should not throw");
+
+    Counter transientErrorCounter = registry.getCounters().get(metricName);
+    assertNotNull(transientErrorCounter, "Lock transient error counter should exist");
+
+    long initialCount = transientErrorCounter.getCount();
+
+    lockMetrics.updateLockTransientErrorMetric();
+    lockMetrics.updateLockTransientErrorMetric();
+
+    assertEquals(initialCount + 2, transientErrorCounter.getCount(),
+        "Lock transient error counter should increment by 2");
+
+    // The transient-error counter must be distinct from the throttled one, so an operator can
+    // tell an unavailable backend from a rate-limited one.
+    String throttledMetricName =
+        writeConfig.getMetricReporterMetricsNamePrefix() + "." + HoodieLockMetrics.LOCK_THROTTLED_COUNTER_NAME;
+    assertNotEquals(throttledMetricName, metricName,
+        "Transient error metric must not reuse the throttled metric name");
+  }
+
+  @Test
   public void testNewMetricsWithDisabledLocking() {
     HoodieStorage storage = mock(HoodieStorage.class);
     // Test that the new metrics methods work safely when locking metrics are disabled
@@ -396,6 +435,8 @@ public class TestHoodieLockMetrics {
         "updateLockDanglingMetric should not throw when locking metrics disabled");
     assertDoesNotThrow(lockMetrics::updateLockThrottledMetric,
         "updateLockThrottledMetric should not throw when locking metrics disabled");
+    assertDoesNotThrow(lockMetrics::updateLockTransientErrorMetric,
+        "updateLockTransientErrorMetric should not throw when locking metrics disabled");
   }
 
   @Test
