@@ -30,6 +30,7 @@ from langchain_core.messages import AIMessage
 
 from hudi_agent_gateway.config import GatewaySettings
 from hudi_agent_gateway.tools import build_registry
+from hudi_agent_gateway.tools.spark_client import SparkQueryError
 from hudi_agent_gateway.tools.trino_client import QueryResult, TrinoQueryError
 
 
@@ -77,7 +78,57 @@ def fake_trino() -> FakeTrinoClient:
 
 @pytest.fixture()
 def registry(settings: GatewaySettings, fake_trino: FakeTrinoClient):
-    return build_registry(settings, trino_client=fake_trino)  # type: ignore[arg-type]
+    return build_registry(settings, client=fake_trino)  # type: ignore[arg-type]
+
+
+@pytest.fixture()
+def spark_settings(monkeypatch: pytest.MonkeyPatch) -> GatewaySettings:
+    # Isolate from the developer's environment.
+    for var in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY"):
+        monkeypatch.delenv(var, raising=False)
+    return GatewaySettings(
+        engine="spark",
+        llm_provider="ollama",
+        spark_host="fake-spark",
+        sql_row_cap=100,
+        tool_result_max_bytes=2000,
+    )
+
+
+class FakeSparkClient:
+    """Records executed SQL; replays canned results or errors (Spark flavor)."""
+
+    def __init__(self) -> None:
+        self.executed: list[str] = []
+        self.result = QueryResult(
+            columns=["city", "trips"],
+            rows=[["chennai", 33], ["san_francisco", 34], ["sao_paulo", 33]],
+        )
+        self.error: Exception | None = None
+        self.last_error: str = ""
+
+    async def execute(self, sql: str, *, timeout: float, max_rows: int) -> QueryResult:
+        self.executed.append(sql)
+        if self.error is not None:
+            self.last_error = str(self.error)
+            raise self.error
+        return self.result
+
+    async def ping(self, timeout: float = 5.0) -> bool:
+        return self.error is None
+
+    def fail_with(self, message: str) -> None:
+        self.error = SparkQueryError(message)
+
+
+@pytest.fixture()
+def fake_spark() -> FakeSparkClient:
+    return FakeSparkClient()
+
+
+@pytest.fixture()
+def spark_registry(spark_settings: GatewaySettings, fake_spark: FakeSparkClient):
+    return build_registry(spark_settings, client=fake_spark)  # type: ignore[arg-type]
 
 
 class ScriptedChatModel(GenericFakeChatModel):

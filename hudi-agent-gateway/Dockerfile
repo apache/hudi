@@ -27,7 +27,7 @@ WORKDIR /opt/hudi-agent-gateway
 COPY pyproject.toml README.md ./
 RUN mkdir -p src/hudi_agent_gateway \
     && printf '__version__ = "0.1.0"\n' > src/hudi_agent_gateway/__init__.py \
-    && pip install --no-cache-dir . \
+    && pip install --no-cache-dir ".[spark]" \
     && pip uninstall -y hudi-agent-gateway
 COPY src ./src
 RUN pip install --no-cache-dir --no-deps .

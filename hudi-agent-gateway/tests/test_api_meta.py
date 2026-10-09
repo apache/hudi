@@ -29,7 +29,7 @@ async def client(settings, fake_trino, monkeypatch):
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as c, app.router.lifespan_context(app):
-        app.state.trino_client = fake_trino
+        app.state.lakehouse_client = fake_trino
         yield c, app
 
 
@@ -42,7 +42,7 @@ async def test_health(client) -> None:
 
 async def test_ready_reports_dependency_failures(client) -> None:
     c, app = client
-    app.state.trino_client.fail_with("connection refused")
+    app.state.lakehouse_client.fail_with("connection refused")
 
     class NotReady:
         async def check(self):
@@ -88,6 +88,74 @@ async def test_info(client) -> None:
     assert body["provider"] == "ollama"
     assert body["catalog"] == "hudi"
     assert body["schema"] == "default"
-    assert body["trino_url"] == "http://fake-trino:8080"
-    assert body["trino_ui_url"] == "http://fake-trino:8080/ui/"
+    assert body["engine"] == "trino"
+    assert body["sql_url"] == "http://fake-trino:8080"
+    assert body["web_ui_url"] == "http://fake-trino:8080/ui/"
     assert body["mcp_enabled"] is False  # fixture disables MCP
+
+
+@pytest.fixture()
+async def spark_client_app(spark_settings, fake_spark):
+    import httpx
+
+    app = create_app(spark_settings.model_copy(update={"mcp_enabled": False}))
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as c, app.router.lifespan_context(app):
+        app.state.lakehouse_client = fake_spark
+        yield c, app
+
+
+async def test_ready_reports_spark_check(spark_client_app) -> None:
+    c, app = spark_client_app
+
+    class Ready:
+        async def check(self):
+            return True, "reachable"
+
+    app.state.llm_readiness = Ready()
+    resp = await c.get("/ready")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ready"] is True
+    assert body["checks"]["spark"]["ok"] is True
+    assert "trino" not in body["checks"]
+
+
+async def test_ready_spark_failure_carries_last_error(spark_client_app) -> None:
+    c, app = spark_client_app
+    app.state.lakehouse_client.fail_with("TTransportException: Could not connect")
+
+    class Ready:
+        async def check(self):
+            return True, "reachable"
+
+    app.state.llm_readiness = Ready()
+    # prime last_error the way a real failed ping would
+    import contextlib
+
+    with contextlib.suppress(Exception):
+        await app.state.lakehouse_client.execute("SELECT 1", timeout=1, max_rows=1)
+    resp = await c.get("/ready")
+    body = resp.json()
+    assert resp.status_code == 503
+    assert body["checks"]["spark"]["ok"] is False
+    assert "spark thrift server" in body["checks"]["spark"]["detail"]
+    assert "Could not connect" in body["checks"]["spark"]["detail"]
+
+
+async def test_info_spark_engine(spark_client_app) -> None:
+    c, _ = spark_client_app
+    resp = await c.get("/v1/info")
+    body = resp.json()
+    assert body["engine"] == "spark"
+    assert body["schema"] == "default"
+    assert body["sql_url"].startswith("jdbc:hive2://fake-spark:10000")
+    assert body["web_ui_url"] is None
+
+
+async def test_tools_listing_spark(spark_client_app) -> None:
+    c, _ = spark_client_app
+    resp = await c.get("/v1/tools")
+    tools = resp.json()["tools"]
+    assert {t["name"] for t in tools} == {"query_lakehouse", "list_tables", "describe_table"}
