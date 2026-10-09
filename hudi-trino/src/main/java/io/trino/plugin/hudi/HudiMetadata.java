@@ -335,6 +335,11 @@ public class HudiMetadata
      * An explicit {@code location} makes the table external, matching Hudi's Spark SQL behaviour. An
      * omitted one makes it managed, at {@code <schemaLocation>/<tableName>}, which is what decides
      * whether {@code DROP TABLE} later deletes the data.
+     * <p>
+     * Concurrent creates at the same S3 location are not safe: the emptiness check does not reserve
+     * the location, and Hudi can overwrite {@code hoodie.properties} before the metastore rejects
+     * the competing create. Until storage initialization has an exclusive claim, callers must
+     * serialize creates targeting the same location.
      */
     @Override
     public void createTable(ConnectorSession session, ConnectorTableMetadata tableMetadata, SaveMode saveMode)
