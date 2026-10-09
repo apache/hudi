@@ -2116,8 +2116,18 @@
             <configuration>
               <source>11</source>
               <doclint>none</doclint>
-              <failOnWarnings>false</failOnWarnings>
-              <failOnError>false</failOnError>
+              <!-- javadoc only puts dependency artifacts on its classpath, never the module's own output
+                   directory, so Java sources that import Scala classes compiled in the same module fail to
+                   resolve them. Put the module's own jar (built earlier in the package phase) on the classpath. -->
+              <additionalDependencies>
+                <additionalDependency>
+                  <groupId>${project.groupId}</groupId>
+                  <artifactId>${project.artifactId}</artifactId>
+                  <version>${project.version}</version>
+                  <scope>system</scope>
+                  <systemPath>${project.build.directory}/${project.build.finalName}.jar</systemPath>
+                </additionalDependency>
+              </additionalDependencies>
             </configuration>
           </plugin>
           <plugin>
