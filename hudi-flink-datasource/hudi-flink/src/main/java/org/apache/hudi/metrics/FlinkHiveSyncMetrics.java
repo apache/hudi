@@ -45,7 +45,7 @@ public class FlinkHiveSyncMetrics extends HoodieFlinkMetrics {
   static final String HIVE_SYNC_INIT_DURATION_MS = "hiveSyncInitDurationMs";
   static final String HIVE_SYNC_SCHEMA_READ_DURATION_MS = "hiveSyncSchemaReadDurationMs";
   static final String HIVE_SYNC_PARTITION_SCAN_DURATION_MS = "hiveSyncPartitionScanDurationMs";
-  static final String HIVE_SYNC_METASTORE_DURATION_MS = "hiveSyncMetastoreDurationMs";
+  static final String HIVE_SYNC_REMAINING_DURATION_MS = "hiveSyncRemainingDurationMs";
   static final String HIVE_SYNC_PARTITIONS_ADDED_COUNT = "hiveSyncPartitionsAddedCount";
   static final String HIVE_SYNC_SCHEMA_EVOLVED_COUNT = "hiveSyncSchemaEvolvedCount";
 
@@ -84,8 +84,11 @@ public class FlinkHiveSyncMetrics extends HoodieFlinkMetrics {
    */
   private final Histogram partitionScanDurationMs = newHistogram();
 
-  /** Time a sync spent on metastore calls: everything but reading the schema and finding partitions. */
-  private final Histogram metastoreDurationMs = newHistogram();
+  /**
+   * Time a sync spent on everything but reading the schema and finding partitions: mostly metastore
+   * calls, plus the local work between them, such as comparing the partitions and schemas found.
+   */
+  private final Histogram remainingDurationMs = newHistogram();
 
   /**
    * Number of partitions added to the metastore. A MERGE_ON_READ table adds the same partitions to
@@ -113,7 +116,7 @@ public class FlinkHiveSyncMetrics extends HoodieFlinkMetrics {
     metricGroup.histogram(HIVE_SYNC_INIT_DURATION_MS, initDurationMs);
     metricGroup.histogram(HIVE_SYNC_SCHEMA_READ_DURATION_MS, schemaReadDurationMs);
     metricGroup.histogram(HIVE_SYNC_PARTITION_SCAN_DURATION_MS, partitionScanDurationMs);
-    metricGroup.histogram(HIVE_SYNC_METASTORE_DURATION_MS, metastoreDurationMs);
+    metricGroup.histogram(HIVE_SYNC_REMAINING_DURATION_MS, remainingDurationMs);
     metricGroup.counter(HIVE_SYNC_PARTITIONS_ADDED_COUNT, partitionsAddedCount);
     metricGroup.counter(HIVE_SYNC_SCHEMA_EVOLVED_COUNT, schemaEvolvedCount);
   }
@@ -128,7 +131,7 @@ public class FlinkHiveSyncMetrics extends HoodieFlinkMetrics {
   public void updateSyncStats(HiveSyncStats stats) {
     stats.getSchemaReadMs().ifPresent(schemaReadDurationMs::update);
     stats.getPartitionScanMs().ifPresent(partitionScanDurationMs::update);
-    stats.getMetastoreMs().ifPresent(metastoreDurationMs::update);
+    stats.getRemainingMs().ifPresent(remainingDurationMs::update);
     partitionsAddedCount.inc(stats.getPartitionsAdded());
     if (stats.isSchemaEvolved()) {
       schemaEvolvedCount.inc();

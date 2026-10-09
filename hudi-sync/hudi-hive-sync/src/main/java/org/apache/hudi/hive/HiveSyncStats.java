@@ -54,11 +54,12 @@ public class HiveSyncStats {
   }
 
   /**
-   * Time spent on the rest of the sync, which is the calls to the metastore: checking for the
-   * database and tables, creating or altering them, and reading and writing their partitions. Empty
-   * when the sync did not run, because the metastore client could not be created.
+   * Time spent on the rest of the sync: mostly the calls to the metastore, checking for the database
+   * and tables, creating or altering them, and reading and writing their partitions, but also the
+   * local work between them, such as comparing the partitions and schemas found. Empty when the sync
+   * did not run, because the metastore client could not be created.
    */
-  public Option<Long> getMetastoreMs() {
+  public Option<Long> getRemainingMs() {
     if (totalMs < 0) {
       return Option.empty();
     }

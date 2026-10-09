@@ -34,7 +34,7 @@ class TestHiveSyncStats {
     HiveSyncStats stats = new HiveSyncStats();
     assertFalse(stats.getSchemaReadMs().isPresent());
     assertFalse(stats.getPartitionScanMs().isPresent());
-    assertFalse(stats.getMetastoreMs().isPresent());
+    assertFalse(stats.getRemainingMs().isPresent());
     assertEquals(0, stats.getPartitionsAdded());
     assertFalse(stats.isSchemaEvolved());
   }
@@ -49,7 +49,7 @@ class TestHiveSyncStats {
 
     assertEquals(15L, stats.getSchemaReadMs().get());
     assertEquals(30L, stats.getPartitionScanMs().get());
-    assertEquals(55L, stats.getMetastoreMs().get());
+    assertEquals(55L, stats.getRemainingMs().get());
   }
 
   @Test
@@ -59,7 +59,7 @@ class TestHiveSyncStats {
 
     assertFalse(stats.getSchemaReadMs().isPresent());
     assertFalse(stats.getPartitionScanMs().isPresent());
-    assertEquals(40L, stats.getMetastoreMs().get());
+    assertEquals(40L, stats.getRemainingMs().get());
   }
 
   @Test

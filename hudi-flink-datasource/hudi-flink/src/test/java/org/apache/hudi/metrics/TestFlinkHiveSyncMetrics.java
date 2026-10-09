@@ -40,9 +40,9 @@ import static org.apache.hudi.metrics.FlinkHiveSyncMetrics.HIVE_SYNC_DURATION_MS
 import static org.apache.hudi.metrics.FlinkHiveSyncMetrics.HIVE_SYNC_FAILURE_COUNT;
 import static org.apache.hudi.metrics.FlinkHiveSyncMetrics.HIVE_SYNC_INIT_DURATION_MS;
 import static org.apache.hudi.metrics.FlinkHiveSyncMetrics.HIVE_SYNC_LAST_SUCCESS_TIME_MS;
-import static org.apache.hudi.metrics.FlinkHiveSyncMetrics.HIVE_SYNC_METASTORE_DURATION_MS;
 import static org.apache.hudi.metrics.FlinkHiveSyncMetrics.HIVE_SYNC_PARTITIONS_ADDED_COUNT;
 import static org.apache.hudi.metrics.FlinkHiveSyncMetrics.HIVE_SYNC_PARTITION_SCAN_DURATION_MS;
+import static org.apache.hudi.metrics.FlinkHiveSyncMetrics.HIVE_SYNC_REMAINING_DURATION_MS;
 import static org.apache.hudi.metrics.FlinkHiveSyncMetrics.HIVE_SYNC_SCHEMA_EVOLVED_COUNT;
 import static org.apache.hudi.metrics.FlinkHiveSyncMetrics.HIVE_SYNC_SCHEMA_READ_DURATION_MS;
 import static org.apache.hudi.metrics.FlinkHiveSyncMetrics.HIVE_SYNC_SUCCESS_COUNT;
@@ -76,7 +76,7 @@ class TestFlinkHiveSyncMetrics {
     assertNotNull(metricGroup.histograms.get(HIVE_SYNC_INIT_DURATION_MS));
     assertNotNull(metricGroup.histograms.get(HIVE_SYNC_SCHEMA_READ_DURATION_MS));
     assertNotNull(metricGroup.histograms.get(HIVE_SYNC_PARTITION_SCAN_DURATION_MS));
-    assertNotNull(metricGroup.histograms.get(HIVE_SYNC_METASTORE_DURATION_MS));
+    assertNotNull(metricGroup.histograms.get(HIVE_SYNC_REMAINING_DURATION_MS));
     assertNotNull(metricGroup.counters.get(HIVE_SYNC_PARTITIONS_ADDED_COUNT));
     assertNotNull(metricGroup.counters.get(HIVE_SYNC_SCHEMA_EVOLVED_COUNT));
   }
@@ -90,7 +90,7 @@ class TestFlinkHiveSyncMetrics {
     assertEquals(0, histogram(HIVE_SYNC_INIT_DURATION_MS).getCount());
     assertEquals(0, histogram(HIVE_SYNC_SCHEMA_READ_DURATION_MS).getCount());
     assertEquals(0, histogram(HIVE_SYNC_PARTITION_SCAN_DURATION_MS).getCount());
-    assertEquals(0, histogram(HIVE_SYNC_METASTORE_DURATION_MS).getCount());
+    assertEquals(0, histogram(HIVE_SYNC_REMAINING_DURATION_MS).getCount());
     assertEquals(0, counter(HIVE_SYNC_PARTITIONS_ADDED_COUNT));
     assertEquals(0, counter(HIVE_SYNC_SCHEMA_EVOLVED_COUNT));
   }
@@ -112,8 +112,8 @@ class TestFlinkHiveSyncMetrics {
     assertEquals(11L, histogram(HIVE_SYNC_SCHEMA_READ_DURATION_MS).getStatistics().getMax());
     assertEquals(2, histogram(HIVE_SYNC_PARTITION_SCAN_DURATION_MS).getCount());
     assertEquals(21L, histogram(HIVE_SYNC_PARTITION_SCAN_DURATION_MS).getStatistics().getMax());
-    assertEquals(2, histogram(HIVE_SYNC_METASTORE_DURATION_MS).getCount());
-    assertEquals(31L, histogram(HIVE_SYNC_METASTORE_DURATION_MS).getStatistics().getMax());
+    assertEquals(2, histogram(HIVE_SYNC_REMAINING_DURATION_MS).getCount());
+    assertEquals(31L, histogram(HIVE_SYNC_REMAINING_DURATION_MS).getStatistics().getMax());
     assertEquals(6, counter(HIVE_SYNC_PARTITIONS_ADDED_COUNT));
     assertEquals(1, counter(HIVE_SYNC_SCHEMA_EVOLVED_COUNT));
   }
@@ -125,7 +125,7 @@ class TestFlinkHiveSyncMetrics {
     assertEquals(0, histogram(HIVE_SYNC_SCHEMA_READ_DURATION_MS).getCount(),
         "A sync that read no schema must not record a schema read of 0 ms");
     assertEquals(0, histogram(HIVE_SYNC_PARTITION_SCAN_DURATION_MS).getCount());
-    assertEquals(1, histogram(HIVE_SYNC_METASTORE_DURATION_MS).getCount());
+    assertEquals(1, histogram(HIVE_SYNC_REMAINING_DURATION_MS).getCount());
     assertEquals(0, counter(HIVE_SYNC_PARTITIONS_ADDED_COUNT));
     assertEquals(0, counter(HIVE_SYNC_SCHEMA_EVOLVED_COUNT));
   }
@@ -242,11 +242,11 @@ class TestFlinkHiveSyncMetrics {
   }
 
   private static HiveSyncStats stats(Option<Long> schemaReadMs, Option<Long> partitionScanMs,
-                                     Option<Long> metastoreMs, int partitionsAdded, boolean schemaEvolved) {
+                                     Option<Long> remainingMs, int partitionsAdded, boolean schemaEvolved) {
     HiveSyncStats stats = mock(HiveSyncStats.class);
     when(stats.getSchemaReadMs()).thenReturn(schemaReadMs);
     when(stats.getPartitionScanMs()).thenReturn(partitionScanMs);
-    when(stats.getMetastoreMs()).thenReturn(metastoreMs);
+    when(stats.getRemainingMs()).thenReturn(remainingMs);
     when(stats.getPartitionsAdded()).thenReturn(partitionsAdded);
     when(stats.isSchemaEvolved()).thenReturn(schemaEvolved);
     return stats;

@@ -1078,7 +1078,7 @@ public class TestHiveSyncTool {
     HiveSyncStats stats = syncAndGetStats();
     assertTrue(stats.getSchemaReadMs().isPresent());
     assertTrue(stats.getPartitionScanMs().isPresent());
-    assertTrue(stats.getMetastoreMs().isPresent());
+    assertTrue(stats.getRemainingMs().isPresent());
     assertEquals(5, stats.getPartitionsAdded());
     assertFalse(stats.isSchemaEvolved(), "Creating the table is not a schema evolution");
 
@@ -1091,7 +1091,7 @@ public class TestHiveSyncTool {
     stats = syncAndGetStats();
     assertFalse(stats.getSchemaReadMs().isPresent(), "A table already synced to the latest commit reads no schema");
     assertFalse(stats.getPartitionScanMs().isPresent(), "A table already synced to the latest commit looks for no partitions");
-    assertTrue(stats.getMetastoreMs().isPresent());
+    assertTrue(stats.getRemainingMs().isPresent());
     assertEquals(0, stats.getPartitionsAdded());
     assertFalse(stats.isSchemaEvolved());
   }
@@ -1117,7 +1117,7 @@ public class TestHiveSyncTool {
     try (GlobalHiveSyncTool tool = new GlobalHiveSyncTool(hiveSyncProps, HiveTestUtil.getHiveConf())) {
       tool.syncHoodieTable();
       HiveSyncStats stats = tool.getSyncStats();
-      assertTrue(stats.getMetastoreMs().isPresent());
+      assertTrue(stats.getRemainingMs().isPresent());
       assertEquals(5, stats.getPartitionsAdded());
     }
   }
