@@ -143,3 +143,7 @@ jobs:
               helm template "$chart" > /dev/null
             fi
           done
+          helm lint hudi-lakehouse/charts/hudi-agent-gateway \
+            -f hudi-lakehouse/charts/hudi-agent-gateway/values-spark-connect.yaml
+          helm template hudi-lakehouse/charts/hudi-agent-gateway \
+            -f hudi-lakehouse/charts/hudi-agent-gateway/values-spark-connect.yaml > /dev/null
