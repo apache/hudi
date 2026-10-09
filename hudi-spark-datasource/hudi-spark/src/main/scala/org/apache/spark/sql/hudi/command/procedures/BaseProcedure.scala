@@ -112,7 +112,7 @@ abstract class BaseProcedure extends Procedure {
   protected def getDbAndTableName(tableName: String): (String, String) = {
     val names = tableName.split("\\.")
     if (names.length == 1) {
-      ("default", names(0))
+      (sparkSession.sessionState.catalog.getCurrentDatabase, names(0))
     } else if (names.length == 2) {
       (names(0), names(1))
     } else {

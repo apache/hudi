@@ -249,6 +249,34 @@ class TestHoodieSparkSqlWriter extends HoodieSparkWriterTestBase {
   }
 
   /**
+   * The database of a write is not persisted in the table config, and a later write naming another database
+   * is accepted since the catalog owns the table's identity.
+   */
+  @Test
+  def testDatabaseIsNotPersistedInTableConfig(): Unit = {
+    val tableOptions = Map("path" -> tempBasePath, HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
+      "hoodie.datasource.write.recordkey.field" -> "uuid")
+    val dataFrame = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
+    assert(HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite,
+      tableOptions + (HoodieTableConfig.DATABASE_NAME.key -> "db1"), dataFrame)._1)
+    assertFalse(createMetaClient(spark, tempBasePath).getTableConfig.contains(HoodieTableConfig.DATABASE_NAME))
+
+    assert(HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append,
+      tableOptions + (HoodieTableConfig.DATABASE_NAME.key -> "db2"), dataFrame)._1)
+    assertFalse(createMetaClient(spark, tempBasePath).getTableConfig.contains(HoodieTableConfig.DATABASE_NAME))
+
+    // An Overwrite that re-initializes a table carrying a database keeps that database, not the writer's.
+    val legacyProps = new java.util.Properties()
+    legacyProps.setProperty(HoodieTableConfig.DATABASE_NAME.key, "legacy_db")
+    val metaClient = createMetaClient(spark, tempBasePath)
+    HoodieTableConfig.update(metaClient.getStorage, metaClient.getMetaPath, legacyProps)
+    assert(HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite,
+      tableOptions + (HoodieTableConfig.DATABASE_NAME.key -> "db3"), dataFrame)._1)
+    assertEquals("legacy_db",
+      createMetaClient(spark, tempBasePath).getTableConfig.getProps.getProperty(HoodieTableConfig.DATABASE_NAME.key))
+  }
+
+  /**
     * Test case for Do not validate table config if save mode is set to Overwrite
     */
   @Test

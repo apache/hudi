@@ -49,6 +49,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.avro.generic.GenericData;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.ql.io.IOConstants;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.hive.serde2.io.TimestampWritable;
@@ -88,6 +89,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
@@ -450,6 +452,43 @@ public class TestHoodieParquetInputFormat {
     assertEquals(10, files.length,
         "When hoodie.incremental.use.database is false, "
             + "We should include commit 100 because the returning incremental pull with start commit time is 1");
+  }
+
+  @Test
+  void testIncrementalWithDatabaseFromHiveTable() throws IOException {
+    File partitionDir = InputFormatTestUtil.prepareTable(basePath, baseFileFormat, 10, "100");
+    createCommitFile(basePath, "100", "2016/05/01");
+    FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
+    InputFormatTestUtil.setupIncremental(jobConf, "100", 1, HoodieTestUtils.HOODIE_DATABASE, true);
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE, baseFileFormat);
+    // Hive copies the table properties into the job conf, not into the conf the input format was created with.
+    inputFormat.setConf(new JobConf(jobConf));
+
+    assertEquals(10, inputFormat.listStatus(jobConf).length,
+        "Without a database the incremental query keyed on the qualified name does not take effect");
+
+    jobConf.set(hive_metastoreConstants.META_TABLE_NAME, HoodieTestUtils.HOODIE_DATABASE + "." + HoodieTestUtils.RAW_TRIPS_TEST_NAME + "_rt");
+    assertEquals(0, inputFormat.listStatus(jobConf).length,
+        "The database of the Hive table being read qualifies the incremental table name");
+
+    jobConf.set(hive_metastoreConstants.META_TABLE_NAME, HoodieTestUtils.HOODIE_DATABASE + ".other_table");
+    assertEquals(10, inputFormat.listStatus(jobConf).length,
+        "A Hive table name that does not name this table is ignored");
+  }
+
+  @Test
+  void testIncrementalOnTwoTablesWithTheSameName() throws IOException {
+    List<String> partitionDirs = new ArrayList<>();
+    for (String tableDir : Arrays.asList("db1_trips", "db2_trips")) {
+      java.nio.file.Path tablePath = basePath.resolve(tableDir);
+      partitionDirs.add(InputFormatTestUtil.prepareTable(tablePath, baseFileFormat, 10, "100").getPath());
+      createCommitFile(tablePath, "100", "2016/05/01");
+    }
+    FileInputFormat.setInputPaths(jobConf, String.join(",", partitionDirs));
+    InputFormatTestUtil.setupIncremental(jobConf, "1", 1, false);
+
+    assertEquals(20, inputFormat.listStatus(jobConf).length,
+        "Both tables named the same keep their incremental files");
   }
 
   @Test

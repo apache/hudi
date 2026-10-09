@@ -79,17 +79,17 @@ class UpgradeOrDowngradeProcedure extends BaseProcedure with ProcedureBuilder wi
     Seq(Row(result))
   }
 
-  private def getWriteConfigWithTrue(tableOpt: scala.Option[Any]) = {
+  private[hudi] def getWriteConfigWithTrue(tableOpt: scala.Option[Any]): HoodieWriteConfig = {
     val basePath = getBasePath(tableOpt)
     val (tableName, database) = HoodieCLIUtils.getTableIdentifier(tableOpt.get.asInstanceOf[String])
-    HoodieWriteConfig.newBuilder
+    val builder = HoodieWriteConfig.newBuilder
       .forTable(tableName)
       .withPath(basePath)
       .withRollbackUsingMarkers(true)
       .withCleanConfig(HoodieCleanConfig.newBuilder.withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER).build)
       .withIndexConfig(HoodieIndexConfig.newBuilder.withIndexType(HoodieIndex.IndexType.BLOOM).build)
-      .withProps(Map(HoodieTableConfig.DATABASE_NAME.key -> database.getOrElse(sparkSession.sessionState.catalog.getCurrentDatabase)).asJava)
-      .build
+    database.foreach(db => builder.withProps(Map(HoodieTableConfig.DATABASE_NAME.key -> db).asJava))
+    builder.build
   }
 
   override def build = new UpgradeOrDowngradeProcedure()

@@ -19,6 +19,7 @@
 package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.exception.TableNotFoundException;
@@ -26,6 +27,7 @@ import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,6 +36,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getTableMetaClientForBasePathUnchecked;
 
@@ -55,7 +58,9 @@ public class InputPathHandler {
   public static final Logger LOG = LoggerFactory.getLogger(InputPathHandler.class);
 
   private final Configuration conf;
-  // tableName to metadata mapping for all Hoodie tables(both incremental & snapshot)
+  // The job conf, which Hive populates with the properties of the table being read
+  private final Configuration jobConf;
+  // base path to metadata mapping for all Hoodie tables(both incremental & snapshot)
   private final Map<String, HoodieTableMetaClient> tableMetaClientMap;
   private final Map<HoodieTableMetaClient, List<Path>> groupedIncrementalPaths;
   private final List<Path> snapshotPaths;
@@ -63,7 +68,12 @@ public class InputPathHandler {
   private final boolean isIncrementalUseDatabase;
 
   public InputPathHandler(Configuration conf, Path[] inputPaths, List<String> incrementalTables) throws IOException {
+    this(conf, conf, inputPaths, incrementalTables);
+  }
+
+  public InputPathHandler(Configuration conf, Configuration jobConf, Path[] inputPaths, List<String> incrementalTables) throws IOException {
     this.conf = conf;
+    this.jobConf = jobConf;
     tableMetaClientMap = new HashMap<>();
     snapshotPaths = new ArrayList<>();
     nonHoodieInputPaths = new ArrayList<>();
@@ -110,7 +120,7 @@ public class InputPathHandler {
         HoodieTableMetaClient metaClient;
         try {
           metaClient = getTableMetaClientForBasePathUnchecked(conf, inputPath);
-          tableMetaClientMap.put(getIncrementalTable(metaClient), metaClient);
+          tableMetaClientMap.put(metaClient.getBasePath().toString(), metaClient);
           tagAsIncrementalOrSnapshot(inputPath, metaClient, incrementalTables);
         } catch (TableNotFoundException | InvalidTableException e) {
           // This is a non Hoodie inputPath
@@ -122,7 +132,7 @@ public class InputPathHandler {
   }
 
   private void tagAsIncrementalOrSnapshot(Path inputPath, HoodieTableMetaClient metaClient, List<String> incrementalTables) {
-    if (!incrementalTables.contains(getIncrementalTable(metaClient))) {
+    if (!incrementalTables.contains(getIncrementalTableName(metaClient))) {
       snapshotPaths.add(inputPath);
     } else {
       // Group incremental Paths belonging to same table.
@@ -149,10 +159,32 @@ public class InputPathHandler {
     return nonHoodieInputPaths;
   }
 
-  private String getIncrementalTable(HoodieTableMetaClient metaClient) {
-    String databaseName = metaClient.getTableConfig().getDatabaseName();
+  /**
+   * Returns the name the incremental query configs of the given table are keyed on: the table name,
+   * qualified with its database when {@code hoodie.incremental.use.database} is set and the database is known.
+   */
+  public String getIncrementalTableName(HoodieTableMetaClient metaClient) {
     String tableName = metaClient.getTableConfig().getTableName();
-    return isIncrementalUseDatabase && !StringUtils.isNullOrEmpty(databaseName)
-            ? databaseName + "." + tableName : tableName;
+    if (!isIncrementalUseDatabase) {
+      return tableName;
+    }
+    String databaseName = getHiveTableDatabase(tableName).orElseGet(() -> metaClient.getTableConfig().getDatabaseName());
+    return StringUtils.isNullOrEmpty(databaseName) ? tableName : databaseName + "." + tableName;
+  }
+
+  /**
+   * Returns the database of the Hive table being read, from the qualified name Hive copies into the conf
+   * with the other table properties. The name is used only when it names this Hudi table (or its
+   * read-optimized or real-time view), since the conf may carry the properties of another table.
+   */
+  private Option<String> getHiveTableDatabase(String tableName) {
+    String qualifiedName = jobConf.get(hive_metastoreConstants.META_TABLE_NAME);
+    int separator = StringUtils.isNullOrEmpty(qualifiedName) ? -1 : qualifiedName.indexOf('.');
+    if (separator <= 0) {
+      return Option.empty();
+    }
+    String hiveTableName = qualifiedName.substring(separator + 1);
+    boolean namesThisTable = Stream.of("", "_ro", "_rt").anyMatch(suffix -> hiveTableName.equalsIgnoreCase(tableName + suffix));
+    return namesThisTable ? Option.of(qualifiedName.substring(0, separator)) : Option.empty();
   }
 }

@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -202,6 +203,64 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     assertEquals("test-table2", config.getTableName());
     assertTrue(config.getOrderingFields().isEmpty());
     assertFalse(config.getPartitionFields().isPresent());
+  }
+
+  @Test
+  void testDatabaseIsPersistedOnlyWhenReinitializingATableThatHasIt() throws IOException {
+    HoodieTableMetaClient newTable = HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE)
+        .setTableName("tbl")
+        .initTable(HoodieTestUtils.getDefaultStorageConf(), basePath + "/new_table");
+    Properties persisted = loadPropertiesFile(newTable.getMetaPath());
+    assertFalse(persisted.containsKey(HoodieTableConfig.DATABASE_NAME.key()));
+    assertEquals(String.valueOf(HoodieTableConfig.generateChecksum(tableNameOnly("tbl"))), persisted.getProperty(TABLE_CHECKSUM.key()));
+
+    // Re-initializing from the props of a table that carries the database keeps it.
+    Properties existingProps = tableNameOnly("tbl");
+    existingProps.setProperty(HoodieTableConfig.DATABASE_NAME.key(), "db1");
+    HoodieTableMetaClient reinitialized = HoodieTableMetaClient.newTableBuilder()
+        .fromProperties(existingProps)
+        .setTableType(HoodieTableType.COPY_ON_WRITE)
+        .initTable(HoodieTestUtils.getDefaultStorageConf(), basePath + "/reinitialized_table");
+    persisted = loadPropertiesFile(reinitialized.getMetaPath());
+    assertEquals("db1", persisted.getProperty(HoodieTableConfig.DATABASE_NAME.key()));
+    assertTrue(HoodieTableConfig.validateChecksum(persisted));
+  }
+
+  @Test
+  void testChecksumValidatesOnceThePersistedDatabaseIsRemoved() throws IOException {
+    Properties legacyProps = new Properties();
+    legacyProps.setProperty(HoodieTableConfig.DATABASE_NAME.key(), "db1");
+    HoodieTableConfig.update(storage, metaPath, legacyProps);
+    Properties withDatabase = loadPropertiesFile(metaPath);
+    assertEquals("db1", withDatabase.getProperty(HoodieTableConfig.DATABASE_NAME.key()));
+    assertTrue(HoodieTableConfig.validateChecksum(withDatabase));
+
+    // The checksum covers the database, so removing the key alone leaves an invalid file.
+    Properties keyStripped = new Properties();
+    keyStripped.putAll(withDatabase);
+    keyStripped.remove(HoodieTableConfig.DATABASE_NAME.key());
+    assertFalse(HoodieTableConfig.validateChecksum(keyStripped));
+
+    HoodieTableConfig.delete(storage, metaPath, Collections.singleton(HoodieTableConfig.DATABASE_NAME.key()));
+    Properties withoutDatabase = loadPropertiesFile(metaPath);
+    assertFalse(withoutDatabase.containsKey(HoodieTableConfig.DATABASE_NAME.key()));
+    assertEquals(String.valueOf(HoodieTableConfig.generateChecksum(tableNameOnly("test-table"))), withoutDatabase.getProperty(TABLE_CHECKSUM.key()));
+    assertNull(new HoodieTableConfig(storage, metaPath).getProps().getProperty(HoodieTableConfig.DATABASE_NAME.key()));
+  }
+
+  private Properties loadPropertiesFile(StoragePath tableMetaPath) throws IOException {
+    Properties props = new Properties();
+    try (InputStream in = storage.open(new StoragePath(tableMetaPath, HoodieTableConfig.HOODIE_PROPERTIES_FILE))) {
+      props.load(in);
+    }
+    return props;
+  }
+
+  private static Properties tableNameOnly(String tableName) {
+    Properties props = new Properties();
+    props.setProperty(HoodieTableConfig.NAME.key(), tableName);
+    return props;
   }
 
   @Test

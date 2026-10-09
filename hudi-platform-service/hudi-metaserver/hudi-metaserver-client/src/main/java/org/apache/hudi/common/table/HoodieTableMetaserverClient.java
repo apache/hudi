@@ -64,7 +64,9 @@ public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
                                      HoodieTimeGeneratorConfig timeGeneratorConfig, FileSystemRetryConfig fileSystemRetryConfig,
                                      Option<String> databaseName, Option<String> tableName, HoodieMetaserverConfig config) {
     super(storage, basePath, false, consistencyGuardConfig, Option.of(TimelineLayoutVersion.CURR_LAYOUT_VERSION), timeGeneratorConfig, fileSystemRetryConfig);
-    this.databaseName = databaseName.isPresent() ? databaseName.get() : tableConfig.getDatabaseName();
+    checkArgument(databaseName.isPresent() && nonEmpty(databaseName.get()),
+        HoodieMetaserverConfig.DATABASE_NAME.key() + " must be set in the metaserver config for the table at " + basePath);
+    this.databaseName = databaseName.get();
     this.tableName = tableName.isPresent() ? tableName.get() : tableConfig.getTableName();
     this.metaserverConfig = config;
     this.metaserverClient = HoodieMetaserverClientProxy.getProxy(config);
@@ -75,7 +77,6 @@ public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
   }
 
   private Table initOrGetTable(HoodieMetaserverConfig config) {
-    checkArgument(nonEmpty(databaseName), "database name is required.");
     checkArgument(nonEmpty(tableName), "table name is required.");
     Table table;
     try {

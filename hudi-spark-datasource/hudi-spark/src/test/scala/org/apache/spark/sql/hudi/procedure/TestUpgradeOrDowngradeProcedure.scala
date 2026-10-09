@@ -31,6 +31,7 @@ import org.apache.hudi.table.upgrade.TestUpgradeDowngrade.getFixtureName
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.SaveMode
+import org.apache.spark.sql.hudi.command.procedures.UpgradeOrDowngradeProcedure
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.NAME_FORMAT_0_X
 import org.junit.jupiter.api.Assertions.assertTrue
 
@@ -190,6 +191,28 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
         assertResult(storedKeys.toSeq)(afterUpsert.select("_hoodie_record_key").collect().map(_.getString(0)).sorted.toSeq)
         assertResult(FIXTURE_IDS.size)(afterUpsert.filter(s"ts = $ts").count())
       }
+    }
+  }
+
+  test("Test upgrade_table records the database only when the table name is qualified") {
+    withTempDir { tmp =>
+      val tableName = generateTableName.split("\\.").last
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  orderingFields = 'ts'
+           | )
+       """.stripMargin)
+      val procedure = new UpgradeOrDowngradeProcedure()
+      assertResult(null)(procedure.getWriteConfigWithTrue(Some(tableName)).getString(HoodieTableConfig.DATABASE_NAME))
+      assertResult("default")(procedure.getWriteConfigWithTrue(Some(s"default.$tableName")).getString(HoodieTableConfig.DATABASE_NAME))
     }
   }
 

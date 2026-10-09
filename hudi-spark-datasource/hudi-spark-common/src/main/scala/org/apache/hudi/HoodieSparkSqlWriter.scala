@@ -75,6 +75,7 @@ import org.apache.spark.sql.internal.StaticSQLConf
 import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
 
+import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.function.BiConsumer
 
@@ -238,7 +239,6 @@ class HoodieSparkSqlWriterInternal {
     asyncClusteringTriggerFnDefined = streamingWritesParamsOpt.map(_.asyncClusteringTriggerFn.isDefined).orElse(Some(false)).get
     // re-use table configs and inject defaults.
     var (parameters, hoodieConfig) = mergeParamsAndGetHoodieConfig(optParams, tableConfig, mode, streamingWritesParamsOpt.isDefined)
-    val databaseName = hoodieConfig.getStringOrDefault(HoodieTableConfig.DATABASE_NAME, "")
     val tblName = hoodieConfig.getStringOrThrow(HoodieWriteConfig.TBL_NAME,
       s"'${HoodieWriteConfig.TBL_NAME.key}' must be set.").trim
 
@@ -269,6 +269,15 @@ class HoodieSparkSqlWriterInternal {
       log.info(s"hoodie table at $basePath already exists. Ignoring & not performing actual writes.")
       (false, common.util.Option.empty(), common.util.Option.empty(), common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
     } else {
+      // An Overwrite that re-initializes the table in place keeps the database the table already persisted.
+      val existingTableDatabase = new Properties()
+      if (tableExists && mode == SaveMode.Overwrite && operation != WriteOperationType.INSERT_OVERWRITE_TABLE) {
+        Option(HoodieTableMetaClient.builder()
+          .setConf(HadoopFSUtils.getStorageConfWithCopy(sparkContext.hadoopConfiguration))
+          .setBasePath(path)
+          .build().getTableConfig.getProps.getProperty(HoodieTableConfig.DATABASE_NAME.key))
+          .foreach(database => existingTableDatabase.setProperty(HoodieTableConfig.DATABASE_NAME.key, database))
+      }
       // Handle various save modes
       handleSaveModes(sparkSession, mode, basePath, tableConfig, tblName, operation, fs)
       val partitionColumns = SparkKeyGenUtils.getPartitionColumns(keyGenerator, toProperties(parameters), false)
@@ -306,11 +315,11 @@ class HoodieSparkSqlWriterInternal {
           hoodieConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), null))
         val tableFormat = hoodieConfig.getStringOrDefault(HoodieTableConfig.TABLE_FORMAT)
         HoodieTableMetaClient.newTableBuilder()
+          .fromProperties(existingTableDatabase)
           .setTableType(tableType)
           .setTableVersion(tableVersion)
           .setTableFormat(tableFormat)
           .setTableStorageLayout(hoodieConfig.getStringOrDefault(HoodieTableConfig.TABLE_STORAGE_LAYOUT))
-          .setDatabaseName(databaseName)
           .setTableName(tblName)
           .setBaseFileFormat(baseFileFormat)
           .setArchiveLogFolder(archiveLogFolder)

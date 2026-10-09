@@ -74,7 +74,6 @@ public class TestHoodieTableServiceManagerClient {
   private HoodieTableMetaClient initMetaClient() throws IOException {
     Properties props = new Properties();
     props.setProperty(HoodieTableConfig.NAME.key(), TABLE_NAME);
-    props.setProperty(HoodieTableConfig.DATABASE_NAME.key(), DB_NAME);
     return HoodieTestUtils.init(
         HoodieTestUtils.getDefaultStorageConf(),
         tempDir.resolve("table").toString(),
@@ -83,7 +82,14 @@ public class TestHoodieTableServiceManagerClient {
   }
 
   private HoodieTableServiceManagerConfig configFor(String uri) {
+    return configFor(uri, DB_NAME);
+  }
+
+  private HoodieTableServiceManagerConfig configFor(String uri, String databaseName) {
     Properties props = new Properties();
+    if (databaseName != null) {
+      props.setProperty(HoodieTableServiceManagerConfig.TABLE_SERVICE_MANAGER_DATABASE_NAME.key(), databaseName);
+    }
     // Keep retry cheap so the error-path test stays fast.
     props.setProperty(HoodieTableServiceManagerConfig.TABLE_SERVICE_MANAGER_RETRIES.key(), "2");
     props.setProperty(HoodieTableServiceManagerConfig.TABLE_SERVICE_MANAGER_RETRY_DELAY_SEC.key(), "1");
@@ -156,6 +162,28 @@ public class TestHoodieTableServiceManagerClient {
     assertTrue(query.containsKey(HoodieTableServiceManagerClient.INSTANT_PARAM));
     assertTrue(query.containsKey(HoodieTableServiceManagerClient.EXECUTION_ENGINE));
     assertTrue(query.containsKey(HoodieTableServiceManagerClient.PARALLELISM));
+  }
+
+  @Test
+  void testDatabaseFallsBackToTheOnePersistedByOlderWriters() throws IOException {
+    Map<String, Object> captured = new HashMap<>();
+    String uri = startRecordingServer(captured);
+    HoodieTableMetaClient metaClient = initMetaClient();
+    Properties legacyProps = new Properties();
+    legacyProps.setProperty(HoodieTableConfig.DATABASE_NAME.key(), "legacy_db");
+    HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), legacyProps);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+
+    new HoodieTableServiceManagerClient(metaClient, configFor(uri, null)).executeCompaction();
+    assertEquals("legacy_db", getQuery(captured).get(HoodieTableServiceManagerClient.DATABASE_NAME_PARAM));
+
+    new HoodieTableServiceManagerClient(metaClient, configFor(uri)).executeCompaction();
+    assertEquals(DB_NAME, getQuery(captured).get(HoodieTableServiceManagerClient.DATABASE_NAME_PARAM));
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Map<String, String> getQuery(Map<String, Object> captured) {
+    return (Map<String, String>) captured.get("query");
   }
 
   @Test
