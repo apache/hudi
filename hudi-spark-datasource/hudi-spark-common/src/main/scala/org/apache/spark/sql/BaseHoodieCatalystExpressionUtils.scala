@@ -18,7 +18,7 @@
 package org.apache.spark.sql
 
 import org.apache.spark.sql.HoodieSparkTypeUtils.isCastPreservingOrdering
-import org.apache.spark.sql.catalyst.expressions.{Add, Attribute, AttributeReference, AttributeSet, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expm1, Expression, FromUnixTime, FromUTCTimestamp, Log, Log10, Log1p, Log2, Lower, Multiply, PredicateHelper, ShiftLeft, ShiftRight, ToUnixTimestamp, ToUTCTimestamp, Upper}
+import org.apache.spark.sql.catalyst.expressions.{Add, Attribute, AttributeReference, AttributeSet, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expm1, Expression, FromUnixTime, FromUTCTimestamp, Log, Log10, Log1p, Log2, Multiply, PredicateHelper, ShiftLeft, ShiftRight, ToUnixTimestamp, ToUTCTimestamp}
 import org.apache.spark.sql.execution.datasources.DataSourceStrategy
 import org.apache.spark.sql.types.DataType
 
@@ -72,8 +72,9 @@ abstract class BaseHoodieCatalystExpressionUtils extends HoodieCatalystExpressio
         case ToUTCTimestamp(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
 
         // String Expressions
-        case Lower(OrderPreservingTransformation(attrRef)) => Some(attrRef)
-        case Upper(OrderPreservingTransformation(attrRef)) => Some(attrRef)
+        // NOTE: Lower/Upper are not matched: case folding does not preserve the binary ordering
+        //       of strings (for ex, "Zebra" < "apple", but lower("Zebra") = "zebra" > "apple")
+
         // Left API change: Improve RuntimeReplaceable
         // https://issues.apache.org/jira/browse/SPARK-38240
         case org.apache.spark.sql.catalyst.expressions.Left(OrderPreservingTransformation(attrRef), _) => Some(attrRef)

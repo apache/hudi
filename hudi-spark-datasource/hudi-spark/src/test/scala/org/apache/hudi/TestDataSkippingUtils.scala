@@ -29,7 +29,7 @@ import org.apache.spark.sql.catalyst.expressions.{Expression, InSet, Not}
 import org.apache.spark.sql.catalyst.optimizer.OptimizeIn
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
-import org.apache.spark.sql.functions.{col, lower}
+import org.apache.spark.sql.functions.{col, lower, upper}
 import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.internal.SQLConf.SESSION_LOCAL_TIMEZONE
 import org.apache.spark.sql.types._
@@ -190,14 +190,34 @@ object TestDataSkippingUtils {
         Seq("file_1", "file_2", "file_3")),
       arguments(
         // Composite expression
+        // NOTE: lower() does not preserve the binary ordering of strings, so this filter isn't translated
+        //       and no file is pruned. For ex, file_5 may hold "B" (sorting between "ABC" and "abc"), whose
+        //       lower-case form doesn't start w/ "abc"
         Not(sparkAdapter.getExpressionFromColumn(lower(col("B")).startsWith("abc"))),
         Seq(
-          IndexRow("file_1", valueCount = 1, B_minValue = "ABA", B_maxValue = "ADF", B_nullCount = 1), // may contain strings starting w/ "ABC" (after upper)
+          IndexRow("file_1", valueCount = 1, B_minValue = "ABA", B_maxValue = "ADF", B_nullCount = 1), // may contain strings starting w/ "ABC"
           IndexRow("file_2", valueCount = 1, B_minValue = "ADF", B_maxValue = "AZY", B_nullCount = 0),
           IndexRow("file_3", valueCount = 1, B_minValue = "AAA", B_maxValue = "ABA", B_nullCount = 0),
-          IndexRow("file_4", valueCount = 1, B_minValue = "ABC123", B_maxValue = "ABC345", B_nullCount = 0) // all strings start w/ "ABC" (after upper)
+          IndexRow("file_4", valueCount = 1, B_minValue = "ABC123", B_maxValue = "ABC345", B_nullCount = 0), // all strings start w/ "ABC"
+          IndexRow("file_5", valueCount = 3, B_minValue = "ABC", B_maxValue = "abc", B_nullCount = 0)
         ),
-        Seq("file_1", "file_2", "file_3"))
+        Seq("file_1", "file_2", "file_3", "file_4", "file_5")),
+      arguments(
+        // NOTE: file_1 holds "Zebra", whose lower-case form is the queried "zebra", even though
+        //       lower(B_maxValue) = "apple" sorts before it
+        sparkAdapter.getExpressionFromColumn(lower(col("B")) === "zebra"),
+        Seq(
+          IndexRow("file_1", valueCount = 2, B_minValue = "Zebra", B_maxValue = "apple", B_nullCount = 0)
+        ),
+        Seq("file_1")),
+      arguments(
+        // NOTE: file_1 holds "apple", whose upper-case form is the queried "APPLE", even though
+        //       upper(B_minValue) = "ZEBRA" sorts after it
+        sparkAdapter.getExpressionFromColumn(upper(col("B")) === "APPLE"),
+        Seq(
+          IndexRow("file_1", valueCount = 2, B_minValue = "Zebra", B_maxValue = "apple", B_nullCount = 0)
+        ),
+        Seq("file_1"))
     )
   }
 
