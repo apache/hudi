@@ -20,6 +20,7 @@ package org.apache.hudi.connect.transaction;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.connect.ControlMessage;
 import org.apache.hudi.connect.kafka.KafkaControlAgent;
 import org.apache.hudi.connect.utils.KafkaConnectUtils;
@@ -42,6 +43,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -63,6 +65,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
   private static final Long START_COMMIT_INIT_DELAY_MS = 100L;
   private static final Long RESTART_COMMIT_DELAY_MS = 500L;
   private static final int COORDINATOR_EVENT_LOOP_TIMEOUT_MS = 1000;
+  private static final int COORDINATOR_EVENT_LOOP_SHUTDOWN_TIMEOUT_MS = 5000;
 
   private final KafkaConnectConfigs configs;
   @Getter
@@ -132,24 +135,25 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
 
   @Override
   public void stop() {
-    kafkaControlClient.deregisterTransactionCoordinator(this);
-    scheduler.shutdownNow();
-    hasStarted.set(false);
-    if (executorService != null) {
-      boolean terminated = false;
-      try {
-        log.info("Shutting down executor service.");
-        executorService.shutdown();
-        log.info("Awaiting termination.");
-        terminated = executorService.awaitTermination(100, TimeUnit.MILLISECONDS);
-      } catch (InterruptedException e) {
-        // ignored
-      }
+    if (!hasStarted.compareAndSet(true, false)) {
+      return;
+    }
 
-      if (!terminated) {
-        log.warn(
-            "Unclean Kafka Control Manager executor service shutdown ");
-        executorService.shutdownNow();
+    try {
+      kafkaControlClient.deregisterTransactionCoordinator(this);
+    } finally {
+      scheduler.shutdownNow();
+      events.clear();
+      executorService.shutdownNow();
+      try {
+        if (!executorService.awaitTermination(COORDINATOR_EVENT_LOOP_SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+          log.warn("Transaction coordinator event loop did not terminate within {} ms for topic {} partition {}",
+              COORDINATOR_EVENT_LOOP_SHUTDOWN_TIMEOUT_MS, partition.topic(), partition.partition());
+        }
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        log.warn("Interrupted while waiting for transaction coordinator event loop to terminate for topic {} partition {}",
+            partition.topic(), partition.partition());
       }
     }
   }
@@ -173,16 +177,24 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
 
   @Override
   public void run() {
-    while (true) {
+    while (hasStarted.get()) {
       try {
         CoordinatorEvent event = events.poll(COORDINATOR_EVENT_LOOP_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-        if (event != null) {
+        if (event != null && hasStarted.get()) {
           processCoordinatorEvent(event);
         }
       } catch (InterruptedException exception) {
-        log.warn("Error received while polling the event loop in Partition Coordinator", exception);
+        Thread.currentThread().interrupt();
+        log.debug("Transaction coordinator event loop interrupted for topic {} partition {}",
+            partition.topic(), partition.partition());
+        break;
       }
     }
+  }
+
+  @VisibleForTesting
+  boolean isEventLoopTerminated() {
+    return executorService.isTerminated();
   }
 
   private void submitEvent(CoordinatorEvent event) {
@@ -190,9 +202,22 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
   }
 
   private void submitEvent(CoordinatorEvent event, long delay, TimeUnit unit) {
-    scheduler.schedule(() -> {
-      events.add(event);
-    }, delay, unit);
+    if (!hasStarted.get()) {
+      return;
+    }
+    try {
+      scheduler.schedule(() -> {
+        if (hasStarted.get()) {
+          events.add(event);
+        }
+      }, delay, unit);
+    } catch (RejectedExecutionException e) {
+      if (hasStarted.get()) {
+        throw e;
+      }
+      log.debug("Ignoring coordinator event submitted during shutdown for topic {} partition {}",
+          partition.topic(), partition.partition());
+    }
   }
 
   private void processCoordinatorEvent(CoordinatorEvent event) {
