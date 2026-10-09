@@ -21,33 +21,55 @@ package org.apache.hudi.sink.utils;
 import org.apache.hudi.common.util.RateLimiter;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
-import java.time.Duration;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 class TestFlinkRateLimiterFactory {
 
   @Test
-  void testRateLimitLowerThanParallelismDoesNotCreateZeroPermitLimiter() {
-    RateLimiter limiter = FlinkRateLimiterFactory.create(1, 4);
+  void testRateLimitLowerThanParallelismUsesLongerReleasePeriod() {
+    ScheduledExecutorService scheduler = mock(ScheduledExecutorService.class);
+    long expectedPeriodNanos = TimeUnit.SECONDS.toNanos(4);
+
+    RateLimiter limiter = FlinkRateLimiterFactory.create(1, 4, scheduler);
+    ArgumentCaptor<Runnable> refillTask = ArgumentCaptor.forClass(Runnable.class);
     try {
-      assertTimeoutPreemptively(Duration.ofSeconds(1), () -> assertTrue(limiter.acquire(1)));
+      verify(scheduler).scheduleAtFixedRate(
+          refillTask.capture(), eq(expectedPeriodNanos), eq(expectedPeriodNanos), eq(TimeUnit.NANOSECONDS));
+      assertTrue(limiter.acquire(1));
+      refillTask.getValue().run();
+      assertTrue(limiter.acquire(1));
     } finally {
       limiter.stop();
     }
+    verify(scheduler).shutdownNow();
   }
 
   @Test
   void testRateLimitAtLeastParallelismUsesPermitsPerSecond() {
-    RateLimiter limiter = FlinkRateLimiterFactory.create(8, 4);
-    try {
-      assertTrue(limiter.acquire(2));
-    } finally {
-      limiter.stop();
-    }
+    FlinkRateLimiterFactory.RateLimitConfig config = FlinkRateLimiterFactory.resolveRateLimit(8, 4);
+
+    assertEquals(2, config.getPermits());
+    assertEquals(1, config.getReleasePeriod());
+    assertEquals(TimeUnit.SECONDS, config.getTimeUnit());
+  }
+
+  @Test
+  void testFractionalRateLimitRoundsReleasePeriodUp() {
+    FlinkRateLimiterFactory.RateLimitConfig config = FlinkRateLimiterFactory.resolveRateLimit(3, 4);
+
+    assertEquals(1, config.getPermits());
+    assertEquals(1_333_333_334L, config.getReleasePeriod());
+    assertEquals(TimeUnit.NANOSECONDS, config.getTimeUnit());
   }
 
   @Test

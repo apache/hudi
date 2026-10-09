@@ -19,19 +19,22 @@
 package org.apache.hudi.common.util;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
-import java.time.Duration;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 /**
  * Tests {@link RateLimiter}.
@@ -73,15 +76,20 @@ public class TestRatelimiter {
 
   @Test
   public void testCustomReleasePeriod() {
-    RateLimiter limiter = RateLimiter.create(1, 100, TimeUnit.MILLISECONDS);
+    ScheduledExecutorService scheduler = mock(ScheduledExecutorService.class);
+
+    RateLimiter limiter = RateLimiter.create(1, 100, TimeUnit.MILLISECONDS, scheduler);
+    ArgumentCaptor<Runnable> refillTask = ArgumentCaptor.forClass(Runnable.class);
     try {
+      verify(scheduler).scheduleAtFixedRate(
+          refillTask.capture(), eq(100L), eq(100L), eq(TimeUnit.MILLISECONDS));
       assertTrue(limiter.acquire(1));
-      long start = System.nanoTime();
-      assertTimeoutPreemptively(Duration.ofSeconds(1), () -> assertTrue(limiter.acquire(1)));
-      assertTrue(System.nanoTime() - start >= TimeUnit.MILLISECONDS.toNanos(50));
+      refillTask.getValue().run();
+      assertTrue(limiter.acquire(1));
     } finally {
       limiter.stop();
     }
+    verify(scheduler).shutdownNow();
   }
 
   @Test

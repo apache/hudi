@@ -50,12 +50,26 @@ public class RateLimiter {
   }
 
   public static RateLimiter create(int permits, long releasePermitsPeriod, TimeUnit timePeriod) {
-    ValidationUtils.checkArgument(permits > 0, "Permits must be greater than zero");
-    ValidationUtils.checkArgument(releasePermitsPeriod > 0, "Release permits period must be greater than zero");
-    ValidationUtils.checkArgument(timePeriod != null, "Time period must not be null");
+    validateConfiguration(permits, releasePermitsPeriod, timePeriod);
     final RateLimiter limiter = new RateLimiter(permits, releasePermitsPeriod, timePeriod);
     limiter.releasePermitsPeriodically();
     return limiter;
+  }
+
+  @VisibleForTesting
+  public static RateLimiter create(int permits, long releasePermitsPeriod, TimeUnit timePeriod,
+                                   ScheduledExecutorService scheduler) {
+    validateConfiguration(permits, releasePermitsPeriod, timePeriod);
+    ValidationUtils.checkArgument(scheduler != null, "Scheduler must not be null");
+    final RateLimiter limiter = new RateLimiter(permits, releasePermitsPeriod, timePeriod);
+    limiter.releasePermitsPeriodically(scheduler);
+    return limiter;
+  }
+
+  private static void validateConfiguration(int permits, long releasePermitsPeriod, TimeUnit timePeriod) {
+    ValidationUtils.checkArgument(permits > 0, "Permits must be greater than zero");
+    ValidationUtils.checkArgument(releasePermitsPeriod > 0, "Release permits period must be greater than zero");
+    ValidationUtils.checkArgument(timePeriod != null, "Time period must not be null");
   }
 
   private RateLimiter(int permits, long releasePermitsPeriod, TimeUnit timePeriod) {
@@ -113,12 +127,26 @@ public class RateLimiter {
     if (scheduler != null) {
       return;
     }
-    scheduler = Executors.newScheduledThreadPool(SCHEDULER_CORE_THREAD_POOL_SIZE,
-        new CustomizedThreadFactory("rate-limiter", true));
-    scheduler.scheduleAtFixedRate(() -> {
-      log.debug("Release permits: maxPermits: {}, available: {}", maxPermits, semaphore.availablePermits());
-      semaphore.release(maxPermits - semaphore.availablePermits());
-    }, releasePermitsPeriod, releasePermitsPeriod, timePeriod);
+    releasePermitsPeriodically(Executors.newScheduledThreadPool(SCHEDULER_CORE_THREAD_POOL_SIZE,
+        new CustomizedThreadFactory("rate-limiter", true)));
+  }
+
+  private synchronized void releasePermitsPeriodically(ScheduledExecutorService scheduler) {
+    ValidationUtils.checkState(!stopped.get(), "Cannot start a stopped rate limiter");
+    if (this.scheduler != null) {
+      return;
+    }
+    this.scheduler = scheduler;
+    try {
+      scheduler.scheduleAtFixedRate(() -> {
+        log.debug("Release permits: maxPermits: {}, available: {}", maxPermits, semaphore.availablePermits());
+        semaphore.release(maxPermits - semaphore.availablePermits());
+      }, releasePermitsPeriod, releasePermitsPeriod, timePeriod);
+    } catch (RuntimeException e) {
+      this.scheduler = null;
+      scheduler.shutdownNow();
+      throw e;
+    }
 
   }
 

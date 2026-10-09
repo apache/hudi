@@ -20,7 +20,9 @@ package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.common.util.RateLimiter;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -32,6 +34,19 @@ public final class FlinkRateLimiterFactory {
   }
 
   public static RateLimiter create(long totalRateLimit, int parallelism) {
+    RateLimitConfig rateLimitConfig = resolveRateLimit(totalRateLimit, parallelism);
+    return RateLimiter.create(
+        rateLimitConfig.getPermits(), rateLimitConfig.getReleasePeriod(), rateLimitConfig.getTimeUnit());
+  }
+
+  @VisibleForTesting
+  static RateLimiter create(long totalRateLimit, int parallelism, ScheduledExecutorService scheduler) {
+    RateLimitConfig rateLimitConfig = resolveRateLimit(totalRateLimit, parallelism);
+    return RateLimiter.create(
+        rateLimitConfig.getPermits(), rateLimitConfig.getReleasePeriod(), rateLimitConfig.getTimeUnit(), scheduler);
+  }
+
+  static RateLimitConfig resolveRateLimit(long totalRateLimit, int parallelism) {
     ValidationUtils.checkArgument(totalRateLimit > 0, "Total rate limit must be greater than zero");
     ValidationUtils.checkArgument(parallelism > 0, "Parallelism must be greater than zero");
 
@@ -39,15 +54,39 @@ public final class FlinkRateLimiterFactory {
       long rateLimitPerSubtask = totalRateLimit / parallelism;
       ValidationUtils.checkArgument(rateLimitPerSubtask <= Integer.MAX_VALUE,
           "Rate limit per subtask exceeds the supported maximum");
-      return RateLimiter.create((int) rateLimitPerSubtask, TimeUnit.SECONDS);
+      return new RateLimitConfig((int) rateLimitPerSubtask, 1, TimeUnit.SECONDS);
     }
 
     long periodNanos = divideRoundingUp(
         Math.multiplyExact(TimeUnit.SECONDS.toNanos(1), parallelism), totalRateLimit);
-    return RateLimiter.create(1, periodNanos, TimeUnit.NANOSECONDS);
+    return new RateLimitConfig(1, periodNanos, TimeUnit.NANOSECONDS);
   }
 
   private static long divideRoundingUp(long dividend, long divisor) {
     return 1 + (dividend - 1) / divisor;
+  }
+
+  static final class RateLimitConfig {
+    private final int permits;
+    private final long releasePeriod;
+    private final TimeUnit timeUnit;
+
+    private RateLimitConfig(int permits, long releasePeriod, TimeUnit timeUnit) {
+      this.permits = permits;
+      this.releasePeriod = releasePeriod;
+      this.timeUnit = timeUnit;
+    }
+
+    int getPermits() {
+      return permits;
+    }
+
+    long getReleasePeriod() {
+      return releasePeriod;
+    }
+
+    TimeUnit getTimeUnit() {
+      return timeUnit;
+    }
   }
 }
