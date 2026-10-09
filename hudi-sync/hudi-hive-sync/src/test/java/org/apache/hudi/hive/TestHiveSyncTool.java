@@ -64,7 +64,14 @@ import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.Driver;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
+import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.session.SessionState;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.Logger;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
+import org.apache.logging.log4j.core.config.Property;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -88,6 +95,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.TIMELINEFOLDER_NAME;
@@ -414,19 +423,106 @@ public class TestHiveSyncTool {
   void testHiveQLSyncKeepsItsMetastoreClientOpen() throws Exception {
     hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), HiveSyncMode.HIVEQL.name());
     HiveTestUtil.createCOWTable("100", 5, true);
-    HiveConf hiveConf = new HiveConf(getHiveConf());
-    // a client's conf, as opposed to the test server's, which has had authorization applied to it
-    hiveConf.unset("hive.internal.ss.authz.settings.applied.marker");
-    hiveConf.setVar(HiveConf.ConfVars.METASTORE_FILTER_HOOK, HiveConf.ConfVars.METASTORE_FILTER_HOOK.getDefaultValue());
-    // without the retry that would reconnect it, a closed metastore client fails the call
-    hiveConf.setIntVar(HiveConf.ConfVars.METASTORETHRIFTFAILURERETRIES, 0);
 
-    try (HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, hiveConf)) {
+    try (HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, getHiveClientConf())) {
       tool.syncHoodieTable();
     }
 
     reInitHiveSyncClient();
     assertEquals(5, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size());
+  }
+
+  /**
+   * A sync that finds the table synced to its latest commit runs no HiveQL statement, so its
+   * session never sets up authorization, and tearing the session down reuses the sync's metastore
+   * client rather than opening a connection of its own.
+   */
+  @Test
+  void testHiveQLSyncThatRunsNoStatementOpensOneMetastoreConnection() throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), HiveSyncMode.HIVEQL.name());
+    HiveTestUtil.createCOWTable("100", 5, true);
+    HiveConf hiveConf = getHiveClientConf();
+    try (HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, hiveConf)) {
+      tool.syncHoodieTable();
+    }
+
+    try (MetastoreConnectionCounter connections = new MetastoreConnectionCounter()) {
+      try (HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, hiveConf)) {
+        tool.syncHoodieTable();
+      }
+      assertEquals(1, connections.opened(), "Only the sync's own metastore client connects");
+      assertEquals(1, connections.closed());
+    }
+  }
+
+  @Test
+  void testSyncClientThatFailsToBuildClosesItsMetastoreClient() throws Exception {
+    HiveTestUtil.createCOWTable("100", 5, true);
+    // the sync mode is read after the metastore client is created
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), "not_a_sync_mode");
+    // otherwise creating the client closes what the test setup left in Hive's cache for the thread
+    Hive.closeCurrent();
+
+    try (MetastoreConnectionCounter connections = new MetastoreConnectionCounter()) {
+      assertThrows(HoodieHiveSyncException.class, () -> new HiveSyncTool(hiveSyncProps, getHiveClientConf()));
+      assertEquals(1, connections.opened());
+      assertEquals(1, connections.closed(), "The metastore client of a sync client that failed to build is closed");
+    }
+  }
+
+  /**
+   * A client's conf, as opposed to the test server's, which has had authorization applied to it.
+   */
+  private static HiveConf getHiveClientConf() {
+    HiveConf hiveConf = new HiveConf(getHiveConf());
+    hiveConf.unset("hive.internal.ss.authz.settings.applied.marker");
+    hiveConf.setVar(HiveConf.ConfVars.METASTORE_FILTER_HOOK, HiveConf.ConfVars.METASTORE_FILTER_HOOK.getDefaultValue());
+    // without the retry that would reconnect it, a closed metastore client fails the call
+    hiveConf.setIntVar(HiveConf.ConfVars.METASTORETHRIFTFAILURERETRIES, 0);
+    return hiveConf;
+  }
+
+  /**
+   * Counts the connections to the metastore that clients open and close, from what
+   * HiveMetaStoreClient logs for each.
+   */
+  private static final class MetastoreConnectionCounter extends AbstractAppender implements AutoCloseable {
+    private final Logger logger = (Logger) LogManager.getLogger("hive.metastore");
+    private final Level previousLevel = logger.getLevel();
+    private final AtomicInteger opened = new AtomicInteger();
+    private final AtomicInteger closed = new AtomicInteger();
+
+    MetastoreConnectionCounter() {
+      super(UUID.randomUUID().toString(), null, null, false, Property.EMPTY_ARRAY);
+      start();
+      logger.addAppender(this);
+      logger.setLevel(Level.INFO);
+    }
+
+    @Override
+    public void append(LogEvent event) {
+      String message = event.getMessage().getFormattedMessage();
+      if (message.startsWith("Opened a connection to metastore")) {
+        opened.incrementAndGet();
+      } else if (message.startsWith("Closed a connection to metastore")) {
+        closed.incrementAndGet();
+      }
+    }
+
+    int opened() {
+      return opened.get();
+    }
+
+    int closed() {
+      return closed.get();
+    }
+
+    @Override
+    public void close() {
+      logger.removeAppender(this);
+      logger.setLevel(previousLevel);
+      stop();
+    }
   }
 
   /**

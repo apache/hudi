@@ -65,18 +65,23 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
   // Owned by HoodieHiveSyncClient; close() is delegated through there. See
   // HiveMetaStoreClientPool javadoc for the usage contract (partition-row ops only).
   private final Option<HiveMetaStoreClientPool> metaStoreClientPool;
+  // Run on the calling thread before the session's Driver runs statements: its first statement
+  // sets up the session's authorization, which replaces the Hive instance cached for the thread.
+  private final Runnable beforeSessionStatements;
 
   public HiveQueryDDLExecutor(HiveSyncConfig config, IMetaStoreClient metaStoreClient) {
-    this(config, metaStoreClient, Option.empty(), Option.empty());
+    this(config, metaStoreClient, Option.empty(), Option.empty(), () -> { });
   }
 
   public HiveQueryDDLExecutor(HiveSyncConfig config, IMetaStoreClient metaStoreClient,
                               Option<HiveDriverPool> driverPool,
-                              Option<HiveMetaStoreClientPool> metaStoreClientPool) {
+                              Option<HiveMetaStoreClientPool> metaStoreClientPool,
+                              Runnable beforeSessionStatements) {
     super(config);
     this.metaStoreClient = metaStoreClient;
     this.driverPool = driverPool;
     this.metaStoreClientPool = metaStoreClientPool;
+    this.beforeSessionStatements = beforeSessionStatements;
     // SessionState.start() binds the session it starts to this thread, displacing the caller's.
     // Statements and the teardown bind ours themselves, so the thread is handed back once the
     // Driver is built -- its constructor is what reads SessionState.get().
@@ -183,6 +188,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
    */
   private void updateHiveSQLs(List<String> sqls) {
     HoodieTimer timer = HoodieTimer.start();
+    beforeSessionStatements.run();
     SessionState previousSession = SessionState.get();
     ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
     try {
@@ -373,6 +379,10 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       if (previousSession != sessionState) {
         restoreThread(previousSession, previousLoader);
       }
+      // HiveSyncTool closes after a sync and again when its caller does, and closing the session a
+      // second time would open a metastore connection just to uncache the class loaders again
+      hiveDriver = null;
+      sessionState = null;
     }
   }
 

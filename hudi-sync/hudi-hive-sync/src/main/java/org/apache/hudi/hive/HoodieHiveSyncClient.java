@@ -90,6 +90,9 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   private final Map<String, Table> initialTableByName = new HashMap<>();
   DDLExecutor ddlExecutor;
   private IMetaStoreClient client;
+  // The thread whose Hive cache holds the instance that owns client, until
+  // releaseClientFromHiveCache() takes it out; null when no cache holds it.
+  private volatile Thread clientCachedOnThread;
   // Present only when HIVE_SYNC_BATCHING_ENABLED and sync mode is HIVEQL. Owned by
   // this class; closed in close() before Hive.closeCurrent(). HiveQueryDDLExecutor
   // uses it only for DROP (Hive Thrift, not Hive Driver) — see HiveMetaStoreClientPool
@@ -167,8 +170,42 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
       // such window; both close() methods are idempotent, so overlapping with the
       // executor's cleanup (or buildHiveQueryDDLExecutor's rollback) is harmless.
       closePartitionPoolsQuietly();
+      closeClient();
       throw new HoodieHiveSyncException("Failed to create HiveMetaStoreClient", e);
     }
+  }
+
+  /**
+   * Takes the instance that owns {@link #client} out of Hive's cache for this thread, if it is
+   * there. Hive replaces the cached instance, closing its client, when a Hive session on the thread
+   * brings a different metastore conf, as a HiveQL-mode Driver's session does on its first
+   * statement, by setting the metastore filter hook for authorization. Until then the client stays
+   * cached, so that the session's teardown reuses it rather than opening a connection of its own.
+   */
+  private void releaseClientFromHiveCache() {
+    if (clientCachedOnThread == Thread.currentThread()) {
+      Hive.set(null);
+      clientCachedOnThread = null;
+    }
+  }
+
+  /**
+   * Closes {@link #client}, which only closing it directly releases once it is out of Hive's cache,
+   * including an underlying client that RetryingMetaStoreClient rebuilt after a transient
+   * TException. Hive.closeCurrent() then closes whatever instance is left in the cache.
+   */
+  private void closeClient() {
+    if (client == null) {
+      return;
+    }
+    try {
+      client.close();
+    } catch (Exception e) {
+      log.warn("Failed to close IMetaStoreClient directly; Hive.closeCurrent() will run anyway", e);
+    }
+    Hive.closeCurrent();
+    client = null;
+    clientCachedOnThread = null;
   }
 
   private void closePartitionPoolsQuietly() {
@@ -236,12 +273,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
             config);
       }
       IMetaStoreClient metaStoreClient = IMetaStoreClientUtil.getMSC(config.getHiveConf());
-      // Hive caches the instance that owns this client for the thread, and replaces it, closing
-      // this client, whenever a Hive session on the thread brings a different metastore conf. A
-      // HiveQL-mode Driver's session does, by setting the metastore filter hook for authorization.
-      // Taken out of the cache, the client is left to this class, which closes it in close().
-      // Hive.closeCurrent() would close the client too, hence the set.
-      Hive.set(null);
+      clientCachedOnThread = Thread.currentThread();
       return metaStoreClient;
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to create HiveMetaStoreClient", e);
@@ -284,7 +316,8 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     try {
       this.partitionDriverPool = maybeBuildHiveDriverPool(config);
       this.partitionClientPool = maybeBuildPartitionClientPool(config);
-      return new HiveQueryDDLExecutor(config, this.client, this.partitionDriverPool, this.partitionClientPool);
+      return new HiveQueryDDLExecutor(config, this.client, this.partitionDriverPool, this.partitionClientPool,
+          this::releaseClientFromHiveCache);
     } catch (Exception e) {
       closePartitionPoolsQuietly();
       throw e;
@@ -702,19 +735,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
           }
           partitionClientPool = Option.empty();
         }
-        if (client != null) {
-          // The client is not in Hive's thread cache (see createMetaStoreClient), so only
-          // closing it directly releases it, including an underlying client that
-          // RetryingMetaStoreClient rebuilt after a transient TException. Hive.closeCurrent()
-          // closes whatever instance a Hive session left in the cache.
-          try {
-            client.close();
-          } catch (Exception e) {
-            log.warn("Failed to close IMetaStoreClient directly; Hive.closeCurrent() will run anyway", e);
-          }
-          Hive.closeCurrent();
-          client = null;
-        }
+        closeClient();
       }
     } catch (Exception e) {
       log.error("Could not close connection ", e);
