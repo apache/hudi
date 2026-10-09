@@ -25,9 +25,11 @@ import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPU
 import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieLogFile}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.config.HoodieIndexConfig
 import org.apache.hudi.core.read.BaseHoodieTableFileIndex
 import org.apache.hudi.core.read.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
@@ -655,14 +657,20 @@ object HoodieFileIndex extends Logging {
       properties.setProperty(PARTITIONPATH_FIELD.key, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(tableConfig).orElse(""))
       properties.setProperty(HoodieTableConfig.PARTITION_EXTRACTOR_CLASS.key(), tableConfig.getPartitionExtractorClass.orElse(""))
 
-      // for simple bucket index, we need to set the INDEX_TYPE, BUCKET_INDEX_HASH_FIELD, BUCKET_INDEX_NUM_BUCKETS
-      val database = getDatabaseName(tableConfig, spark.catalog.currentDatabase)
-      val tableName = tableConfig.getTableName
-
-      if (spark.catalog.tableExists(database, tableName)) {
-        val tableIdentifier = TableIdentifier(tableName, Some(database))
-        val table = HoodieCatalogTable(spark, tableIdentifier)
-        table.catalogProperties.foreach(kv => properties.setProperty(kv._1, kv._2))
+      // The catalog entry only completes the simple bucket index settings (hash field and bucket count), which
+      // hoodie.properties does not record, so it is consulted only when the read declares a bucket index.
+      if (isBucketIndexDeclared(properties)) {
+        val database = getDatabaseName(tableConfig, spark.catalog.currentDatabase)
+        val tableName = tableConfig.getTableName
+        try {
+          if (spark.catalog.tableExists(database, tableName)) {
+            val table = HoodieCatalogTable(spark, TableIdentifier(tableName, Some(database)))
+            table.catalogProperties.foreach(kv => properties.setProperty(kv._1, kv._2))
+          }
+        } catch {
+          case NonFatal(e) =>
+            logWarning(s"Skipping catalog properties for table $tableName: lookup of $database.$tableName failed", e)
+        }
       }
     }
 
@@ -720,6 +728,9 @@ object HoodieFileIndex extends Logging {
           throw new IllegalArgumentException("'path' or 'glob paths' option required"))
     Seq(new StoragePath(path))
   }
+
+  private def isBucketIndexDeclared(properties: TypedProperties): Boolean =
+    IndexType.BUCKET.name.equalsIgnoreCase(properties.getString(HoodieIndexConfig.INDEX_TYPE.key, ""))
 
   // if database name is not set, fall back to use 'default' instead of failing
   def getDatabaseName(tableConfig: HoodieTableConfig, defaultDatabase: String)  = {
