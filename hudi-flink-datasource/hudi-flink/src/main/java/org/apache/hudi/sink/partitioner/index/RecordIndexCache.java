@@ -36,7 +36,6 @@ import org.apache.flink.configuration.Configuration;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Comparator;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -188,24 +187,24 @@ public class RecordIndexCache implements Closeable {
    * @param nextCacheSize the size for the next new cache
    */
   private void cleanIfNecessary(long nextCacheSize) {
+    // Empty caches provide no lookup benefit, regardless of memory pressure.
+    caches.entrySet().removeIf(entry -> {
+      if (entry.getKey() < minRetainedCheckpointId && entry.getValue().isEmpty()) {
+        entry.getValue().close();
+        log.info("Clean record index cache for checkpoint: {}", entry.getKey());
+        return true;
+      }
+      return false;
+    });
+
+    // Evict remaining caches oldest first, only under memory pressure.
     long usedMemory = getInMemoryMapSize();
-    // The map is reverse ordered; traverse its descending view to evict the oldest checkpoints first.
-    Iterator<Map.Entry<Long, ExternalSpillableMap<String, HoodieRecordGlobalLocation>>> iterator =
-        caches.descendingMap().entrySet().iterator();
-    while (iterator.hasNext()) {
-      Map.Entry<Long, ExternalSpillableMap<String, HoodieRecordGlobalLocation>> entry = iterator.next();
-      long checkpointId = entry.getKey();
-      if (checkpointId >= minRetainedCheckpointId) {
-        break;
-      }
-      ExternalSpillableMap<String, HoodieRecordGlobalLocation> cache = entry.getValue();
-      // Keep scanning for empty generations even after memory pressure is relieved.
-      if (cache.isEmpty() || usedMemory + nextCacheSize > maxCacheSizeInBytes) {
-        usedMemory -= cache.getCurrentInMemoryMapSize();
-        cache.close();
-        iterator.remove();
-        log.info("Clean record index cache for checkpoint: {}", checkpointId);
-      }
+    while (!caches.isEmpty() && caches.lastKey() < minRetainedCheckpointId
+        && usedMemory + nextCacheSize > maxCacheSizeInBytes) {
+      Map.Entry<Long, ExternalSpillableMap<String, HoodieRecordGlobalLocation>> entry = caches.pollLastEntry();
+      usedMemory -= entry.getValue().getCurrentInMemoryMapSize();
+      entry.getValue().close();
+      log.info("Clean record index cache for checkpoint: {}", entry.getKey());
     }
   }
 
