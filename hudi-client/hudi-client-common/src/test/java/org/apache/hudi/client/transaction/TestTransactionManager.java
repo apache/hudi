@@ -266,6 +266,43 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
 
   }
 
+  @Test
+  void testFailedUnlockClearsOwnerAndNextStateChangeUsesFreshProvider() {
+    FaultInjectingLockProvider.reset();
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(FaultInjectingLockProvider.class)
+            .withClientNumRetries(0)
+            .build())
+        .build();
+    TransactionManager txnManager = new TransactionManager(config, this.metaClient.getStorage());
+    try {
+      Option<HoodieInstant> firstOwner = getInstant("0000001");
+      txnManager.beginStateChange(firstOwner, Option.empty());
+      FaultInjectingLockProvider first = (FaultInjectingLockProvider) txnManager.getLockManager().getLockProvider();
+      FaultInjectingLockProvider.setFailUnlock(true);
+      assertThrows(HoodieLockException.class, () -> txnManager.endStateChange(firstOwner));
+      Assertions.assertFalse(txnManager.getCurrentTransactionOwner().isPresent());
+      Assertions.assertFalse(txnManager.getLastCompletedTransactionOwner().isPresent());
+      Assertions.assertTrue(first.isClosed());
+
+      FaultInjectingLockProvider.setFailUnlock(false);
+      Option<HoodieInstant> secondOwner = getInstant("0000002");
+      txnManager.beginStateChange(secondOwner, firstOwner);
+      FaultInjectingLockProvider second = (FaultInjectingLockProvider) txnManager.getLockManager().getLockProvider();
+      Assertions.assertNotSame(first, second);
+      Assertions.assertTrue(second.isHeld());
+      Assertions.assertEquals(secondOwner, txnManager.getCurrentTransactionOwner());
+      txnManager.endStateChange(secondOwner);
+      Assertions.assertFalse(txnManager.getCurrentTransactionOwner().isPresent());
+      Assertions.assertTrue(second.isClosed());
+    } finally {
+      txnManager.close();
+      FaultInjectingLockProvider.reset();
+    }
+  }
+
   private Option<HoodieInstant> getInstant(String timestamp) {
     return Option.of(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, timestamp));
   }
