@@ -21,14 +21,15 @@ import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.common.testutils.HoodieTestUtils.assertTableConfigs
 import org.apache.hudi.common.util.HoodieStorageUtils
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.escapePathName
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat
-import org.apache.hudi.keygen.constant.{ComplexKeyGenEncoding, KeyGeneratorType}
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.Assertions
@@ -103,57 +104,96 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
     spark.sql("use default")
   }
 
-  test("Test Create Hoodie Table With Options") {
-    val tableName = generateTableName
-    spark.sql(
-      s"""
-         | create table $tableName (
-         |  id int,
-         |  name string,
-         |  price double,
-         |  ts long,
-         |  dt string
-         | ) using hudi
-         | partitioned by (dt)
-         | options (
-         |   hoodie.database.name = "databaseName",
-         |   hoodie.table.name = "tableName",
-         |   primaryKey = 'id',
-         |   orderingFields = 'ts',
-         |   hoodie.datasource.write.operation = 'upsert'
-         | )
-       """.stripMargin)
-    val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
-    assertResult(table.properties("type"))("cow")
-    assertResult(table.properties("primaryKey"))("id")
-    assertResult(table.properties("orderingFields"))("ts")
-    assertResult(tableName)(table.identifier.table)
-    assertResult("hudi")(table.provider.get)
-    assertResult(CatalogTableType.MANAGED)(table.tableType)
-    assertResult(
-      HoodieRecord.HOODIE_META_COLUMNS.asScala.map(StructField(_, StringType))
-        ++ Seq(
-        StructField("id", IntegerType),
-        StructField("name", StringType),
-        StructField("price", DoubleType),
-        StructField("ts", LongType),
-        StructField("dt", StringType))
-    )(table.schema.fields)
-    assertFalse(table.properties.contains(HoodieTableConfig.DATABASE_NAME.key()))
-    assertFalse(table.properties.contains(HoodieTableConfig.NAME.key()))
-    assertFalse(table.properties.contains(OPERATION.key()))
+  Seq(HoodieTableVersion.SIX, HoodieTableVersion.EIGHT, HoodieTableVersion.NINE, HoodieTableVersion.TEN).foreach { tableVersion =>
+    test(s"Test Create Hoodie Table With Options (tableVersion=${tableVersion.versionCode()})") {
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long,
+           |  dt string
+           | ) using hudi
+           | partitioned by (dt)
+           | options (
+           |   hoodie.database.name = "databaseName",
+           |   hoodie.table.name = "tableName",
+           |   hoodie.write.table.version = '${tableVersion.versionCode()}',
+           |   primaryKey = 'id',
+           |   orderingFields = 'ts',
+           |   hoodie.datasource.write.operation = 'upsert'
+           | )
+         """.stripMargin)
+      val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
+      assertResult(table.properties("type"))("cow")
+      assertResult(table.properties("primaryKey"))("id")
+      assertResult(table.properties("orderingFields"))("ts")
+      assertResult(tableName)(table.identifier.table)
+      assertResult("hudi")(table.provider.get)
+      assertResult(CatalogTableType.MANAGED)(table.tableType)
+      assertResult(
+        HoodieRecord.HOODIE_META_COLUMNS.asScala.map(StructField(_, StringType))
+          ++ Seq(
+          StructField("id", IntegerType),
+          StructField("name", StringType),
+          StructField("price", DoubleType),
+          StructField("ts", LongType),
+          StructField("dt", StringType))
+      )(table.schema.fields)
+      assertFalse(table.properties.contains(HoodieTableConfig.DATABASE_NAME.key()))
+      assertFalse(table.properties.contains(HoodieTableConfig.NAME.key()))
+      assertFalse(table.properties.contains(OPERATION.key()))
 
-    val tablePath = table.storage.properties("path")
-    val metaClient = createMetaClient(spark, tablePath)
-    val tableConfig = metaClient.getTableConfig.getProps.asScala.toMap
-    assertResult(true)(tableConfig.contains(HoodieTableConfig.CREATE_SCHEMA.key))
-    assertResult("dt")(tableConfig(HoodieTableConfig.PARTITION_FIELDS.key))
-    assertResult("id")(tableConfig(HoodieTableConfig.RECORDKEY_FIELDS.key))
-    assertResult("ts")(tableConfig(HoodieTableConfig.ORDERING_FIELDS.key))
-    assertResult(KeyGeneratorType.SIMPLE.name())(tableConfig(HoodieTableConfig.KEY_GENERATOR_TYPE.key))
-    assertResult("default")(tableConfig(HoodieTableConfig.DATABASE_NAME.key()))
-    assertResult(tableName)(tableConfig(HoodieTableConfig.NAME.key()))
-    assertFalse(tableConfig.contains(OPERATION.key()))
+      val tablePath = table.storage.properties("path")
+      val metaClient = createMetaClient(spark, tablePath)
+      assertTrue(metaClient.getTableConfig.contains(HoodieTableConfig.CREATE_SCHEMA))
+      assertTableConfigs(metaClient.getStorage, tablePath, expectedTableConfigs(tableName, tableVersion).asJava)
+    }
+  }
+
+  private def expectedTableConfigs(tableName: String, tableVersion: HoodieTableVersion): Map[String, String] = {
+    val commonConfigs = Map(
+      "hoodie.database.name" -> "default",
+      "hoodie.table.name" -> tableName,
+      "hoodie.table.type" -> "COPY_ON_WRITE",
+      "hoodie.table.version" -> tableVersion.versionCode().toString,
+      "hoodie.table.recordkey.fields" -> "id",
+      "hoodie.table.partition.fields" -> "dt",
+      "hoodie.table.ordering.fields" -> "ts",
+      "hoodie.table.keygenerator.type" -> "SIMPLE",
+      "hoodie.table.format" -> "native",
+      "hoodie.meta.fields.mode" -> "ALL",
+      "hoodie.datasource.write.drop.partition.columns" -> "false",
+      "hoodie.datasource.write.hive_style_partitioning" -> "true",
+      "hoodie.datasource.write.partitionpath.urlencode" -> "false",
+      "hoodie.archivelog.folder" -> "archived",
+      "hoodie.timeline.path" -> "timeline",
+      "hoodie.timeline.history.path" -> "history")
+    val layoutConfigs = if (tableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
+      Map(
+        "hoodie.timeline.layout.version" -> "1",
+        "hoodie.table.keygenerator.class" -> "org.apache.hudi.keygen.SimpleKeyGenerator")
+    } else {
+      Map(
+        "hoodie.timeline.layout.version" -> "2",
+        "hoodie.table.initial.version" -> tableVersion.versionCode().toString,
+        "hoodie.record.merge.mode" -> "EVENT_TIME_ORDERING")
+    }
+    val mergeConfigs = if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
+      Map(
+        "hoodie.compaction.payload.class" -> "org.apache.hudi.common.model.DefaultHoodieRecordPayload",
+        "hoodie.record.merge.strategy.id" -> "eeb8d96f-b1e4-49fd-bbf8-28ac514178e5")
+    } else {
+      Map.empty[String, String]
+    }
+    val metaFieldsConfigs = if (tableVersion.lesserThan(HoodieTableVersion.TEN)) {
+      Map("hoodie.populate.meta.fields" -> "true")
+    } else {
+      Map.empty[String, String]
+    }
+    commonConfigs ++ layoutConfigs ++ mergeConfigs ++ metaFieldsConfigs
   }
 
   test("Test Create External Hoodie Table") {
