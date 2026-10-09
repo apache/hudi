@@ -321,16 +321,17 @@ object DataSkippingUtils extends Logging {
         })
 
       // Filter "colA like 'xxx%'"
-      // Translates to "colA_minValue <= xxx AND xxx <= colA_maxValue" for index lookup
+      // Translates to "(colA_minValue <= xxx AND xxx <= colA_maxValue) OR colA_minValue like 'xxx%'" for index lookup
       //
-      // NOTE: Since a) this operator matches strings by prefix and b) given that this column is going to be ordered
-      //       lexicographically, we essentially need to check that provided literal falls w/in min/max bounds of the
-      //       given column
+      // NOTE: Strings starting w/ the prefix form a contiguous range of the binary (byte-wise) ordering, which starts
+      //       at the prefix itself but also holds strings sorting after it (for ex, "xxx1" > "xxx"). Hence the file may
+      //       hold such strings if either the prefix falls w/in its min/max bounds, or its min value starts w/ it
       case StartsWith(sourceExpr @ AllowedTransformationExpression(attrRef), v @ Literal(_: UTF8String, _)) =>
         getTargetIndexedColumnName(attrRef, indexedCols)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            genColumnValuesEqualToExpression(colName, v, targetExprBuilder)
+            Or(genColumnValuesEqualToExpression(colName, v, targetExprBuilder),
+              StartsWith(targetExprBuilder.apply(genColMinValueExpr(colName)), v))
           }.orElse({
           Option.empty
         })
