@@ -41,7 +41,6 @@ import java.net.URI
 import java.nio.file.Path
 
 class TestHoodieFileIndex {
-
   @Test
   def testDefaultDatabaseName(): Unit = {
     assertEquals("default", HoodieFileIndex.getDatabaseName(new HoodieTableConfig(), null))
