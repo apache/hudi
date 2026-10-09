@@ -45,9 +45,9 @@ class TestFlinkRateLimiterFactory {
     try {
       verify(scheduler).scheduleAtFixedRate(
           refillTask.capture(), eq(expectedPeriodNanos), eq(expectedPeriodNanos), eq(TimeUnit.NANOSECONDS));
-      assertTrue(limiter.acquire(1));
+      assertTrue(limiter.acquire());
       refillTask.getValue().run();
-      assertTrue(limiter.acquire(1));
+      assertTrue(limiter.acquire());
     } finally {
       limiter.stop();
     }

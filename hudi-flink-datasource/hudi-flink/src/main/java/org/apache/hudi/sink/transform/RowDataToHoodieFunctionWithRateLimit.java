@@ -57,7 +57,7 @@ public class RowDataToHoodieFunctionWithRateLimit<I extends RowData, O extends H
 
   @Override
   public O map(I i) throws Exception {
-    rateLimiter.acquire(1);
+    rateLimiter.acquire();
     return super.map(i);
   }
 

@@ -57,7 +57,7 @@ public class AppendWriteFunctionWithRateLimit<I>
 
   @Override
   public void processElement(I value, Context ctx, Collector<RowData> out) throws Exception {
-    rateLimiter.acquire(1);
+    rateLimiter.acquire();
     super.processElement(value, ctx, out);
   }
 

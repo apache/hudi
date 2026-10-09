@@ -83,9 +83,9 @@ public class TestRatelimiter {
     try {
       verify(scheduler).scheduleAtFixedRate(
           refillTask.capture(), eq(100L), eq(100L), eq(TimeUnit.MILLISECONDS));
-      assertTrue(limiter.acquire(1));
+      assertTrue(limiter.acquire());
       refillTask.getValue().run();
-      assertTrue(limiter.acquire(1));
+      assertTrue(limiter.acquire());
     } finally {
       limiter.stop();
     }
@@ -100,12 +100,23 @@ public class TestRatelimiter {
   }
 
   @Test
+  public void testInvalidAcquireRequestIsRejected() {
+    RateLimiter limiter = RateLimiter.create(1, 1, TimeUnit.DAYS);
+    try {
+      assertThrows(IllegalArgumentException.class, () -> limiter.acquire(0));
+      assertThrows(IllegalArgumentException.class, () -> limiter.acquire(2));
+    } finally {
+      limiter.stop();
+    }
+  }
+
+  @Test
   public void testStopIsIdempotentAndUnblocksAcquire() throws Exception {
     RateLimiter limiter = RateLimiter.create(1, 1, TimeUnit.DAYS);
     ExecutorService executor = Executors.newSingleThreadExecutor();
     try {
-      assertTrue(limiter.acquire(1));
-      Future<Boolean> blockedAcquire = executor.submit(() -> limiter.acquire(1));
+      assertTrue(limiter.acquire());
+      Future<Boolean> blockedAcquire = executor.submit(() -> limiter.acquire());
 
       limiter.stop();
       limiter.stop();

@@ -96,6 +96,14 @@ public class RateLimiter {
   public boolean acquire(int numOps) {
     ValidationUtils.checkArgument(numOps > 0 && numOps <= maxPermits,
         "Number of permits must be between one and the configured maximum");
+    return acquireInternal(numOps);
+  }
+
+  public boolean acquire() {
+    return acquireInternal(1);
+  }
+
+  private boolean acquireInternal(int numOps) {
     try {
       while (!stopped.get() && !semaphore.tryAcquire(numOps)) {
         Thread.sleep(WAIT_BEFORE_NEXT_ACQUIRE_PERMIT_IN_MS);
