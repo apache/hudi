@@ -542,6 +542,43 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   }
 
   @Test
+  void testIndexDefinitionChangesKeepDefinitionsOfOtherMetaClients() throws IOException {
+    final String basePath = tempDir.toAbsolutePath() + Path.SEPARATOR + "t8";
+    HoodieTableMetaClient firstMetaClient = HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+        .setTableName("table")
+        .initTable(this.metaClient.getStorageConf(), basePath);
+    // both meta clients load the index definitions before either of them changes them
+    HoodieTableMetaClient secondMetaClient = HoodieTableMetaClient.reload(firstMetaClient);
+    String secondaryIndexName = MetadataPartitionType.SECONDARY_INDEX.getPartitionPath() + "c1";
+    String columnStatsIndexName = MetadataPartitionType.COLUMN_STATS.getPartitionPath();
+
+    firstMetaClient.buildIndexDefinition(HoodieIndexDefinition.newBuilder()
+        .withIndexName(secondaryIndexName)
+        .withIndexType(MetadataPartitionType.SECONDARY_INDEX.getPartitionPath())
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), secondaryIndexName))
+        .withSourceFields(Collections.singletonList("c1"))
+        .build());
+    // the second meta client did not load the secondary index definition, and must not drop it
+    secondMetaClient.buildIndexDefinition(HoodieIndexDefinition.newBuilder()
+        .withIndexName(columnStatsIndexName)
+        .withIndexType(columnStatsIndexName)
+        .withIndexFunction(columnStatsIndexName)
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), columnStatsIndexName))
+        .withSourceFields(Arrays.asList("c1", "c2"))
+        .build());
+    HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(firstMetaClient);
+    assertTrue(reloadedMetaClient.getIndexForMetadataPartition(secondaryIndexName).isPresent());
+    assertTrue(reloadedMetaClient.getIndexForMetadataPartition(columnStatsIndexName).isPresent());
+
+    // a delete through the first meta client must keep the definition the second meta client wrote
+    firstMetaClient.deleteIndexDefinition(secondaryIndexName);
+    reloadedMetaClient = HoodieTableMetaClient.reload(firstMetaClient);
+    assertFalse(reloadedMetaClient.getIndexForMetadataPartition(secondaryIndexName).isPresent());
+    assertTrue(reloadedMetaClient.getIndexForMetadataPartition(columnStatsIndexName).isPresent());
+  }
+
+  @Test
   void testReadIndexDefFromStorage() throws Exception {
     final String basePath = tempDir.toAbsolutePath() + Path.SEPARATOR + "t8";
 
