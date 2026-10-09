@@ -302,11 +302,31 @@ public class CloudObjectsSelectorCommon {
       filter.append(SPACE_DELIMTER).append(String.format("and %s not like '%%%s%%'", objectKey, ignoreRelativePathSubStr.get()));
     }
 
-    // Match files with a given extension, or use the fileFormat as the default.
+    // Match files with any of the given extensions, or use the fileFormat as the default.
     getPropVal(props, CLOUD_DATAFILE_EXTENSION).or(() -> Option.of(fileFormat))
-        .map(val -> filter.append(SPACE_DELIMTER).append(String.format("and %s like '%%%s'", objectKey, val)));
+        .map(extensions -> filter.append(extensionClause(objectKey, extensions)));
 
     return filter.toString();
+  }
+
+  /**
+   * Renders the file extension predicate. A comma separated value matches any one of the
+   * extensions, so a prefix holding more than one file type can be selected in a single sync;
+   * a single value renders exactly the predicate it always did. Empty when no usable extension
+   * is configured, which leaves the filter unchanged.
+   */
+  private static String extensionClause(String objectKey, String extensions) {
+    List<String> predicates = Arrays.stream(extensions.split(","))
+        .map(String::trim)
+        .filter(extension -> !extension.isEmpty())
+        .map(extension -> String.format("%s like '%%%s'", objectKey, extension))
+        .collect(Collectors.toList());
+    if (predicates.isEmpty()) {
+      return "";
+    }
+    return predicates.size() == 1
+        ? SPACE_DELIMTER + "and " + predicates.get(0)
+        : SPACE_DELIMTER + "and (" + String.join(" or ", predicates) + ")";
   }
 
   /**
