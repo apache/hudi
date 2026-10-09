@@ -25,7 +25,7 @@ Ask, don't default. Route before selecting a writer:
 
 - Spark → continue with the shared writer decisions below.
 - Flink → load `flink-question-flow.md` and the other Flink-only references listed
-  there. In PR1, stop before the shared Writer section because it is Spark-specific.
+  there. Stop before the shared Writer section because it is Spark-specific.
 - Undecided → explain the tradeoff below, confirm the engine, and then route. Do not
   load both sets of references speculatively.
 

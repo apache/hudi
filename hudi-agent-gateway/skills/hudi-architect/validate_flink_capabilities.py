@@ -40,12 +40,107 @@ DEFAULT_MANIFEST = (
     SKILL_DIR / "references" / "flink-1.20-hudi-1.2.0-capabilities.toml"
 )
 
-EXPECTED_SCHEMA_VERSION = 1
+EXPECTED_SCHEMA_VERSION = 2
 EXPECTED_BASELINE_ID = "hudi-1.2.0-flink-1.20"
 EXPECTED_HUDI_VERSION = "1.2.0"
 EXPECTED_HUDI_SOURCE_REVISION = "f05c83f2b97732de7a558ff9b26959e1139c05f5"
 EXPECTED_FLINK_LINE = "1.20"
 EXPECTED_FLINK_FIXTURE_VERSION = "1.20.1"
+EXPECTED_REQUIRED_SETTINGS = [
+    {
+        "key": "table.type",
+        "value": "COPY_ON_WRITE",
+        "applies_to": "pr2-append-only-cow",
+    },
+    {
+        "key": "write.insert.cluster",
+        "value": False,
+        "applies_to": "pr2-append-only-cow",
+    },
+    {
+        "key": "write.operation",
+        "value": "insert",
+        "applies_to": "pr2-append-only-cow",
+    },
+]
+EXPECTED_PHYSICAL_TYPES = {
+    "simple": [
+        "BIGINT",
+        "BOOLEAN",
+        "BYTES",
+        "DATE",
+        "DOUBLE",
+        "FLOAT",
+        "INT",
+        "INTEGER",
+        "SMALLINT",
+        "STRING",
+        "TINYINT",
+    ],
+    "parameterized": [
+        "BINARY",
+        "CHAR",
+        "DECIMAL",
+        "TIME",
+        "TIMESTAMP",
+        "TIMESTAMP_LTZ",
+        "VARBINARY",
+        "VARCHAR",
+    ],
+}
+EXPECTED_PHYSICAL_SCHEMA_CONSTRAINTS = {
+    "binary_routing_types": ["BINARY", "BYTES", "VARBINARY"],
+    "field_name_pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+    "reserved_target_field_names": [
+        "_hoodie_commit_seqno",
+        "_hoodie_commit_time",
+        "_hoodie_file_name",
+        "_hoodie_operation",
+        "_hoodie_partition_path",
+        "_hoodie_record_key",
+    ],
+    "temporal_precision_min": 0,
+    "temporal_precision_max": 6,
+    "temporal_types": ["TIME", "TIMESTAMP", "TIMESTAMP_LTZ"],
+}
+EXPECTED_RUNTIME_CONSTRAINTS = {
+    "checkpoint_interval_min_ms": 1000,
+    "flink_checkpoint_interval_min_ms": 10,
+}
+EXPECTED_ACCEPTANCE_EVIDENCE = {
+    "FLINK_APPEND_MODE_CLUSTERING_ENABLED": (
+        "test_pr2_rejects_insert_clustering_override",
+        "testPinnedAppendModeRequiresInsertClusteringDisabled",
+    ),
+    "FLINK_BINARY_ROUTING_FIELD_UNSUPPORTED": (
+        "test_pr2_rejects_binary_routing_fields",
+        "testPinnedBinaryValuesUseObjectIdentityForRouting",
+    ),
+    "FLINK_RECORD_KEY_FIELD_MISSING": (
+        "test_pr2_rejects_record_key_missing_from_append_schema",
+        "testPinnedFactorySkipsMissingRecordKeyCheckInAppendMode",
+    ),
+    "FLINK_SOURCE_CHANGELOG_NOT_APPEND_ONLY": (
+        "test_pr2_rejects_non_append_source_changelog",
+        "testStableKeySinkAndInsertPlan",
+    ),
+    "FLINK_TEMPORAL_PRECISION_UNSUPPORTED": (
+        "test_pr2_enforces_pinned_temporal_precision_limits",
+        "testPinnedPlannerRejectsTemporalPrecisionAboveSix",
+    ),
+    "FLINK_SCHEMA_FIELD_NAME_UNSUPPORTED": (
+        "test_pr2_rejects_non_avro_physical_field_names",
+        "testPinnedPlannerRejectsNonAvroFieldName",
+    ),
+    "FLINK_HUDI_METADATA_FIELD_CONFLICT": (
+        "test_pr2_rejects_reserved_hudi_metadata_field_names",
+        "testPinnedWriterRejectsReservedHudiMetadataField",
+    ),
+    "FLINK_CHECKPOINT_INTERVAL_UNSUPPORTED": (
+        "test_pr2_enforces_checkpoint_interval_safety_floor",
+        "testPinnedRuntimeCheckpointIntervalBoundary",
+    ),
+}
 SHA1_PATTERN = re.compile(r"[0-9a-f]{40}")
 SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 
@@ -182,31 +277,103 @@ def validate_manifest(manifest: dict[str, Any]) -> list[str]:
                 f"required_effective_settings[{index}].applies_to must be "
                 "'pr2-append-only-cow'"
             )
+    if settings != EXPECTED_REQUIRED_SETTINGS:
+        errors.append("required_effective_settings does not match the bounded PR2 path")
 
-    deferred_checks = manifest.get("deferred_acceptance_checks")
-    deferred_ids: list[str] = []
-    if not isinstance(deferred_checks, list) or not deferred_checks:
-        errors.append("deferred_acceptance_checks must be a non-empty array")
-        deferred_checks = []
-    for index, check in enumerate(deferred_checks):
+    fixture_artifacts = manifest.get("fixture_artifacts")
+    if not isinstance(fixture_artifacts, dict):
+        errors.append("fixture_artifacts must be a table")
+        fixture_artifacts = {}
+    if fixture_artifacts.get("hudi_bundle") != (
+        "org.apache.hudi:hudi-flink1.20-bundle:1.2.0"
+    ):
+        errors.append("fixture_artifacts.hudi_bundle must pin the Hudi 1.2.0 Flink bundle")
+    if fixture_artifacts.get("flink_version") != EXPECTED_FLINK_FIXTURE_VERSION:
+        errors.append(
+            f"fixture_artifacts.flink_version must be {EXPECTED_FLINK_FIXTURE_VERSION!r}"
+        )
+    if fixture_artifacts.get("java_version") != 11:
+        errors.append("fixture_artifacts.java_version must be 11")
+
+    executable_contract = manifest.get("executable_contract")
+    expected_contract = {
+        "contract_schema": 1,
+        "table_lifecycle": "new",
+        "writer_model": "single_writer",
+        "external_catalog": False,
+        "mutability": "append_only",
+        "source_changelog_mode": "INSERT_ONLY",
+        "execution_mode": "STREAMING",
+        "require_checkpointing": True,
+        "allow_record_key_modes": ["stable_key", "auto_key"],
+        "allow_replay_behaviors": ["cannot_occur", "duplicates_acceptable"],
+    }
+    if executable_contract != expected_contract:
+        errors.append("executable_contract does not match the bounded PR2 path")
+
+    physical_types = manifest.get("physical_types")
+    if not isinstance(physical_types, dict):
+        errors.append("physical_types must be a table")
+    elif physical_types != EXPECTED_PHYSICAL_TYPES:
+        errors.append("physical_types does not match the bounded PR2 scalar surface")
+    else:
+        for type_group in ("simple", "parameterized"):
+            values = physical_types.get(type_group)
+            if (
+                not isinstance(values, list)
+                or not values
+                or not all(isinstance(value, str) and value for value in values)
+                or values != sorted(values)
+                or len(values) != len(set(values))
+            ):
+                errors.append(f"physical_types.{type_group} must be sorted unique strings")
+
+    physical_schema_constraints = manifest.get("physical_schema_constraints")
+    if physical_schema_constraints != EXPECTED_PHYSICAL_SCHEMA_CONSTRAINTS:
+        errors.append(
+            "physical_schema_constraints does not match the pinned Hudi connector limits"
+        )
+
+    runtime_constraints = manifest.get("runtime_constraints")
+    if runtime_constraints != EXPECTED_RUNTIME_CONSTRAINTS:
+        errors.append("runtime_constraints does not match the bounded PR2 runtime limits")
+
+    implemented_checks = manifest.get("implemented_acceptance_checks")
+    implemented_ids: list[str] = []
+    if not isinstance(implemented_checks, list) or not implemented_checks:
+        errors.append("implemented_acceptance_checks must be a non-empty array")
+        implemented_checks = []
+    for index, check in enumerate(implemented_checks):
         if not isinstance(check, dict):
-            errors.append(f"deferred_acceptance_checks[{index}] must be a table")
+            errors.append(f"implemented_acceptance_checks[{index}] must be a table")
             continue
         check_id = check.get("id")
         if not isinstance(check_id, str) or not check_id.startswith("FLINK_"):
             errors.append(
-                f"deferred_acceptance_checks[{index}].id must be a stable FLINK_ identifier"
+                f"implemented_acceptance_checks[{index}].id must be a stable FLINK_ identifier"
             )
         else:
-            deferred_ids.append(check_id)
-        if check.get("target_pr") != "PR2":
-            errors.append(f"deferred_acceptance_checks[{index}].target_pr must be 'PR2'")
+            implemented_ids.append(check_id)
         if not isinstance(check.get("requirement"), str) or not check["requirement"]:
             errors.append(
-                f"deferred_acceptance_checks[{index}].requirement must be non-empty"
+                f"implemented_acceptance_checks[{index}].requirement must be non-empty"
             )
-    if len(deferred_ids) != len(set(deferred_ids)):
-        errors.append("deferred_acceptance_checks contains duplicate ids")
+        for evidence_key in ("python_test", "java_test"):
+            if not isinstance(check.get(evidence_key), str) or not check[evidence_key]:
+                errors.append(
+                    f"implemented_acceptance_checks[{index}].{evidence_key} must be non-empty"
+                )
+    if len(implemented_ids) != len(set(implemented_ids)):
+        errors.append("implemented_acceptance_checks contains duplicate ids")
+    implemented_evidence = {
+        check.get("id"): (check.get("python_test"), check.get("java_test"))
+        for check in implemented_checks
+        if isinstance(check, dict) and isinstance(check.get("id"), str)
+    }
+    if implemented_evidence != EXPECTED_ACCEPTANCE_EVIDENCE:
+        errors.append(
+            "implemented_acceptance_checks does not match the required PR2 evidence"
+        )
 
     return errors
 
@@ -223,6 +390,7 @@ def validation_evidence(manifest: dict[str, Any]) -> dict[str, Any]:
     return {
         "baseline_id": manifest["baseline_id"],
         "capability_manifest_schema": manifest["schema_version"],
+        "design_contract_schema": manifest["executable_contract"]["contract_schema"],
         "flink_fixture_version": manifest["flink"]["fixture_version"],
         "hudi_source_revision": manifest["hudi"]["source_revision"],
     }

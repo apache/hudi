@@ -14,10 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Deterministic contracts for the Hudi Architect Flink PR1 foundation."""
+"""Deterministic contracts for the Hudi Architect Flink SQL path."""
 
 from __future__ import annotations
 
+import ast
+import copy
 import json
 import subprocess
 import sys
@@ -35,7 +37,24 @@ GATE_FIXTURE = (
     GATEWAY_DIR / "tests" / "fixtures" / "hudi_architect" / "flink_pr1_scenarios.toml"
 )
 FLINK_VALIDATOR = SKILL_DIR / "validate_flink_capabilities.py"
+FLINK_DESIGN_VALIDATOR = SKILL_DIR / "validate_flink_design.py"
 PINNED_HUDI_REVISION = "f05c83f2b97732de7a558ff9b26959e1139c05f5"
+PR2_FIXTURE_DIR = GATEWAY_DIR / "tests" / "fixtures" / "hudi_architect" / "flink_pr2"
+ASF_LICENSE_MARKER = "Licensed to the Apache Software Foundation (ASF) under one"
+PR2_JAVA_FIXTURE = (
+    GATEWAY_DIR
+    / "fixtures"
+    / "hudi-architect-flink-1.20"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "apache"
+    / "hudi"
+    / "agent"
+    / "architect"
+    / "TestFlinkArchitectSqlFixtures.java"
+)
 
 FLINK_REFERENCES = (
     "flink-1.20-hudi-1.2.0-capabilities.md",
@@ -49,6 +68,14 @@ FLINK_REFERENCES = (
 
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
+
+
+def _read_sql_golden(path: Path) -> str:
+    license_header, separator, sql = _read(path).partition("*/")
+    assert separator, f"missing block-comment license header: {path}"
+    assert license_header.startswith("/*"), f"license header is not first: {path}"
+    assert ASF_LICENSE_MARKER in license_header, f"missing ASF license header: {path}"
+    return sql.lstrip("\r\n")
 
 
 def _normalized(text: str) -> str:
@@ -73,8 +100,6 @@ def _scenario_finding_codes(contract: dict, scenario: dict) -> list[str]:
         if finding_code := transition.get("finding_code"):
             finding_codes.append(finding_code)
 
-    if scenario.get("all_other_gates_pass") and not finding_codes:
-        finding_codes.append("FLINK_EXECUTABLE_PATH_DEFERRED")
     return finding_codes
 
 
@@ -85,6 +110,23 @@ def _run_flink_validator(*args: str) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         check=False,
     )
+
+
+def _run_flink_design_validator(
+    input_path: Path, *args: str
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(FLINK_DESIGN_VALIDATOR), "--input", str(input_path), *args],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+
+def _write_design(tmp_path: Path, design: dict) -> Path:
+    input_path = tmp_path / "design.json"
+    input_path.write_text(json.dumps(design), encoding="utf-8")
+    return input_path
 
 
 def test_flink_references_exist_and_are_linked_from_skill() -> None:
@@ -110,7 +152,7 @@ def test_engine_router_is_lazy_and_keeps_spark_on_shared_flow() -> None:
     assert "FLINK_" not in _read(REFERENCES_DIR / "config-templates.md")
 
 
-def test_flink_baseline_is_fixed_and_pr1_does_not_claim_config_validated() -> None:
+def test_flink_baseline_is_fixed_and_pr2_has_bounded_executable_contract() -> None:
     capability = _read(REFERENCES_DIR / "flink-1.20-hudi-1.2.0-capabilities.md")
     manifest = _load_toml(CAPABILITY_MANIFEST)
     decisions = _read(REFERENCES_DIR / "flink-decision-overrides.md")
@@ -127,11 +169,36 @@ def test_flink_baseline_is_fixed_and_pr1_does_not_claim_config_validated() -> No
         "fixture_version": "1.20.1",
     }
     assert PINNED_HUDI_REVISION in capability
-    assert "This status is unreachable in PR1" in capability
-    assert "`CONFIG_VALIDATED` is defined" in decisions
-    assert "`CONFIG_VALIDATED`." in output
+    assert manifest["schema_version"] == 2
+    assert manifest["fixture_artifacts"] == {
+        "hudi_bundle": "org.apache.hudi:hudi-flink1.20-bundle:1.2.0",
+        "flink_version": "1.20.1",
+        "java_version": 11,
+    }
+    assert manifest["physical_schema_constraints"] == {
+        "binary_routing_types": ["BINARY", "BYTES", "VARBINARY"],
+        "field_name_pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+        "reserved_target_field_names": [
+            "_hoodie_commit_seqno",
+            "_hoodie_commit_time",
+            "_hoodie_file_name",
+            "_hoodie_operation",
+            "_hoodie_partition_path",
+            "_hoodie_record_key",
+        ],
+        "temporal_precision_min": 0,
+        "temporal_precision_max": 6,
+        "temporal_types": ["TIME", "TIMESTAMP", "TIMESTAMP_LTZ"],
+    }
+    assert manifest["runtime_constraints"] == {
+        "checkpoint_interval_min_ms": 1000,
+        "flink_checkpoint_interval_min_ms": 10,
+    }
+    assert "first executable" in capability
+    assert "`CONFIG_VALIDATED`" in decisions
+    assert "Executable eligible: true" in output
     assert "CREATE TABLE" in output
-    assert "Do not emit" in output
+    assert "INSERT INTO" in output
 
 
 def test_flink_capability_manifest_validates_without_current_checkout_discovery() -> None:
@@ -147,7 +214,8 @@ def test_flink_capability_validation_emits_pinned_evidence() -> None:
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout) == {
         "baseline_id": "hudi-1.2.0-flink-1.20",
-        "capability_manifest_schema": 1,
+        "capability_manifest_schema": 2,
+        "design_contract_schema": 1,
         "flink_fixture_version": "1.20.1",
         "hudi_source_revision": PINNED_HUDI_REVISION,
     }
@@ -191,15 +259,63 @@ def test_flink_capability_validation_rejects_manifest_revision_drift(
     assert "immutable Hudi 1.2.0 release commit" in result.stderr
 
 
-def test_flink_capability_manifest_records_dannys_pr2_acceptance_contract() -> None:
+@pytest.mark.parametrize(
+    ("old", "new", "expected_message"),
+    [
+        (
+            'key = "write.insert.cluster"\nvalue = false',
+            'key = "write.insert.cluster"\nvalue = true',
+            "required_effective_settings does not match",
+        ),
+        (
+            '  "STRING",',
+            '  "ROW",',
+            "physical_types does not match",
+        ),
+        (
+            'java_test = "testStableKeySinkAndInsertPlan"',
+            'java_test = "testSinkOnly"',
+            "implemented_acceptance_checks does not match",
+        ),
+        (
+            "temporal_precision_max = 6",
+            "temporal_precision_max = 9",
+            "physical_schema_constraints does not match",
+        ),
+        (
+            "checkpoint_interval_min_ms = 1000",
+            "checkpoint_interval_min_ms = 10",
+            "runtime_constraints does not match",
+        ),
+    ],
+)
+def test_flink_capability_validation_rejects_executable_contract_drift(
+    tmp_path: Path, old: str, new: str, expected_message: str
+) -> None:
+    manifest_path = tmp_path / "capabilities.toml"
+    manifest_path.write_text(_read(CAPABILITY_MANIFEST).replace(old, new), encoding="utf-8")
+
+    result = _run_flink_validator("--manifest", str(manifest_path))
+
+    assert result.returncode == 1
+    assert expected_message in result.stderr
+
+
+def test_flink_capability_manifest_records_pr2_acceptance_contract() -> None:
     manifest = _load_toml(CAPABILITY_MANIFEST)
+    python_tests = {
+        node.name
+        for node in ast.walk(ast.parse(_read(Path(__file__))))
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    java_fixture = _read(PR2_JAVA_FIXTURE)
     effective_settings = {
         setting["key"]: setting["value"]
         for setting in manifest["required_effective_settings"]
     }
-    deferred_checks = {
-        check["id"]: check["target_pr"]
-        for check in manifest["deferred_acceptance_checks"]
+    implemented_checks = {
+        check["id"]: (check["python_test"], check["java_test"])
+        for check in manifest["implemented_acceptance_checks"]
     }
 
     assert effective_settings == {
@@ -207,11 +323,43 @@ def test_flink_capability_manifest_records_dannys_pr2_acceptance_contract() -> N
         "write.insert.cluster": False,
         "write.operation": "insert",
     }
-    assert deferred_checks == {
-        "FLINK_APPEND_MODE_CLUSTERING_ENABLED": "PR2",
-        "FLINK_RECORD_KEY_FIELD_MISSING": "PR2",
-        "FLINK_SOURCE_CHANGELOG_NOT_APPEND_ONLY": "PR2",
+    assert implemented_checks == {
+        "FLINK_APPEND_MODE_CLUSTERING_ENABLED": (
+            "test_pr2_rejects_insert_clustering_override",
+            "testPinnedAppendModeRequiresInsertClusteringDisabled",
+        ),
+        "FLINK_BINARY_ROUTING_FIELD_UNSUPPORTED": (
+            "test_pr2_rejects_binary_routing_fields",
+            "testPinnedBinaryValuesUseObjectIdentityForRouting",
+        ),
+        "FLINK_RECORD_KEY_FIELD_MISSING": (
+            "test_pr2_rejects_record_key_missing_from_append_schema",
+            "testPinnedFactorySkipsMissingRecordKeyCheckInAppendMode",
+        ),
+        "FLINK_SOURCE_CHANGELOG_NOT_APPEND_ONLY": (
+            "test_pr2_rejects_non_append_source_changelog",
+            "testStableKeySinkAndInsertPlan",
+        ),
+        "FLINK_TEMPORAL_PRECISION_UNSUPPORTED": (
+            "test_pr2_enforces_pinned_temporal_precision_limits",
+            "testPinnedPlannerRejectsTemporalPrecisionAboveSix",
+        ),
+        "FLINK_SCHEMA_FIELD_NAME_UNSUPPORTED": (
+            "test_pr2_rejects_non_avro_physical_field_names",
+            "testPinnedPlannerRejectsNonAvroFieldName",
+        ),
+        "FLINK_HUDI_METADATA_FIELD_CONFLICT": (
+            "test_pr2_rejects_reserved_hudi_metadata_field_names",
+            "testPinnedWriterRejectsReservedHudiMetadataField",
+        ),
+        "FLINK_CHECKPOINT_INTERVAL_UNSUPPORTED": (
+            "test_pr2_enforces_checkpoint_interval_safety_floor",
+            "testPinnedRuntimeCheckpointIntervalBoundary",
+        ),
     }
+    for check in manifest["implemented_acceptance_checks"]:
+        assert check["python_test"] in python_tests
+        assert f"void {check['java_test']}(" in java_fixture
 
 
 def test_pinned_source_hashes_match_when_release_object_is_available() -> None:
@@ -228,9 +376,9 @@ def test_pinned_source_hashes_match_when_release_object_is_available() -> None:
     assert result.returncode == 0, result.stderr
 
 
-def test_pr1_scenarios_have_deterministic_status_and_are_non_executable() -> None:
+def test_pr1_safety_gates_keep_deterministic_status_before_pr2_validation() -> None:
     contract = _load_toml(GATE_FIXTURE)
-    assert contract["schema_version"] == 2
+    assert contract["schema_version"] == 3
     assert contract["status_precedence"] == ["INCOMPLETE", "REVIEW_REQUIRED", "BLOCKED"]
     precedence = {
         status: priority for priority, status in enumerate(contract["status_precedence"])
@@ -243,6 +391,9 @@ def test_pr1_scenarios_have_deterministic_status_and_are_non_executable() -> Non
 
     for scenario in contract["scenarios"]:
         assert f"`{scenario['case_id']}`" in decisions
+        if scenario.get("passes_safety_gates"):
+            assert _scenario_finding_codes(contract, scenario) == []
+            continue
         statuses = [
             finding_status[code] for code in _scenario_finding_codes(contract, scenario)
         ]
@@ -283,7 +434,8 @@ def test_auto_key_acceptance_scenarios_derive_findings_from_answers() -> None:
         "FLINK_AUTO_KEY_ACCEPTANCE_REQUIRED"
     ]
     assert _scenario_finding_codes(contract, declined) == ["FLINK_AUTO_KEY_DECLINED"]
-    assert _scenario_finding_codes(contract, accepted) == ["FLINK_EXECUTABLE_PATH_DEFERRED"]
+    assert _scenario_finding_codes(contract, accepted) == []
+    assert accepted["passes_safety_gates"] is True
     assert contract["auto_key_acceptance"]["accepted"] == {
         "warning_code": "FLINK_AUTO_KEY_DURABILITY"
     }
@@ -292,14 +444,591 @@ def test_auto_key_acceptance_scenarios_derive_findings_from_answers() -> None:
         assert transition["status"] == finding_status[transition["finding_code"]]
 
 
+@pytest.mark.parametrize("fixture_name", ["stable_key", "auto_key"])
+def test_pr2_valid_designs_render_exact_executable_sql(fixture_name: str) -> None:
+    input_path = PR2_FIXTURE_DIR / f"{fixture_name}.json"
+    result = _run_flink_design_validator(input_path)
+
+    assert result.returncode == 0, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "CONFIG_VALIDATED"
+    assert assessment["executable_eligible"] is True
+    assert assessment["finding_codes"] == []
+    assert assessment["artifacts"]["combined_sql"] == _read_sql_golden(
+        PR2_FIXTURE_DIR / f"{fixture_name}.sql"
+    ).rstrip("\n")
+    assert assessment["validation_evidence"] == {
+        "baseline_id": "hudi-1.2.0-flink-1.20",
+        "capability_manifest_schema": 2,
+        "design_contract_schema": 1,
+        "flink_fixture_version": "1.20.1",
+        "hudi_source_revision": PINNED_HUDI_REVISION,
+    }
+
+
+def test_pr2_fails_closed_when_capability_manifest_is_malformed(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "capabilities.toml"
+    manifest_path.write_text(
+        _read(CAPABILITY_MANIFEST).replace("[physical_types]", "[physical_types_broken]"),
+        encoding="utf-8",
+    )
+
+    result = _run_flink_design_validator(
+        PR2_FIXTURE_DIR / "stable_key.json", "--manifest", str(manifest_path)
+    )
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == ["FLINK_BASELINE_EVIDENCE_INVALID"]
+    assert assessment["status"] == "BLOCKED"
+    assert assessment["executable_eligible"] is False
+    assert assessment["validation_evidence"] == {"design_contract_schema": 1}
+    assert "artifacts" not in assessment
+
+
+def test_pr2_rejects_record_key_missing_from_append_schema(tmp_path: Path) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    design["write"]["connector_options"] = {
+        "hoodie.datasource.write.recordkey.field": "missing_id"
+    }
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert "FLINK_RECORD_KEY_FIELD_MISSING" in assessment["finding_codes"]
+    assert assessment["finding_codes"][0] == "FLINK_RECORD_KEY_FIELD_MISSING"
+    assert assessment["status"] == "BLOCKED"
+    assert assessment["executable_eligible"] is False
+    assert "artifacts" not in assessment
+
+
+def test_pr2_rejects_insert_clustering_override(tmp_path: Path) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    design["write"]["insert_cluster"] = True
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == ["FLINK_APPEND_MODE_CLUSTERING_ENABLED"]
+    assert assessment["status"] == "BLOCKED"
+    assert assessment["executable_eligible"] is False
+
+
+def test_pr2_rejects_insert_clustering_connector_override(tmp_path: Path) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    design["write"]["connector_options"] = {"write.insert.cluster": True}
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert "FLINK_APPEND_MODE_CLUSTERING_ENABLED" in assessment["finding_codes"]
+    assert assessment["status"] == "BLOCKED"
+    assert assessment["executable_eligible"] is False
+
+
+def test_pr2_rejects_non_append_source_changelog(tmp_path: Path) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    design["source"]["changelog_mode"] = "UPSERT"
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == ["FLINK_SOURCE_CHANGELOG_NOT_APPEND_ONLY"]
+    assert assessment["status"] == "BLOCKED"
+    assert assessment["executable_eligible"] is False
+
+
+def test_pr2_treats_unknown_source_changelog_as_incomplete(tmp_path: Path) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    design["source"].pop("changelog_mode")
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == ["FLINK_SOURCE_CONTRACT_REQUIRED"]
+    assert assessment["status"] == "INCOMPLETE"
+    assert assessment["executable_eligible"] is False
+
+
+def test_pr2_requires_source_physical_schema(tmp_path: Path) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    design["source"].pop("columns")
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert "FLINK_SOURCE_CONTRACT_REQUIRED" in assessment["finding_codes"]
+    assert assessment["status"] == "INCOMPLETE"
+    assert assessment["executable_eligible"] is False
+
+
+def test_pr2_preserves_combined_validation_findings(tmp_path: Path) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    design["write"]["insert_cluster"] = True
+    design["source"]["changelog_mode"] = "UPSERT"
+    design["runtime"]["checkpoint_interval_ms"] = None
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == [
+        "FLINK_SOURCE_CHANGELOG_NOT_APPEND_ONLY",
+        "FLINK_APPEND_MODE_CLUSTERING_ENABLED",
+        "FLINK_CHECKPOINT_INTERVAL_REQUIRED",
+    ]
+    assert assessment["status"] == "BLOCKED"
+    assert assessment["executable_eligible"] is False
+
+
+def test_pr2_preserves_multiple_reasons_under_one_finding_code(tmp_path: Path) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    design["table"]["name"] = "<TARGET_TABLE>"
+    design["table"]["path"] = "s3://user:password@bucket/orders"
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    load_bearing_finding = next(
+        finding
+        for finding in assessment["findings"]
+        if finding["code"] == "FLINK_LOAD_BEARING_VALUE_REQUIRED"
+    )
+    assert "target table" in load_bearing_finding["message"]
+    assert "target path" in load_bearing_finding["message"]
+    assert assessment["finding_codes"].count("FLINK_LOAD_BEARING_VALUE_REQUIRED") == 1
+
+
+@pytest.mark.parametrize(
+    ("section", "field"),
+    [
+        ("table", "partition_fields"),
+        ("identity", "record_key_fields"),
+        ("identity", "record_key_option_fields"),
+        ("write", "connector_options"),
+        ("runtime", "checkpointing_enabled"),
+    ],
+)
+def test_pr2_requires_explicit_empty_and_boolean_contract_fields(
+    tmp_path: Path, section: str, field: str
+) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    design[section].pop(field)
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert "FLINK_DESIGN_CONTRACT_INVALID" in assessment["finding_codes"]
+    assert assessment["status"] == "INCOMPLETE"
+    assert assessment["executable_eligible"] is False
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_code", "expected_status"),
+    [
+        (
+            ("write", "connector_options", {"ordering.fields": "event_ts"}),
+            "FLINK_DESIGN_CONTRACT_INVALID",
+            "INCOMPLETE",
+        ),
+        (
+            ("write", "connector_options", {"hoodie.vector.columns": "payload"}),
+            "FLINK_OPTION_NOT_VERIFIED",
+            "REVIEW_REQUIRED",
+        ),
+        (
+            ("runtime", "target_commit_freshness_ms", 0),
+            "FLINK_DESIGN_CONTRACT_INVALID",
+            "INCOMPLETE",
+        ),
+        (
+            ("identity", "auto_key_accepted", True),
+            "FLINK_DESIGN_CONTRACT_INVALID",
+            "INCOMPLETE",
+        ),
+        (
+            ("table", "partition_fields", ["partition_date", "partition_date"]),
+            "FLINK_DESIGN_CONTRACT_INVALID",
+            "INCOMPLETE",
+        ),
+    ],
+)
+def test_pr2_rejects_ignored_or_malformed_contract_values(
+    tmp_path: Path,
+    mutation: tuple[str, str, object],
+    expected_code: str,
+    expected_status: str,
+) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    section, key, value = mutation
+    design[section][key] = value
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert expected_code in assessment["finding_codes"]
+    assert assessment["status"] == expected_status
+    assert assessment["executable_eligible"] is False
+    assert "artifacts" not in assessment
+
+
+def test_pr2_rejects_out_of_range_physical_type_parameters(tmp_path: Path) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    design["table"]["columns"][1]["type"] = "VARCHAR(2147483648)"
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert "FLINK_SCHEMA_TYPE_UNVERIFIED" in assessment["finding_codes"]
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["executable_eligible"] is False
+
+
+@pytest.mark.parametrize("binary_type", ["BYTES", "BINARY(16)", "VARBINARY(16)"])
+@pytest.mark.parametrize(
+    ("field_name", "expected_message"),
+    [
+        ("id", "Record-key field 'id'"),
+        ("partition_date", "Partition field 'partition_date'"),
+    ],
+)
+def test_pr2_rejects_binary_routing_fields(
+    tmp_path: Path, binary_type: str, field_name: str, expected_message: str
+) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    for section in ("table", "source"):
+        column = next(
+            column
+            for column in design[section]["columns"]
+            if column["name"] == field_name
+        )
+        column["type"] = binary_type
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == ["FLINK_BINARY_ROUTING_FIELD_UNSUPPORTED"]
+    assert assessment["status"] == "BLOCKED"
+    assert assessment["executable_eligible"] is False
+    assert "artifacts" not in assessment
+    assert expected_message in assessment["findings"][0]["message"]
+
+
+@pytest.mark.parametrize("binary_type", ["BYTES", "BINARY(16)", "VARBINARY(16)"])
+def test_pr2_accepts_binary_payload_fields(tmp_path: Path, binary_type: str) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "auto_key.json"))
+    for section in ("table", "source"):
+        design[section]["columns"][0]["type"] = binary_type
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 0, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "CONFIG_VALIDATED"
+    assert f"`payload` {binary_type}" in assessment["artifacts"]["combined_sql"]
+
+
+@pytest.mark.parametrize("type_name", ["TIME", "TIMESTAMP", "TIMESTAMP_LTZ"])
+@pytest.mark.parametrize(("precision", "accepted"), [(6, True), (7, False), (9, False)])
+def test_pr2_enforces_pinned_temporal_precision_limits(
+    tmp_path: Path, type_name: str, precision: int, accepted: bool
+) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "auto_key.json"))
+    temporal_type = f"{type_name}({precision})"
+    design["table"]["columns"][1]["type"] = temporal_type
+    design["source"]["columns"][1]["type"] = temporal_type
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+    assessment = json.loads(result.stdout)
+
+    if accepted:
+        assert result.returncode == 0, result.stderr
+        assert assessment["finding_codes"] == []
+        assert assessment["status"] == "CONFIG_VALIDATED"
+        assert temporal_type in assessment["artifacts"]["combined_sql"]
+    else:
+        assert result.returncode == 1
+        assert assessment["finding_codes"] == [
+            "FLINK_TEMPORAL_PRECISION_UNSUPPORTED"
+        ]
+        assert assessment["status"] == "BLOCKED"
+        assert assessment["executable_eligible"] is False
+        assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize("field_name", ["user-id", "1user", "user.id"])
+def test_pr2_rejects_non_avro_physical_field_names(
+    tmp_path: Path, field_name: str
+) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "auto_key.json"))
+    design["table"]["columns"][0]["name"] = field_name
+    design["source"]["columns"][0]["name"] = field_name
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == ["FLINK_SCHEMA_FIELD_NAME_UNSUPPORTED"]
+    assert assessment["status"] == "BLOCKED"
+    assert assessment["executable_eligible"] is False
+    assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize("field_name", ["_user", "user_1"])
+def test_pr2_accepts_avro_physical_field_name_boundaries(
+    tmp_path: Path, field_name: str
+) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "auto_key.json"))
+    design["table"]["columns"][0]["name"] = field_name
+    design["source"]["columns"][0]["name"] = field_name
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 0, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "CONFIG_VALIDATED"
+    assert f"`{field_name}` STRING" in assessment["artifacts"]["combined_sql"]
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    [
+        "_hoodie_commit_seqno",
+        "_hoodie_commit_time",
+        "_hoodie_file_name",
+        "_hoodie_operation",
+        "_hoodie_partition_path",
+        "_hoodie_record_key",
+        "_HOODIE_COMMIT_TIME",
+    ],
+)
+def test_pr2_rejects_reserved_hudi_metadata_field_names(
+    tmp_path: Path, field_name: str
+) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "auto_key.json"))
+    design["table"]["columns"][0]["name"] = field_name
+    design["source"]["columns"][0]["name"] = field_name
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == ["FLINK_HUDI_METADATA_FIELD_CONFLICT"]
+    assert assessment["status"] == "BLOCKED"
+    assert assessment["executable_eligible"] is False
+    assert "artifacts" not in assessment
+
+
+def test_pr2_does_not_reject_the_entire_hoodie_field_prefix(tmp_path: Path) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "auto_key.json"))
+    design["table"]["columns"][0]["name"] = "_hoodie_custom"
+    design["source"]["columns"][0]["name"] = "_hoodie_custom"
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 0, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "CONFIG_VALIDATED"
+    assert "`_hoodie_custom` STRING" in assessment["artifacts"]["combined_sql"]
+
+
+@pytest.mark.parametrize(
+    ("interval_ms", "accepted"), [(9, False), (10, False), (999, False), (1000, True)]
+)
+def test_pr2_enforces_checkpoint_interval_safety_floor(
+    tmp_path: Path, interval_ms: int, accepted: bool
+) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "auto_key.json"))
+    design["runtime"]["checkpoint_interval_ms"] = interval_ms
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+    assessment = json.loads(result.stdout)
+
+    if accepted:
+        assert result.returncode == 0, result.stderr
+        assert assessment["finding_codes"] == []
+        assert assessment["status"] == "CONFIG_VALIDATED"
+        assert f"'{interval_ms} ms'" in assessment["artifacts"]["runtime_sql"]
+    else:
+        assert result.returncode == 1
+        assert assessment["finding_codes"] == [
+            "FLINK_CHECKPOINT_INTERVAL_UNSUPPORTED"
+        ]
+        assert assessment["status"] == "BLOCKED"
+        assert assessment["executable_eligible"] is False
+        assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_code"),
+    [
+        (("table", "path", "<TABLE_PATH>"), "FLINK_LOAD_BEARING_VALUE_REQUIRED"),
+        (
+            ("table", "path", "s3://user:password@bucket/orders"),
+            "FLINK_LOAD_BEARING_VALUE_REQUIRED",
+        ),
+        (
+            ("table", "path", "s3://bucket/orders#token=secret"),
+            "FLINK_LOAD_BEARING_VALUE_REQUIRED",
+        ),
+        (
+            ("table", "path", "s3://[invalid-host/orders"),
+            "FLINK_LOAD_BEARING_VALUE_REQUIRED",
+        ),
+        (
+            ("table", "path", "file:///tmp/orders\nDROP TABLE target"),
+            "FLINK_LOAD_BEARING_VALUE_REQUIRED",
+        ),
+        (("runtime", "checkpointing_enabled", False), "FLINK_CHECKPOINTING_REQUIRED"),
+        (("safety", "replay_behavior", "must_collapse"), "FLINK_REPLAY_IDEMPOTENCE_DEFERRED"),
+    ],
+)
+def test_pr2_withholds_sql_when_load_bearing_contract_is_invalid(
+    tmp_path: Path, mutation: tuple[str, str, object], expected_code: str
+) -> None:
+    design = copy.deepcopy(json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json")))
+    section, key, value = mutation
+    design[section][key] = value
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert expected_code in assessment["finding_codes"]
+    assert assessment["executable_eligible"] is False
+    assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize("scheme", ["abfs", "abfss"])
+def test_pr2_accepts_standard_abfs_filesystem_authority(
+    tmp_path: Path, scheme: str
+) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    design["table"]["path"] = (
+        f"{scheme}://container@account.dfs.core.windows.net/orders"
+    )
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 0, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "CONFIG_VALIDATED"
+    assert design["table"]["path"] in assessment["artifacts"]["table_ddl"]
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "abfss://user:password@account.dfs.core.windows.net/orders",
+        "abfss://user@non-azure.example.com/orders",
+        "s3://user@bucket/orders",
+    ],
+)
+def test_pr2_rejects_actual_uri_credentials(tmp_path: Path, path: str) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    design["table"]["path"] = path
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert "FLINK_LOAD_BEARING_VALUE_REQUIRED" in assessment["finding_codes"]
+    assert assessment["executable_eligible"] is False
+    assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize(
+    "sas_query",
+    [
+        "sv=2025-01-05&sp=rw&sig=EXAMPLE_SIGNATURE",
+        "sv=2025-01-05&sp=rw&SIG=",
+    ],
+)
+def test_pr2_rejects_azure_sas_signatures(tmp_path: Path, sas_query: str) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    design["table"]["path"] = (
+        "https://account.blob.core.windows.net/container/orders?" + sas_query
+    )
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert "FLINK_LOAD_BEARING_VALUE_REQUIRED" in assessment["finding_codes"]
+    assert assessment["executable_eligible"] is False
+    assert "artifacts" not in assessment
+    assert "EXAMPLE_SIGNATURE" not in result.stdout
+    assert "EXAMPLE_SIGNATURE" not in result.stderr
+
+
+@pytest.mark.parametrize("replay_behavior", [[], {}])
+def test_pr2_reports_non_string_replay_behavior_without_losing_findings(
+    tmp_path: Path, replay_behavior: object
+) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    design["safety"]["replay_behavior"] = replay_behavior
+    design["write"]["insert_cluster"] = True
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == [
+        "FLINK_REPLAY_BEHAVIOR_UNRESOLVED",
+        "FLINK_APPEND_MODE_CLUSTERING_ENABLED",
+    ]
+    assert assessment["status"] == "BLOCKED"
+    assert assessment["executable_eligible"] is False
+    assert "artifacts" not in assessment
+    assert "Traceback" not in result.stderr
+
+
+def test_pr2_sql_renderer_escapes_identifiers_and_literals(tmp_path: Path) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    design["table"]["name"] = "analytics.order`s"
+    design["source"]["table"] = "staging.source`s"
+    design["table"]["path"] = "file:///tmp/architect's-orders"
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 0, result.stderr
+    sql = json.loads(result.stdout)["artifacts"]["combined_sql"]
+    assert "`analytics`.`order``s`" in sql
+    assert "`staging`.`source``s`" in sql
+    assert "'file:///tmp/architect''s-orders'" in sql
+
+
 def test_flink_code_inventory_covers_findings_and_advisories() -> None:
     contract = _load_toml(GATE_FIXTURE)
     decisions = _read(REFERENCES_DIR / "flink-decision-overrides.md")
     warnings = _read(REFERENCES_DIR / "flink-warnings.md")
     codes = set(contract["finding_status"])
+    syntax_tree = ast.parse(_read(FLINK_DESIGN_VALIDATOR))
+    finding_assignment = next(
+        node
+        for node in syntax_tree.body
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name) and target.id == "FINDING_STATUS"
+            for target in node.targets
+        )
+    )
+    codes.update(ast.literal_eval(finding_assignment.value))
     codes.update(
         {
             "FLINK_AUTO_KEY_DURABILITY",
+            "FLINK_CHECKPOINT_SMALL_FILE_RISK",
             "FLINK_STABLE_KEY_NOT_IDEMPOTENT",
             "FLINK_SECRET_REDACTED",
         }
@@ -320,7 +1049,10 @@ def test_safety_gate_order_is_stable() -> None:
         "## F4 — Physical schema availability",
         "## F5 — Mutation and record-key posture",
         "## F6 — Replay and backfill idempotence",
-        "## PR1 completion",
+        "## F7 — Physical table and source contract",
+        "## F8 — Source changelog contract",
+        "## F9 — Streaming checkpoint contract",
+        "## PR2 validation and completion",
     ]
     offsets = [flow.index(heading) for heading in headings]
     assert offsets == sorted(offsets)

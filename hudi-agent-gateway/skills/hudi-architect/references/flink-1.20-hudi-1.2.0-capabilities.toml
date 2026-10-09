@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-schema_version = 1
+schema_version = 2
 baseline_id = "hudi-1.2.0-flink-1.20"
 validation_surface = "initial-flink-sql-sink"
 
@@ -26,6 +26,69 @@ release_ref = "release-1.2.0"
 compatibility_line = "1.20"
 fixture_version = "1.20.1"
 
+[fixture_artifacts]
+hudi_bundle = "org.apache.hudi:hudi-flink1.20-bundle:1.2.0"
+flink_version = "1.20.1"
+java_version = 11
+
+[executable_contract]
+contract_schema = 1
+table_lifecycle = "new"
+writer_model = "single_writer"
+external_catalog = false
+mutability = "append_only"
+source_changelog_mode = "INSERT_ONLY"
+execution_mode = "STREAMING"
+require_checkpointing = true
+allow_record_key_modes = ["stable_key", "auto_key"]
+allow_replay_behaviors = ["cannot_occur", "duplicates_acceptable"]
+
+# PR2 intentionally validates a bounded scalar physical-schema surface. Complex,
+# computed, metadata, and watermark columns remain unverified rather than being guessed.
+[physical_types]
+simple = [
+  "BIGINT",
+  "BOOLEAN",
+  "BYTES",
+  "DATE",
+  "DOUBLE",
+  "FLOAT",
+  "INT",
+  "INTEGER",
+  "SMALLINT",
+  "STRING",
+  "TINYINT",
+]
+parameterized = [
+  "BINARY",
+  "CHAR",
+  "DECIMAL",
+  "TIME",
+  "TIMESTAMP",
+  "TIMESTAMP_LTZ",
+  "VARBINARY",
+  "VARCHAR",
+]
+
+[physical_schema_constraints]
+binary_routing_types = ["BINARY", "BYTES", "VARBINARY"]
+field_name_pattern = "^[A-Za-z_][A-Za-z0-9_]*$"
+reserved_target_field_names = [
+  "_hoodie_commit_seqno",
+  "_hoodie_commit_time",
+  "_hoodie_file_name",
+  "_hoodie_operation",
+  "_hoodie_partition_path",
+  "_hoodie_record_key",
+]
+temporal_precision_min = 0
+temporal_precision_max = 6
+temporal_types = ["TIME", "TIMESTAMP", "TIMESTAMP_LTZ"]
+
+[runtime_constraints]
+checkpoint_interval_min_ms = 1000
+flink_checkpoint_interval_min_ms = 10
+
 [[source_anchors]]
 id = "root_pom"
 path = "pom.xml"
@@ -37,6 +100,24 @@ id = "flink_options"
 path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/configuration/FlinkOptions.java"
 sha256 = "090f69445ce8baa700b06356c0165a7d0dc35cf57c12052d91813af0427d2f71"
 purpose = "Flink DynamicTable option keys and defaults"
+
+[[source_anchors]]
+id = "hoodie_schema_converter"
+path = "hudi-client/hudi-flink-client/src/main/java/org/apache/hudi/util/HoodieSchemaConverter.java"
+sha256 = "9fc500632bd250be48b0c9fa08faff7eb6cdb1ce9ad5ecce03a2532a69952e72"
+purpose = "Flink logical-type conversion limits and Avro-backed physical field construction"
+
+[[source_anchors]]
+id = "hoodie_record"
+path = "hudi-common/src/main/java/org/apache/hudi/common/model/HoodieRecord.java"
+sha256 = "11587947231d5a5727fea25169c986a20a3079d7f62787d3efe44c1f6e3f066e"
+purpose = "Canonical Hudi metadata field names reserved by the write path"
+
+[[source_anchors]]
+id = "flink_data_type_utils"
+path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/util/DataTypeUtils.java"
+sha256 = "62e99e81fede5fdf1e6b50ce81553812f4149502e821db300e227c03dce2c240"
+purpose = "Writer-side prepending of Hudi metadata fields to the Flink row type"
 
 [[source_anchors]]
 id = "options_resolver"
@@ -127,17 +208,50 @@ key = "write.operation"
 value = "insert"
 applies_to = "pr2-append-only-cow"
 
-[[deferred_acceptance_checks]]
+[[implemented_acceptance_checks]]
+id = "FLINK_BINARY_ROUTING_FIELD_UNSUPPORTED"
+requirement = "Reject binary record-key and partition fields whose Hudi 1.2.0 routing strings depend on Java object identity."
+python_test = "test_pr2_rejects_binary_routing_fields"
+java_test = "testPinnedBinaryValuesUseObjectIdentityForRouting"
+
+[[implemented_acceptance_checks]]
 id = "FLINK_RECORD_KEY_FIELD_MISSING"
-target_pr = "PR2"
 requirement = "Reject an explicitly configured record-key field that is absent from the physical schema, including append mode."
+python_test = "test_pr2_rejects_record_key_missing_from_append_schema"
+java_test = "testPinnedFactorySkipsMissingRecordKeyCheckInAppendMode"
 
-[[deferred_acceptance_checks]]
+[[implemented_acceptance_checks]]
 id = "FLINK_APPEND_MODE_CLUSTERING_ENABLED"
-target_pr = "PR2"
 requirement = "Reject COW insert output whose effective write.insert.cluster value is not false."
+python_test = "test_pr2_rejects_insert_clustering_override"
+java_test = "testPinnedAppendModeRequiresInsertClusteringDisabled"
 
-[[deferred_acceptance_checks]]
+[[implemented_acceptance_checks]]
 id = "FLINK_SOURCE_CHANGELOG_NOT_APPEND_ONLY"
-target_pr = "PR2"
 requirement = "Validate generated INSERT INTO with a declared source schema and append-only changelog contract through a planner fixture."
+python_test = "test_pr2_rejects_non_append_source_changelog"
+java_test = "testStableKeySinkAndInsertPlan"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_TEMPORAL_PRECISION_UNSUPPORTED"
+requirement = "Reject TIME, TIMESTAMP, and TIMESTAMP_LTZ precision above the Hudi 1.2.0 connector limit of 6."
+python_test = "test_pr2_enforces_pinned_temporal_precision_limits"
+java_test = "testPinnedPlannerRejectsTemporalPrecisionAboveSix"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_SCHEMA_FIELD_NAME_UNSUPPORTED"
+requirement = "Reject physical field names that cannot be represented by the Avro-backed Hudi sink schema."
+python_test = "test_pr2_rejects_non_avro_physical_field_names"
+java_test = "testPinnedPlannerRejectsNonAvroFieldName"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_HUDI_METADATA_FIELD_CONFLICT"
+requirement = "Reject target physical field names reserved for Hudi metadata before the append writer prepends them."
+python_test = "test_pr2_rejects_reserved_hudi_metadata_field_names"
+java_test = "testPinnedWriterRejectsReservedHudiMetadataField"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_CHECKPOINT_INTERVAL_UNSUPPORTED"
+requirement = "Reject checkpoint intervals below the 1000 ms Architect safety floor while preserving the pinned Flink 10 ms runtime boundary as evidence."
+python_test = "test_pr2_enforces_checkpoint_interval_safety_floor"
+java_test = "testPinnedRuntimeCheckpointIntervalBoundary"

@@ -23,7 +23,7 @@ This reference is the only verified baseline for the initial Flink-native Archit
 - Apache Flink 1.20.
 - Flink 1.20.1 for build and test fixtures.
 - Hudi source revision `f05c83f2b97732de7a558ff9b26959e1139c05f5`.
-- Flink SQL with the Hudi DynamicTable connector as the future executable API.
+- Flink SQL with the Hudi DynamicTable connector as the executable API.
 - No XTable integration.
 
 An explicit version outside this baseline is `REVIEW_REQUIRED`. Do not treat current `master`, a
@@ -32,8 +32,8 @@ newer release, or an older supported connector as equivalent without its own ver
 ## Immutable validation input
 
 `flink-1.20-hudi-1.2.0-capabilities.toml` is the machine-readable validation input. It records the
-full Hudi release commit, Flink fixture version, source paths and hashes, the option allowlist for
-the initial sink path, and later executable-path acceptance checks.
+full Hudi release commit, pinned Maven fixture artifacts, source paths and hashes, the option
+allowlist, the bounded design contract, and executable-path acceptance evidence.
 
 Normal validation must read that checked-in manifest. It must not discover accepted Flink options
 by scanning the enclosing checkout: the checkout may be `master` or another release and can contain
@@ -47,18 +47,18 @@ Before producing a Flink safety assessment, run:
 python3 validate_flink_capabilities.py --emit-evidence
 ```
 
-Copy the returned baseline ID, manifest schema, Hudi source revision, and Flink fixture version into
-the validation evidence. If the manifest cannot be loaded or validated, add
+Copy the returned baseline ID, manifest and design-contract schemas, Hudi source revision, and
+Flink fixture version into the validation evidence. If the manifest cannot be loaded or validated, add
 `FLINK_BASELINE_EVIDENCE_INVALID` with a `BLOCKED` contribution and make no baseline capability
 claim. Continue collecting independent workload facts before selecting the final status.
 
 The manifest allowlist covers the initial Flink SQL sink path; it is not an enumeration of every
 option in Hudi 1.2.0. An option absent from the allowlist is unverified for generated output even if
-the current checkout contains it. PR1 still does not generate an executable configuration.
+the current checkout contains it.
 
-## PR1 capability matrix
+## Current capability matrix
 
-| Capability | PR1 behavior |
+| Capability | Current behavior |
 |---|---|
 | Select Flink after the shared tier gate | Supported routing |
 | Hudi 1.2.0 / Flink 1.20 baseline disclosure | Supported |
@@ -71,42 +71,94 @@ the current checkout contains it. PR1 still does not generate an executable conf
 | External-catalog requirement detection | Supported |
 | Catalog or metastore composition | `REVIEW_REQUIRED`; deferred to PR6 |
 | Physical-schema availability detection | Supported |
-| Physical-schema parsing and DDL validation | Deferred to PR2 |
+| Bounded scalar physical-schema validation | Supported |
+| Binary payload columns | Supported |
+| `BYTES`, `BINARY`, or `VARBINARY` record-key and partition fields | `BLOCKED`; deterministic routing encoding is not available |
+| Avro-compatible physical field names | Required; incompatible names are `BLOCKED` |
+| Hudi fixed metadata field names in the target schema | `BLOCKED`; six exact names are reserved case-insensitively |
+| `TIME`, `TIMESTAMP`, and `TIMESTAMP_LTZ` precision 0 through 6 | Supported |
+| Temporal precision above 6 | `BLOCKED` by the pinned connector limit |
+| Other nested, computed, metadata, and watermark columns | `REVIEW_REQUIRED` |
 | Append-only record-key posture detection | Supported |
 | Auto-generated-key durability warning | Supported |
 | Replay-idempotence classification | Supported |
 | Mutable COW, upsert, and deletes | `BLOCKED`; deferred to PR3 |
 | MOR and compaction ownership | Deferred to PR4 |
-| Flink SQL DDL and connector options | Not generated in PR1 |
-| Executable sink-side example | Not generated in PR1 |
-| `HoodieTableFactory` fixture validation | Deferred to PR2 |
+| New-table, single-writer, append-only COW SQL | Supported after static validation |
+| Stable-key DDL | `PRIMARY KEY (...) NOT ENFORCED` |
+| Explicitly accepted auto-generated keys | Supported with durable warning |
+| Streaming checkpoint contract | Required; interval must be at least 1000 ms |
+| Declared source schema and `INSERT_ONLY` changelog | Required |
+| Flink SQL DDL and connector options | Validator-rendered for eligible requests |
+| Executable sink-side `INSERT INTO` | Validator-rendered for eligible requests |
+| Hudi 1.2.0 `HoodieTableFactory` fixture | Supported through pinned release bundle |
+| Flink 1.20.1 planner fixture | Supported with a local declared source contract |
 | Spark and HoodieStreamer behavior | Must remain unchanged |
 
-## Required PR2 acceptance contract
+## Implemented PR2 acceptance contract
 
-The following checks are recorded now so that the first executable path cannot claim
-`CONFIG_VALIDATED` using only a successful sink-factory construction. Their stable identifiers and
-requirements are also present in the machine-readable manifest.
+The first executable path cannot claim `CONFIG_VALIDATED` using only a successful sink-factory
+construction. The stable identifiers and their Python and Java evidence are recorded in the
+machine-readable manifest.
+
+### `FLINK_BINARY_ROUTING_FIELD_UNSUPPORTED`
+
+The pinned Hudi 1.2.0 `RowDataKeyGen` converts Flink binary values through Java array
+`toString()`, producing object-identity strings such as `[B@...`. Equal byte sequences can
+therefore produce different record keys or partition directories. The design validator blocks
+`BYTES`, `BINARY`, and `VARBINARY` only when used in either routing role; those types remain
+available for payload columns. Python tests cover all three types in both roles, and the pinned
+bundle fixture preserves the object-identity behavior as regression evidence.
 
 ### `FLINK_RECORD_KEY_FIELD_MISSING`
 
-For append mode, `HoodieTableFactory.sanityCheck` skips `checkRecordKey`. PR2 must therefore add an
-Architect-validator fixture that explicitly supplies a record-key field absent from the physical
-schema and rejects it before factory validation. The fixture must use the pinned Hudi revision and
-Flink 1.20.1.
+For append mode, `HoodieTableFactory.sanityCheck` skips `checkRecordKey`. The Architect validator
+therefore rejects an explicit record-key field absent from the physical schema before factory
+validation. The negative fixture is bound to this manifest and its pinned release artifacts.
 
 ### `FLINK_APPEND_MODE_CLUSTERING_ENABLED`
 
 On Hudi 1.2.0, a COW insert is append mode only when the effective value of
-`write.insert.cluster` is `false`. PR2 must pin or validate that value and reject an incompatible
-`true` override. Checking only `write.operation = insert` is insufficient.
+`write.insert.cluster` is `false`. The design validator requires and renders that value and rejects
+an incompatible `true` override. Checking only `write.operation = insert` is insufficient.
 
 ### `FLINK_SOURCE_CHANGELOG_NOT_APPEND_ONLY`
 
-PR2 must validate the generated `INSERT INTO` with a planner fixture that declares the source
-schema and changelog contract. A successful `HoodieTableFactory` construction proves only that the
-sink can be constructed; it does not prove that the source-to-sink statement is append-only. The
-planner fixture remains local and requires no external source service.
+The generated `INSERT INTO` is consumed by a Flink 1.20.1 planner fixture with a declared physical
+source schema and `ChangelogMode.insertOnly()`. The Python validator independently rejects a
+non-`INSERT_ONLY` source contract. The fixture is local and requires no external source service.
+
+### `FLINK_TEMPORAL_PRECISION_UNSUPPORTED`
+
+The pinned `HoodieSchemaConverter` maps `TIME`, `TIMESTAMP`, and `TIMESTAMP_LTZ` only through
+precision 6. The design validator blocks higher precision before SQL emission. Python tests cover
+the 6, 7, and 9 boundaries for all three types, and the pinned planner fixture reproduces the
+connector rejection at 7 and 9 for both timestamp forms. A direct pinned-converter test covers
+the same boundaries for `TIME`, closing the adjacent path governed by the same connector limit.
+
+### `FLINK_SCHEMA_FIELD_NAME_UNSUPPORTED`
+
+The Hudi sink builds an Avro-backed physical schema, so a Flink-quoted name such as `user-id` is
+not sufficient. The design validator requires every source and target field name to match
+`^[A-Za-z_][A-Za-z0-9_]*$` before rendering. Python tests cover valid and invalid boundaries, and
+the pinned planner fixture preserves the connector failure as regression evidence. The validator
+does not silently sanitize names because doing so would alter schema, key, and partition semantics.
+
+### `FLINK_HUDI_METADATA_FIELD_CONFLICT`
+
+The pinned Hudi write path prepends the six names in
+`HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION`. The design validator therefore rejects those
+exact target names case-insensitively before SQL emission, while allowing other `_hoodie_`-prefixed
+names. Python tests cover all six names, case-insensitive matching, and the non-reserved prefix
+boundary. The pinned writer-path fixture reproduces Flink's duplicate-field failure for all six
+names and anchors the canonical reserved-name set.
+
+### `FLINK_CHECKPOINT_INTERVAL_UNSUPPORTED`
+
+Flink 1.20.1 rejects checkpoint intervals below its 10 ms runtime minimum. The bounded Architect
+path deliberately applies a stricter 1000 ms safety floor and blocks lower values instead of
+silently increasing them. The pinned runtime test preserves the 9/10 ms dependency boundary, and
+the Python validator tests preserve the 999/1000 ms Architect boundary.
 
 ## Status vocabulary
 
@@ -114,8 +166,8 @@ planner fixture remains local and requires no external source service.
 - `BLOCKED` — the requested path is known to be outside the currently implemented Flink scope.
 - `REVIEW_REQUIRED` — compatibility, writer topology, catalog behavior, or another operational
   risk requires human confirmation.
-- `CONFIG_VALIDATED` — reserved for a later executable path whose load-bearing values have passed
-  static validation. This status is unreachable in PR1.
+- `CONFIG_VALIDATED` — every PR1 gate passed and all load-bearing PR2 design values passed the
+  pinned static validator. Canonical SQL was emitted without unresolved placeholders.
 
 No status claims that storage permissions, JAR deployment, source availability, catalog
 connectivity, active writers, checkpoint behavior, or live table state were verified.

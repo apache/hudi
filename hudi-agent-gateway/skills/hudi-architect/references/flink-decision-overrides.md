@@ -15,7 +15,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 -->
-# Flink decision overrides — PR1
+# Flink decision overrides — first executable PR2 path
 
 These rules constrain the shared Hudi Architect decisions after the Flink route is selected. They
 do not replace the shared table-design rules and do not form a standalone planner API.
@@ -34,9 +34,19 @@ do not replace the shared table-design rules and do not form a standalone planne
 - Do not infer `SINGLE_WRITER`; it must be confirmed by the user.
 - Do not infer that no external catalog is needed; ask the outcome gate.
 - Do not infer a physical schema.
+- Do not sanitize physical field names or reduce temporal precision. Field names must match the
+  pinned Avro-backed schema rule, and `TIME`, `TIMESTAMP`, and `TIMESTAMP_LTZ` precision must be
+  between 0 and 6.
+- Do not emit a target field whose case-insensitive name matches one of Hudi's six reserved
+  metadata fields. Reject the conflict instead of renaming the field or relying on the writer to
+  prepend a duplicate metadata column.
+- Require a checkpoint interval of at least 1000 ms for the bounded Architect path. The pinned
+  Flink 1.20.1 runtime minimum of 10 ms remains explicit dependency evidence, not the Architect
+  safety floor.
 - Do not equate a stable record key with replay idempotence.
 - Do not reuse this baseline for another Hudi or Flink version.
-- PR1 never returns an executable Flink configuration.
+- Emit executable output only when `validate_flink_design.py` returns `CONFIG_VALIDATED` for the
+  complete version-1 design contract. Never hand-write around a validator finding.
 
 ## Gate outcomes
 
@@ -59,12 +69,32 @@ do not replace the shared table-design rules and do not form a standalone planne
 | No stable key and the auto-key posture is explicitly declined | `FLINK_AUTO_KEY_DECLINED` | `BLOCKED` | No |
 | Replay copies must collapse | `FLINK_REPLAY_IDEMPOTENCE_DEFERRED` | `BLOCKED` | No |
 | Replay behavior unknown | `FLINK_REPLAY_BEHAVIOR_UNRESOLVED` | `REVIEW_REQUIRED` | No |
-| All PR1 gates pass | `FLINK_EXECUTABLE_PATH_DEFERRED` | `BLOCKED` | No |
+| Stable or explicit record-key option references a missing field | `FLINK_RECORD_KEY_FIELD_MISSING` | `BLOCKED` | No |
+| Stable record-key field is nullable | `FLINK_RECORD_KEY_NULLABLE` | `BLOCKED` | No |
+| PRIMARY KEY syntax conflicts with a record-key option | `FLINK_PRIMARY_KEY_RECORD_KEY_CONFLICT` | `BLOCKED` | No |
+| Partition field is absent from the physical schema | `FLINK_PARTITION_FIELD_MISSING` | `BLOCKED` | No |
+| Binary field is used as a stable record key or partition field | `FLINK_BINARY_ROUTING_FIELD_UNSUPPORTED` | `BLOCKED` | No |
+| Physical field name is not representable by the Avro-backed Hudi schema | `FLINK_SCHEMA_FIELD_NAME_UNSUPPORTED` | `BLOCKED` | No |
+| Target physical field conflicts with a fixed Hudi metadata name | `FLINK_HUDI_METADATA_FIELD_CONFLICT` | `BLOCKED` | No |
+| `TIME`, `TIMESTAMP`, or `TIMESTAMP_LTZ` precision is outside 0 through 6 | `FLINK_TEMPORAL_PRECISION_UNSUPPORTED` | `BLOCKED` | No |
+| Physical type is outside the pinned PR2 scalar surface | `FLINK_SCHEMA_TYPE_UNVERIFIED` | `REVIEW_REQUIRED` | No |
+| Source table contract is missing | `FLINK_SOURCE_CONTRACT_REQUIRED` | `INCOMPLETE` | No |
+| Source and target projected schemas differ | `FLINK_SOURCE_SCHEMA_MISMATCH` | `BLOCKED` | No |
+| Source changelog is not `INSERT_ONLY` | `FLINK_SOURCE_CHANGELOG_NOT_APPEND_ONLY` | `BLOCKED` | No |
+| Effective `write.insert.cluster` is not `false` | `FLINK_APPEND_MODE_CLUSTERING_ENABLED` | `BLOCKED` | No |
+| Table type, operation, or execution mode is outside PR2 | `FLINK_PR2_WRITE_PATH_UNSUPPORTED` | `BLOCKED` | No |
+| Checkpointing is explicitly disabled | `FLINK_CHECKPOINTING_REQUIRED` | `BLOCKED` | No |
+| Checkpoint interval is absent or non-positive | `FLINK_CHECKPOINT_INTERVAL_REQUIRED` | `INCOMPLETE` | No |
+| Positive checkpoint interval is below the 1000 ms Architect safety floor | `FLINK_CHECKPOINT_INTERVAL_UNSUPPORTED` | `BLOCKED` | No |
+| Target table, target path, source table, or another load-bearing value is a placeholder | `FLINK_LOAD_BEARING_VALUE_REQUIRED` | `INCOMPLETE` | No |
+| Design-contract structure is malformed or contains an ignored field | `FLINK_DESIGN_CONTRACT_INVALID` | `INCOMPLETE` | No |
+| A connector option is outside the pinned allowlist | `FLINK_OPTION_NOT_VERIFIED` | `REVIEW_REQUIRED` | No |
+| Complete PR2 contract passes deterministic validation | — | `CONFIG_VALIDATED` | Yes |
 
 ## Final-status precedence
 
 Collect findings before choosing the final status. A finding must not end the interview while
-independent PR1 gates can still be evaluated. Continue those independent gates and skip only a
+independent gates can still be evaluated. Continue those independent gates and skip only a
 question whose prerequisite is genuinely unavailable. Preserve every finding in gate order, even
 when a higher-precedence finding determines the final status.
 
@@ -73,18 +103,16 @@ After collection, choose one final status with this precedence:
 1. A known unsupported or not-yet-implemented path makes the result `BLOCKED`.
 2. Otherwise, an unverified compatibility or operational risk makes it `REVIEW_REQUIRED`.
 3. Otherwise, a missing required fact makes it `INCOMPLETE`.
-4. Only if no other finding exists and all safety facts are present, add
-   `FLINK_EXECUTABLE_PATH_DEFERRED` and return `BLOCKED`.
+4. Only if no finding exists, every PR1 safety gate passed, and the PR2 design validator emitted
+   canonical SQL, return `CONFIG_VALIDATED` with executable eligibility `true`.
 
-PR1 always reports executable eligibility as `false`. Status precedence changes only the single
-summary status; it never removes a lower-precedence reason.
-
-`CONFIG_VALIDATED` is defined for the complete Flink flow but is unreachable in PR1. It becomes
-eligible only after a later PR adds executable generation and static validation.
+Status precedence changes only the single summary status; it never removes a lower-precedence
+reason. `CONFIG_VALIDATED` is a success state, not another precedence contribution. It proves
+only bounded static validation against the pinned release contract.
 
 ## Record-key and replay classification
 
-| Mutability | Stable business key | Replay requirement | PR1 result |
+| Mutability | Stable business key | Replay requirement | PR2 result |
 |---|---|---|---|
 | Mutable | Required | Any | `BLOCKED` — mutable COW is deferred |
 | Append-only | Yes | Replays impossible | Continue safety gates; stable key preferred |
@@ -109,9 +137,10 @@ table. They remain part of the deterministic code inventory:
 |---|---|---|
 | Stable business key on the append-only insert path | `FLINK_STABLE_KEY_NOT_IDEMPOTENT` | Explain that insert does not deduplicate independent replay |
 | Eligible no-stable-key path reaches the acceptance question | `FLINK_AUTO_KEY_DURABILITY` | Explain durability before recording acceptance |
+| Known checkpoint volume per active partition is very small | `FLINK_CHECKPOINT_SMALL_FILE_RISK` | Record a cadence risk without inventing tuning |
 | Credential material is removed from supplied evidence | `FLINK_SECRET_REDACTED` | Continue with sanitized evidence or mark an obscured fact incomplete |
 
-## PR1 deterministic scenario matrix
+## Safety-gate deterministic scenario matrix
 
 The identifiers below are stable test fixtures for the reference contract. Tests assert status
 and executable eligibility, not exact natural-language wording.
@@ -130,11 +159,11 @@ and executable eligibility, not exact natural-language wording.
 | `F07_MUTABLE` | Updates or deletes occur | `BLOCKED` | No |
 | `F08_REPLAY_COLLAPSE` | Independent replay must deduplicate | `BLOCKED` | No |
 | `F09_REPLAY_UNKNOWN` | Replay behavior is unknown | `REVIEW_REQUIRED` | No |
-| `F10_SAFE_APPEND` | Baseline new-table single-writer append-only path with a stable key passes every gate | `BLOCKED` | No |
+| `F10_SAFE_APPEND` | Baseline new-table single-writer append-only path with a stable key passes every gate | Proceed to PR2 validation | Not decided by gates alone |
 | `F11_COMBINED_GATES` | Writer model unknown, physical schema missing, and replay copies must collapse | `BLOCKED` | No |
 | `F12_AUTO_KEY_PENDING` | Otherwise-safe no-stable-key path has no explicit auto-key decision | `INCOMPLETE` | No |
 | `F13_AUTO_KEY_DECLINED` | Otherwise-safe no-stable-key path explicitly rejects auto-generated keys | `BLOCKED` | No |
-| `F14_AUTO_KEY_ACCEPTED` | Otherwise-safe no-stable-key path explicitly accepts auto-generated keys | `BLOCKED` | No |
+| `F14_AUTO_KEY_ACCEPTED` | Otherwise-safe no-stable-key path explicitly accepts auto-generated keys | Proceed to PR2 validation | Not decided by gates alone |
 
 For `F11_COMBINED_GATES`, retain `FLINK_WRITER_MODEL_UNRESOLVED`,
 `FLINK_PHYSICAL_SCHEMA_REQUIRED`, and `FLINK_REPLAY_IDEMPOTENCE_DEFERRED`. `BLOCKED` wins by
@@ -142,8 +171,25 @@ precedence, but the `REVIEW_REQUIRED` and `INCOMPLETE` reasons remain visible.
 
 For `F12_AUTO_KEY_PENDING` and `F13_AUTO_KEY_DECLINED`, derive the finding from the recorded
 auto-key answer and retain it in the final assessment. `F14_AUTO_KEY_ACCEPTED` records the
-`FLINK_AUTO_KEY_DURABILITY` advisory and, because no status-contributing finding remains, ends
-with `FLINK_EXECUTABLE_PATH_DEFERRED` like every otherwise-safe PR1 request.
+`FLINK_AUTO_KEY_DURABILITY` advisory and, because no status-contributing finding remains, proceeds
+to the executable contract just like `F10_SAFE_APPEND`.
+
+## PR2 executable invariants
+
+- Canonical COW insert output fixes `table.type=COPY_ON_WRITE`, `write.operation=insert`, and
+  `write.insert.cluster=false`.
+- The pass-through connector-option map is explicitly empty. Canonical structured fields are the
+  only source of emitted options; no accepted input may be silently ignored.
+- Stable-key output uses `PRIMARY KEY (...) NOT ENFORCED`; auto-key output omits both primary-key
+  syntax and record-key options.
+- Target and source schemas are explicit. The generated `INSERT INTO` names every column and never
+  uses `SELECT *` or an inferred cast.
+- The source contract is `INSERT_ONLY`, execution is streaming, and checkpointing has a concrete
+  interval of at least 1000 ms.
+- Target table, path, and source table are concrete. A `CONFIG_VALIDATED` output contains no
+  unresolved load-bearing placeholder.
+- The Hudi 1.2.0 / Flink 1.20.1 factory and planner fixtures consume the same SQL golden files as
+  the Python validator tests.
 
 ## Evidence and secret handling
 
