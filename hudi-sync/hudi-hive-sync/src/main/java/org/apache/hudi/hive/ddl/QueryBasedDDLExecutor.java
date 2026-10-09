@@ -157,7 +157,8 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
     log.info("Adding partitions {} to table {}", partitionsToAdd.size(), tableName);
     int batchSize = config.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM);
     List<String> sqls = constructAddPartitions(tableName, partitionsToAdd, batchSize);
-    // statement i adds the i-th batch of batchSize partitions, the last one what is left
+    // statement i adds the i-th batch of batchSize partitions; if it is the last statement, it adds
+    // what is left, which can be fewer
     runSQLs(sqls, i -> onPartitionsAdded.accept(Math.min(batchSize, partitionsToAdd.size() - i * batchSize)));
   }
 
