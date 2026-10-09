@@ -2594,6 +2594,53 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   def testNestedFieldPartition(): Unit = {
     TestCOWDataSource.runNestedFieldPartitionTest(spark, basePath, storage, "MOR")
   }
+
+  /**
+   * Upserts and deletes into a MOR table with the operation meta field enabled write records that carry no operation,
+   * or a delete without its row after deduplication; they must land in the log files, and inline compaction must pick
+   * those log files up.
+   */
+  @ParameterizedTest
+  @CsvSource(Array("6,true", "6,false", "8,true", "8,false", "10,true", "10,false"))
+  def testUpsertWithOperationMetadataField(tableVersion: Int, allowOperationField: Boolean): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+    val options = Map[String, String](
+      DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
+      DataSourceWriteOptions.OPERATION.key -> UPSERT_OPERATION_OPT_VAL,
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "part",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "ts",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_operation_field",
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> tableVersion.toString,
+      HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key -> allowOperationField.toString,
+      HoodieCompactionConfig.INLINE_COMPACT.key -> "true",
+      HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key -> "3",
+      "hoodie.insert.shuffle.parallelism" -> "1",
+      "hoodie.upsert.shuffle.parallelism" -> "1")
+    def write(rows: Seq[(String, String, Long, String, Boolean)], mode: SaveMode): Unit =
+      rows.toDF("id", "name", "ts", "part", HoodieRecord.HOODIE_IS_DELETED_FIELD)
+        .write.format("hudi").options(options).mode(mode).save(basePath)
+    def readNames(): Seq[String] = spark.read.format("hudi").load(basePath)
+      .select("id", "name").collect().map(row => row.getString(0) + ":" + row.getString(1)).sorted.toSeq
+
+    write(Seq(("1", "a", 1L, "p1", false), ("2", "b", 1L, "p1", false), ("3", "c", 1L, "p1", false)), SaveMode.Overwrite)
+    write(Seq(("1", "a2", 2L, "p1", false)), SaveMode.Append)
+    assertEquals(Seq("1:a2", "2:b", "3:c"), readNames())
+    if (allowOperationField) {
+      val operations = spark.read.format("hudi").load(basePath)
+        .select("id", HoodieRecord.OPERATION_METADATA_FIELD).collect().map(row => row.getString(0) -> row.getString(1)).toMap
+      assertEquals("U", operations("1"), "the update in the log file must be marked as an update")
+    }
+    // A plain delete of 2, and an update and a delete of 3 that deduplication merges into a delete without its row.
+    write(Seq(("2", "b", 3L, "p1", true), ("3", "c3", 3L, "p1", false), ("3", "c", 4L, "p1", true)), SaveMode.Append)
+    assertEquals(Seq("1:a2"), readNames())
+
+    val compactionCommits = createMetaClient(spark, basePath).getActiveTimeline.filterCompletedInstants()
+      .getInstants.asScala.count(_.getAction == "commit")
+    assertEquals(1, compactionCommits, "inline compaction should compact the log files")
+    assertEquals(Seq("1:a2"), readNames())
+  }
 }
 
 object TestMORDataSource {
