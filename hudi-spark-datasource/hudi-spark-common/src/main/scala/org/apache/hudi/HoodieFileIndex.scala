@@ -24,7 +24,7 @@ import org.apache.hudi.common.config.{HoodieConfig, HoodieMetadataConfig, TypedP
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT}
 import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieLogFile}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
-import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
 import org.apache.hudi.config.HoodieIndexConfig
 import org.apache.hudi.core.read.BaseHoodieTableFileIndex
 import org.apache.hudi.core.read.BaseHoodieTableFileIndex.PartitionPath
@@ -730,7 +730,7 @@ object HoodieFileIndex extends Logging {
   }
 
   private def isBucketIndexDeclared(properties: TypedProperties): Boolean =
-    IndexType.BUCKET.name.equalsIgnoreCase(properties.getString(HoodieIndexConfig.INDEX_TYPE.key, ""))
+    IndexType.BUCKET.name.equalsIgnoreCase(ConfigUtils.getStringWithAltKeys(properties, HoodieIndexConfig.INDEX_TYPE, ""))
 
   // if database name is not set, fall back to use 'default' instead of failing
   def getDatabaseName(tableConfig: HoodieTableConfig, defaultDatabase: String)  = {
