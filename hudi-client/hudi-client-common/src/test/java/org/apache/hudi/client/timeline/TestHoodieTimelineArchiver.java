@@ -19,32 +19,43 @@
 
 package org.apache.hudi.client.timeline;
 
+import org.apache.hudi.client.transaction.FaultInjectingLockProvider;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
 import org.apache.hudi.common.table.timeline.versioning.v1.ActiveTimelineV1;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieArchivalConfig;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieWriteableTestTable;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.lang.reflect.Field;
 import java.util.Collections;
 
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -55,6 +66,12 @@ class TestHoodieTimelineArchiver extends HoodieCommonTestHarness {
   void setUp() throws Exception {
     initPath();
     initMetaClient();
+    FaultInjectingLockProvider.reset();
+  }
+
+  @AfterEach
+  void tearDown() {
+    FaultInjectingLockProvider.reset();
   }
 
   @Test
@@ -136,11 +153,90 @@ class TestHoodieTimelineArchiver extends HoodieCommonTestHarness {
     assertFalse(lsmConfig.populateMetaFields());
   }
 
+  @Test
+  void archiveIfRequired_failedUnlockClosesLockProvider() throws Exception {
+    HoodieWriteConfig writeConfig = getLockedWriteConfig();
+    HoodieEngineContext context = new HoodieLocalEngineContext(metaClient.getStorageConf());
+    HoodieStorage hoodieStorage = HoodieStorageUtils.getStorage(basePath, metaClient.getStorageConf());
+    HoodieWriteableTestTable testTable = new HoodieWriteableTestTable(basePath, hoodieStorage, metaClient, SCHEMA, null, null, Option.of(context));
+    for (int i = 0; i < 5; i++) {
+      testTable.addCommit(InProcessTimeGenerator.createNewInstantTime());
+    }
+    TimelineArchiverV1 archiver = new TimelineArchiverV1<>(writeConfig, setupMockHoodieTable(context, writeConfig));
+
+    FaultInjectingLockProvider.setFailUnlock(true);
+    assertThrows(HoodieLockException.class, () -> archiver.archiveIfRequired(context, true));
+    assertEquals(4, metaClient.reloadActiveTimeline().countInstants());
+    assertEquals(1, FaultInjectingLockProvider.getInstances().size());
+    assertTrue(FaultInjectingLockProvider.getInstances().get(0).isClosed());
+  }
+
+  @Test
+  void archiveIfRequired_writerCloseFailureClosesLockProvider() throws Exception {
+    HoodieWriteConfig writeConfig = getLockedWriteConfig();
+    HoodieEngineContext context = new HoodieLocalEngineContext(metaClient.getStorageConf());
+    TimelineArchiverV1 archiver = new TimelineArchiverV1<>(writeConfig, setupMockHoodieTable(context, writeConfig));
+    Writer failingWriter = mock(Writer.class);
+    doThrow(new IOException("Injected writer close failure")).when(failingWriter).close();
+    Field writerField = TimelineArchiverV1.class.getDeclaredField("writer");
+    writerField.setAccessible(true);
+    writerField.set(archiver, failingWriter);
+
+    HoodieException e = assertThrows(HoodieException.class, () -> archiver.archiveIfRequired(context, true));
+    assertEquals("Unable to close HoodieLogFormat writer", e.getMessage());
+    assertEquals(1, FaultInjectingLockProvider.getInstances().size());
+    assertTrue(FaultInjectingLockProvider.getInstances().get(0).isClosed());
+  }
+
+  @Test
+  void archiveIfRequired_failedLockAcquisitionDoesNotCloseProvider() throws Exception {
+    HoodieWriteConfig writeConfig = getLockedWriteConfig();
+    HoodieEngineContext context = new HoodieLocalEngineContext(metaClient.getStorageConf());
+    TimelineArchiverV1 archiver = new TimelineArchiverV1<>(writeConfig, setupMockHoodieTable(context, writeConfig));
+
+    FaultInjectingLockProvider.setFailTryLock(true);
+    assertThrows(HoodieLockException.class, () -> archiver.archiveIfRequired(context, true));
+    assertEquals(1, FaultInjectingLockProvider.getInstances().size());
+    assertFalse(FaultInjectingLockProvider.getInstances().get(0).isClosed());
+  }
+
+  @Test
+  void archiveIfRequiredV2_failedLockAcquisitionDoesNotCloseProvider() throws Exception {
+    HoodieWriteConfig writeConfig = getLockedWriteConfig();
+    HoodieEngineContext context = new HoodieLocalEngineContext(metaClient.getStorageConf());
+    TimelineArchiverV2 archiver = new TimelineArchiverV2<>(writeConfig, setupMockHoodieTable(context, writeConfig));
+
+    FaultInjectingLockProvider.setFailTryLock(true);
+    assertEquals(0, archiver.archiveIfRequired(context, true));
+    assertEquals(1, FaultInjectingLockProvider.getInstances().size());
+    assertFalse(FaultInjectingLockProvider.getInstances().get(0).isClosed());
+  }
+
+  private HoodieWriteConfig getLockedWriteConfig() {
+    TypedProperties advanceProperties = new TypedProperties();
+    advanceProperties.put(TimelineArchiverV1.ARCHIVE_LIMIT_INSTANTS, 1L);
+    return HoodieWriteConfig
+        .newBuilder()
+        .withPath(tempDir.toString())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
+            .archiveCommitsWith(2, 3)
+            .build())
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(FaultInjectingLockProvider.class)
+            .withClientNumRetries(0)
+            .withClientRetryWaitTimeInMillis(10L)
+            .build())
+        .withMarkersType("DIRECT")
+        .withProperties(advanceProperties)
+        .build();
+  }
+
   private HoodieTable setupMockHoodieTable(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
     HoodieTable hoodieTable = mock(HoodieTable.class, RETURNS_DEEP_STUBS);
     when(hoodieTable.getContext()).thenReturn(context);
     when(hoodieTable.getConfig()).thenReturn(writeConfig);
     when(hoodieTable.getMetaClient()).thenReturn(metaClient);
+    when(hoodieTable.getStorage()).thenReturn(metaClient.getStorage());
     when(hoodieTable.getActiveTimeline()).thenReturn(metaClient.getActiveTimeline());
     when(hoodieTable.getCompletedCommitsTimeline()).thenReturn(metaClient.getCommitsTimeline().filterCompletedInstants());
     when(hoodieTable.getCompletedCleanTimeline()).thenReturn(metaClient.getActiveTimeline().getCleanerTimeline().filterCompletedInstants());
