@@ -226,8 +226,13 @@ public class SparkRecordMergingUtils {
             }
           }
           StructType mergedStructType = new StructType(mergedFieldList.toArray(new StructField[0]));
-          HoodieSchema mergedSchema = HoodieSchemaCache.intern(HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(
-              mergedStructType, readerSchema.getName(), readerSchema.getNamespace().orElse(null)));
+          // With every reader field present, reuse the reader schema: the struct type conversion drops field defaults,
+          // giving a schema unequal to the reader schema but with the same hash, so each schema-keyed lookup would
+          // compare the two field by field.
+          HoodieSchema mergedSchema = mergedFieldList.size() == refFieldIdToFieldMapping.size()
+              ? refSchema
+              : HoodieSchemaCache.intern(HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(
+                  mergedStructType, readerSchema.getName(), readerSchema.getNamespace().orElse(null)));
           return Pair.of(mergedMapping, Pair.of(mergedStructType, mergedSchema));
         });
   }
