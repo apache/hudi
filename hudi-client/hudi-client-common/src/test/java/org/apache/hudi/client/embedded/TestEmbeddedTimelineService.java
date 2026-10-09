@@ -21,14 +21,27 @@ package org.apache.hudi.client.embedded;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.timeline.service.TimelineService;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
+
+import java.io.IOException;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -37,8 +50,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -49,6 +64,262 @@ import static org.mockito.Mockito.when;
  * These tests are mainly focused on testing the creation and reuse of the embedded timeline server.
  */
 public class TestEmbeddedTimelineService extends HoodieCommonTestHarness {
+
+  @AfterEach
+  public void shutdownTimelineServices() {
+    EmbeddedTimelineService.shutdownAllTimelineServers();
+  }
+
+  @Test
+  public void sameBasePathIsReleasedOnlyAfterLastReference() throws Exception {
+    long initialCount = runningServerCount();
+    HoodieWriteConfig config = serviceConfig("shared_table", true);
+    TimelineService server = Mockito.mock(TimelineService.class);
+    EmbeddedTimelineService first = acquireService(config, server);
+    EmbeddedTimelineService second = acquireService(config, server);
+    assertSame(first, second);
+    assertEquals(initialCount + 1, runningServerCount());
+    verify(server, times(1)).startService();
+
+    first.stopForBasePath("unknown_table");
+    verify(server, never()).unregisterBasePath(any());
+    first.stopForBasePath(config.getBasePath());
+    verify(server, never()).unregisterBasePath(config.getBasePath());
+    verify(server, never()).close();
+    assertEquals(initialCount + 1, runningServerCount());
+
+    second.stopForBasePath(config.getBasePath());
+    second.stopForBasePath(config.getBasePath());
+    verify(server, times(1)).unregisterBasePath(config.getBasePath());
+    verify(server, times(1)).close();
+    assertEquals(initialCount, runningServerCount());
+  }
+
+  @Test
+  public void referencesAreTrackedPerTableAndCanBeReacquired() throws Exception {
+    HoodieWriteConfig firstConfig = serviceConfig("first_table", true);
+    HoodieWriteConfig secondConfig = serviceConfig("second_table", true);
+    TimelineService server = Mockito.mock(TimelineService.class);
+    EmbeddedTimelineService service = acquireService(firstConfig, server);
+    assertSame(service, acquireService(firstConfig, server));
+    assertSame(service, acquireService(secondConfig, server));
+
+    service.stopForBasePath(firstConfig.getBasePath());
+    verify(server, never()).unregisterBasePath(firstConfig.getBasePath());
+    service.stopForBasePath(firstConfig.getBasePath());
+    verify(server, times(1)).unregisterBasePath(firstConfig.getBasePath());
+    verify(server, never()).close();
+
+    assertSame(service, acquireService(firstConfig, server));
+    service.stopForBasePath(secondConfig.getBasePath());
+    verify(server, times(1)).unregisterBasePath(secondConfig.getBasePath());
+    verify(server, never()).close();
+    service.stopForBasePath(firstConfig.getBasePath());
+    verify(server, times(2)).unregisterBasePath(firstConfig.getBasePath());
+    verify(server, times(1)).close();
+  }
+
+  @Test
+  public void independentServiceDoesNotRemoveReusableService() throws Exception {
+    HoodieWriteConfig sharedConfig = serviceConfig("shared_table", true);
+    HoodieWriteConfig independentConfig = serviceConfig("independent_table", false);
+    TimelineService sharedServer = Mockito.mock(TimelineService.class);
+    TimelineService independentServer = Mockito.mock(TimelineService.class);
+    EmbeddedTimelineService shared = acquireService(sharedConfig, sharedServer);
+    EmbeddedTimelineService independent = acquireService(independentConfig, independentServer);
+    assertNotSame(shared, independent);
+
+    independent.stopForBasePath(independentConfig.getBasePath());
+    verify(independentServer, times(1)).close();
+    assertSame(shared, acquireService(sharedConfig, sharedServer));
+    verify(sharedServer, times(1)).startService();
+    shared.stopForBasePath(sharedConfig.getBasePath());
+    verify(sharedServer, never()).close();
+    shared.stopForBasePath(sharedConfig.getBasePath());
+    verify(sharedServer, times(1)).close();
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void unregisterFailureDoesNotPreventReleasingReferences(boolean hasOtherTable) throws Exception {
+    long initialCount = runningServerCount();
+    HoodieWriteConfig config = serviceConfig("failing_table", true);
+    HoodieWriteConfig otherConfig = serviceConfig("other_table", true);
+    TimelineService server = Mockito.mock(TimelineService.class);
+    EmbeddedTimelineService service = acquireService(config, server);
+    if (hasOtherTable) {
+      assertSame(service, acquireService(otherConfig, server));
+    }
+    doThrow(new RuntimeException("view failed to close")).when(server).unregisterBasePath(config.getBasePath());
+
+    assertDoesNotThrow(() -> service.stopForBasePath(config.getBasePath()));
+    assertDoesNotThrow(() -> service.stopForBasePath(config.getBasePath()));
+    verify(server, times(1)).unregisterBasePath(config.getBasePath());
+    if (hasOtherTable) {
+      verify(server, never()).close();
+      service.stopForBasePath(otherConfig.getBasePath());
+    }
+    verify(server, times(1)).close();
+    assertEquals(initialCount, runningServerCount());
+  }
+
+  @Test
+  public void concurrentReferencesCloseServerOnlyOnce() throws Exception {
+    long initialCount = runningServerCount();
+    HoodieWriteConfig config = serviceConfig("shared_table", true);
+    TimelineService server = Mockito.mock(TimelineService.class);
+    EmbeddedTimelineService service = acquireService(config, server);
+    assertSame(service, acquireService(config, server));
+    ExecutorService executor = Executors.newFixedThreadPool(2);
+    CountDownLatch ready = new CountDownLatch(2);
+    CountDownLatch release = new CountDownLatch(1);
+    try {
+      Future<?> first = executor.submit(() -> {
+        ready.countDown();
+        assertTrue(release.await(10, TimeUnit.SECONDS));
+        service.stopForBasePath(config.getBasePath());
+        return null;
+      });
+      Future<?> second = executor.submit(() -> {
+        ready.countDown();
+        assertTrue(release.await(10, TimeUnit.SECONDS));
+        service.stopForBasePath(config.getBasePath());
+        return null;
+      });
+      assertTrue(ready.await(10, TimeUnit.SECONDS));
+      release.countDown();
+      first.get(10, TimeUnit.SECONDS);
+      second.get(10, TimeUnit.SECONDS);
+      verify(server, times(1)).unregisterBasePath(config.getBasePath());
+      verify(server, times(1)).close();
+      assertEquals(initialCount, runningServerCount());
+    } finally {
+      release.countDown();
+      executor.shutdownNow();
+      assertTrue(executor.awaitTermination(10, TimeUnit.SECONDS));
+    }
+  }
+
+  @Test
+  public void reacquisitionWaitsForPreviousViewCleanup() throws Exception {
+    HoodieWriteConfig config = serviceConfig("reacquired_table", true);
+    HoodieWriteConfig otherConfig = serviceConfig("other_table", true);
+    TimelineService server = Mockito.mock(TimelineService.class);
+    EmbeddedTimelineService service = acquireService(config, server);
+    assertSame(service, acquireService(otherConfig, server));
+    CountDownLatch cleanupStarted = new CountDownLatch(1);
+    CountDownLatch finishCleanup = new CountDownLatch(1);
+    CountDownLatch acquireStarted = new CountDownLatch(1);
+    AtomicBoolean cleanupFinished = new AtomicBoolean();
+    doAnswer(invocation -> {
+      cleanupStarted.countDown();
+      assertTrue(finishCleanup.await(10, TimeUnit.SECONDS));
+      cleanupFinished.set(true);
+      return null;
+    }).when(server).unregisterBasePath(config.getBasePath());
+    ExecutorService executor = Executors.newFixedThreadPool(2);
+    try {
+      Future<?> release = executor.submit(() -> service.stopForBasePath(config.getBasePath()));
+      assertTrue(cleanupStarted.await(10, TimeUnit.SECONDS));
+      Future<EmbeddedTimelineService> acquire = executor.submit(() -> {
+        acquireStarted.countDown();
+        EmbeddedTimelineService acquired = acquireService(config, server);
+        assertTrue(cleanupFinished.get(), "Acquisition must not finish before the old view is cleared");
+        return acquired;
+      });
+      assertTrue(acquireStarted.await(10, TimeUnit.SECONDS));
+      assertThrows(TimeoutException.class, () -> acquire.get(100, TimeUnit.MILLISECONDS));
+      finishCleanup.countDown();
+      release.get(10, TimeUnit.SECONDS);
+      assertSame(service, acquire.get(10, TimeUnit.SECONDS));
+      verify(server, never()).close();
+
+      service.stopForBasePath(otherConfig.getBasePath());
+      verify(server, never()).close();
+      service.stopForBasePath(config.getBasePath());
+      verify(server, times(2)).unregisterBasePath(config.getBasePath());
+      verify(server, times(1)).close();
+    } finally {
+      finishCleanup.countDown();
+      executor.shutdownNow();
+      assertTrue(executor.awaitTermination(10, TimeUnit.SECONDS));
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void detachedServerCannotBeClosedAgainOrRemoveReplacement(boolean forceShutdown) throws Exception {
+    long initialCount = runningServerCount();
+    HoodieWriteConfig config = serviceConfig("shared_table", true);
+    TimelineService oldServer = Mockito.mock(TimelineService.class);
+    EmbeddedTimelineService oldService = acquireService(config, oldServer);
+    if (forceShutdown) {
+      assertSame(oldService, acquireService(config, oldServer));
+    }
+    CountDownLatch closeStarted = new CountDownLatch(1);
+    CountDownLatch finishClose = new CountDownLatch(1);
+    doAnswer(invocation -> {
+      closeStarted.countDown();
+      assertTrue(finishClose.await(10, TimeUnit.SECONDS));
+      return null;
+    }).when(oldServer).close();
+    ExecutorService executor = Executors.newFixedThreadPool(2);
+    try {
+      Future<?> closing = executor.submit(() -> {
+        if (forceShutdown) {
+          EmbeddedTimelineService.shutdownAllTimelineServers();
+        } else {
+          oldService.stopForBasePath(config.getBasePath());
+        }
+      });
+      assertTrue(closeStarted.await(10, TimeUnit.SECONDS));
+      TimelineService newServer = Mockito.mock(TimelineService.class);
+      Future<EmbeddedTimelineService> acquiring = executor.submit(() -> {
+        // A second shutdown or an owner's release must not attempt to close the detached server.
+        EmbeddedTimelineService.shutdownAllTimelineServers();
+        EmbeddedTimelineService replacement = acquireService(config, newServer);
+        oldService.stopForBasePath(config.getBasePath());
+        oldService.stopForBasePath(config.getBasePath());
+        assertSame(replacement, acquireService(config, newServer));
+        return replacement;
+      });
+      EmbeddedTimelineService replacement = acquiring.get(10, TimeUnit.SECONDS);
+      assertNotSame(oldService, replacement);
+      assertEquals(initialCount + 2, runningServerCount());
+      finishClose.countDown();
+      closing.get(10, TimeUnit.SECONDS);
+      verify(oldServer, times(1)).close();
+      verify(oldServer, times(forceShutdown ? 0 : 1)).unregisterBasePath(config.getBasePath());
+      assertEquals(initialCount + 1, runningServerCount());
+
+      replacement.stopForBasePath(config.getBasePath());
+      verify(newServer, never()).close();
+      replacement.stopForBasePath(config.getBasePath());
+      verify(newServer, times(1)).close();
+      assertEquals(initialCount, runningServerCount());
+    } finally {
+      finishClose.countDown();
+      executor.shutdownNow();
+      assertTrue(executor.awaitTermination(10, TimeUnit.SECONDS));
+    }
+  }
+
+  private HoodieWriteConfig serviceConfig(String tableName, boolean reuse) {
+    return HoodieWriteConfig.newBuilder()
+        .withPath(tempDir.resolve(tableName).toString())
+        .withEmbeddedTimelineServerEnabled(true)
+        .withEmbeddedTimelineServerReuseEnabled(reuse)
+        .build();
+  }
+
+  private EmbeddedTimelineService acquireService(HoodieWriteConfig config, TimelineService server) throws IOException {
+    return EmbeddedTimelineService.getOrStartEmbeddedTimelineService(
+        new HoodieLocalEngineContext(getDefaultStorageConf()), null, config, (storageConf, serviceConfig, viewManager) -> server);
+  }
+
+  private long runningServerCount() {
+    return Registry.getRegistry("TimelineService").getAllCounts(false).getOrDefault("numEmbeddedTimelineServers", 0L);
+  }
 
   @Test
   public void timelineServiceIdentifierConsidersAllFieldsWhenHostIsNull() {
