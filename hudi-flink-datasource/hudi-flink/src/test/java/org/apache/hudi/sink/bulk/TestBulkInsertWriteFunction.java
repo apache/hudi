@@ -35,6 +35,7 @@ import org.apache.flink.table.data.RowData;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InOrder;
 
@@ -43,6 +44,7 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.Collections;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -113,14 +115,20 @@ class TestBulkInsertWriteFunction {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  void testCloseFailureStillClosesWriteClient(boolean runtimeFailure) throws Exception {
+  @CsvSource({"false, false", "true, false", "false, true", "true, true"})
+  void testCloseFailureStillClosesWriteClient(boolean runtimeFailure, boolean clientCloseFails) throws Exception {
     BulkInsertWriterHelper helper = mock(BulkInsertWriterHelper.class);
     setField("writerHelper", helper);
     Exception failure = runtimeFailure ? new IllegalStateException("close failed") : new IOException("close failed");
     doThrow(failure).when(helper).close();
+    RuntimeException clientFailure = new RuntimeException("client close failed");
+    if (clientCloseFails) {
+      doThrow(clientFailure).when(writeClient).close();
+    }
 
-    assertSame(failure, assertThrows(Exception.class, function::close));
+    Exception thrown = assertThrows(Exception.class, function::close);
+    assertSame(failure, thrown);
+    assertArrayEquals(clientCloseFails ? new Throwable[] {clientFailure} : new Throwable[0], thrown.getSuppressed());
 
     InOrder order = inOrder(helper, writeClient);
     order.verify(helper).close();
