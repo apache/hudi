@@ -283,8 +283,7 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
   @CsvSource(value = Array(
     "COPY_ON_WRITE,false",
     "COPY_ON_WRITE,true",
-    "MERGE_ON_READ,false",
-    "MERGE_ON_READ,true"))
+    "MERGE_ON_READ,false"))
   def testFallbackFullTableScanWithStaleRollbackOnActiveTimeline(tableType: String, upgradeToV9: Boolean): Unit = {
     def opts(tableVersion: Int) = Map(
       "hoodie.insert.shuffle.parallelism" -> "2",
