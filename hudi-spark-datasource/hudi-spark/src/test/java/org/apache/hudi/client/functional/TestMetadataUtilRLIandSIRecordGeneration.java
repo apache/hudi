@@ -53,6 +53,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.metadata.BaseFileRecordParsingUtils;
 import org.apache.hudi.metadata.EmptyHoodieRecordPayloadWithPartition;
 import org.apache.hudi.metadata.HoodieIndexVersion;
@@ -61,12 +62,15 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.model.FileSliceAndPartition;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -597,6 +601,59 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
     assertListEquality(expectedRLIInserts, actualInserts);
     assertListEquality(expectedRLIDeletes, actualDeletes);
     assertListEquality(expectedUpatesAndDeletes, actualUpdatesAndDeletes);
+  }
+
+  /**
+   * An empty first commit written without a schema (as a streamer sync with no input does) must not block
+   * record index updates for the commits that follow it.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testRecordIndexUpdatesAfterEmptyFirstCommitWithoutSchema(boolean streamingWrites) throws IOException {
+    cleanupClients();
+    Properties props = getPropertiesForKeyGen(true);
+    props.put(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp");
+    initMetaClient(HoodieTableType.MERGE_ON_READ, props);
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(true)
+        .withEnableGlobalRecordLevelIndex(true).withStreamingWriteEnabled(streamingWrites).build();
+
+    HoodieWriteConfig emptyCommitConfig = getConfigBuilder(HoodieSchema.NULL_SCHEMA.toString(), IndexType.RECORD_INDEX)
+        .withProperties(props).withMetadataConfig(metadataConfig).build();
+    SparkRDDWriteClient emptyCommitClient = getHoodieWriteClient(emptyCommitConfig);
+    String emptyInstantTime = emptyCommitClient.startCommit();
+    List<WriteStatus> emptyWriteStatuses = emptyCommitClient.upsert(jsc.emptyRDD(), emptyInstantTime).collect();
+    assertTrue(emptyCommitClient.commit(emptyInstantTime, jsc.parallelize(emptyWriteStatuses)));
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieCommitMetadata emptyCommitMetadata = metaClient.getActiveTimeline()
+        .readCommitMetadata(metaClient.getCommitsTimeline().filterCompletedInstants().lastInstant().get());
+    assertTrue(emptyCommitMetadata.getPartitionToWriteStats().isEmpty());
+    assertEquals("", emptyCommitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY));
+
+    HoodieWriteConfig writeConfig = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, IndexType.RECORD_INDEX)
+        .withProperties(props).withMetadataConfig(metadataConfig).build();
+    SparkRDDWriteClient client = getHoodieWriteClient(writeConfig);
+    String instantTime = client.startCommit();
+    List<HoodieRecord> inserts = dataGen.generateInserts(instantTime, 50);
+    List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(inserts, 1), instantTime).collect();
+    assertNoWriteErrors(writeStatuses);
+    assertTrue(client.commit(instantTime, jsc.parallelize(writeStatuses)));
+
+    instantTime = client.startCommit();
+    List<WriteStatus> updateStatuses = client.upsert(jsc.parallelize(dataGen.generateUpdates(instantTime, inserts), 1), instantTime).collect();
+    assertNoWriteErrors(updateStatuses);
+    assertTrue(client.commit(instantTime, jsc.parallelize(updateStatuses)));
+
+    List<HoodieKey> deletedKeys = inserts.subList(0, 10).stream().map(HoodieRecord::getKey).collect(Collectors.toList());
+    instantTime = client.startCommit();
+    List<WriteStatus> deleteStatuses = client.delete(jsc.parallelize(deletedKeys, 1), instantTime).collect();
+    assertNoWriteErrors(deleteStatuses);
+    assertTrue(client.commit(instantTime, jsc.parallelize(deleteStatuses)));
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieSparkTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
+    List<HoodieRecord> tagged = tagLocation(table.getIndex(), context, jsc.parallelize(inserts, 1), table).collect();
+    assertEquals(inserts.size(), tagged.size());
+    tagged.forEach(record -> assertEquals(!deletedKeys.contains(record.getKey()), record.isCurrentLocationKnown(), record.getRecordKey()));
   }
 
   @Test
