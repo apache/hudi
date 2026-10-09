@@ -19,15 +19,22 @@
 
 package org.apache.hudi.utilities.schema;
 
+import com.fasterxml.jackson.databind.node.TextNode;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.util.internal.Accessor;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -119,6 +126,86 @@ public class TestLazyCastingIterator {
       itr.next();
     }, "Should error out since long cannot be promoted to int");
     assertTrue(e.getMessage().contains("cannot support rewrite value for schema type: \"int\" since the old schema type is: \"long\""));
+  }
+
+  @Test
+  void testRecordsWithEqualSchemaReturnedAsIs() {
+    // each record carries its own schema instance, equal to but distinct from the target schema
+    List<GenericRecord> genericRecords = Arrays.asList(
+        getRecordWithExampleSchema(), getRecordWithExampleSchema(), getRecordWithExampleSchemaNullNestedCol());
+    LazyCastingIterator itr = new LazyCastingIterator(genericRecords.iterator(), EXAMPLE_SCHEMA);
+    for (GenericRecord record : genericRecords) {
+      assertSame(record, itr.next());
+    }
+    assertFalse(itr.hasNext());
+  }
+
+  @Test
+  void testSourceSchemaChangesMidIterator() {
+    Schema exampleSchema = new Schema.Parser().parse(EXAMPLE_SCHEMA);
+    GenericRecord sameSchema1 = copyWithSchema(GEN_RECORD_EXAMPLE_WITH_NESTED, exampleSchema);
+    GenericRecord sameSchema2 = copyWithSchema(GEN_RECORD_EXAMPLE_WITH_NULL_NESTED, exampleSchema);
+    GenericRecord withoutNested = getRecordWithExampleSchemaWithoutNestedCol();
+    GenericRecord longColAsInt = getRecordWithExampleSchemaLongColAsInt();
+    GenericRecord otherEqualSchema = getRecordWithExampleSchema();
+    LazyCastingIterator itr = new LazyCastingIterator(
+        Arrays.asList(sameSchema1, withoutNested, sameSchema2, longColAsInt, longColAsInt, otherEqualSchema, sameSchema1).iterator(),
+        EXAMPLE_SCHEMA);
+
+    assertSame(sameSchema1, itr.next());
+    assertRewritten(withoutNested, GEN_RECORD_EXAMPLE_WITH_NULL_NESTED, itr.next());
+    assertSame(sameSchema2, itr.next());
+    assertRewritten(longColAsInt, GEN_RECORD_EXAMPLE_WITH_NESTED, itr.next());
+    assertRewritten(longColAsInt, GEN_RECORD_EXAMPLE_WITH_NESTED, itr.next());
+    assertSame(otherEqualSchema, itr.next());
+    assertSame(sameSchema1, itr.next());
+    assertFalse(itr.hasNext());
+  }
+
+  @Test
+  void testSourceSchemaComparedOncePerSchemaInstance() {
+    String targetSchema = "{\"type\":\"record\",\"name\":\"rec\",\"fields\":["
+        + "{\"name\":\"key\",\"type\":\"string\"},{\"name\":\"tag\",\"type\":\"string\",\"default\":\"none\"}]}";
+    // Schema.equals compares field defaults, so a counting default node counts deep schema comparisons
+    AtomicInteger comparisons = new AtomicInteger();
+    TextNode countingDefault = new TextNode("none") {
+      @Override
+      public boolean equals(Object o) {
+        comparisons.incrementAndGet();
+        return super.equals(o);
+      }
+    };
+    Schema sourceSchema = Schema.createRecord("rec", null, null, false, Arrays.asList(
+        new Schema.Field("key", Schema.create(Schema.Type.STRING)),
+        Accessor.createField("tag", Schema.create(Schema.Type.STRING), null, countingDefault)));
+    assertEquals(new Schema.Parser().parse(targetSchema), sourceSchema);
+    comparisons.set(0);
+
+    int numRecords = 100;
+    GenericRecord[] records = new GenericRecord[numRecords];
+    for (int i = 0; i < numRecords; i++) {
+      records[i] = new GenericData.Record(sourceSchema);
+      records[i].put("key", "key" + i);
+      records[i].put("tag", "value" + i);
+    }
+    LazyCastingIterator itr = new LazyCastingIterator(Arrays.asList(records).iterator(), targetSchema);
+    for (GenericRecord record : records) {
+      assertSame(record, itr.next());
+    }
+    assertEquals(1, comparisons.get());
+  }
+
+  private static void assertRewritten(GenericRecord input, GenericRecord expected, GenericRecord actual) {
+    assertNotSame(input, actual);
+    assertEquals(expected, actual);
+  }
+
+  private static GenericRecord copyWithSchema(GenericRecord record, Schema schema) {
+    GenericRecord copy = new GenericData.Record(schema);
+    for (Schema.Field field : schema.getFields()) {
+      copy.put(field.name(), record.get(field.name()));
+    }
+    return copy;
   }
 
   public static GenericRecord getRecordWithExampleSchema() {
