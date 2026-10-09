@@ -767,14 +767,14 @@ public class RequestHandler {
       String basePath = ctx.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM);
       SyncableFileSystemView view = viewManager.getFileSystemView(basePath);
       synchronized (view) {
+        HoodieTimeline localTimeline = view.getTimeline();
+        // The final check already accepts a trailing clean with an otherwise matching timeline.
+        // Other extensions still need a sync: restore may have deleted their extra instants.
+        if (!shouldThrowExceptionIfLocalViewBehind(localTimeline, getTimelineHashParam(ctx))) {
+          return false;
+        }
         if (isLocalViewBehind(ctx)) {
           String lastKnownInstantFromClient = getLastInstantTsParam(ctx);
-          HoodieTimeline localTimeline = viewManager.getFileSystemView(basePath).getTimeline();
-          // The final check already accepts a trailing clean with an otherwise matching timeline.
-          // Other extensions still need a sync: restore may have deleted their extra instants.
-          if (!shouldThrowExceptionIfLocalViewBehind(localTimeline, getTimelineHashParam(ctx))) {
-            return false;
-          }
           if (log.isInfoEnabled()) {
             log.info("Syncing view as client passed last known instant {} as last known instant but server has the following last instant on timeline: {}",
                 lastKnownInstantFromClient, localTimeline.lastInstant());
