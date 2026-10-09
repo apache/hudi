@@ -509,11 +509,13 @@ public class StreamWriteOperatorCoordinator
    */
   private HiveSyncTool createHiveSyncTool() {
     HoodieTimer timer = HoodieTimer.start();
+    HiveSyncTool tool;
     try {
-      return hiveSyncContext.hiveSyncTool();
+      tool = hiveSyncContext.hiveSyncTool();
     } finally {
       hiveSyncMetrics.updateInitDuration(timer.endTimer());
     }
+    return tool;
   }
 
   private void scheduleTableServices(Boolean committed) {
