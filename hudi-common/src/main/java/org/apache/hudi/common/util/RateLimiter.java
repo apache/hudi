@@ -26,7 +26,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Thread-safe rate limiter implementation.
@@ -39,8 +38,9 @@ public class RateLimiter {
   private final int maxPermits;
   private final long releasePermitsPeriod;
   private final TimeUnit timePeriod;
-  private final AtomicBoolean stopped = new AtomicBoolean(false);
-  private volatile ScheduledExecutorService scheduler;
+  private final Runnable permitWaitCallback;
+  private volatile boolean stopped;
+  private ScheduledExecutorService scheduler;
   private static final long RELEASE_PERMITS_PERIOD_IN_SECONDS = 1L;
   private static final long WAIT_BEFORE_NEXT_ACQUIRE_PERMIT_IN_MS = 5;
   private static final int SCHEDULER_CORE_THREAD_POOL_SIZE = 1;
@@ -66,6 +66,16 @@ public class RateLimiter {
     return limiter;
   }
 
+  @VisibleForTesting
+  static RateLimiter create(int permits, long releasePermitsPeriod, TimeUnit timePeriod,
+                            Runnable permitWaitCallback) {
+    validateConfiguration(permits, releasePermitsPeriod, timePeriod);
+    final RateLimiter limiter = new RateLimiter(
+        permits, releasePermitsPeriod, timePeriod, permitWaitCallback);
+    limiter.releasePermitsPeriodically();
+    return limiter;
+  }
+
   private static void validateConfiguration(int permits, long releasePermitsPeriod, TimeUnit timePeriod) {
     ValidationUtils.checkArgument(permits > 0, "Permits must be greater than zero");
     ValidationUtils.checkArgument(releasePermitsPeriod > 0, "Release permits period must be greater than zero");
@@ -73,10 +83,16 @@ public class RateLimiter {
   }
 
   private RateLimiter(int permits, long releasePermitsPeriod, TimeUnit timePeriod) {
+    this(permits, releasePermitsPeriod, timePeriod, null);
+  }
+
+  private RateLimiter(int permits, long releasePermitsPeriod, TimeUnit timePeriod,
+                      Runnable permitWaitCallback) {
     this.semaphore = new Semaphore(permits);
     this.maxPermits = permits;
     this.releasePermitsPeriod = releasePermitsPeriod;
     this.timePeriod = timePeriod;
+    this.permitWaitCallback = permitWaitCallback;
   }
 
   public boolean tryAcquire(int numPermits) {
@@ -105,10 +121,13 @@ public class RateLimiter {
 
   private boolean acquireInternal(int numOps) {
     try {
-      while (!stopped.get() && !semaphore.tryAcquire(numOps)) {
+      while (!stopped && !semaphore.tryAcquire(numOps)) {
+        if (permitWaitCallback != null) {
+          permitWaitCallback.run();
+        }
         Thread.sleep(WAIT_BEFORE_NEXT_ACQUIRE_PERMIT_IN_MS);
       }
-      ValidationUtils.checkState(!stopped.get(), "Rate limiter is stopped");
+      ValidationUtils.checkState(!stopped, "Rate limiter is stopped");
       log.debug("acquire permits: {}, maxPermits: {}", numOps, maxPermits);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
@@ -118,20 +137,21 @@ public class RateLimiter {
   }
 
   public synchronized void stop() {
-    if (stopped.compareAndSet(false, true)) {
-      ScheduledExecutorService currentScheduler = scheduler;
-      if (currentScheduler != null) {
-        currentScheduler.shutdownNow();
-      }
+    if (stopped) {
+      return;
+    }
+    stopped = true;
+    if (scheduler != null) {
+      scheduler.shutdownNow();
     }
   }
 
   public boolean isStopped() {
-    return stopped.get();
+    return stopped;
   }
 
   public synchronized void releasePermitsPeriodically() {
-    ValidationUtils.checkState(!stopped.get(), "Cannot start a stopped rate limiter");
+    ValidationUtils.checkState(!stopped, "Cannot start a stopped rate limiter");
     if (scheduler != null) {
       return;
     }
@@ -140,7 +160,7 @@ public class RateLimiter {
   }
 
   private synchronized void releasePermitsPeriodically(ScheduledExecutorService scheduler) {
-    ValidationUtils.checkState(!stopped.get(), "Cannot start a stopped rate limiter");
+    ValidationUtils.checkState(!stopped, "Cannot start a stopped rate limiter");
     if (this.scheduler != null) {
       return;
     }

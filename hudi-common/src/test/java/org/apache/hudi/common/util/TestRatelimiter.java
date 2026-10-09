@@ -21,6 +21,7 @@ package org.apache.hudi.common.util;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -112,11 +113,13 @@ public class TestRatelimiter {
 
   @Test
   public void testStopIsIdempotentAndUnblocksAcquire() throws Exception {
-    RateLimiter limiter = RateLimiter.create(1, 1, TimeUnit.DAYS);
+    CountDownLatch waitingForPermit = new CountDownLatch(1);
+    RateLimiter limiter = RateLimiter.create(1, 1, TimeUnit.DAYS, waitingForPermit::countDown);
     ExecutorService executor = Executors.newSingleThreadExecutor();
     try {
       assertTrue(limiter.acquire());
       Future<Boolean> blockedAcquire = executor.submit(() -> limiter.acquire());
+      assertTrue(waitingForPermit.await(1, TimeUnit.SECONDS));
 
       limiter.stop();
       limiter.stop();
