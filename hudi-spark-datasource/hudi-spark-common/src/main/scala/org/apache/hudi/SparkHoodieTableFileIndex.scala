@@ -46,7 +46,7 @@ import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.{expressions, InternalRow}
+import org.apache.spark.sql.catalyst.{expressions, InternalRow, TableIdentifier}
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BasePredicate, BoundReference, EmptyRow, EqualTo, Expression, GetStructField, Literal}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache}
@@ -532,11 +532,22 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       staticPartitionColumnValues.map(_._1): _*)
   }
 
+  private lazy val listingCatalogTableIdentifier: Option[TableIdentifier] = if (isPartitionListingViaCatalogEnabled) {
+    val identifier = HoodieFileIndex.catalogTableIdentifier(configProperties.asScala)
+    if (identifier.isEmpty) {
+      logInfo(s"${FILE_INDEX_PARTITION_LISTING_VIA_CATALOG.key} is enabled but the read of $getBasePath was not "
+        + s"resolved from a catalog entry (${CATALOG_TABLE_DATABASE.key} and ${CATALOG_TABLE_NAME.key} are not set); "
+        + "listing partitions as if the option were disabled")
+    }
+    identifier
+  } else {
+    None
+  }
+
   override protected def createMetadataTable(engineContext: HoodieEngineContext): HoodieTableMetadata = {
-    if (isPartitionListingViaCatalogEnabled) {
-      new CatalogBackedTableMetadata(engineContext, metaClient.getTableConfig, metaClient.getStorage, getBasePath.toString)
-    } else {
-      super.createMetadataTable(engineContext)
+    listingCatalogTableIdentifier match {
+      case Some(identifier) => new CatalogBackedTableMetadata(engineContext, metaClient, identifier)
+      case None => super.createMetadataTable(engineContext)
     }
   }
 
