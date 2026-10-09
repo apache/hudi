@@ -34,7 +34,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, H
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineUtils}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.{deleteRecordsToStrings, recordsToStrings}
-import org.apache.hudi.common.testutils.HoodieTestUtils.{INSTANT_FILE_NAME_GENERATOR, INSTANT_GENERATOR}
+import org.apache.hudi.common.testutils.HoodieTestUtils.{assertTableConfigs, INSTANT_FILE_NAME_GENERATOR, INSTANT_GENERATOR}
 import org.apache.hudi.common.util.{ClusteringUtils, Option}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
@@ -144,15 +144,64 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
         .options(writeOptions).mode(SaveMode.Overwrite).save(basePath)
       metaClient = HoodieTableMetaClient.builder.setConf(storageConf).setBasePath(basePath).build
       // If no write version is specified, use current.
-      if (!targetTableVersion.equals("null")) {
-        assertEquals(
-          HoodieTableVersion.fromVersionCode(Integer.valueOf(targetTableVersion)),
-          metaClient.getTableConfig.getTableVersion)
+      val expectedTableVersion = if (targetTableVersion.equals("null")) {
+        HoodieTableVersion.current
       } else {
-        // Otherwise, the table version is the target table version.
-        assertEquals(HoodieTableVersion.current, metaClient.getTableConfig.getTableVersion)
+        HoodieTableVersion.fromVersionCode(Integer.valueOf(targetTableVersion))
       }
+      assertEquals(expectedTableVersion, metaClient.getTableConfig.getTableVersion)
+      assertTableConfigs(storage, basePath, expectedTableConfigs(expectedTableVersion).asJava)
     }
+  }
+
+  private def expectedTableConfigs(tableVersion: HoodieTableVersion): Map[String, String] = {
+    val commonConfigs = Map(
+      "hoodie.table.name" -> "testTableCreation",
+      "hoodie.table.type" -> "COPY_ON_WRITE",
+      "hoodie.table.version" -> tableVersion.versionCode().toString,
+      "hoodie.table.partition.fields" -> "partition",
+      "hoodie.table.keygenerator.type" -> "SIMPLE",
+      "hoodie.table.base.file.format" -> "PARQUET",
+      "hoodie.table.format" -> "native",
+      "hoodie.table.cdc.enabled" -> "false",
+      "hoodie.table.timeline.timezone" -> "LOCAL",
+      "hoodie.table.metadata.partitions.inflight" -> "",
+      "hoodie.table.index.defs.path" -> ".hoodie/.index_defs/index.json",
+      "hoodie.table.partition_extractor_class" -> "org.apache.hudi.hive.SinglePartPartitionValueExtractor",
+      "hoodie.meta.fields.mode" -> "ALL",
+      "hoodie.partition.metafile.use.base.format" -> "false",
+      "hoodie.datasource.write.drop.partition.columns" -> "false",
+      "hoodie.datasource.write.hive_style_partitioning" -> "false",
+      "hoodie.datasource.write.partitionpath.urlencode" -> "false",
+      "hoodie.archivelog.folder" -> "history",
+      "hoodie.timeline.path" -> "timeline",
+      "hoodie.timeline.history.path" -> "history")
+    val layoutConfigs = if (tableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
+      Map(
+        "hoodie.timeline.layout.version" -> "1",
+        "hoodie.table.keygenerator.class" -> "org.apache.hudi.keygen.SimpleKeyGenerator",
+        "hoodie.table.metadata.partitions" -> "column_stats,files")
+    } else {
+      Map(
+        "hoodie.timeline.layout.version" -> "2",
+        "hoodie.table.initial.version" -> tableVersion.versionCode().toString,
+        "hoodie.record.merge.mode" -> "COMMIT_TIME_ORDERING",
+        "hoodie.table.multiple.base.file.formats.enable" -> "false",
+        "hoodie.table.metadata.partitions" -> "column_stats,files,partition_stats")
+    }
+    val mergeConfigs = if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
+      Map(
+        "hoodie.compaction.payload.class" -> "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload",
+        "hoodie.record.merge.strategy.id" -> "ce9acb64-bde0-424c-9b91-f6ebba25356d")
+    } else {
+      Map.empty[String, String]
+    }
+    val metaFieldsConfigs = if (tableVersion.lesserThan(HoodieTableVersion.TEN)) {
+      Map("hoodie.populate.meta.fields" -> "true")
+    } else {
+      Map("hoodie.table.storage.layout" -> "default")
+    }
+    commonConfigs ++ layoutConfigs ++ mergeConfigs ++ metaFieldsConfigs
   }
 
   @ParameterizedTest
@@ -2971,7 +3020,7 @@ object TestCOWDataSource {
 
   def tableVersionCreationTestCases = {
     val autoUpgradeValues = Array("true", "false")
-    val targetVersions = Array("1", "2", "3", "4", "5", "6", "7", "8", "9", "null")
+    val targetVersions = Array("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "null")
     autoUpgradeValues.flatMap(
       (autoUpgrade: String) => targetVersions.map(
         (targetVersion: String) => Arguments.of(autoUpgrade, targetVersion)))
