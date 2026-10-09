@@ -131,6 +131,11 @@ object HoodieCreateRecordUtils {
           }
           val keyGenerator : Option[BaseKeyGenerator] = if (usePreppedInsteadOfKeyGen) None else Some(HoodieSparkKeyGeneratorFactory.createKeyGenerator(keyGenProps).asInstanceOf[BaseKeyGenerator])
           val dataFileSchema = HoodieSchema.parse(dataFileSchemaStr)
+          val dataFileAvroSchemaWithoutMeta = if (preppedSparkSqlWrites || preppedSparkSqlMergeInto || preppedWriteOperation) {
+            org.apache.hudi.common.schema.HoodieSchemaUtils.removeMetadataFields(dataFileSchema).toAvroSchema
+          } else {
+            null
+          }
           val consistentLogicalTimestampEnabled = parameters.getOrElse(
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()).toBoolean
@@ -143,7 +148,7 @@ object HoodieCreateRecordUtils {
             val (hoodieKey: HoodieKey, recordLocation: HOption[HoodieRecordLocation]) = HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, avroRec,
               preppedSparkSqlWrites || preppedWriteOperation, preppedSparkSqlWrites || preppedWriteOperation || preppedSparkSqlMergeInto)
             val avroRecWithoutMeta: GenericRecord = if (preppedSparkSqlWrites || preppedSparkSqlMergeInto || preppedWriteOperation) {
-              HoodieAvroUtils.rewriteRecord(avroRec, org.apache.hudi.common.schema.HoodieSchemaUtils.removeMetadataFields(dataFileSchema).toAvroSchema)
+              HoodieAvroUtils.rewriteRecord(avroRec, dataFileAvroSchemaWithoutMeta)
             } else {
               avroRec
             }

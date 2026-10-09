@@ -68,6 +68,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
@@ -1367,6 +1368,13 @@ public class TestHoodieAvroUtils {
     assertNotNull(HoodieAvroUtils.AVRO_VERSION);
     // the pom.properties lookup must agree with the jar that actually defines Schema
     assertEquals(Schema.class.getPackage().getImplementationVersion(), HoodieAvroUtils.AVRO_VERSION);
+  }
+
+  @Test
+  void testAvroVersionChecksMatchLoadedAvroVersion() {
+    assertTrue(HoodieAvroUtils.gteqAvro1_9());
+    assertEquals(StringUtils.compareVersions(HoodieAvroUtils.AVRO_VERSION, "1.10") >= 0, HoodieAvroUtils.gteqAvro1_10());
+    assertEquals(StringUtils.compareVersions(HoodieAvroUtils.AVRO_VERSION, "1.12") >= 0, HoodieAvroUtils.gteqAvro1_12());
   }
 
   @Test
