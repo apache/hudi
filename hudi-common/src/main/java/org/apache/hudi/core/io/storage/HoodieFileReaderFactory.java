@@ -65,6 +65,17 @@ public class HoodieFileReaderFactory {
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
 
+  /**
+   * Returns a reader of the file at the given path whose length is known, so that formats that need the length to
+   * locate the footer do not look it up.
+   */
+  public HoodieFileReader getFileReader(HoodieConfig hoodieConfig, StoragePathInfo pathInfo) throws IOException {
+    if (PARQUET.getFileExtension().equals(FSUtils.getFileExtension(pathInfo.getPath().toString()))) {
+      return newParquetFileReader(pathInfo);
+    }
+    return getFileReader(hoodieConfig, pathInfo.getPath());
+  }
+
   public HoodieFileReader getFileReader(HoodieConfig hoodieConfig, StoragePath path, HoodieFileFormat format)
       throws IOException {
     return getFileReader(hoodieConfig, path, format, Option.empty());
@@ -92,7 +103,7 @@ public class HoodieFileReaderFactory {
                                         Option<HoodieSchema> schemaOption) throws IOException {
     switch (format) {
       case PARQUET:
-        return newParquetFileReader(pathInfo.getPath());
+        return newParquetFileReader(pathInfo);
       case HFILE:
         return newHFileFileReader(hoodieConfig, pathInfo, schemaOption);
       case ORC:
@@ -117,6 +128,10 @@ public class HoodieFileReaderFactory {
 
   protected HoodieFileReader newParquetFileReader(StoragePath path) {
     throw new UnsupportedOperationException();
+  }
+
+  protected HoodieFileReader newParquetFileReader(StoragePathInfo pathInfo) {
+    return newParquetFileReader(pathInfo.getPath());
   }
 
   protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig, StoragePath path,

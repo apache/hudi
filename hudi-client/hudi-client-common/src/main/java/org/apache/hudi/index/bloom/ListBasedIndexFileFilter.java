@@ -24,6 +24,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Simple implementation of {@link IndexFileFilter}. Sequentially goes through every index file in a given partition to
@@ -39,7 +40,10 @@ class ListBasedIndexFileFilter implements IndexFileFilter {
    * @param partitionToFileIndexInfo Map of partition to List of {@link BloomIndexFileInfo}
    */
   ListBasedIndexFileFilter(final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo) {
-    this.partitionToFileIndexInfo = partitionToFileIndexInfo;
+    // the filter is shipped with every task that pairs records with candidate files, which needs only the key ranges
+    this.partitionToFileIndexInfo = partitionToFileIndexInfo.entrySet().stream()
+        .collect(Collectors.toMap(Map.Entry::getKey,
+            entry -> entry.getValue().stream().map(BloomIndexFileInfo::withoutBaseFile).collect(Collectors.toList())));
   }
 
   @Override

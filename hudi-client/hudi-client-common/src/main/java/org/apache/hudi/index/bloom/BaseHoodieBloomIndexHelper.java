@@ -21,6 +21,7 @@ package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -28,6 +29,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
 import java.io.Serializable;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -53,4 +55,15 @@ public abstract class BaseHoodieBloomIndexHelper implements Serializable {
       HoodiePairData<HoodieFileGroupId, String> fileComparisonPairs,
       Map<String, List<BloomIndexFileInfo>> partitionToFileInfo,
       Map<String, Long> recordsPerPartition);
+
+  /**
+   * Collects the base files carried by the {@link BloomIndexFileInfo}s by file group.
+   */
+  protected static Map<HoodieFileGroupId, HoodieBaseFile> getBaseFilesByFileGroup(
+      Map<String, List<BloomIndexFileInfo>> partitionToFileInfo) {
+    Map<HoodieFileGroupId, HoodieBaseFile> baseFiles = new HashMap<>();
+    partitionToFileInfo.forEach((partitionPath, fileInfos) -> fileInfos.forEach(fileInfo -> fileInfo.getBaseFile()
+        .ifPresent(baseFile -> baseFiles.put(new HoodieFileGroupId(partitionPath, fileInfo.getFileId()), baseFile))));
+    return baseFiles;
+  }
 }

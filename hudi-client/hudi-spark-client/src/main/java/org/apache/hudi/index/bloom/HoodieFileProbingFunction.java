@@ -138,7 +138,7 @@ public class HoodieFileProbingFunction implements
 
             final HoodieBaseFile dataFile = fileIDBaseFileMap.get(fileId);
             Collection<Pair<String, Long>> matchingKeysAndPositions = HoodieIndexUtils.filterKeysFromFile(
-                dataFile.getStoragePath(), candidateRecordKeys, HoodieStorageUtils.getStorage(dataFile.getStoragePath(), storageConf));
+                dataFile, candidateRecordKeys, HoodieStorageUtils.getStorage(dataFile.getStoragePath(), storageConf));
 
             log.debug(
                 "Bloom filter candidates ({}) / false positives ({}), actual matches ({})",

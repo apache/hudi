@@ -21,6 +21,7 @@ package org.apache.hudi.io;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.io.storage.HoodieFileReader;
@@ -43,13 +44,18 @@ import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 @Slf4j
 public class HoodieKeyLookupHandle<T, I, K, O> extends HoodieReadHandle<T, I, K, O> {
 
+  private final HoodieBaseFile baseFile;
   private final BloomFilter bloomFilter;
   private final Set<String> candidateRecordKeys;
   private long totalKeysChecked;
 
+  /**
+   * @param baseFileOpt the latest base file of the file group, looked up from the file system view when empty
+   */
   public HoodieKeyLookupHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O> hoodieTable,
-                               Pair<String, String> partitionPathFileIDPair) {
+                               Pair<String, String> partitionPathFileIDPair, Option<HoodieBaseFile> baseFileOpt) {
     super(config, hoodieTable, partitionPathFileIDPair);
+    this.baseFile = baseFileOpt.orElseGet(this::getLatestBaseFile);
     this.candidateRecordKeys = new HashSet<>();
     this.totalKeysChecked = 0;
     this.bloomFilter = getBloomFilter();
@@ -65,7 +71,7 @@ public class HoodieKeyLookupHandle<T, I, K, O> extends HoodieReadHandle<T, I, K,
         bloomFilter = hoodieTable.getTableMetadata().getBloomFilter(partitionPathFileIDPair.getLeft(), partitionPathFileIDPair.getRight())
             .orElseThrow(() -> new HoodieIndexException("BloomFilter missing for " + partitionPathFileIDPair.getRight()));
       } else {
-        try (HoodieFileReader reader = createNewFileReader()) {
+        try (HoodieFileReader reader = createNewFileReader(baseFile)) {
           bloomFilter = reader.readBloomFilter();
         }
       }
@@ -94,9 +100,8 @@ public class HoodieKeyLookupHandle<T, I, K, O> extends HoodieReadHandle<T, I, K,
   public HoodieKeyLookupResult getLookupResult() {
     log.debug("#The candidate row keys for {} => {}", partitionPathFileIDPair, candidateRecordKeys);
 
-    HoodieBaseFile baseFile = getLatestBaseFile();
     Collection<Pair<String, Long>> matchingKeysAndPositions = HoodieIndexUtils.filterKeysFromFile(
-        baseFile.getStoragePath(), candidateRecordKeys, hoodieTable.getStorage());
+        baseFile, candidateRecordKeys, hoodieTable.getStorage());
     log.info("Total records ({}), bloom filter candidates ({})/fp({}), actual matches ({})", totalKeysChecked,
             candidateRecordKeys.size(), candidateRecordKeys.size() - matchingKeysAndPositions.size(), matchingKeysAndPositions.size());
     return new HoodieKeyLookupResult(partitionPathFileIDPair.getRight(), partitionPathFileIDPair.getLeft(),

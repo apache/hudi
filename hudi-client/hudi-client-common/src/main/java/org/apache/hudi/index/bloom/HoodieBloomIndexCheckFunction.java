@@ -19,7 +19,9 @@
 package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.common.function.SerializableFunction;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -48,20 +50,31 @@ public class HoodieBloomIndexCheckFunction<I>
 
   private final SerializableFunction<I, HoodieFileGroupId> fileGroupIdExtractor;
   private final SerializableFunction<I, String> recordKeyExtractor;
+  private final SerializableFunction<HoodieFileGroupId, Option<HoodieBaseFile>> baseFileLookup;
 
+  /**
+   * @param baseFileLookup returns the latest base file of a file group when the caller already has it, so the
+   *                       lookup handle does not ask the file system view for it
+   */
   public HoodieBloomIndexCheckFunction(HoodieTable hoodieTable,
                                        HoodieWriteConfig config,
                                        SerializableFunction<I, HoodieFileGroupId> fileGroupIdExtractor,
-                                       SerializableFunction<I, String> recordKeyExtractor) {
+                                       SerializableFunction<I, String> recordKeyExtractor,
+                                       SerializableFunction<HoodieFileGroupId, Option<HoodieBaseFile>> baseFileLookup) {
     this.hoodieTable = hoodieTable;
     this.config = config;
     this.fileGroupIdExtractor = fileGroupIdExtractor;
     this.recordKeyExtractor = recordKeyExtractor;
+    this.baseFileLookup = baseFileLookup;
   }
 
   @Override
   public Iterator<HoodieKeyLookupResult> apply(Iterator<I> fileGroupIdRecordKeyPairIterator) {
     return new LazyKeyCheckIterator(fileGroupIdRecordKeyPairIterator);
+  }
+
+  private HoodieKeyLookupHandle newKeyLookupHandle(HoodieFileGroupId fileGroupId, Pair<String, String> partitionPathFilePair) throws Exception {
+    return new HoodieKeyLookupHandle(config, hoodieTable, partitionPathFilePair, baseFileLookup.apply(fileGroupId));
   }
 
   protected class LazyKeyCheckIterator implements Iterator<HoodieKeyLookupResult> {
@@ -95,7 +108,7 @@ public class HoodieBloomIndexCheckFunction<I>
 
           // lazily init state
           if (keyLookupHandle == null) {
-            keyLookupHandle = new HoodieKeyLookupHandle(config, hoodieTable, partitionPathFilePair);
+            keyLookupHandle = newKeyLookupHandle(fileGroupId, partitionPathFilePair);
           }
 
           // if continue on current file
@@ -104,7 +117,7 @@ public class HoodieBloomIndexCheckFunction<I>
           } else {
             // do the actual checking of file & break out
             HoodieKeyLookupResult result = keyLookupHandle.getLookupResult();
-            keyLookupHandle = new HoodieKeyLookupHandle(config, hoodieTable, partitionPathFilePair);
+            keyLookupHandle = newKeyLookupHandle(fileGroupId, partitionPathFilePair);
             keyLookupHandle.addKey(recordKey);
             return result;
           }

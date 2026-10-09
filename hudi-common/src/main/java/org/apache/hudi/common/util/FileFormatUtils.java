@@ -38,6 +38,7 @@ import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.metadata.stats.ValueMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.generic.GenericRecord;
 
@@ -61,6 +62,14 @@ import java.util.stream.Collectors;
  * Utils for file format used in Hudi.
  */
 public abstract class FileFormatUtils {
+  private static final String[] BLOOM_FILTER_FOOTER_NAMES = {
+      HoodieBloomFilterWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY,
+      HoodieBloomFilterWriteSupport.OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY,
+      HoodieBloomFilterWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE};
+  private static final String[] MIN_MAX_RECORD_KEY_FOOTER_NAMES = {
+      HoodieBloomFilterWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER,
+      HoodieBloomFilterWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER};
+
   /**
    * Aggregate column range statistics across files in a partition. HoodieSchema is used to properly
    * extract and compare statistics values based on their data types (including logical types).
@@ -174,11 +183,21 @@ public abstract class FileFormatUtils {
    * @return a BloomFilter object.
    */
   public BloomFilter readBloomFilterFromMetadata(HoodieStorage storage, StoragePath filePath) {
-    Map<String, String> footerVals =
-        readFooter(storage, false, filePath,
-            HoodieBloomFilterWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY,
-            HoodieBloomFilterWriteSupport.OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY,
-            HoodieBloomFilterWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE);
+    return toBloomFilter(readFooter(storage, false, filePath, BLOOM_FILTER_FOOTER_NAMES));
+  }
+
+  /**
+   * Read the bloom filter from the metadata of the given data file, whose length is known.
+   *
+   * @param storage  {@link HoodieStorage} instance.
+   * @param fileInfo the data file path and length.
+   * @return a BloomFilter object.
+   */
+  public BloomFilter readBloomFilterFromMetadata(HoodieStorage storage, StoragePathInfo fileInfo) {
+    return toBloomFilter(readFooter(storage, false, fileInfo, BLOOM_FILTER_FOOTER_NAMES));
+  }
+
+  private static BloomFilter toBloomFilter(Map<String, String> footerVals) {
     String footerVal = footerVals.get(HoodieBloomFilterWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY);
     if (null == footerVal) {
       // We use old style key "com.uber.hoodie.bloomfilter"
@@ -204,8 +223,21 @@ public abstract class FileFormatUtils {
    * @return an array of two string where the first is min record key and the second is max record key.
    */
   public String[] readMinMaxRecordKeys(HoodieStorage storage, StoragePath filePath) {
-    Map<String, String> minMaxKeys = readFooter(storage, true, filePath,
-        HoodieBloomFilterWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER, HoodieBloomFilterWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER);
+    return toMinMaxRecordKeys(readFooter(storage, true, filePath, MIN_MAX_RECORD_KEY_FOOTER_NAMES), filePath);
+  }
+
+  /**
+   * Read the min and max record key from the metadata of the given data file, whose length is known.
+   *
+   * @param storage  {@link HoodieStorage} instance.
+   * @param fileInfo the data file path and length.
+   * @return an array of two string where the first is min record key and the second is max record key.
+   */
+  public String[] readMinMaxRecordKeys(HoodieStorage storage, StoragePathInfo fileInfo) {
+    return toMinMaxRecordKeys(readFooter(storage, true, fileInfo, MIN_MAX_RECORD_KEY_FOOTER_NAMES), fileInfo.getPath());
+  }
+
+  private static String[] toMinMaxRecordKeys(Map<String, String> minMaxKeys, StoragePath filePath) {
     if (minMaxKeys.size() != 2) {
       throw new HoodieException(
           String.format("Could not read min/max record key out of footer correctly from %s. read) : %s",
@@ -248,6 +280,21 @@ public abstract class FileFormatUtils {
                                                  String... footerNames);
 
   /**
+   * Read the footer data of the given data file, whose length is known. Formats that need the file length to locate
+   * the footer override this to skip looking it up.
+   *
+   * @param storage     {@link HoodieStorage} instance.
+   * @param required    require the footer data to be in data file.
+   * @param fileInfo    the data file path and length.
+   * @param footerNames the footer names to read.
+   * @return a map where the key is the footer name and the value is the footer value.
+   */
+  public Map<String, String> readFooter(HoodieStorage storage, boolean required, StoragePathInfo fileInfo,
+                                        String... footerNames) {
+    return readFooter(storage, required, fileInfo.getPath(), footerNames);
+  }
+
+  /**
    * Returns the number of records in the data file.
    *
    * @param storage  {@link HoodieStorage} instance.
@@ -265,6 +312,19 @@ public abstract class FileFormatUtils {
    * @return set of pairs of row key and position matching candidateRecordKeys.
    */
   public abstract Set<Pair<String, Long>> filterRowKeys(HoodieStorage storage, StoragePath filePath, Set<String> filter);
+
+  /**
+   * Read the rowKey list matching the given filter, from the given data file, whose length is known.
+   * If the filter is empty, then this will return all the row keys and corresponding positions.
+   *
+   * @param storage  {@link HoodieStorage} instance.
+   * @param fileInfo the data file path and length.
+   * @param filter   record keys filter.
+   * @return set of pairs of row key and position matching candidateRecordKeys.
+   */
+  public Set<Pair<String, Long>> filterRowKeys(HoodieStorage storage, StoragePathInfo fileInfo, Set<String> filter) {
+    return filterRowKeys(storage, fileInfo.getPath(), filter);
+  }
 
   /**
    * Read the rowKey list matching the given filter, from the given data file, which was written outside Hudi and
@@ -326,6 +386,23 @@ public abstract class FileFormatUtils {
                                                                    Option<String> partitionPath);
 
   /**
+   * Provides a closable iterator for reading the given data file, whose length is known. Formats that need the file
+   * length to locate the footer override this to skip looking it up.
+   *
+   * @param storage         {@link HoodieStorage} instance.
+   * @param fileInfo        the data file path and length.
+   * @param keyGeneratorOpt instance of KeyGenerator.
+   * @param partitionPath   optional partition path for the file, if provided only the record key is read from the file
+   * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the file.
+   */
+  public ClosableIterator<HoodieKey> getHoodieKeyIterator(HoodieStorage storage,
+                                                          StoragePathInfo fileInfo,
+                                                          Option<BaseKeyGenerator> keyGeneratorOpt,
+                                                          Option<String> partitionPath) {
+    return getHoodieKeyIterator(storage, fileInfo.getPath(), keyGeneratorOpt, partitionPath);
+  }
+
+  /**
    * Provides a closable iterator for reading the given data file.
    *
    * @param storage  {@link HoodieStorage} instance.
@@ -362,6 +439,24 @@ public abstract class FileFormatUtils {
                                                                                Option<String> partitionPath) {
     AtomicLong position = new AtomicLong(0);
     return new CloseableMappingIterator<>(getHoodieKeyIterator(storage, filePath, keyGeneratorOpt, partitionPath),
+        key -> Pair.of(key, position.getAndIncrement()));
+  }
+
+  /**
+   * Fetch {@link HoodieKey}s with positions from the given data file, whose length is known.
+   *
+   * @param storage         {@link HoodieStorage} instance.
+   * @param fileInfo        the data file path and length.
+   * @param keyGeneratorOpt instance of KeyGenerator.
+   * @param partitionPath   optional partition path for the file, if provided only the record key is read from the file
+   * @return {@link Iterator} of pairs of {@link HoodieKey} and position fetched from the data file.
+   */
+  public ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage,
+                                                                               StoragePathInfo fileInfo,
+                                                                               Option<BaseKeyGenerator> keyGeneratorOpt,
+                                                                               Option<String> partitionPath) {
+    AtomicLong position = new AtomicLong(0);
+    return new CloseableMappingIterator<>(getHoodieKeyIterator(storage, fileInfo, keyGeneratorOpt, partitionPath),
         key -> Pair.of(key, position.getAndIncrement()));
   }
 

@@ -46,6 +46,11 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
   }
 
   @Override
+  protected HoodieFileReader newParquetFileReader(StoragePathInfo pathInfo) {
+    return new HoodieAvroParquetReader(storage, pathInfo);
+  }
+
+  @Override
   protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig,
                                                 StoragePath path,
                                                 Option<HoodieSchema> schemaOption) throws IOException {
