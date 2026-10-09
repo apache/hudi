@@ -19,6 +19,7 @@
 
 package org.apache.spark.sql.hudi.common
 
+import org.apache.hudi.DataSourceReadOptions.{CATALOG_TABLE_DATABASE, CATALOG_TABLE_NAME}
 import org.apache.hudi.HoodieFileIndex
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieIndexConfig.{BUCKET_INDEX_NUM_BUCKETS, INDEX_TYPE}
@@ -41,19 +42,29 @@ import java.net.URI
 import java.nio.file.Path
 
 class TestHoodieFileIndex {
-  @Test
-  def testDefaultDatabaseName(): Unit = {
-    assertEquals("default", HoodieFileIndex.getDatabaseName(new HoodieTableConfig(), null))
-    assertEquals("default_db", HoodieFileIndex.getDatabaseName(new HoodieTableConfig(), "default_db"))
-  }
+  private val catalogIdentity = Map(
+    CATALOG_TABLE_DATABASE.key -> "db1",
+    CATALOG_TABLE_NAME.key -> "tbl")
 
   @Test
   def testCatalogIsNotConsultedWithoutBucketIndex(): Unit = {
     val (spark, catalog, _) = mockSpark()
     when(catalog.tableExists(anyString(), anyString()))
-      .thenThrow(new IllegalStateException("database default is not allowed"))
+      .thenThrow(new IllegalStateException("database db1 is not allowed"))
 
-    val props = HoodieFileIndex.getConfigProperties(spark, Map.empty, tableConfig("tbl"))
+    val props = HoodieFileIndex.getConfigProperties(spark, catalogIdentity, tableConfig("tbl"))
+
+    verify(catalog, never()).tableExists(anyString(), anyString())
+    assertFalse(props.containsKey(BUCKET_INDEX_NUM_BUCKETS.key))
+  }
+
+  @Test
+  def testCatalogIsNotConsultedWithoutCatalogIdentity(): Unit = {
+    val (spark, catalog, _) = mockSpark()
+    when(catalog.tableExists(anyString(), anyString())).thenReturn(true)
+    val options = Map(INDEX_TYPE.key -> IndexType.BUCKET.name)
+
+    val props = HoodieFileIndex.getConfigProperties(spark, options, tableConfig("tbl"))
 
     verify(catalog, never()).tableExists(anyString(), anyString())
     assertFalse(props.containsKey(BUCKET_INDEX_NUM_BUCKETS.key))
@@ -62,28 +73,28 @@ class TestHoodieFileIndex {
   @Test
   def testCatalogPropertiesMergedWhenBucketIndexDeclared(@TempDir dir: Path): Unit = {
     val (spark, catalog, sessionCatalog) = mockSpark()
-    val id = TableIdentifier("tbl", Some("default"))
-    when(catalog.tableExists("default", "tbl")).thenReturn(true)
+    val id = TableIdentifier("tbl", Some("db1"))
+    when(catalog.tableExists("db1", "tbl")).thenReturn(true)
     when(sessionCatalog.getTableMetadata(id)).thenReturn(bucketCatalogTable(id, dir))
-    val options = Map(INDEX_TYPE.key -> IndexType.BUCKET.name)
+    val options = catalogIdentity + (INDEX_TYPE.key -> IndexType.BUCKET.name)
 
-    val props = HoodieFileIndex.getConfigProperties(spark, options, tableConfig("tbl"))
+    val props = HoodieFileIndex.getConfigProperties(spark, options, tableConfig("name_in_table_config"))
 
     assertEquals("3", props.getProperty(BUCKET_INDEX_NUM_BUCKETS.key))
     assertFalse(props.containsKey("preCombineField"))
-    verify(catalog).tableExists("default", "tbl")
+    verify(catalog).tableExists("db1", "tbl")
   }
 
   @Test
   def testCatalogFailureWithBucketIndexDeclaredDoesNotFailRead(): Unit = {
     val (spark, catalog, _) = mockSpark()
     when(catalog.tableExists(anyString(), anyString()))
-      .thenThrow(new IllegalStateException("database default is not allowed"))
-    val options = Map(INDEX_TYPE.key -> IndexType.BUCKET.name)
+      .thenThrow(new IllegalStateException("database db1 is not allowed"))
+    val options = catalogIdentity + (INDEX_TYPE.key -> IndexType.BUCKET.name)
 
     val props = HoodieFileIndex.getConfigProperties(spark, options, tableConfig("tbl"))
 
-    verify(catalog).tableExists("default", "tbl")
+    verify(catalog).tableExists("db1", "tbl")
     assertFalse(props.containsKey(BUCKET_INDEX_NUM_BUCKETS.key))
   }
 
@@ -111,7 +122,6 @@ class TestHoodieFileIndex {
     when(sessionState.newHadoopConf()).thenReturn(new Configuration())
     when(sessionState.catalog).thenReturn(sessionCatalog)
     when(spark.catalog).thenReturn(catalog)
-    when(catalog.currentDatabase).thenReturn("default")
     (spark, catalog, sessionCatalog)
   }
 }
