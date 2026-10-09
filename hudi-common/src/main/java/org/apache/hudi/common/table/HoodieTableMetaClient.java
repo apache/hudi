@@ -1597,7 +1597,8 @@ public class HoodieTableMetaClient implements Serializable {
       if (null != keyGeneratorClassProp) {
         KeyGeneratorType type = KeyGeneratorType.fromClassName(keyGeneratorClassProp);
         tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, type.name());
-        if (USER_PROVIDED == type) {
+        // tables below version 8 are also read by 0.x, which only knows the key generator class
+        if (USER_PROVIDED == type || tableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
           tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, keyGeneratorClassProp);
         }
       } else if (null != keyGeneratorType) {
@@ -1606,6 +1607,9 @@ public class HoodieTableMetaClient implements Serializable {
                 USER_PROVIDED.name()));
         KeyGeneratorType type = KeyGeneratorType.valueOf(keyGeneratorType);
         tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, type.name());
+        if (tableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
+          tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, type.getClassName());
+        }
       }
       if (tableConfig.isComplexKeyGenWithSingleRecordKeyField() && metaFieldsMode.isRecordKeyPopulated()) {
         // The property describes the record keys the table's data carries, not what the table version implies:
