@@ -25,6 +25,7 @@ import io.trino.metastore.Database;
 import io.trino.metastore.HiveMetastore;
 import io.trino.metastore.Table;
 import io.trino.metastore.TableInfo;
+import io.trino.metastore.cache.CachingHiveMetastore;
 import io.trino.plugin.base.classloader.ClassLoaderSafeSystemTable;
 import io.trino.plugin.hive.HiveColumnHandle;
 import io.trino.plugin.hudi.stats.HudiTableStatistics;
@@ -394,6 +395,10 @@ public class HudiMetadata
         catch (RuntimeException e) {
             Optional<Table> registeredTable;
             try {
+                if (metastore instanceof CachingHiveMetastore cachingHiveMetastore) {
+                    // Initialization can fail before createTable invalidates the cached miss above.
+                    cachingHiveMetastore.invalidateTable(schemaTableName.getSchemaName(), schemaTableName.getTableName());
+                }
                 registeredTable = metastore.getTable(schemaTableName.getSchemaName(), schemaTableName.getTableName());
             }
             catch (RuntimeException lookupFailure) {
