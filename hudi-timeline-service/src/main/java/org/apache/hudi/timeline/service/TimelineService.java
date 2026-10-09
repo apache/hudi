@@ -340,6 +340,9 @@ public class TimelineService {
 
   public void unregisterBasePath(String basePath) {
     fsViewsManager.clearFileSystemView(basePath);
+    if (requestHandler != null) {
+      requestHandler.unregisterBasePath(basePath);
+    }
   }
 
   public static void main(String[] args) throws Exception {
