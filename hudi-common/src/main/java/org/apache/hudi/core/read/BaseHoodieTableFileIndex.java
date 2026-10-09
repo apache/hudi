@@ -433,10 +433,14 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   }
 
   private boolean isBeforeTimelineStarts() {
+    // Check against the same timeline findInstantsInRange() reads: the incremental listing takes the
+    // written partitions from the write timeline, so it is only complete when that timeline covers the
+    // start. Older non-write instants (e.g. a rollback the archiver has not reached) must not count.
+    HoodieTimeline writeTimeline = metaClient.getActiveTimeline().getWriteTimeline().filterCompletedInstants();
     if (isCompletionTimeBasedQuery) {
-      return metaClient.getActiveTimeline().isBeforeTimelineStartsByCompletionTime(incrementalQueryStartTime.get());
+      return writeTimeline.isBeforeTimelineStartsByCompletionTime(incrementalQueryStartTime.get());
     } else {
-      return metaClient.getActiveTimeline().isBeforeTimelineStarts(incrementalQueryStartTime.get());
+      return writeTimeline.isBeforeTimelineStarts(incrementalQueryStartTime.get());
     }
   }
 
