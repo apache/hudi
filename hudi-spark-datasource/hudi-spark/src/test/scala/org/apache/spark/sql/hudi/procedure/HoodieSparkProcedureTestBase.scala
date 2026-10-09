@@ -23,7 +23,7 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class HoodieSparkProcedureTestBase extends HoodieSparkSqlTestBase {
   override def generateTableName: String = {
-    s"default.${super.generateTableName}"
+    s"$testDatabase.${super.generateTableName}"
   }
 
   def assertCached(query: Dataset[_], numCachedTables: Int = 1): Unit = {

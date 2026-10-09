@@ -100,7 +100,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
     assertFalse(schemaOpt.get().getFields.asScala.exists(f => HoodieRecord.HOODIE_META_COLUMNS.contains(f.name())),
       "Table create schema should not include metadata fields")
 
-    spark.sql("use default")
+    spark.sql(s"use $testDatabase")
   }
 
   test("Test Create Hoodie Table With Options") {
@@ -151,7 +151,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
     assertResult("id")(tableConfig(HoodieTableConfig.RECORDKEY_FIELDS.key))
     assertResult("ts")(tableConfig(HoodieTableConfig.ORDERING_FIELDS.key))
     assertResult(KeyGeneratorType.SIMPLE.name())(tableConfig(HoodieTableConfig.KEY_GENERATOR_TYPE.key))
-    assertResult("default")(tableConfig(HoodieTableConfig.DATABASE_NAME.key()))
+    assertResult(testDatabase)(tableConfig(HoodieTableConfig.DATABASE_NAME.key()))
     assertResult(tableName)(tableConfig(HoodieTableConfig.NAME.key()))
     assertFalse(tableConfig.contains(OPERATION.key()))
   }
@@ -917,7 +917,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
       val tablePath = table.storage.properties("path")
       val metaClient = createMetaClient(spark, tablePath)
       val tableConfig = metaClient.getTableConfig.getProps.asScala.toMap
-      assertResult("default")(tableConfig(HoodieTableConfig.DATABASE_NAME.key()))
+      assertResult(testDatabase)(tableConfig(HoodieTableConfig.DATABASE_NAME.key()))
       assertResult(tableName)(tableConfig(HoodieTableConfig.NAME.key()))
       assertFalse(tableConfig.contains(OPERATION.key()))
     }
@@ -953,7 +953,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
       val tablePath = table.storage.properties("path")
       val metaClient = createMetaClient(spark, tablePath)
       val tableConfig = metaClient.getTableConfig.getProps.asScala.toMap
-      assertResult("default")(tableConfig(HoodieTableConfig.DATABASE_NAME.key()))
+      assertResult(testDatabase)(tableConfig(HoodieTableConfig.DATABASE_NAME.key()))
       assertResult(tableName)(tableConfig(HoodieTableConfig.NAME.key()))
       assertFalse(tableConfig.contains(OPERATION.key()))
     }
@@ -1488,7 +1488,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
          | AS
          | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
          |""".stripMargin)("Compaction is not supported on a CopyOnWrite table")
-    val dbPath = spark.sessionState.catalog.getDatabaseMetadata("default").locationUri.getPath
+    val dbPath = spark.sessionState.catalog.getDatabaseMetadata(testDatabase).locationUri.getPath
     val tablePath = s"${dbPath}/${tableName}"
     assertResult(false)(existsPath(tablePath))
 
@@ -1540,7 +1540,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
         StructField("ts", LongType))
     )(table.schema.fields)
 
-    spark.sql("use default")
+    spark.sql(s"use $testDatabase")
   }
 
   test("Test Infer KegGenClazz") {
@@ -1727,7 +1727,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
       val tableSchemaAfterCreate1 = createMetaClient(spark, tablePath).getTableConfig.getTableCreateSchema
 
       // avro schema name and namespace should not change should not change
-      spark.newSession().sql(
+      newSessionInTestDatabase().sql(
         s"""
            |create table $tableName (
            |  id int,
