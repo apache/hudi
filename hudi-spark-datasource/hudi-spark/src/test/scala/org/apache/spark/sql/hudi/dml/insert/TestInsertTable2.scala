@@ -144,7 +144,7 @@ class TestInsertTable2 extends HoodieSparkSqlTestBase {
      """.stripMargin)
     val tooManyDataColumnsErrorMsg = if (HoodieSparkUtils.gteqSpark3_5) {
       s"""
-         |[INSERT_COLUMN_ARITY_MISMATCH.TOO_MANY_DATA_COLUMNS] Cannot write to `spark_catalog`.`default`.`$tableName`, the reason is too many data columns:
+         |[INSERT_COLUMN_ARITY_MISMATCH.TOO_MANY_DATA_COLUMNS] Cannot write to `spark_catalog`.`$testDatabase`.`$tableName`, the reason is too many data columns:
          |Table columns: `id`, `name`, `price`.
          |Data columns: `1`, `a1`, `10`, `2021-06-20`.
          |""".stripMargin
@@ -166,7 +166,7 @@ class TestInsertTable2 extends HoodieSparkSqlTestBase {
 
     val notEnoughDataColumnsErrorMsg = if (HoodieSparkUtils.gteqSpark3_5) {
       s"""
-         |[INSERT_COLUMN_ARITY_MISMATCH.NOT_ENOUGH_DATA_COLUMNS] Cannot write to `spark_catalog`.`default`.`$tableName`, the reason is not enough data columns:
+         |[INSERT_COLUMN_ARITY_MISMATCH.NOT_ENOUGH_DATA_COLUMNS] Cannot write to `spark_catalog`.`$testDatabase`.`$tableName`, the reason is not enough data columns:
          |Table columns: `id`, `name`, `price`, `dt`.
          |Data columns: `1`, `a1`, `10`.
          |""".stripMargin

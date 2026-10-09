@@ -32,7 +32,7 @@ class TestInsertTable3 extends HoodieSparkSqlTestBase {
   test("Test Insert Into With Catalog Identifier") {
     Seq("hudi", "parquet").foreach { format =>
       withTempDir { tmp =>
-        val tableName = s"spark_catalog.default.$generateTableName"
+        val tableName = s"spark_catalog.$testDatabase.$generateTableName"
         // Create a partitioned table
         spark.sql(
           s"""

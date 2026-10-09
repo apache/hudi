@@ -339,16 +339,16 @@ class TestInsertTable5 extends HoodieSparkSqlTestBase {
              | """.stripMargin
         val expectedExceptionMessage = if (HoodieSparkUtils.gteqSpark3_5) {
           "[INSERT_COLUMN_ARITY_MISMATCH.TOO_MANY_DATA_COLUMNS] " +
-            s"Cannot write to `spark_catalog`.`default`.`$tableName`, " +
+            s"Cannot write to `spark_catalog`.`$testDatabase`.`$tableName`, " +
             "the reason is too many data columns:\n" +
             "Table columns: `id`, `name`, `price`, `ts`.\n" +
             "Data columns: `id`, `name`, `price`, `ts`, `new_col`."
         } else {
           val endingStr = if (HoodieSparkUtils.gteqSpark3_4) "." else ""
           val tableId = if (HoodieSparkUtils.gteqSpark3_4) {
-            s"spark_catalog.default.$tableName"
+            s"spark_catalog.$testDatabase.$tableName"
           } else {
-            s"default.$tableName"
+            s"$testDatabase.$tableName"
           }
           s"Cannot write to '$tableId', too many data columns:\n" +
             s"Table columns: 'id', 'name', 'price', 'ts'$endingStr\n" +
