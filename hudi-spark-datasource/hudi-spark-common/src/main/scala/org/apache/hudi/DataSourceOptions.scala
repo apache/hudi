@@ -282,8 +282,7 @@ object DataSourceReadOptions {
         "the file system to avoid recursively listing of large number of directories. Enabling this can reduce " +
         "large amount of listing calls and speed up the queries for very large tables. This is only necessary " +
         "when MDT is not enabled on the dataset as otherwise the MDT can provide the partition listing faster " +
-        "and without any actual listing on the file system. Reads not resolved through Hudi's Spark catalog ignore " +
-        "the option, and a catalog entry whose last synced commit is behind the table falls back to listing the file system.")
+        "and without any actual listing on the file system.")
 
   val INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.incr.fallback.fulltablescan.enable")

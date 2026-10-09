@@ -17,21 +17,16 @@
 
 package org.apache.spark.sql.hudi.common
 
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
+import org.apache.hudi.DataSourceReadOptions
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.metadata.CatalogBackedTableMetadata
 import org.apache.hudi.storage.StoragePath
-import org.apache.hudi.sync.common.HoodieMetaSyncOperations.{HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC, HOODIE_LAST_COMMIT_TIME_SYNC}
 
-import org.apache.spark.sql.catalyst.TableIdentifier
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
 import java.util.stream.Collectors
-
-import scala.collection.JavaConverters._
 
 /**
  * Tests for CatalogBackedTableMetadata to verify partition listing via catalog
@@ -88,8 +83,9 @@ class TestCatalogBackedTableMetadata extends HoodieSparkSqlTestBase {
 
       // Verify catalog-backed metadata can list partitions
       val engine = new HoodieSparkEngineContext(spark.sparkContext)
+      val storage = metaClient.getStorage
       val catalogBackedMetadata = new CatalogBackedTableMetadata(
-        engine, metaClient, catalogIdentifier(targetTable))
+        engine, metaClient.getTableConfig, storage, tablePath)
 
       val allPartitions = catalogBackedMetadata.getAllPartitionPaths
       val jan01 = hivePartitionPath("year" -> "2024", "month" -> "01", "day" -> "01")
@@ -219,8 +215,9 @@ class TestCatalogBackedTableMetadata extends HoodieSparkSqlTestBase {
         .build()
 
       val engine = new HoodieSparkEngineContext(spark.sparkContext)
+      val storage = metaClient.getStorage
       val catalogBackedMetadata = new CatalogBackedTableMetadata(
-        engine, metaClient, catalogIdentifier(targetTable))
+        engine, metaClient.getTableConfig, storage, tablePath)
 
       val allPartitions = catalogBackedMetadata.getAllPartitionPaths
       assertEquals(6, allPartitions.size(), "Should have 6 partitions")
@@ -307,7 +304,7 @@ class TestCatalogBackedTableMetadata extends HoodieSparkSqlTestBase {
       // Catalog-backed metadata should still work
       val engine = new HoodieSparkEngineContext(spark.sparkContext)
       val catalogBackedMetadata = new CatalogBackedTableMetadata(
-        engine, updatedMetaClient, catalogIdentifier(targetTable))
+        engine, updatedMetaClient.getTableConfig, storage, tablePath)
 
       val partitions = catalogBackedMetadata.getAllPartitionPaths
       assertTrue(partitions.size() >= 3, s"Should have at least 3 partitions, got ${partitions.size()}")
@@ -368,8 +365,9 @@ class TestCatalogBackedTableMetadata extends HoodieSparkSqlTestBase {
         .build()
 
       val engine = new HoodieSparkEngineContext(spark.sparkContext)
+      val storage = metaClient.getStorage
       val catalogBackedMetadata = new CatalogBackedTableMetadata(
-        engine, metaClient, catalogIdentifier(targetTable))
+        engine, metaClient.getTableConfig, storage, tablePath)
 
       // Test filtering with path prefix
       import scala.collection.JavaConverters._
@@ -458,8 +456,9 @@ class TestCatalogBackedTableMetadata extends HoodieSparkSqlTestBase {
         .build()
 
       val engine = new HoodieSparkEngineContext(spark.sparkContext)
+      val storage = metaClient.getStorage
       val catalogBackedMetadata = new CatalogBackedTableMetadata(
-        engine, metaClient, catalogIdentifier(targetTable))
+        engine, metaClient.getTableConfig, storage, tablePath)
 
       catalogBackedMetadata.close()
     }
@@ -516,7 +515,7 @@ class TestCatalogBackedTableMetadata extends HoodieSparkSqlTestBase {
       // Test with catalog-backed metadata
       spark.conf.set(DataSourceReadOptions.FILE_INDEX_PARTITION_LISTING_VIA_CATALOG.key, "true")
       val catalogBackedMetadata = new CatalogBackedTableMetadata(
-        engine, metaClient, catalogIdentifier(targetTable))
+        engine, metaClient.getTableConfig, storage, tablePath)
 
       val startCatalog = System.currentTimeMillis()
       val partitionsCatalog = catalogBackedMetadata.getAllPartitionPaths
@@ -543,117 +542,6 @@ class TestCatalogBackedTableMetadata extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test catalog-backed partition listing uses a catalog entry synced to the latest commit") {
-    withTempDir { tmp =>
-      val targetTable = generateTableName
-      createCountryPartitionedTable(targetTable, tmp.getCanonicalPath)
-      spark.sql(s"insert into $targetTable values (1, 'a1', 1000, 'US'), (2, 'a2', 1000, 'CN')")
-      syncPartitionsToCatalog(targetTable)
-      // the new partition is not added to the catalog, but the entry is marked as synced to this commit
-      spark.sql(s"insert into $targetTable values (3, 'a3', 1000, 'ID')")
-      recordLastSyncedCommit(catalogIdentifier(targetTable))
-
-      withSQLConf(DataSourceReadOptions.FILE_INDEX_PARTITION_LISTING_VIA_CATALOG.key -> "true") {
-        checkAnswer(s"select id, name, country from $targetTable order by id")(
-          Seq(1, "a1", "US"),
-          Seq(2, "a2", "CN")
-        )
-      }
-    }
-  }
-
-  test("Test catalog-backed partition listing lists the file system when the read is not resolved from a catalog entry") {
-    withTempDir { tmp =>
-      val targetTable = generateTableName
-      val tablePath = tmp.getCanonicalPath
-      createCountryPartitionedTable(targetTable, tablePath)
-      spark.sql(s"insert into $targetTable values (1, 'a1', 1000, 'US')")
-      syncPartitionsToCatalog(targetTable)
-      // the new partition is not added to the catalog, but the entry is marked as synced to this commit
-      spark.sql(s"insert into $targetTable values (2, 'a2', 1000, 'ID')")
-      recordLastSyncedCommit(catalogIdentifier(targetTable))
-
-      val rows = spark.read.format("hudi")
-        .option(DataSourceReadOptions.FILE_INDEX_PARTITION_LISTING_VIA_CATALOG.key, "true")
-        .option(HoodieMetadataConfig.ENABLE.key, "false")
-        .load(tablePath)
-        .select("id", "country")
-        .orderBy("id")
-        .collect()
-        .map(row => (row.getInt(0), row.getString(1)))
-      assertEquals(Seq((1, "US"), (2, "ID")), rows.toSeq)
-    }
-  }
-
-  test("Test catalog-backed partition listing uses the entry the read was resolved from, not the table config name") {
-    withTempDir { tmp =>
-      val tablePath = tmp.getCanonicalPath
-      val storedTableName = generateTableName
-      val catalogDatabase = s"db_$storedTableName"
-      val entry = TableIdentifier(s"entry_$storedTableName", Some(catalogDatabase))
-      writeCountryRows(tablePath, storedTableName, Seq((1, "a1", "US"), (2, "a2", "CN")))
-      spark.sql(s"create database $catalogDatabase")
-      try {
-        spark.sql(s"create table ${entry.unquotedString} using hudi location '$tablePath'")
-        spark.sql(s"msck repair table ${entry.unquotedString}")
-        // the new partition is not added to the catalog, but the entry is marked as synced to this commit
-        writeCountryRows(tablePath, storedTableName, Seq((3, "a3", "ID")))
-        recordLastSyncedCommit(entry)
-
-        withSQLConf(DataSourceReadOptions.FILE_INDEX_PARTITION_LISTING_VIA_CATALOG.key -> "true") {
-          checkAnswer(s"select id, name, country from ${entry.unquotedString} order by id")(
-            Seq(1, "a1", "US"),
-            Seq(2, "a2", "CN")
-          )
-        }
-        val metaClient = HoodieTableMetaClient.builder()
-          .setConf(HadoopFSUtils.getStorageConfWithCopy(spark.sparkContext.hadoopConfiguration))
-          .setBasePath(tablePath)
-          .build()
-        assertEquals(storedTableName, metaClient.getTableConfig.getTableName)
-        val catalogBackedMetadata = new CatalogBackedTableMetadata(
-          new HoodieSparkEngineContext(spark.sparkContext), metaClient, entry)
-        assertEquals(Seq("country=CN", "country=US"), catalogBackedMetadata.getAllPartitionPaths.asScala.sorted)
-        catalogBackedMetadata.close()
-      } finally {
-        spark.sql(s"drop database if exists $catalogDatabase cascade")
-      }
-    }
-  }
-
-  private def createCountryPartitionedTable(tableName: String, tablePath: String): Unit = {
-    spark.sql(
-      s"""
-         |create table $tableName (
-         |  id int,
-         |  name string,
-         |  ts long,
-         |  country string
-         |) using hudi
-         | location '$tablePath'
-         | tblproperties (
-         |  primaryKey = 'id',
-         |  orderingFields = 'ts',
-         |  hoodie.metadata.enable = 'false'
-         | )
-         | partitioned by (country)""".stripMargin)
-  }
-
-  private def writeCountryRows(tablePath: String, tableName: String, rows: Seq[(Int, String, String)]): Unit = {
-    import spark.implicits._
-    rows.map { case (id, name, country) => (id, name, 1000L, country) }
-      .toDF("id", "name", "ts", "country")
-      .write.format("hudi")
-      .option(HoodieTableConfig.NAME.key, tableName)
-      .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
-      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "country")
-      .option(DataSourceWriteOptions.ORDERING_FIELDS.key, "ts")
-      .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, "true")
-      .option(HoodieMetadataConfig.ENABLE.key, "false")
-      .mode("append")
-      .save(tablePath)
-  }
-
   private def corruptParquetFileInPartition(tablePath: String, relativePartitionPath: String): Unit = {
     val metaClient = HoodieTableMetaClient.builder()
       .setConf(HadoopFSUtils.getStorageConfWithCopy(spark.sparkContext.hadoopConfiguration))
@@ -674,24 +562,7 @@ class TestCatalogBackedTableMetadata extends HoodieSparkSqlTestBase {
 
   private def syncPartitionsToCatalog(tableName: String): Unit = {
     spark.sql(s"msck repair table $tableName")
-    recordLastSyncedCommit(catalogIdentifier(tableName))
   }
-
-  // Records the table's latest completed commit on the catalog entry the way meta sync does.
-  private def recordLastSyncedCommit(identifier: TableIdentifier): Unit = {
-    val catalog = spark.sessionState.catalog
-    val table = catalog.getTableMetadata(identifier)
-    val commits = HoodieTableMetaClient.builder()
-      .setConf(HadoopFSUtils.getStorageConfWithCopy(spark.sparkContext.hadoopConfiguration))
-      .setBasePath(table.location.toString)
-      .build()
-      .getActiveTimeline.getCommitsTimeline.filterCompletedInstants
-    catalog.alterTable(table.copy(properties = table.properties ++ Map(
-      HOODIE_LAST_COMMIT_TIME_SYNC -> commits.lastInstant.get.requestedTime,
-      HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC -> commits.getLatestCompletionTime.get)))
-  }
-
-  private def catalogIdentifier(tableName: String): TableIdentifier = TableIdentifier(tableName, Some("default"))
 
   private def hivePartitionPrefix(partitionColumns: (String, String)*): String = {
     partitionColumns.map { case (column, value) => s"$column=$value" }.mkString("/")
