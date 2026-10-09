@@ -51,6 +51,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
@@ -644,8 +645,14 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     List<String> newPartitions = filterPartitions(partitionEventList, PartitionEventType.ADD);
     if (!newPartitions.isEmpty()) {
       log.info("New Partitions {}", newPartitions);
-      syncClient.addPartitionsToTable(tableName, newPartitions);
-      syncStats.recordPartitionsAdded(newPartitions.size());
+      // counted as the metastore takes them, so that if a later batch fails, the batches already
+      // added are counted; the retry will not add them again
+      AtomicInteger partitionsAdded = new AtomicInteger();
+      try {
+        syncClient.addPartitionsToTable(tableName, newPartitions, partitionsAdded::addAndGet);
+      } finally {
+        syncStats.recordPartitionsAdded(partitionsAdded.get());
+      }
     }
 
     List<String> updatePartitions = filterPartitions(partitionEventList, PartitionEventType.UPDATE);

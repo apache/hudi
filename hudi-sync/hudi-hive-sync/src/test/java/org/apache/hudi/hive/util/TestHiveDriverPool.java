@@ -148,6 +148,28 @@ class TestHiveDriverPool {
     }
   }
 
+  @Test
+  void dispatchAllReportsOnlyTheStatementsThatRan() throws Exception {
+    HiveSyncConfig config = configWithEmptyHiveConf();
+    HiveDriverPool.DriverFactory factory = (db) -> {
+      Driver d = mock(Driver.class);
+      doAnswer(inv -> {
+        if ("FAIL".equals(inv.getArgument(0))) {
+          throw new RuntimeException("boom");
+        }
+        return SUCCESS;
+      }).when(d).run(anyString());
+      return d;
+    };
+    // one worker, so the statements run in order and the one after the failure is skipped
+    try (HiveDriverPool pool = new HiveDriverPool(config, 1, factory)) {
+      List<Integer> ran = Collections.synchronizedList(new ArrayList<>());
+      ParallelDispatch dispatch = pool.dispatchAll(Arrays.asList("OK", "FAIL", "OK"), ran::add);
+      assertThrows(HoodieHiveSyncException.class, () -> pool.awaitAll(dispatch));
+      assertEquals(Collections.singletonList(0), ran);
+    }
+  }
+
   /**
    * Driver.run() reports a statement Hive rejects through its response rather than by throwing,
    * so a batch that only watched for exceptions would report the sync as applied.

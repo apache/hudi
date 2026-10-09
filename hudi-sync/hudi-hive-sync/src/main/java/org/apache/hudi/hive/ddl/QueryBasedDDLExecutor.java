@@ -38,6 +38,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.IntConsumer;
 
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
@@ -85,8 +86,18 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
    * with {@code `db`.`tbl`} so any statement can run on any worker.
    */
   protected void runSQLs(List<String> sqls) {
-    for (String sql : sqls) {
-      runSQL(sql);
+    runSQLs(sqls, index -> { });
+  }
+
+  /**
+   * Like {@link #runSQLs(List)}, and gives {@code onStatementRun} the index of each statement
+   * once it has run. Subclasses that parallelize call it from their workers, so it may be called
+   * from several threads at once and out of order.
+   */
+  protected void runSQLs(List<String> sqls, IntConsumer onStatementRun) {
+    for (int i = 0; i < sqls.size(); i++) {
+      runSQL(sqls.get(i));
+      onStatementRun.accept(i);
     }
   }
 
@@ -144,13 +155,20 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
 
   @Override
   public void addPartitionsToTable(String tableName, List<String> partitionsToAdd) {
+    addPartitionsToTable(tableName, partitionsToAdd, added -> { });
+  }
+
+  @Override
+  public void addPartitionsToTable(String tableName, List<String> partitionsToAdd, IntConsumer onPartitionsAdded) {
     if (partitionsToAdd.isEmpty()) {
       log.info("No partitions to add for {}", tableName);
       return;
     }
     log.info("Adding partitions {} to table {}", partitionsToAdd.size(), tableName);
-    List<String> sqls = constructAddPartitions(tableName, partitionsToAdd);
-    runSQLs(sqls);
+    int batchSize = config.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM);
+    List<String> sqls = constructAddPartitions(tableName, partitionsToAdd, batchSize);
+    // statement i adds the i-th batch of batchSize partitions, the last one what is left
+    runSQLs(sqls, i -> onPartitionsAdded.accept(Math.min(batchSize, partitionsToAdd.size() - i * batchSize)));
   }
 
   @Override
@@ -188,9 +206,8 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
     return false;
   }
 
-  private List<String> constructAddPartitions(String tableName, List<String> partitions) {
+  private List<String> constructAddPartitions(String tableName, List<String> partitions, int batchSyncPartitionNum) {
     List<String> result = new ArrayList<>();
-    int batchSyncPartitionNum = config.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM);
     StringBuilder alterSQL = getAlterTablePrefix(tableName);
     for (int i = 0; i < partitions.size(); i++) {
       String partitionClause = getPartitionClause(partitions.get(i));

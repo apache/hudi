@@ -36,6 +36,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.IntConsumer;
 
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 
@@ -145,15 +146,25 @@ public class HiveDriverPool implements AutoCloseable {
    * rather than by the awaiting thread — see {@link ParallelDispatch}.
    */
   public ParallelDispatch dispatchAll(List<String> sqls) {
+    return dispatchAll(sqls, index -> { });
+  }
+
+  /**
+   * Like {@link #dispatchAll(List)}, and gives {@code onStatementRun} the index of each statement
+   * once it has run. It is called on the worker threads, so from several at once and out of order.
+   */
+  public ParallelDispatch dispatchAll(List<String> sqls, IntConsumer onStatementRun) {
     if (closed) {
       throw new IllegalStateException("Cannot dispatch to a closed HiveDriverPool");
     }
     ParallelDispatch dispatch = new ParallelDispatch(sqls.size());
     for (int i = 0; i < sqls.size(); i++) {
+      int index = i;
       String sql = sqls.get(i);
       Worker worker = workers.get(i % workers.size());
       dispatch.add(worker.executor.submit(dispatch.guard(() -> {
         HiveStatementExecutor.executeOrThrow(worker.driver, sql);
+        onStatementRun.accept(index);
         return null;
       }, "Skipped after an earlier statement failed")));
     }
