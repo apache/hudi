@@ -151,6 +151,13 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       }
       assertEquals(expectedTableVersion, metaClient.getTableConfig.getTableVersion)
       assertTableConfigs(storage, basePath, expectedTableConfigs(expectedTableVersion).asJava)
+
+      // the next write backfills the key generator class of a table created without it
+      HoodieTableConfig.delete(storage, metaClient.getMetaPath,
+        java.util.Collections.singleton(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key))
+      inputDF.write.format("hudi").partitionBy("partition")
+        .options(writeOptions).mode(SaveMode.Append).save(basePath)
+      assertTableConfigs(storage, basePath, expectedTableConfigs(expectedTableVersion).asJava)
     }
   }
 

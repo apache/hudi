@@ -630,6 +630,14 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     deltaStreamer.getIngestionService().ingestOnce();
     assertTableConfigs(storage, tablePath, expectedTableConfigs(version));
     deltaStreamer.shutdownGracefully();
+
+    // the next write backfills the key generator class of a table created without it
+    HoodieTableConfig.delete(storage, new StoragePath(tablePath, HoodieTableMetaClient.METAFOLDER_NAME),
+        Collections.singleton(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key()));
+    deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
+    deltaStreamer.getIngestionService().ingestOnce();
+    assertTableConfigs(storage, tablePath, expectedTableConfigs(version));
+    deltaStreamer.shutdownGracefully();
   }
 
   private static Map<String, String> expectedTableConfigs(HoodieTableVersion version) {
