@@ -904,6 +904,23 @@ public class FSUtils {
     }
   }
 
+  /**
+   * Returns the path info of a native log file for readers that only need its path and length.
+   *
+   * <p>The listing-time path info is returned when attached; otherwise one is built from the file size, which is
+   * fetched and kept on the log file only when unknown. Native log files are never appended to, so the kept size
+   * cannot go stale.
+   */
+  public static StoragePathInfo getNativeLogFilePathInfo(HoodieStorage storage, HoodieLogFile logFile) {
+    if (logFile.getPathInfo() != null) {
+      return logFile.getPathInfo();
+    }
+    if (logFile.getFileSize() < 0) {
+      logFile.setFileSize(getFileSize(storage, logFile));
+    }
+    return new StoragePathInfo(logFile.getPath(), logFile.getFileSize(), false, (short) 0, 0, 0);
+  }
+
   public static Map<String, Boolean> deleteFilesParallelize(
       HoodieTableMetaClient metaClient,
       List<String> paths,

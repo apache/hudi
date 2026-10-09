@@ -197,6 +197,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   public void close() {
     isMetaInfoLoaded = false;
     metaInfoMap.clear();
+    readerFactory.releaseDownloadedContent();
   }
 
   @Override
