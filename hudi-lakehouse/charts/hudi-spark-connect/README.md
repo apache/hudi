@@ -121,6 +121,32 @@ The test creates a temporary table, checks INSERT/UPDATE/DELETE, restarts the
 endpoint, verifies persistence, and cleans up. It interrupts active sessions.
 On failure, follow the printed cleanup instructions.
 
+## Agent gateway
+
+See the [gateway setup and limits](../../../hudi-agent-gateway/README.md#spark-connect-backend).
+The Agent and MCP interfaces share the same three read-only tools:
+`list_tables`, `describe_table`, and `query_lakehouse`.
+
+Build the gateway image, which includes the official PySpark Connect client:
+
+```bash
+docker build -t hudi-lakehouse-agent-gateway:0.1.0 hudi-agent-gateway
+```
+
+Load or push that image for your cluster, then install the gateway from the
+repository root:
+
+```bash
+helm upgrade --install hudi-agent-gateway hudi-lakehouse/charts/hudi-agent-gateway \
+  -n hudi-lakehouse \
+  -f hudi-lakehouse/charts/hudi-agent-gateway/values-local-dev.yaml \
+  -f hudi-lakehouse/charts/hudi-agent-gateway/values-spark-connect.yaml
+```
+
+This retains the local-dev Ollama configuration. `/ready` checks Spark with
+`SELECT 1` and checks the configured LLM separately. MCP tool calls themselves
+do not require an LLM. Override the provider as described in the gateway README.
+
 <a id="spark-connect-client-tutorials"></a>
 
 ## BI clients

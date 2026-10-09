@@ -26,7 +26,8 @@ process hosts three surfaces over the same set of guarded lakehouse tools:
 | MCP server | `/mcp` (streamable HTTP) | external agents (Claude, anything MCP) call the lakehouse tools directly |
 | Chat UI | `/ui/` | first-party ChatGPT-style web UI (zero third-party code) |
 
-The v1 tools query the lakehouse through Trino: `query_lakehouse` (guarded,
+The tools query the lakehouse through Trino (default) or the official PySpark
+Connect client: `query_lakehouse` (guarded,
 read-only SQL), `list_tables`, `describe_table`. Every model-written query
 passes AST-level guardrails (single statement, SELECT-only, row cap injected
 as a real `LIMIT`) and every invocation is logged as structured JSON — the
@@ -57,9 +58,17 @@ For a fully local model, install [Ollama](https://ollama.com), pull a
 tool-capable model, and use the default provider:
 
 ```bash
-ollama pull qwen3:8b
-GATEWAY_LLM_PROVIDER=ollama GATEWAY_LLM_MODEL=qwen3:8b hudi-agent-gateway serve
+ollama pull qwen3:4b-instruct
+GATEWAY_LLM_PROVIDER=ollama GATEWAY_LLM_MODEL=qwen3:4b-instruct hudi-agent-gateway serve
 ```
+
+The chat UI shows progress and elapsed time while a response is running. **Stop**
+closes the response stream and cancels the agent task. If the gateway does not
+accept the connection within 15 seconds, the UI reports a connection timeout.
+The server's chat timeout returns HTTP 504
+for JSON requests or a `chat_timeout` SSE error. Provider/SQL cancellation is
+best-effort; remote work may take time to stop. After Stop or an error the UI
+starts a new conversation on the next message to avoid incomplete tool-call history.
 
 Connect an MCP client:
 
@@ -81,11 +90,15 @@ Environment variables (prefix `GATEWAY_` except the standard key names):
 | Variable | Default | Purpose |
 |---|---|---|
 | `GATEWAY_LLM_PROVIDER` | `ollama` | `anthropic` \| `openai` \| `ollama` \| `openai-compatible` |
-| `GATEWAY_LLM_MODEL` | `qwen3:8b` | model name for the provider |
+| `GATEWAY_LLM_MODEL` | `qwen3:4b-instruct` | model name for the provider |
 | `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | — | required by the matching provider |
 | `GATEWAY_OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama endpoint |
 | `GATEWAY_OPENAI_BASE_URL` | — | endpoint for `openai-compatible` (vLLM, Together, …) |
-| `GATEWAY_LLM_TIMEOUT_SECONDS` | `120` | per-model-call timeout |
+| `GATEWAY_LLM_TIMEOUT_SECONDS` | `120` | HTTP operation/read timeout; streaming data can keep a call alive |
+| `GATEWAY_CHAT_TIMEOUT_SECONDS` | `300` | total wall-clock limit for one chat turn, including all model/tool calls |
+| `GATEWAY_SQL_BACKEND` | `trino` | `trino` or `spark-connect` |
+| `GATEWAY_SPARK_CONNECT_URI` | `sc://hudi-spark-connect.hudi-lakehouse.svc:15002` | PySpark Connect URI; optional `/;key=value` parameters |
+| `GATEWAY_SPARK_CONNECT_CATALOG` / `_SCHEMA` | `spark_catalog` / `default` | Spark query and metadata defaults |
 | `GATEWAY_TRINO_HOST` / `_PORT` | `hudi-trino.hudi-lakehouse.svc` / `8080` | Trino coordinator |
 | `GATEWAY_TRINO_CATALOG` / `_SCHEMA` / `_USER` | `hudi` / `default` / `hudi-agent-gateway` | query defaults |
 | `GATEWAY_SQL_ROW_CAP` | `200` | LIMIT enforced on every query |
@@ -98,9 +111,74 @@ Environment variables (prefix `GATEWAY_` except the standard key names):
 | `GATEWAY_MCP_ENABLED` | `true` | serve /mcp |
 | `GATEWAY_HOST` / `GATEWAY_PORT` / `GATEWAY_LOG_LEVEL` | `0.0.0.0` / `8000` / `INFO` | server basics |
 
-Startup never depends on the LLM or Trino being reachable: `/health` is
+Startup never depends on the LLM or the selected SQL backend being reachable: `/health` is
 liveness, `/ready` reports per-dependency status (and gates the Kubernetes
 readiness probe).
+
+## Spark Connect backend
+
+Install the gateway in a Python 3.11/3.12 environment. Its dependencies include
+`pyspark-client==4.1.3`, matching the chart's Spark version, and PyArrow 18.1.0.
+The official Python Connect client sends RPCs to the remote Spark server; the
+gateway image requires no Java runtime, Spark JARs, or native ADBC driver.
+PySpark also brings pandas, gRPC, and protobuf dependencies; use a dedicated
+environment and upgrade the client alongside the server.
+
+After deploying the [Spark Connect chart](../hudi-lakehouse/charts/hudi-spark-connect/README.md)
+and forwarding port 15002:
+
+```bash
+GATEWAY_SQL_BACKEND=spark-connect \
+GATEWAY_SPARK_CONNECT_URI='sc://localhost:15002' \
+  hudi-agent-gateway serve
+```
+
+Use Helm `sqlBackend: spark-connect` and `sparkConnect.uri/catalog/schema`,
+or apply the chart's `values-spark-connect.yaml` overlay. An optional
+`sparkConnect.existingSecret` supplies the URI via `sparkConnect.uriSecretKey`.
+`/ready` reports a `spark-connect` check (cached SELECT 1) and the LLM check;
+`/v1/info`, Agent prompts, MCP tool descriptions, and the UI reflect the selected
+backend. Connection credentials are omitted from `/v1/info`.
+
+`query_lakehouse` accepts Spark SQL with backtick identifiers and enforces the
+same single-SELECT/AST/LIMIT policy. `list_tables` uses SHOW TABLES and reports
+`TABLE` for persistent objects (Spark's SHOW TABLES does not distinguish views
+from tables), `TEMPORARY` for temporary objects. `describe_table` uses a zero-row
+SELECT and PySpark's schema, preserving column/type/nullability result columns.
+Types use Spark SQL names such as `int`, `bigint`, and `array<string>`. Each call
+creates an independent remote session, sets its catalog/schema, and stops that
+session in a finally block. Sessions are not shared across tool calls.
+
+**Bounds:** SQL LIMIT and DataFrame.limit before collect cap query result rows;
+the existing JSON size cap truncates tool responses. Wide rows can still consume
+substantial client memory, and SHOW TABLES can enumerate the whole namespace
+before returning limited rows. The JSON cap is a response limit, not a
+server/memory budget. Queries use at most eight workers with no accumulating
+queue. A timed-out call keeps its capacity slot until execution and cleanup
+actually finish.
+
+**Timeout/cancellation:** gateway timeouts return promptly and request
+`SparkSession.interruptAll()` on a separate thread; task cancellation follows
+the same path. Each request owns its session, so this interrupts only that
+request's operations. Spark provides a server interruption RPC, but network
+failures and races with operation startup mean cancellation remains best-effort.
+A timeout does not prove Spark stopped. Hung RPCs can delay session cleanup;
+worker pools shut down without waiting, and Python cannot forcibly terminate
+worker threads. Restart the process if all eight slots remain stuck. Connect
+URIs can use `/;use_ssl=true;token=...` for an appropriately configured endpoint;
+the chart itself has no authentication or TLS. Gateway tools expose no DML;
+direct Superset/Zeppelin writes have their own
+[tutorials and limitations](../hudi-lakehouse/charts/hudi-spark-connect/README.md#spark-connect-client-tutorials).
+
+Opt-in live tests use an existing table and do not write data:
+
+```bash
+GATEWAY_IT_SPARK_CONNECT_URI='sc://localhost:15002' \
+GATEWAY_IT_SPARK_TABLE=bi_adbc_demo.orders \
+  .venv/bin/python -m pytest tests/integration/test_spark_connect_live.py -q
+```
+
+Add `GATEWAY_IT_LLM=1` to exercise the real Agent loop with the configured LLM.
 
 ## Development
 

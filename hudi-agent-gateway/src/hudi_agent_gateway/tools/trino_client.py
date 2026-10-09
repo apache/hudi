@@ -22,30 +22,20 @@ import asyncio
 import contextlib
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
 from typing import Any
 
 import trino
 
 from hudi_agent_gateway.config import GatewaySettings
-
-
-class TrinoQueryError(Exception):
-    """A query failed on the Trino side; message is safe to surface to the model."""
-
-
-class TrinoTimeoutError(TrinoQueryError):
-    pass
-
-
-@dataclass
-class QueryResult:
-    columns: list[str]
-    rows: list[list[Any]]
-    row_count: int = field(init=False)
-
-    def __post_init__(self) -> None:
-        self.row_count = len(self.rows)
+from hudi_agent_gateway.tools.lakehouse_client import (
+    QueryError as TrinoQueryError,
+)
+from hudi_agent_gateway.tools.lakehouse_client import (
+    QueryResult as QueryResult,
+)
+from hudi_agent_gateway.tools.lakehouse_client import (
+    QueryTimeoutError as TrinoTimeoutError,
+)
 
 
 class TrinoClient:
@@ -60,6 +50,9 @@ class TrinoClient:
         # default executor, and the bound caps how many can pile up at all.
         self._executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="trino-query")
         self._ping_cache: tuple[float, bool] | None = None
+
+    def close(self) -> None:
+        self._executor.shutdown(wait=False, cancel_futures=True)
 
     def _connect(self) -> trino.dbapi.Connection:
         s = self._settings
@@ -104,6 +97,9 @@ class TrinoClient:
             raise TrinoQueryError(f"{e.error_name}: {e.message}") from e
         except trino.exceptions.Error as e:
             raise TrinoQueryError(str(e)) from e
+
+    async def describe(self, sql: str, *, timeout: float, max_rows: int) -> QueryResult:
+        return await self.execute(sql, timeout=timeout, max_rows=max_rows)
 
     async def ping(self, timeout: float = 5.0, cache_seconds: float = 10.0) -> bool:
         """Cached reachability check feeding ``/ready``.
