@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.HoodieRollbackStat;
+import org.apache.hudi.common.NativeTableFormat;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -320,6 +321,34 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
       log.info("Deleted pending commit {}", instantToBeDeleted);
     } else {
       log.info("Rollback finished without deleting inflight instant file. Instant={}", instantToBeDeleted);
+    }
+  }
+
+  /**
+   * Un-publishes the instant being rolled back: a completed instant is first reverted in the
+   * pluggable table format and then transitioned back to inflight; an instant that is inflight in
+   * the resolved timeline but still completed in the native timeline (the table format fences
+   * completion) is reverted there as well.
+   */
+  protected void unpublishInstant() {
+    HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
+    if (instantToRollback.isCompleted()) {
+      log.info("Unpublishing instant {}", instantToRollback);
+      table.getMetaClient().getTableFormat().rollback(instantToRollback, table.getContext(), table.getMetaClient(), table.getViewManager());
+      // Revert the completed instant to inflight in native format.
+      resolvedInstant = activeTimeline.revertToInflight(instantToRollback);
+      // reload meta-client to reflect latest timeline status
+      table.getMetaClient().reloadActiveTimeline();
+    }
+
+    // If instant is inflight but marked as completed in native format, delete the completed instant from storage.
+    if (instantToRollback.isInflight() && !table.getMetaClient().getTableFormat().getName().equals(NativeTableFormat.TABLE_FORMAT)) {
+      HoodieActiveTimeline activeTimelineForNativeFormat = table.getMetaClient().getActiveTimelineForNativeFormat();
+      Option<HoodieInstant> instantToRollbackInNativeFormat = activeTimelineForNativeFormat.filter(instant -> instant.requestedTime().equals(instantToRollback.requestedTime())).lastInstant();
+      if (instantToRollbackInNativeFormat.isPresent() && instantToRollbackInNativeFormat.get().isCompleted()) {
+        resolvedInstant = activeTimelineForNativeFormat.revertToInflight(instantToRollbackInNativeFormat.get());
+        table.getMetaClient().reloadActiveTimeline();
+      }
     }
   }
 
