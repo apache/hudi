@@ -36,6 +36,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.IntConsumer;
 
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 
@@ -143,17 +144,22 @@ public class HiveDriverPool implements AutoCloseable {
    * indices {@code w, w + N, w + 2N, ...}. Each worker drains its own queue
    * independently, which is why abort has to be observed by the tasks themselves
    * rather than by the awaiting thread — see {@link ParallelDispatch}.
+   *
+   * <p>{@code onStatementSucceeded} is given the index of each statement that succeeds. It is
+   * called on the worker threads, so from several at once and out of order.
    */
-  public ParallelDispatch dispatchAll(List<String> sqls) {
+  public ParallelDispatch dispatchAll(List<String> sqls, IntConsumer onStatementSucceeded) {
     if (closed) {
       throw new IllegalStateException("Cannot dispatch to a closed HiveDriverPool");
     }
     ParallelDispatch dispatch = new ParallelDispatch(sqls.size());
     for (int i = 0; i < sqls.size(); i++) {
+      int index = i;
       String sql = sqls.get(i);
       Worker worker = workers.get(i % workers.size());
       dispatch.add(worker.executor.submit(dispatch.guard(() -> {
         HiveStatementExecutor.executeOrThrow(worker.driver, sql);
+        onStatementSucceeded.accept(index);
         return null;
       }, "Skipped after an earlier statement failed")));
     }

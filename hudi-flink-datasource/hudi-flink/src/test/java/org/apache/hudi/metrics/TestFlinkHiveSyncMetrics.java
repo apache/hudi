@@ -18,6 +18,9 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hive.HiveSyncStats;
+
 import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.Gauge;
 import org.apache.flink.metrics.Histogram;
@@ -35,11 +38,19 @@ import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.metrics.FlinkHiveSyncMetrics.HIVE_SYNC_DURATION_MS;
 import static org.apache.hudi.metrics.FlinkHiveSyncMetrics.HIVE_SYNC_FAILURE_COUNT;
+import static org.apache.hudi.metrics.FlinkHiveSyncMetrics.HIVE_SYNC_INIT_DURATION_MS;
 import static org.apache.hudi.metrics.FlinkHiveSyncMetrics.HIVE_SYNC_LAST_SUCCESS_TIME_MS;
+import static org.apache.hudi.metrics.FlinkHiveSyncMetrics.HIVE_SYNC_PARTITIONS_ADDED_COUNT;
+import static org.apache.hudi.metrics.FlinkHiveSyncMetrics.HIVE_SYNC_PARTITION_SCAN_DURATION_MS;
+import static org.apache.hudi.metrics.FlinkHiveSyncMetrics.HIVE_SYNC_REMAINING_DURATION_MS;
+import static org.apache.hudi.metrics.FlinkHiveSyncMetrics.HIVE_SYNC_SCHEMA_EVOLVED_COUNT;
+import static org.apache.hudi.metrics.FlinkHiveSyncMetrics.HIVE_SYNC_SCHEMA_READ_DURATION_MS;
 import static org.apache.hudi.metrics.FlinkHiveSyncMetrics.HIVE_SYNC_SUCCESS_COUNT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Tests for {@link FlinkHiveSyncMetrics}.
@@ -62,6 +73,12 @@ class TestFlinkHiveSyncMetrics {
     assertNotNull(metricGroup.counters.get(HIVE_SYNC_FAILURE_COUNT));
     assertNotNull(metricGroup.histograms.get(HIVE_SYNC_DURATION_MS));
     assertNotNull(metricGroup.gauges.get(HIVE_SYNC_LAST_SUCCESS_TIME_MS));
+    assertNotNull(metricGroup.histograms.get(HIVE_SYNC_INIT_DURATION_MS));
+    assertNotNull(metricGroup.histograms.get(HIVE_SYNC_SCHEMA_READ_DURATION_MS));
+    assertNotNull(metricGroup.histograms.get(HIVE_SYNC_PARTITION_SCAN_DURATION_MS));
+    assertNotNull(metricGroup.histograms.get(HIVE_SYNC_REMAINING_DURATION_MS));
+    assertNotNull(metricGroup.counters.get(HIVE_SYNC_PARTITIONS_ADDED_COUNT));
+    assertNotNull(metricGroup.counters.get(HIVE_SYNC_SCHEMA_EVOLVED_COUNT));
   }
 
   @Test
@@ -70,6 +87,47 @@ class TestFlinkHiveSyncMetrics {
     assertEquals(0, failureCount());
     assertEquals(0, duration().getCount());
     assertEquals(0L, lastSuccessTime());
+    assertEquals(0, histogram(HIVE_SYNC_INIT_DURATION_MS).getCount());
+    assertEquals(0, histogram(HIVE_SYNC_SCHEMA_READ_DURATION_MS).getCount());
+    assertEquals(0, histogram(HIVE_SYNC_PARTITION_SCAN_DURATION_MS).getCount());
+    assertEquals(0, histogram(HIVE_SYNC_REMAINING_DURATION_MS).getCount());
+    assertEquals(0, counter(HIVE_SYNC_PARTITIONS_ADDED_COUNT));
+    assertEquals(0, counter(HIVE_SYNC_SCHEMA_EVOLVED_COUNT));
+  }
+
+  @Test
+  void testUpdateInitDuration() {
+    metrics.updateInitDuration(7L);
+
+    assertEquals(1, histogram(HIVE_SYNC_INIT_DURATION_MS).getCount());
+    assertEquals(7L, histogram(HIVE_SYNC_INIT_DURATION_MS).getStatistics().getMax());
+  }
+
+  @Test
+  void testUpdateSyncStats() {
+    metrics.updateSyncStats(stats(Option.of(10L), Option.of(20L), Option.of(30L), 4, true));
+    metrics.updateSyncStats(stats(Option.of(11L), Option.of(21L), Option.of(31L), 2, false));
+
+    assertEquals(2, histogram(HIVE_SYNC_SCHEMA_READ_DURATION_MS).getCount());
+    assertEquals(11L, histogram(HIVE_SYNC_SCHEMA_READ_DURATION_MS).getStatistics().getMax());
+    assertEquals(2, histogram(HIVE_SYNC_PARTITION_SCAN_DURATION_MS).getCount());
+    assertEquals(21L, histogram(HIVE_SYNC_PARTITION_SCAN_DURATION_MS).getStatistics().getMax());
+    assertEquals(2, histogram(HIVE_SYNC_REMAINING_DURATION_MS).getCount());
+    assertEquals(31L, histogram(HIVE_SYNC_REMAINING_DURATION_MS).getStatistics().getMax());
+    assertEquals(6, counter(HIVE_SYNC_PARTITIONS_ADDED_COUNT));
+    assertEquals(1, counter(HIVE_SYNC_SCHEMA_EVOLVED_COUNT));
+  }
+
+  @Test
+  void testUpdateSyncStatsSkipsStepsThatDidNotRun() {
+    metrics.updateSyncStats(stats(Option.empty(), Option.empty(), Option.of(5L), 0, false));
+
+    assertEquals(0, histogram(HIVE_SYNC_SCHEMA_READ_DURATION_MS).getCount(),
+        "A sync that read no schema must not record a schema read of 0 ms");
+    assertEquals(0, histogram(HIVE_SYNC_PARTITION_SCAN_DURATION_MS).getCount());
+    assertEquals(1, histogram(HIVE_SYNC_REMAINING_DURATION_MS).getCount());
+    assertEquals(0, counter(HIVE_SYNC_PARTITIONS_ADDED_COUNT));
+    assertEquals(0, counter(HIVE_SYNC_SCHEMA_EVOLVED_COUNT));
   }
 
   @Test
@@ -173,6 +231,25 @@ class TestFlinkHiveSyncMetrics {
 
   private long lastSuccessTime() {
     return (Long) metricGroup.gauges.get(HIVE_SYNC_LAST_SUCCESS_TIME_MS).getValue();
+  }
+
+  private Histogram histogram(String name) {
+    return metricGroup.histograms.get(name);
+  }
+
+  private long counter(String name) {
+    return metricGroup.counters.get(name).getCount();
+  }
+
+  private static HiveSyncStats stats(Option<Long> schemaReadMs, Option<Long> partitionScanMs,
+                                     Option<Long> remainingMs, int partitionsAdded, boolean schemaEvolved) {
+    HiveSyncStats stats = mock(HiveSyncStats.class);
+    when(stats.getSchemaReadMs()).thenReturn(schemaReadMs);
+    when(stats.getPartitionScanMs()).thenReturn(partitionScanMs);
+    when(stats.getRemainingMs()).thenReturn(remainingMs);
+    when(stats.getPartitionsAdded()).thenReturn(partitionsAdded);
+    when(stats.isSchemaEvolved()).thenReturn(schemaEvolved);
+    return stats;
   }
 
   private static class CapturingMetricGroup extends UnregisteredMetricsGroup {

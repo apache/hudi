@@ -220,7 +220,7 @@ class TestHiveQueryDDLExecutorSession {
     ClassLoader callerLoader = Thread.currentThread().getContextClassLoader();
 
     HoodieHiveSyncException ex = assertThrows(HoodieHiveSyncException.class,
-        () -> executor.runSQLs(Arrays.asList(rejected, "ALTER TABLE `tbl` SET TBLPROPERTIES ('k'='v')")));
+        () -> executor.runSQLs(Arrays.asList(rejected, "ALTER TABLE `tbl` SET TBLPROPERTIES ('k'='v')"), index -> { }));
 
     String message = ex.getCause().getMessage();
     assertTrue(message.contains("contains non-partition columns"), message);
