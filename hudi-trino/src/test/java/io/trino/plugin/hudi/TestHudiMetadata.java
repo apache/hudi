@@ -22,6 +22,7 @@ import io.trino.metastore.Database;
 import io.trino.metastore.HiveMetastore;
 import io.trino.metastore.Table;
 import io.trino.metastore.TableAlreadyExistsException;
+import io.trino.metastore.cache.CachingHiveMetastore;
 import io.trino.plugin.hudi.util.HudiSchemaConverter;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ColumnMetadata;
@@ -47,12 +48,14 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 import static com.google.common.base.Throwables.getCausalChain;
 import static com.google.common.util.concurrent.MoreExecutors.newDirectExecutorService;
+import static io.trino.metastore.cache.CachingHiveMetastore.createPerTransactionCache;
 import static io.trino.plugin.hive.HiveMetadata.TRINO_QUERY_ID_NAME;
 import static io.trino.plugin.hive.TableType.EXTERNAL_TABLE;
 import static io.trino.plugin.hudi.HudiTableProperties.TABLE_TYPE_PROPERTY;
@@ -146,6 +149,53 @@ final class TestHudiMetadata
         assertThat(race.winningTable().get()).isNull();
         assertThat(metadataExists(race, race.attemptedTable().get()))
                 .isFalse();
+    }
+
+    @Test
+    void testCreateTableInitializationFailureRechecksCachedMetastoreMiss()
+    {
+        SchemaTableName tableName = new SchemaTableName("test_schema", "concurrent_create");
+        TableFixture fixture = tableFixture(createTableMetadata(tableName));
+        AtomicReference<Table> winningTable = new AtomicReference<>();
+        AtomicInteger tableLookups = new AtomicInteger();
+        HiveMetastore delegate = fakeMetastore(Map.of(
+                "getDatabase", arguments -> Optional.of(database(tableName)),
+                "getTable", arguments -> {
+                    tableLookups.incrementAndGet();
+                    return Optional.ofNullable(winningTable.get());
+                }));
+        CachingHiveMetastore metastore = createPerTransactionCache(delegate, 1000);
+        AtomicBoolean winnerInitialized = new AtomicBoolean();
+        TrinoFileSystem racingFileSystem = (TrinoFileSystem) Proxy.newProxyInstance(
+                TrinoFileSystem.class.getClassLoader(),
+                new Class<?>[] {TrinoFileSystem.class},
+                (proxy, method, arguments) -> {
+                    if (method.getName().equals("newOutputFile") && winnerInitialized.compareAndSet(false, true)) {
+                        initializeTable(fixture);
+                        winningTable.set(asTableCreatedByAnotherQuery(HudiMetastoreTables.buildTable(
+                                tableName, fixture.basePath(), HoodieTableType.COPY_ON_WRITE,
+                                fixture.tableSchema(), List.of(), false, Optional.empty(), Optional.empty())));
+                        throw new IllegalStateException("simulated initialization failure");
+                    }
+                    try {
+                        return method.invoke(fixture.fileSystem(), arguments);
+                    }
+                    catch (InvocationTargetException e) {
+                        throw e.getCause();
+                    }
+                });
+        HudiMetadata metadata = new HudiMetadata(
+                metastore, identity -> racingFileSystem, unusedTypeManager(), newDirectExecutorService());
+
+        assertThatThrownBy(() -> metadata.createTable(SESSION, fixture.tableMetadata(), SaveMode.FAIL))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("simulated initialization failure");
+
+        assertThat(winnerInitialized).isTrue();
+        assertThat(winningTable).hasValueSatisfying(table ->
+                assertThat(HudiUtil.hudiMetadataExists(fixture.fileSystem(), Location.of(table.getStorage().getLocation())))
+                        .isTrue());
+        assertThat(tableLookups).hasValue(2);
     }
 
     @Test
