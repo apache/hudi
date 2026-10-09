@@ -31,7 +31,7 @@ Intentional exceptions (e.g. keys targeting a future Hudi version that the
 skill discusses but does not emit) live in validate_config_keys_allowlist.txt,
 one key per line, '#' comments allowed.
 
-Run from anywhere:  python3 hudi-agent-gateway/skills/hudi-architect/validate_config_keys.py
+Run from anywhere:  python3 hudi-ai-operator/skills/hudi-architect/validate_config_keys.py
 """
 
 import re
@@ -195,7 +195,7 @@ def main():
         print("ERROR: no config keys resolved from the source tree.")
         print(f"       Looked under: {REPO_ROOT}")
         print("       This script must run from a copy of the skill INSIDE a Hudi checkout")
-        print("       (hudi-agent-gateway/skills/hudi-architect/), not from an installed copy under")
+        print("       (hudi-ai-operator/skills/hudi-architect/), not from an installed copy under")
         print("       ~/.claude/skills/. Run the repo copy instead.")
         return 2
 
