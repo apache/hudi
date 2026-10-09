@@ -23,7 +23,6 @@ import org.apache.hudi.common.avro.VariantSchemaUtils;
 import org.apache.hudi.common.avro.VariantShreddingRuntime;
 import org.apache.hudi.common.avro.VariantShreddingSchemaInferrer;
 import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
@@ -46,6 +45,8 @@ import java.util.List;
 import static org.apache.hudi.common.model.HoodieFileFormat.LANCE;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.common.util.ParquetUtils.getCompressionCodecName;
+import static org.apache.hudi.core.io.storage.HoodieFileWriterFactory.createBloomFilter;
+import static org.apache.hudi.core.io.storage.HoodieFileWriterFactory.enableBloomFilter;
 
 /**
  * Factory to assist in instantiating a new {@link HoodieInternalRowFileWriter}.
@@ -163,17 +164,7 @@ public class HoodieInternalRowFileWriterFactory {
   }
 
   private static Option<BloomFilter> tryInstantiateBloomFilter(HoodieWriteConfig writeConfig) {
-    // NOTE: Currently Bloom Filter is only going to be populated if meta-fields are populated
-    if (writeConfig.populateMetaFields()) {
-      BloomFilter bloomFilter = BloomFilterFactory.createBloomFilter(
-          writeConfig.getBloomFilterNumEntries(),
-          writeConfig.getBloomFilterFPP(),
-          writeConfig.getDynamicBloomFilterMaxNumEntries(),
-          writeConfig.getBloomFilterType());
-
-      return Option.of(bloomFilter);
-    }
-
-    return Option.empty();
+    return enableBloomFilter(writeConfig.getMetaFieldsMode(), writeConfig)
+        ? Option.of(createBloomFilter(writeConfig)) : Option.empty();
   }
 }
