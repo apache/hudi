@@ -21,7 +21,7 @@ package org.apache.spark.sql.hudi.common
 
 import org.apache.hudi.HoodieFileIndex
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.config.HoodieIndexConfig
+import org.apache.hudi.config.HoodieIndexConfig.{BUCKET_INDEX_NUM_BUCKETS, INDEX_TYPE}
 import org.apache.hudi.index.HoodieIndex.IndexType
 
 import org.apache.hadoop.conf.Configuration
@@ -42,8 +42,6 @@ import java.nio.file.Path
 
 class TestHoodieFileIndex {
 
-  private val bucketsKey = HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key
-
   @Test
   def testDefaultDatabaseName(): Unit = {
     assertEquals("default", HoodieFileIndex.getDatabaseName(new HoodieTableConfig(), null))
@@ -59,7 +57,7 @@ class TestHoodieFileIndex {
     val props = HoodieFileIndex.getConfigProperties(spark, Map.empty, tableConfig("tbl"))
 
     verify(catalog, never()).tableExists(anyString(), anyString())
-    assertFalse(props.containsKey(bucketsKey))
+    assertFalse(props.containsKey(BUCKET_INDEX_NUM_BUCKETS.key))
   }
 
   @Test
@@ -68,11 +66,12 @@ class TestHoodieFileIndex {
     val id = TableIdentifier("tbl", Some("default"))
     when(catalog.tableExists("default", "tbl")).thenReturn(true)
     when(sessionCatalog.getTableMetadata(id)).thenReturn(bucketCatalogTable(id, dir))
-    val options = Map(HoodieIndexConfig.INDEX_TYPE.key -> IndexType.BUCKET.name)
+    val options = Map(INDEX_TYPE.key -> IndexType.BUCKET.name)
 
     val props = HoodieFileIndex.getConfigProperties(spark, options, tableConfig("tbl"))
 
-    assertEquals("3", props.getProperty(bucketsKey))
+    assertEquals("3", props.getProperty(BUCKET_INDEX_NUM_BUCKETS.key))
+    assertFalse(props.containsKey("preCombineField"))
     verify(catalog).tableExists("default", "tbl")
   }
 
@@ -81,12 +80,12 @@ class TestHoodieFileIndex {
     val (spark, catalog, _) = mockSpark()
     when(catalog.tableExists(anyString(), anyString()))
       .thenThrow(new IllegalStateException("database default is not allowed"))
-    val options = Map(HoodieIndexConfig.INDEX_TYPE.key -> IndexType.BUCKET.name)
+    val options = Map(INDEX_TYPE.key -> IndexType.BUCKET.name)
 
     val props = HoodieFileIndex.getConfigProperties(spark, options, tableConfig("tbl"))
 
     verify(catalog).tableExists("default", "tbl")
-    assertFalse(props.containsKey(bucketsKey))
+    assertFalse(props.containsKey(BUCKET_INDEX_NUM_BUCKETS.key))
   }
 
   private def tableConfig(name: String): HoodieTableConfig = {
@@ -101,7 +100,7 @@ class TestHoodieFileIndex {
     storage = CatalogStorageFormat.empty.copy(locationUri = Some(new URI("file:" + location.toAbsolutePath))),
     schema = new StructType(),
     provider = Some("hudi"),
-    properties = Map(bucketsKey -> "3"))
+    properties = Map(BUCKET_INDEX_NUM_BUCKETS.key -> "3", "preCombineField" -> "ts"))
 
   private def mockSpark(): (SparkSession, Catalog, SessionCatalog) = {
     val spark = mock(classOf[SparkSession])

@@ -657,15 +657,16 @@ object HoodieFileIndex extends Logging {
       properties.setProperty(PARTITIONPATH_FIELD.key, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(tableConfig).orElse(""))
       properties.setProperty(HoodieTableConfig.PARTITION_EXTRACTOR_CLASS.key(), tableConfig.getPartitionExtractorClass.orElse(""))
 
-      // The catalog entry only completes the simple bucket index settings (hash field and bucket count), which
-      // hoodie.properties does not record, so it is consulted only when the read declares a bucket index.
+      // The catalog entry only completes the simple bucket index options, which hoodie.properties does not record,
+      // so it is consulted only when the read declares a bucket index and only those options are copied.
       if (isBucketIndexDeclared(properties)) {
         val database = getDatabaseName(tableConfig, spark.catalog.currentDatabase)
         val tableName = tableConfig.getTableName
         try {
           if (spark.catalog.tableExists(database, tableName)) {
             val table = HoodieCatalogTable(spark, TableIdentifier(tableName, Some(database)))
-            table.catalogProperties.foreach(kv => properties.setProperty(kv._1, kv._2))
+            table.catalogProperties.filter { case (key, _) => bucketIndexCatalogKeys.contains(key) }
+            .foreach(kv => properties.setProperty(kv._1, kv._2))
           }
         } catch {
           case NonFatal(e) =>
@@ -728,6 +729,10 @@ object HoodieFileIndex extends Logging {
           throw new IllegalArgumentException("'path' or 'glob paths' option required"))
     Seq(new StoragePath(path))
   }
+
+  private val bucketIndexCatalogKeys: Set[String] = Set(
+    HoodieIndexConfig.INDEX_TYPE, HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE, HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD,
+    HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS, HoodieIndexConfig.BUCKET_QUERY_INDEX).map(_.key)
 
   private def isBucketIndexDeclared(properties: TypedProperties): Boolean =
     IndexType.BUCKET.name.equalsIgnoreCase(ConfigUtils.getStringWithAltKeys(properties, HoodieIndexConfig.INDEX_TYPE, ""))
