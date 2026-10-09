@@ -486,9 +486,7 @@ public class StreamWriteOperatorCoordinator
    */
   public void doSyncHive() {
     HoodieTimer timer = HoodieTimer.start();
-    HoodieTimer initTimer = HoodieTimer.start();
-    try (HiveSyncTool syncTool = hiveSyncContext.hiveSyncTool()) {
-      hiveSyncMetrics.updateInitDuration(initTimer.endTimer());
+    try (HiveSyncTool syncTool = createHiveSyncTool()) {
       if (!syncTool.isSyncClientInitialized()) {
         hiveSyncMetrics.markSyncFailed(timer.endTimer());
         return;
@@ -503,6 +501,19 @@ public class StreamWriteOperatorCoordinator
       throw t;
     }
     hiveSyncMetrics.markSyncSucceeded(timer.endTimer());
+  }
+
+  /**
+   * Builds the sync tool, recording how long that took even when it fails, as when the metastore
+   * cannot be reached.
+   */
+  private HiveSyncTool createHiveSyncTool() {
+    HoodieTimer timer = HoodieTimer.start();
+    try {
+      return hiveSyncContext.hiveSyncTool();
+    } finally {
+      hiveSyncMetrics.updateInitDuration(timer.endTimer());
+    }
   }
 
   private void scheduleTableServices(Boolean committed) {

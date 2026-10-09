@@ -638,8 +638,8 @@ public class TestStreamWriteOperatorCoordinator {
     assertEquals(2, metricGroup.counters.get("hiveSyncFailureCount").getCount());
     assertEquals(2, metricGroup.histograms.get("hiveSyncDurationMs").getCount());
     assertEquals(0L, metricGroup.gauges.get("hiveSyncLastSuccessTimeMs").getValue());
-    assertEquals(0, metricGroup.histograms.get("hiveSyncInitDurationMs").getCount(),
-        "A sync tool that failed to build records no init time");
+    assertEquals(2, metricGroup.histograms.get("hiveSyncInitDurationMs").getCount(),
+        "The time spent failing to build the sync tool is init time");
     assertEquals(0, metricGroup.histograms.get("hiveSyncRemainingDurationMs").getCount());
   }
 

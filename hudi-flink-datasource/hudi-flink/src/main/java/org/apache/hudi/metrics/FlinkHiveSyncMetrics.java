@@ -71,7 +71,8 @@ public class FlinkHiveSyncMetrics extends HoodieFlinkMetrics {
 
   /**
    * Time to build the sync tool, which creates the Hudi meta client and connects to the metastore.
-   * Recorded when building it succeeds.
+   * Recorded whether building it succeeds or fails, so the time spent failing to reach the
+   * metastore shows here.
    */
   private final Histogram initDurationMs = newHistogram();
 
