@@ -747,19 +747,6 @@ public class TestHiveSyncTool {
     reSyncHiveTable();
 
     if (syncAsDataSourceTable) {
-      Map<String, String> syncedDescriptorParameters;
-      IMetaStoreClient client = IMetaStoreClientUtil.getMSC(getHiveConf());
-      try {
-        syncedDescriptorParameters = client.getTable(HiveTestUtil.DB_NAME, HiveTestUtil.TABLE_NAME)
-            .getParameters()
-            .entrySet()
-            .stream()
-            .filter(entry -> entry.getKey().equals("EXTERNAL") || entry.getKey().startsWith("spark.sql."))
-            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-      } finally {
-        client.close();
-      }
-
       assertEquals(
           HoodieMetastoreTableDescriptor.forSnapshotView(
               hiveClient.getStorageSchema(true),
@@ -768,7 +755,7 @@ public class TestHiveSyncTool {
               HiveTestUtil.basePath,
               true)
               .getTableParameters(),
-          syncedDescriptorParameters);
+          syncedDescriptorParameters());
     }
 
     SessionState.start(HiveTestUtil.getHiveConf());
@@ -1242,6 +1229,16 @@ public class TestHiveSyncTool {
       }
     }
     assertEquals(2, commentCnt, "hive schema field comment numbers should match the avro schema field doc numbers");
+    assertEquals(
+        HoodieMetastoreTableDescriptor.forSnapshotView(
+            hiveClient.getStorageSchema(true),
+            Collections.singletonList("datestr"),
+            HoodieTableType.COPY_ON_WRITE,
+            HiveTestUtil.basePath,
+            true)
+            .getTableParameters(),
+        syncedDescriptorParameters());
+    assertSparkSchemaPropertyContainsComments("\"comment\":\"name_comment\"", "\"comment\":\"favorite_number_comment\"");
   }
 
   private static final String STANDARD_COLUMNS =
@@ -1422,6 +1419,20 @@ public class TestHiveSyncTool {
     return hiveClient.getMetastoreFieldSchemas(tableName)
         .stream()
         .collect(Collectors.toMap(FieldSchema::getName, FieldSchema::getCommentOrEmpty));
+  }
+
+  private Map<String, String> syncedDescriptorParameters() throws Exception {
+    IMetaStoreClient client = IMetaStoreClientUtil.getMSC(getHiveConf());
+    try {
+      return client.getTable(HiveTestUtil.DB_NAME, HiveTestUtil.TABLE_NAME)
+          .getParameters()
+          .entrySet()
+          .stream()
+          .filter(entry -> entry.getKey().equals("EXTERNAL") || entry.getKey().startsWith("spark.sql."))
+          .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    } finally {
+      client.close();
+    }
   }
 
   @ParameterizedTest
