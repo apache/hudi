@@ -25,6 +25,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.streamer.ErrorTableUtils;
 
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
@@ -33,10 +34,14 @@ import org.apache.spark.sql.types.StructType;
 import java.util.List;
 import java.util.function.Supplier;
 
+import static org.apache.hudi.utilities.streamer.BaseErrorTableWriter.ERROR_TABLE_CURRUPT_RECORD_COL_NAME;
+
 /**
  * A {@link Transformer} to chain other {@link Transformer}s and apply sequentially.
- * Adds errorTableCorruptRecordColumn at the beginning of transformations and validates
- * if that column is not dropped in any of the transformations.
+ * Adds errorTableCorruptRecordColumn at the beginning of transformations and preserves
+ * its values across transformers that drop it (e.g. custom column-projecting transformers).
+ * Values are stashed before each transformer and restored via positional RDD zip if the
+ * transformer dropped the column.
  */
 public class ErrorTableAwareChainedTransformer extends ChainedTransformer {
   public ErrorTableAwareChainedTransformer(List<String> configuredTransformers, Supplier<Option<HoodieSchema>> sourceSchemaSupplier) {
@@ -54,9 +59,34 @@ public class ErrorTableAwareChainedTransformer extends ChainedTransformer {
     dataset = ErrorTableUtils.addNullValueErrorTableCorruptRecordColumn(dataset);
     for (TransformerInfo transformerInfo : transformers) {
       Transformer transformer = transformerInfo.getTransformer();
+
+      // Stash _corrupt_record values before the transformer can drop them
+      Dataset<Row> corruptRecordStash = null;
+      if (ErrorTableUtils.isErrorTableCorruptRecordColumnPresent(dataset)) {
+        corruptRecordStash = dataset.select(new Column(ERROR_TABLE_CURRUPT_RECORD_COL_NAME));
+        corruptRecordStash.cache();
+        // Force materialization so the stash is computed and stored before the transformer
+        // runs. Without this, both stash and transformed dataset recompute the shared
+        // upstream lineage independently at zip time — if that lineage has non-deterministic
+        // row ordering (e.g. shuffle/repartition), the zip silently misaligns values.
+        corruptRecordStash.count();
+      }
+
       dataset = transformer.apply(jsc, sparkSession, dataset, transformerInfo.getProperties(properties, transformers));
-      // validate in every stage to ensure ErrorRecordColumn not dropped by one of the transformer and added by next transformer.
-      ErrorTableUtils.validate(dataset);
+
+      if (!ErrorTableUtils.isErrorTableCorruptRecordColumnPresent(dataset)) {
+        if (corruptRecordStash != null) {
+          // Restore original values via positional zip — works when the transformer
+          // only projects columns (row count and partition layout unchanged).
+          dataset = ErrorTableUtils.restoreCorruptRecordColumn(sparkSession, dataset, corruptRecordStash);
+        } else {
+          dataset = ErrorTableUtils.addNullValueErrorTableCorruptRecordColumn(dataset);
+        }
+      }
+
+      if (corruptRecordStash != null) {
+        corruptRecordStash.unpersist();
+      }
     }
     return dataset;
   }
