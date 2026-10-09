@@ -14,12 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Lakehouse tools backed by Trino.
+"""Lakehouse tools backed by a Spark Thrift Server.
 
-Handlers return JSON strings. Expected failures (guardrail rejections, query
-errors, timeouts) are returned as ``{"error": ..., "hint": ...}`` payloads
-rather than raised, so the agent can read the error and self-correct, and MCP
-clients get a useful result instead of a protocol error.
+Same tool surface and error contract as the Trino backend
+(:mod:`hudi_agent_gateway.tools.trino_tools`): handlers return JSON strings,
+and expected failures (guardrail rejections, query errors, timeouts) are
+returned as ``{"error": ..., "hint": ...}`` payloads rather than raised, so
+the agent can read the error and self-correct.
+
+Spark differences, kept behind the shared contract:
+
+- SQL is validated and rendered in the ``spark`` sqlglot dialect.
+- Spark has no ``information_schema``: ``list_tables`` uses ``SHOW TABLES IN``
+  and ``describe_table`` uses ``DESCRIBE TABLE``.
+- Identifiers are quoted with backticks.
 """
 
 from __future__ import annotations
@@ -33,7 +41,6 @@ from hudi_agent_gateway.tools.common import (
     error_payload,
     schema_error_hint,
     shape_result,
-    split_table_name,
     validate_identifier,
 )
 from hudi_agent_gateway.tools.connector import (
@@ -45,32 +52,49 @@ from hudi_agent_gateway.tools.connector import (
 )
 from hudi_agent_gateway.tools.guardrails import enforce_guardrails
 from hudi_agent_gateway.tools.registry import ToolInputError, ToolRegistry
-from hudi_agent_gateway.tools.trino_client import (
-    TrinoClient,
-    TrinoQueryError,
-    TrinoTimeoutError,
+from hudi_agent_gateway.tools.spark_client import (
+    SparkQueryError,
+    SparkThriftClient,
+    SparkTimeoutError,
 )
 
-__all__ = ["TrinoConnector", "register", "shape_result"]
+__all__ = ["SparkConnector", "register"]
 
 _QUERY_DESC = (
-    "Run a single read-only SELECT statement (Trino SQL) against the lakehouse "
+    "Run a single read-only SELECT statement (Spark SQL) against the lakehouse "
     "and return the result as JSON. A server-side row cap is enforced; results "
     "may be truncated (indicated by `truncated: true`)."
 )
 _LIST_TABLES_DESC = (
-    "List tables in the lakehouse. Optionally filter by catalog and schema; "
-    "defaults to the gateway's configured catalog and schema."
+    "List tables in the lakehouse. Optionally filter by database; "
+    "defaults to the gateway's configured database."
 )
 _DESCRIBE_DESC = (
-    "Describe a table's columns and types. Accepts `table`, `schema.table`, or "
-    "`catalog.schema.table`."
+    "Describe a table's columns and types. Accepts `table` or `database.table`."
 )
+
+# Spark 4.x error class and the Spark 3.x message form. Deliberately narrow:
+# a generic phrase like "cannot be found" could misclassify unrelated errors.
+_NOT_FOUND_MARKERS = (
+    "TABLE_OR_VIEW_NOT_FOUND",
+    "Table or view not found",
+)
+
+
+def _split_table_name(table: str, settings: GatewaySettings) -> tuple[str, str]:
+    parts = table.split(".")
+    if len(parts) == 1:
+        return settings.spark_database, parts[0]
+    if len(parts) == 2:
+        return parts[0], parts[1]
+    raise ToolInputError(
+        f"invalid table name {table!r}", hint="Use table or database.table."
+    )
 
 
 def register(
     registry: ToolRegistry,
-    client: TrinoClient,
+    client: SparkThriftClient,
     settings: GatewaySettings,
     schema_cache: Any = None,
 ) -> None:
@@ -83,24 +107,24 @@ def register(
     @registry.register("query_lakehouse", _QUERY_DESC)
     async def query_lakehouse(
         sql: Annotated[
-            str, Field(description="A single read-only SELECT statement in Trino SQL.")
+            str, Field(description="A single read-only SELECT statement in Spark SQL.")
         ],
     ) -> str:
         try:
-            safe_sql = enforce_guardrails(sql, row_cap=settings.sql_row_cap)
+            safe_sql = enforce_guardrails(sql, row_cap=settings.sql_row_cap, dialect="spark")
             result = await client.execute(
                 safe_sql, timeout=settings.sql_timeout_seconds, max_rows=settings.sql_row_cap
             )
         except ToolInputError as e:
             return error_payload(str(e), e.hint)
-        except TrinoTimeoutError as e:
+        except SparkTimeoutError as e:
             return error_payload(
                 f"query failed: {e}",
                 f"The query hit the gateway's {settings.sql_timeout_seconds:.0f}s limit -- "
                 "narrow it (partition filter, pre-aggregate, fewer columns) or raise "
                 "GATEWAY_SQL_TIMEOUT_SECONDS.",
             )
-        except TrinoQueryError as e:
+        except SparkQueryError as e:
             hint = await _not_found_hint(str(e))
             return error_payload(f"query failed: {e}", hint or "Fix the SQL and try again.")
         return shape_result(
@@ -112,27 +136,20 @@ def register(
 
     @registry.register("list_tables", _LIST_TABLES_DESC)
     async def list_tables(
-        catalog: Annotated[
-            str, Field(description="Catalog to list from; empty for the default.")
-        ] = "",
-        schema_name: Annotated[
-            str, Field(description="Schema to list from; empty for the default.")
+        database: Annotated[
+            str, Field(description="Database to list from; empty for the default.")
         ] = "",
     ) -> str:
         try:
-            cat = validate_identifier(catalog or settings.trino_catalog, "catalog")
-            sch = validate_identifier(schema_name or settings.trino_schema, "schema")
+            db = validate_identifier(database or settings.spark_database, "database")
         except ToolInputError as e:
             return error_payload(str(e), e.hint)
-        sql = (
-            f'SELECT table_schema, table_name, table_type FROM "{cat}".information_schema.tables '
-            f"WHERE table_schema = '{sch}' ORDER BY table_name"
-        )
+        sql = f"SHOW TABLES IN `{db}`"
         try:
             result = await client.execute(
                 sql, timeout=settings.sql_timeout_seconds, max_rows=settings.sql_row_cap
             )
-        except TrinoQueryError as e:
+        except SparkQueryError as e:
             return error_payload(f"listing tables failed: {e}")
         return shape_result(
             result, max_bytes=settings.tool_result_max_bytes, sql=sql, row_cap=settings.sql_row_cap
@@ -141,30 +158,30 @@ def register(
     @registry.register("describe_table", _DESCRIBE_DESC)
     async def describe_table(
         table: Annotated[
-            str, Field(description="Table name: table, schema.table, or catalog.schema.table.")
+            str, Field(description="Table name: table or database.table.")
         ],
     ) -> str:
         try:
-            cat, sch, tbl = split_table_name(table, settings.trino_catalog, settings.trino_schema)
-            validate_identifier(cat, "catalog")
-            validate_identifier(sch, "schema")
+            db, tbl = _split_table_name(table, settings)
+            validate_identifier(db, "database")
             validate_identifier(tbl, "table")
         except ToolInputError as e:
             return error_payload(str(e), e.hint)
-        sql = (
-            "SELECT column_name, data_type, is_nullable "
-            f'FROM "{cat}".information_schema.columns '
-            f"WHERE table_schema = '{sch}' AND table_name = '{tbl}' ORDER BY ordinal_position"
-        )
+        sql = f"DESCRIBE TABLE `{db}`.`{tbl}`"
         try:
             result = await client.execute(
                 sql, timeout=settings.sql_timeout_seconds, max_rows=settings.sql_row_cap
             )
-        except TrinoQueryError as e:
+        except SparkQueryError as e:
+            if any(marker.lower() in str(e).lower() for marker in _NOT_FOUND_MARKERS):
+                return error_payload(
+                    f"table {db}.{tbl} not found",
+                    "Call list_tables to see available tables.",
+                )
             return error_payload(f"describe failed: {e}")
         if result.row_count == 0:
             return error_payload(
-                f"table {cat}.{sch}.{tbl} not found",
+                f"table {db}.{tbl} not found",
                 "Call list_tables to see available tables.",
             )
         return shape_result(
@@ -173,13 +190,15 @@ def register(
 
 
 @register_connector
-class TrinoConnector(LakehouseConnector):
-    """Trino coordinator with the Hudi connector (the default engine)."""
+class SparkConnector(LakehouseConnector):
+    """Spark SQL over the HiveServer2 Thrift protocol (a Spark Thrift Server,
+    or Apache Kyuubi -- same wire protocol). Reads MOR snapshots and the Hudi
+    1.x unstructured types (BLOB/VECTOR/VARIANT) that Trino cannot serve."""
 
-    name = "trino"
+    name = "spark"
 
-    def create_client(self, settings: GatewaySettings) -> TrinoClient:
-        return TrinoClient(settings)
+    def create_client(self, settings: GatewaySettings) -> SparkThriftClient:
+        return SparkThriftClient(settings)
 
     def register_tools(
         self,
@@ -193,45 +212,54 @@ class TrinoConnector(LakehouseConnector):
     async def fetch_schema(
         self, client: LakehouseClient, settings: GatewaySettings
     ) -> dict[str, list[tuple[str, str]]]:
-        """One information_schema query covering every table in the schema."""
-        sql = (
-            "SELECT table_name, column_name, data_type "
-            f'FROM "{settings.trino_catalog}".information_schema.columns '
-            f"WHERE table_schema = '{settings.trino_schema}' "
-            "ORDER BY table_name, ordinal_position"
-        )
-        max_rows = settings.schema_max_tables * settings.schema_max_columns
-        result = await client.execute(
-            sql, timeout=settings.sql_timeout_seconds, max_rows=max_rows
+        """SHOW TABLES then one DESCRIBE per table (Spark has no
+        information_schema), bounded by the configured schema caps."""
+        db = settings.spark_database
+        tables = await client.execute(
+            f"SHOW TABLES IN `{db}`",
+            timeout=settings.sql_timeout_seconds,
+            max_rows=settings.schema_max_tables,
         )
         schema: dict[str, list[tuple[str, str]]] = {}
-        for table, column, dtype in result.rows:
-            schema.setdefault(table, []).append((column, dtype))
+        for row in tables.rows:
+            name = row[1]  # (namespace, tableName, isTemporary)
+            described = await client.execute(
+                f"DESCRIBE TABLE `{db}`.`{name}`",
+                timeout=settings.sql_timeout_seconds,
+                max_rows=settings.schema_max_columns + 10,
+            )
+            columns: list[tuple[str, str]] = []
+            for col_name, col_type, *_ in described.rows:
+                col_name = (col_name or "").strip()
+                if not col_name or col_name.startswith("#"):
+                    break  # blank line / "# Partition Information" section
+                columns.append((col_name, col_type))
+            schema[name] = columns[: settings.schema_max_columns]
         return schema
 
     def prompt_context(self, settings: GatewaySettings) -> PromptContext:
         return PromptContext(
-            engine_name="Trino",
-            dialect="Trino SQL",
+            engine_name="a Spark Thrift Server",
+            dialect="Spark SQL",
             namespace_line=(
-                f"The default catalog is `{settings.trino_catalog}` and the default schema "
-                f"is `{settings.trino_schema}`; tables are Hudi tables registered in the "
-                "catalog's metastore."
+                f"The default database is `{settings.spark_database}`; tables are Hudi "
+                "tables registered in the server's metastore."
             ),
             qualify_line=(
-                "Qualify names as catalog.schema.table when querying outside the defaults."
+                "Qualify names as database.table when querying outside the default database."
             ),
         )
 
     def unreachable_detail(self, settings: GatewaySettings) -> str:
-        return f"cannot reach trino at {settings.trino_host}:{settings.trino_port}"
+        return f"cannot reach spark thrift server at {settings.spark_host}:{settings.spark_port}"
 
     def engine_info(self, settings: GatewaySettings) -> EngineInfo:
-        base = f"http://{settings.trino_host}:{settings.trino_port}"
         return EngineInfo(
-            engine="trino",
-            catalog=settings.trino_catalog,
-            schema=settings.trino_schema,
-            sql_url=base,
-            web_ui_url=f"{base}/ui/",
+            engine="spark",
+            catalog="spark_catalog",
+            schema=settings.spark_database,
+            sql_url=(
+                f"jdbc:hive2://{settings.spark_host}:{settings.spark_port}/{settings.spark_database}"
+            ),
+            web_ui_url=None,
         )
