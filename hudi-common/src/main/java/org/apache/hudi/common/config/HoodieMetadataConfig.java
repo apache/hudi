@@ -493,6 +493,14 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Metadata expression index partition file group count.");
 
+  public static final ConfigProperty<Integer> VECTOR_INDEX_FILE_GROUP_COUNT = ConfigProperty
+      .key(METADATA_PREFIX + ".index.vector.file.groups")
+      .defaultValue(0)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Metadata vector index partition file group count. When set to a positive value, "
+          + "this explicit count is used instead of deriving file groups from IVF cluster count.");
+
   public static final ConfigProperty<Integer> EXPRESSION_INDEX_PARALLELISM = ConfigProperty
       .key(METADATA_PREFIX + ".index.expression.parallelism")
       .defaultValue(200)
@@ -892,6 +900,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public int getExpressionIndexFileGroupCount() {
     return getInt(EXPRESSION_INDEX_FILE_GROUP_COUNT);
+  }
+
+  public int getVectorIndexFileGroupCount() {
+    return getInt(VECTOR_INDEX_FILE_GROUP_COUNT);
   }
 
   public int getExpressionIndexParallelism() {
@@ -1297,6 +1309,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withExpressionIndexFileGroupCount(int fileGroupCount) {
       metadataConfig.setValue(EXPRESSION_INDEX_FILE_GROUP_COUNT, String.valueOf(fileGroupCount));
+      return this;
+    }
+
+    public Builder withVectorIndexFileGroupCount(int fileGroupCount) {
+      metadataConfig.setValue(VECTOR_INDEX_FILE_GROUP_COUNT, String.valueOf(fileGroupCount));
       return this;
     }
 
