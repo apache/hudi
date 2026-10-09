@@ -219,13 +219,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
 
       val (recordName, namespace) = HoodieSchemaConversionUtils.getRecordNameAndNamespace(table.identifier.table)
       val schema = HoodieSparkSchemaConverters.toHoodieType(dataSchema, nullable = false, recordName, namespace)
-      val partitionColumns = if (SparkConfigUtils.containsConfigProperty(tableConfigs, KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)) {
-        SparkConfigUtils.getStringWithAltKeys(tableConfigs, KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)
-      } else if (table.partitionColumnNames.isEmpty) {
-        null
-      } else {
-        table.partitionColumnNames.mkString(",")
-      }
+      val partitionColumns = resolvePartitionColumns(tableConfigs)
 
       HoodieTableMetaClient.newTableBuilder()
         .fromProperties(properties)
@@ -272,6 +266,9 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
         val schema = table.schema
         val options = extraTableConfig(tableExists = false, globalTableConfigs, sqlOptions) ++
           mapSqlOptionsToTableConfigs(sqlOptions)
+        // Only for a table being created. An existing table already in this state stays readable,
+        // so that registering it in the catalog remains possible.
+        validateKeyGeneratorForPartitionColumns(options)
         (addMetaFields(schema), options)
 
       case (CatalogTableType.MANAGED, true) =>
@@ -288,6 +285,42 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
     verifyDataSchema(table.identifier, table.tableType, dataSchema)
 
     (finalSchema, tableConfigs)
+  }
+
+  /**
+   * Resolves the partition fields to persist in the table config, preferring an explicitly configured
+   * partition path field over the columns of the PARTITIONED BY clause.
+   */
+  private def resolvePartitionColumns(tableConfigs: Map[String, String]): String = {
+    if (SparkConfigUtils.containsConfigProperty(tableConfigs, KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)) {
+      SparkConfigUtils.getStringWithAltKeys(tableConfigs, KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)
+    } else if (table.partitionColumnNames.isEmpty) {
+      null
+    } else {
+      table.partitionColumnNames.mkString(",")
+    }
+  }
+
+  /**
+   * A non partitioned key generator never produces a partition path, so pairing one with partition
+   * columns describes a table that cannot exist. Creating it anyway persists a table config that
+   * disagrees with itself, and every subsequent write is rejected for a partition path conflict that
+   * names neither the key generator nor the partition columns. Reject it while the statement that
+   * introduced it is still in hand.
+   */
+  private def validateKeyGeneratorForPartitionColumns(tableConfigs: Map[String, String]): Unit = {
+    val partitionColumns = resolvePartitionColumns(tableConfigs)
+    if (!StringUtils.isNullOrEmpty(partitionColumns)) {
+      val keyGenerator = KeyGeneratorType.getKeyGeneratorClassName(tableConfigs.asJava)
+      if (KeyGeneratorType.NON_PARTITION.getClassName == keyGenerator
+        || KeyGeneratorType.NON_PARTITION_AVRO.getClassName == keyGenerator) {
+        throw new HoodieAnalysisException(
+          s"Cannot create table '$catalogTableName' partitioned by '$partitionColumns' using key generator"
+            + s" '$keyGenerator', which does not generate a partition path. Either drop the partition"
+            + s" columns, or configure a partitioned key generator through"
+            + s" '${HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key}'.")
+      }
+    }
   }
 
   private def extraTableConfig(tableExists: Boolean,
