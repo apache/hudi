@@ -120,9 +120,15 @@ public class BulkInsertWriteFunction<I>
   }
 
   @Override
-  public void close() {
-    if (this.writeClient != null) {
-      this.writeClient.close();
+  public void close() throws IOException {
+    try {
+      if (this.writerHelper != null) {
+        this.writerHelper.close();
+      }
+    } finally {
+      if (this.writeClient != null) {
+        this.writeClient.close();
+      }
     }
   }
 
