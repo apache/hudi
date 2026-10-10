@@ -91,7 +91,10 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
   public CompletionTimeQueryViewV2(HoodieTableMetaClient metaClient) {
     this.metaClient = metaClient;
     this.instantTimeToCompletionTimeMap = new ConcurrentHashMap<>();
-    this.cursorInstant = metaClient.getActiveTimeline().firstInstant().map(HoodieInstant::requestedTime).orElse("");
+    // Instants at or after the cursor are assumed to be on the active timeline, so it must start at the first
+    // write instant: an older non-write instant (e.g. a rollback the archiver has not reached) would otherwise
+    // hide the archived write instants between it and the first active write instant.
+    this.cursorInstant = metaClient.getActiveTimeline().getWriteTimeline().firstInstant().map(HoodieInstant::requestedTime).orElse("");
     // Note: use getWriteTimeline() to keep sync with the fs view visibleCommitsAndCompactionTimeline, see AbstractTableFileSystemView.refreshTimeline.
     this.firstNonSavepointCommit = metaClient.getActiveTimeline().getWriteTimeline().getFirstNonSavepointCommit().map(HoodieInstant::requestedTime).orElse("");
     load();
