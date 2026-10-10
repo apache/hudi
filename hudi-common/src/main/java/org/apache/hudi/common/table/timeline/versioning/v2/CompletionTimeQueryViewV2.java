@@ -90,6 +90,16 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
   private final String firstNonSavepointCommit;
 
   /**
+   * The initial cursor instant: write instants before it are archived, except the savepointed ones.
+   */
+  private final String firstActiveWriteInstant;
+
+  /**
+   * The savepointed instants on the active timeline.
+   */
+  private final Set<String> activeSavepointedInstants;
+
+  /**
    * The constructor.
    *
    * @param metaClient The table meta client.
@@ -103,9 +113,11 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
     // or a savepointed commit left behind by archival would otherwise hide the archived write instants after it.
     // Instants before the cursor that are still active are loaded eagerly by #load. Without such a write instant,
     // nothing after the last active instant can be archived.
-    this.cursorInstant = activeTimeline.getTimelineOfActions(WRITE_AND_SAVEPOINT_ACTIONS).getFirstNonSavepointCommit()
-        .or(activeTimeline::lastInstant)
-        .map(HoodieInstant::requestedTime).orElse("");
+    this.firstActiveWriteInstant = activeTimeline.getTimelineOfActions(WRITE_AND_SAVEPOINT_ACTIONS).getFirstNonSavepointCommit()
+        .or(activeTimeline::lastInstant).map(HoodieInstant::requestedTime).orElse("");
+    this.activeSavepointedInstants = activeTimeline.getSavePointTimeline().getInstantsAsStream()
+        .map(HoodieInstant::requestedTime).collect(Collectors.toSet());
+    this.cursorInstant = this.firstActiveWriteInstant;
     // Note: use getWriteTimeline() to keep sync with the fs view visibleCommitsAndCompactionTimeline, see AbstractTableFileSystemView.refreshTimeline.
     this.firstNonSavepointCommit = activeTimeline.getWriteTimeline().getFirstNonSavepointCommit().map(HoodieInstant::requestedTime).orElse("");
     load();
@@ -116,14 +128,18 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
    */
   public boolean isCompleted(String instantTime) {
     // archival does not proceed beyond the first savepoint, so any instant before that is completed.
-    return this.instantTimeToCompletionTimeMap.containsKey(instantTime) || isArchived(instantTime);
+    return this.instantTimeToCompletionTimeMap.containsKey(instantTime)
+        || InstantComparison.compareTimestamps(instantTime, LESSER_THAN, this.firstNonSavepointCommit);
   }
 
   /**
    * Returns whether the instant is archived.
    */
   public boolean isArchived(String instantTime) {
-    return InstantComparison.compareTimestamps(instantTime, LESSER_THAN, this.firstNonSavepointCommit);
+    // with archival beyond savepoint, the write instants between a savepointed commit and the first active write
+    // instant are archived as well, while the savepointed commit itself stays active.
+    return InstantComparison.compareTimestamps(instantTime, LESSER_THAN, this.firstActiveWriteInstant)
+        && !this.activeSavepointedInstants.contains(instantTime);
   }
 
   /**
