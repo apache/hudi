@@ -21,6 +21,7 @@ package org.apache.hudi.commit;
 import org.apache.hudi.HoodieDatasetBulkInsertHelper;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -33,13 +34,17 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieInternalConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
+import org.apache.hudi.keygen.BuiltinKeyGenerator;
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.types.StructType;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -64,8 +69,8 @@ public class DatasetBulkInsertOverwriteCommitActionExecutor extends BaseDatasetB
    * For INSERT_OVERWRITE: enumerate latest file groups in the targeted partitions so the caller
    * can reject overlap with pending clustering before the bulk-insert materializes. Mirrors
    * {@code SparkInsertOverwriteCommitActionExecutor#getFileGroupsBeingReplaced}; called by the
-   * base class on the prepared dataset (after {@code prepareForBulkInsert} populates the
-   * {@code _hoodie_partition_path} meta field), so dynamic partition resolution can read it.
+   * base class on the prepared dataset (after {@code prepareForBulkInsert}), so dynamic partition
+   * resolution can read the rows' partition paths.
    */
   @Override
   protected Set<HoodieFileGroupId> getFileGroupsBeingReplaced(Dataset<Row> preparedRecords) {
@@ -91,13 +96,39 @@ public class DatasetBulkInsertOverwriteCommitActionExecutor extends BaseDatasetB
     if (StringUtils.nonEmpty(staticOverwritePartitionPaths)) {
       return Arrays.asList(staticOverwritePartitionPaths.split(","));
     }
+    if (!writeConfig.populateMetaFields()) {
+      // Without meta fields, HoodieDatasetBulkInsertHelper.prepareForBulkInsert stubs every meta
+      // column with null, and the writer derives each row's partition path from the key generator
+      // instead (BulkInsertDataInternalWriterHelper#extractPartitionPath), so do the same here.
+      return resolvePartitionPathsWithKeyGenerator(preparedRecords, writeConfig.getProps());
+    }
     // Dynamic partition path: read the populated _hoodie_partition_path meta field. The base
-    // class invokes this hook after HoodieDatasetBulkInsertHelper.prepareForBulkInsert, so the
-    // field is guaranteed to be present and populated by the configured key generator.
+    // class invokes this hook after HoodieDatasetBulkInsertHelper.prepareForBulkInsert, which
+    // populates the field through the configured key generator when meta fields are populated.
     return preparedRecords.select(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
         .distinct()
         .as(Encoders.STRING())
         .collectAsList();
+  }
+
+  /**
+   * Computes the distinct partition paths of the prepared rows with the configured key generator,
+   * the same way the bulk-insert writer does when the {@code _hoodie_partition_path} meta field is
+   * not populated. Static, so the Spark closure captures only the schema and the properties.
+   */
+  private static List<String> resolvePartitionPathsWithKeyGenerator(Dataset<Row> preparedRecords, TypedProperties props) {
+    StructType schema = preparedRecords.schema();
+    return preparedRecords.queryExecution().toRdd().toJavaRDD()
+        .mapPartitions(rows -> {
+          Option<BuiltinKeyGenerator> keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.getKeyGenerator(props);
+          Set<String> partitionPaths = new HashSet<>();
+          rows.forEachRemaining(row -> partitionPaths.add(keyGeneratorOpt.isPresent()
+              ? keyGeneratorOpt.get().getPartitionPath(row, schema).toString()
+              : StringUtils.EMPTY_STRING));
+          return partitionPaths.iterator();
+        })
+        .distinct()
+        .collect();
   }
 
   @Override

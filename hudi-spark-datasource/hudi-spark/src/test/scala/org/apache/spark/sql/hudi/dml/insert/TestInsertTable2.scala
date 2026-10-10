@@ -703,9 +703,11 @@ class TestInsertTable2 extends HoodieSparkSqlTestBase {
     // partitions: overwriting the other must succeed and leave the plan pending, overwriting the
     // clustered one must be rejected before anything is written. Static mode resolves the target
     // partition from the PARTITION clause and dynamic mode from the rows, so both arms of
-    // DatasetBulkInsertOverwriteCommitActionExecutor.resolveTargetPartitions are driven, with meta
-    // fields populated (the unpopulated case bypasses the check today, see #19770).
-    Seq("static", "dynamic").foreach { overwriteMode =>
+    // DatasetBulkInsertOverwriteCommitActionExecutor.resolveTargetPartitions are driven. Each runs
+    // with and without meta fields: without them the dynamic arm cannot read the
+    // _hoodie_partition_path meta field, which prepareForBulkInsert leaves as a null stub, and must
+    // derive the partitions from the key generator instead (#19770).
+    for (overwriteMode <- Seq("static", "dynamic"); populateMetaFields <- Seq(true, false)) {
       withSQLConf(SPARK_SQL_INSERT_INTO_OPERATION.key -> WriteOperationType.BULK_INSERT.value(),
         ENABLE_ROW_WRITER.key -> "true",
         "hoodie.datasource.overwrite.mode" -> overwriteMode) {
@@ -722,7 +724,8 @@ class TestInsertTable2 extends HoodieSparkSqlTestBase {
                  |) using hudi
                  | tblproperties (
                  |  type = 'cow',
-                 |  primaryKey = 'id'
+                 |  primaryKey = 'id',
+                 |  hoodie.populate.meta.fields = '$populateMetaFields'
                  | )
                  | partitioned by (dt)
                  | location '$tablePath'
