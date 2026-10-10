@@ -44,6 +44,7 @@ import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap.DiskMapType;
 import org.apache.hudi.common.util.collection.Pair;
@@ -437,20 +438,23 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   }
 
   private boolean isBeforeTimelineStarts() {
+    return isBeforeTimelineStarts(metaClient.getActiveTimeline(), isCompletionTimeBasedQuery, incrementalQueryStartTime.get());
+  }
+
+  @VisibleForTesting
+  static boolean isBeforeTimelineStarts(HoodieTimeline activeTimeline, boolean isCompletionTimeBasedQuery, String startTime) {
     // Check against the same timeline findInstantsInRange() reads: the incremental listing takes the
     // written partitions from the write timeline, so it is only complete when that timeline covers the
     // start. Older non-write instants (e.g. a rollback the archiver has not reached) must not count.
     // Savepoints are kept so that savepointed commits left behind by archival are skipped as the start.
-    HoodieTimeline writeTimeline = metaClient.getActiveTimeline().getTimelineOfActions(WRITE_AND_SAVEPOINT_ACTIONS);
-    String startTime = incrementalQueryStartTime.get();
-    if (isCompletionTimeBasedQuery) {
+    HoodieTimeline writeTimeline = activeTimeline.getTimelineOfActions(WRITE_AND_SAVEPOINT_ACTIONS);
+    if (writeTimeline.filterCompletedInstants().getFirstNonSavepointCommit().isEmpty()) {
       // no completed write instant on the active timeline: the written partitions are unknown, list them all
-      return writeTimeline.filterCompletedInstants().getFirstNonSavepointCommit().isEmpty()
-          || writeTimeline.isBeforeTimelineStartsByCompletionTime(startTime);
-    } else {
-      return writeTimeline.getFirstNonSavepointCommit().isEmpty()
-          || writeTimeline.isBeforeTimelineStarts(startTime);
+      return true;
     }
+    return isCompletionTimeBasedQuery
+        ? writeTimeline.isBeforeTimelineStartsByCompletionTime(startTime)
+        : writeTimeline.isBeforeTimelineStarts(startTime);
   }
 
   private HoodieTimeline findInstantsInRange() {

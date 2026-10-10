@@ -19,11 +19,9 @@
 package org.apache.hudi.core.read;
 
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.MockHoodieTimeline;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.core.read.BaseHoodieTableFileIndex.PartitionPath;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -45,7 +43,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 public class BaseHoodieTableFileIndexTest {
 
@@ -119,17 +116,16 @@ public class BaseHoodieTableFileIndexTest {
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
   public void testIncrementalStartBeforeFirstWriteIsArchivedDespiteOlderNonWriteInstant(boolean completionTimeBased) throws Exception {
-    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
-    when(metaClient.getActiveTimeline()).thenReturn(new MockHoodieTimeline(Arrays.asList(
+    HoodieTimeline activeTimeline = new MockHoodieTimeline(Arrays.asList(
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.ROLLBACK_ACTION, "001", "002"),
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "005", "006"),
-        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "007", "008"))));
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "007", "008")));
 
     // start after the rollback but before the first commit: archived
-    assertTrue(isBeforeTimelineStarts(metaClient, completionTimeBased, "003"));
+    assertTrue(BaseHoodieTableFileIndex.isBeforeTimelineStarts(activeTimeline, completionTimeBased, "003"));
     // start at or after the first commit: covered by the active write timeline
-    assertFalse(isBeforeTimelineStarts(metaClient, completionTimeBased, completionTimeBased ? "006" : "005"));
-    assertFalse(isBeforeTimelineStarts(metaClient, completionTimeBased, "007"));
+    assertFalse(BaseHoodieTableFileIndex.isBeforeTimelineStarts(activeTimeline, completionTimeBased, completionTimeBased ? "006" : "005"));
+    assertFalse(BaseHoodieTableFileIndex.isBeforeTimelineStarts(activeTimeline, completionTimeBased, "007"));
   }
 
   /**
@@ -141,16 +137,15 @@ public class BaseHoodieTableFileIndexTest {
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
   public void testIncrementalStartInArchivalHoleAfterSavepointIsArchived(boolean completionTimeBased) throws Exception {
-    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
-    when(metaClient.getActiveTimeline()).thenReturn(new MockHoodieTimeline(Arrays.asList(
+    HoodieTimeline activeTimeline = new MockHoodieTimeline(Arrays.asList(
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "001", "002"),
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "001", "003"),
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "010", "011"),
-        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "012", "013"))));
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "012", "013")));
 
     // start between the savepointed commit and the first active commit after it: archived
-    assertTrue(isBeforeTimelineStarts(metaClient, completionTimeBased, "005"));
-    assertFalse(isBeforeTimelineStarts(metaClient, completionTimeBased, completionTimeBased ? "011" : "010"));
+    assertTrue(BaseHoodieTableFileIndex.isBeforeTimelineStarts(activeTimeline, completionTimeBased, "005"));
+    assertFalse(BaseHoodieTableFileIndex.isBeforeTimelineStarts(activeTimeline, completionTimeBased, completionTimeBased ? "011" : "010"));
   }
 
   /**
@@ -160,29 +155,17 @@ public class BaseHoodieTableFileIndexTest {
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
   public void testIncrementalStartIsArchivedWithoutActiveWriteInstant(boolean completionTimeBased) throws Exception {
-    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
-    when(metaClient.getActiveTimeline()).thenReturn(new MockHoodieTimeline(Arrays.asList(
+    HoodieTimeline activeTimeline = new MockHoodieTimeline(Arrays.asList(
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.ROLLBACK_ACTION, "001", "002"),
-        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.CLEAN_ACTION, "003", "004"))));
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.CLEAN_ACTION, "003", "004")));
 
-    assertTrue(isBeforeTimelineStarts(metaClient, completionTimeBased, "000"));
-    assertTrue(isBeforeTimelineStarts(metaClient, completionTimeBased, "005"));
-  }
+    assertTrue(BaseHoodieTableFileIndex.isBeforeTimelineStarts(activeTimeline, completionTimeBased, "000"));
+    assertTrue(BaseHoodieTableFileIndex.isBeforeTimelineStarts(activeTimeline, completionTimeBased, "005"));
 
-  private static boolean isBeforeTimelineStarts(HoodieTableMetaClient metaClient, boolean completionTimeBased, String start)
-      throws Exception {
-    BaseHoodieTableFileIndex fileIndex = mock(BaseHoodieTableFileIndex.class, org.mockito.Mockito.CALLS_REAL_METHODS);
-    setField(fileIndex, "metaClient", metaClient);
-    setField(fileIndex, "isCompletionTimeBasedQuery", completionTimeBased);
-    setField(fileIndex, "incrementalQueryStartTime", Option.of(start));
-    Method method = BaseHoodieTableFileIndex.class.getDeclaredMethod("isBeforeTimelineStarts");
-    method.setAccessible(true);
-    return (boolean) method.invoke(fileIndex);
-  }
-
-  private static void setField(Object target, String name, Object value) throws Exception {
-    Field field = BaseHoodieTableFileIndex.class.getDeclaredField(name);
-    field.setAccessible(true);
-    field.set(target, value);
+    // a pending write instant alone does not tell which partitions were written either
+    HoodieTimeline pendingOnlyTimeline = new MockHoodieTimeline(Arrays.asList(
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.ROLLBACK_ACTION, "001", "002"),
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "003")));
+    assertTrue(BaseHoodieTableFileIndex.isBeforeTimelineStarts(pendingOnlyTimeline, completionTimeBased, "005"));
   }
 }

@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
+import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer;
 import org.apache.hudi.common.table.timeline.ActiveAction;
 import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -259,9 +260,26 @@ public class TestCompletionTimeQueryView {
       // archived commits after the savepointed commit are found, not reported as pending
       assertThat(view.getCompletionTime(String.format("%08d", 4)).orElse(""), is(String.format("%08d", 1004)));
       assertThat(getInstantTimeSetFormattedString(view, 3 + 1000, 6 + 1000), is("00000003,00000004,00000005,00000006"));
+      // and they are archived, while the savepointed commit and the commits after the hole are active
+      assertTrue(view.isArchived(String.format("%08d", 4)));
+      assertFalse(view.isArchived(savepointed));
+      assertFalse(view.isArchived(String.format("%08d", 7)));
       // a pending write instant is still pending
       assertFalse(view.getCompletionTime(String.format("%08d", 11)).isPresent());
     }
+
+    // an incremental query over the hole reads the archived commits from the archived timeline
+    IncrementalQueryAnalyzer.QueryContext queryContext = IncrementalQueryAnalyzer.builder()
+        .metaClient(metaClient)
+        .startCompletionTime(String.format("%08d", 1003))
+        .endCompletionTime(String.format("%08d", 1008))
+        .rangeType(InstantRange.RangeType.CLOSED_CLOSED)
+        .build()
+        .analyze();
+    assertThat(queryContext.getArchivedInstants().stream().map(HoodieInstant::requestedTime).collect(Collectors.joining(",")),
+        is("00000003,00000004,00000005,00000006"));
+    assertThat(queryContext.getActiveInstants().stream().map(HoodieInstant::requestedTime).collect(Collectors.joining(",")),
+        is("00000007,00000008"));
   }
 
   @Test
