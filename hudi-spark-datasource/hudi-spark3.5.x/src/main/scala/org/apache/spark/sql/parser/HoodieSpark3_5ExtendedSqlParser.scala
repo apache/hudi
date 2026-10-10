@@ -85,7 +85,7 @@ class HoodieSpark3_5ExtendedSqlParser(session: SparkSession, delegate: ParserInt
     parser.addErrorListener(ParseErrorListener)
     //    parser.legacy_setops_precedence_enabled = conf.setOpsPrecedenceEnforced
     parser.legacy_exponent_literal_as_decimal_enabled = conf.exponentLiteralAsDecimalEnabled
-    parser.SQL_standard_keyword_behavior = conf.ansiEnabled
+    parser.SQL_standard_keyword_behavior = conf.enforceReservedKeywords
 
     try {
       try {

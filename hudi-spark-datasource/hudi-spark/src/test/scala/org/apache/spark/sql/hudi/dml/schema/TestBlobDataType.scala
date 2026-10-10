@@ -304,6 +304,7 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
          |  c_float FLOAT,
          |  c_double DOUBLE,
          |  c_date DATE,
+         |  c_ts TIMESTAMP,
          |  c_str STRING,
          |  c_char CHAR(5),
          |  c_varchar VARCHAR(10),
@@ -325,6 +326,7 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
     assertResult(FloatType)(schema("c_float").dataType)
     assertResult(DoubleType)(schema("c_double").dataType)
     assertResult(DateType)(schema("c_date").dataType)
+    assertResult(TimestampType)(schema("c_ts").dataType)
     assertResult(StringType)(schema("c_str").dataType)
     // CHAR/VARCHAR may be preserved or replaced with STRING depending on the Spark version.
     assert(Seq[DataType](CharType(5), StringType).contains(schema("c_char").dataType))
@@ -449,15 +451,12 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
 
   test("Test parse CREATE TABLE with BLOB column and typed transform-argument literals") {
     // Constant transform arguments exercise the literal visitors: string, integer, big-integer and
-    // exponent numerics (the private numeric-literal helper), the typed date constructor, and both
-    // interval forms (multi-unit and unit-to-unit). A typed TIMESTAMP constructor is skipped due
-    // to #19449: the extended parser enables ANSI reserved-keyword enforcement whenever
-    // spark.sql.ansi.enabled is set (the Spark 4.x default) instead of following Spark's
-    // spark.sql.ansi.enforceReservedKeywords, which makes a bare TIMESTAMP token unparseable
-    // there (a bug, not a Spark 4 constraint). Boolean and null literals are keyword-mode
-    // dependent: only TRUE is ansiNonReserved, so a bare true always parses as a column
-    // reference, while false and null are column references under the default non-ANSI keyword
-    // mode but typed literals under ANSI mode (both cases are asserted below).
+    // exponent numerics (the private numeric-literal helper), the typed date and timestamp
+    // constructors, and both interval forms (multi-unit and unit-to-unit). Boolean and null
+    // literals are keyword-mode dependent: only TRUE is ansiNonReserved, so a bare true always
+    // parses as a column reference, while false and null are column references under the default
+    // non-ANSI keyword mode but typed literals under ANSI keyword mode (both cases are asserted
+    // below).
     val plan = parseCreateTable(
       s"""
          |CREATE TABLE blob_lit_tbl (
@@ -470,6 +469,7 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
          |  long_t(9000000000L, id),
          |  exp_t(1E3, id),
          |  date_t(DATE '2020-01-01', id),
+         |  ts_t(TIMESTAMP '2020-01-01 00:00:00', id),
          |  mu_ivl_t(INTERVAL '1' DAY, id),
          |  uu_ivl_t(INTERVAL '1-2' YEAR TO MONTH, id)
          |)
@@ -480,6 +480,7 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
     assertResult(LongType)(firstLiteralArg(transformByName(plan, "long_t")).dataType)
     assertResult(DoubleType)(firstLiteralArg(transformByName(plan, "exp_t")).dataType)
     assertResult(DateType)(firstLiteralArg(transformByName(plan, "date_t")).dataType)
+    assertResult(TimestampType)(firstLiteralArg(transformByName(plan, "ts_t")).dataType)
     assertResult(DayTimeIntervalType(DayTimeIntervalType.DAY, DayTimeIntervalType.DAY))(
       firstLiteralArg(transformByName(plan, "mu_ivl_t")).dataType)
     assertResult(YearMonthIntervalType(YearMonthIntervalType.YEAR, YearMonthIntervalType.MONTH))(
@@ -487,8 +488,11 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
 
     // Under ANSI keyword mode a bare false and a bare null must survive visitBooleanLiteral
     // and visitNullLiteral as typed literals, while a bare true stays a column reference
-    // (TRUE is ansiNonReserved; FALSE and NULL are not).
-    withSQLConf("spark.sql.ansi.enabled" -> "true") {
+    // (TRUE is ansiNonReserved; FALSE and NULL are not). As in stock Spark, ANSI keyword mode
+    // takes spark.sql.ansi.enforceReservedKeywords on top of spark.sql.ansi.enabled.
+    withSQLConf(
+      "spark.sql.ansi.enabled" -> "true",
+      "spark.sql.ansi.enforceReservedKeywords" -> "true") {
       val ansiPlan = parseCreateTable(
         "CREATE TABLE blob_bool_tbl (id BIGINT, data BLOB) USING hudi " +
           "PARTITIONED BY (bool_t(false, id), true_t(true, id), null_t(null, id))")
@@ -498,6 +502,22 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
       assertResult(null)(firstLiteralArg(transformByName(ansiPlan, "null_t")).value)
       assertResult(Seq(Seq("true"), Seq("id")))(
         transformFieldRefs(transformByName(ansiPlan, "true_t")))
+    }
+  }
+
+  test("Test parse CREATE TABLE with BLOB column and TIMESTAMP under ANSI mode") {
+    // ANSI mode alone (the Spark 4.x default) must not turn on ANSI reserved-keyword enforcement
+    // in the extended parser: like stock Spark, it must follow spark.sql.ansi.enforceReservedKeywords,
+    // which defaults to false. Under enforcement the forked grammar cannot read TIMESTAMP as a
+    // type name or a typed-literal prefix, so a statement the stock parser accepts used to fail
+    // with "no viable alternative at input 'TIMESTAMP'" as soon as it carried a BLOB column.
+    withSQLConf("spark.sql.ansi.enabled" -> "true") {
+      val plan = parseCreateTable(
+        "CREATE TABLE blob_ansi_ts_tbl (id BIGINT, ts TIMESTAMP, data BLOB) USING hudi " +
+          "PARTITIONED BY (ts_t(TIMESTAMP '2020-01-01 00:00:00', id))")
+      assertResult(TimestampType)(plan.tableSchema("ts").dataType)
+      assertResult(BlobType())(plan.tableSchema("data").dataType)
+      assertResult(TimestampType)(firstLiteralArg(transformByName(plan, "ts_t")).dataType)
     }
   }
 
