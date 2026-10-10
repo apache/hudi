@@ -118,12 +118,21 @@ class TestMetaFieldsMode {
   }
 
   @Test
-  void toLegacyPopulateMetaFieldsIsTrueOnlyForAll() {
-    assertTrue(ALL.toLegacyPopulateMetaFields());
+  void toLegacyPopulateMetaFieldsIsFalseOnlyForNone() {
+    // False means no meta columns at all, so every mode populating at least one maps to true.
     assertFalse(NONE.toLegacyPopulateMetaFields());
-    assertFalse(COMMIT_TIME_ONLY.toLegacyPopulateMetaFields());
-    assertFalse(FILE_NAME_ONLY.toLegacyPopulateMetaFields());
-    assertFalse(COMMIT_TIME_AND_FILE_NAME.toLegacyPopulateMetaFields());
+    assertTrue(ALL.toLegacyPopulateMetaFields());
+    assertTrue(COMMIT_TIME_ONLY.toLegacyPopulateMetaFields());
+    assertTrue(FILE_NAME_ONLY.toLegacyPopulateMetaFields());
+    assertTrue(COMMIT_TIME_AND_FILE_NAME.toLegacyPopulateMetaFields());
+  }
+
+  @ParameterizedTest
+  @EnumSource(MetaFieldsMode.class)
+  void toLegacyPopulateMetaFieldsAgreesWithWhetherAnyColumnIsPopulated(MetaFieldsMode mode) {
+    boolean anyPopulated = mode.isCommitTimePopulated() || mode.isFileNamePopulated()
+        || mode.isRecordKeyPopulated();
+    assertEquals(anyPopulated, mode.toLegacyPopulateMetaFields());
   }
 
   @Test
