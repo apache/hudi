@@ -95,6 +95,10 @@ import static org.apache.hudi.common.table.timeline.TimelineUtils.validateTimest
 @Slf4j
 public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
+  private static final Set<String> WRITE_AND_SAVEPOINT_ACTIONS = CollectionUtils.createSet(
+      HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.LOG_COMPACTION_ACTION,
+      HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.CLUSTERING_ACTION, HoodieTimeline.SAVEPOINT_ACTION);
+
   @Getter(AccessLevel.PROTECTED)
   private final String[] partitionColumns;
 
@@ -436,11 +440,16 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     // Check against the same timeline findInstantsInRange() reads: the incremental listing takes the
     // written partitions from the write timeline, so it is only complete when that timeline covers the
     // start. Older non-write instants (e.g. a rollback the archiver has not reached) must not count.
-    HoodieTimeline writeTimeline = metaClient.getActiveTimeline().getWriteTimeline();
+    // Savepoints are kept so that savepointed commits left behind by archival are skipped as the start.
+    HoodieTimeline writeTimeline = metaClient.getActiveTimeline().getTimelineOfActions(WRITE_AND_SAVEPOINT_ACTIONS);
+    String startTime = incrementalQueryStartTime.get();
     if (isCompletionTimeBasedQuery) {
-      return writeTimeline.isBeforeTimelineStartsByCompletionTime(incrementalQueryStartTime.get());
+      // no completed write instant on the active timeline: the written partitions are unknown, list them all
+      return writeTimeline.filterCompletedInstants().getFirstNonSavepointCommit().isEmpty()
+          || writeTimeline.isBeforeTimelineStartsByCompletionTime(startTime);
     } else {
-      return writeTimeline.isBeforeTimelineStarts(incrementalQueryStartTime.get());
+      return writeTimeline.getFirstNonSavepointCommit().isEmpty()
+          || writeTimeline.isBeforeTimelineStarts(startTime);
     }
   }
 

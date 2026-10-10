@@ -132,6 +132,43 @@ public class BaseHoodieTableFileIndexTest {
     assertFalse(isBeforeTimelineStarts(metaClient, completionTimeBased, "007"));
   }
 
+  /**
+   * With archival beyond savepoint, a savepointed commit stays on the active timeline while the commits after it are
+   * archived. A start in that hole is archived, so the savepointed commit must not count as the start of the timeline.
+   *
+   * <p>Timeline: commit 001 (completed 002) with savepoint 001, commit 010 (completed 011), commit 012 (completed 013).
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testIncrementalStartInArchivalHoleAfterSavepointIsArchived(boolean completionTimeBased) throws Exception {
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    when(metaClient.getActiveTimeline()).thenReturn(new MockHoodieTimeline(Arrays.asList(
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "001", "002"),
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "001", "003"),
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "010", "011"),
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "012", "013"))));
+
+    // start between the savepointed commit and the first active commit after it: archived
+    assertTrue(isBeforeTimelineStarts(metaClient, completionTimeBased, "005"));
+    assertFalse(isBeforeTimelineStarts(metaClient, completionTimeBased, completionTimeBased ? "011" : "010"));
+  }
+
+  /**
+   * Without a completed write instant on the active timeline the written partitions are unknown, so every start is
+   * treated as archived and all partitions are listed.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testIncrementalStartIsArchivedWithoutActiveWriteInstant(boolean completionTimeBased) throws Exception {
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    when(metaClient.getActiveTimeline()).thenReturn(new MockHoodieTimeline(Arrays.asList(
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.ROLLBACK_ACTION, "001", "002"),
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.CLEAN_ACTION, "003", "004"))));
+
+    assertTrue(isBeforeTimelineStarts(metaClient, completionTimeBased, "000"));
+    assertTrue(isBeforeTimelineStarts(metaClient, completionTimeBased, "005"));
+  }
+
   private static boolean isBeforeTimelineStarts(HoodieTableMetaClient metaClient, boolean completionTimeBased, String start)
       throws Exception {
     BaseHoodieTableFileIndex fileIndex = mock(BaseHoodieTableFileIndex.class, org.mockito.Mockito.CALLS_REAL_METHODS);
