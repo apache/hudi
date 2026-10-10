@@ -19,12 +19,14 @@
 package org.apache.hudi.client.timeline;
 
 import org.apache.hudi.DummyActiveAction;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
+import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer;
 import org.apache.hudi.common.table.timeline.ActiveAction;
 import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -200,6 +202,84 @@ public class TestCompletionTimeQueryView {
       // query with non-existing completion time
       assertThat(getInstantTimeSetFormattedString(view, 12 + 1000, 15 + 1000), is(""));
     }
+  }
+
+  /**
+   * A completed non-write instant older than the archived commits (e.g. a rollback the archiver has not
+   * reached, which survives an upgrade from table version 6) must not hide those archived commits.
+   */
+  @Test
+  void testArchivedInstantsAfterStaleNonWriteInstant() throws Exception {
+    String tableName = "testTable";
+    String tablePath = tempFile.getAbsolutePath() + StoragePath.SEPARATOR + tableName;
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(
+        HoodieTestUtils.getDefaultStorageConf(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
+    prepareTimeline(tablePath, metaClient);
+    // a completed rollback sorting between the archived commits 1 and 2
+    String staleRollback = "000000015";
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    HoodieRollbackMetadata rollbackMetadata = testTable.getRollbackMetadata("00000099", Collections.emptyMap(), false);
+    testTable.addRollback(staleRollback, rollbackMetadata, null).addRollbackCompleted(staleRollback, rollbackMetadata, false);
+    metaClient.reloadActiveTimeline();
+    assertThat(metaClient.getActiveTimeline().firstInstant().get().requestedTime(), is(staleRollback));
+
+    try (CompletionTimeQueryView view =
+             metaClient.getTableFormat().getTimelineFactory().createCompletionTimeQueryView(metaClient)) {
+      // archived commits newer than the rollback are found, not reported as pending
+      assertThat(view.getCompletionTime(String.format("%08d", 4)).orElse(""), is(String.format("%08d", 1004)));
+      assertThat(getInstantTimeSetFormattedString(view, 3 + 1000, 6 + 1000), is("00000003,00000004,00000005,00000006"));
+      // a pending write instant is still pending
+      assertFalse(view.getCompletionTime(String.format("%08d", 11)).isPresent());
+    }
+  }
+
+  /**
+   * With archival beyond savepoint, a savepointed commit stays on the active timeline while the commits after it are
+   * archived. That commit must not hide the archived commits after it.
+   */
+  @Test
+  void testArchivedInstantsAfterSavepointedCommit() throws Exception {
+    String tableName = "testTable";
+    String tablePath = tempFile.getAbsolutePath() + StoragePath.SEPARATOR + tableName;
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(
+        HoodieTestUtils.getDefaultStorageConf(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
+    // archive 2 to 6, while 1 is savepointed and stays active
+    prepareTimeline(tablePath, metaClient, (writer, activeActions) -> writer.write(activeActions.subList(1, 6), Option.empty(), Option.empty()));
+    String savepointed = String.format("%08d", 1);
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    testTable.addCommit(savepointed, Option.of(String.format("%08d", 1001)),
+        Option.of(testTable.createCommitMetadata(savepointed, WriteOperationType.INSERT, Arrays.asList("par1", "par2"), 10, false)));
+    testTable.addSavepoint(savepointed, Option.of(String.format("%08d", 1002)), testTable.getSavepointMetadata(savepointed, Collections.emptyMap()));
+    metaClient.reloadActiveTimeline();
+    assertThat(metaClient.getActiveTimeline().getWriteTimeline().firstInstant().get().requestedTime(), is(savepointed));
+
+    try (CompletionTimeQueryView view =
+             metaClient.getTableFormat().getTimelineFactory().createCompletionTimeQueryView(metaClient)) {
+      // the savepointed commit is still found
+      assertThat(view.getCompletionTime(savepointed).orElse(""), is(String.format("%08d", 1001)));
+      // archived commits after the savepointed commit are found, not reported as pending
+      assertThat(view.getCompletionTime(String.format("%08d", 4)).orElse(""), is(String.format("%08d", 1004)));
+      assertThat(getInstantTimeSetFormattedString(view, 3 + 1000, 6 + 1000), is("00000003,00000004,00000005,00000006"));
+      // and they are archived, while the savepointed commit and the commits after the hole are active
+      assertTrue(view.isArchived(String.format("%08d", 4)));
+      assertFalse(view.isArchived(savepointed));
+      assertFalse(view.isArchived(String.format("%08d", 7)));
+      // a pending write instant is still pending
+      assertFalse(view.getCompletionTime(String.format("%08d", 11)).isPresent());
+    }
+
+    // an incremental query over the hole reads the archived commits from the archived timeline
+    IncrementalQueryAnalyzer.QueryContext queryContext = IncrementalQueryAnalyzer.builder()
+        .metaClient(metaClient)
+        .startCompletionTime(String.format("%08d", 1003))
+        .endCompletionTime(String.format("%08d", 1008))
+        .rangeType(InstantRange.RangeType.CLOSED_CLOSED)
+        .build()
+        .analyze();
+    assertThat(queryContext.getArchivedInstants().stream().map(HoodieInstant::requestedTime).collect(Collectors.joining(",")),
+        is("00000003,00000004,00000005,00000006"));
+    assertThat(queryContext.getActiveInstants().stream().map(HoodieInstant::requestedTime).collect(Collectors.joining(",")),
+        is("00000007,00000008"));
   }
 
   @Test
