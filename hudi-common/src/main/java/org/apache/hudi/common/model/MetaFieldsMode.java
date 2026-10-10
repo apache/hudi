@@ -184,9 +184,12 @@ public enum MetaFieldsMode {
   /**
    * @return the equivalent value of the deprecated {@code hoodie.populate.meta.fields} boolean, so
    * that call sites not yet migrated to this enum keep observing consistent behavior.
+   *
+   * <p>Only {@link #NONE} maps to {@code false}: the boolean says whether any meta column is
+   * populated, not which. Use {@link #isRecordKeyPopulated()} for key-dependent checks.
    */
   public boolean toLegacyPopulateMetaFields() {
-    return this == ALL;
+    return this != NONE;
   }
 
   public static MetaFieldsMode fromLegacyPopulateMetaFields(Boolean populateMetaFields) {

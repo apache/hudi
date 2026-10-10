@@ -1282,10 +1282,9 @@ public class HoodieTableConfig extends HoodieConfig {
   /**
    * @returns true is meta fields need to be populated. else returns false.
    *
-   * <p>Derived from {@link #getMetaFieldsMode()} so that call sites still written against the
-   * deprecated boolean observe the same answer as the enum: only {@link MetaFieldsMode#ALL}
-   * populates every meta column. Selective modes report {@code false} here, which keeps
-   * key-dependent machinery (bloom filters, record-level index) correctly disabled.
+   * <p>Derived from {@link #getMetaFieldsMode()}: {@code false} only for
+   * {@link MetaFieldsMode#NONE}. Key-dependent machinery (bloom filters, record-level index) must
+   * gate on {@link #isRecordKeyPopulated()} instead.
    */
   public boolean populateMetaFields() {
     return getMetaFieldsMode().toLegacyPopulateMetaFields();
