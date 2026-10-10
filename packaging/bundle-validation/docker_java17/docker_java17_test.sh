@@ -47,63 +47,77 @@ use_default_java_runtime () {
 }
 
 start_datanode () {
-  DN=$1
+  local dn=$1
+  local data_dir="$DOCKER_TEST_DIR/additional_datanode/$dn"
+  local pid_dir="$DOCKER_TEST_DIR/pid/datanode-$dn"
 
-  echo "::warning::docker_test_java17.sh starting datanode:"$DN
-
-  cat $HADOOP_HOME/hadoop/etc/hdfs-site.xml
-  cat $HADOOP_HOME/hadoop/etc/core-site.xml
-
-  DN_DIR_PREFIX=$DOCKER_TEST_DIR/additional_datanode/
-  PID_DIR=$DOCKER_TEST_DIR/pid/$1
-
-  if [ -z $DN_DIR_PREFIX ]; then
-    mkdir -p $DN_DIR_PREFIX
-  fi
-
-  if [ -z $PID_DIR ]; then
-    mkdir -p $PID_DIR
-  fi
-
-  export HADOOP_PID_DIR=$PID_PREFIX
-  DN_CONF_OPTS="\
-  -Dhadoop.tmp.dir=$DN_DIR_PREFIX$DN\
-  -Ddfs.datanode.address=localhost:5001$DN \
-  -Ddfs.datanode.http.address=localhost:5008$DN \
-  -Ddfs.datanode.ipc.address=localhost:5002$DN"
-  $HADOOP_HOME/bin/hdfs --daemon start datanode $DN_CONF_OPTS
-  $HADOOP_HOME/bin/hdfs dfsadmin -report
+  echo "::warning::docker_test_java17.sh starting datanode:$dn"
+  mkdir -p "$data_dir" "$pid_dir" || return 1
+  HADOOP_PID_DIR="$pid_dir" "$HADOOP_HOME/bin/hdfs" --daemon start datanode \
+    -Dhadoop.tmp.dir="$data_dir" \
+    -Ddfs.datanode.address="localhost:5001$dn" \
+    -Ddfs.datanode.http.address="localhost:5008$dn" \
+    -Ddfs.datanode.ipc.address="localhost:5002$dn"
 }
 
 setup_hdfs () {
+  # The base image's Java 8 cgroup metrics can crash on newer CI hosts.
+  # Disable container detection only for Hadoop and bound each daemon's heap explicitly.
+  export HADOOP_OPTS="${HADOOP_OPTS:-} -XX:-UseContainerSupport"
+  export HADOOP_HEAPSIZE_MAX=512
+
   echo "::warning::docker_test_java17.sh copying hadoop conf"
-  mv /opt/bundle-validation/tmp-conf-dir/hdfs-site.xml $HADOOP_HOME/etc/hadoop/hdfs-site.xml
-  mv /opt/bundle-validation/tmp-conf-dir/core-site.xml $HADOOP_HOME/etc/hadoop/core-site.xml
+  cp "$WORKDIR/tmp-conf-dir/hdfs-site.xml" "$HADOOP_HOME/etc/hadoop/hdfs-site.xml" || return 1
+  cp "$WORKDIR/tmp-conf-dir/core-site.xml" "$HADOOP_HOME/etc/hadoop/core-site.xml" || return 1
 
-  $HADOOP_HOME/bin/hdfs namenode -format
-  $HADOOP_HOME/bin/hdfs --daemon start namenode
-  echo "::warning::docker_test_java17.sh starting hadoop hdfs"
-  $HADOOP_HOME/sbin/start-dfs.sh
+  mkdir -p "$DOCKER_TEST_DIR/pid/namenode" || return 1
+  "$HADOOP_HOME/bin/hdfs" namenode -format || return 1
+  HADOOP_PID_DIR="$DOCKER_TEST_DIR/pid/namenode" "$HADOOP_HOME/bin/hdfs" --daemon start namenode || return 1
 
-  # start datanodes
-  for i in $(seq 1 3)
-  do
-    start_datanode $i
+  # All daemons run in this container. Avoid the SSH/su worker dispatch in start-dfs.sh.
+  local i
+  for i in 1 2 3; do
+    start_datanode "$i" || return 1
   done
 
-  echo "::warning::docker_test_java17.sh starting hadoop hdfs, hdfs report"
-  $HADOOP_HOME/bin/hdfs dfs -mkdir -p /user/root
-  $HADOOP_HOME/bin/hdfs dfs -ls /user/
-  if [ "$?" -ne 0 ]; then
-    echo "::error::docker_test_java17.sh Failed setting up HDFS!"
-    exit 1
-  fi
+  # Starting a daemon only forks it; wait for all replicas before running the tests.
+  local report
+  for i in $(seq 1 30); do
+    if report=$("$HADOOP_HOME/bin/hdfs" dfsadmin -Dipc.client.connect.max.retries=0 -report 2>&1) \
+        && printf '%s\n' "$report" | grep -q 'Live datanodes (3)'; then
+      printf '%s\n' "$report"
+      "$HADOOP_HOME/bin/hdfs" dfsadmin -safemode wait || return 1
+      "$HADOOP_HOME/bin/hdfs" dfs -mkdir -p /user/root || return 1
+      "$HADOOP_HOME/bin/hdfs" dfs -ls /user/
+      return $?
+    fi
+    sleep 2
+  done
+
+  printf '%s\n' "$report"
+  echo "::error::docker_test_java17.sh Failed waiting for three live HDFS datanodes!"
+  tail -n 100 "$HADOOP_HOME"/logs/*.log "$HADOOP_HOME"/logs/*.out
+  return 1
 }
 
 stop_hdfs() {
   use_default_java_runtime
   echo "::warning::docker_test_java17.sh stopping hadoop hdfs"
-  $HADOOP_HOME/sbin/stop-dfs.sh
+  local i
+  for i in 1 2 3; do
+    HADOOP_PID_DIR="$DOCKER_TEST_DIR/pid/datanode-$i" "$HADOOP_HOME/bin/hdfs" --daemon stop datanode
+  done
+  HADOOP_PID_DIR="$DOCKER_TEST_DIR/pid/namenode" "$HADOOP_HOME/bin/hdfs" --daemon stop namenode
+}
+
+cleanup_hdfs() {
+  local exit_code=$?
+  if [ "$exit_code" -ne 0 ]; then
+    # Daemon startup errors are redirected to these files by Hadoop's launcher.
+    tail -n 100 "$HADOOP_HOME"/logs/*.log "$HADOOP_HOME"/logs/*.out
+  fi
+  stop_hdfs
+  return "$exit_code"
 }
 
 build_hudi () {
@@ -171,7 +185,8 @@ echo "::warning::docker_test_java17.sh Building Hudi"
 build_hudi
 echo "::warning::docker_test_java17.sh Done building Hudi"
 
-setup_hdfs
+trap cleanup_hdfs EXIT
+setup_hdfs || exit 1
 
 echo "::warning::docker_test_java17.sh Running tests with Java 17"
 run_docker_tests
@@ -179,5 +194,3 @@ if [ "$?" -ne 0 ]; then
   exit 1
 fi
 echo "::warning::docker_test_java17.sh Done running tests with Java 17"
-
-stop_hdfs
