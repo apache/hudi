@@ -60,6 +60,7 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
@@ -78,6 +79,9 @@ import java.util.stream.Collectors;
 @ShellComponent
 @Slf4j
 public class ExportCommand {
+
+  // number of archived instants whose metadata is held in memory at once
+  private static final int ARCHIVED_WINDOW_SIZE = 1000;
 
   @ShellMethod(key = "export instants", value = "Export Instants and their metadata from the Timeline")
   public String exportInstants(
@@ -98,7 +102,8 @@ public class ExportCommand {
     }
 
     // The non archived instants can be listed from the Timeline.
-    HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedInstants()
+    // reload it, so that an archival triggered earlier in the same CLI session is visible
+    HoodieTimeline timeline = metaClient.reloadActiveTimeline().filterCompletedInstants()
         .filter(i -> actionSet.contains(i.getAction()));
     List<HoodieInstant> nonArchivedInstants = timeline.getInstants();
 
@@ -134,7 +139,7 @@ public class ExportCommand {
     if (descending) {
       Collections.reverse(archivedPathInfoList);
     }
-    return copyLegacyArchivedInstants(metaClient, archivedPathInfoList, actionSet, limit, localFolder);
+    return copyLegacyArchivedInstants(metaClient, archivedPathInfoList, actionSet, descending, limit, localFolder);
   }
 
   /**
@@ -152,32 +157,31 @@ public class ExportCommand {
         .filter(HoodieInstant::isCompleted)
         .filter(instant -> actionSet.contains(instant.getAction()))
         .collect(Collectors.toList());
-    if (descending) {
-      Collections.reverse(instants);
-    }
+    // the instants are in ascending order, keep the oldest ones, or the latest ones in descending order
     if (instants.size() > limit) {
-      instants = instants.subList(0, limit);
+      instants = descending ? instants.subList(instants.size() - limit, instants.size()) : instants.subList(0, limit);
     }
-    if (instants.isEmpty()) {
-      return 0;
-    }
-    // load only the payloads of the time range being exported
-    String first = instants.get(0).requestedTime();
-    String last = instants.get(instants.size() - 1).requestedTime();
-    archivedTimeline.loadCompletedInstantDetailsInMemory(descending ? last : first, descending ? first : last);
 
     int copyCount = 0;
-    for (HoodieInstant instant : instants) {
-      final String action = instant.getAction();
-      final String instantTime = instant.requestedTime();
-      GenericRecord metadata = readArchivedMetadata(archivedTimeline, instant);
-      if (metadata == null) {
-        log.error("Could not load metadata for action {} at instant time {}", action, instantTime);
-        continue;
+    // load and write the payloads in windows, so that they are not all held in memory at once
+    for (int from = 0; from < instants.size(); from += ARCHIVED_WINDOW_SIZE) {
+      List<HoodieInstant> window = instants.subList(from, Math.min(from + ARCHIVED_WINDOW_SIZE, instants.size()));
+      String windowStart = window.get(0).requestedTime();
+      String windowEnd = window.get(window.size() - 1).requestedTime();
+      archivedTimeline.loadCompletedInstantDetailsInMemory(windowStart, windowEnd);
+      for (HoodieInstant instant : window) {
+        final String action = instant.getAction();
+        final String instantTime = instant.requestedTime();
+        GenericRecord metadata = readArchivedMetadata(archivedTimeline, instant);
+        if (metadata == null) {
+          log.error("Could not load metadata for action {} at instant time {}", action, instantTime);
+          continue;
+        }
+        final String outPath = localFolder + StoragePath.SEPARATOR + instantTime + "." + action;
+        writeToFile(outPath, HoodieAvroUtils.avroToJson(metadata, true));
+        copyCount++;
       }
-      final String outPath = localFolder + StoragePath.SEPARATOR + instantTime + "." + action;
-      writeToFile(outPath, HoodieAvroUtils.avroToJson(metadata, true));
-      copyCount++;
+      archivedTimeline.clearInstantDetailsFromMemory(windowStart, windowEnd);
     }
     return copyCount;
   }
@@ -223,6 +227,7 @@ public class ExportCommand {
   private int copyLegacyArchivedInstants(HoodieTableMetaClient metaClient,
                                          List<StoragePathInfo> pathInfoList,
                                          Set<String> actionSet,
+                                         boolean descending,
                                          int limit,
                                          String localFolder) throws Exception {
     int copyCount = 0;
@@ -231,15 +236,19 @@ public class ExportCommand {
       if (copyCount >= limit) {
         break;
       }
+      // the records of an archive file are in ascending order, so in descending order they are
+      // collected first and then written from the latest one
+      List<String[]> fileEntries = new ArrayList<>();
+      List<byte[]> fileJsons = new ArrayList<>();
       // read the archived file
       try (Reader reader = HoodieLogFormat.newReader(metaClient, new HoodieLogFile(pathInfo.getPath()),
           HoodieSchema.fromAvroSchema(HoodieArchivedMetaEntry.getClassSchema()))) {
 
         // read the avro blocks
-        while (reader.hasNext() && copyCount < limit) {
+        while (reader.hasNext() && (descending || copyCount < limit)) {
           HoodieAvroDataBlock blk = (HoodieAvroDataBlock) reader.next();
           try (ClosableIterator<HoodieRecord<IndexedRecord>> recordItr = blk.getRecordIterator(HoodieRecordType.AVRO)) {
-            while (recordItr.hasNext() && copyCount < limit) {
+            while (recordItr.hasNext() && (descending || copyCount < limit)) {
               IndexedRecord ir = recordItr.next().getData();
               // Archived instants are saved as arvo encoded HoodieArchivedMetaEntry records. We need to get the
               // metadata record from the entry and convert it to json.
@@ -280,12 +289,22 @@ public class ExportCommand {
                 log.error("Could not load metadata for action {} at instant time {}", action, instantTime);
                 continue;
               }
-              final String outPath = localFolder + StoragePath.SEPARATOR + instantTime + "." + action;
-              writeToFile(outPath, HoodieAvroUtils.avroToJson(metadata, true));
-              copyCount++;
+              byte[] json = HoodieAvroUtils.avroToJson(metadata, true);
+              if (descending) {
+                fileEntries.add(new String[] {instantTime, action});
+                fileJsons.add(json);
+              } else {
+                writeToFile(localFolder + StoragePath.SEPARATOR + instantTime + "." + action, json);
+                copyCount++;
+              }
             }
           }
         }
+      }
+      for (int i = fileEntries.size() - 1; i >= 0 && copyCount < limit; i--) {
+        String[] entry = fileEntries.get(i);
+        writeToFile(localFolder + StoragePath.SEPARATOR + entry[0] + "." + entry[1], fileJsons.get(i));
+        copyCount++;
       }
     }
 

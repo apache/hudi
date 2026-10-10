@@ -262,6 +262,15 @@ public class TestExportCommand extends CLIFunctionalTestHarness {
     assertTrue(ShellEvaluationResultUtil.isSuccess(result), String.valueOf(result));
     assertEquals("Exported 1 Instants to " + oldest, result.toString());
     assertEquals(archivedFileNames("100"), exportedFiles(oldest));
+
+    // both archived instants are in one archive file, the latest of them comes first in descending order
+    Path latest = Files.createDirectories(exportFolder.resolve("latest"));
+    result = shell.evaluate(() -> "export instants --limit 5 --desc true --localFolder " + latest);
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result), String.valueOf(result));
+    assertEquals("Exported 5 Instants to " + latest, result.toString());
+    expected = instantFileNames("102", "103", "104", "105");
+    expected.addAll(archivedFileNames("101"));
+    assertEquals(expected, exportedFiles(latest));
   }
 
   @Test
