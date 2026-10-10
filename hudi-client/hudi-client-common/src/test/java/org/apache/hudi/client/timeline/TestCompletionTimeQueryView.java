@@ -232,6 +232,38 @@ public class TestCompletionTimeQueryView {
     }
   }
 
+  /**
+   * With archival beyond savepoint, a savepointed commit stays on the active timeline while the commits after it are
+   * archived. That commit must not hide the archived commits after it.
+   */
+  @Test
+  void testArchivedInstantsAfterSavepointedCommit() throws Exception {
+    String tableName = "testTable";
+    String tablePath = tempFile.getAbsolutePath() + StoragePath.SEPARATOR + tableName;
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(
+        HoodieTestUtils.getDefaultStorageConf(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
+    // archive 2 to 6, while 1 is savepointed and stays active
+    prepareTimeline(tablePath, metaClient, (writer, activeActions) -> writer.write(activeActions.subList(1, 6), Option.empty(), Option.empty()));
+    String savepointed = String.format("%08d", 1);
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    testTable.addCommit(savepointed, Option.of(String.format("%08d", 1001)),
+        Option.of(testTable.createCommitMetadata(savepointed, WriteOperationType.INSERT, Arrays.asList("par1", "par2"), 10, false)));
+    testTable.addSavepoint(savepointed, Option.of(String.format("%08d", 1002)), testTable.getSavepointMetadata(savepointed, Collections.emptyMap()));
+    metaClient.reloadActiveTimeline();
+    assertThat(metaClient.getActiveTimeline().getWriteTimeline().firstInstant().get().requestedTime(), is(savepointed));
+
+    try (CompletionTimeQueryView view =
+             metaClient.getTableFormat().getTimelineFactory().createCompletionTimeQueryView(metaClient)) {
+      // the savepointed commit is still found
+      assertThat(view.getCompletionTime(savepointed).orElse(""), is(String.format("%08d", 1001)));
+      // archived commits after the savepointed commit are found, not reported as pending
+      assertThat(view.getCompletionTime(String.format("%08d", 4)).orElse(""), is(String.format("%08d", 1004)));
+      assertThat(getInstantTimeSetFormattedString(view, 3 + 1000, 6 + 1000), is("00000003,00000004,00000005,00000006"));
+      // a pending write instant is still pending
+      assertFalse(view.getCompletionTime(String.format("%08d", 11)).isPresent());
+    }
+  }
+
   @Test
   void testGetInstantTimesWithOnlyEndCompletionTime() throws Exception {
     String tableName = "testTable";
