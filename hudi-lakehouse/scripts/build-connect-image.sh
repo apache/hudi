@@ -15,16 +15,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Tears down everything up.sh created (the whole hudi-lakehouse namespace).
+# Uses pinned release artifacts, independently of the Spark 3.5 writer build.
 set -euo pipefail
-NS=hudi-lakehouse
-
-# Delete SparkApplications FIRST, while the operator is still alive to
-# process their finalizers -- otherwise the namespace hangs in Terminating.
-kubectl -n "$NS" delete sparkapplications --all --timeout=120s 2>/dev/null || true
-
-helm uninstall hudi-trino -n "$NS" 2>/dev/null || true
-helm uninstall hudi-spark-connect -n "$NS" 2>/dev/null || true
-helm uninstall spark-kubernetes-operator -n "$NS" 2>/dev/null || true
-kubectl delete namespace "$NS" --ignore-not-found --timeout=300s
-echo ">>> local-dev lakehouse removed"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REGISTRY=""
+PUSH=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --registry)
+      [[ $# -ge 2 && -n "$2" && "$2" != --* ]] || { echo "--registry requires a prefix" >&2; exit 1; }
+      REGISTRY="${2%/}/"; shift 2 ;;
+    --push) PUSH=1; shift ;;
+    *) echo "unknown arg: $1" >&2; exit 1 ;;
+  esac
+done
+if [[ "$PUSH" == 1 && -z "$REGISTRY" ]]; then
+  echo "--push requires --registry" >&2; exit 1
+fi
+IMAGE="${REGISTRY}hudi-lakehouse-spark-connect:4.1.3-hudi1.2.0"
+docker build -t "$IMAGE" "$HERE/images/spark-connect"
+if [[ "$PUSH" == 1 ]]; then
+  docker push "$IMAGE"
+fi
+echo ">>> Image ready: $IMAGE"

@@ -107,6 +107,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Spark Connect chart contract tests
+        run: |
+          pip install PyYAML==6.0.3
+          python -m unittest discover -s hudi-lakehouse/tests -v
       # helm is preinstalled on GitHub-hosted ubuntu runners. Do NOT add
       # azure/setup-helm or other third-party actions here: the apache org
       # allowlist only permits GitHub-created actions (actions/*) and a
