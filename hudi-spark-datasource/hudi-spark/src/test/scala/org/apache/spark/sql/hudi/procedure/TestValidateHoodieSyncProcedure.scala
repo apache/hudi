@@ -17,7 +17,8 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.hudi.exception.HoodieIOException
+import org.apache.spark.sql.hudi.command.procedures.ValidateHoodieSyncProcedure
+import org.joda.time.DateTime
 
 import java.sql.SQLException
 
@@ -27,8 +28,8 @@ import java.sql.SQLException
  * The "complete" / "latestPartitions" modes count records over JDBC, but they do not need a live
  * Hive/JDBC endpoint to be exercised negatively: pointed at a hostless URL, both fail fast in the
  * driver's URL parsing, which raises JdbcUriParseException (an SQLException) before any transport
- * class loads or any network connect. The last test pins those two failure shapes, one of which is
- * the connection-failure masking bug of #19635. Failing during parsing, not transport setup, keeps
+ * class loads or any network connect. The record-count test pins that both modes surface that
+ * SQLException rather than masking it, see #19635. Failing during parsing, not transport setup, keeps
  * the pins independent of libthrift resolution: the Hive 2.3.10 client jars need libthrift 0.14.1
  * (TConfiguration), but spark-hive pulls 0.12.0 onto the test classpath, so a connect attempt that
  * reaches HiveAuthUtils.getSocketTransport dies with NoClassDefFoundError instead of the
@@ -185,30 +186,62 @@ class TestValidateHoodieSyncProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
-  test("Test Call sync_validate when the target table is mor (known limitation)") {
+  test("Test Call sync_validate when the target table is mor (deltacommit catch-up)") {
     withTempDir { tmp =>
-      val srcTable = generateTableName
-      val dstTable = generateTableName
-      createTable(srcTable, s"${tmp.getCanonicalPath}/$srcTable")
-      spark.sql(s"insert into $srcTable select 1, 'a1', 10, 1000")
+      withSQLConf("hoodie.parquet.small.file.limit" -> "0") {
+        val srcTable = generateTableName
+        val dstTable = generateTableName
+        createTable(srcTable, s"${tmp.getCanonicalPath}/$srcTable")
+        spark.sql(s"insert into $srcTable select 1, 'a1', 10, 1000")
 
-      // Writes to a mor table land as deltacommits, so both of these are in the catch-up range.
-      createTable(dstTable, s"${tmp.getCanonicalPath}/$dstTable", "mor")
-      spark.sql(s"insert into $dstTable select 1, 'a1', 10, 1000")
-      spark.sql(s"insert into $dstTable select 2, 'a2', 20, 2000")
+        // Writes to a mor table land as deltacommits, so both of these are in the catch-up range.
+        createTable(dstTable, s"${tmp.getCanonicalPath}/$dstTable", "mor")
+        spark.sql(s"insert into $dstTable select 1, 'a1', 10, 1000")
+        spark.sql(s"insert into $dstTable select 2, 'a2', 20, 2000")
 
-      // Known limitation: the catch-up counting hardcodes the commit action when it rebuilds the
-      // instants, so it cannot resolve deltacommit instants and the procedure fails on any mor
-      // target with catch-up commits. See #19635. A fix flips this test to assert a count.
-      val e = intercept[HoodieIOException] {
-        spark.sql(
+        val result = spark.sql(
           s"""call sync_validate(src_table => '$srcTable', dst_table => '$dstTable',
              | mode => 'noop', hive_server_url => 'jdbc:hive2://unused', hive_pass => 'x')"""
             .stripMargin).collect()
+
+        assertResult(1)(result.length)
+        val srcName = srcTable.stripPrefix("default.")
+        val dstName = dstTable.stripPrefix("default.")
+        // The catch-up instants are read under their own deltacommit action instead of a
+        // synthesized commit action (#19635), so both inserts are counted.
+        assertResult(s"Count difference now is count($dstName) - count($srcName) == 0. Catach up count is 2")(
+          result.head.getString(0))
       }
-      // The instant timestamp varies per run, but the synthesized commit action is the whole bug.
-      assert(e.getMessage.startsWith("Cannot find the instant["), e.getMessage)
-      assert(e.getMessage.endsWith("__commit__COMPLETED]"), e.getMessage)
+    }
+  }
+
+  test("Test Call sync_validate when the target table has a replacecommit to catch up") {
+    withTempDir { tmp =>
+      withSQLConf("hoodie.parquet.small.file.limit" -> "0") {
+        val srcTable = generateTableName
+        val dstTable = generateTableName
+        createTable(srcTable, s"${tmp.getCanonicalPath}/$srcTable")
+        spark.sql(s"insert into $srcTable select 1, 'a1', 10, 1000")
+
+        // The insert lands as a commit and the insert overwrite as a replacecommit, both in the
+        // catch-up range.
+        createTable(dstTable, s"${tmp.getCanonicalPath}/$dstTable")
+        spark.sql(s"insert into $dstTable select 1, 'a1', 10, 1000")
+        spark.sql(s"insert overwrite table $dstTable select 2, 'a2', 20, 2000")
+
+        val result = spark.sql(
+          s"""call sync_validate(src_table => '$srcTable', dst_table => '$dstTable',
+             | mode => 'noop', hive_server_url => 'jdbc:hive2://unused', hive_pass => 'x')"""
+            .stripMargin).collect()
+
+        assertResult(1)(result.length)
+        val srcName = srcTable.stripPrefix("default.")
+        val dstName = dstTable.stripPrefix("default.")
+        // The replacecommit's metadata is read as replace commit metadata, and its one written
+        // record is counted alongside the commit's.
+        assertResult(s"Count difference now is count($dstName) - count($srcName) == 0. Catach up count is 2")(
+          result.head.getString(0))
+      }
     }
   }
 
@@ -226,29 +259,26 @@ class TestValidateHoodieSyncProcedure extends HoodieSparkProcedureTestBase {
       // spark-hive's libthrift 0.12.0 on the classpath, transport setup dies with a
       // NoClassDefFoundError (the Hive 2.3.10 jars need 0.14.1) instead of an SQLException.
 
-      // mode = 'complete' routes to the countRecords overload that declares its connection as
-      // `var conn: Connection = null` and closes it in an unguarded `finally { conn.close() }`.
-      // When DriverManager.getConnection throws, conn is still null, so the finally block raises a
-      // NullPointerException that replaces the real SQLException. This pins that masking bug, see
-      // #19635. A fix flips this test to assert an SQLException is present in the chain.
+      // mode = 'complete' used to declare its connection as `var conn: Connection = null` and close
+      // it in an unguarded `finally { conn.close() }`, so a failing DriverManager.getConnection
+      // surfaced as a NullPointerException that replaced the real SQLException, see #19635. A
+      // connection is now closed only once it has been opened, so the SQLException surfaces.
       val completeFailure = intercept[Throwable] {
         spark.sql(
           s"""call sync_validate(src_table => '$tableName', dst_table => '$tableName',
              | mode => 'complete', hive_server_url => 'jdbc:hive2://:10000', hive_pass => 'x')"""
             .stripMargin).collect()
       }
-      // Assert over the cause chain, never the top-level type: on Spark 3.4+ QueryExecution wraps a
-      // NullPointerException thrown by an eagerly executed command into a SparkException
-      // [INTERNAL_ERROR]. Message text is off limits too, the NPE message is null on JDK 11 and the
+      // Assert over the cause chain, never the top-level type: on Spark 3.4+ QueryExecution may wrap
+      // an exception thrown by an eagerly executed command. Message text is off limits too, the
       // Hive URI wording moves with hive.version.
-      assert(causeChain(completeFailure).exists(_.isInstanceOf[NullPointerException]),
+      assert(causeChain(completeFailure).exists(_.isInstanceOf[SQLException]),
         chainTypes(completeFailure))
-      assert(!causeChain(completeFailure).exists(_.isInstanceOf[SQLException]),
+      assert(!causeChain(completeFailure).exists(_.isInstanceOf[NullPointerException]),
         chainTypes(completeFailure))
 
-      // mode = 'latestPartitions' routes to the sibling overload, which obtains the connection
-      // before entering its try and closes it under an `if (conn != null)` guard, so the connection
-      // failure surfaces as the SQLException it is instead of being masked.
+      // mode = 'latestPartitions' routes to the sibling overload, which shares the same connection
+      // handling, so the connection failure surfaces as the SQLException it is.
       val latestPartitionsFailure = intercept[Throwable] {
         spark.sql(
           s"""call sync_validate(src_table => '$tableName', dst_table => '$tableName',
@@ -257,6 +287,15 @@ class TestValidateHoodieSyncProcedure extends HoodieSparkProcedureTestBase {
       }
       assert(causeChain(latestPartitionsFailure).exists(_.isInstanceOf[SQLException]),
         chainTypes(latestPartitionsFailure))
+      assert(!causeChain(latestPartitionsFailure).exists(_.isInstanceOf[NullPointerException]),
+        chainTypes(latestPartitionsFailure))
     }
+  }
+
+  test("Test sync_validate formats the latestPartitions datestr bounds as yyyy-MM-dd") {
+    // The bounds used to be built with the s interpolator, which leaves a format specifier such as
+    // %02d in the output verbatim instead of applying it, yielding e.g. 2024-1%02d-5%02d.
+    assertResult("2024-01-05")(ValidateHoodieSyncProcedure.formatDatestr(new DateTime(2024, 1, 5, 0, 0)))
+    assertResult("2024-11-25")(ValidateHoodieSyncProcedure.formatDatestr(new DateTime(2024, 11, 25, 23, 59)))
   }
 }
