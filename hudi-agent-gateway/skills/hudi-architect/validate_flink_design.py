@@ -15,12 +15,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Validate and render the bounded Hudi Architect Flink PR2 design contract.
+"""Validate and render bounded Hudi Architect Flink SQL design contracts.
 
 The caller supplies every architecture decision.  This program does not select
-table type, identity, partitioning, replay behavior, or checkpoint cadence.  It
-only rejects incomplete or unsupported combinations and serializes a validated
-contract into deterministic Flink SQL.
+table type, identity, ordering, partitioning, replay behavior, or checkpoint
+cadence.  It only rejects incomplete or unsupported combinations and serializes
+a validated contract into deterministic Flink SQL.
 """
 
 from __future__ import annotations
@@ -41,7 +41,12 @@ from validate_flink_capabilities import (
     validation_evidence,
 )
 
-CONTRACT_SCHEMA_VERSION = 1
+APPEND_CONTRACT_SCHEMA_VERSION = 1
+MUTABLE_CONTRACT_SCHEMA_VERSION = 2
+SUPPORTED_CONTRACT_SCHEMAS = {
+    APPEND_CONTRACT_SCHEMA_VERSION,
+    MUTABLE_CONTRACT_SCHEMA_VERSION,
+}
 MAX_TYPE_LENGTH = 2_147_483_647
 STATUS_PRIORITY = {"INCOMPLETE": 0, "REVIEW_REQUIRED": 1, "BLOCKED": 2}
 AZURE_FILESYSTEM_SCHEMES = frozenset({"abfs", "abfss"})
@@ -78,7 +83,15 @@ FINDING_STATUS = {
     "FLINK_LOAD_BEARING_VALUE_REQUIRED": "INCOMPLETE",
     "FLINK_MULTI_WRITER_REVIEW": "REVIEW_REQUIRED",
     "FLINK_MUTABILITY_REQUIRED": "INCOMPLETE",
+    "FLINK_MUTABLE_AUTO_KEY_UNSUPPORTED": "BLOCKED",
     "FLINK_MUTABLE_COW_DEFERRED": "BLOCKED",
+    "FLINK_MUTABLE_DELETE_PAYLOAD_UNSUPPORTED": "BLOCKED",
+    "FLINK_MUTABLE_INDEX_BOOTSTRAP_REQUIRED": "BLOCKED",
+    "FLINK_MUTABLE_INDEX_CONFIGURATION_UNSUPPORTED": "BLOCKED",
+    "FLINK_MUTABLE_ORDERING_FIELD_INVALID": "BLOCKED",
+    "FLINK_MUTABLE_ORDERING_FIELD_REQUIRED": "INCOMPLETE",
+    "FLINK_MUTABLE_PARTITION_EVOLUTION_UNSUPPORTED": "BLOCKED",
+    "FLINK_MUTABLE_SOURCE_CHANGELOG_UNSUPPORTED": "BLOCKED",
     "FLINK_OPTION_NOT_VERIFIED": "REVIEW_REQUIRED",
     "FLINK_PARTITION_FIELD_MISSING": "BLOCKED",
     "FLINK_PHYSICAL_SCHEMA_REQUIRED": "INCOMPLETE",
@@ -97,6 +110,7 @@ FINDING_STATUS = {
     "FLINK_VERSION_UNVERIFIED": "REVIEW_REQUIRED",
     "FLINK_WRITER_MODEL_UNRESOLVED": "REVIEW_REQUIRED",
     "FLINK_PR2_WRITE_PATH_UNSUPPORTED": "BLOCKED",
+    "FLINK_PR3_WRITE_PATH_UNSUPPORTED": "BLOCKED",
     "FLINK_SCHEMA_TYPE_UNVERIFIED": "REVIEW_REQUIRED",
 }
 
@@ -181,7 +195,7 @@ def _normalize_type(
     ]:
         assessment.add(
             "FLINK_SCHEMA_TYPE_UNVERIFIED",
-            f"Flink SQL type {value!r} is outside the bounded PR2 scalar surface",
+            f"Flink SQL type {value!r} is outside the bounded scalar surface",
         )
         return None
 
@@ -355,6 +369,7 @@ def _render_sql(
     source = contract["source"]
     runtime = contract["runtime"]
     identity = contract["identity"]
+    mutable = contract["contract_schema"] == MUTABLE_CONTRACT_SCHEMA_VERSION
 
     definitions = [
         f"  {_quote_identifier(column['name'])} {column['type']}"
@@ -373,15 +388,33 @@ def _render_sql(
     if partition_fields:
         partition_sql = ", ".join(_quote_identifier(field) for field in partition_fields)
         table_ddl += f"\nPARTITIONED BY ({partition_sql})"
-    table_ddl += (
-        "\nWITH (\n"
-        "  'connector' = 'hudi',\n"
-        f"  'path' = {_sql_string(table['path'])},\n"
-        "  'table.type' = 'COPY_ON_WRITE',\n"
-        "  'write.operation' = 'insert',\n"
-        "  'write.insert.cluster' = 'false'\n"
-        ");"
-    )
+    if mutable:
+        ordering_field = contract["ordering"]["fields"][0]
+        table_ddl += (
+            "\nWITH (\n"
+            "  'connector' = 'hudi',\n"
+            f"  'path' = {_sql_string(table['path'])},\n"
+            "  'table.type' = 'COPY_ON_WRITE',\n"
+            "  'write.operation' = 'upsert',\n"
+            f"  'ordering.fields' = {_sql_string(ordering_field)},\n"
+            "  'hoodie.write.record.merge.mode' = 'EVENT_TIME_ORDERING',\n"
+            "  'index.type' = 'FLINK_STATE',\n"
+            "  'index.global.enabled' = 'true',\n"
+            "  'index.state.ttl' = '0',\n"
+            "  'index.bootstrap.enabled' = 'true',\n"
+            "  'changelog.enabled' = 'false'\n"
+            ");"
+        )
+    else:
+        table_ddl += (
+            "\nWITH (\n"
+            "  'connector' = 'hudi',\n"
+            f"  'path' = {_sql_string(table['path'])},\n"
+            "  'table.type' = 'COPY_ON_WRITE',\n"
+            "  'write.operation' = 'insert',\n"
+            "  'write.insert.cluster' = 'false'\n"
+            ");"
+        )
 
     field_sql = ",\n  ".join(_quote_identifier(column["name"]) for column in table_columns)
     insert_sql = (
@@ -405,7 +438,7 @@ def _render_sql(
 def assess_design(
     contract: dict[str, Any], manifest: dict[str, Any]
 ) -> dict[str, Any]:
-    """Validate one explicit PR2 contract and return deterministic evidence."""
+    """Validate one explicit append-only or mutable COW contract."""
 
     assessment = Assessment()
     manifest_errors = validate_manifest(manifest)
@@ -420,7 +453,7 @@ def assess_design(
             "findings": assessment.findings,
             "advisory_codes": assessment.advisories,
             "validation_evidence": {
-                "design_contract_schema": CONTRACT_SCHEMA_VERSION,
+                "design_contract_schema": contract.get("contract_schema"),
             },
         }
 
@@ -432,6 +465,7 @@ def assess_design(
             "flink_version",
             "hudi_version",
             "identity",
+            "ordering",
             "runtime",
             "safety",
             "source",
@@ -441,10 +475,21 @@ def assess_design(
         "contract",
         assessment,
     )
-    if contract.get("contract_schema") != CONTRACT_SCHEMA_VERSION:
+    contract_schema = contract.get("contract_schema")
+    if (
+        not isinstance(contract_schema, int)
+        or isinstance(contract_schema, bool)
+        or contract_schema not in SUPPORTED_CONTRACT_SCHEMAS
+    ):
         assessment.add(
             "FLINK_DESIGN_CONTRACT_INVALID",
-            f"contract_schema must be {CONTRACT_SCHEMA_VERSION}",
+            "contract_schema must be 1 (append-only) or 2 (mutable COW)",
+        )
+    mutable_contract = contract_schema == MUTABLE_CONTRACT_SCHEMA_VERSION
+    if not mutable_contract and "ordering" in contract:
+        assessment.add(
+            "FLINK_DESIGN_CONTRACT_INVALID",
+            "ordering is supported only by contract_schema 2",
         )
     if contract.get("baseline_id") != manifest.get("baseline_id"):
         assessment.add("FLINK_VERSION_UNVERIFIED", "The capability baseline does not match")
@@ -475,14 +520,20 @@ def assess_design(
     if lifecycle is None:
         assessment.add("FLINK_TABLE_LIFECYCLE_REQUIRED", "Table lifecycle is required")
     elif lifecycle == "existing":
-        assessment.add("FLINK_EXISTING_TABLE_DEFERRED", "PR2 supports only a new table")
+        assessment.add(
+            "FLINK_EXISTING_TABLE_DEFERRED",
+            "The executable contracts support only a new Architect-managed table",
+        )
     elif lifecycle != "new":
         assessment.add("FLINK_TABLE_LIFECYCLE_REQUIRED", "Table lifecycle is unresolved")
     writer_model = safety.get("writer_model")
     if writer_model is None:
         assessment.add("FLINK_WRITER_MODEL_UNRESOLVED", "Writer topology is required")
     elif writer_model == "multi_writer":
-        assessment.add("FLINK_MULTI_WRITER_REVIEW", "PR2 supports only a confirmed single writer")
+        assessment.add(
+            "FLINK_MULTI_WRITER_REVIEW",
+            "The executable contracts support only a confirmed single writer",
+        )
     elif writer_model != "single_writer":
         assessment.add("FLINK_WRITER_MODEL_UNRESOLVED", "Writer topology is unresolved")
     external_catalog = safety.get("external_catalog")
@@ -491,20 +542,34 @@ def assess_design(
     elif external_catalog is not False:
         assessment.add("FLINK_CATALOG_REQUIREMENT_UNRESOLVED", "Catalog requirement is unresolved")
     mutability = safety.get("mutability")
-    if mutability == "mutable":
-        assessment.add("FLINK_MUTABLE_COW_DEFERRED", "Mutable COW is deferred")
+    if mutable_contract:
+        if mutability != "mutable":
+            assessment.add(
+                "FLINK_MUTABILITY_REQUIRED",
+                "contract_schema 2 requires mutable input",
+            )
+    elif mutability == "mutable":
+        assessment.add(
+            "FLINK_MUTABLE_COW_DEFERRED",
+            "Mutable COW requires the explicit contract_schema 2 safety contract",
+        )
     elif mutability != "append_only":
         assessment.add("FLINK_MUTABILITY_REQUIRED", "Append-only input must be confirmed")
     replay_behavior = safety.get("replay_behavior")
     if not _non_empty_string(replay_behavior):
         assessment.add("FLINK_REPLAY_BEHAVIOR_UNRESOLVED", "Replay behavior is unresolved")
-    elif replay_behavior == "must_collapse":
+    elif replay_behavior == "must_collapse" and not mutable_contract:
         assessment.add("FLINK_REPLAY_IDEMPOTENCE_DEFERRED", "Replay deduplication needs upsert")
-    elif replay_behavior not in {"cannot_occur", "duplicates_acceptable"}:
+    elif replay_behavior not in (
+        {"must_collapse"} if mutable_contract else {"cannot_occur", "duplicates_acceptable"}
+    ):
         assessment.add("FLINK_REPLAY_BEHAVIOR_UNRESOLVED", "Replay behavior is unresolved")
 
     table = _dict(contract.get("table"), "table", assessment)
-    _check_keys(table, {"columns", "name", "partition_fields", "path"}, "table", assessment)
+    table_keys = {"columns", "name", "partition_fields", "path"}
+    if mutable_contract:
+        table_keys.add("partition_fields_mutable")
+    _check_keys(table, table_keys, "table", assessment)
     table_name = table.get("name")
     table_path = table.get("path")
     if not _check_concrete_value(table_name) or any(
@@ -529,6 +594,17 @@ def assess_design(
     partition_fields = _string_list(
         table.get("partition_fields"), "table.partition_fields", assessment
     )
+    if mutable_contract:
+        if table.get("partition_fields_mutable") is True:
+            assessment.add(
+                "FLINK_MUTABLE_PARTITION_EVOLUTION_UNSUPPORTED",
+                "The first mutable path does not move a key between partitions",
+            )
+        elif table.get("partition_fields_mutable") is not False:
+            assessment.add(
+                "FLINK_DESIGN_CONTRACT_INVALID",
+                "table.partition_fields_mutable must be explicitly false",
+            )
     for field in partition_fields:
         if field not in table_by_name:
             assessment.add(
@@ -600,7 +676,8 @@ def assess_design(
                 f"Record-key option field {field!r} is absent from the physical schema",
             )
     if identity_mode == "stable_key":
-        assessment.advise("FLINK_STABLE_KEY_NOT_IDEMPOTENT")
+        if not mutable_contract:
+            assessment.advise("FLINK_STABLE_KEY_NOT_IDEMPOTENT")
         if "auto_key_accepted" in identity:
             assessment.add(
                 "FLINK_DESIGN_CONTRACT_INVALID",
@@ -639,7 +716,12 @@ def assess_design(
                 "The auto-key path cannot contain primary-key or record-key fields",
             )
         accepted = identity.get("auto_key_accepted")
-        if accepted is True:
+        if mutable_contract:
+            assessment.add(
+                "FLINK_MUTABLE_AUTO_KEY_UNSUPPORTED",
+                "Mutable upsert/delete requires a stable non-null record key",
+            )
+        elif accepted is True:
             assessment.advise("FLINK_AUTO_KEY_DURABILITY")
         elif accepted is False:
             assessment.add("FLINK_AUTO_KEY_DECLINED", "Auto-generated keys were declined")
@@ -651,8 +733,48 @@ def assess_design(
     else:
         assessment.add("FLINK_DESIGN_CONTRACT_INVALID", "identity.mode is required")
 
+    ordering_fields: list[str] = []
+    if mutable_contract:
+        ordering = _dict(contract.get("ordering"), "ordering", assessment)
+        _check_keys(ordering, {"fields", "mode"}, "ordering", assessment)
+        ordering_fields = _string_list(
+            ordering.get("fields"), "ordering.fields", assessment
+        )
+        if ordering.get("mode") != "event_time":
+            assessment.add(
+                "FLINK_MUTABLE_ORDERING_FIELD_REQUIRED",
+                "The first mutable path requires event_time ordering",
+            )
+        if len(ordering_fields) != 1:
+            assessment.add(
+                "FLINK_MUTABLE_ORDERING_FIELD_REQUIRED",
+                "Exactly one ordering field is required",
+            )
+        for field in ordering_fields:
+            column = table_by_name.get(field)
+            if column is None:
+                assessment.add(
+                    "FLINK_MUTABLE_ORDERING_FIELD_INVALID",
+                    f"Ordering field {field!r} is absent from the physical schema",
+                )
+            elif column["nullable"]:
+                assessment.add(
+                    "FLINK_MUTABLE_ORDERING_FIELD_INVALID",
+                    f"Ordering field {field!r} must be NOT NULL",
+                )
+            elif column["type"] != "BIGINT" and re.fullmatch(
+                r"TIMESTAMP\([0-6]\)", column["type"]
+            ) is None:
+                assessment.add(
+                    "FLINK_MUTABLE_ORDERING_FIELD_INVALID",
+                    f"Ordering field {field!r} must use BIGINT or TIMESTAMP(p<=6)",
+                )
+
     source = _dict(contract.get("source"), "source", assessment)
-    _check_keys(source, {"changelog_mode", "columns", "table"}, "source", assessment)
+    source_keys = {"changelog_mode", "columns", "table"}
+    if mutable_contract:
+        source_keys.update({"delete_payload", "emits_deletes", "primary_key_fields"})
+    _check_keys(source, source_keys, "source", assessment)
     source_name = source.get("table")
     if not _check_concrete_value(source_name) or any(
         not part for part in str(source_name).split(".")
@@ -673,36 +795,74 @@ def assess_design(
                     "FLINK_SOURCE_SCHEMA_MISMATCH",
                     f"Source field {name!r} must match the target name, type, and nullability",
                 )
+    if mutable_contract:
+        source_primary_key_fields = _string_list(
+            source.get("primary_key_fields"), "source.primary_key_fields", assessment
+        )
+        if not source_primary_key_fields:
+            assessment.add(
+                "FLINK_SOURCE_CONTRACT_REQUIRED",
+                "The mutable source must declare its primary-key fields",
+            )
+        elif record_key_fields and source_primary_key_fields != record_key_fields:
+            assessment.add(
+                "FLINK_PRIMARY_KEY_RECORD_KEY_CONFLICT",
+                "Source primary-key fields must exactly match target record-key fields",
+            )
+        for field in source_primary_key_fields:
+            source_column = source_by_name.get(field)
+            if source_column is None or source_column["nullable"]:
+                assessment.add(
+                    "FLINK_PRIMARY_KEY_RECORD_KEY_CONFLICT",
+                    f"Source primary-key field {field!r} must exist and be NOT NULL",
+                )
+        emits_deletes = source.get("emits_deletes")
+        if not isinstance(emits_deletes, bool):
+            assessment.add(
+                "FLINK_DESIGN_CONTRACT_INVALID",
+                "source.emits_deletes must be explicitly true or false",
+            )
+        delete_payload = source.get("delete_payload")
+        if emits_deletes is True and delete_payload != "FULL_ROW":
+            assessment.add(
+                "FLINK_MUTABLE_DELETE_PAYLOAD_UNSUPPORTED",
+                "Deletes must carry key, ordering, partition, and projected row values",
+            )
+        elif emits_deletes is False and delete_payload != "NOT_APPLICABLE":
+            assessment.add(
+                "FLINK_DESIGN_CONTRACT_INVALID",
+                "source.delete_payload must be NOT_APPLICABLE when deletes are absent",
+            )
+
     changelog_mode = source.get("changelog_mode")
     if not _non_empty_string(changelog_mode) or changelog_mode == "UNKNOWN":
         assessment.add(
             "FLINK_SOURCE_CONTRACT_REQUIRED",
             "The source changelog mode must be explicitly confirmed",
         )
-    elif changelog_mode != "INSERT_ONLY":
+    elif mutable_contract and changelog_mode != "UPSERT":
+        assessment.add(
+            "FLINK_MUTABLE_SOURCE_CHANGELOG_UNSUPPORTED",
+            "The mutable source must declare normalized UPSERT changelog (I/UA/D, no UB)",
+        )
+    elif not mutable_contract and changelog_mode != "INSERT_ONLY":
         assessment.add(
             "FLINK_SOURCE_CHANGELOG_NOT_APPEND_ONLY",
             "The PR2 source contract must be INSERT_ONLY",
         )
 
     write = _dict(contract.get("write"), "write", assessment)
+    write_keys = {"connector_options", "operation", "table_type"}
+    if mutable_contract:
+        write_keys.update({"changelog_enabled", "index", "record_merge_mode"})
+    else:
+        write_keys.add("insert_cluster")
     _check_keys(
         write,
-        {"connector_options", "insert_cluster", "operation", "table_type"},
+        write_keys,
         "write",
         assessment,
     )
-    insert_cluster = write.get("insert_cluster")
-    if insert_cluster is True:
-        assessment.add(
-            "FLINK_APPEND_MODE_CLUSTERING_ENABLED",
-            "COW insert is append mode only with write.insert.cluster=false",
-        )
-    elif insert_cluster is not False:
-        assessment.add(
-            "FLINK_DESIGN_CONTRACT_INVALID",
-            "write.insert_cluster must be explicitly true or false",
-        )
     table_type = write.get("table_type")
     operation = write.get("operation")
     if table_type is None or operation is None:
@@ -710,11 +870,70 @@ def assess_design(
             "FLINK_DESIGN_CONTRACT_INVALID",
             "write.table_type and write.operation must be explicit",
         )
-    elif table_type != "COPY_ON_WRITE" or operation != "insert":
+    elif mutable_contract and (
+        table_type != "COPY_ON_WRITE" or operation != "upsert"
+    ):
+        assessment.add(
+            "FLINK_PR3_WRITE_PATH_UNSUPPORTED",
+            "The first mutable path supports only COPY_ON_WRITE upsert",
+        )
+    elif not mutable_contract and (
+        table_type != "COPY_ON_WRITE" or operation != "insert"
+    ):
         assessment.add(
             "FLINK_PR2_WRITE_PATH_UNSUPPORTED",
             "PR2 supports only COPY_ON_WRITE with write.operation=insert",
         )
+    if mutable_contract:
+        if write.get("record_merge_mode") != "EVENT_TIME_ORDERING":
+            assessment.add(
+                "FLINK_PR3_WRITE_PATH_UNSUPPORTED",
+                "write.record_merge_mode must be EVENT_TIME_ORDERING",
+            )
+        if write.get("changelog_enabled") is not False:
+            assessment.add(
+                "FLINK_PR3_WRITE_PATH_UNSUPPORTED",
+                "write.changelog_enabled must be explicitly false",
+            )
+        index = _dict(write.get("index"), "write.index", assessment)
+        _check_keys(
+            index,
+            {"bootstrap_enabled", "global", "state_ttl_days", "type"},
+            "write.index",
+            assessment,
+        )
+        if index.get("type") != "FLINK_STATE" or index.get("global") is not True:
+            assessment.add(
+                "FLINK_MUTABLE_INDEX_CONFIGURATION_UNSUPPORTED",
+                "The first mutable path requires global FLINK_STATE index",
+            )
+        state_ttl = index.get("state_ttl_days")
+        if (
+            not isinstance(state_ttl, (int, float))
+            or isinstance(state_ttl, bool)
+            or state_ttl != 0
+        ):
+            assessment.add(
+                "FLINK_MUTABLE_INDEX_CONFIGURATION_UNSUPPORTED",
+                "write.index.state_ttl_days must be 0 (no state expiry)",
+            )
+        if index.get("bootstrap_enabled") is not True:
+            assessment.add(
+                "FLINK_MUTABLE_INDEX_BOOTSTRAP_REQUIRED",
+                "FLINK_STATE must bootstrap existing keys after state loss or cold restart",
+            )
+    else:
+        insert_cluster = write.get("insert_cluster")
+        if insert_cluster is True:
+            assessment.add(
+                "FLINK_APPEND_MODE_CLUSTERING_ENABLED",
+                "COW insert is append mode only with write.insert.cluster=false",
+            )
+        elif insert_cluster is not False:
+            assessment.add(
+                "FLINK_DESIGN_CONTRACT_INVALID",
+                "write.insert_cluster must be explicitly true or false",
+            )
     connector_options = write.get("connector_options")
     if not isinstance(connector_options, dict):
         assessment.add("FLINK_DESIGN_CONTRACT_INVALID", "write.connector_options must be an object")
@@ -726,7 +945,7 @@ def assess_design(
                 f"Options outside the pinned allowlist: {unknown_options}",
             )
         raw_insert_cluster = connector_options.get("write.insert.cluster")
-        if "write.insert.cluster" in connector_options and not (
+        if not mutable_contract and "write.insert.cluster" in connector_options and not (
             raw_insert_cluster is False
             or (
                 isinstance(raw_insert_cluster, str)
@@ -739,21 +958,27 @@ def assess_design(
             )
         raw_table_type = connector_options.get("table.type")
         raw_operation = connector_options.get("write.operation")
+        expected_operation = "upsert" if mutable_contract else "insert"
         if (
             "table.type" in connector_options
             and raw_table_type != "COPY_ON_WRITE"
         ) or (
-            "write.operation" in connector_options and raw_operation != "insert"
+            "write.operation" in connector_options
+            and raw_operation != expected_operation
         ):
             assessment.add(
-                "FLINK_PR2_WRITE_PATH_UNSUPPORTED",
-                "A connector-option override leaves the bounded COW insert path",
+                (
+                    "FLINK_PR3_WRITE_PATH_UNSUPPORTED"
+                    if mutable_contract
+                    else "FLINK_PR2_WRITE_PATH_UNSUPPORTED"
+                ),
+                "A connector-option override leaves the bounded COW path",
             )
         verified_overrides = sorted(set(connector_options) - set(unknown_options))
         if verified_overrides:
             assessment.add(
                 "FLINK_DESIGN_CONTRACT_INVALID",
-                "PR2 connector settings must use canonical structured fields; "
+                "Connector settings must use canonical structured fields; "
                 f"pass-through overrides are not rendered: {verified_overrides}",
             )
 
@@ -775,7 +1000,14 @@ def assess_design(
             "FLINK_DESIGN_CONTRACT_INVALID", "runtime.execution_mode must be explicit"
         )
     elif execution_mode != "STREAMING":
-        assessment.add("FLINK_PR2_WRITE_PATH_UNSUPPORTED", "PR2 supports streaming execution")
+        assessment.add(
+            (
+                "FLINK_PR3_WRITE_PATH_UNSUPPORTED"
+                if mutable_contract
+                else "FLINK_PR2_WRITE_PATH_UNSUPPORTED"
+            ),
+            "The executable path supports streaming execution",
+        )
     checkpointing_enabled = runtime.get("checkpointing_enabled")
     if checkpointing_enabled is False:
         assessment.add("FLINK_CHECKPOINTING_REQUIRED", "Streaming commits require checkpointing")
@@ -794,7 +1026,7 @@ def assess_design(
             "FLINK_CHECKPOINT_INTERVAL_UNSUPPORTED",
             "The checkpoint interval must be at least "
             f"{manifest['runtime_constraints']['checkpoint_interval_min_ms']} ms for the "
-            "bounded PR2 path",
+            "bounded executable path",
         )
     target_freshness = runtime.get("target_commit_freshness_ms")
     if target_freshness is not None and (
@@ -815,7 +1047,7 @@ def assess_design(
         "finding_codes": [finding["code"] for finding in assessment.findings],
         "findings": assessment.findings,
         "advisory_codes": assessment.advisories,
-        "validation_evidence": validation_evidence(manifest),
+        "validation_evidence": validation_evidence(manifest, contract_schema),
     }
     if executable:
         result["artifacts"] = _render_sql(

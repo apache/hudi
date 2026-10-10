@@ -35,10 +35,11 @@ Target Hudi version: **1.2.0**.
 
 - **Spark and HoodieStreamer** retain the existing full design flow, configuration bundle, and
   runnable output.
-- **Flink** combines the routing and safety foundation with one bounded executable Flink SQL sink
-  path for Hudi 1.2.0 and Flink 1.20 (1.20.1 fixtures). New-table, single-writer, append-only COW
-  designs without an external catalog can reach `CONFIG_VALIDATED` after schema, identity, source
-  changelog, append-mode, and checkpoint validation. Other Flink designs remain fail-closed.
+- **Flink** combines the routing and safety foundation with bounded append-only and first mutable
+  COW SQL sink paths for Hudi 1.2.0 and Flink 1.20 (1.20.1 fixtures). Mutable eligibility requires
+  stable identity, event-time ordering, normalized UPSERT changelog, full-row deletes when present, immutable
+  partitions, and the fixed global FLINK_STATE/bootstrap/no-TTL contract. Other Flink designs
+  remain fail-closed.
 
 ## How to invoke
 
@@ -120,6 +121,9 @@ python3 hudi-agent-gateway/skills/hudi-architect/validate_flink_design.py \
 The validator emits SQL only after all safety and load-bearing checks pass. The exact SQL is also
 planned in CI against the released Hudi 1.2.0 Flink bundle and Flink 1.20.1.
 
+The mutable schema-2 fixture is
+`hudi-agent-gateway/tests/fixtures/hudi_architect/flink_pr3/mutable_cow.json`.
+
 Credential-bearing evidence can be sanitized without executing or parsing it as configuration:
 
 ```bash
@@ -140,9 +144,10 @@ This is **Milestone 1 of a longer arc** — meant to be shareable and playable, 
 
 ## What's out of scope in Milestone 1
 
-- Flink upsert/delete, MOR, existing-table composition, external catalogs, multiple writers,
+- Flink MOR, existing-table takeover, external catalogs, multiple writers, alternative indexes,
+  custom mergers, retract normalization, partition movement, key-only deletes, full CDC history,
   DataStream API, `HoodieFlinkStreamer`, source connector generation, and submit/deploy commands.
-  Those paths do not reuse the bounded append-only SQL output as if it were generally applicable.
+  Those paths do not reuse the bounded SQL output as if it were generally applicable.
 
 - Multi-writer contention tuning — the mode, lock provider, and config bundle are derived, but retry/timeout tuning and early conflict detection stay at defaults (they depend on observed behavior, not design-time facts).
 - Benchmarking / scale-characterization — different flow shape, future revision.

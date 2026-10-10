@@ -15,7 +15,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 -->
-# Flink decision overrides — first executable PR2 path
+# Flink decision overrides — bounded executable SQL paths
 
 These rules constrain the shared Hudi Architect decisions after the Flink route is selected. They
 do not replace the shared table-design rules and do not form a standalone planner API.
@@ -45,8 +45,9 @@ do not replace the shared table-design rules and do not form a standalone planne
   safety floor.
 - Do not equate a stable record key with replay idempotence.
 - Do not reuse this baseline for another Hudi or Flink version.
-- Emit executable output only when `validate_flink_design.py` returns `CONFIG_VALIDATED` for the
-  complete version-1 design contract. Never hand-write around a validator finding.
+- Emit executable output only when `validate_flink_design.py` returns `CONFIG_VALIDATED` for a
+  complete version-1 append-only or version-2 mutable contract. Never hand-write around a
+  validator finding.
 
 ## Gate outcomes
 
@@ -62,12 +63,12 @@ do not replace the shared table-design rules and do not form a standalone planne
 | External catalog required | `FLINK_EXTERNAL_CATALOG_REVIEW` | `REVIEW_REQUIRED` | No |
 | Catalog requirement unknown | `FLINK_CATALOG_REQUIREMENT_UNRESOLVED` | `REVIEW_REQUIRED` | No |
 | Physical schema missing, insufficient, or available only through an unreadable pointer | `FLINK_PHYSICAL_SCHEMA_REQUIRED` | `INCOMPLETE` | No |
-| Mutable workload | `FLINK_MUTABLE_COW_DEFERRED` | `BLOCKED` | No |
+| Mutable workload supplied through the version-1 append contract | `FLINK_MUTABLE_COW_DEFERRED` | `BLOCKED` | No |
 | Mutability unknown | `FLINK_MUTABILITY_REQUIRED` | `INCOMPLETE` | No |
 | Record-key posture unknown | `FLINK_RECORD_KEY_POSTURE_REQUIRED` | `INCOMPLETE` | No |
 | No stable key and auto-key acceptance is pending or unanswered | `FLINK_AUTO_KEY_ACCEPTANCE_REQUIRED` | `INCOMPLETE` | No |
 | No stable key and the auto-key posture is explicitly declined | `FLINK_AUTO_KEY_DECLINED` | `BLOCKED` | No |
-| Replay copies must collapse | `FLINK_REPLAY_IDEMPOTENCE_DEFERRED` | `BLOCKED` | No |
+| Append-only replay copies must collapse | `FLINK_REPLAY_IDEMPOTENCE_DEFERRED` | `BLOCKED` | No |
 | Replay behavior unknown | `FLINK_REPLAY_BEHAVIOR_UNRESOLVED` | `REVIEW_REQUIRED` | No |
 | Stable or explicit record-key option references a missing field | `FLINK_RECORD_KEY_FIELD_MISSING` | `BLOCKED` | No |
 | Stable record-key field is nullable | `FLINK_RECORD_KEY_NULLABLE` | `BLOCKED` | No |
@@ -83,13 +84,22 @@ do not replace the shared table-design rules and do not form a standalone planne
 | Source changelog is not `INSERT_ONLY` | `FLINK_SOURCE_CHANGELOG_NOT_APPEND_ONLY` | `BLOCKED` | No |
 | Effective `write.insert.cluster` is not `false` | `FLINK_APPEND_MODE_CLUSTERING_ENABLED` | `BLOCKED` | No |
 | Table type, operation, or execution mode is outside PR2 | `FLINK_PR2_WRITE_PATH_UNSUPPORTED` | `BLOCKED` | No |
+| Mutable path uses auto-generated keys | `FLINK_MUTABLE_AUTO_KEY_UNSUPPORTED` | `BLOCKED` | No |
+| Mutable source is not normalized UPSERT (`I`, `UA`, `D`, no `UB`) | `FLINK_MUTABLE_SOURCE_CHANGELOG_UNSUPPORTED` | `BLOCKED` | No |
+| Mutable ordering field is absent, nullable, or outside BIGINT/TIMESTAMP(p≤6) | `FLINK_MUTABLE_ORDERING_FIELD_INVALID` | `BLOCKED` | No |
+| Mutable ordering decision is absent or not event-time | `FLINK_MUTABLE_ORDERING_FIELD_REQUIRED` | `INCOMPLETE` | No |
+| A mutable delete does not carry the full projected row | `FLINK_MUTABLE_DELETE_PAYLOAD_UNSUPPORTED` | `BLOCKED` | No |
+| Partition values can change for an existing key | `FLINK_MUTABLE_PARTITION_EVOLUTION_UNSUPPORTED` | `BLOCKED` | No |
+| Mutable index is not global `FLINK_STATE` with TTL 0 | `FLINK_MUTABLE_INDEX_CONFIGURATION_UNSUPPORTED` | `BLOCKED` | No |
+| FLINK_STATE index bootstrap is not enabled | `FLINK_MUTABLE_INDEX_BOOTSTRAP_REQUIRED` | `BLOCKED` | No |
+| Table type, operation, merge mode, changelog setting, or execution mode is outside PR3 | `FLINK_PR3_WRITE_PATH_UNSUPPORTED` | `BLOCKED` | No |
 | Checkpointing is explicitly disabled | `FLINK_CHECKPOINTING_REQUIRED` | `BLOCKED` | No |
 | Checkpoint interval is absent or non-positive | `FLINK_CHECKPOINT_INTERVAL_REQUIRED` | `INCOMPLETE` | No |
 | Positive checkpoint interval is below the 1000 ms Architect safety floor | `FLINK_CHECKPOINT_INTERVAL_UNSUPPORTED` | `BLOCKED` | No |
 | Target table, target path, source table, or another load-bearing value is a placeholder | `FLINK_LOAD_BEARING_VALUE_REQUIRED` | `INCOMPLETE` | No |
 | Design-contract structure is malformed or contains an ignored field | `FLINK_DESIGN_CONTRACT_INVALID` | `INCOMPLETE` | No |
 | A connector option is outside the pinned allowlist | `FLINK_OPTION_NOT_VERIFIED` | `REVIEW_REQUIRED` | No |
-| Complete PR2 contract passes deterministic validation | — | `CONFIG_VALIDATED` | Yes |
+| Complete PR2 or PR3 contract passes deterministic validation | — | `CONFIG_VALIDATED` | Yes |
 
 ## Final-status precedence
 
@@ -103,7 +113,7 @@ After collection, choose one final status with this precedence:
 1. A known unsupported or not-yet-implemented path makes the result `BLOCKED`.
 2. Otherwise, an unverified compatibility or operational risk makes it `REVIEW_REQUIRED`.
 3. Otherwise, a missing required fact makes it `INCOMPLETE`.
-4. Only if no finding exists, every PR1 safety gate passed, and the PR2 design validator emitted
+4. Only if no finding exists, every applicable safety gate passed, and the design validator emitted
    canonical SQL, return `CONFIG_VALIDATED` with executable eligibility `true`.
 
 Status precedence changes only the single summary status; it never removes a lower-precedence
@@ -112,9 +122,11 @@ only bounded static validation against the pinned release contract.
 
 ## Record-key and replay classification
 
-| Mutability | Stable business key | Replay requirement | PR2 result |
+| Mutability | Stable business key | Replay requirement | Result |
 |---|---|---|---|
-| Mutable | Required | Any | `BLOCKED` — mutable COW is deferred |
+| Mutable | Yes | Copies must collapse | Continue into the bounded PR3 mutable contract |
+| Mutable | No | Any | `BLOCKED` — auto-key cannot express mutable identity |
+| Mutable | Unknown | Any | `INCOMPLETE` |
 | Append-only | Yes | Replays impossible | Continue safety gates; stable key preferred |
 | Append-only | Yes | Duplicates acceptable | Continue; record duplicate tolerance |
 | Append-only | Yes | Copies must collapse | `BLOCKED` — upsert-capable design required |
@@ -156,8 +168,8 @@ and executable eligibility, not exact natural-language wording.
 | `F05_CATALOG` | External consumer requires catalog visibility | `REVIEW_REQUIRED` | No |
 | `F06_SCHEMA` | Physical schema is missing | `INCOMPLETE` | No |
 | `F06_SCHEMA_POINTER` | Only a schema location is supplied; field names and types are unavailable | `INCOMPLETE` | No |
-| `F07_MUTABLE` | Updates or deletes occur | `BLOCKED` | No |
-| `F08_REPLAY_COLLAPSE` | Independent replay must deduplicate | `BLOCKED` | No |
+| `F07_MUTABLE` | Otherwise-safe mutable workload enters the schema-2 candidate flow | Proceed to PR3 validation | Not decided by gates alone |
+| `F08_REPLAY_COLLAPSE` | Append-only independent replay must deduplicate | `BLOCKED` | No |
 | `F09_REPLAY_UNKNOWN` | Replay behavior is unknown | `REVIEW_REQUIRED` | No |
 | `F10_SAFE_APPEND` | Baseline new-table single-writer append-only path with a stable key passes every gate | Proceed to PR2 validation | Not decided by gates alone |
 | `F11_COMBINED_GATES` | Writer model unknown, physical schema missing, and replay copies must collapse | `BLOCKED` | No |
@@ -190,6 +202,22 @@ to the executable contract just like `F10_SAFE_APPEND`.
   unresolved load-bearing placeholder.
 - The Hudi 1.2.0 / Flink 1.20.1 factory and planner fixtures consume the same SQL golden files as
   the Python validator tests.
+
+## PR3 mutable COW executable invariants
+
+- Version-2 contracts cover only new-table, single-writer, no-external-catalog streaming COW.
+- Identity is a stable, non-null primary key shared by source and target. Auto-key is blocked.
+- The source declares normalized UPSERT changelog (`INSERT`, `UPDATE_AFTER`, `DELETE`) without
+  `UPDATE_BEFORE`. Deletes carry the full projected row, including key, ordering, and partition.
+- Exactly one non-null event-time ordering field is used. Its type is `BIGINT` or
+  `TIMESTAMP(p)` with `p <= 6`; arbitrary expressions and custom merger logic remain deferred.
+- Partition values are immutable for an existing key.
+- Canonical output fixes COW upsert, `EVENT_TIME_ORDERING`, global `FLINK_STATE`, state TTL `0`,
+  index bootstrap enabled, and `changelog.enabled=false`. Pass-through options remain empty.
+- Bootstrap protects the cold-restart boundary for a table created by this path. It does not admit
+  arbitrary existing-table takeover, which remains deferred.
+- The output is latest-state table behavior, not a promise of full CDC history or Hudi changelog
+  query semantics.
 
 ## Evidence and secret handling
 

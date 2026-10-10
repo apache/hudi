@@ -82,7 +82,15 @@ the current checkout contains it.
 | Append-only record-key posture detection | Supported |
 | Auto-generated-key durability warning | Supported |
 | Replay-idempotence classification | Supported |
-| Mutable COW, upsert, and deletes | `BLOCKED`; deferred to PR3 |
+| First bounded mutable COW upsert/delete path | Supported after schema-2 validation |
+| Stable non-null mutable record key | Required; auto-key is `BLOCKED` |
+| Mutable ordering | One non-null `BIGINT` or `TIMESTAMP(p<=6)` event-time field |
+| Mutable source changelog | Normalized UPSERT (`I`, `UA`, `D`, no `UB`) |
+| Mutable delete payload | Full projected row required when deletes are emitted |
+| Partition changes for an existing key | `BLOCKED`; immutable partition values required |
+| Mutable index | Global `FLINK_STATE`, TTL 0, bootstrap enabled |
+| Alternative indexes, expiring state, custom mergers, or retract normalization | `BLOCKED`; deferred |
+| Full changelog history / Hudi CDC query | Not claimed; output is latest-state behavior |
 | MOR and compaction ownership | Deferred to PR4 |
 | New-table, single-writer, append-only COW SQL | Supported after static validation |
 | Stable-key DDL | `PRIMARY KEY (...) NOT ENFORCED` |
@@ -160,13 +168,30 @@ path deliberately applies a stricter 1000 ms safety floor and blocks lower value
 silently increasing them. The pinned runtime test preserves the 9/10 ms dependency boundary, and
 the Python validator tests preserve the 999/1000 ms Architect boundary.
 
+## Implemented PR3 mutable COW contract
+
+The schema-2 path is deliberately narrower than the full Hudi upsert surface. It accepts only a
+new table, one writer, no external catalog, streaming checkpoints, stable non-null identity, one
+event-time ordering field, normalized UPSERT input, immutable partitions, and full-row deletes when present.
+The renderer fixes `COPY_ON_WRITE`, `upsert`, `EVENT_TIME_ORDERING`, global `FLINK_STATE`, state
+TTL `0`, index bootstrap, and `changelog.enabled=false`; it accepts no pass-through override.
+
+The pinned Flink planner fixture consumes the exact SQL golden with an `I/UA/D` source and proves
+that the generated graph includes changelog normalization, the Hudi stream writer, and
+`index_bootstrap`. Direct pinned-option fixtures preserve the ordering, index, TTL, bootstrap, and
+changelog values. Python tests cover the successful golden and fail-closed deviations.
+
+Bootstrap closes the cold-start gap for a table created and operated under this contract: state
+loss must not make existing keys look new. It does not expand the path into arbitrary
+existing-table takeover; that still needs the separate PR5 evidence and compatibility flow.
+
 ## Status vocabulary
 
 - `INCOMPLETE` — a required workload fact, schema, or lifecycle fact is missing.
 - `BLOCKED` — the requested path is known to be outside the currently implemented Flink scope.
 - `REVIEW_REQUIRED` — compatibility, writer topology, catalog behavior, or another operational
   risk requires human confirmation.
-- `CONFIG_VALIDATED` — every PR1 gate passed and all load-bearing PR2 design values passed the
+- `CONFIG_VALIDATED` — every applicable gate and all load-bearing PR2 or PR3 design values passed the
   pinned static validator. Canonical SQL was emitted without unresolved placeholders.
 
 No status claims that storage permissions, JAR deployment, source availability, catalog

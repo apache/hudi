@@ -120,12 +120,13 @@ ordering, and partition references can eventually be checked.
 
 ## FLINK_MUTABLE_COW_DEFERRED
 
-**Trigger:** Existing logical records can be updated or deleted.
+**Trigger:** Existing logical records can be updated or deleted, but the request is still using the
+version-1 append contract.
 
-**Message:** Mutable COW requires identity, ordering, and an upsert-capable path that is deferred
-to PR3.
+**Message:** Mutable COW requires the explicit version-2 identity, ordering, changelog, delete,
+partition, and index safety contract.
 
-**Action:** `BLOCKED`; collect independent facts but generate no executable configuration.
+**Action:** `BLOCKED`; qualify the request for schema 2 or generate no executable configuration.
 
 ## FLINK_MUTABILITY_REQUIRED
 
@@ -188,12 +189,13 @@ status.
 
 ## FLINK_REPLAY_IDEMPOTENCE_DEFERRED
 
-**Trigger:** Replayed or backfilled copies can occur and must collapse into one table record.
+**Trigger:** On the append contract, replayed or backfilled copies can occur and must collapse into
+one table record.
 
 **Message:** This requires stable record identity and an upsert-capable design. The append-only
 insert path cannot be presented as deduplicating.
 
-**Action:** `BLOCKED` until the mutable COW path is implemented.
+**Action:** `BLOCKED`; use the mutable schema-2 contract only if all of its gates are satisfied.
 
 ## FLINK_REPLAY_BEHAVIOR_UNRESOLVED
 
@@ -306,7 +308,7 @@ rename it.
 **Trigger:** An explicitly projected source field is missing or differs in type or nullability from
 the target field.
 
-**Message:** PR2 does not infer casts, aliases, or schema reconciliation.
+**Message:** The bounded executable paths do not infer casts, aliases, or schema reconciliation.
 
 **Action:** `BLOCKED`; require an explicit compatible source contract.
 
@@ -315,7 +317,7 @@ the target field.
 **Trigger:** The declared source changelog contains updates or deletes.
 
 **Message:** Sink-factory construction does not prove the complete source-to-sink statement is
-append-only. Mutable change semantics are deferred to PR3.
+append-only. An eligible mutable request must use the separate schema-2 contract.
 
 **Action:** `BLOCKED`; do not generate executable append SQL.
 
@@ -335,6 +337,81 @@ Checking only `write.operation=insert` is insufficient.
 **Message:** PR2 implements only the first bounded append-only SQL sink path.
 
 **Action:** `BLOCKED`; route mutable COW to PR3 and MOR to PR4.
+
+## FLINK_MUTABLE_AUTO_KEY_UNSUPPORTED
+
+**Trigger:** A mutable contract has no stable business key.
+
+**Message:** Upsert and delete semantics require durable identity across events and restarts.
+
+**Action:** `BLOCKED`; require a stable, non-null source and target primary key.
+
+## FLINK_MUTABLE_SOURCE_CHANGELOG_UNSUPPORTED
+
+**Trigger:** The mutable source is not normalized UPSERT (`I`, `UA`, `D`, without `UB`).
+
+**Message:** The first mutable sink path does not normalize retract streams or infer changelog.
+
+**Action:** `BLOCKED`; normalize upstream or defer the path.
+
+## FLINK_MUTABLE_ORDERING_FIELD_REQUIRED
+
+**Trigger:** Event-time ordering or its single ordering field is missing.
+
+**Message:** The validator cannot select conflict-resolution semantics or invent a field.
+
+**Action:** `INCOMPLETE`; obtain one explicit ordering field.
+
+## FLINK_MUTABLE_ORDERING_FIELD_INVALID
+
+**Trigger:** The ordering field is absent, nullable, or not BIGINT/TIMESTAMP(p<=6).
+
+**Message:** The bounded event-time merger surface does not cover nullable or other orderings.
+
+**Action:** `BLOCKED`; correct the source contract without casting silently.
+
+## FLINK_MUTABLE_DELETE_PAYLOAD_UNSUPPORTED
+
+**Trigger:** Deletes omit projected key, ordering, partition, or row values.
+
+**Message:** The first path accepts only full-row deletes; key-only delete normalization is not
+implemented.
+
+**Action:** `BLOCKED`; normalize upstream or defer.
+
+## FLINK_MUTABLE_PARTITION_EVOLUTION_UNSUPPORTED
+
+**Trigger:** An existing key can change its partition value.
+
+**Message:** Cross-partition movement is deliberately outside this first mutable path.
+
+**Action:** `BLOCKED`; use immutable partition fields or an unpartitioned design.
+
+## FLINK_MUTABLE_INDEX_CONFIGURATION_UNSUPPORTED
+
+**Trigger:** Index type, scope, or TTL differs from global FLINK_STATE with TTL 0.
+
+**Message:** Alternative indexes and expiring state need separate correctness evidence.
+
+**Action:** `BLOCKED`; do not weaken the canonical index contract.
+
+## FLINK_MUTABLE_INDEX_BOOTSTRAP_REQUIRED
+
+**Trigger:** Index bootstrap is not explicitly enabled.
+
+**Message:** A cold start with empty state could otherwise miss keys already present in the table.
+
+**Action:** `BLOCKED`; enable bootstrap. This does not authorize arbitrary existing-table takeover.
+
+## FLINK_PR3_WRITE_PATH_UNSUPPORTED
+
+**Trigger:** Mutable table type, operation, merge mode, changelog setting, or runtime leaves the
+bounded COW upsert path.
+
+**Message:** PR3 implements one conservative latest-state mutable route, not the complete Hudi
+mutable configuration surface.
+
+**Action:** `BLOCKED`; retain the request as a later capability rather than guessing settings.
 
 ## FLINK_CHECKPOINTING_REQUIRED
 

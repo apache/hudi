@@ -75,11 +75,14 @@ that manifest with options discovered from the enclosing checkout. If the user e
 another Hudi or Flink version, do not silently reuse the baseline: add a `REVIEW_REQUIRED` finding
 unless a separate verified capability reference exists.
 
-The Flink implementation includes the PR1 safety foundation and the first PR2 executable path. It
-may generate Flink SQL only for a new-table, confirmed-single-writer, append-only COW streaming
-sink whose source contract is `INSERT_ONLY`. Every safety gate must pass, and
-`validate_flink_design.py` must return `CONFIG_VALIDATED`. Mutable COW, MOR, existing-table,
-catalog, and multi-writer requests still fail closed for their later PRs.
+The Flink implementation includes the PR1 safety foundation, the PR2 append-only path, and the
+first bounded PR3 mutable COW path. Both require a new table, confirmed single writer, no external
+catalog, streaming checkpointing, and `CONFIG_VALIDATED` from `validate_flink_design.py`. The
+mutable path additionally requires stable non-null identity, one event-time ordering field,
+normalized UPSERT changelog, full-row deletes when present, immutable partitions, and the fixed global
+FLINK_STATE/bootstrap/no-TTL settings. MOR, existing-table takeover, catalog, multi-writer,
+alternative indexes, custom mergers, retract normalization, and full CDC history still fail
+closed.
 
 ## Flow structure
 
@@ -88,7 +91,7 @@ The conversation has three parts:
 1. **Tier gate** — a single scoping question to figure out which downstream questions fire.
 2. **Rounds 1-3** — workload questions, gated conditionally by tier.
 3. **Output** — engine-specific output: the established Spark artifacts, a non-executable Flink
-   assessment, or the bounded validator-rendered PR2 SQL artifacts.
+  assessment, or bounded validator-rendered PR2/PR3 SQL artifacts.
 
 Load `references/question-flow.md` for the full round-by-round question list with conditional gating.
 
@@ -141,7 +144,7 @@ Internal labels for these four tiers: `EXPLORATION`, `PROTOTYPING`, `PRODUCTIONI
 **What fires per tier:**
 
 - **EXPLORATION** — Round 1 abbreviated, concept-explanation focused. May not produce a full ADR — often a "here's what your workload would look like as a Hudi table" narrative. Replace hard questions with explanations ("Hudi supports Spark and Flink — Spark is most common; I'll assume Spark unless you say otherwise").
-- **PROTOTYPING** — Round 1, then a **disclosed-defaults consent block** for table size / partitioning / retention, then **hard-ask the non-defaultable facts**: record key and ordering field when mutable, and whether anything else writes the table. On an implemented executable route, the goal is a genuinely runnable first table, not a sketch, and a prototyping ADR must not ship placeholder values. The Flink PR2 path additionally requires a concrete target, source contract, and a checkpoint interval of at least 1000 ms.
+- **PROTOTYPING** — Round 1, then a **disclosed-defaults consent block** for table size / partitioning / retention, then **hard-ask the non-defaultable facts**: record key and ordering field when mutable, and whether anything else writes the table. On an implemented executable route, the goal is a genuinely runnable first table, not a sketch, and a prototyping ADR must not ship placeholder values. The Flink executable paths additionally require a concrete target, source contract, and a checkpoint interval of at least 1000 ms.
 - **PRODUCTIONIZING_INITIAL** — Rounds 1 + 2. Full mutation/identity/partitioning questions. Production-safe defaults.
 - **PRODUCTION_AT_SCALE** — All rounds. Full rubric. Guardrails strict. All revisit conditions surfaced.
 
@@ -211,7 +214,7 @@ The Flink status vocabulary is:
 - `BLOCKED` — the requested path is known to be unsupported or outside the currently implemented
   Flink capability.
 - `REVIEW_REQUIRED` — a compatibility or operational risk needs human confirmation.
-- `CONFIG_VALIDATED` — every safety gate and load-bearing PR2 design value passed pinned static
+- `CONFIG_VALIDATED` — every safety gate and load-bearing executable design value passed pinned static
   validation, and canonical SQL was emitted. It does not prove the live environment.
 
 **Revisit conditions must be measurable.** Not "revisit if write amp becomes an issue." Yes: "if p95 commit duration exceeds the ingestion interval on a COW table above 1TB, evaluate switching to MOR — note this requires a table rewrite, so decide before the table grows further."
