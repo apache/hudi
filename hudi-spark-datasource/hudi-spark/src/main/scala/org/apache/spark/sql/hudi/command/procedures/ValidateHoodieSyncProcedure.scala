@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, InstantComparison}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, InstantComparison, TimelineUtils}
 import org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps
 
 import org.apache.spark.internal.Logging
@@ -29,7 +29,7 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 import org.joda.time.DateTime
 
 import java.io.IOException
-import java.sql.{Connection, DriverManager, ResultSet, SQLException}
+import java.sql.{Connection, DriverManager, ResultSet, SQLException, Statement}
 import java.util.function.Supplier
 
 import scala.collection.JavaConverters._
@@ -105,8 +105,7 @@ class ValidateHoodieSyncProcedure extends BaseProcedure with ProcedureBuilder wi
     val sourceLatestCommit =
       if (sourceTimeline.getInstants.iterator().hasNext) sourceTimeline.lastInstant().get().requestedTime else "0"
 
-    if (sourceLatestCommit != null
-      && compareTimestamps(targetLatestCommit, InstantComparison.GREATER_THAN, sourceLatestCommit))
+    if (compareTimestamps(targetLatestCommit, InstantComparison.GREATER_THAN, sourceLatestCommit))
       Seq(Row(getString(targetMetaClient, targetTimeline, srcMetaClient, sourceCount, targetCount, sourceLatestCommit)))
     else
       Seq(Row(getString(srcMetaClient, sourceTimeline, targetMetaClient, targetCount, sourceCount, targetLatestCommit)))
@@ -120,48 +119,26 @@ class ValidateHoodieSyncProcedure extends BaseProcedure with ProcedureBuilder wi
     if (commitsToCatchup.isEmpty) {
       s"Count difference now is count(${target.getTableConfig.getTableName}) - count(${source.getTableConfig.getTableName}) == ${targetCount - sourceCount}"
     } else {
-      val newInserts = countNewRecords(target, commitsToCatchup.map(elem => elem.requestedTime))
+      val newInserts = countNewRecords(target, commitsToCatchup)
       s"Count difference now is count(${target.getTableConfig.getTableName}) - count(${source.getTableConfig.getTableName}) == ${targetCount - sourceCount}" +
         s". Catach up count is $newInserts"
     }
   }
 
+  @throws[SQLException]
   def countRecords(jdbcUrl: String, source: HoodieTableMetaClient, dbName: String, user: String, pass: String): Long = {
-    var conn: Connection = null
-    var rs: ResultSet = null
-    var count: Long = -1
-    try {
-      conn = DriverManager.getConnection(jdbcUrl, user, pass)
-      val stmt = conn.createStatement()
-
-      stmt.execute("set hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat");
-      stmt.execute("set hive.stats.autogather=false");
-
-      rs = stmt.executeQuery(
-        s"select count(`_hoodie_commit_time`) as cnt from $dbName.${source.getTableConfig.getTableName}")
-      if (rs.next()) {
-        count = rs.getLong("cnt")
-      }
-
-      println(s"Total records in ${source.getTableConfig.getTableName} is $count")
-    } finally {
-      conn.close()
-      if (rs != null) {
-        rs.close()
-      }
-    }
+    val count = executeCountQuery(jdbcUrl, user, pass,
+      s"select count(`_hoodie_commit_time`) as cnt from $dbName.${source.getTableConfig.getTableName}")
+    println(s"Total records in ${source.getTableConfig.getTableName} is $count")
     count
   }
 
   @throws[SQLException]
   def countRecords(jdbcUrl: String, source: HoodieTableMetaClient, srcDb: String, partitions: Int, user: String, pass: String): Long = {
-    def getDate(dateTime: DateTime): String = {
-      s"${dateTime.getYear}-${dateTime.getMonthOfYear}%02d-${dateTime.getDayOfMonth}%02d"
-    }
     var dateTime = DateTime.now
-    val endDateStr = getDate(dateTime)
+    val endDateStr = ValidateHoodieSyncProcedure.formatDatestr(dateTime)
     dateTime = dateTime.minusDays(partitions)
-    val startDateStr = getDate(dateTime)
+    val startDateStr = ValidateHoodieSyncProcedure.formatDatestr(dateTime)
     println("Start date " + startDateStr + " and end date " + endDateStr)
     countRecords(jdbcUrl, source, srcDb, startDateStr, endDateStr, user, pass)
 
@@ -169,34 +146,53 @@ class ValidateHoodieSyncProcedure extends BaseProcedure with ProcedureBuilder wi
 
   @throws[SQLException]
   private def countRecords(jdbcUrl: String, source: HoodieTableMetaClient, srcDb: String, startDateStr: String, endDateStr: String, user: String, pass: String): Long = {
-    var rs: ResultSet = null
+    executeCountQuery(jdbcUrl, user, pass,
+      s"select count(`_hoodie_commit_time`) as cnt from $srcDb.${source.getTableConfig.getTableName}" +
+        s" where datestr>'$startDateStr' and datestr<='$endDateStr'")
+  }
+
+  /**
+   * Runs a `count(...) as cnt` query over a new HiveServer2 connection and returns `cnt`, or -1 if
+   * the query yields no row.
+   *
+   * Each JDBC resource is closed only once it has been opened, in the reverse order of opening, so a
+   * failure to connect surfaces as the [[SQLException]] it is rather than as a failure to close a
+   * connection that was never opened.
+   */
+  @throws[SQLException]
+  private def executeCountQuery(jdbcUrl: String, user: String, pass: String, countQuery: String): Long = {
+    val conn: Connection = DriverManager.getConnection(jdbcUrl, user, pass)
     try {
-      val conn = DriverManager.getConnection(jdbcUrl, user, pass)
-      val stmt = conn.createStatement
-      try { // stmt.execute("set mapred.job.queue.name=<queue_name>");
+      val stmt: Statement = conn.createStatement()
+      try {
         stmt.execute("set hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat")
         stmt.execute("set hive.stats.autogather=false")
-        rs = stmt.executeQuery(s"select count(`_hoodie_commit_time`) as cnt from $srcDb.${source.getTableConfig.getTableName} where datestr>'$startDateStr' and datestr<='$endDateStr'")
-        if (rs.next)
-          rs.getLong("cnt")
-        else
-          -1
+        val rs: ResultSet = stmt.executeQuery(countQuery)
+        try {
+          if (rs.next()) rs.getLong("cnt") else -1
+        } finally {
+          rs.close()
+        }
       } finally {
-        if (rs != null) rs.close()
-        if (conn != null) conn.close()
-        if (stmt != null) stmt.close()
+        stmt.close()
       }
+    } finally {
+      conn.close()
     }
   }
 
+  /**
+   * Sums the records inserted by the given write instants. Each instant is read as it is on the
+   * timeline, so the deltacommits of a merge-on-read table and the replacecommits of a clustering
+   * or an insert overwrite are resolved under their own action. Pending instants are skipped, as
+   * they have not committed any records yet.
+   */
   @throws[IOException]
-  def countNewRecords(target: HoodieTableMetaClient, commitsToCatchup: List[String]): Long = {
+  def countNewRecords(target: HoodieTableMetaClient, commitsToCatchup: List[HoodieInstant]): Long = {
     var totalNew: Long = 0
-    val timeline: HoodieTimeline = target.reloadActiveTimeline.getCommitAndReplaceTimeline.filterCompletedInstants
-    for (commit <- commitsToCatchup) {
-      val instantGenerator = target.getTimelineLayout.getInstantGenerator
-      val instant: HoodieInstant = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, commit)
-      val c: HoodieCommitMetadata = timeline.readCommitMetadata(instant)
+    val timeline: HoodieTimeline = target.reloadActiveTimeline.getCommitsTimeline.filterCompletedInstants
+    for (instant <- commitsToCatchup if instant.isCompleted) {
+      val c: HoodieCommitMetadata = TimelineUtils.getCommitMetadata(instant, timeline)
       totalNew += c.fetchTotalRecordsWritten - c.fetchTotalUpdateRecordsWritten
     }
     totalNew
@@ -205,6 +201,13 @@ class ValidateHoodieSyncProcedure extends BaseProcedure with ProcedureBuilder wi
 
 object ValidateHoodieSyncProcedure {
   val NAME = "sync_validate"
+
+  /**
+   * Formats a day as the `datestr` partition value that the latestPartitions mode bounds its count
+   * with, e.g. 2024-01-05.
+   */
+  private[hudi] def formatDatestr(dateTime: DateTime): String =
+    f"${dateTime.getYear}%d-${dateTime.getMonthOfYear}%02d-${dateTime.getDayOfMonth}%02d"
 
   def builder: Supplier[ProcedureBuilder] = new Supplier[ProcedureBuilder] {
     override def get(): ProcedureBuilder = new ValidateHoodieSyncProcedure()
