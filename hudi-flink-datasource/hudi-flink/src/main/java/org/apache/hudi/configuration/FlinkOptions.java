@@ -1039,7 +1039,7 @@ public class FlinkOptions extends HoodieConfig {
 
   @AdvancedConfig
   public static final ConfigOption<String> HADOOP_CONF_DIR = ConfigOptions
-          .key("hadoop.conf.dir")
+          .key("hadoop_conf.dir")
           .stringType()
           .noDefaultValue()
           .withDescription("The hadoop configuration directory, where the core-site.xml, "

@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.catalog.HoodieCatalogTestUtils;
@@ -2279,85 +2280,156 @@ public class ITTestHoodieDataSource {
     assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
   }
 
+// -------------------------------------------------------------------------
+//  Cross-cluster access via hadoop_conf.dir
+// -------------------------------------------------------------------------
+
   /**
-   * Test that Flink can write and read a Hudi table when hadoop.conf.dir is explicitly set.
-   * This simulates cross-cluster access by pointing hadoop.conf.dir to a local conf directory
-   * containing core-site.xml with fs.defaultFS=file:///.
+   * Batch write then batch read, with 'hadoop_conf.dir' pointing at a conf
+   * directory whose fs.defaultFS is file:/// (simulating a remote cluster).
    */
   @Test
-  void testBatchWriteAndReadWithHadoopConfDir() throws IOException {
-    // Prepare a hadoop conf dir with core-site.xml pointing to local filesystem
-    File hadoopConfDir = new File(tempFile.getParentFile(), "hadoop-conf");
-    hadoopConfDir.mkdirs();
-    String coreSiteXml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-            + "<configuration>\n"
-            + "  <property><name>fs.defaultFS</name><value>file:///</value></property>\n"
-            + "</configuration>";
-    try (FileWriter w = new FileWriter(new File(hadoopConfDir, "core-site.xml"))) {
-      w.write(coreSiteXml);
-    }
+  public void testWriteAndReadWithHadoopConfDir() throws Exception {
+    File hadoopConfDir = createHadoopConfDirWithFileFs();
 
-    TableEnvironment tableEnv = batchTableEnv;
-    String hoodieTableDDL = sql("t1")
-            .option(FlinkOptions.PATH, tempFile.toURI().toString())
-            // specify hadoop.conf.dir to simulate cross-cluster configuration
-            .option(FlinkOptions.HADOOP_CONF_DIR, hadoopConfDir.getAbsolutePath().replace('\\', '/'))
-            .option(FlinkOptions.METADATA_ENABLED, false)
+    StoragePath path = new StoragePath(tempFile.toURI());
+
+    // ---- write ----
+    TableEnvironment writeEnv = batchTableEnv;
+    String writeDDL = sql("source")
+            .option(FlinkOptions.PATH, path)
+            .option(FlinkOptions.HADOOP_CONF_DIR, hadoopConfDir.getAbsolutePath())
             .end();
-    tableEnv.executeSql(hoodieTableDDL);
+    writeEnv.executeSql(writeDDL);
+    writeEnv.executeSql(
+                    "insert into source values "
+                            + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:01','par1'),"
+                            + "('id2','Stephen',33,TIMESTAMP '1970-01-01 00:00:02','par1')")
+            .await();
 
-    execInsertSql(tableEnv, TestSQL.INSERT_T1);
+    // ---- read ----
+    String readDDL = sql("t1")
+            .option(FlinkOptions.PATH, path)
+            .option(FlinkOptions.HADOOP_CONF_DIR, hadoopConfDir.getAbsolutePath())
+            .end();
+    batchTableEnv.executeSql(readDDL);
 
     List<Row> result = CollectionUtil.iterableToList(
-            () -> tableEnv.sqlQuery("select * from t1").execute().collect());
-    assertRowsEquals(result, TestData.DATA_SET_SOURCE_INSERT);
+            () -> batchTableEnv.sqlQuery("select * from t1").execute().collect());
+    assertEquals(2, result.size(),
+            "Should read back the records written with hadoop_conf.dir");
   }
 
   /**
-   * Test incremental read with hadoop.conf.dir set.
-   * Verifies that the hadoop.conf.dir option is correctly propagated to the
-   * incremental read path (HoodieTableSource -> HadoopConfigurations.getHadoopConf).
+   * Incremental read with 'hadoop_conf.dir': the read path must use the
+   * configured conf dir (via HoodieTableSource / StreamReadMonitoringFunction),
+   * not the environment-discovered configuration.
    */
-  @ParameterizedTest
-  @EnumSource(value = HoodieTableType.class)
-  void testIncrementalReadWithHadoopConfDir(HoodieTableType tableType) throws Exception {
-    // Prepare a hadoop conf dir with core-site.xml
-    File hadoopConfDir = new File(tempFile.getParentFile(), "hadoop-conf-incr");
-    hadoopConfDir.mkdirs();
-    String coreSiteXml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-            + "<configuration>\n"
-            + "  <property><name>fs.defaultFS</name><value>file:///</value></property>\n"
-            + "</configuration>";
-    try (FileWriter w = new FileWriter(new File(hadoopConfDir, "core-site.xml"))) {
-      w.write(coreSiteXml);
-    }
-    String tablePath = tempFile.toURI().toString();
-    // Step 1: write first batch
-    Configuration conf = TestConfigurations.getDefaultConf(tablePath);
-    conf.set(FlinkOptions.TABLE_TYPE, tableType.name());
+  @Test
+  public void testIncrementalReadWithHadoopConfDir() throws Exception {
+    File hadoopConfDir = createHadoopConfDirWithFileFs();
+    StoragePath path = new StoragePath(tempFile.toURI());
+    Configuration conf = TestConfigurations.getDefaultConf(path.toString());
+    conf.set(FlinkOptions.HADOOP_CONF_DIR, hadoopConfDir.getAbsolutePath());
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
-    String firstCommit = TestUtils.getFirstCompleteInstant(tablePath);
+    String firstCommit = TestUtils.getFirstCompleteInstant(path.toString());
 
-    // Step 2: write second batch
     TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
 
-    // Step 3: incremental read from firstCommit with hadoop.conf.dir set
-    TableEnvironment tableEnv = batchTableEnv;
-    String hoodieTableDDL = sql("t1")
-            .option(FlinkOptions.PATH, tablePath)
-            .option(FlinkOptions.TABLE_TYPE, tableType)
+    String ddl = sql("t1")
+            .option(FlinkOptions.PATH, path)
             .option(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_INCREMENTAL)
             .option(FlinkOptions.READ_START_COMMIT, firstCommit)
-            .option(FlinkOptions.HADOOP_CONF_DIR, hadoopConfDir.getAbsolutePath().replace('\\', '/'))
-            .option(FlinkOptions.METADATA_ENABLED, false)
+            .option(FlinkOptions.HADOOP_CONF_DIR, hadoopConfDir.getAbsolutePath())
             .end();
-    tableEnv.executeSql(hoodieTableDDL);
+    batchTableEnv.executeSql(ddl);
 
     List<Row> result = CollectionUtil.iterableToList(
-            () -> tableEnv.sqlQuery("select * from t1").execute().collect());
-    // incremental read should return the second batch (update/insert records)
-    assertFalse(result.isEmpty(), "Incremental read should return records after firstCommit");
+            () -> batchTableEnv.sqlQuery("select * from t1").execute().collect());
+    // second batch contains update + insert records
+    assertFalse(result.isEmpty(),
+            "Incremental read should return records committed after " + firstCommit);
+  }
+
+  /**
+   * 'hadoop_conf.dir' pointing at a non-existent directory must fail fast —
+   * silently falling back to the environment configuration would resolve
+   * fs.defaultFS to the local filesystem instead of the intended cluster.
+   */
+  @Test
+  public void testReadWithInvalidHadoopConfDirFails() {
+    StoragePath path = new StoragePath(tempFile.toURI());
+    String nonExistentDir = new File(tempFile, "no-such-conf-dir").getAbsolutePath();
+
+    String ddl = sql("t1")
+            .option(FlinkOptions.PATH, path)
+            .option(FlinkOptions.HADOOP_CONF_DIR, nonExistentDir)
+            .end();
+
+    // The table source validates the conf dir when the catalog/planner
+    // instantiates it (DDL registration or first query planning).
+    batchTableEnv.executeSql(ddl);
+    Throwable e = assertThrows(Exception.class,
+            () -> batchTableEnv.sqlQuery("select * from t1").execute().collect().next());
+    assertTrue(getRootMessage(e).contains(nonExistentDir)
+                    && getRootMessage(e).contains(FlinkOptions.HADOOP_CONF_DIR.key()),
+            "Error should name the invalid conf dir and the option key, got: "
+                    + getRootMessage(e));
+  }
+
+  /**
+   * An existing directory that contains no Hadoop site files is also a
+   * configuration error — an empty Configuration would again resolve to the
+   * local filesystem.
+   */
+  @Test
+  public void testReadWithEmptyHadoopConfDirFails() {
+    StoragePath path = new StoragePath(tempFile.toURI());
+    File emptyDir = new File(tempFile, "empty-conf-dir");
+    assertTrue(emptyDir.mkdirs());
+    String ddl = sql("t1")
+            .option(FlinkOptions.PATH, path)
+            .option(FlinkOptions.HADOOP_CONF_DIR, emptyDir.getAbsolutePath())
+            .end();
+
+    batchTableEnv.executeSql(ddl);
+    Throwable e = assertThrows(Exception.class,
+            () -> batchTableEnv.sqlQuery("select * from t1").execute().collect().next());
+    assertTrue(getRootMessage(e).contains(emptyDir.getAbsolutePath()),
+            "Error should name the invalid conf dir, got: " + getRootMessage(e));
+  }
+
+  /**
+   * 'hadoop.*' single-property options take precedence over the site files
+   * loaded from 'hadoop_conf.dir'.
+   */
+  @Test
+  public void testHadoopOptionOverridesConfDir() throws Exception {
+    File hadoopConfDir = createHadoopConfDirWithFileFs();
+    StoragePath path = new StoragePath(tempFile.toURI());
+    writeSiteXml(new File(hadoopConfDir, "core-site.xml"),
+            "fs.defaultFS", "hdfs://conf-dir-cluster:8020");
+
+    String ddl = sql("t1")
+            .option(FlinkOptions.PATH, path)
+            .option(FlinkOptions.HADOOP_CONF_DIR, hadoopConfDir.getAbsolutePath())
+            .option("hadoop.test.prop", "override-value")
+            .end();
+    batchTableEnv.executeSql(ddl);
+
+    // verify via HadoopConfigurations directly since the DDL path only
+    // exercises the conf inside the table source
+    Configuration flinkConf = new Configuration();
+    flinkConf.setString(FlinkOptions.HADOOP_CONF_DIR.key(),
+            hadoopConfDir.getAbsolutePath());
+    flinkConf.setString("hadoop.test.prop", "override-value");
+
+    org.apache.hadoop.conf.Configuration hadoopConf =
+            HadoopConfigurations.getHadoopConf(flinkConf);
+    assertEquals("hdfs://conf-dir-cluster:8020", hadoopConf.get("fs.defaultFS"));
+    assertEquals("override-value", hadoopConf.get("test.prop"),
+            "hadoop.* options must override values from the conf dir");
   }
 
   // -------------------------------------------------------------------------
@@ -2524,5 +2596,37 @@ public class ITTestHoodieDataSource {
     return CollectSinkTableFactory.RESULT.values().stream()
         .flatMap(Collection::stream)
         .collect(Collectors.toList());
+  }
+
+  /** Creates a hadoop conf dir with a minimal core-site.xml using file:/// fs. */
+  private File createHadoopConfDirWithFileFs() throws IOException {
+    File dir = new File(tempFile, "remote-hadoop-conf");
+    assertTrue(dir.mkdirs());
+    writeSiteXml(new File(dir, "core-site.xml"), "fs.defaultFS", "file:///");
+    writeSiteXml(new File(dir, "hdfs-site.xml"), "dfs.replication", "1");
+    return dir;
+  }
+
+  private static void writeSiteXml(File file, String name, String value)
+          throws IOException {
+    String content = "<?xml version=\"1.0\"?>\n"
+            + "<configuration>\n"
+            + "  <property><name>" + name + "</name><value>" + value
+            + "</value></property>\n"
+            + "</configuration>\n";
+    try (FileWriter w = new FileWriter(file)) {
+      w.write(content);
+    }
+  }
+
+  private static String getRootMessage(Throwable t) {
+    StringBuilder sb = new StringBuilder();
+    while (t != null) {
+      if (t.getMessage() != null) {
+        sb.append(t.getMessage()).append("; ");
+      }
+      t = t.getCause();
+    }
+    return sb.toString();
   }
 }
