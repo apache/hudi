@@ -1164,6 +1164,28 @@ public class TestHoodieSchemaUtils {
   }
 
   @Test
+  public void testGenerateProjectionSchemaWithPrebuiltFieldMap() {
+    HoodieSchema originalSchema = HoodieSchema.parse("{\"type\": \"record\",\"name\": \"rec\",\"fields\": ["
+            + "{\"name\": \"ID\", \"type\": \"string\"},"
+            + "{\"name\": \"Name\", \"type\": \"string\"},"
+            + "{\"name\": \"value\", \"type\": \"int\"}]}");
+
+    Map<String, HoodieSchemaField> schemaFieldsMap = originalSchema.getFields().stream()
+            .collect(Collectors.toMap(
+                    field -> field.name().toLowerCase(Locale.ROOT),
+                    field -> field));
+
+    HoodieSchema projected = HoodieSchemaUtils.generateProjectionSchema(
+            originalSchema,
+            schemaFieldsMap,
+            Arrays.asList("name", "ID"));
+
+    assertEquals(2, projected.getFields().size());
+    assertEquals("Name", projected.getFields().get(0).name());
+    assertEquals("ID", projected.getFields().get(1).name());
+  }
+
+  @Test
   public void testAppendFieldsToSchemaDedupNested() {
     HoodieSchema fullSchema = HoodieSchema.parse("{\n"
         + "  \"type\": \"record\",\n"
@@ -2484,5 +2506,43 @@ public class TestHoodieSchemaUtils {
     IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
         () -> HoodieSchemaUtils.createDeleteLogSchema(tableSchema, Collections.singletonList("not_a_field")));
     assertEquals("Ordering field not_a_field not found in table schema", exception.getMessage());
+  }
+
+  @Test
+  void testIsTimestampMillisField() {
+    // Test timestamp-millis
+    HoodieSchema timestampMillisSchema = HoodieSchema.createTimestampMillis();
+    assertTrue(HoodieSchemaUtils.isTimestampMillisField(timestampMillisSchema),
+        "Should return true for timestamp-millis");
+
+    // Test nullable timestamp-millis
+    HoodieSchema nullableTimestampMillisSchema = HoodieSchema.createNullable(HoodieSchema.createTimestampMillis());
+    assertTrue(HoodieSchemaUtils.isTimestampMillisField(nullableTimestampMillisSchema),
+        "Should return true for nullable timestamp-millis");
+
+    // Test timestamp-micros (should return false)
+    HoodieSchema timestampMicrosSchema = HoodieSchema.createTimestampMicros();
+    assertFalse(HoodieSchemaUtils.isTimestampMillisField(timestampMicrosSchema),
+        "Should return false for timestamp-micros");
+
+    // Test regular long (should return false)
+    HoodieSchema longSchema = HoodieSchema.create(HoodieSchemaType.LONG);
+    assertFalse(HoodieSchemaUtils.isTimestampMillisField(longSchema),
+        "Should return false for regular long");
+
+    // Test string (should return false)
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    assertFalse(HoodieSchemaUtils.isTimestampMillisField(stringSchema),
+        "Should return false for string");
+
+    // Test local-timestamp-millis
+    assertTrue(HoodieSchemaUtils.isTimestampMillisField(
+                    HoodieSchema.createLocalTimestampMillis()),
+            "Should return true for local-timestamp-millis");
+
+    // Test local-timestamp-micros (should return false)
+    assertFalse(HoodieSchemaUtils.isTimestampMillisField(
+                    HoodieSchema.createLocalTimestampMicros()),
+            "Should return false for local-timestamp-micros");
   }
 }
