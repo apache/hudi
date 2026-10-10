@@ -40,6 +40,7 @@ FLINK_VALIDATOR = SKILL_DIR / "validate_flink_capabilities.py"
 FLINK_DESIGN_VALIDATOR = SKILL_DIR / "validate_flink_design.py"
 PINNED_HUDI_REVISION = "f05c83f2b97732de7a558ff9b26959e1139c05f5"
 PR2_FIXTURE_DIR = GATEWAY_DIR / "tests" / "fixtures" / "hudi_architect" / "flink_pr2"
+PR3_FIXTURE_DIR = GATEWAY_DIR / "tests" / "fixtures" / "hudi_architect" / "flink_pr3"
 ASF_LICENSE_MARKER = "Licensed to the Apache Software Foundation (ASF) under one"
 PR2_JAVA_FIXTURE = (
     GATEWAY_DIR
@@ -152,7 +153,7 @@ def test_engine_router_is_lazy_and_keeps_spark_on_shared_flow() -> None:
     assert "FLINK_" not in _read(REFERENCES_DIR / "config-templates.md")
 
 
-def test_flink_baseline_is_fixed_and_pr2_has_bounded_executable_contract() -> None:
+def test_flink_baseline_has_bounded_append_and_mutable_contracts() -> None:
     capability = _read(REFERENCES_DIR / "flink-1.20-hudi-1.2.0-capabilities.md")
     manifest = _load_toml(CAPABILITY_MANIFEST)
     decisions = _read(REFERENCES_DIR / "flink-decision-overrides.md")
@@ -169,7 +170,7 @@ def test_flink_baseline_is_fixed_and_pr2_has_bounded_executable_contract() -> No
         "fixture_version": "1.20.1",
     }
     assert PINNED_HUDI_REVISION in capability
-    assert manifest["schema_version"] == 2
+    assert manifest["schema_version"] == 3
     assert manifest["fixture_artifacts"] == {
         "hudi_bundle": "org.apache.hudi:hudi-flink1.20-bundle:1.2.0",
         "flink_version": "1.20.1",
@@ -214,10 +215,11 @@ def test_flink_capability_validation_emits_pinned_evidence() -> None:
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout) == {
         "baseline_id": "hudi-1.2.0-flink-1.20",
-        "capability_manifest_schema": 2,
+        "capability_manifest_schema": 3,
         "design_contract_schema": 1,
         "flink_fixture_version": "1.20.1",
         "hudi_source_revision": PINNED_HUDI_REVISION,
+        "supported_design_contract_schemas": [1, 2],
     }
 
 
@@ -301,7 +303,7 @@ def test_flink_capability_validation_rejects_executable_contract_drift(
     assert expected_message in result.stderr
 
 
-def test_flink_capability_manifest_records_pr2_acceptance_contract() -> None:
+def test_flink_capability_manifest_records_executable_acceptance_contracts() -> None:
     manifest = _load_toml(CAPABILITY_MANIFEST)
     python_tests = {
         node.name
@@ -310,7 +312,11 @@ def test_flink_capability_manifest_records_pr2_acceptance_contract() -> None:
     }
     java_fixture = _read(PR2_JAVA_FIXTURE)
     effective_settings = {
-        setting["key"]: setting["value"]
+        setting["applies_to"]: {
+            candidate["key"]: candidate["value"]
+            for candidate in manifest["required_effective_settings"]
+            if candidate["applies_to"] == setting["applies_to"]
+        }
         for setting in manifest["required_effective_settings"]
     }
     implemented_checks = {
@@ -319,9 +325,21 @@ def test_flink_capability_manifest_records_pr2_acceptance_contract() -> None:
     }
 
     assert effective_settings == {
-        "table.type": "COPY_ON_WRITE",
-        "write.insert.cluster": False,
-        "write.operation": "insert",
+        "pr2-append-only-cow": {
+            "table.type": "COPY_ON_WRITE",
+            "write.insert.cluster": False,
+            "write.operation": "insert",
+        },
+        "pr3-mutable-cow": {
+            "changelog.enabled": False,
+            "hoodie.write.record.merge.mode": "EVENT_TIME_ORDERING",
+            "index.bootstrap.enabled": True,
+            "index.global.enabled": True,
+            "index.state.ttl": 0.0,
+            "index.type": "FLINK_STATE",
+            "table.type": "COPY_ON_WRITE",
+            "write.operation": "upsert",
+        },
     }
     assert implemented_checks == {
         "FLINK_APPEND_MODE_CLUSTERING_ENABLED": (
@@ -356,6 +374,22 @@ def test_flink_capability_manifest_records_pr2_acceptance_contract() -> None:
             "test_pr2_enforces_checkpoint_interval_safety_floor",
             "testPinnedRuntimeCheckpointIntervalBoundary",
         ),
+        "FLINK_MUTABLE_SOURCE_CHANGELOG_UNSUPPORTED": (
+            "test_pr3_rejects_unsupported_source_changelog",
+            "testMutableCowSinkAndUpsertPlan",
+        ),
+        "FLINK_MUTABLE_ORDERING_FIELD_INVALID": (
+            "test_pr3_rejects_invalid_ordering_fields",
+            "testPinnedMutableOrderingConfiguration",
+        ),
+        "FLINK_MUTABLE_INDEX_CONFIGURATION_UNSUPPORTED": (
+            "test_pr3_rejects_unsafe_index_configuration",
+            "testPinnedMutableIndexConfiguration",
+        ),
+        "FLINK_MUTABLE_INDEX_BOOTSTRAP_REQUIRED": (
+            "test_pr3_requires_index_bootstrap",
+            "testPinnedMutableIndexBootstrapConfiguration",
+        ),
     }
     for check in manifest["implemented_acceptance_checks"]:
         assert check["python_test"] in python_tests
@@ -376,9 +410,9 @@ def test_pinned_source_hashes_match_when_release_object_is_available() -> None:
     assert result.returncode == 0, result.stderr
 
 
-def test_pr1_safety_gates_keep_deterministic_status_before_pr2_validation() -> None:
+def test_pr1_safety_gates_keep_deterministic_status_before_executable_validation() -> None:
     contract = _load_toml(GATE_FIXTURE)
-    assert contract["schema_version"] == 3
+    assert contract["schema_version"] == 4
     assert contract["status_precedence"] == ["INCOMPLETE", "REVIEW_REQUIRED", "BLOCKED"]
     precedence = {
         status: priority for priority, status in enumerate(contract["status_precedence"])
@@ -400,6 +434,14 @@ def test_pr1_safety_gates_keep_deterministic_status_before_pr2_validation() -> N
         resolved_status = max(statuses, key=precedence.__getitem__)
         assert resolved_status == scenario["expected_final_status"], scenario["case_id"]
         assert scenario["executable_eligible"] is False
+
+    mutable = next(
+        scenario
+        for scenario in contract["scenarios"]
+        if scenario["case_id"] == "F07_MUTABLE"
+    )
+    assert mutable["passes_safety_gates"] is True
+    assert mutable["next_contract_schema"] == 2
 
 
 def test_combined_gate_fixture_preserves_all_reasons_and_blocked_wins() -> None:
@@ -459,11 +501,165 @@ def test_pr2_valid_designs_render_exact_executable_sql(fixture_name: str) -> Non
     ).rstrip("\n")
     assert assessment["validation_evidence"] == {
         "baseline_id": "hudi-1.2.0-flink-1.20",
-        "capability_manifest_schema": 2,
+        "capability_manifest_schema": 3,
         "design_contract_schema": 1,
         "flink_fixture_version": "1.20.1",
         "hudi_source_revision": PINNED_HUDI_REVISION,
+        "supported_design_contract_schemas": [1, 2],
     }
+
+
+def test_pr3_valid_mutable_design_renders_exact_executable_sql() -> None:
+    result = _run_flink_design_validator(PR3_FIXTURE_DIR / "mutable_cow.json")
+
+    assert result.returncode == 0, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "CONFIG_VALIDATED"
+    assert assessment["executable_eligible"] is True
+    assert assessment["finding_codes"] == []
+    assert assessment["advisory_codes"] == []
+    assert assessment["artifacts"]["combined_sql"] == _read_sql_golden(
+        PR3_FIXTURE_DIR / "mutable_cow.sql"
+    ).rstrip("\n")
+    assert assessment["validation_evidence"]["design_contract_schema"] == 2
+    assert assessment["validation_evidence"]["capability_manifest_schema"] == 3
+
+
+def test_pr3_accepts_update_only_source_without_delete_payload(tmp_path: Path) -> None:
+    design = json.loads(_read(PR3_FIXTURE_DIR / "mutable_cow.json"))
+    design["source"]["emits_deletes"] = False
+    design["source"]["delete_payload"] = "NOT_APPLICABLE"
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 0, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "CONFIG_VALIDATED"
+    assert assessment["finding_codes"] == []
+
+
+@pytest.mark.parametrize("changelog_mode", ["INSERT_ONLY", "RETRACT", "ALL"])
+def test_pr3_rejects_unsupported_source_changelog(
+    tmp_path: Path, changelog_mode: str
+) -> None:
+    design = json.loads(_read(PR3_FIXTURE_DIR / "mutable_cow.json"))
+    design["source"]["changelog_mode"] = changelog_mode
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == [
+        "FLINK_MUTABLE_SOURCE_CHANGELOG_UNSUPPORTED"
+    ]
+    assert assessment["status"] == "BLOCKED"
+    assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize(
+    ("field_type", "nullable"),
+    [("STRING", False), ("TIMESTAMP_LTZ(3)", False), ("BIGINT", True)],
+)
+def test_pr3_rejects_invalid_ordering_fields(
+    tmp_path: Path, field_type: str, nullable: bool
+) -> None:
+    design = json.loads(_read(PR3_FIXTURE_DIR / "mutable_cow.json"))
+    for section in ("table", "source"):
+        column = next(
+            column
+            for column in design[section]["columns"]
+            if column["name"] == "event_version"
+        )
+        column["type"] = field_type
+        column["nullable"] = nullable
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert "FLINK_MUTABLE_ORDERING_FIELD_INVALID" in assessment["finding_codes"]
+    assert assessment["status"] == "BLOCKED"
+    assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("type", "BUCKET"), ("global", False), ("state_ttl_days", 1)],
+)
+def test_pr3_rejects_unsafe_index_configuration(
+    tmp_path: Path, field: str, value: object
+) -> None:
+    design = json.loads(_read(PR3_FIXTURE_DIR / "mutable_cow.json"))
+    design["write"]["index"][field] = value
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == [
+        "FLINK_MUTABLE_INDEX_CONFIGURATION_UNSUPPORTED"
+    ]
+    assert assessment["status"] == "BLOCKED"
+
+
+def test_pr3_requires_index_bootstrap(tmp_path: Path) -> None:
+    design = json.loads(_read(PR3_FIXTURE_DIR / "mutable_cow.json"))
+    design["write"]["index"]["bootstrap_enabled"] = False
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == ["FLINK_MUTABLE_INDEX_BOOTSTRAP_REQUIRED"]
+    assert assessment["status"] == "BLOCKED"
+
+
+def test_pr3_rejects_table_property_alias_for_write_merge_mode(tmp_path: Path) -> None:
+    design = json.loads(_read(PR3_FIXTURE_DIR / "mutable_cow.json"))
+    design["write"]["connector_options"] = {
+        "hoodie.record.merge.mode": "EVENT_TIME_ORDERING"
+    }
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == ["FLINK_OPTION_NOT_VERIFIED"]
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_code"),
+    [
+        (("identity", "mode", "auto_key"), "FLINK_MUTABLE_AUTO_KEY_UNSUPPORTED"),
+        (
+            ("table", "partition_fields_mutable", True),
+            "FLINK_MUTABLE_PARTITION_EVOLUTION_UNSUPPORTED",
+        ),
+        (
+            ("source", "delete_payload", "KEY_ONLY"),
+            "FLINK_MUTABLE_DELETE_PAYLOAD_UNSUPPORTED",
+        ),
+        (("write", "operation", "insert"), "FLINK_PR3_WRITE_PATH_UNSUPPORTED"),
+    ],
+)
+def test_pr3_fails_closed_outside_the_bounded_mutable_path(
+    tmp_path: Path, mutation: tuple[str, str, object], expected_code: str
+) -> None:
+    design = json.loads(_read(PR3_FIXTURE_DIR / "mutable_cow.json"))
+    section, field, value = mutation
+    design[section][field] = value
+    if section == "identity" and field == "mode":
+        design["identity"]["record_key_fields"] = []
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert expected_code in assessment["finding_codes"]
+    assert assessment["status"] == "BLOCKED"
+    assert "artifacts" not in assessment
 
 
 def test_pr2_fails_closed_when_capability_manifest_is_malformed(tmp_path: Path) -> None:
@@ -483,6 +679,22 @@ def test_pr2_fails_closed_when_capability_manifest_is_malformed(tmp_path: Path) 
     assert assessment["status"] == "BLOCKED"
     assert assessment["executable_eligible"] is False
     assert assessment["validation_evidence"] == {"design_contract_schema": 1}
+    assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize("contract_schema", [True, 1.0, 3])
+def test_flink_design_rejects_non_exact_contract_schema(
+    tmp_path: Path, contract_schema: object
+) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    design["contract_schema"] = contract_schema
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert "FLINK_DESIGN_CONTRACT_INVALID" in assessment["finding_codes"]
+    assert assessment["executable_eligible"] is False
     assert "artifacts" not in assessment
 
 
@@ -1052,7 +1264,7 @@ def test_safety_gate_order_is_stable() -> None:
         "## F7 — Physical table and source contract",
         "## F8 — Source changelog contract",
         "## F9 — Streaming checkpoint contract",
-        "## PR2 validation and completion",
+        "## PR2/PR3 validation and completion",
     ]
     offsets = [flow.index(heading) for heading in headings]
     assert offsets == sorted(offsets)

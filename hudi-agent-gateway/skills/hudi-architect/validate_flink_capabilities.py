@@ -40,7 +40,7 @@ DEFAULT_MANIFEST = (
     SKILL_DIR / "references" / "flink-1.20-hudi-1.2.0-capabilities.toml"
 )
 
-EXPECTED_SCHEMA_VERSION = 2
+EXPECTED_SCHEMA_VERSION = 3
 EXPECTED_BASELINE_ID = "hudi-1.2.0-flink-1.20"
 EXPECTED_HUDI_VERSION = "1.2.0"
 EXPECTED_HUDI_SOURCE_REVISION = "f05c83f2b97732de7a558ff9b26959e1139c05f5"
@@ -61,6 +61,46 @@ EXPECTED_REQUIRED_SETTINGS = [
         "key": "write.operation",
         "value": "insert",
         "applies_to": "pr2-append-only-cow",
+    },
+    {
+        "key": "changelog.enabled",
+        "value": False,
+        "applies_to": "pr3-mutable-cow",
+    },
+    {
+        "key": "hoodie.write.record.merge.mode",
+        "value": "EVENT_TIME_ORDERING",
+        "applies_to": "pr3-mutable-cow",
+    },
+    {
+        "key": "index.bootstrap.enabled",
+        "value": True,
+        "applies_to": "pr3-mutable-cow",
+    },
+    {
+        "key": "index.global.enabled",
+        "value": True,
+        "applies_to": "pr3-mutable-cow",
+    },
+    {
+        "key": "index.state.ttl",
+        "value": 0.0,
+        "applies_to": "pr3-mutable-cow",
+    },
+    {
+        "key": "index.type",
+        "value": "FLINK_STATE",
+        "applies_to": "pr3-mutable-cow",
+    },
+    {
+        "key": "table.type",
+        "value": "COPY_ON_WRITE",
+        "applies_to": "pr3-mutable-cow",
+    },
+    {
+        "key": "write.operation",
+        "value": "upsert",
+        "applies_to": "pr3-mutable-cow",
     },
 ]
 EXPECTED_PHYSICAL_TYPES = {
@@ -139,6 +179,22 @@ EXPECTED_ACCEPTANCE_EVIDENCE = {
     "FLINK_CHECKPOINT_INTERVAL_UNSUPPORTED": (
         "test_pr2_enforces_checkpoint_interval_safety_floor",
         "testPinnedRuntimeCheckpointIntervalBoundary",
+    ),
+    "FLINK_MUTABLE_SOURCE_CHANGELOG_UNSUPPORTED": (
+        "test_pr3_rejects_unsupported_source_changelog",
+        "testMutableCowSinkAndUpsertPlan",
+    ),
+    "FLINK_MUTABLE_ORDERING_FIELD_INVALID": (
+        "test_pr3_rejects_invalid_ordering_fields",
+        "testPinnedMutableOrderingConfiguration",
+    ),
+    "FLINK_MUTABLE_INDEX_CONFIGURATION_UNSUPPORTED": (
+        "test_pr3_rejects_unsafe_index_configuration",
+        "testPinnedMutableIndexConfiguration",
+    ),
+    "FLINK_MUTABLE_INDEX_BOOTSTRAP_REQUIRED": (
+        "test_pr3_requires_index_bootstrap",
+        "testPinnedMutableIndexBootstrapConfiguration",
     ),
 }
 SHA1_PATTERN = re.compile(r"[0-9a-f]{40}")
@@ -272,13 +328,15 @@ def validate_manifest(manifest: dict[str, Any]) -> list[str]:
             )
         if "value" not in setting:
             errors.append(f"required_effective_settings[{index}].value is required")
-        if setting.get("applies_to") != "pr2-append-only-cow":
+        if setting.get("applies_to") not in {
+            "pr2-append-only-cow",
+            "pr3-mutable-cow",
+        }:
             errors.append(
-                f"required_effective_settings[{index}].applies_to must be "
-                "'pr2-append-only-cow'"
+                f"required_effective_settings[{index}].applies_to is unsupported"
             )
     if settings != EXPECTED_REQUIRED_SETTINGS:
-        errors.append("required_effective_settings does not match the bounded PR2 path")
+        errors.append("required_effective_settings does not match the bounded paths")
 
     fixture_artifacts = manifest.get("fixture_artifacts")
     if not isinstance(fixture_artifacts, dict):
@@ -311,11 +369,35 @@ def validate_manifest(manifest: dict[str, Any]) -> list[str]:
     if executable_contract != expected_contract:
         errors.append("executable_contract does not match the bounded PR2 path")
 
+    mutable_executable_contract = manifest.get("mutable_executable_contract")
+    expected_mutable_contract = {
+        "contract_schema": 2,
+        "table_lifecycle": "new",
+        "writer_model": "single_writer",
+        "external_catalog": False,
+        "mutability": "mutable",
+        "source_changelog_mode": "UPSERT",
+        "execution_mode": "STREAMING",
+        "require_checkpointing": True,
+        "record_key_mode": "stable_key",
+        "replay_behavior": "must_collapse",
+        "ordering_mode": "event_time",
+        "ordering_field_types": ["BIGINT", "TIMESTAMP"],
+        "allow_emits_deletes": [False, True],
+        "delete_payload_when_deletes": "FULL_ROW",
+        "delete_payload_without_deletes": "NOT_APPLICABLE",
+        "partition_fields_mutable": False,
+    }
+    if mutable_executable_contract != expected_mutable_contract:
+        errors.append(
+            "mutable_executable_contract does not match the bounded PR3 path"
+        )
+
     physical_types = manifest.get("physical_types")
     if not isinstance(physical_types, dict):
         errors.append("physical_types must be a table")
     elif physical_types != EXPECTED_PHYSICAL_TYPES:
-        errors.append("physical_types does not match the bounded PR2 scalar surface")
+        errors.append("physical_types does not match the bounded scalar surface")
     else:
         for type_group in ("simple", "parameterized"):
             values = physical_types.get(type_group)
@@ -372,7 +454,7 @@ def validate_manifest(manifest: dict[str, Any]) -> list[str]:
     }
     if implemented_evidence != EXPECTED_ACCEPTANCE_EVIDENCE:
         errors.append(
-            "implemented_acceptance_checks does not match the required PR2 evidence"
+            "implemented_acceptance_checks does not match the required evidence"
         )
 
     return errors
@@ -384,13 +466,23 @@ def supported_option_keys(manifest: dict[str, Any]) -> set[str]:
     return {option["key"] for option in manifest["verified_options"]}
 
 
-def validation_evidence(manifest: dict[str, Any]) -> dict[str, Any]:
+def validation_evidence(
+    manifest: dict[str, Any], contract_schema: int | None = None
+) -> dict[str, Any]:
     """Build the stable baseline evidence included in every Flink assessment."""
 
     return {
         "baseline_id": manifest["baseline_id"],
         "capability_manifest_schema": manifest["schema_version"],
-        "design_contract_schema": manifest["executable_contract"]["contract_schema"],
+        "design_contract_schema": (
+            manifest["executable_contract"]["contract_schema"]
+            if contract_schema is None
+            else contract_schema
+        ),
+        "supported_design_contract_schemas": [
+            manifest["executable_contract"]["contract_schema"],
+            manifest["mutable_executable_contract"]["contract_schema"],
+        ],
         "flink_fixture_version": manifest["flink"]["fixture_version"],
         "hudi_source_revision": manifest["hudi"]["source_revision"],
     }

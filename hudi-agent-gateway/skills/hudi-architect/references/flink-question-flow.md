@@ -140,12 +140,24 @@ First ask whether existing logical records can change:
 > - **Yes — updates or deletes occur**
 > - **Not sure**
 
-- Mutable → collect no configuration on this path. Record that identity and ordering are required,
-  then add `FLINK_MUTABLE_COW_DEFERRED` with a `BLOCKED` contribution. The mutable COW path arrives
-  in PR3. Continue any independent gate, including replay behavior, but do not ask append-only key
-  follow-ups.
+- Mutable → enter the bounded PR3 candidate flow. Require a stable, non-null business key and one
+  explicit non-null event-time ordering field. Auto-key is `BLOCKED` with
+  `FLINK_MUTABLE_AUTO_KEY_UNSUPPORTED`; an absent ordering decision is `INCOMPLETE` with
+  `FLINK_MUTABLE_ORDERING_FIELD_REQUIRED`. Do not infer either value.
 - Not sure → `INCOMPLETE` with `FLINK_MUTABILITY_REQUIRED`.
 - Append-only → ask the record-key posture question below.
+
+For mutable input, ask for the stable business-key field(s) and one ordering field in user terms:
+
+> "Which non-null field(s) identify the same record across updates and deletes, and which one
+> timestamp or source sequence field decides which version wins?"
+
+- No stable key → `BLOCKED` with `FLINK_MUTABLE_AUTO_KEY_UNSUPPORTED`.
+- Key unknown → `INCOMPLETE` with `FLINK_RECORD_KEY_POSTURE_REQUIRED`; ordering field unknown →
+  `INCOMPLETE` with `FLINK_MUTABLE_ORDERING_FIELD_REQUIRED`.
+- Stable key plus one ordering field → record both, then validate their physical fields in F7.
+  The ordering field must be non-null `BIGINT` or `TIMESTAMP(p<=6)`; do not infer a cast or use
+  ingestion time as a hidden default.
 
 For append-only input:
 
@@ -194,8 +206,8 @@ For append-only input:
 
 - Cannot occur → continue and record the confirmed assumption boundary.
 - Duplicates acceptable → continue and record duplicate tolerance in the ADR.
-- Copies must collapse → `BLOCKED` with `FLINK_REPLAY_IDEMPOTENCE_DEFERRED`; this requires a
-  stable key and an upsert-capable path.
+- Copies must collapse → continue only for an otherwise eligible mutable schema-2 path. For the
+  append-only schema-1 path, use `FLINK_REPLAY_IDEMPOTENCE_DEFERRED` with `BLOCKED`.
 - Not sure → `REVIEW_REQUIRED` with `FLINK_REPLAY_BEHAVIOR_UNRESOLVED`.
 
 ## F7 — Physical table and source contract
@@ -207,8 +219,10 @@ Enter this stage only when F0-F6 have no status-contributing finding. Collect, w
 - Partition fields, or an explicit unpartitioned decision.
 - Stable record-key fields when F5 found a stable business key.
 - The existing source-table identifier and its expected physical columns.
+- For mutable input: source primary-key fields, exactly one ordering field, whether deletes occur,
+  whether deletes contain the complete projected row, and whether partition values can change.
 
-PR2 validates a bounded scalar Flink SQL type surface recorded in the capability manifest.
+The executable paths validate a bounded scalar Flink SQL type surface recorded in the capability manifest.
 Nested, computed, metadata, and watermark columns remain `REVIEW_REQUIRED` with
 `FLINK_SCHEMA_TYPE_UNVERIFIED` until covered by a pinned fixture. A field referenced by the
 record key or partition list must exist. Stable-key columns must be `NOT NULL`. Every physical
@@ -251,9 +265,11 @@ explicit projection; never use `SELECT *`, infer casts, or invent a source DDL.
 > - **Updates or deletes can occur**
 > - **Not sure**
 
-- Inserts only → record `INSERT_ONLY` and continue.
-- Updates or deletes → add `FLINK_SOURCE_CHANGELOG_NOT_APPEND_ONLY` with a `BLOCKED`
-  contribution. Mutable change semantics arrive in PR3.
+- Inserts only → record `INSERT_ONLY` and continue on the append path.
+- Updates or deletes → for a mutable candidate, require normalized UPSERT changelog containing
+  `INSERT`, `UPDATE_AFTER`, and optional `DELETE`, with no `UPDATE_BEFORE`. Otherwise add
+  `FLINK_MUTABLE_SOURCE_CHANGELOG_UNSUPPORTED`. For an append contract, retain
+  `FLINK_SOURCE_CHANGELOG_NOT_APPEND_ONLY`.
 - Not sure → add `FLINK_SOURCE_CONTRACT_REQUIRED` with an `INCOMPLETE` contribution.
 
 This check is independent of sink-factory construction. Hudi 1.2.0 can construct a sink without
@@ -283,13 +299,14 @@ deployment responsibilities. If known rate and active-partition evidence indicat
 data per checkpoint, surface `FLINK_CHECKPOINT_SMALL_FILE_RISK`; do not enable clustering or tune
 file sizing in PR2.
 
-## PR2 validation and completion
+## PR2/PR3 validation and completion
 
-After all applicable questions, build a version-1 JSON design contract containing the confirmed
-safety facts, physical schemas, identity mode, source contract, fixed write settings, and runtime
-contract. Do not insert placeholders for the target table, path, source table, or checkpoint
-interval. Record an explicitly empty pass-through connector-option map; PR2 never accepts an
-option that the canonical renderer would ignore.
+After all applicable questions, build a version-1 JSON contract for append-only or a version-2
+JSON contract for mutable COW. Both contain confirmed safety facts, physical schemas, identity,
+source, write, and runtime contracts. Version 2 additionally records event-time ordering,
+normalized UPSERT, full-row delete posture, immutable partition fields, and the fixed global
+FLINK_STATE/bootstrap/no-TTL contract. Do not insert placeholders. Record an explicitly empty
+pass-through connector-option map; neither renderer accepts an ignored option.
 
 Run:
 

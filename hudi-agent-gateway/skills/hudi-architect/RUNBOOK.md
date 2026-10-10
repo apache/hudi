@@ -25,7 +25,7 @@ A practical guide to running the Hudi Architect agent: what it does, how to set 
 (ADR) with tradeoff tables and measurable revisit conditions, a ready-to-use `hoodie.*` config
 bundle, and a runnable submit command — all pinned to **Hudi 1.2.0**. The Flink route is pinned to
 **Hudi 1.2.0 / Flink 1.20** and remains fail-closed by default. It can emit validated Flink SQL for
-one bounded new-table, single-writer, no-external-catalog, append-only COW sink path.
+bounded append-only and first mutable new-table, single-writer, no-external-catalog COW paths.
 
 ---
 
@@ -141,8 +141,10 @@ For a Flink request, the session always includes an ADR-shaped safety assessment
 Hudi 1.2.0 source revision plus Flink 1.20.1 fixture version. Any unresolved gate returns
 `INCOMPLETE`, `BLOCKED`, or `REVIEW_REQUIRED` without SQL. A design in the bounded executable
 surface reaches `CONFIG_VALIDATED` only after the physical target and source schemas, identity,
-`INSERT_ONLY` source changelog, COW insert append mode (`write.insert.cluster=false`), and a
-checkpoint interval of at least 1000 ms pass deterministic validation. Its artifacts are runtime `SET`
+source changelog, fixed write mode, and a checkpoint interval of at least 1000 ms pass deterministic
+validation. Mutable input additionally requires a stable non-null key, event-time ordering,
+normalized UPSERT changelog, full-row deletes when present, immutable partitions, and the fixed global
+FLINK_STATE/bootstrap/no-TTL contract. Its artifacts are runtime `SET`
 statements, Hudi `CREATE TABLE`, and an explicit-column `INSERT INTO`; deployment remains manual.
 
 Then: land a first commit in a staging path, run your real read patterns against it, and check the ADR's operational playbook section for what to monitor from day one (commit duration, pending compactions, active timeline size, small-file ratio).
@@ -151,10 +153,11 @@ Then: land a first commit in a staging path, run your real read patterns against
 
 Be aware of what the agent will *decline* to decide — it defers honestly rather than guessing, but plan for these yourself:
 
-- **Flink executable coverage** — only a new-table, single-writer, no-external-catalog,
-  append-only COW streaming SQL sink is implemented. Mutable/upsert/delete, MOR, existing tables,
-  catalogs, multiple writers, DataStream API, `HoodieFlinkStreamer`, source connector generation,
-  and submit/deploy commands remain out of scope.
+- **Flink executable coverage** — bounded append-only and first mutable new-table, single-writer,
+  no-external-catalog COW streaming SQL sinks are implemented. MOR, existing-table takeover,
+  catalogs, multiple writers, alternative indexes, custom mergers, retract normalization,
+  partition movement, key-only deletes, full CDC history, DataStream API, `HoodieFlinkStreamer`,
+  source connector generation, and submit/deploy commands remain out of scope.
 
 - **Multi-writer contention tuning** — on the Spark route, the agent asks whether anything else writes the table (every tier but the lightest), derives the concurrency mode, picks a lock provider, and emits a complete, runnable block. What it does *not* do is tune for observed contention: lock retry/timeout values, conflict-retry counts, and early conflict detection stay at their defaults, because the right values depend on measured behavior rather than design-time facts. That is Operations Agent territory. Two things remain yours to carry out: apply the emitted block to **every** writing job (the ADR's pre-launch checklist enumerates them), and confirm that writers using `INSERT`/`BULK_INSERT` have disjoint key spaces — concurrent inserts can duplicate even with dedup enabled. The current Flink path detects multiple writers but emits no concurrency configuration. Background: [Hudi concurrency docs](https://hudi.apache.org/docs/concurrency_control).
 - **Catalog / metastore sync beyond the common paths** — on the Spark route, the agent asks which engines query the table and derives sync config for Hive Metastore, AWS Glue, BigQuery, and DataHub, including the partition-extractor and MOR `_ro`/`_rt` consequences. The current Flink path detects an external-catalog requirement but emits no catalog configuration. Not covered: Polaris beyond pointing at the Spark catalog config, Snowflake/Redshift-specific setup, and per-catalog auth (Kerberos, IAM policy documents, service-account keys) — those are environment concerns the flow deliberately never asks about. Background: [metastore](https://hudi.apache.org/docs/syncing_metastore), [Glue](https://hudi.apache.org/docs/syncing_aws_glue_data_catalog), [BigQuery](https://hudi.apache.org/docs/gcp_bigquery), [DataHub](https://hudi.apache.org/docs/syncing_datahub).

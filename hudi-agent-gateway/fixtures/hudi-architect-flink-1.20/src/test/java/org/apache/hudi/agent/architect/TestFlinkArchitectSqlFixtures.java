@@ -23,6 +23,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.table.HoodieTableFactory;
+import org.apache.hudi.util.ChangelogModes;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.HoodieSchemaConverter;
 
@@ -46,6 +47,7 @@ import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimeType;
 import org.apache.flink.types.Row;
+import org.apache.flink.types.RowKind;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -56,6 +58,7 @@ import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -68,7 +71,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Factory and planner fixtures for the bounded Hudi Architect PR2 path.
+ * Factory and planner fixtures for the bounded Hudi Architect Flink SQL paths.
  *
  * <p>The fixture depends on the released Hudi 1.2.0 Flink 1.20 bundle and Flink 1.20.1 rather
  * than the enclosing checkout. It plans the exact SQL golden files checked by the Python
@@ -118,6 +121,57 @@ class TestFlinkArchitectSqlFixtures {
     assertTrue(plan.contains("events_hudi"), plan);
     assertTrue(plan.contains("hoodie_append_write: default_database.events_hudi"), plan);
     assertTrue(plan.contains("changelogMode=[I]"), plan);
+  }
+
+  @Test
+  void testMutableCowSinkAndUpsertPlan() throws Exception {
+    TestContext context = newTestContext();
+    StreamTableEnvironment tableEnv = context.tableEnv;
+    registerMutableSource(context);
+
+    SqlFixture fixture = SqlFixture.load("mutable_cow.sql");
+    applyRuntimeStatements(tableEnv, fixture.runtimeSql);
+    tableEnv.executeSql(fixture.tableDdl);
+    String plan = tableEnv.explainSql(
+        fixture.insertSql,
+        ExplainDetail.CHANGELOG_MODE,
+        ExplainDetail.JSON_EXECUTION_PLAN);
+
+    assertPinnedArtifacts();
+    assertTrue(plan.contains("orders_mutable_hudi"), plan);
+    assertTrue(plan.contains("stream_write: default_database.orders_mutable_hudi"), plan);
+    assertTrue(plan.contains("changelogMode=[I,UA,D]"), plan);
+    assertTrue(plan.contains("index_bootstrap"), plan);
+    assertEquals(
+        Set.of(RowKind.INSERT, RowKind.UPDATE_AFTER, RowKind.DELETE),
+        ChangelogModes.UPSERT.getContainedKinds());
+    assertFalse(ChangelogModes.UPSERT.contains(RowKind.UPDATE_BEFORE));
+  }
+
+  @Test
+  void testPinnedMutableOrderingConfiguration() {
+    Configuration conf = mutableConfiguration();
+
+    assertEquals("hoodie.write.record.merge.mode", FlinkOptions.RECORD_MERGE_MODE.key());
+    assertEquals("event_version", conf.get(FlinkOptions.ORDERING_FIELDS));
+    assertEquals("EVENT_TIME_ORDERING", conf.get(FlinkOptions.RECORD_MERGE_MODE));
+    assertFalse(conf.get(FlinkOptions.CHANGELOG_ENABLED));
+  }
+
+  @Test
+  void testPinnedMutableIndexConfiguration() {
+    Configuration conf = mutableConfiguration();
+
+    assertEquals("FLINK_STATE", conf.get(FlinkOptions.INDEX_TYPE));
+    assertTrue(conf.get(FlinkOptions.INDEX_GLOBAL_ENABLED));
+    assertEquals(0.0, conf.get(FlinkOptions.INDEX_STATE_TTL));
+  }
+
+  @Test
+  void testPinnedMutableIndexBootstrapConfiguration() {
+    Configuration conf = mutableConfiguration();
+
+    assertTrue(conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED));
   }
 
   @Test
@@ -359,6 +413,20 @@ class TestFlinkArchitectSqlFixtures {
     return (RowDataKeyGen) factory.invoke(null, conf, rowType);
   }
 
+  private static Configuration mutableConfiguration() {
+    Configuration conf = new Configuration();
+    conf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_COPY_ON_WRITE);
+    conf.set(FlinkOptions.OPERATION, "upsert");
+    conf.set(FlinkOptions.ORDERING_FIELDS, "event_version");
+    conf.set(FlinkOptions.RECORD_MERGE_MODE, "EVENT_TIME_ORDERING");
+    conf.set(FlinkOptions.INDEX_TYPE, "FLINK_STATE");
+    conf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, true);
+    conf.set(FlinkOptions.INDEX_STATE_TTL, 0.0);
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+    conf.set(FlinkOptions.CHANGELOG_ENABLED, false);
+    return conf;
+  }
+
   private static TestContext newTestContext() {
     StreamExecutionEnvironment environment = StreamExecutionEnvironment.getExecutionEnvironment();
     environment.enableCheckpointing(60_000L);
@@ -402,6 +470,49 @@ class TestFlinkArchitectSqlFixtures {
         .column("event_ts", DataTypes.TIMESTAMP(3).notNull())
         .build();
     registerInsertOnlyView(context.tableEnv, "events_source", stream, schema);
+  }
+
+  private static void registerMutableSource(TestContext context) {
+    Row insert = Row.ofKind(
+        RowKind.INSERT,
+        "id-1",
+        "Alice",
+        1L,
+        Date.valueOf("2026-01-01"));
+    Row updateAfter = Row.ofKind(
+        RowKind.UPDATE_AFTER,
+        "id-1",
+        "Alice updated",
+        2L,
+        Date.valueOf("2026-01-01"));
+    Row delete = Row.ofKind(
+        RowKind.DELETE,
+        "id-1",
+        "Alice updated",
+        3L,
+        Date.valueOf("2026-01-01"));
+    DataStream<Row> stream = context.environment.fromCollection(
+        List.of(insert, updateAfter, delete),
+        Types.ROW_NAMED(
+            new String[] {"id", "name", "event_version", "partition_date"},
+            Types.STRING,
+            Types.STRING,
+            Types.LONG,
+            Types.SQL_DATE));
+    Schema schema = Schema.newBuilder()
+        .column("id", DataTypes.STRING().notNull())
+        .column("name", DataTypes.STRING())
+        .column("event_version", DataTypes.BIGINT().notNull())
+        .column("partition_date", DataTypes.DATE().notNull())
+        .primaryKey("id")
+        .build();
+    ChangelogMode upsertMode = ChangelogMode.newBuilder()
+        .addContainedKind(RowKind.INSERT)
+        .addContainedKind(RowKind.UPDATE_AFTER)
+        .addContainedKind(RowKind.DELETE)
+        .build();
+    Table source = context.tableEnv.fromChangelogStream(stream, schema, upsertMode);
+    context.tableEnv.createTemporaryView("orders_mutable_source", source);
   }
 
   private static void registerInsertOnlyView(
