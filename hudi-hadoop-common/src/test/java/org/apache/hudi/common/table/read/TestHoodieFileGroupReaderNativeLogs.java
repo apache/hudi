@@ -32,7 +32,9 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
+import org.apache.hudi.common.testutils.CountingHoodieStorage;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.reader.HoodieFileGroupReaderTestHarness;
 import org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils;
@@ -40,11 +42,14 @@ import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -167,6 +172,52 @@ public class TestHoodieFileGroupReaderNativeLogs extends HoodieFileGroupReaderTe
     assertFileGroupRecords(fileSlice, prefixPredicate,
         Arrays.asList("30", "31"),
         Arrays.asList(2L, 4L));
+  }
+
+  /**
+   * Each native HFile log file is opened once for its footer and once for its records, and its status is fetched
+   * only when the file size is not known up front.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testNativeHFileLogFileReadsPerFile(boolean isFileSizeKnown) throws IOException {
+    preparePartitionPath();
+    List<StoragePath> logPaths = Arrays.asList(
+        createNativeHFileDataLogFile("001", 1, records(Arrays.asList("1", "2", "30"), 2L, false)).getPath(),
+        createNativeHFileDataLogFile("002", 2, records(Arrays.asList("1", "4", "31"), 4L, false)).getPath());
+    HoodieTableMetaClient originalMetaClient = metaClient;
+    HoodieReaderContext<IndexedRecord> originalReaderContext = readerContext;
+    metaClient = HoodieTableMetaClient.builder().setConf(storageConf).setBasePath(basePath)
+        .setStorage(new CountingHoodieStorage(new StoragePath(basePath), storageConf)).build();
+    metaClient.getTableConfig().setValue(HoodieTableConfig.BASE_FILE_FORMAT, HoodieFileFormat.HFILE.name());
+    try {
+      Predicate inPredicate = Predicates.in(
+          Literal.from(ROW_KEY), Arrays.asList(Literal.from("1"), Literal.from("31")));
+      Predicate prefixPredicate = Predicates.startsWithAny(
+          Literal.from(ROW_KEY), Arrays.asList(Literal.from("3")));
+      List<Option<Predicate>> filters = Arrays.asList(Option.empty(), Option.of(inPredicate), Option.of(prefixPredicate));
+      List<List<String>> expectedKeys = Arrays.asList(
+          Arrays.asList("1", "2", "4", "30", "31"), Arrays.asList("1", "31"), Arrays.asList("30", "31"));
+      List<List<Long>> expectedTimestamps = Arrays.asList(
+          Arrays.asList(4L, 2L, 4L, 2L, 4L), Arrays.asList(4L, 4L), Arrays.asList(2L, 4L));
+      for (int i = 0; i < filters.size(); i++) {
+        readerContext = new HoodieAvroReaderContext(storageConf, metaClient.getTableConfig(), Option.empty(), filters.get(i));
+        HoodieLogFile[] logFiles = logPaths.stream()
+            .map(path -> isFileSizeKnown ? new HoodieLogFile(path, new File(path.toUri().getPath()).length()) : new HoodieLogFile(path))
+            .toArray(HoodieLogFile[]::new);
+        CountingHoodieStorage.resetCounts();
+        try (ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(createFileSlice(null, logFiles), false, false)) {
+          assertRecords(iterator, expectedKeys.get(i), expectedTimestamps.get(i));
+        }
+        for (StoragePath logPath : logPaths) {
+          assertEquals(2, CountingHoodieStorage.getOpenCount(logPath), "opens of " + logPath);
+          assertEquals(isFileSizeKnown ? 0 : 1, CountingHoodieStorage.getPathInfoCount(logPath), "file status lookups of " + logPath);
+        }
+      }
+    } finally {
+      metaClient = originalMetaClient;
+      readerContext = originalReaderContext;
+    }
   }
 
   @Test

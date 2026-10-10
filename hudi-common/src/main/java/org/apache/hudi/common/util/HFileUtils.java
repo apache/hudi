@@ -50,6 +50,7 @@ import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
@@ -107,12 +108,20 @@ public class HFileUtils extends FileFormatUtils {
 
   @Override
   public Map<String, String> readFooter(HoodieStorage storage, boolean required, StoragePath filePath, String... footerNames) {
+    return readFooter(HFileReaderFactory.builder().withStorage(storage).withPath(filePath), required, filePath, footerNames);
+  }
+
+  @Override
+  public Map<String, String> readFooter(HoodieStorage storage, boolean required, StoragePathInfo pathInfo, String... footerNames) {
+    return readFooter(
+        HFileReaderFactory.builder().withStorage(storage).withPath(pathInfo.getPath()).withFileSize(pathInfo.getLength()),
+        required, pathInfo.getPath(), footerNames);
+  }
+
+  private static Map<String, String> readFooter(HFileReaderFactory.Builder readerFactoryBuilder, boolean required,
+                                                StoragePath filePath, String... footerNames) {
     Map<String, String> footerVals = new HashMap<>();
-    try (HFileReader reader = HFileReaderFactory.builder()
-        .withStorage(storage)
-        .withPath(filePath)
-        .build()
-        .createHFileReader()) {
+    try (HFileReader reader = readerFactoryBuilder.build().createHFileReader()) {
       for (String footerName : footerNames) {
         Option<byte[]> footerValue = reader.getMetaInfo(new UTF8StringKey(footerName));
         if (footerValue.isPresent()) {

@@ -50,6 +50,7 @@ import java.util.function.UnaryOperator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class TestHoodieReaderContext {
@@ -77,13 +78,13 @@ class TestHoodieReaderContext {
   private static List<String> lookup(TestReaderContext readerContext, List<String> keys, boolean fullKey) throws IOException {
     StoragePath filePath = new StoragePath("/tmp/test.parquet");
     HoodieStorage storage = mock(HoodieStorage.class);
-    when(storage.getPathInfo(filePath)).thenReturn(new StoragePathInfo(filePath, 100, false, (short) 1, 100, 0));
 
     List<String> result = new ArrayList<>();
     try (ClosableIterator<String> iterator = readerContext.lookupRecords(
-        filePath, HoodieFileFormat.PARQUET, READER_SCHEMA, storage, keys, fullKey)) {
+        new StoragePathInfo(filePath, 100, false, (short) 1, 100, 0), HoodieFileFormat.PARQUET, READER_SCHEMA, storage, keys, fullKey)) {
       iterator.forEachRemaining(result::add);
     }
+    verifyNoInteractions(storage);
     return result;
   }
 

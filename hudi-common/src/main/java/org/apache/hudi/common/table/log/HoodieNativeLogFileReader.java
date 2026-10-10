@@ -122,7 +122,7 @@ public class HoodieNativeLogFileReader implements HoodieLogFormat.Reader {
   private Map<HeaderMetadataType, String> getLogBlockHeader(HoodieFileFormat fileFormat) {
     Map<String, String> keyValueMetadata = HoodieIOFactory.getIOFactory(storage)
         .getFileFormatUtils(fileFormat)
-        .readFooter(storage, false, logFile.getPath(), NativeLogFooterMetadata.FOOTER_METADATA_KEY);
+        .readFooter(storage, false, FSUtils.getNativeLogFilePathInfo(storage, logFile), NativeLogFooterMetadata.FOOTER_METADATA_KEY);
     Map<HeaderMetadataType, String> header = NativeLogFooterMetadata.fromFooterMetadata(keyValueMetadata);
     header.putIfAbsent(HeaderMetadataType.INSTANT_TIME, logFile.getDeltaCommitTime());
     return header;
