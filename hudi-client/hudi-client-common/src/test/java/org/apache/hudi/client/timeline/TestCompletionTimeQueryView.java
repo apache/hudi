@@ -19,6 +19,7 @@
 package org.apache.hudi.client.timeline;
 
 import org.apache.hudi.DummyActiveAction;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -199,6 +200,35 @@ public class TestCompletionTimeQueryView {
       assertThat(getInstantTimeSetFormattedString(view, 10 + 1000, 11 + 1000), is("00000010"));
       // query with non-existing completion time
       assertThat(getInstantTimeSetFormattedString(view, 12 + 1000, 15 + 1000), is(""));
+    }
+  }
+
+  /**
+   * A completed non-write instant older than the archived commits (e.g. a rollback the archiver has not
+   * reached, which survives an upgrade from table version 6) must not hide those archived commits.
+   */
+  @Test
+  void testArchivedInstantsAfterStaleNonWriteInstant() throws Exception {
+    String tableName = "testTable";
+    String tablePath = tempFile.getAbsolutePath() + StoragePath.SEPARATOR + tableName;
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(
+        HoodieTestUtils.getDefaultStorageConf(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
+    prepareTimeline(tablePath, metaClient);
+    // a completed rollback sorting between the archived commits 1 and 2
+    String staleRollback = "000000015";
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    HoodieRollbackMetadata rollbackMetadata = testTable.getRollbackMetadata("00000099", Collections.emptyMap(), false);
+    testTable.addRollback(staleRollback, rollbackMetadata, null).addRollbackCompleted(staleRollback, rollbackMetadata, false);
+    metaClient.reloadActiveTimeline();
+    assertThat(metaClient.getActiveTimeline().firstInstant().get().requestedTime(), is(staleRollback));
+
+    try (CompletionTimeQueryView view =
+             metaClient.getTableFormat().getTimelineFactory().createCompletionTimeQueryView(metaClient)) {
+      // archived commits newer than the rollback are found, not reported as pending
+      assertThat(view.getCompletionTime(String.format("%08d", 4)).orElse(""), is(String.format("%08d", 1004)));
+      assertThat(getInstantTimeSetFormattedString(view, 3 + 1000, 6 + 1000), is("00000003,00000004,00000005,00000006"));
+      // a pending write instant is still pending
+      assertFalse(view.getCompletionTime(String.format("%08d", 11)).isPresent());
     }
   }
 
