@@ -175,9 +175,10 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
    * Bulk-insert overwrite executors override this so the overlap-with-pending-clustering check
    * can fire before any writes materialize.
    *
-   * @param preparedRecords the dataset after {@code HoodieDatasetBulkInsertHelper.prepareForBulkInsert}
-   *                        has populated the {@code _hoodie_partition_path} meta field, so dynamic
-   *                        partition resolution can read it.
+   * @param preparedRecords the dataset after {@code HoodieDatasetBulkInsertHelper.prepareForBulkInsert},
+   *                        which carries the {@code _hoodie_partition_path} meta field when meta
+   *                        fields are populated (and a null stub otherwise), so dynamic partition
+   *                        resolution can read the rows' partition paths.
    */
   protected Set<HoodieFileGroupId> getFileGroupsBeingReplaced(Dataset<Row> preparedRecords) {
     return Collections.emptySet();
