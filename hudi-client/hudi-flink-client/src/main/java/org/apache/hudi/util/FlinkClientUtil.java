@@ -59,6 +59,15 @@ public class FlinkClientUtil {
     return hadoopConf;
   }
 
+  public static org.apache.hadoop.conf.Configuration getHadoopConf(String hadoopConfDir) {
+    org.apache.hadoop.conf.Configuration hadoopConf;
+    hadoopConf = getHadoopConfiguration(hadoopConfDir);
+    if (hadoopConf == null){
+      hadoopConf = new org.apache.hadoop.conf.Configuration();
+    }
+    return hadoopConf;
+  }
+
   /**
    * Returns a new Hadoop Configuration object using the path to the hadoop conf configured.
    *
