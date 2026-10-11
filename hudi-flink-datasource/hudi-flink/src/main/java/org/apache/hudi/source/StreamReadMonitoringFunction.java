@@ -215,6 +215,7 @@ public class StreamReadMonitoringFunction
         incrementalInputSplits.inputSplits(metaClient, this.issuedInstant, this.issuedOffset, this.cdcEnabled);
     if (result.isEmpty()) {
       // no new instants, returns early
+      LOG.info("No new instants to read for current run.");
       return;
     }
 

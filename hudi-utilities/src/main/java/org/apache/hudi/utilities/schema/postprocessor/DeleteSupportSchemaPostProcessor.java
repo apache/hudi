@@ -46,7 +46,7 @@ public class DeleteSupportSchemaPostProcessor extends SchemaPostProcessor {
   public Schema processSchema(Schema schema) {
 
     if (schema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD) != null) {
-      LOG.warn(String.format("column %s already exists!", HoodieRecord.HOODIE_IS_DELETED_FIELD));
+      LOG.warn("column {} already exists!", HoodieRecord.HOODIE_IS_DELETED_FIELD);
       return schema;
     }
 

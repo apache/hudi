@@ -18,11 +18,14 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hudi.common.util.OrderingValueUtils;
+import org.apache.hudi.common.util.collection.Pair;
 
 import java.io.IOException;
 import java.util.Map;
@@ -45,23 +48,33 @@ public class EventTimeAvroPayload extends DefaultHoodieRecordPayload {
   }
 
   @Override
+  public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload oldValue) {
+    if ((recordBytes.length == 0 || isDeletedRecord) && DEFAULT_VALUE.equals(orderingVal)) {
+      //use natural for delete record
+      return this;
+    }
+    Pair<Comparable, Comparable> comparablePair = OrderingValueUtils.canonicalizeOrderingValue(oldValue.orderingVal, this.orderingVal);
+    Comparable oldValueOrderingVal = comparablePair.getLeft();
+    Comparable thisOrderingVal = comparablePair.getRight();
+    if (oldValueOrderingVal.compareTo(thisOrderingVal) > 0) {
+      return oldValue;
+    } else {
+      return this;
+    }
+  }
+
+  @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema, Properties properties) throws IOException {
     /*
      * Check if the incoming record is a delete record.
      */
-    if (recordBytes.length == 0 || isDeletedRecord) {
-      return Option.empty();
-    }
-
-    GenericRecord incomingRecord = bytesToAvro(recordBytes, schema);
-
+    Option<IndexedRecord> incomingRecord = recordBytes.length == 0 || isDeletedRecord ? Option.empty() : Option.of(HoodieAvroUtils.bytesToAvro(recordBytes,schema));
     // Null check is needed here to support schema evolution. The record in storage may be from old schema where
     // the new ordering column might not be present and hence returns null.
     if (!needUpdatingPersistedRecord(currentValue, incomingRecord, properties)) {
       return Option.of(currentValue);
     }
-
-    return Option.of(incomingRecord);
+    return incomingRecord;
   }
 
   @Override
@@ -77,4 +90,5 @@ public class EventTimeAvroPayload extends DefaultHoodieRecordPayload {
   public Option<Map<String, String>> getMetadata() {
     return Option.empty();
   }
+
 }

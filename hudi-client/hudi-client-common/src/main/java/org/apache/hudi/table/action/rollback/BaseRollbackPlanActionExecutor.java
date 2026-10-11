@@ -118,7 +118,7 @@ public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecut
           return Option.empty();
         }
         if (table.getRollbackTimeline().filterInflightsAndRequested().containsInstant(rollbackInstant.getTimestamp())) {
-          LOG.warn("Request Rollback found with instant time " + rollbackInstant + ", hence skipping scheduling rollback");
+          LOG.info("Request Rollback found with instant time " + rollbackInstant + ", hence skipping scheduling rollback");
         } else {
           table.getActiveTimeline().saveToRollbackRequested(rollbackInstant, TimelineMetadataUtils.serializeRollbackPlan(rollbackPlan));
           table.getMetaClient().reloadActiveTimeline();

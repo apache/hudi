@@ -26,6 +26,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
@@ -106,11 +107,15 @@ public abstract class HoodieIOFactory {
    * @return a util class to support read and write in the file format.
    */
   public final FileFormatUtils getFileFormatUtils(StoragePath path) {
-    if (path.getFileExtension().equals(HoodieFileFormat.PARQUET.getFileExtension())) {
+    String fileExtension = path.getFileExtension();
+    if (ExternalFilePathUtil.isExternallyCreatedFile(path.getName())) {
+      fileExtension = new StoragePath(ExternalFilePathUtil.removeCommitTimeAndExternalFileMarker(path.getName())).getFileExtension();
+    }
+    if (fileExtension.equals(HoodieFileFormat.PARQUET.getFileExtension())) {
       return getFileFormatUtils(HoodieFileFormat.PARQUET);
-    } else if (path.getFileExtension().equals(HoodieFileFormat.ORC.getFileExtension())) {
+    } else if (fileExtension.equals(HoodieFileFormat.ORC.getFileExtension())) {
       return getFileFormatUtils(HoodieFileFormat.ORC);
-    } else if (path.getFileExtension().equals(HoodieFileFormat.HFILE.getFileExtension())) {
+    } else if (fileExtension.equals(HoodieFileFormat.HFILE.getFileExtension())) {
       return getFileFormatUtils(HoodieFileFormat.HFILE);
     }
     throw new UnsupportedOperationException("The format for file " + path + " is not supported yet.");

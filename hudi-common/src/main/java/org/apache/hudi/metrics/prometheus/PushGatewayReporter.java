@@ -136,7 +136,7 @@ public class PushGatewayReporter extends ScheduledReporter {
         }
       }
     } catch (IOException e) {
-      LOG.warn("Failed to delete metrics from pushGateway with jobName {" + jobName + "}", e);
+      LOG.warn("Failed to delete metrics from pushGateway with jobName {{}}", jobName, e);
     }
   }
 

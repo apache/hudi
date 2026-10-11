@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 
 import java.io.Serializable;
+import java.util.function.Supplier;
 
 /**
  * Interface providing the storage configuration in type {@link T}.
@@ -62,6 +63,16 @@ public abstract class StorageConfiguration<T> implements Serializable {
    * @return the property value if present, or {@code Option.empty()}.
    */
   public abstract Option<String> getString(String key);
+
+  /**
+   * Checks if a property key is present in the configuration.
+   *
+   * @param key property key in String.
+   * @return {@code true} if the property is present, {@code false} otherwise.
+   */
+  public final boolean contains(String key) {
+    return getString(key).isPresent();
+  }
 
   /**
    * Gets an inline version of this storage configuration
@@ -112,6 +123,20 @@ public abstract class StorageConfiguration<T> implements Serializable {
     return value.isPresent()
         ? (!StringUtils.isNullOrEmpty(value.get()) ? Boolean.parseBoolean(value.get()) : defaultValue)
         : defaultValue;
+  }
+
+  /**
+   * Gets the boolean value of a property key if present, or the default value if not.
+   *
+   * @param key                   property key in String.
+   * @param defaultValueSupplier  default value supplier if the property does not exist.
+   * @return the property value if present, or the default value.
+   */
+  public final boolean getBoolean(String key, Supplier<Boolean> defaultValueSupplier) {
+    Option<String> value = getString(key);
+    return value.isPresent()
+        ? (!StringUtils.isNullOrEmpty(value.get()) ? Boolean.parseBoolean(value.get()) : defaultValueSupplier.get())
+        : defaultValueSupplier.get();
   }
 
   /**

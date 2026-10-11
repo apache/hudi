@@ -355,6 +355,14 @@
           <groupId>org.apache.parquet</groupId>
           <artifactId>*</artifactId>
         </exclusion>
+        <exclusion>
+          <groupId>org.codehaus.janino</groupId>
+          <artifactId>janino</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.codehaus.janino</groupId>
+          <artifactId>commons-compiler</artifactId>
+        </exclusion>
       </exclusions>
     </dependency>
     <dependency>
@@ -373,6 +381,14 @@
         <exclusion>
           <groupId>org.apache.parquet</groupId>
           <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.codehaus.janino</groupId>
+          <artifactId>janino</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.codehaus.janino</groupId>
+          <artifactId>commons-compiler</artifactId>
         </exclusion>
       </exclusions>
     </dependency>
@@ -393,6 +409,14 @@
           <groupId>org.apache.parquet</groupId>
           <artifactId>*</artifactId>
         </exclusion>
+        <exclusion>
+          <groupId>org.codehaus.janino</groupId>
+          <artifactId>janino</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.codehaus.janino</groupId>
+          <artifactId>commons-compiler</artifactId>
+        </exclusion>
       </exclusions>
     </dependency>
     <dependency>
@@ -407,6 +431,14 @@
         <exclusion>
           <groupId>org.apache.parquet</groupId>
           <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.codehaus.janino</groupId>
+          <artifactId>janino</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.codehaus.janino</groupId>
+          <artifactId>commons-compiler</artifactId>
         </exclusion>
       </exclusions>
     </dependency>
@@ -435,6 +467,17 @@
       <artifactId>hudi-tests-common</artifactId>
       <version>${project.version}</version>
       <scope>test</scope>
+      <!-- Exclude Janino to use Spark's version (2.7.6) -->
+      <exclusions>
+        <exclusion>
+          <groupId>org.codehaus.janino</groupId>
+          <artifactId>janino</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.codehaus.janino</groupId>
+          <artifactId>commons-compiler</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
@@ -443,6 +486,17 @@
       <classifier>tests</classifier>
       <type>test-jar</type>
       <scope>test</scope>
+      <!-- Exclude Janino to use Spark's version (2.7.6) -->
+      <exclusions>
+        <exclusion>
+          <groupId>org.codehaus.janino</groupId>
+          <artifactId>janino</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.codehaus.janino</groupId>
+          <artifactId>commons-compiler</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
@@ -451,6 +505,17 @@
       <classifier>tests</classifier>
       <type>test-jar</type>
       <scope>test</scope>
+      <!-- Exclude Janino to use Spark's version (2.7.6) -->
+      <exclusions>
+        <exclusion>
+          <groupId>org.codehaus.janino</groupId>
+          <artifactId>janino</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.codehaus.janino</groupId>
+          <artifactId>commons-compiler</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>

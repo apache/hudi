@@ -18,6 +18,7 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestGetPartitionValuesFromPath extends HoodieSparkSqlTestBase {
@@ -38,7 +39,8 @@ class TestGetPartitionValuesFromPath extends HoodieSparkSqlTestBase {
                  |tblproperties (
                  | primaryKey = 'id',
                  | type='mor',
-                 | hoodie.datasource.write.hive_style_partitioning='$hiveStylePartitioning')
+                 | hoodie.datasource.write.hive_style_partitioning='$hiveStylePartitioning',
+                 | ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()} = 'false')
                  |partitioned by (region, dt)""".stripMargin)
             spark.sql(s"insert into $tableName partition (region='reg1', dt='2023-08-01') select 1, 'name1'")
 
@@ -66,7 +68,8 @@ class TestGetPartitionValuesFromPath extends HoodieSparkSqlTestBase {
            | primaryKey = 'id',
            | type = 'mor',
            | preCombineField = 'ts',
-           | hoodie.datasource.write.drop.partition.columns = 'true'
+           | hoodie.datasource.write.drop.partition.columns = 'true',
+           | ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()} = 'false'
            |)
            |partitioned by (region, dt)""".stripMargin)
 

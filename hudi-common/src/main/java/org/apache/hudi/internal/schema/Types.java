@@ -383,6 +383,78 @@ public class Types {
     }
   }
 
+  public static class TimeMillisType extends PrimitiveType {
+    private static final TimeMillisType INSTANCE = new TimeMillisType();
+
+    public static TimeMillisType get() {
+      return INSTANCE;
+    }
+
+    @Override
+    public TypeID typeId() {
+      return TypeID.TIME_MILLIS;
+    }
+
+    @Override
+    public String toString() {
+      return "time-millis";
+    }
+  }
+
+  public static class TimestampMillisType extends PrimitiveType {
+    private static final TimestampMillisType INSTANCE = new TimestampMillisType();
+
+    public static TimestampMillisType get() {
+      return INSTANCE;
+    }
+
+    @Override
+    public TypeID typeId() {
+      return TypeID.TIMESTAMP_MILLIS;
+    }
+
+    @Override
+    public String toString() {
+      return "timestamp-millis";
+    }
+  }
+
+  public static class LocalTimestampMillisType extends PrimitiveType {
+    private static final LocalTimestampMillisType INSTANCE = new LocalTimestampMillisType();
+
+    public static LocalTimestampMillisType get() {
+      return INSTANCE;
+    }
+
+    @Override
+    public TypeID typeId() {
+      return TypeID.LOCAL_TIMESTAMP_MILLIS;
+    }
+
+    @Override
+    public String toString() {
+      return "local-timestamp-millis";
+    }
+  }
+
+  public static class LocalTimestampMicrosType extends PrimitiveType {
+    private static final LocalTimestampMicrosType INSTANCE = new LocalTimestampMicrosType();
+
+    public static LocalTimestampMicrosType get() {
+      return INSTANCE;
+    }
+
+    @Override
+    public TypeID typeId() {
+      return TypeID.LOCAL_TIMESTAMP_MICROS;
+    }
+
+    @Override
+    public String toString() {
+      return "local-timestamp-micros";
+    }
+  }
+
   /**
    * UUID primitive type.
    */

@@ -145,7 +145,7 @@ public class TestDatadogHttpClient {
 
     verify(appender).append(logCaptor.capture());
     assertEquals("Failed to send to Datadog. Response was unauthorized", logCaptor.getValue().getMessage().getFormattedMessage());
-    assertEquals(Level.WARN, logCaptor.getValue().getLevel());
+    assertEquals(Level.ERROR, logCaptor.getValue().getLevel());
   }
 
   @Test

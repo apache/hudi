@@ -79,7 +79,7 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
         stmt.close();
       }
     } catch (SQLException e) {
-      LOG.warn("Could not close the statement opened ", e);
+      LOG.info("Could not close the statement opened ", e);
     }
 
     try {
@@ -87,7 +87,7 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
         resultSet.close();
       }
     } catch (SQLException e) {
-      LOG.warn("Could not close the resultset opened ", e);
+      LOG.info("Could not close the resultset opened ", e);
     }
   }
 

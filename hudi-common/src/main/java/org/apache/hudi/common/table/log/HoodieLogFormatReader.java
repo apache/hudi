@@ -44,12 +44,14 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   private final String recordKeyField;
   private final boolean enableInlineReading;
   private final int bufferSize;
+  private final boolean enableLogicalTimestampFieldRepair;
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieLogFormatReader.class);
 
   HoodieLogFormatReader(HoodieStorage storage, List<HoodieLogFile> logFiles, Schema readerSchema,
                         boolean reverseLogReader, int bufferSize, boolean enableRecordLookups,
-                        String recordKeyField, InternalSchema internalSchema) throws IOException {
+                        String recordKeyField, InternalSchema internalSchema,
+                        boolean enableLogicalTimestampFieldRepair) throws IOException {
     this.logFiles = logFiles;
     this.storage = storage;
     this.readerSchema = readerSchema;
@@ -57,10 +59,11 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     this.recordKeyField = recordKeyField;
     this.enableInlineReading = enableRecordLookups;
     this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
+    this.enableLogicalTimestampFieldRepair = enableLogicalTimestampFieldRepair;
     if (!logFiles.isEmpty()) {
       HoodieLogFile nextLogFile = logFiles.remove(0);
       this.currentReader = new HoodieLogFileReader(storage, nextLogFile, readerSchema, bufferSize, false,
-          enableRecordLookups, recordKeyField, internalSchema);
+          enableRecordLookups, recordKeyField, internalSchema, enableLogicalTimestampFieldRepair);
     }
   }
 
@@ -86,7 +89,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
         HoodieLogFile nextLogFile = logFiles.remove(0);
         this.currentReader.close();
         this.currentReader = new HoodieLogFileReader(storage, nextLogFile, readerSchema, bufferSize, false,
-            enableInlineReading, recordKeyField, internalSchema);
+            enableInlineReading, recordKeyField, internalSchema, enableLogicalTimestampFieldRepair);
       } catch (IOException io) {
         throw new HoodieIOException("unable to initialize read with log file ", io);
       }

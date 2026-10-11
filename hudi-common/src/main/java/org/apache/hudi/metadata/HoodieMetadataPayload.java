@@ -177,7 +177,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private static final HoodieMetadataFileInfo DELETE_FILE_METADATA = new HoodieMetadataFileInfo(0L, true);
   private String key = null;
   private int type = 0;
-  private Map<String, HoodieMetadataFileInfo> filesystemMetadata = null;
+  protected Map<String, HoodieMetadataFileInfo> filesystemMetadata = null;
   private HoodieMetadataBloomFilter bloomFilterMetadata = null;
   private HoodieMetadataColumnStats columnStatMetadata = null;
   private HoodieRecordIndexInfo recordIndexMetadata;
@@ -263,33 +263,35 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     }
   }
 
-  private HoodieMetadataPayload(String key, int type, Map<String, HoodieMetadataFileInfo> filesystemMetadata) {
-    this(key, type, filesystemMetadata, null, null, null);
+  protected HoodieMetadataPayload(String key, int type, Map<String, HoodieMetadataFileInfo> filesystemMetadata) {
+    this(key, type, filesystemMetadata, null, null, null, false);
   }
 
-  private HoodieMetadataPayload(String key, HoodieMetadataBloomFilter metadataBloomFilter) {
-    this(key, METADATA_TYPE_BLOOM_FILTER, null, metadataBloomFilter, null, null);
+  protected HoodieMetadataPayload(String key, HoodieMetadataBloomFilter metadataBloomFilter) {
+    this(key, METADATA_TYPE_BLOOM_FILTER, null, metadataBloomFilter, null, null, metadataBloomFilter.getIsDeleted());
   }
 
-  private HoodieMetadataPayload(String key, HoodieMetadataColumnStats columnStats) {
-    this(key, METADATA_TYPE_COLUMN_STATS, null, null, columnStats, null);
+  protected HoodieMetadataPayload(String key, HoodieMetadataColumnStats columnStats) {
+    this(key, METADATA_TYPE_COLUMN_STATS, null, null, columnStats, null, columnStats.getIsDeleted());
   }
 
   private HoodieMetadataPayload(String key, HoodieRecordIndexInfo recordIndexMetadata) {
-    this(key, METADATA_TYPE_RECORD_INDEX, null, null, null, recordIndexMetadata);
+    this(key, METADATA_TYPE_RECORD_INDEX, null, null, null, recordIndexMetadata, false);
   }
 
   protected HoodieMetadataPayload(String key, int type,
-      Map<String, HoodieMetadataFileInfo> filesystemMetadata,
-      HoodieMetadataBloomFilter metadataBloomFilter,
-      HoodieMetadataColumnStats columnStats,
-      HoodieRecordIndexInfo recordIndexMetadata) {
+                                  Map<String, HoodieMetadataFileInfo> filesystemMetadata,
+                                  HoodieMetadataBloomFilter metadataBloomFilter,
+                                  HoodieMetadataColumnStats columnStats,
+                                  HoodieRecordIndexInfo recordIndexMetadata,
+                                  boolean isDeletedRecord) {
     this.key = key;
     this.type = type;
     this.filesystemMetadata = filesystemMetadata;
     this.bloomFilterMetadata = metadataBloomFilter;
     this.columnStatMetadata = columnStats;
     this.recordIndexMetadata = recordIndexMetadata;
+    this.isDeletedRecord = isDeletedRecord;
   }
 
   /**

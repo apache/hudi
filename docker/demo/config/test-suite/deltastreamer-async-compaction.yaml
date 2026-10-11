@@ -1,0 +1,53 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+dag_name: deltastreamer-async-clustering.yaml
+dag_rounds: 6
+dag_intermittent_delay_mins: 1
+dag_content:
+  first_insert:
+    config:
+      record_size: 1000
+      num_partitions_insert: 5
+      repeat_count: 5
+      num_records_insert: 10000
+    type: BulkInsertNode
+    deps: none
+  first_upsert:
+    config:
+      record_size: 1000
+      num_partitions_insert: 5
+      num_records_insert: 300
+      repeat_count: 5
+      num_records_upsert: 2000
+      num_partitions_upsert: 5
+    type: UpsertNode
+    deps: first_insert
+  second_upsert:
+    config:
+      record_size: 1000
+      num_partitions_insert: 5
+      num_records_insert: 300
+      repeat_count: 5
+      num_records_upsert: 2000
+      num_partitions_upsert: 5
+    type: UpsertNode
+    deps: first_upsert
+  first_validate:
+    config:
+      validate_hive: false
+      max_wait_time_for_deltastreamer_catch_up_ms: 600000
+    type: ValidateDatasetNode
+    deps: second_upsert

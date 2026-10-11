@@ -33,10 +33,10 @@ import java.io.IOException;
 public class HoodieInternalRowParquetWriter extends HoodieBaseParquetWriter<InternalRow>
     implements HoodieInternalRowFileWriter {
 
-  private final HoodieRowParquetWriteSupport writeSupport;
+  private final HoodieParquetWriteSupport writeSupport;
 
   public HoodieInternalRowParquetWriter(StoragePath file,
-                                        HoodieParquetConfig<HoodieRowParquetWriteSupport> parquetConfig)
+                                        HoodieParquetConfig<HoodieParquetWriteSupport> parquetConfig)
       throws IOException {
     super(file, parquetConfig);
 

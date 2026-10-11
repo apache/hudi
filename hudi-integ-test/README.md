@@ -698,7 +698,9 @@ Here is the full command:
 --min-sync-interval-seconds 20
 ```
 
-We can use any yaml and properties file w/ above spark-submit command to test deltastreamer w/ async table services. 
+We can use any yaml and properties file w/ above spark-submit command to test deltastreamer w/ async table services.
+For running async clustering with deltastreamer, following property can be set: hoodie.clustering.async.enabled=true.
+Similarly for running async compaction, set hoodie.parquet.small.file.limit=0 so that log files are generated.
 
 ## Automated tests for N no of yamls in Local Docker environment
 

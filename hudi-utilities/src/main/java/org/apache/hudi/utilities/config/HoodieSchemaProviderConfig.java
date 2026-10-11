@@ -59,13 +59,6 @@ public class HoodieSchemaProviderConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("The class name of the custom schema converter to use.");
 
-  public static final ConfigProperty<Boolean> SPARK_AVRO_POST_PROCESSOR_ENABLE = ConfigProperty
-      .key(SCHEMAPROVIDER_CONFIG_PREFIX + "spark_avro_post_processor.enable")
-      .defaultValue(true)
-      .withAlternatives(OLD_SCHEMAPROVIDER_CONFIG_PREFIX + "spark_avro_post_processor.enable")
-      .markAdvanced()
-      .withDocumentation("Whether to enable Spark Avro post processor.");
-
   public static final ConfigProperty<String> SCHEMA_REGISTRY_BASE_URL = ConfigProperty
       .key(SCHEMAPROVIDER_CONFIG_PREFIX + "registry.baseUrl")
       .noDefaultValue()

@@ -18,6 +18,10 @@
 
 package org.apache.hudi.hadoop.avro;
 
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.internal.schema.InternalSchema;
+
+import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.mapreduce.InputSplit;
@@ -33,6 +37,14 @@ import java.io.IOException;
  * we need to handle timestamp types separately based on the parquet-avro approach.
  */
 public class HoodieTimestampAwareParquetInputFormat extends ParquetInputFormat<ArrayWritable> {
+  private final Option<InternalSchema> internalSchemaOption;
+  private final Option<Schema> dataSchema;
+
+  public HoodieTimestampAwareParquetInputFormat(Option<InternalSchema> internalSchemaOption, Option<Schema> dataSchema) {
+    super();
+    this.internalSchemaOption = internalSchemaOption;
+    this.dataSchema = dataSchema;
+  }
 
   @Override
   public RecordReader<Void, ArrayWritable> createRecordReader(

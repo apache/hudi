@@ -78,7 +78,7 @@ public class FlinkWriteMetrics extends HoodieFlinkMetrics {
     try {
       commitEpochTimeInMs = HoodieInstantTimeGenerator.parseDateFromInstantTime(instantTime).getTime();
     } catch (ParseException e) {
-      LOG.warn("Invalid input issued instant: " + instantTime);
+      LOG.warn("Invalid input issued instant: {}", instantTime);
       return;
     }
     updateCommitMetrics(commitEpochTimeInMs, System.currentTimeMillis() - commitEpochTimeInMs, metadata);

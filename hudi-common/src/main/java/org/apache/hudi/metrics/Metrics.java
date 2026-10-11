@@ -125,7 +125,7 @@ public class Metrics {
     if (!fromShutdownHook) {
       Runtime.getRuntime().removeShutdownHook(shutdownThread);
     } else {
-      LOG.warn("Shutting down the metrics reporter from shutdown hook.");
+      LOG.debug("Shutting down the metrics reporter from shutdown hook.");
     }
     if (initialized) {
       try {

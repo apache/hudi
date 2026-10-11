@@ -23,9 +23,11 @@ import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, projectReader}
 import org.apache.hudi.HoodieMergeOnReadRDD.CONFIG_INSTANTIATION_LOCK
 import org.apache.hudi.MergeOnReadSnapshotRelation.isProjectionCompatible
+import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.io.storage.HoodieFileReader
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
@@ -85,7 +87,6 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
   extends RDD[InternalRow](sc, Nil) with HoodieUnsafeRDD {
 
   protected val maxCompactionMemoryInBytes: Long = getMaxCompactionMemoryInBytes(new JobConf(config))
-
   private val hadoopConfBroadcast = sc.broadcast(new SerializableWritable(config))
 
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {

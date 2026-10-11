@@ -38,6 +38,7 @@ import org.apache.parquet.schema.MessageType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -57,6 +58,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
   protected final HoodieSyncConfig config;
   protected final PartitionValueExtractor partitionValueExtractor;
   protected final HoodieTableMetaClient metaClient;
+  private static final String TEMP_SUFFIX = "_temp";
 
   public HoodieSyncClient(HoodieSyncConfig config) {
     this.config = config;
@@ -212,11 +214,14 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
       // Check if the partition values or if hdfs path is the same
       List<String> storagePartitionValues = partitionValueExtractor.extractPartitionValuesInPath(storagePartition);
 
-      if (droppedPartitionsOnStorage.contains(storagePartition)) {
-        events.add(PartitionEvent.newPartitionDropEvent(storagePartition));
-      } else {
-        if (!storagePartitionValues.isEmpty()) {
-          String storageValue = String.join(", ", storagePartitionValues);
+      if (!storagePartitionValues.isEmpty()) {
+        String storageValue = String.join(", ", storagePartitionValues);
+        if (droppedPartitionsOnStorage.contains(storagePartition)) {
+          if (paths.containsKey(storageValue)) {
+            // Add partition drop event only if it exists in the metastore
+            events.add(PartitionEvent.newPartitionDropEvent(storagePartition));
+          }
+        } else {
           if (!paths.containsKey(storageValue)) {
             events.add(PartitionEvent.newPartitionAddEvent(storagePartition));
           } else if (!paths.get(storageValue).equals(fullStoragePartitionPath)) {
@@ -244,5 +249,9 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
       paths.put(String.join(", ", hivePartitionValues), fullTablePartitionPath);
     }
     return paths;
+  }
+
+  protected String generateTempTableName(String tableName) {
+    return tableName + TEMP_SUFFIX + ZonedDateTime.now().toEpochSecond();
   }
 }

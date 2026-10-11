@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieTableQueryType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.StoragePath;
 
 import org.slf4j.Logger;
@@ -80,22 +79,5 @@ public class HiveHoodieTableFileIndex extends BaseHoodieTableFileIndex {
     //       since Hive does partition pruning in a different way (based on the input-path being
     //       fetched by the query engine)
     return new Object[0];
-  }
-
-  static class NoopCache implements FileStatusCache {
-    @Override
-    public Option<List<StoragePathInfo>> get(StoragePath path) {
-      return Option.empty();
-    }
-
-    @Override
-    public void put(StoragePath path, List<StoragePathInfo> leafFiles) {
-      // no-op
-    }
-
-    @Override
-    public void invalidate() {
-      // no-op
-    }
   }
 }

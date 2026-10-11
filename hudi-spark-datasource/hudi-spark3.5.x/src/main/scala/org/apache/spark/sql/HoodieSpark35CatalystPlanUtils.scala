@@ -24,11 +24,12 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{AnalysisErrorAt, ResolvedTable}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression, ProjectionOverSchema}
 import org.apache.spark.sql.catalyst.planning.ScanOperation
-import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, MergeIntoTable, Project}
+import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, LogicalPlan, MergeIntoTable, Project}
 import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog}
 import org.apache.spark.sql.execution.command.RepairTableCommand
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.execution.datasources.parquet.NewHoodieParquetFileFormat
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
 
 object HoodieSpark35CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
@@ -79,5 +80,33 @@ object HoodieSpark35CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
       messageParameters = Map(
         "sqlExpr" -> a.sql,
         "cols" -> cols))
+  }
+
+  override def rebaseInsertIntoStatement(iis: LogicalPlan, targetTable: LogicalPlan, query: LogicalPlan): LogicalPlan = {
+    val insert = iis.asInstanceOf[InsertIntoStatement]
+    insert.copy(
+      table = targetTable,
+      partitionSpec = insert.partitionSpec,
+      userSpecifiedCols = insert.userSpecifiedCols,
+      query = query,
+      overwrite = insert.overwrite,
+      ifPartitionNotExists = insert.ifPartitionNotExists)
+  }
+
+  /**
+   * Override resolveOutputColumns for Spark 3.5 compatibility.
+   * In Spark 3.5, TableOutputResolver.resolveOutputColumns method signature changed
+   * to add supportColDefaultValue parameter (defaults to false).
+   * Since it has a default value, we can call it with the same parameters as Spark 3.4.
+   */
+  override def resolveOutputColumns(tableName: String,
+                                   expected: Seq[Attribute],
+                                   query: LogicalPlan,
+                                   byName: Boolean,
+                                   conf: SQLConf): LogicalPlan = {
+    import org.apache.spark.sql.catalyst.analysis.TableOutputResolver
+    // In Spark 3.5, the method signature is: resolveOutputColumns(tableName, expected, query, byName, conf, supportColDefaultValue = false)
+    // We omit the last parameter since it defaults to false, so the call is the same as Spark 3.4
+    TableOutputResolver.resolveOutputColumns(tableName, expected, query, byName, conf)
   }
 }
