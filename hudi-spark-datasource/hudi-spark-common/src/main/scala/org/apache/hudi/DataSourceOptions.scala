@@ -115,31 +115,40 @@ object DataSourceReadOptions {
     .noDefaultValue()
     .sinceVersion("0.9.0")
     .withDocumentation("Required when `" + QUERY_TYPE.key() + "` is set to `" + QUERY_TYPE_INCREMENTAL_OPT_VAL + "`. "
-      + "Represents the completion time to start incrementally pulling data from. The completion time here need not necessarily "
-      + "correspond to an instant on the timeline. New data written with completion_time >= START_COMMIT are fetched out. "
-      + "For e.g: ‘20170901080000’ will get all new data written on or after Sep 1, 2017 08:00AM.")
+      + "The start point (exclusive) to begin incrementally pulling data from. The semantics depend on the effective table "
+      + "version (overridable via `hoodie.datasource.read.incr.table.version` for incremental reads or "
+      + "`hoodie.datasource.read.streaming.table.version` for streaming reads; otherwise the source table's actual version): "
+      + "version 8 or later treats this as a completion time, earlier versions (e.g., version 6) treat it as a requested time "
+      + "(instant time). The value need not necessarily correspond to an instant on the timeline. New data written strictly "
+      + "after START_COMMIT are fetched out. For e.g. ‘20170901080000’ will get all new data written strictly after Sep 1, "
+      + "2017 08:00AM.")
 
   val END_COMMIT: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.end.instanttime")
     .noDefaultValue()
     .sinceVersion("0.9.0")
     .withDocumentation("Used when `" + QUERY_TYPE.key() + "` is set to `" + QUERY_TYPE_INCREMENTAL_OPT_VAL
-      + "`. Represents the completion time to limit incrementally fetched data to. When not specified latest commit "
-      + "completion time from timeline is assumed by default. When specified, new data written with "
-      + "completion_time <= END_COMMIT are fetched out. "
-      + "Point in time type queries make more sense with begin and end completion times specified.")
+      + "`. The end point (inclusive) to limit incrementally fetched data to. Same time-semantics rules as START_COMMIT: "
+      + "version 8 or later treats this as a completion time, earlier versions (e.g., version 6) treat it as a requested time "
+      + "(overridable via `hoodie.datasource.read.incr.table.version` or `hoodie.datasource.read.streaming.table.version`). "
+      + "When not specified, the latest committed instant from the timeline is used. Point in time type queries make more "
+      + "sense with both begin and end specified.")
 
   val STREAMING_READ_TABLE_VERSION: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.streaming.table.version")
     .noDefaultValue()
     .sinceVersion("1.0.0")
-    .withDocumentation("The table version assumed for streaming read")
+    .withDocumentation("Overrides the table version assumed for streaming reads. Version 8+ selects HoodieStreamSourceV2 "
+      + "(completion-time based START_COMMIT/END_COMMIT); earlier versions select HoodieStreamSourceV1 (requested-time based). "
+      + "If unset, the source table's actual version is used.")
 
   val INCREMENTAL_READ_TABLE_VERSION: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.incr.table.version")
     .noDefaultValue()
     .sinceVersion("1.0.0")
-    .withDocumentation("The table version assumed for incremental read")
+    .withDocumentation("Overrides the table version assumed for incremental reads. Version 8+ selects the V2 incremental "
+      + "relation (completion-time based START_COMMIT/END_COMMIT); earlier versions select the V1 relation (requested-time "
+      + "based). If unset, the source table's actual version is used.")
 
   val INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.schema.use.end.instanttime")
