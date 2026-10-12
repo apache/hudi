@@ -306,10 +306,12 @@ public class FileStatsIndex implements ColumnStatsIndex {
 
       List<Tuple3> columnStats = alignedColumnRowsMap.values().stream().map(row -> {
         if (row == null) {
-          // NOTE: Since we're assuming missing column to essentially contain exclusively
-          //       null values, we set null-count to be equal to value-count (this behavior is
-          //       consistent with reading non-existent columns from Parquet)
-          return Tuple3.of(null, null, valueCount);
+          // Statistics are missing for this column (common after expanding
+          // hoodie.metadata.index.column.stats.column.list, async clustering, etc.).
+          // Do NOT treat missing stats as "all values are null" — that causes
+          // silent data loss. Use nullCnt = -1 as an explicit "unknown" sentinel.
+          // ExpressionEvaluators will keep the file when stats are unknown.
+          return Tuple3.of(null, null, -1L);
         } else {
           GenericRowData gr = (GenericRowData) row;
           return Tuple3.of(gr.getField(ORD_MIN_VAL), gr.getField(ORD_MAX_VAL), gr.getField(ORD_NULL_CNT));
