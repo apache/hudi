@@ -21,7 +21,20 @@ package org.apache.hudi.common.config;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.ObjectStreamClass;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Properties;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 /**
  * Tests {@link HoodieConfig}.
@@ -66,5 +79,103 @@ public class TestHoodieConfig {
     assertEquals(200, config4.getFakeInteger());
     assertEquals("xyz", config4.getFakeStringNoDefaultWithInfer());
     assertEquals("uvw", config4.getFakeStringNoDefaultWithInferEmpty());
+  }
+
+  @Test
+  void testNestedConfigsSerializedAsDifferenceFromEnclosingConfig() throws Exception {
+    TypedProperties props = new TypedProperties();
+    for (int i = 0; i < 100; i++) {
+      props.setProperty("key" + i, "value" + i);
+    }
+    CompositeConfig composite = new CompositeConfig(props);
+    HoodieConfig changed = composite.nested.get(0);
+    changed.setValue("key1", "changed");
+    changed.setValue("added", "value");
+    changed.getProps().remove("key2");
+    changed.getProps().put("nonStringValue", 7);
+    composite.nested.get(1).getProps().clear();
+    composite.nested.get(1).setValue("unrelated", "value");
+    composite.setValue("enclosingOnly", "value");
+
+    CompositeConfig copy = roundTrip(composite);
+    assertEquals(composite.getProps(), copy.getProps());
+    for (int i = 0; i < composite.nested.size(); i++) {
+      assertEquals(composite.nested.get(i).getProps(), copy.nested.get(i).getProps());
+      assertSame(composite.nested.get(i).getProps().getClass(), copy.nested.get(i).getProps().getClass());
+    }
+    for (int i = 0; i < composite.nested.size() - 1; i++) {
+      assertNotSame(copy.getProps(), copy.nested.get(i).getProps());
+    }
+    assertSame(copy.getProps(), copy.nested.get(6).getProps());
+    assertSame(copy.nested.get(2), copy.nested.get(3));
+    copy.nested.get(2).setValue("key3", "changed");
+    assertEquals("value3", copy.getString("key3"));
+    assertEquals("value3", copy.nested.get(4).getString("key3"));
+
+    // The enclosing props, their snapshot, and the two nested props that are not mostly the same as the enclosing props
+    assertEquals(4, countWrittenProperties(composite));
+  }
+
+  @Test
+  void testSerialVersionUidMatchesEarlierReleases() {
+    // Earlier releases did not declare it, so this is the value computed for them; changing it breaks reading their configs.
+    assertEquals(449277607721112139L, ObjectStreamClass.lookup(HoodieConfig.class).getSerialVersionUID());
+  }
+
+  private static int countWrittenProperties(Object object) throws IOException {
+    AtomicInteger count = new AtomicInteger();
+    try (ObjectOutputStream out = new ObjectOutputStream(new ByteArrayOutputStream()) {
+      {
+        enableReplaceObject(true);
+      }
+
+      @Override
+      protected Object replaceObject(Object obj) {
+        if (obj instanceof Properties) {
+          count.incrementAndGet();
+        }
+        return obj;
+      }
+    }) {
+      out.writeObject(object);
+    }
+    return count.get();
+  }
+
+  private static byte[] serialize(Object object) throws IOException {
+    ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+    try (ObjectOutputStream out = new ObjectOutputStream(bytes)) {
+      out.writeObject(object);
+    }
+    return bytes.toByteArray();
+  }
+
+  @SuppressWarnings("unchecked")
+  private static <T> T roundTrip(T object) throws Exception {
+    try (ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(serialize(object)))) {
+      return (T) in.readObject();
+    }
+  }
+
+  private static class CompositeConfig extends HoodieConfig {
+    private final List<HoodieConfig> nested;
+
+    CompositeConfig(TypedProperties props) {
+      super(props);
+      HoodieConfig shared = new HoodieConfig(TypedProperties.copy(props));
+      this.nested = Arrays.asList(new HoodieConfig(TypedProperties.copy(props)), new HoodieConfig(TypedProperties.copy(props)),
+          shared, shared, new HoodieConfig(TypedProperties.copy(props)), new HoodieConfig(new SubclassedProperties(props)),
+          new HoodieConfig(props));
+    }
+
+    private void writeObject(ObjectOutputStream out) throws IOException {
+      defaultWriteObjectSharingProps(out);
+    }
+  }
+
+  private static class SubclassedProperties extends TypedProperties {
+    SubclassedProperties(TypedProperties props) {
+      super(props);
+    }
   }
 }
