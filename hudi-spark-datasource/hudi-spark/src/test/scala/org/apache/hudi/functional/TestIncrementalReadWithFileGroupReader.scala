@@ -310,16 +310,16 @@ class TestIncrementalReadWithFileGroupReader extends SparkClientFunctionalTestHa
       Set(("k1", 5), ("k2", 4), ("k3", 5), ("k4", 5)))
   }
 
-  // Incremental scans never read vectorized. That decision belongs to the scan alone: it used to be
+  // MOR incremental scans never read vectorized. That decision belongs to the scan alone: it used to be
   // written into spark.sql.parquet.enableVectorizedReader, so every later read in the session lost
   // vectorization.
   @Test
-  def testCowIncrementalReadDoesNotMutateVectorizedReaderSessionConf(): Unit = {
+  def testMorIncrementalReadDoesNotMutateVectorizedReaderSessionConf(): Unit = {
     val vectorizedReaderConf = "spark.sql.parquet.enableVectorizedReader"
     val previous = spark.conf.getOption(vectorizedReaderConf)
     try {
       spark.conf.set(vectorizedReaderConf, "true")
-      write(batches.head._1, "COPY_ON_WRITE", 8, batches.head._2, SaveMode.Overwrite)
+      write(batches.head._1, "MERGE_ON_READ", 8, batches.head._2, SaveMode.Overwrite)
 
       val metaClient = HoodieTableMetaClient.builder()
         .setConf(storageConf().newInstance()).setBasePath(basePath()).build()
@@ -328,7 +328,7 @@ class TestIncrementalReadWithFileGroupReader extends SparkClientFunctionalTestHa
 
       assertEquals(batches.head._1.size, readIncremental(8, "000", instant).collect().length)
       assertTrue(spark.conf.get(vectorizedReaderConf).toBoolean,
-        "COW incremental read must preserve the session vectorized-reader setting")
+        "MOR incremental read must preserve the session vectorized-reader setting")
     } finally {
       previous match {
         case Some(value) => spark.conf.set(vectorizedReaderConf, value)
