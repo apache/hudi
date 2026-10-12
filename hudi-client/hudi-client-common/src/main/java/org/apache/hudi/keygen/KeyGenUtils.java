@@ -69,6 +69,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
@@ -687,7 +688,7 @@ public class KeyGenUtils {
         continue;
       }
       scanned++;
-      for (HoodieWriteStat writeStat : commitMetadata.getWriteStats()) {
+      for (HoodieWriteStat writeStat : inReadingOrder(commitMetadata.getWriteStats())) {
         if (StringUtils.isNullOrEmpty(writeStat.getPath())) {
           continue;
         }
@@ -734,6 +735,22 @@ public class KeyGenUtils {
     } catch (IOException e) {
       throw new HoodieIOException("Failed to check for the timeline directory " + timelinePath, e);
     }
+  }
+
+  /**
+   * Orders a commit's write stats so the cheapest file to read a record of that commit from comes first: a file the
+   * commit created holds only its records, so the first one decides, while a file the commit rewrote may have to be
+   * read to its end to find one. Among each kind, smaller files come first.
+   */
+  private static List<HoodieWriteStat> inReadingOrder(List<HoodieWriteStat> writeStats) {
+    List<HoodieWriteStat> ordered = new ArrayList<>(writeStats);
+    ordered.sort(Comparator.comparing((HoodieWriteStat writeStat) -> !isNewFile(writeStat))
+        .thenComparingLong(HoodieWriteStat::getFileSizeInBytes));
+    return ordered;
+  }
+
+  private static boolean isNewFile(HoodieWriteStat writeStat) {
+    return writeStat.getPrevCommit() == null || HoodieWriteStat.NULL_COMMIT.equals(writeStat.getPrevCommit());
   }
 
   private static HoodieCommitMetadata getCommitMetadata(HoodieInstant instant, HoodieTimeline timeline) {
