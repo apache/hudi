@@ -39,6 +39,7 @@ import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.testutils.BaseFileStatusCountingFileSystem;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
@@ -87,7 +88,8 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieSparkClientTestHarne
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testFetchHandle(boolean populateMetaFields) throws Exception {
-    metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.COPY_ON_WRITE, populateMetaFields ? new Properties() : getPropertiesForKeyGen());
+    metaClient = HoodieTestUtils.init(BaseFileStatusCountingFileSystem.withCountingFileSystem(storageConf), basePath,
+        HoodieTableType.COPY_ON_WRITE, populateMetaFields ? new Properties() : getPropertiesForKeyGen());
     config = getConfigBuilder()
         // Match the table created above. This test does not build a write client, so the
         // writer-vs-table meta-fields check never runs on it -- but leaving the writer on
@@ -107,6 +109,7 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieSparkClientTestHarne
 
     BaseKeyGenerator keyGenerator = (BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(TypedProperties.copy(getPropertiesForKeyGen()));
 
+    long fileStatusCallsBefore = BaseFileStatusCountingFileSystem.getParquetFileStatusCalls();
     for (Tuple2<String, HoodieBaseFile> entry : partitionPathFileIdPairs) {
       HoodieKeyLocationFetchHandle fetcherHandle = new HoodieKeyLocationFetchHandle(config, hoodieTable, Pair.of(entry._1, entry._2),
           populateMetaFields ? Option.empty() : Option.of(keyGenerator));
@@ -116,6 +119,9 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieSparkClientTestHarne
         assertEquals(expectedList.get(new Tuple2<>(entry._1, entry._2.getFileId())), actualList);
       }
     }
+    // the base files come with their sizes, so only reading the file schema for the key generator looks up a status
+    assertEquals(populateMetaFields ? 0 : partitionPathFileIdPairs.size(),
+        BaseFileStatusCountingFileSystem.getParquetFileStatusCalls() - fileStatusCallsBefore);
   }
 
   private Map<Tuple2<String, String>, List<Tuple2<HoodieKey, HoodieRecordLocation>>> writeToParquetAndGetExpectedRecordLocations(

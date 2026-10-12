@@ -18,31 +18,38 @@
 
 package org.apache.hudi.index.bloom;
 
+import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.functional.TestHoodieMetadataBase;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
+import org.apache.hudi.index.HoodieGlobalSimpleIndex;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndexUtils;
+import org.apache.hudi.index.HoodieSimpleIndex;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.testutils.BaseFileStatusCountingFileSystem;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 
 import org.apache.spark.api.java.JavaPairRDD;
@@ -52,6 +59,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.nio.file.Paths;
@@ -717,6 +725,80 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
         .collect(Collectors.toSet());
     assertTrue(loadedPartitions.contains(partition1));
     assertTrue(loadedPartitions.contains(partition2));
+  }
+
+  /**
+   * The bloom index reads the candidate base files it resolved while loading them: the key check sends no per-file
+   * base file lookup to the timeline server, no read looks up a base file's status since its length is known, and the
+   * tagged locations match the simple index.
+   */
+  @ParameterizedTest(name = "[{index}] global={0}, listBasedHelper={1}, rangePruning={2}, bucketizedChecking={3}, "
+      + "fileGroupIdKeySorting={4}, useColumnStats={5}, useBloomFilters={6}")
+  @CsvSource({
+      "false,false,true,true,false,false,false",
+      "false,false,false,false,false,false,false",
+      "false,false,true,false,true,false,false",
+      "false,false,true,true,false,true,false",
+      "false,false,true,true,false,true,true",
+      "false,true,true,false,false,false,false",
+      "false,true,false,false,false,true,false",
+      "true,false,true,true,false,false,false",
+      "true,true,true,false,false,true,false"})
+  void testKeyCheckReadsResolvedBaseFiles(boolean global, boolean listBasedHelper, boolean rangePruning, boolean bucketizedChecking,
+                                          boolean fileGroupIdKeySorting, boolean useColumnStats, boolean useBloomFilters) throws Exception {
+    HoodieWriteConfig config = getWriteConfigBuilder(true, true, false)
+        .withIndexConfig(HoodieIndexConfig.newBuilder()
+            .withIndexType(global ? HoodieIndex.IndexType.GLOBAL_BLOOM : HoodieIndex.IndexType.BLOOM)
+            .bloomIndexPruneByRanges(rangePruning)
+            .bloomIndexBucketizedChecking(bucketizedChecking)
+            .enableBloomIndexFileGroupIdKeySorting(fileGroupIdKeySorting)
+            .bloomIndexUseMetadata(useColumnStats || useBloomFilters)
+            .withGlobalBloomIndexUpdatePartitionPath(false)
+            .withGlobalSimpleIndexUpdatePartitionPath(false)
+            .build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .withMetadataIndexColumnStats(useColumnStats)
+            .withMetadataIndexBloomFilter(useBloomFilters)
+            .build())
+        .build();
+    SparkRDDWriteClient client = getHoodieWriteClient(config);
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEED);
+    List<HoodieRecord> records = new ArrayList<>();
+    for (int i = 0; i < 2; i++) {
+      String instantTime = client.startCommit();
+      List<HoodieRecord> inserts = dataGen.generateInserts(instantTime, 30);
+      client.commit(instantTime, client.insert(jsc.parallelize(inserts, 2), instantTime));
+      records.addAll(inserts);
+    }
+
+    HoodieTableMetaClient countingMetaClient = HoodieTableMetaClient.builder()
+        .setConf(BaseFileStatusCountingFileSystem.withCountingFileSystem(storageConf)).setBasePath(basePath).build();
+    HoodieTable table = HoodieSparkTable.create(client.getConfig(), context, countingMetaClient);
+    BaseHoodieBloomIndexHelper helper =
+        listBasedHelper ? ListBasedHoodieBloomIndexHelper.getInstance() : SparkHoodieBloomIndexHelper.getInstance();
+    HoodieBloomIndex bloomIndex = global ? new HoodieGlobalBloomIndex(client.getConfig(), helper) : new HoodieBloomIndex(client.getConfig(), helper);
+    long requestsBefore = getLatestBaseFileRequests();
+    long fileStatusCallsBefore = BaseFileStatusCountingFileSystem.getParquetFileStatusCalls();
+    Map<HoodieKey, HoodieRecordLocation> locations = getLocations(tagLocation(bloomIndex, jsc.parallelize(records, 2), table));
+    assertEquals(0, getLatestBaseFileRequests() - requestsBefore);
+    assertEquals(0, BaseFileStatusCountingFileSystem.getParquetFileStatusCalls() - fileStatusCallsBefore);
+
+    assertEquals(records.size(), locations.size());
+    long fileGroups = locations.values().stream().map(HoodieRecordLocation::getFileId).distinct().count();
+    assertTrue(fileGroups > HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS.length);
+    HoodieSimpleIndex simpleIndex = global
+        ? new HoodieGlobalSimpleIndex(client.getConfig(), Option.empty()) : new HoodieSimpleIndex(client.getConfig(), Option.empty());
+    assertEquals(getLocations(tagLocation(simpleIndex, jsc.parallelize(records, 2), table)), locations);
+  }
+
+  private static long getLatestBaseFileRequests() {
+    return Registry.getRegistry("TimelineService").getAllCounts().getOrDefault("LATEST_PARTITION_DATA_FILE", 0L);
+  }
+
+  private static Map<HoodieKey, HoodieRecordLocation> getLocations(JavaRDD<HoodieRecord> taggedRecords) {
+    return taggedRecords.filter(HoodieRecord::isCurrentLocationKnown)
+        .mapToPair(record -> new Tuple2<>(record.getKey(), record.getCurrentLocation()))
+        .collectAsMap();
   }
 
   private static String genRandomUUID() {

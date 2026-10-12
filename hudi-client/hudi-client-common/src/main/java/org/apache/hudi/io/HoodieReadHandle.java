@@ -23,8 +23,10 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.io.storage.HoodieFileReader;
+import org.apache.hudi.core.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
 
 import lombok.Getter;
@@ -74,8 +76,11 @@ public abstract class HoodieReadHandle<T, I, K, O> extends HoodieIOHandle<T, I, 
   }
 
   protected HoodieFileReader createNewFileReader(HoodieBaseFile hoodieBaseFile) throws IOException {
-    return HoodieIOFactory.getIOFactory(hoodieTable.getStorage())
-        .getReaderFactory(this.config.getRecordMerger().getRecordType())
-        .getFileReader(config, hoodieBaseFile.getStoragePath());
+    HoodieFileReaderFactory readerFactory = HoodieIOFactory.getIOFactory(hoodieTable.getStorage())
+        .getReaderFactory(this.config.getRecordMerger().getRecordType());
+    Option<StoragePathInfo> pathInfo = hoodieBaseFile.getPathInfoWithKnownSize();
+    return pathInfo.isPresent()
+        ? readerFactory.getFileReader(config, pathInfo.get())
+        : readerFactory.getFileReader(config, hoodieBaseFile.getStoragePath());
   }
 }

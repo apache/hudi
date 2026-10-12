@@ -41,6 +41,7 @@ import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -69,16 +70,29 @@ import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSc
 public class HoodieAvroParquetReader extends HoodieAvroFileReader {
 
   private final StoragePath path;
+  private final Option<StoragePathInfo> pathInfo;
   private final HoodieStorage storage;
   private final FileFormatUtils parquetUtils;
   private final List<ParquetReaderIterator> readerIterators = new ArrayList<>();
   private Option<HoodieSchema> fileSchema = Option.empty();
 
   public HoodieAvroParquetReader(HoodieStorage storage, StoragePath path) {
+    this(storage, path, Option.empty());
+  }
+
+  /**
+   * @param pathInfo path and length of the file, so the key and footer reads do not look up the file status
+   */
+  public HoodieAvroParquetReader(HoodieStorage storage, StoragePathInfo pathInfo) {
+    this(storage, pathInfo.getPath(), Option.of(pathInfo));
+  }
+
+  private HoodieAvroParquetReader(HoodieStorage storage, StoragePath path, Option<StoragePathInfo> pathInfo) {
     // We have to clone the Hadoop Config as it might be subsequently modified
     // by the Reader (for proper config propagation to Parquet components)
     this.storage = storage.newInstance(path, tryOverrideDefaultConfigs(storage.getConf().newInstance()));
     this.path = path;
+    this.pathInfo = pathInfo;
     this.parquetUtils = HoodieIOFactory.getIOFactory(storage)
         .getFileFormatUtils(HoodieFileFormat.PARQUET);
   }
@@ -94,17 +108,19 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
 
   @Override
   public String[] readMinMaxRecordKeys() {
-    return parquetUtils.readMinMaxRecordKeys(storage, path);
+    return pathInfo.isPresent() ? parquetUtils.readMinMaxRecordKeys(storage, pathInfo.get()) : parquetUtils.readMinMaxRecordKeys(storage, path);
   }
 
   @Override
   public BloomFilter readBloomFilter() {
-    return parquetUtils.readBloomFilterFromMetadata(storage, path);
+    return pathInfo.isPresent() ? parquetUtils.readBloomFilterFromMetadata(storage, pathInfo.get()) : parquetUtils.readBloomFilterFromMetadata(storage, path);
   }
 
   @Override
   public Set<Pair<String, Long>> filterRowKeys(Set<String> candidateRowKeys) {
-    return parquetUtils.filterRowKeys(storage, path, candidateRowKeys);
+    return pathInfo.isPresent()
+        ? parquetUtils.filterRowKeys(storage, pathInfo.get(), candidateRowKeys)
+        : parquetUtils.filterRowKeys(storage, path, candidateRowKeys);
   }
 
   @Override

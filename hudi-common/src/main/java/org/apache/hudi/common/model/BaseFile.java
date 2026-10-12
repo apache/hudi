@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -75,6 +76,17 @@ public class BaseFile implements Serializable {
       return pathInfo.getPath();
     }
     return new StoragePath(path);
+  }
+
+  /**
+   * Returns the path info of the file, built from the path and the file size when it is not at hand (e.g. after
+   * deserialization), or empty when the file size is unknown.
+   */
+  public Option<StoragePathInfo> getPathInfoWithKnownSize() {
+    if (pathInfo != null) {
+      return Option.of(pathInfo);
+    }
+    return fileSize > 0 ? Option.of(new StoragePathInfo(getStoragePath(), fileSize, false, (short) 0, 0, 0)) : Option.empty();
   }
 
   private static String getFileName(String fullPath) {
