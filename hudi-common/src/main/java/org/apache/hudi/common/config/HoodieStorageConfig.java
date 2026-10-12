@@ -361,7 +361,8 @@ public class HoodieStorageConfig extends HoodieConfig {
       .key("hoodie.hfile.compression.algorithm")
       .defaultValue("GZ")
       .markAdvanced()
-      .withDocumentation("Compression codec to use for hfile base files.");
+      .withDocumentation("Compression codec to use for HFile base files, including the metadata table. "
+          + "The native HFile reader supports NONE, GZ and ZSTD.");
 
   public static final ConfigProperty<String> ORC_COMPRESSION_CODEC_NAME = ConfigProperty
       .key("hoodie.orc.compression.codec")

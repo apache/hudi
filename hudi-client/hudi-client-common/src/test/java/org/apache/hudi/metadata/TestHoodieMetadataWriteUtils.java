@@ -73,6 +73,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieMetadataWriteUtils {
 
+  @ParameterizedTest
+  @ValueSource(strings = {"NONE", "GZ", "ZSTD"})
+  public void testCreateMetadataWriteConfigPropagatesHFileCompression(String compression) {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp/base_path/")
+        .withStorageConfig(HoodieStorageConfig.newBuilder().hfileCompressionAlgorithm(compression).build())
+        .build();
+
+    HoodieWriteConfig metadataWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(
+        writeConfig, HoodieFailedWritesCleaningPolicy.EAGER, HoodieTableVersion.EIGHT);
+    assertEquals(compression, metadataWriteConfig.getHFileCompressionAlgorithm());
+  }
+
   @Test
   void testCreateEmptyNativeLogFile(@TempDir Path tempDir) throws Exception {
     String instantTime = "20260717120000000";

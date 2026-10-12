@@ -311,6 +311,7 @@ public class HoodieMetadataWriteUtils {
             .withMaxDeltaSecondsBeforeCompaction(writeConfig.getMetadataMaxDeltaSecondsBeforeCompaction())
             .build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(MDT_MAX_HFILE_SIZE_BYTES)
+            .hfileCompressionAlgorithm(writeConfig.getHFileCompressionAlgorithm())
             .allowDuplicatesWithHfileWrites(writeConfig.allowDuplicatesWithHfileWrites())
             .logFileMaxSize(maxLogFileSizeBytes)
             .parquetCompressionCodec(writeConfig.getParquetCompressionCodec())
