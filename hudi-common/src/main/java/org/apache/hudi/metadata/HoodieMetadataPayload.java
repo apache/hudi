@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.model.HoodieFullTextIndexInfo;
 import org.apache.hudi.avro.model.HoodieMetadataBloomFilter;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
@@ -121,6 +122,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private static final int COLUMN_STATS_METADATA_FIELD_OFFSET = BLOOM_FILTER_METADATA_FIELD_OFFSET + 1;
   private static final int RECORD_INDEX_METADATA_FIELD_OFFSET = COLUMN_STATS_METADATA_FIELD_OFFSET + 1;
   private static final int SECONDARY_INDEX_METADATA_FIELD_OFFSET = RECORD_INDEX_METADATA_FIELD_OFFSET + 1;
+  private static final int FULL_TEXT_INDEX_METADATA_FIELD_OFFSET = SECONDARY_INDEX_METADATA_FIELD_OFFSET + 1;
 
   /**
    * HoodieMetadata schema field ids
@@ -132,6 +134,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   public static final String SCHEMA_FIELD_ID_BLOOM_FILTER = "BloomFilterMetadata";
   public static final String SCHEMA_FIELD_ID_RECORD_INDEX = "recordIndexMetadata";
   public static final String SCHEMA_FIELD_ID_SECONDARY_INDEX = "SecondaryIndexMetadata";
+  public static final String SCHEMA_FIELD_ID_FULL_TEXT_INDEX = "FullTextIndexMetadata";
 
   /**
    * HoodieMetadata bloom filter payload field ids
@@ -210,6 +213,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   protected HoodieMetadataColumnStats columnStatMetadata = null;
   protected HoodieRecordIndexInfo recordIndexMetadata;
   protected HoodieSecondaryIndexInfo secondaryIndexMetadata;
+  protected HoodieFullTextIndexInfo fullTextIndexMetadata;
   private boolean isDeletedRecord = false;
 
   public HoodieMetadataPayload(@Nullable GenericRecord record, Comparable<?> orderingVal) {
@@ -251,6 +255,11 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
   protected HoodieMetadataPayload(String key, HoodieSecondaryIndexInfo secondaryIndexMetadata) {
     this(key, MetadataPartitionType.SECONDARY_INDEX.getRecordType(), null, null, null, null, secondaryIndexMetadata, secondaryIndexMetadata.getIsDeleted());
+  }
+
+  protected HoodieMetadataPayload(String key, HoodieFullTextIndexInfo fullTextIndexMetadata) {
+    this(key, MetadataPartitionType.FULL_TEXT_INDEX.getRecordType(), null, null, null, null, null, fullTextIndexMetadata.getIsDeleted());
+    this.fullTextIndexMetadata = fullTextIndexMetadata;
   }
 
   protected HoodieMetadataPayload(String key, int type,
@@ -429,7 +438,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     if (schema == null || schema == HOODIE_METADATA_AVRO_SCHEMA) {
       // If the schema is same or none is provided, we can return the record directly
       HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, bloomFilterMetadata,
-          columnStatMetadata, recordIndexMetadata, secondaryIndexMetadata);
+          columnStatMetadata, recordIndexMetadata, secondaryIndexMetadata, fullTextIndexMetadata);
       return Option.of(record);
     } else {
       // Otherwise, the assumption is that the schema required contains the metadata fields so we construct a new GenericRecord with these fields
@@ -450,6 +459,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       }
       if (secondaryIndexMetadata != null) {
         record.put(SECONDARY_INDEX_METADATA_FIELD_OFFSET, secondaryIndexMetadata);
+      }
+      if (fullTextIndexMetadata != null) {
+        record.put(FULL_TEXT_INDEX_METADATA_FIELD_OFFSET, fullTextIndexMetadata);
       }
       return Option.of(record);
     }
@@ -756,6 +768,19 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     return secondaryIndexMetadata.getIsDeleted();
   }
 
+  public static HoodieRecord<HoodieMetadataPayload> createFullTextIndexRecord(String key, String partitionPath, long rowCount,
+                                                                             long cardinality, boolean dense, ByteBuffer positions,
+                                                                             boolean isDeleted) {
+    HoodieKey hoodieKey = new HoodieKey(key, partitionPath);
+    HoodieMetadataPayload payload = new HoodieMetadataPayload(key,
+        new HoodieFullTextIndexInfo(isDeleted, rowCount, cardinality, dense, positions));
+    return new HoodieAvroRecord<>(hoodieKey, payload);
+  }
+
+  public HoodieFullTextIndexInfo getFullTextIndexMetadata() {
+    return fullTextIndexMetadata;
+  }
+
   /**
    * Create and return a {@code HoodieMetadataPayload} to delete a record in the Metadata Table's record index.
    *
@@ -799,7 +824,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         && Objects.equals(this.filesystemMetadata, otherMetadataPayload.filesystemMetadata)
         && Objects.equals(this.bloomFilterMetadata, otherMetadataPayload.bloomFilterMetadata)
         && Objects.equals(this.columnStatMetadata, otherMetadataPayload.columnStatMetadata)
-        && Objects.equals(this.recordIndexMetadata, otherMetadataPayload.recordIndexMetadata);
+        && Objects.equals(this.recordIndexMetadata, otherMetadataPayload.recordIndexMetadata)
+        && Objects.equals(this.fullTextIndexMetadata, otherMetadataPayload.fullTextIndexMetadata);
   }
 
   @Override
