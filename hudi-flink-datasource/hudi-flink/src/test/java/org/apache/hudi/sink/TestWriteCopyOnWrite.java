@@ -22,6 +22,7 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
@@ -63,9 +64,11 @@ import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
+import org.apache.flink.types.RowKind;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -504,6 +507,49 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .assertNextEvent()
         .checkpointComplete(2)
         .checkWrittenData(getUpsertWithDeleteExpected())
+        .end();
+  }
+
+  @ParameterizedTest
+  @CsvSource({"8,false", "8,true", "9,false", "9,true", "10,false", "10,true"})
+  public void testDeduplicationPreservesEventTimeDeleteOrdering(int tableVersion, boolean preCombine) throws Exception {
+    conf.set(FlinkOptions.WRITE_TABLE_VERSION, tableVersion);
+    conf.set(FlinkOptions.RECORD_MERGE_MODE, RecordMergeMode.EVENT_TIME_ORDERING.name());
+    conf.set(FlinkOptions.PRE_COMBINE, preCombine);
+
+    List<RowData> inserts = new ArrayList<>();
+    List<RowData> changes = new ArrayList<>();
+    for (String key : Arrays.asList("id1", "id2")) {
+      inserts.add(TestData.insertRow(
+          StringData.fromString(key), StringData.fromString("base"), 100,
+          TimestampData.fromEpochMillis(100), StringData.fromString("par1")));
+      changes.add(TestData.insertRow(
+          StringData.fromString(key), StringData.fromString("older"), 50,
+          TimestampData.fromEpochMillis(50), StringData.fromString("par1")));
+      long deleteTs = key.equals("id1") ? 60 : 110;
+      RowData delete = TestData.insertRow(
+          StringData.fromString(key), StringData.fromString("delete"), 60,
+          TimestampData.fromEpochMillis(deleteTs), StringData.fromString("par1"));
+      delete.setRowKind(RowKind.DELETE);
+      changes.add(delete);
+    }
+
+    preparePipeline()
+        .consume(inserts)
+        .checkpoint(1)
+        .assertNextEvent()
+        .checkpointComplete(1)
+        .assertGlobalFailure(false)
+        .checkWrittenData(Collections.singletonMap(
+            "par1", "[id1,par1,id1,base,100,100,par1, id2,par1,id2,base,100,100,par1]"), 1)
+        .consume(changes)
+        .assertDataBuffer(1, 4)
+        .checkpoint(2)
+        .assertNextEvent()
+        .checkpointComplete(2)
+        .assertGlobalFailure(false)
+        // The stale delete must not remove id1 at ts=100; the newer delete must remove id2.
+        .checkWrittenData(Collections.singletonMap("par1", "[id1,par1,id1,base,100,100,par1]"), 1)
         .end();
   }
 
