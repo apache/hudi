@@ -187,7 +187,8 @@ object ParquetSchemaEvolutionUtils {
    * Maps a pushed-down query filter onto the names the file actually carries: a column renamed
    * under schema-on-read is rewritten to its file-schema name, and one the file does not hold at
    * all collapses to AlwaysTrue, since a filter on an absent column cannot skip any of its row
-   * groups. A table without an internal schema passes its filters through untouched.
+   * groups. A name the query schema does not hold at all (see fileFilterName) collapses to
+   * AlwaysTrue as well. A table without an internal schema passes its filters through untouched.
    */
   def rebuildFilterFromParquet(oldFilter: Filter, fileSchema: InternalSchema, querySchema: InternalSchema): Filter = {
     if (fileSchema == null || querySchema == null) {
@@ -258,7 +259,7 @@ object ParquetSchemaEvolutionUtils {
     Try(CatalystSqlParser.parseMultipartIdentifier(name)).toOption match {
       case Some(parts) =>
         val fullName = parts.mkString(".")
-        val fileFullName = InternalSchemaUtils.reBuildFilterName(fullName, fileSchema, querySchema)
+        val fileFullName = fileFilterName(fullName, fileSchema, querySchema)
         if (fileFullName.isEmpty) {
           ""
         } else if (fileFullName == fullName) {
@@ -270,7 +271,24 @@ object ParquetSchemaEvolutionUtils {
           }.quoted
         }
       case None =>
-        InternalSchemaUtils.reBuildFilterName(name, fileSchema, querySchema)
+        fileFilterName(name, fileSchema, querySchema)
+    }
+  }
+
+  /**
+   * InternalSchemaUtils.reBuildFilterName, except a name the query schema does not hold comes back
+   * empty, so its filter collapses to AlwaysTrue instead of failing the read. Such a name comes from
+   * a predicate on a variant that Spark's PushVariantIntoScan rewrote: it is pushed as a nested
+   * filter on the projection struct's ordinal-named member (v.`0`), which is no column of the table.
+   * Dropping it is always safe, since Spark evaluates every pushed filter again above the scan, and
+   * it lets the read reach validateNoShreddedVariants, which rejects that request with the
+   * actionable message.
+   */
+  private def fileFilterName(fullName: String, fileSchema: InternalSchema, querySchema: InternalSchema): String = {
+    if (querySchema.findIdByName(fullName) == -1) {
+      ""
+    } else {
+      InternalSchemaUtils.reBuildFilterName(fullName, fileSchema, querySchema)
     }
   }
 
