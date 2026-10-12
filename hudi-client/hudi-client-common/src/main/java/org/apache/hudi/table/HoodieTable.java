@@ -32,6 +32,7 @@ import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.data.HoodieBroadcast;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
@@ -753,26 +754,37 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   private void deleteInvalidFilesByPartitions(HoodieEngineContext context, Map<String, List<Pair<String, String>>> invalidFilesByPartition) {
     // Now delete partially written files
     context.setJobStatus(this.getClass().getSimpleName(), "Delete invalid files generated during the write operation: " + config.getTableName());
-    context.map(invalidFilesByPartition.values().stream()
-            .flatMap(Collection::stream)
-            .collect(Collectors.toList()),
-        partitionFilePair -> {
-          final HoodieStorage storage = metaClient.getStorage();
-          log.info("Deleting invalid data file={}", partitionFilePair);
-          // Delete
-          try {
-            StoragePath pathToDelete = new StoragePath(partitionFilePair.getValue());
-            boolean deletionSuccess = storage.deleteFile(pathToDelete);
-            if (!deletionSuccess && storage.exists(pathToDelete)) {
-              throw new HoodieIOException("Failed to delete invalid path during marker reconciliaton " + pathToDelete);
-            }
-          } catch (FileNotFoundException fnfe) {
-            // no op
-          } catch (IOException e) {
-            throw new HoodieIOException(e.getMessage(), e);
-          }
-          return true;
-        }, config.getFinalizeWriteParallelism());
+    List<Pair<String, String>> invalidFiles = invalidFilesByPartition.values().stream()
+        .flatMap(Collection::stream)
+        .collect(Collectors.toList());
+    HoodieBroadcast<HoodieTableMetaClient> metaClientBroadcast = context.broadcast(metaClient);
+    try {
+      context.map(invalidFiles, partitionFilePair -> deleteInvalidFile(metaClientBroadcast.value().getStorage(), partitionFilePair),
+          getFinalizeWriteParallelism(invalidFiles.size()));
+    } finally {
+      metaClientBroadcast.destroy();
+    }
+  }
+
+  private static boolean deleteInvalidFile(HoodieStorage storage, Pair<String, String> partitionFilePair) {
+    log.info("Deleting invalid data file={}", partitionFilePair);
+    // Delete
+    try {
+      StoragePath pathToDelete = new StoragePath(partitionFilePair.getValue());
+      boolean deletionSuccess = storage.deleteFile(pathToDelete);
+      if (!deletionSuccess && storage.exists(pathToDelete)) {
+        throw new HoodieIOException("Failed to delete invalid path during marker reconciliaton " + pathToDelete);
+      }
+    } catch (FileNotFoundException fnfe) {
+      // no op
+    } catch (IOException e) {
+      throw new HoodieIOException(e.getMessage(), e);
+    }
+    return true;
+  }
+
+  private int getFinalizeWriteParallelism(int numTasks) {
+    return Math.max(1, Math.min(numTasks, config.getFinalizeWriteParallelism()));
   }
 
   /**
@@ -868,20 +880,28 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   private void waitForAllFiles(HoodieEngineContext context, Map<String, List<Pair<String, String>>> groupByPartition, FileVisibility visibility) {
     // This will either ensure all files to be deleted are present.
     context.setJobStatus(this.getClass().getSimpleName(), "Wait for all files to appear/disappear: " + config.getTableName());
-    boolean checkPassed =
-        context.map(new ArrayList<>(groupByPartition.entrySet()), partitionWithFileList -> waitForCondition(partitionWithFileList.getKey(),
-            partitionWithFileList.getValue().stream(), visibility), config.getFinalizeWriteParallelism())
-            .stream().allMatch(x -> x);
+    HoodieBroadcast<Pair<HoodieTableMetaClient, ConsistencyGuardConfig>> storageBroadcast =
+        context.broadcast(Pair.of(metaClient, config.getConsistencyGuardConfig()));
+    boolean checkPassed;
+    try {
+      checkPassed = context.map(new ArrayList<>(groupByPartition.entrySet()), partitionWithFileList -> waitForCondition(
+              storageBroadcast.value().getLeft().getRawStorage(), storageBroadcast.value().getRight(), partitionWithFileList.getKey(),
+              partitionWithFileList.getValue().stream(), visibility),
+          getFinalizeWriteParallelism(groupByPartition.size()))
+          .stream().allMatch(x -> x);
+    } finally {
+      storageBroadcast.destroy();
+    }
     if (!checkPassed) {
       throw new HoodieIOException("Consistency check failed to ensure all files " + visibility);
     }
   }
 
-  private boolean waitForCondition(String partitionPath, Stream<Pair<String, String>> partitionFilePaths, FileVisibility visibility) {
-    final HoodieStorage storage = metaClient.getRawStorage();
+  private static boolean waitForCondition(HoodieStorage storage, ConsistencyGuardConfig consistencyGuardConfig, String partitionPath,
+                                          Stream<Pair<String, String>> partitionFilePaths, FileVisibility visibility) {
     List<String> fileList = partitionFilePaths.map(Pair::getValue).collect(Collectors.toList());
     try {
-      getConsistencyGuard(storage, config.getConsistencyGuardConfig())
+      getConsistencyGuard(storage, consistencyGuardConfig)
           .waitTill(partitionPath, fileList, visibility);
     } catch (IOException | TimeoutException ioe) {
       log.error("Got exception while waiting for files to show up", ioe);

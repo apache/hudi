@@ -132,7 +132,6 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
         if (HoodieTableType.COPY_ON_WRITE == tableType) {
           hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, filesToDelete.get()));
         } else if (HoodieTableType.MERGE_ON_READ == tableType) {
-          table.getMetaClient().reloadActiveTimeline();
           String action = instantToRollback.getAction();
           if (isCompaction.get()) { // compaction's action in hoodie instant will be "commit". So, we might need to override.
             action = HoodieTimeline.COMPACTION_ACTION;
@@ -201,6 +200,8 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
                 // as well if the base file gets deleted.
                 HoodieCommitMetadata commitMetadata = commitMetadataOptional.get();
                 if (commitMetadata.getPartitionToWriteStats().containsKey(partitionPath)) {
+                  // the file slices of the partition are looked up on the latest timeline
+                  table.getMetaClient().reloadActiveTimeline();
                   hoodieRollbackRequests.addAll(getRollbackRequestToAppendForVersionSix(partitionPath, instantToRollback, commitMetadata, table));
                 }
               }

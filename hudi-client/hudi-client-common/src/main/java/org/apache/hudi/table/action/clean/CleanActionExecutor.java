@@ -24,9 +24,11 @@ import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.client.BaseHoodieClient;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.HoodieCleanStat;
+import org.apache.hudi.common.data.HoodieBroadcast;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.CleanFileInfo;
 import org.apache.hudi.common.schema.internal.io.FileBasedInternalSchemaStorageManager;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -112,9 +114,8 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
     }
   }
 
-  private static Stream<Pair<String, PartitionCleanStat>> deleteFilesFunc(Iterator<Pair<String, CleanFileInfo>> cleanFileInfo, HoodieTable table) {
+  private static Stream<Pair<String, PartitionCleanStat>> deleteFilesFunc(Iterator<Pair<String, CleanFileInfo>> cleanFileInfo, HoodieStorage storage) {
     Map<String, PartitionCleanStat> partitionCleanStatMap = new HashMap<>();
-    HoodieStorage storage = table.getStorage();
 
     cleanFileInfo.forEachRemaining(partitionDelFileTuple -> {
       String partitionPath = partitionDelFileTuple.getLeft();
@@ -156,12 +157,16 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
             .flatMap(x -> x.getValue().stream().map(y -> new ImmutablePair<>(x.getKey(),
                 new CleanFileInfo(y.getFilePath(), y.getIsBootstrapBaseFile()))));
 
-    Stream<ImmutablePair<String, PartitionCleanStat>> partitionCleanStats =
-        context.mapPartitionsToPairAndReduceByKey(filesToBeDeletedPerPartition,
-            iterator -> deleteFilesFunc(iterator, table), PartitionCleanStat::merge, cleanerParallelism);
-
-    Map<String, PartitionCleanStat> partitionCleanStatsMap = partitionCleanStats
-        .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+    HoodieBroadcast<HoodieTableMetaClient> metaClient = context.broadcast(table.getMetaClient());
+    Map<String, PartitionCleanStat> partitionCleanStatsMap;
+    try {
+      Stream<ImmutablePair<String, PartitionCleanStat>> partitionCleanStats =
+          context.mapPartitionsToPairAndReduceByKey(filesToBeDeletedPerPartition,
+              iterator -> deleteFilesFunc(iterator, metaClient.value().getStorage()), PartitionCleanStat::merge, cleanerParallelism);
+      partitionCleanStatsMap = partitionCleanStats.collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+    } finally {
+      metaClient.destroy();
+    }
 
     List<String> partitionsToBeDeleted = table.getMetaClient().getTableConfig().isTablePartitioned() && cleanerPlan.getPartitionsToBeDeleted() != null
         ? cleanerPlan.getPartitionsToBeDeleted()

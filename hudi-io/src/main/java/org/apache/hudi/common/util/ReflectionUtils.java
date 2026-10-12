@@ -305,4 +305,14 @@ public class ReflectionUtils {
   public static boolean isSubClass(String aClazzName, Class<?> superClazz) {
     return superClazz.isAssignableFrom(getClass(aClazzName));
   }
+
+  /**
+   * Checks if a class ships with Hudi, as opposed to a user-provided implementation of a pluggable interface.
+   *
+   * @param clazz Class to check.
+   * @return {@code true} if the class is in an {@code org.apache.hudi} package; {@code false} otherwise.
+   */
+  public static boolean isHudiClass(Class<?> clazz) {
+    return clazz.getName().startsWith("org.apache.hudi.");
+  }
 }
