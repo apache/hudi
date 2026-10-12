@@ -383,9 +383,9 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
    * 1. Enable column_stats, partition_stats and record_index (files/RLI already enabled by default).
    * 2. Do two inserts and validate index initialization.
    * 3. Do a savepoint on the second commits.
-   * 4. Add three more commits to trigger clean, which cleans the files from the first commit.
+   * 4. Add three more commits to trigger clean and record the files actually deleted.
    * 5. Restore, and validate that partition_stats is deleted, but column_stats partition exists.
-   * 6. Validate that column_stats does not contain records with file names from first commit.
+   * 6. Validate that column_stats does not contain records for the deleted files.
    */
   @Test
   def testPartitionStatsWithRestore(): Unit = {
@@ -400,7 +400,6 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite)
-    val firstCompletedInstant = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant()
     // Second ingest.
     doWriteAndValidateDataAndPartitionStats(
       hudiOpts,
@@ -436,13 +435,16 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
         saveMode = SaveMode.Append)
     }
     metaClient = HoodieTableMetaClient.reload(metaClient)
-    // Clean commit should be triggered.
-    val cleanInstantOpt = metaClient.getActiveTimeline.getCleanerTimeline.lastInstant()
-    assertTrue(cleanInstantOpt.isPresent)
-    val cleanMetadataBytes = metaClient.getActiveTimeline.getInstantDetails(cleanInstantOpt.get)
-    val cleanMetadata = deserializeAvroMetadataLegacy(cleanMetadataBytes.get(), classOf[HoodieCleanMetadata])
-    // This clean operation deletes 6 files created by the first commit.
-    assertTrue(cleanMetadata.getTotalFilesDeleted > 0)
+    // A savepoint can retain first-commit file slices in MOR tables. Check the files
+    // actually deleted by all completed cleans instead of assuming their commit time.
+    val cleanTimeline = metaClient.getActiveTimeline.getCleanerTimeline.filterCompletedInstants()
+    assertFalse(cleanTimeline.empty())
+    val deletedFileNames = cleanTimeline.getInstants.asScala.flatMap { instant =>
+      val cleanMetadata = deserializeAvroMetadataLegacy(
+        cleanTimeline.getInstantDetails(instant).get(), classOf[HoodieCleanMetadata])
+      cleanMetadata.getPartitionMetadata.values().asScala.flatMap(_.getSuccessDeleteFiles.asScala)
+    }.toSet
+    assertTrue(deletedFileNames.nonEmpty, "The test must clean files before restoring")
     // Restore to savepoint
     writeClient.restoreToSavepoint(savepointTimestamp)
     // Verify restore completed
@@ -486,9 +488,10 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     val columnStats = columnStatsIndex
       .loadColumnStatsIndexRecords(targetColumnsToIndex, shouldReadInMemory = true)
       .collectAsList()
-    // All files from first commit have been removed.
+    assertFalse(columnStats.isEmpty, "Column stats must be present after restoring and writing")
     for (stats <- columnStats.asScala) {
-      assertFalse(stats.getFileName.contains(firstCompletedInstant.get().requestedTime()))
+      assertFalse(deletedFileNames.contains(stats.getFileName),
+        s"Column stats must not retain cleaned file ${stats.getFileName}")
     }
   }
 
