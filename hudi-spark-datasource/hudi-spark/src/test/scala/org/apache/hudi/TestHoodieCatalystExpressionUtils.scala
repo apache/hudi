@@ -18,8 +18,9 @@
 package org.apache.hudi
 
 import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateSub, Divide, Exp, Expression, Literal, Log, Lower, Multiply, ParseToDate, ShiftLeft, Sqrt, Upper}
-import org.apache.spark.sql.types.{DateType, DoubleType, IntegerType, LongType, StringType}
+import org.apache.spark.sql.types.{DataType, DateType, Decimal, DecimalType, DoubleType, FloatType, IntegerType, LongType, StringType}
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 
 /**
@@ -35,6 +36,7 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
   private val dblAttr = AttributeReference("d", DoubleType)()
   private val dateAttr = AttributeReference("dt", DateType)()
   private val longAttr = AttributeReference("l", LongType)()
+  private val decAttr = AttributeReference("dec", DecimalType(10, 2))()
 
   private def matched(expr: Expression): Option[AttributeReference] =
     sparkAdapter.getCatalystExpressionUtils.tryMatchAttributeOrderingPreservingTransformation(expr)
@@ -84,10 +86,61 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     assertEquals(Some(intAttr), matched(Cast(intAttr, LongType)))
     // Casting a numeric column to string can reorder values, so it must not match.
     assertEquals(None, matched(Cast(intAttr, StringType)))
-    // TODO(#19445): a narrowing numeric cast wraps around in non-ANSI mode and does not preserve
-    // ordering, so this should be None; pinning the current (incorrect) behavior until
-    // isCastPreservingOrdering rejects it.
-    assertEquals(Some(longAttr), matched(Cast(longAttr, IntegerType)))
+    // A narrowing numeric cast wraps around in non-ANSI mode and does not preserve ordering.
+    assertEquals(None, matched(Cast(longAttr, IntegerType)))
+  }
+
+  @Test
+  def testNumericCastOrderingFollowsUpCastRules(): Unit = {
+    // Widening precedence casts preserve ordering, including lossy-but-monotonic long to float.
+    assertEquals(Some(intAttr), matched(Cast(intAttr, DoubleType)))
+    assertEquals(Some(longAttr), matched(Cast(longAttr, FloatType)))
+    // Decimal widening is an up-cast; narrowing precision is not.
+    assertEquals(Some(decAttr), matched(Cast(decAttr, DecimalType(12, 2))))
+    assertEquals(None, matched(Cast(decAttr, DecimalType(8, 2))))
+    // Cast.canUpCast rejects double to float even though rounding is weakly monotonic; the
+    // conservative answer only costs pruning opportunity.
+    assertEquals(None, matched(Cast(dblAttr, FloatType)))
+    // String to numeric is not order-preserving.
+    assertEquals(None, matched(Cast(strAttr, IntegerType)))
+    // Identity string cast keeps the ordering.
+    assertEquals(Some(strAttr), matched(Cast(strAttr, StringType)))
+  }
+
+  @Test
+  def testMultiplyDivideRequireStrictlyPositiveLiteral(): Unit = {
+    // Negative factors reverse ordering.
+    assertEquals(None, matched(Multiply(intAttr, Literal(-1))))
+    assertEquals(None, matched(Multiply(Literal(-1), intAttr)))
+    assertEquals(None, matched(Divide(intAttr, Literal(-2))))
+    // Zero collapses ordering and makes division undefined.
+    assertEquals(None, matched(Multiply(intAttr, Literal(0))))
+    assertEquals(None, matched(Divide(intAttr, Literal(0))))
+    // Typed null literals carry a null value.
+    assertEquals(None, matched(Multiply(intAttr, Literal(null, IntegerType))))
+    // Non-literal operands cannot be validated statically, even when reference-free.
+    assertEquals(None, matched(Multiply(intAttr, Add(Literal(1), Literal(1)))))
+    // Self-multiplication is not monotonic over negative values.
+    assertEquals(None, matched(Multiply(intAttr, intAttr)))
+    // Strictly positive literals of any numeric type match in the supported operand positions.
+    assertEquals(Some(intAttr), matched(Multiply(intAttr, Literal(2.5d))))
+    assertEquals(Some(dblAttr), matched(Multiply(Literal(Decimal(2)), dblAttr)))
+    assertEquals(Some(intAttr), matched(Divide(intAttr, Literal(3L))))
+  }
+
+  @Test
+  def testCollationChangingStringCastsDoNotPreserveOrdering(): Unit = {
+    assumeTrue(HoodieSparkUtils.gteqSpark4_0, "String collations only exist on Spark 4.x")
+    // StringType("UTF8_LCASE") is a Spark 4 API, so it is obtained reflectively to keep this
+    // file compiling against the Spark 3 profiles.
+    val lcase = StringType.getClass.getMethod("apply", classOf[String])
+      .invoke(StringType, "UTF8_LCASE").asInstanceOf[DataType]
+    val collatedAttr = AttributeReference("cs", lcase)()
+    // Changing collation changes the sort order, in either direction.
+    assertEquals(None, matched(Cast(collatedAttr, StringType)))
+    assertEquals(None, matched(Cast(strAttr, lcase)))
+    // A collation-preserving cast keeps the ordering.
+    assertEquals(Some(collatedAttr), matched(Cast(collatedAttr, lcase)))
   }
 
   @Test
