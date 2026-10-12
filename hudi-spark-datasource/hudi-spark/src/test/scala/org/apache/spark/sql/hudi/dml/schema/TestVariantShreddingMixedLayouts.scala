@@ -2358,6 +2358,32 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
     }
   }
 
+  test("Variant read does not mutate the session vectorized reader configuration") {
+    assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
+
+    // A variant read falls back to row-based reads. That decision belongs to the scan alone: it used
+    // to be written into spark.sql.parquet.enableVectorizedReader, so every later read in the session
+    // lost vectorization.
+    withVariantTable(
+      "vectorized reader session conf",
+      "cow",
+      recordTypes = Seq(HoodieRecordType.SPARK)) { (tableName, _, _) =>
+
+      spark.sql(
+        s"""insert into $tableName values (1, parse_json('{"key":"v1"}'), 1000)""")
+
+      withSQLConf("spark.sql.parquet.enableVectorizedReader" -> "true") {
+        checkAnswer(
+          s"select id, cast(v as string) from $tableName")(
+          Seq(1, """{"key":"v1"}"""))
+
+        assert(
+          spark.conf.get("spark.sql.parquet.enableVectorizedReader") == "true",
+          "A query-local vectorization fallback must not mutate the session configuration")
+      }
+    }
+  }
+
   // -----------------------------------------------------------------------------------------------
   // G. Schema evolution
   // -----------------------------------------------------------------------------------------------
