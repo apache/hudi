@@ -54,5 +54,5 @@ ENV HDFS_SECONDARYNAMENODE_USER root
 ENV YARN_RESOURCEMANAGER_USER root
 ENV YARN_NODEMANAGER_USER root
 
-# for RocksDb
-RUN apk add --no-cache libstdc++
+# RocksDB needs libstdc++; Hadoop's daemon scripts need procps (ps -p).
+RUN apk add --no-cache libstdc++ procps

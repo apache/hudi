@@ -270,8 +270,9 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
   private val recordMerger = HoodieRecordUtils.createRecordMerger(tableState.tablePath, EngineType.SPARK,
     tableState.recordMergeImplClasses.asJava, tableState.recordMergeStrategyId)
 
-  private val rowRecordContext: RecordContext[InternalRow] = SparkFileFormatInternalRecordContext.getFieldAccessorInstance
-  private val avroRecordContext: RecordContext[IndexedRecord] = AvroRecordContext.getFieldAccessorInstance
+  // Merging caches schema IDs and serializers; these contexts must not be shared across Spark tasks.
+  private val rowRecordContext: RecordContext[InternalRow] = SparkFileFormatInternalRecordContext()
+  private val avroRecordContext: RecordContext[IndexedRecord] = new AvroRecordContext()
   private val orderingFields: Array[String] = tableState.orderingFields.toArray
 
   override def doHasNext: Boolean = hasNextInternal
