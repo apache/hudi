@@ -486,6 +486,9 @@ def assess_design(
             "contract_schema must be 1 (append-only) or 2 (mutable COW)",
         )
     mutable_contract = contract_schema == MUTABLE_CONTRACT_SCHEMA_VERSION
+    contract_profile = manifest[
+        "mutable_executable_contract" if mutable_contract else "executable_contract"
+    ]
     if not mutable_contract and "ordering" in contract:
         assessment.add(
             "FLINK_DESIGN_CONTRACT_INVALID",
@@ -560,9 +563,7 @@ def assess_design(
         assessment.add("FLINK_REPLAY_BEHAVIOR_UNRESOLVED", "Replay behavior is unresolved")
     elif replay_behavior == "must_collapse" and not mutable_contract:
         assessment.add("FLINK_REPLAY_IDEMPOTENCE_DEFERRED", "Replay deduplication needs upsert")
-    elif replay_behavior not in (
-        {"must_collapse"} if mutable_contract else {"cannot_occur", "duplicates_acceptable"}
-    ):
+    elif replay_behavior not in contract_profile["allow_replay_behaviors"]:
         assessment.add("FLINK_REPLAY_BEHAVIOR_UNRESOLVED", "Replay behavior is unresolved")
 
     table = _dict(contract.get("table"), "table", assessment)
@@ -750,7 +751,16 @@ def assess_design(
                 "FLINK_MUTABLE_ORDERING_FIELD_REQUIRED",
                 "Exactly one ordering field is required",
             )
+        reserved_ordering_values = set(
+            contract_profile["reserved_ordering_field_values"]
+        )
         for field in ordering_fields:
+            if field in reserved_ordering_values:
+                assessment.add(
+                    "FLINK_MUTABLE_ORDERING_FIELD_INVALID",
+                    f"Ordering field {field!r} is reserved by Hudi and disables ordering",
+                )
+                continue
             column = table_by_name.get(field)
             if column is None:
                 assessment.add(

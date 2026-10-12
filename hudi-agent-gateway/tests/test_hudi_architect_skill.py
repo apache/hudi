@@ -324,6 +324,14 @@ def test_flink_capability_manifest_records_executable_acceptance_contracts() -> 
         for check in manifest["implemented_acceptance_checks"]
     }
 
+    assert manifest["mutable_executable_contract"]["allow_replay_behaviors"] == [
+        "cannot_occur",
+        "duplicates_acceptable",
+        "must_collapse",
+    ]
+    assert manifest["mutable_executable_contract"][
+        "reserved_ordering_field_values"
+    ] == ["no_precombine"]
     assert effective_settings == {
         "pr2-append-only-cow": {
             "table.type": "COPY_ON_WRITE",
@@ -525,6 +533,43 @@ def test_pr3_valid_mutable_design_renders_exact_executable_sql() -> None:
     assert assessment["validation_evidence"]["capability_manifest_schema"] == 3
 
 
+@pytest.mark.parametrize(
+    "replay_behavior",
+    ["cannot_occur", "duplicates_acceptable", "must_collapse"],
+)
+def test_pr3_accepts_resolved_replay_behaviors(
+    tmp_path: Path, replay_behavior: str
+) -> None:
+    design = json.loads(_read(PR3_FIXTURE_DIR / "mutable_cow.json"))
+    design["safety"]["replay_behavior"] = replay_behavior
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 0, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "CONFIG_VALIDATED"
+    assert assessment["finding_codes"] == []
+    assert assessment["artifacts"]["combined_sql"] == _read_sql_golden(
+        PR3_FIXTURE_DIR / "mutable_cow.sql"
+    ).rstrip("\n")
+
+
+@pytest.mark.parametrize("replay_behavior", ["unknown", [], {}])
+def test_pr3_rejects_unresolved_replay_behaviors(
+    tmp_path: Path, replay_behavior: object
+) -> None:
+    design = json.loads(_read(PR3_FIXTURE_DIR / "mutable_cow.json"))
+    design["safety"]["replay_behavior"] = replay_behavior
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == ["FLINK_REPLAY_BEHAVIOR_UNRESOLVED"]
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert "artifacts" not in assessment
+
+
 def test_pr3_accepts_update_only_source_without_delete_payload(tmp_path: Path) -> None:
     design = json.loads(_read(PR3_FIXTURE_DIR / "mutable_cow.json"))
     design["source"]["emits_deletes"] = False
@@ -557,11 +602,16 @@ def test_pr3_rejects_unsupported_source_changelog(
 
 
 @pytest.mark.parametrize(
-    ("field_type", "nullable"),
-    [("STRING", False), ("TIMESTAMP_LTZ(3)", False), ("BIGINT", True)],
+    ("field_name", "field_type", "nullable"),
+    [
+        ("event_version", "STRING", False),
+        ("event_version", "TIMESTAMP_LTZ(3)", False),
+        ("event_version", "BIGINT", True),
+        ("no_precombine", "BIGINT", False),
+    ],
 )
 def test_pr3_rejects_invalid_ordering_fields(
-    tmp_path: Path, field_type: str, nullable: bool
+    tmp_path: Path, field_name: str, field_type: str, nullable: bool
 ) -> None:
     design = json.loads(_read(PR3_FIXTURE_DIR / "mutable_cow.json"))
     for section in ("table", "source"):
@@ -570,8 +620,10 @@ def test_pr3_rejects_invalid_ordering_fields(
             for column in design[section]["columns"]
             if column["name"] == "event_version"
         )
+        column["name"] = field_name
         column["type"] = field_type
         column["nullable"] = nullable
+    design["ordering"]["fields"] = [field_name]
 
     result = _run_flink_design_validator(_write_design(tmp_path, design))
 

@@ -70,7 +70,7 @@ Design contract schema: <1 append-only | 2 mutable COW>
 
 Confirmed facts:
 - New table; confirmed single writer; no current external-catalog requirement.
-- Workload: <append-only with replay behavior | mutable with copies required to collapse>.
+- Workload: <append-only or mutable, with confirmed replay behavior>.
 - Identity: <stable key fields | explicitly accepted append-only auto-generated keys>.
 - Mutable only: one event-time ordering field; immutable partition values; full-row delete posture.
 

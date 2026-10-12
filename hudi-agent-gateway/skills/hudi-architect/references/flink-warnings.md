@@ -202,8 +202,8 @@ insert path cannot be presented as deduplicating.
 **Trigger:** The user cannot determine whether retries, replays, or backfills can repeat logical
 records or whether repeated copies must collapse.
 
-**Message:** Replay safety is unresolved, so the append-only insert path cannot be presented as
-idempotent.
+**Message:** Replay safety is unresolved, so an executable append-only or mutable path cannot be
+validated.
 
 **Action:** `REVIEW_REQUIRED`; retain the uncertainty and withhold executable output.
 
@@ -364,9 +364,11 @@ Checking only `write.operation=insert` is insufficient.
 
 ## FLINK_MUTABLE_ORDERING_FIELD_INVALID
 
-**Trigger:** The ordering field is absent, nullable, or not BIGINT/TIMESTAMP(p<=6).
+**Trigger:** The ordering field is absent, nullable, not BIGINT/TIMESTAMP(p<=6), or is the exact
+Hudi `no_precombine` sentinel.
 
-**Message:** The bounded event-time merger surface does not cover nullable or other orderings.
+**Message:** The bounded event-time merger surface does not cover nullable or other orderings, and
+`no_precombine` disables ordering instead of selecting a same-named physical field.
 
 **Action:** `BLOCKED`; correct the source contract without casting silently.
 

@@ -67,6 +67,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -156,6 +157,10 @@ class TestFlinkArchitectSqlFixtures {
     assertEquals("event_version", conf.get(FlinkOptions.ORDERING_FIELDS));
     assertEquals("EVENT_TIME_ORDERING", conf.get(FlinkOptions.RECORD_MERGE_MODE));
     assertFalse(conf.get(FlinkOptions.CHANGELOG_ENABLED));
+
+    conf.set(FlinkOptions.ORDERING_FIELDS, FlinkOptions.NO_PRE_COMBINE);
+    assertEquals("no_precombine", FlinkOptions.NO_PRE_COMBINE);
+    assertNull(OptionsResolver.getOrderingFieldsStr(conf));
   }
 
   @Test

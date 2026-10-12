@@ -86,7 +86,7 @@ do not replace the shared table-design rules and do not form a standalone planne
 | Table type, operation, or execution mode is outside PR2 | `FLINK_PR2_WRITE_PATH_UNSUPPORTED` | `BLOCKED` | No |
 | Mutable path uses auto-generated keys | `FLINK_MUTABLE_AUTO_KEY_UNSUPPORTED` | `BLOCKED` | No |
 | Mutable source is not normalized UPSERT (`I`, `UA`, `D`, no `UB`) | `FLINK_MUTABLE_SOURCE_CHANGELOG_UNSUPPORTED` | `BLOCKED` | No |
-| Mutable ordering field is absent, nullable, or outside BIGINT/TIMESTAMP(p≤6) | `FLINK_MUTABLE_ORDERING_FIELD_INVALID` | `BLOCKED` | No |
+| Mutable ordering field is absent, nullable, outside BIGINT/TIMESTAMP(p≤6), or is `no_precombine` | `FLINK_MUTABLE_ORDERING_FIELD_INVALID` | `BLOCKED` | No |
 | Mutable ordering decision is absent or not event-time | `FLINK_MUTABLE_ORDERING_FIELD_REQUIRED` | `INCOMPLETE` | No |
 | A mutable delete does not carry the full projected row | `FLINK_MUTABLE_DELETE_PAYLOAD_UNSUPPORTED` | `BLOCKED` | No |
 | Partition values can change for an existing key | `FLINK_MUTABLE_PARTITION_EVOLUTION_UNSUPPORTED` | `BLOCKED` | No |
@@ -124,7 +124,10 @@ only bounded static validation against the pinned release contract.
 
 | Mutability | Stable business key | Replay requirement | Result |
 |---|---|---|---|
+| Mutable | Yes | Replays impossible | Continue into the bounded PR3 mutable contract |
+| Mutable | Yes | Duplicates acceptable | Continue; record duplicate tolerance |
 | Mutable | Yes | Copies must collapse | Continue into the bounded PR3 mutable contract |
+| Mutable | Yes | Replay behavior unknown | `REVIEW_REQUIRED` |
 | Mutable | No | Any | `BLOCKED` — auto-key cannot express mutable identity |
 | Mutable | Unknown | Any | `INCOMPLETE` |
 | Append-only | Yes | Replays impossible | Continue safety gates; stable key preferred |

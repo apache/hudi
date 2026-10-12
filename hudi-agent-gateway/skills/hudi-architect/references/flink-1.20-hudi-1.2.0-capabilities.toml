@@ -53,9 +53,10 @@ source_changelog_mode = "UPSERT"
 execution_mode = "STREAMING"
 require_checkpointing = true
 record_key_mode = "stable_key"
-replay_behavior = "must_collapse"
+allow_replay_behaviors = ["cannot_occur", "duplicates_acceptable", "must_collapse"]
 ordering_mode = "event_time"
 ordering_field_types = ["BIGINT", "TIMESTAMP"]
+reserved_ordering_field_values = ["no_precombine"]
 allow_emits_deletes = [false, true]
 delete_payload_when_deletes = "FULL_ROW"
 delete_payload_without_deletes = "NOT_APPLICABLE"
@@ -141,7 +142,7 @@ purpose = "Writer-side prepending of Hudi metadata fields to the Flink row type"
 id = "options_resolver"
 path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/configuration/OptionsResolver.java"
 sha256 = "1a63ef88bbdf84cbcebb92f402557c21b6f84bdd0112726792ce22da635ad766"
-purpose = "Effective append-mode predicate"
+purpose = "Effective append-mode predicate and no-precombine ordering sentinel resolution"
 
 [[source_anchors]]
 id = "table_factory"
@@ -262,7 +263,7 @@ source_symbol = "INDEX_TYPE"
 [[verified_options]]
 key = "ordering.fields"
 value_type = "string"
-source_anchors = ["flink_options"]
+source_anchors = ["flink_options", "options_resolver"]
 source_symbol = "ORDERING_FIELDS"
 
 [[verified_options]]
@@ -400,7 +401,7 @@ java_test = "testMutableCowSinkAndUpsertPlan"
 
 [[implemented_acceptance_checks]]
 id = "FLINK_MUTABLE_ORDERING_FIELD_INVALID"
-requirement = "Require one non-null BIGINT or TIMESTAMP(p<=6) event-time ordering field."
+requirement = "Require one non-null BIGINT or TIMESTAMP(p<=6) event-time ordering field and reject Hudi's no_precombine sentinel."
 python_test = "test_pr3_rejects_invalid_ordering_fields"
 java_test = "testPinnedMutableOrderingConfiguration"
 

@@ -172,7 +172,10 @@ the Python validator tests preserve the 999/1000 ms Architect boundary.
 
 The schema-2 path is deliberately narrower than the full Hudi upsert surface. It accepts only a
 new table, one writer, no external catalog, streaming checkpoints, stable non-null identity, one
-event-time ordering field, normalized UPSERT input, immutable partitions, and full-row deletes when present.
+event-time ordering field, normalized UPSERT input, immutable partitions, and full-row deletes when
+present. All three resolved replay answers are eligible; only an unresolved replay posture blocks
+validation. The exact ordering-field value `no_precombine` is rejected because Hudi 1.2.0 resolves
+that sentinel to no ordering field even if the physical schema contains a same-named column.
 The renderer fixes `COPY_ON_WRITE`, `upsert`, `EVENT_TIME_ORDERING`, global `FLINK_STATE`, state
 TTL `0`, index bootstrap, and `changelog.enabled=false`; it accepts no pass-through override.
 

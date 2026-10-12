@@ -157,7 +157,8 @@ For mutable input, ask for the stable business-key field(s) and one ordering fie
   `INCOMPLETE` with `FLINK_MUTABLE_ORDERING_FIELD_REQUIRED`.
 - Stable key plus one ordering field → record both, then validate their physical fields in F7.
   The ordering field must be non-null `BIGINT` or `TIMESTAMP(p<=6)`; do not infer a cast or use
-  ingestion time as a hidden default.
+  ingestion time as a hidden default. Reject the exact value `no_precombine`: Hudi 1.2.0 treats it
+  as a sentinel that disables ordering even when a physical column has that name.
 
 For append-only input:
 
