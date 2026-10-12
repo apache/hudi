@@ -62,7 +62,7 @@ public class SparkPartitionBucketIndexPartitioner<T> extends SparkHoodiePartitio
   // comma-separated config string is not re-split per record
   private final List<String> indexKeyFieldList;
   private final int totalPartitionPaths;
-  private final List<String> partitionPaths;
+  private final transient List<String> partitionPaths;
   /**
    * Helps get the RDD partition id, partition id is partition offset + bucket id.
    * The partition offset is a multiple of the bucket num.
@@ -73,18 +73,18 @@ public class SparkPartitionBucketIndexPartitioner<T> extends SparkHoodiePartitio
   /**
    * Partition path and file groups in it pair. Decide the file group an incoming update should go to.
    */
-  private Map<String, Set<String>> updatePartitionPathFileIds;
+  private transient Map<String, Set<String>> updatePartitionPathFileIds;
 
   private final boolean isNonBlockingConcurrencyControl;
   /**
    * Direct mapping from partition number to partition path.
    */
-  private final String[] partitionNumberToPath;
+  private final transient String[] partitionNumberToPath;
 
   /**
    * Direct mapping from partition number to local bucket ID.
    */
-  private final Integer[] partitionNumberToLocalBucketId;
+  private final transient Integer[] partitionNumberToLocalBucketId;
 
   public SparkPartitionBucketIndexPartitioner(WorkloadProfile profile,
                                               HoodieEngineContext context,

@@ -37,16 +37,18 @@ import org.apache.spark.Partitioner;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 public abstract class BaseSparkDeltaCommitActionExecutor<T>
     extends BaseSparkCommitActionExecutor<T> {
 
-  // UpsertPartitioner for MergeOnRead table type
-  private SparkUpsertDeltaCommitPartitioner<T> mergeOnReadUpsertPartitioner;
+  // file ids of the small files the upsert partitioner packs inserts into
+  private Set<String> smallFileIds = Collections.emptySet();
 
   public BaseSparkDeltaCommitActionExecutor(HoodieSparkEngineContext context, HoodieWriteConfig config, HoodieTable table,
                                                 String instantTime, WriteOperationType operationType) {
@@ -64,8 +66,10 @@ public abstract class BaseSparkDeltaCommitActionExecutor<T>
     if (profile == null) {
       throw new HoodieUpsertException("Need workload profile to construct the upsert partitioner.");
     }
-    mergeOnReadUpsertPartitioner = new SparkUpsertDeltaCommitPartitioner<>(profile, (HoodieSparkEngineContext) context, table, config, operationType);
-    return mergeOnReadUpsertPartitioner;
+    SparkUpsertDeltaCommitPartitioner<T> partitioner =
+        new SparkUpsertDeltaCommitPartitioner<>(profile, (HoodieSparkEngineContext) context, table, config, operationType);
+    smallFileIds = new HashSet<>(partitioner.getSmallFileIds());
+    return partitioner;
   }
 
   @Override
@@ -73,8 +77,7 @@ public abstract class BaseSparkDeltaCommitActionExecutor<T>
                                                   long numUpdates,
                                                   Iterator<HoodieRecord<T>> recordItr) throws IOException {
     log.info("Merging updates for commit {} for file {}", instantTime, fileId);
-    if (!table.getIndex().canIndexLogFiles() && mergeOnReadUpsertPartitioner != null
-        && mergeOnReadUpsertPartitioner.getSmallFileIds().contains(fileId)) {
+    if (!table.getIndex().canIndexLogFiles() && smallFileIds.contains(fileId)) {
       log.info("Small file corrections for updates for commit {} for file {}", instantTime, fileId);
       return super.handleUpdate(partitionPath, fileId, numUpdates, recordItr);
     } else {

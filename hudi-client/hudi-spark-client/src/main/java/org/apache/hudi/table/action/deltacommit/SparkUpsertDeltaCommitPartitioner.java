@@ -116,6 +116,9 @@ public class SparkUpsertDeltaCommitPartitioner<T> extends UpsertPartitioner<T> {
           .collect(Collectors.toList());
   }
 
+  /**
+   * Driver only.
+   */
   public List<String> getSmallFileIds() {
     return smallFiles.stream().map(smallFile -> smallFile.location.getFileId())
         .collect(Collectors.toList());

@@ -27,10 +27,13 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.CompactionTestUtils;
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -40,6 +43,7 @@ import org.apache.hudi.io.MergeContext;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.WorkloadProfile;
+import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.table.action.cluster.ClusteringTestUtils;
 import org.apache.hudi.table.action.deltacommit.SparkUpsertDeltaCommitPartitioner;
 import org.apache.hudi.testutils.HoodieClientTestBase;
@@ -396,6 +400,48 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
             new BucketInfo(BucketType.UPDATE, "fg-1", partitionPath)
         ),
         partitioner.getBucketInfos());
+  }
+
+  @Test
+  void testSmallFilesOfManyPartitionsFromTimelineServer() throws Exception {
+    HoodieWriteConfig config = makeHoodieClientConfigBuilder()
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1000 * 1024).build())
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withStorageType(FileSystemViewStorageType.REMOTE_ONLY)
+            .withRemoteServerHost("localhost").withRemoteServerPort(timelineServicePort).build())
+        .build();
+    // more partitions than the timeline server takes in one request URL, plus one with updates only
+    List<String> partitionPaths = new ArrayList<>();
+    for (int i = 0; i < 500; i++) {
+      String partitionPath = String.format("year=2024/month=%02d/day=%05d", i % 12 + 1, i);
+      FileCreateUtilsLegacy.createBaseFile(basePath, partitionPath, "001", "file" + i, 1024);
+      partitionPaths.add(partitionPath);
+    }
+    FileCreateUtilsLegacy.createCommit(basePath, "001");
+    Map<String, WorkloadStat> partitionStats = new HashMap<>();
+    WorkloadStat globalStat = new WorkloadStat();
+    for (String partitionPath : partitionPaths) {
+      partitionStats.put(partitionPath, new WorkloadStat());
+      partitionStats.get(partitionPath).addInserts(10);
+      globalStat.addInserts(10);
+    }
+    WorkloadStat updateOnlyStat = new WorkloadStat();
+    updateOnlyStat.addUpdates(new HoodieRecordLocation("001", "updated-file"), 5);
+    partitionStats.put("updates/only", updateOnlyStat);
+    globalStat.addUpdates(new HoodieRecordLocation("001", "updated-file"), 5);
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    UpsertPartitioner partitioner = new UpsertPartitioner(new WorkloadProfile(Pair.of(partitionStats, globalStat)),
+        context, HoodieSparkTable.create(config, context, metaClient), config, WriteOperationType.UPSERT);
+
+    // one update bucket per partition: the small file takes all the inserts of its partition
+    assertEquals(501, partitioner.numPartitions());
+    for (int i = 0; i < partitionPaths.size(); i++) {
+      List<InsertBucketCumulativeWeightPair> insertBuckets = partitioner.getInsertBuckets(partitionPaths.get(i));
+      assertEquals(1, insertBuckets.size());
+      BucketInfo bucketInfo = partitioner.getSparkBucketInfoGetter().getBucketInfo(insertBuckets.get(0).getKey().bucketNumber);
+      assertEquals(new BucketInfo(BucketType.UPDATE, "file" + i, partitionPaths.get(i)), bucketInfo);
+    }
   }
 
   private HoodieWriteConfig.Builder makeHoodieClientConfigBuilder() {
