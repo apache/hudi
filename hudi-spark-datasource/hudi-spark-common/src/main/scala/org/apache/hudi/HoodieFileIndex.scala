@@ -658,19 +658,20 @@ object HoodieFileIndex extends Logging {
       properties.setProperty(HoodieTableConfig.PARTITION_EXTRACTOR_CLASS.key(), tableConfig.getPartitionExtractorClass.orElse(""))
 
       // The catalog entry only completes the simple bucket index options, which hoodie.properties does not record,
-      // so it is consulted only when the read declares a bucket index and only those options are copied.
+      // so it is consulted only when the read declares a bucket index and was resolved from that entry, and only
+      // those options are copied.
       if (isBucketIndexDeclared(properties)) {
-        val database = getDatabaseName(tableConfig, spark.catalog.currentDatabase)
-        val tableName = tableConfig.getTableName
-        try {
-          if (spark.catalog.tableExists(database, tableName)) {
-            val table = HoodieCatalogTable(spark, TableIdentifier(tableName, Some(database)))
-            table.catalogProperties.filter { case (key, _) => bucketIndexCatalogKeys.contains(key) }
-            .foreach(kv => properties.setProperty(kv._1, kv._2))
+        catalogTableIdentifier(options).foreach { identifier =>
+          try {
+            if (spark.catalog.tableExists(identifier.database.get, identifier.table)) {
+              HoodieCatalogTable(spark, identifier).catalogProperties
+                .filter { case (key, _) => bucketIndexCatalogKeys.contains(key) }
+                .foreach(kv => properties.setProperty(kv._1, kv._2))
+            }
+          } catch {
+            case NonFatal(e) =>
+              logWarning(s"Skipping catalog properties of $identifier: the lookup failed", e)
           }
-        } catch {
-          case NonFatal(e) =>
-            logWarning(s"Skipping catalog properties for table $tableName: lookup of $database.$tableName failed", e)
         }
       }
     }
@@ -737,16 +738,11 @@ object HoodieFileIndex extends Logging {
   private def isBucketIndexDeclared(properties: TypedProperties): Boolean =
     IndexType.BUCKET.name.equalsIgnoreCase(ConfigUtils.getStringWithAltKeys(properties, HoodieIndexConfig.INDEX_TYPE, ""))
 
-  // if database name is not set, fall back to use 'default' instead of failing
-  def getDatabaseName(tableConfig: HoodieTableConfig, defaultDatabase: String)  = {
-    if (StringUtils.isNullOrEmpty(tableConfig.getDatabaseName)) {
-      if (StringUtils.isNullOrEmpty(defaultDatabase)) {
-        "default"
-      } else {
-        defaultDatabase
-      }
-    } else {
-      tableConfig.getDatabaseName
-    }
-  }
+  /**
+   * The catalog entry a read was resolved from, as passed by Hudi's Spark catalog integration.
+   */
+  def catalogTableIdentifier(options: scala.collection.Map[String, String]): Option[TableIdentifier] = for {
+    database <- options.get(DataSourceReadOptions.CATALOG_TABLE_DATABASE.key).filter(_.nonEmpty)
+    table <- options.get(DataSourceReadOptions.CATALOG_TABLE_NAME.key).filter(_.nonEmpty)
+  } yield TableIdentifier(table, Some(database))
 }

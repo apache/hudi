@@ -67,8 +67,6 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
   private static final int DEFAULT_LISTING_PARALLELISM = 1500;
 
   @Getter
-  private final String databaseName;
-  @Getter
   private final String tableName;
   private final boolean hiveStylePartitioningEnabled;
   private final boolean urlEncodePartitioningEnabled;
@@ -76,7 +74,6 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
   public FileSystemBackedTableMetadata(HoodieEngineContext engineContext, HoodieTableConfig tableConfig,
                                        HoodieStorage storage, String datasetBasePath) {
     super(engineContext, storage, datasetBasePath);
-    this.databaseName = tableConfig.getDatabaseName();
     this.tableName = tableConfig.getTableName();
     this.hiveStylePartitioningEnabled = Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable());
     this.urlEncodePartitioningEnabled = Boolean.parseBoolean(tableConfig.getUrlEncodePartitioning());
@@ -90,7 +87,6 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
     StoragePath metaPath =
         new StoragePath(dataBasePath, HoodieTableMetaClient.METAFOLDER_NAME);
     HoodieTableConfig tableConfig = new HoodieTableConfig(storage, metaPath);
-    this.databaseName = tableConfig.getDatabaseName();
     this.tableName = tableConfig.getTableName();
     this.hiveStylePartitioningEnabled =
         Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable());
