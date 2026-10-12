@@ -38,6 +38,7 @@ import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSpa
 import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.catalyst.catalog.SessionCatalog
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.checkMessageContains
 import org.apache.spark.sql.types.StructField
@@ -71,14 +72,35 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   //       is consistent with the fixtures
   DateTimeZone.setDefault(DateTimeZone.UTC)
   TimeZone.setDefault(DateTimeUtils.getTimeZone("UTC"))
-  protected lazy val spark: SparkSession = SparkSession.builder()
-    .config("spark.sql.warehouse.dir", sparkWareHouse.getCanonicalPath)
-    .config("spark.sql.session.timeZone", "UTC")
-    .config("hoodie.insert.shuffle.parallelism", "4")
-    .config("hoodie.upsert.shuffle.parallelism", "4")
-    .config("hoodie.delete.shuffle.parallelism", "4")
-    .config(sparkConf())
-    .getOrCreate()
+  protected lazy val spark: SparkSession = {
+    val session = StrictCatalogSharedState.createSession(Map(
+      "spark.sql.warehouse.dir" -> sparkWareHouse.getCanonicalPath,
+      "spark.sql.session.timeZone" -> "UTC",
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      "hoodie.delete.shuffle.parallelism" -> "4"
+    ) ++ sparkConf().getAll)
+    // The test database shares the warehouse root with `default`, so managed table paths are unchanged.
+    session.sql(s"CREATE DATABASE IF NOT EXISTS $testDatabase LOCATION '${sparkWareHouse.getCanonicalPath}'")
+    session.sql(s"USE $testDatabase")
+    session
+  }
+
+  /**
+   * The current database of [[spark]]. The session runs on [[StrictDefaultDatabaseCatalog]], which
+   * rejects table and function operations on `default`.
+   */
+  protected def testDatabase: String = HoodieSparkSqlTestBase.TEST_DATABASE
+
+  /**
+   * A new session sharing [[spark]]'s catalog, switched to [[testDatabase]] since a new session
+   * always starts in `default`.
+   */
+  protected def newSessionInTestDatabase(): SparkSession = {
+    val session = spark.newSession()
+    session.sql(s"USE $testDatabase")
+    session
+  }
 
   private var tableId = new AtomicInteger(0)
 
@@ -119,7 +141,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
         // Runs before the catalog cleanup so it holds even if a drop throws.
         HoodieInMemoryHashIndex.clear()
         val catalog = spark.sessionState.catalog
-        catalog.listDatabases().foreach { db =>
+        catalog.listDatabases().filterNot(_.equalsIgnoreCase(SessionCatalog.DEFAULT_DATABASE)).foreach { db =>
           catalog.listTables(db).foreach { table =>
             catalog.dropTable(table, true, true)
           }
@@ -277,7 +299,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   protected def getExpectedUnresolvedColumnExceptionMessage(columnName: String,
                                                             targetTableName: String): String = {
     val targetTableFields = spark.sql(s"select * from $targetTableName").schema.fields
-      .map(e => (e.name, targetTableName, s"spark_catalog.default.$targetTableName.${e.name}"))
+      .map(e => (e.name, targetTableName, s"spark_catalog.$testDatabase.$targetTableName.${e.name}"))
     getExpectedUnresolvedColumnExceptionMessage(columnName, targetTableFields)
   }
 
@@ -412,6 +434,8 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
 }
 
 object HoodieSparkSqlTestBase {
+
+  final val TEST_DATABASE: String = "hudi_sql_test"
 
   // the naming format of 0.x version
   final val NAME_FORMAT_0_X: Pattern = Pattern.compile("^(\\d+)(\\.\\w+)(\\.\\D+)?$")

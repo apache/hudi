@@ -457,10 +457,10 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
 
         if (gteqSpark3_4) {
           assert(e1.getMessage.contains(s"Detected disallowed assignment clause in UPDATE statement for record key field `id`" +
-            s" for table `spark_catalog.default.$tableName`. Please remove the assignment clause to avoid the error."))
+            s" for table `spark_catalog.$testDatabase.$tableName`. Please remove the assignment clause to avoid the error."))
         } else {
           assert(e1.getMessage.contains(s"Detected disallowed assignment clause in UPDATE statement for record key field `id`" +
-            s" for table `default.$tableName`. Please remove the assignment clause to avoid the error."))
+            s" for table `$testDatabase.$tableName`. Please remove the assignment clause to avoid the error."))
         }
 
         // Try to update partition column (should fail)
@@ -469,10 +469,10 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
         }
         if (gteqSpark3_4) {
           assert(e2.getMessage.contains(s"Detected disallowed assignment clause in UPDATE statement for partition field `pt`" +
-            s" for table `spark_catalog.default.$tableName`. Please remove the assignment clause to avoid the error."))
+            s" for table `spark_catalog.$testDatabase.$tableName`. Please remove the assignment clause to avoid the error."))
         } else {
           assert(e2.getMessage.contains(s"Detected disallowed assignment clause in UPDATE statement for partition field `pt`" +
-            s" for table `default.$tableName`. Please remove the assignment clause to avoid the error."))
+            s" for table `$testDatabase.$tableName`. Please remove the assignment clause to avoid the error."))
         }
 
         // Verify data remains unchanged after failed updates

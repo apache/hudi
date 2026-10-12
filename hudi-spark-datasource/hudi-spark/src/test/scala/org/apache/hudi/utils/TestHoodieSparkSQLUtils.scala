@@ -31,7 +31,7 @@ class TestHoodieSparkSQLUtils extends HoodieSparkSqlTestBase {
 
   test("Test getBasePathFromTableName APIs") {
     withTable(generateTableName) { tableName =>
-      val fullTableName = s"default.$tableName"
+      val fullTableName = s"$testDatabase.$tableName"
       createHudiTable(tableName)
 
       val expectedBasePath = getTableLocation(fullTableName)
@@ -55,18 +55,18 @@ class TestHoodieSparkSQLUtils extends HoodieSparkSqlTestBase {
           createHudiTable(tableName2)
           createHudiTable(otherPrefixTable)
 
-          val fullTableName1 = s"default.$tableName1"
-          val fullTableName2 = s"default.$tableName2"
-          val fullOtherTableName = s"default.$otherPrefixTable"
+          val fullTableName1 = s"$testDatabase.$tableName1"
+          val fullTableName2 = s"$testDatabase.$tableName2"
+          val fullOtherTableName = s"$testDatabase.$otherPrefixTable"
 
-          val allPairs = HoodieSparkSQLUtils.loadHoodiePathsFromHive(spark, "default", false).asScala
+          val allPairs = HoodieSparkSQLUtils.loadHoodiePathsFromHive(spark, testDatabase, false).asScala
           val allTableNames = allPairs.map(_.getLeft).toSet
           assertTrue(allTableNames.contains(fullTableName1))
           assertTrue(allTableNames.contains(fullTableName2))
           assertTrue(allTableNames.contains(fullOtherTableName))
 
           val prefixPairs = HoodieSparkSQLUtils
-            .loadHoodiePathsFromHive(spark, "default", false, tableNamePrefix)
+            .loadHoodiePathsFromHive(spark, testDatabase, false, tableNamePrefix)
             .asScala
           assertTrue(prefixPairs.forall(_.getLeft.split("\\.")(1).startsWith(tableNamePrefix)))
         }
@@ -77,7 +77,7 @@ class TestHoodieSparkSQLUtils extends HoodieSparkSqlTestBase {
   test("Test loadHoodiePathsFromHive filterHudiDatasets mode") {
     withTable(generateTableName) { tableName =>
       createHudiTable(tableName)
-      val filteredPairs = HoodieSparkSQLUtils.loadHoodiePathsFromHive(spark, "default", true).asScala
+      val filteredPairs = HoodieSparkSQLUtils.loadHoodiePathsFromHive(spark, testDatabase, true).asScala
       // The current filter checks InputFormat value with startsWith("Hoodie").
       assertTrue(filteredPairs.isEmpty)
     }

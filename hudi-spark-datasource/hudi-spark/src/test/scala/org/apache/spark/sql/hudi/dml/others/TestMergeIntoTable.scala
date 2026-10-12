@@ -1581,7 +1581,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         )
 
         val targetTableFields = spark.sql(s"select * from $tableName").schema.fields
-          .map(e => (e.name, tableName, s"spark_catalog.default.$tableName.${e.name}"))
+          .map(e => (e.name, tableName, s"spark_catalog.$testDatabase.$tableName.${e.name}"))
         val sourceTableFields = Seq("s0._id", "s0._price", "s0._ts", "s0.dt", "s0.name")
           .map(e => {
             val splits = e.split('.')

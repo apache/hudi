@@ -104,7 +104,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
 
           spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
           spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
-          checkAnswer(s"show indexes from default.$tableName")(
+          checkAnswer(s"show indexes from $testDatabase.$tableName")(
             Seq("column_stats", "column_stats", ""),
             Seq("partition_stats", "partition_stats", ""),
             Seq("record_index", "record_index", "")
@@ -116,7 +116,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           )
           // Secondary index is created by default for non record key column when index type is not specified
           spark.sql(s"create index idx_name on $tableName (name)")
-          checkAnswer(s"show indexes from default.$tableName")(
+          checkAnswer(s"show indexes from $testDatabase.$tableName")(
             Seq("column_stats", "column_stats", ""),
             Seq("partition_stats", "partition_stats", ""),
             Seq("secondary_index_idx_name", "secondary_index", "name"),
@@ -1161,7 +1161,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
       withSQLConf("hoodie.schema.on.read.enable" -> "true") {
 
         // Verify indexes exist
-        checkAnswer(s"show indexes from default.$tableName")(
+        checkAnswer(s"show indexes from $testDatabase.$tableName")(
           Seq("column_stats", "column_stats", ""),
           Seq("record_index", "record_index", ""),
           Seq("secondary_index_idx_quantity1", "secondary_index", "quantity1"),

@@ -161,7 +161,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
   test("Test Create Expression Index Syntax") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
-        val databaseName = "default"
+        val databaseName = testDatabase
         val tableName = generateTableName
         val basePath = s"${tmp.getCanonicalPath}/$tableName"
         spark.sql(
@@ -187,7 +187,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
         val sqlParser: ParserInterface = spark.sessionState.sqlParser
         val analyzer: Analyzer = spark.sessionState.analyzer
 
-        var logicalPlan = sqlParser.parsePlan(s"show indexes from default.$tableName")
+        var logicalPlan = sqlParser.parsePlan(s"show indexes from $testDatabase.$tableName")
         var resolvedLogicalPlan = analyzer.execute(logicalPlan)
         assertTableIdentifier(resolvedLogicalPlan.asInstanceOf[ShowIndexesCommand].table, databaseName, tableName)
 
@@ -213,7 +213,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
   test("Test Create Expression Index") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
-        val databaseName = "default"
+        val databaseName = testDatabase
         val tableName = generateTableName
         val basePath = s"${tmp.getCanonicalPath}/$tableName"
         spark.sql(
@@ -245,7 +245,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
         val sqlParser: ParserInterface = spark.sessionState.sqlParser
         val analyzer: Analyzer = spark.sessionState.analyzer
 
-        var logicalPlan = sqlParser.parsePlan(s"show indexes from default.$tableName")
+        var logicalPlan = sqlParser.parsePlan(s"show indexes from $testDatabase.$tableName")
         var resolvedLogicalPlan = analyzer.execute(logicalPlan)
         assertTableIdentifier(resolvedLogicalPlan.asInstanceOf[ShowIndexesCommand].table, databaseName, tableName)
 
@@ -295,7 +295,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
 
   test("Test Drop Expression Index") {
     withTempDir { tmp =>
-      val databaseName = "default"
+      val databaseName = testDatabase
       val tableName = generateTableName
       val basePath = s"${tmp.getCanonicalPath}/$tableName"
       spark.sql(
@@ -327,7 +327,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
       val sqlParser: ParserInterface = spark.sessionState.sqlParser
       val analyzer: Analyzer = spark.sessionState.analyzer
 
-      val logicalPlan = sqlParser.parsePlan(s"show indexes from default.$tableName")
+      val logicalPlan = sqlParser.parsePlan(s"show indexes from $testDatabase.$tableName")
       val resolvedLogicalPlan = analyzer.execute(logicalPlan)
       assertTableIdentifier(resolvedLogicalPlan.asInstanceOf[ShowIndexesCommand].table, databaseName, tableName)
 

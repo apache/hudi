@@ -48,7 +48,7 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
       val catalog = hoodieCatalog
       val tableName = generateTableName
       val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-      val ident = Identifier.of(Array("default"), tableName)
+      val ident = Identifier.of(Array(testDatabase), tableName)
       val schema = StructType(Seq(
         StructField("id", IntegerType),
         StructField("name", StringType),
@@ -97,7 +97,7 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
       assertTrue(unsupportedChange.getMessage.contains("SetProperty"), unsupportedChange.getMessage)
 
       // renameTable moves the catalog entry.
-      val renamed = Identifier.of(Array("default"), s"${tableName}_renamed")
+      val renamed = Identifier.of(Array(testDatabase), s"${tableName}_renamed")
       catalog.renameTable(ident, renamed)
       assertFalse(catalog.tableExists(ident))
       assertTrue(catalog.tableExists(renamed))
@@ -130,7 +130,7 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
     withSQLConf("spark.sql.legacy.useV1Command" -> "true") {
       val ddl = spark.sql(s"show create table $tableName").head().getString(0)
       assertTrue(ddl.contains("CREATE TABLE IF NOT EXISTS"), ddl)
-      assertTrue(ddl.contains(s"`default`.`$tableName`"), ddl)
+      assertTrue(ddl.contains(s"`$testDatabase`.`$tableName`"), ddl)
       assertTrue(ddl.contains("USING hudi"), ddl)
       assertTrue(ddl.contains("PARTITIONED BY (dt)"), ddl)
       assertTrue(ddl.contains("COMMENT 'a hudi table'"), ddl)
@@ -179,7 +179,7 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
              |""".stripMargin)
 
         // With schema evolution enabled, loadTable returns the V2 table directly.
-        val ident = Identifier.of(Array("default"), tableName)
+        val ident = Identifier.of(Array(testDatabase), tableName)
         val loaded = hoodieCatalog.loadTable(ident)
         assertTrue(loaded.isInstanceOf[HoodieInternalV2Table])
         val v2 = loaded.asInstanceOf[HoodieInternalV2Table]
@@ -189,10 +189,10 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
         assertTrue(v2.schema().fieldNames.contains("id"))
         assertTrue(v2.partitioning().isEmpty)
         assertFalse(v2.properties().isEmpty)
-        // v2.name() is catalog-qualified on Spark 3.4+ (spark_catalog.default.<t>) but only
+        // v2.name() is catalog-qualified on Spark 3.4+ (spark_catalog.<db>.<t>) but only
         // db-qualified on Spark 3.3 (TableIdentifier has no catalog field there), so match either.
         assertTrue(
-          v2.name() == s"spark_catalog.default.$tableName" || v2.name() == s"default.$tableName",
+          v2.name() == s"spark_catalog.$testDatabase.$tableName" || v2.name() == s"$testDatabase.$tableName",
           v2.name())
 
         // HoodieSpark35Analysis (and its per-version HoodieSpark3xAnalysis siblings) rewrites the
