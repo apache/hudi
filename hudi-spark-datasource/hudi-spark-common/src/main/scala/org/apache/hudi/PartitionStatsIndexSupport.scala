@@ -89,7 +89,10 @@ class PartitionStatsIndexSupport(spark: SparkSession,
   }
 
   def prunePartitions(fileIndex: HoodieFileIndex, queryFilters: Seq[Expression]): Option[Set[String]] = {
-    if (isIndexAvailable && queryFilters.nonEmpty) {
+    // A partition missing from the index result is pruned, so a partition's stats must cover all of its data. The
+    // stats of a metadata-only bootstrapped file group come from its skeleton file, which only has the meta columns,
+    // so partition stats on a bootstrapped table cannot be used for pruning.
+    if (isIndexAvailable && queryFilters.nonEmpty && !metaClient.getTableConfig.getBootstrapBasePath.isPresent) {
       // Filter out sql queries. Partition stats only supports simple queries on field attribute without any operation on the field
       val nonSqlFilters = filterNonSqlExpressions(queryFilters)
       val filteredIndexedCols = {
