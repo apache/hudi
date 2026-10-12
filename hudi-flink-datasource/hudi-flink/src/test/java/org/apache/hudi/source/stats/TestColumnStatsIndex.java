@@ -28,14 +28,22 @@ import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.StringData;
+import org.apache.flink.table.data.TimestampData;
+import org.apache.flink.table.expressions.CallExpression;
+import org.apache.flink.table.expressions.FieldReferenceExpression;
+import org.apache.flink.table.expressions.ValueLiteralExpression;
+import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
@@ -161,6 +169,60 @@ public class TestColumnStatsIndex {
       assertEquals(Collections.singleton("missing-stats.parquet"),
           index.computeCandidateFiles(probe, files, Collections.singletonList(partition)));
       assertTrue(index.readColumnStatsIndexByColumns(columns, Collections.singletonList("unknown-partition")).isEmpty());
+    }
+  }
+
+  @Test
+  void testCandidateFilesWithMissingColumnStatsAfterIndexExpansion() throws Exception {
+    final String path = tempFile.getAbsolutePath();
+    Configuration conf = TestConfigurations.getDefaultConf(path);
+    conf.set(FlinkOptions.TABLE_TYPE, "COPY_ON_WRITE");
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false");
+    conf.setString(HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key(), "age");
+
+    // The old file contains a non-null name, but only age has column statistics.
+    TestData.writeData(Collections.singletonList(TestData.insertRow(
+        StringData.fromString("id1"), StringData.fromString("alice"), 25,
+        TimestampData.fromEpochMillis(1), StringData.fromString("par1"))), conf);
+
+    // Write a different partition so expanding the index does not rewrite the old file.
+    conf.setString(HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key(), "age,name");
+    TestData.writeData(Collections.singletonList(TestData.insertRow(
+        StringData.fromString("id2"), StringData.fromString("bob"), 30,
+        TimestampData.fromEpochMillis(2), StringData.fromString("par2"))), conf);
+
+    try (FileStatsIndex index = new FileStatsIndex(path, TestConfigurations.ROW_TYPE, conf, StreamerUtil.createMetaClient(conf))) {
+      String[] columns = {"age", "name"};
+      List<RowData> oldStats = index.readColumnStatsIndexByColumns(columns, Collections.singletonList("par1"));
+      assertEquals(1, oldStats.size());
+      assertEquals("age", oldStats.get(0).getString(ColumnStatsSchemas.ORD_COL_NAME).toString());
+      String oldFile = oldStats.get(0).getString(ColumnStatsSchemas.ORD_FILE_NAME).toString();
+
+      List<RowData> allStats = index.readColumnStatsIndexByColumns(columns, Collections.emptyList());
+      assertEquals(3, allStats.size());
+      List<String> allFiles = allStats.stream()
+          .map(row -> row.getString(ColumnStatsSchemas.ORD_FILE_NAME).toString()).distinct().collect(Collectors.toList());
+      assertEquals(2, allFiles.size());
+
+      CallExpression ageFilter = CallExpression.permanent(
+          BuiltInFunctionDefinitions.GREATER_THAN_OR_EQUAL,
+          Arrays.asList(new FieldReferenceExpression("age", DataTypes.INT(), 0, 2), new ValueLiteralExpression(0)),
+          DataTypes.BOOLEAN());
+      CallExpression nameFilter = CallExpression.permanent(
+          BuiltInFunctionDefinitions.EQUALS,
+          Arrays.asList(new FieldReferenceExpression("name", DataTypes.STRING(), 0, 1), new ValueLiteralExpression("alice")),
+          DataTypes.BOOLEAN());
+
+      // With only name referenced, the old file is retained by the unindexed-file fallback.
+      assertEquals(Collections.singleton(oldFile), index.computeCandidateFiles(
+          ColumnStatsProbe.newInstance(Collections.singletonList(nameFilter)), new ArrayList<>(allFiles), Collections.emptyList()));
+
+      // Adding a matching age predicate must not turn missing name statistics into all-null data.
+      assertEquals(Collections.singleton(oldFile), index.computeCandidateFiles(
+          ColumnStatsProbe.newInstance(Arrays.asList(ageFilter, nameFilter)), new ArrayList<>(allFiles), Collections.emptyList()));
     }
   }
 
