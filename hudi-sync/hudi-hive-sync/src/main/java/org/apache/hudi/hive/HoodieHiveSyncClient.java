@@ -92,7 +92,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   private IMetaStoreClient client;
   // The thread whose Hive cache holds the instance that owns client, until
   // releaseClientFromHiveCache() takes it out; null when no cache holds it.
-  private volatile Thread clientCachedOnThread;
+  private volatile Thread threadCachingClient;
   // Present only when HIVE_SYNC_BATCHING_ENABLED and sync mode is HIVEQL. Owned by
   // this class; closed in close() before Hive.closeCurrent(). HiveQueryDDLExecutor
   // uses it only for DROP (Hive Thrift, not Hive Driver) — see HiveMetaStoreClientPool
@@ -169,6 +169,8 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
       // HiveQueryDDLExecutor's own try block is even entered. Closing here covers every
       // such window; both close() methods are idempotent, so overlapping with the
       // executor's cleanup (or buildHiveQueryDDLExecutor's rollback) is harmless.
+      // The metastore client is closed too: the caller never gets this object to close it, and
+      // Hive would close it only if something on this thread later replaced its cached instance.
       closePartitionPoolsQuietly();
       closeClient();
       throw new HoodieHiveSyncException("Failed to create HiveMetaStoreClient", e);
@@ -183,9 +185,9 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
    * cached, so that the session's teardown reuses it rather than opening a connection of its own.
    */
   private void releaseClientFromHiveCache() {
-    if (clientCachedOnThread == Thread.currentThread()) {
+    if (threadCachingClient == Thread.currentThread()) {
       Hive.set(null);
-      clientCachedOnThread = null;
+      threadCachingClient = null;
     }
   }
 
@@ -205,7 +207,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     }
     Hive.closeCurrent();
     client = null;
-    clientCachedOnThread = null;
+    threadCachingClient = null;
   }
 
   private void closePartitionPoolsQuietly() {
@@ -273,7 +275,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
             config);
       }
       IMetaStoreClient metaStoreClient = IMetaStoreClientUtil.getMSC(config.getHiveConf());
-      clientCachedOnThread = Thread.currentThread();
+      threadCachingClient = Thread.currentThread();
       return metaStoreClient;
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to create HiveMetaStoreClient", e);

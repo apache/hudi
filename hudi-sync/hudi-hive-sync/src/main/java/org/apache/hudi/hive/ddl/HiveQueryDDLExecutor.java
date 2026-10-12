@@ -54,6 +54,8 @@ import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 @Slf4j
 public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
 
+  private static final Runnable NO_OP = () -> { };
+
   private final IMetaStoreClient metaStoreClient;
   private SessionState sessionState;
   private Driver hiveDriver;
@@ -70,7 +72,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
   private final Runnable beforeSessionStatements;
 
   public HiveQueryDDLExecutor(HiveSyncConfig config, IMetaStoreClient metaStoreClient) {
-    this(config, metaStoreClient, Option.empty(), Option.empty(), () -> { });
+    this(config, metaStoreClient, Option.empty(), Option.empty(), NO_OP);
   }
 
   public HiveQueryDDLExecutor(HiveSyncConfig config, IMetaStoreClient metaStoreClient,
