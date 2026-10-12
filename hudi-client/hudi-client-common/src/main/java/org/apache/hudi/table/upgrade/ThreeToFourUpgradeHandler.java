@@ -22,13 +22,13 @@ package org.apache.hudi.table.upgrade;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.MetadataPartitionType;
 
 import java.util.Collections;
 import java.util.Hashtable;
 import java.util.Map;
+import java.util.Properties;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
@@ -46,11 +46,11 @@ public class ThreeToFourUpgradeHandler implements UpgradeHandler {
                                                                          String instantTime,
                                                                          SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     Map<ConfigProperty, String> tablePropsToAdd = new Hashtable<>();
-    String database = config.getString(DATABASE_NAME);
-    if (StringUtils.nonEmpty(database)) {
-      tablePropsToAdd.put(DATABASE_NAME, database);
-    }
-    tablePropsToAdd.put(TABLE_CHECKSUM, String.valueOf(HoodieTableConfig.generateChecksum(config.getProps())));
+    // The database is not persisted, so the checksum must not cover the one the writer may carry.
+    Properties checksumProps = new Properties();
+    checksumProps.putAll(config.getProps());
+    checksumProps.remove(DATABASE_NAME.key());
+    tablePropsToAdd.put(TABLE_CHECKSUM, String.valueOf(HoodieTableConfig.generateChecksum(checksumProps)));
     // if metadata is enabled and files partition exist then update TABLE_METADATA_INDEX_COMPLETED
     // schema for the files partition is same between the two versions
     if (config.isMetadataTableEnabled() && metadataPartitionExists(config.getBasePath(), context, MetadataPartitionType.FILES.getPartitionPath())) {

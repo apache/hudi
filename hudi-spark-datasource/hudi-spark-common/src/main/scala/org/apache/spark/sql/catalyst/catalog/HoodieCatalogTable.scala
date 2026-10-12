@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.catalyst.catalog
 
-import org.apache.hudi.{DataSourceOptionsHelper, HoodieSchemaConversionUtils}
+import org.apache.hudi.{DataSourceOptionsHelper, DataSourceReadOptions, HoodieSchemaConversionUtils}
 import org.apache.hudi.DataSourceWriteOptions.OPERATION
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieConfig, TypedProperties}
@@ -25,7 +25,7 @@ import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.HoodieTableConfig.{HIVE_STYLE_PARTITIONING_ENABLE, URL_ENCODE_PARTITIONING}
 import org.apache.hudi.common.table.timeline.TimelineUtils
-import org.apache.hudi.common.util.{HoodieTableConfigUtils, StringUtils, ValidationUtils}
+import org.apache.hudi.common.util.{HoodieTableConfigUtils, ValidationUtils}
 import org.apache.hudi.common.util.HoodieStorageUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
@@ -74,7 +74,8 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   /**
    * properties defined in catalog.
    */
-  val catalogProperties: Map[String, String] = HoodieOptionConfig.makeOptionsCaseInsensitive(table.storage.properties ++ table.properties)
+  val catalogProperties: Map[String, String] = HoodieOptionConfig.makeOptionsCaseInsensitive(
+    (table.storage.properties -- DataSourceReadOptions.CATALOG_IDENTITY_KEYS) ++ table.properties)
 
   /**
    * hoodie table's location.
@@ -110,11 +111,6 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
    * the name of table
    */
   lazy val tableName: String = tableConfig.getTableName
-
-  /**
-   * the name of database
-   */
-  lazy val databaseName: String = tableConfig.getDatabaseName
 
   /**
    * The name of type of table
@@ -209,13 +205,8 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
 
       table = table.copy(schema = finalSchema)
 
-      // Save all the table config to the hoodie.properties.
-      val properties = TypedProperties.fromMap(tableConfigs.asJava)
-
-      val databaseFromIdentifier = table.identifier.database.getOrElse(
-        spark.sessionState.catalog.getCurrentDatabase)
-      val catalogDatabaseName = formatName(spark,
-        if (StringUtils.isNullOrEmpty(databaseFromIdentifier)) "default" else databaseFromIdentifier)
+      // Save all the table config to the hoodie.properties, except the database: a new table never persists it.
+      val properties = TypedProperties.fromMap((tableConfigs - HoodieTableConfig.DATABASE_NAME.key).asJava)
 
       val (recordName, namespace) = HoodieSchemaConversionUtils.getRecordNameAndNamespace(table.identifier.table)
       val schema = HoodieSparkSchemaConverters.toHoodieType(dataSchema, nullable = false, recordName, namespace)
@@ -231,7 +222,6 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
         .fromProperties(properties)
         .setTableVersion(Integer.valueOf(getStringWithAltKeys(tableConfigs, HoodieWriteConfig.WRITE_TABLE_VERSION)))
         .setTableFormat(getStringWithAltKeys(tableConfigs, HoodieTableConfig.TABLE_FORMAT))
-        .setDatabaseName(catalogDatabaseName)
         .setTableName(table.identifier.table)
         .setTableCreateSchema(schema.toString())
         .setPartitionFields(partitionColumns)

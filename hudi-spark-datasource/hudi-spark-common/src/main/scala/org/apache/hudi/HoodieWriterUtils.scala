@@ -26,7 +26,6 @@ import org.apache.hudi.common.config.RecordMergeMode.CUSTOM
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, MetaFieldsMode, OverwriteWithLatestAvroPayload, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion}
 import org.apache.hudi.common.util.StringUtils
-import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.{RECORD_MERGE_MODE, SPARK_SQL_MERGE_INTO_PREPPED_KEY}
 import org.apache.hudi.exception.HoodieException
@@ -179,8 +178,8 @@ object HoodieWriterUtils {
       || key.equals(RECORD_MERGE_STRATEGY_ID.key())))
 
     ignoreConfig = ignoreConfig || (key.equals(PAYLOAD_CLASS_NAME.key()) && shouldIgnorePayloadValidation(value, tableConfig))
-    // If hoodie.database.name is empty, ignore validation.
-    ignoreConfig = ignoreConfig || (key.equals(HoodieTableConfig.DATABASE_NAME.key()) && isNullOrEmpty(getStringFromTableConfigWithAlternatives(tableConfig, key)))
+    // The catalog owns the database, so a table registered under another database must still accept writes.
+    ignoreConfig = ignoreConfig || key.equals(HoodieTableConfig.DATABASE_NAME.key())
     ignoreConfig
   }
 

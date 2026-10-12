@@ -17,8 +17,9 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.hadoop.fs.Path
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
@@ -60,6 +61,46 @@ class TestTruncateTableProcedure extends HoodieSparkProcedureTestBase {
 
       //Step3: check number of directories under tablePath, only .hoodie
       assertTrue(files.size == 1)
+    }
+  }
+
+  test("Test Call truncate_table Procedure resolves an unqualified table in the current database") {
+    withTempDir { tmp =>
+      val databaseName = "truncate_db"
+      val tableName = generateTableName.split("\\.").last
+      val tablePath = tmp.getCanonicalPath + "/" + tableName
+      spark.sql(s"create database if not exists $databaseName")
+      spark.sql(s"use $databaseName")
+      try {
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | location '$tablePath'
+             | tblproperties (
+             |  primaryKey = 'id',
+             |  orderingFields = 'ts'
+             | )
+       """.stripMargin)
+        spark.sql(s"insert into $tableName select 1, 'a1', 10.0, 1000L")
+        // A table written by an older release carries its database in hoodie.properties.
+        val legacyProps = new java.util.Properties()
+        legacyProps.setProperty(HoodieTableConfig.DATABASE_NAME.key, "legacy_db")
+        val metaClient = createMetaClient(spark, tablePath)
+        HoodieTableConfig.update(metaClient.getStorage, metaClient.getMetaPath, legacyProps)
+
+        spark.sql(s"""call truncate_table(table => '$tableName')""")
+
+        checkAnswer(s"select count(*) from $databaseName.$tableName")(Seq(0L))
+        assertEquals("legacy_db",
+          createMetaClient(spark, tablePath).getTableConfig.getProps.getProperty(HoodieTableConfig.DATABASE_NAME.key))
+      } finally {
+        spark.sql("use default")
+      }
     }
   }
 
