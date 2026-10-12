@@ -29,9 +29,13 @@ import org.junit.jupiter.api.Test;
 import java.util.Collections;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -73,9 +77,94 @@ class TestConnectTransactionCoordinatorLifecycle {
       assertDoesNotThrow(coordinator::stop);
       assertDoesNotThrow(() -> coordinator.processControlEvent(writeStatusEvent()));
       verify(controlAgent, times(1)).deregisterTransactionCoordinator(coordinator);
+      verify(transactionServices, times(1)).close();
     } finally {
       coordinator.stop();
     }
+  }
+
+  @Test
+  void stopClosesTransactionServicesAfterEventProcessingExits() throws Exception {
+    KafkaControlAgent controlAgent = mock(KafkaControlAgent.class);
+    ConnectTransactionServices transactionServices = mock(ConnectTransactionServices.class);
+    CountDownLatch eventProcessingStarted = new CountDownLatch(1);
+    CountDownLatch releaseEventProcessing = new CountDownLatch(1);
+    AtomicBoolean eventProcessingExited = new AtomicBoolean(false);
+    AtomicBoolean servicesClosedAfterEventProcessing = new AtomicBoolean(false);
+    when(transactionServices.fetchLatestExtraCommitMetadata()).thenReturn(Collections.emptyMap());
+    when(transactionServices.startCommit()).thenAnswer(invocation -> {
+      eventProcessingStarted.countDown();
+      try {
+        releaseEventProcessing.await();
+      } finally {
+        eventProcessingExited.set(true);
+      }
+      return "001";
+    });
+    doAnswer(invocation -> {
+      servicesClosedAfterEventProcessing.set(eventProcessingExited.get());
+      return null;
+    }).when(transactionServices).close();
+
+    ConnectTransactionCoordinator coordinator = createCoordinator(controlAgent, transactionServices);
+    try {
+      coordinator.start();
+      assertTrue(eventProcessingStarted.await(5, TimeUnit.SECONDS));
+
+      coordinator.stop();
+
+      assertTrue(eventProcessingExited.get());
+      assertTrue(servicesClosedAfterEventProcessing.get());
+      verify(transactionServices, times(1)).close();
+    } finally {
+      releaseEventProcessing.countDown();
+      coordinator.stop();
+    }
+  }
+
+  @Test
+  void stopRetriesDeregistrationAfterFailure() throws Exception {
+    KafkaControlAgent controlAgent = mock(KafkaControlAgent.class);
+    ConnectTransactionServices transactionServices = mock(ConnectTransactionServices.class);
+    CountDownLatch eventProcessed = new CountDownLatch(1);
+    when(transactionServices.fetchLatestExtraCommitMetadata()).thenReturn(Collections.emptyMap());
+    when(transactionServices.startCommit()).thenAnswer(invocation -> {
+      eventProcessed.countDown();
+      return "001";
+    });
+
+    ConnectTransactionCoordinator coordinator = createCoordinator(controlAgent, transactionServices);
+    try {
+      coordinator.start();
+      assertTrue(eventProcessed.await(5, TimeUnit.SECONDS));
+      doThrow(new IllegalStateException("deregistration failed"))
+          .doNothing()
+          .when(controlAgent).deregisterTransactionCoordinator(coordinator);
+
+      assertThrows(IllegalStateException.class, coordinator::stop);
+      assertTrue(coordinator.isEventLoopTerminated());
+      assertDoesNotThrow(coordinator::stop);
+      assertDoesNotThrow(coordinator::stop);
+
+      verify(controlAgent, times(2)).deregisterTransactionCoordinator(coordinator);
+      verify(transactionServices, times(1)).close();
+    } finally {
+      coordinator.stop();
+    }
+  }
+
+  private static ConnectTransactionCoordinator createCoordinator(
+      KafkaControlAgent controlAgent, ConnectTransactionServices transactionServices) {
+    KafkaConnectConfigs configs = KafkaConnectConfigs.newBuilder()
+        .withCommitIntervalSecs(60L)
+        .withCoordinatorWriteTimeoutSecs(60L)
+        .build();
+    return new ConnectTransactionCoordinator(
+        configs,
+        new TopicPartition(TOPIC_NAME, ConnectTransactionCoordinator.COORDINATOR_KAFKA_PARTITION),
+        controlAgent,
+        transactionServices,
+        (bootstrapServers, topicName) -> 1);
   }
 
   private static ControlMessage writeStatusEvent() {

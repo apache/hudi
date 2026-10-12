@@ -151,6 +151,11 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
     throw new HoodieException("Fatal error retrieving Hoodie Extra Metadata since Table Meta Client is absent");
   }
 
+  @Override
+  public void close() {
+    javaClient.close();
+  }
+
   private boolean isAsyncCompactionEnabled() {
     return tableMetaClient.isPresent()
         && HoodieTableType.MERGE_ON_READ.equals(tableMetaClient.get().getTableType())
