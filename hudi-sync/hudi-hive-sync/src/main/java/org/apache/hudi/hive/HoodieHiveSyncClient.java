@@ -192,9 +192,9 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   }
 
   /**
-   * Closes {@link #client}, which only closing it directly releases once it is out of Hive's cache,
-   * including an underlying client that RetryingMetaStoreClient rebuilt after a transient
-   * TException. Hive.closeCurrent() then closes whatever instance is left in the cache.
+   * Closes {@link #client} directly, since Hive no longer closes it once it is out of the cache.
+   * This also releases a client that RetryingMetaStoreClient rebuilt after a transient TException.
+   * Hive.closeCurrent() then closes whatever instance is left in the cache.
    */
   private void closeClient() {
     if (client == null) {
