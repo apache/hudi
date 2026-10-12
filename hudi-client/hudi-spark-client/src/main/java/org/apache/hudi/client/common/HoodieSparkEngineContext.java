@@ -21,6 +21,7 @@ package org.apache.hudi.client.common;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieAccumulator;
+import org.apache.hudi.common.data.HoodieBroadcast;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.data.HoodiePairData;
@@ -42,6 +43,7 @@ import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.data.HoodieSparkBroadcast;
 import org.apache.hudi.data.HoodieSparkLongAccumulator;
 import org.apache.hudi.data.partitioner.ConditionalRangePartitioner;
 import org.apache.hudi.exception.HoodieException;
@@ -118,6 +120,11 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
     HoodieSparkLongAccumulator accumulator = HoodieSparkLongAccumulator.create();
     javaSparkContext.sc().register(accumulator.getAccumulator());
     return accumulator;
+  }
+
+  @Override
+  public <T> HoodieBroadcast<T> broadcast(T value) {
+    return HoodieSparkBroadcast.create(javaSparkContext, value);
   }
 
   @Override
