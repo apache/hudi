@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -26,6 +27,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.HoodieRecordUtils;
+import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.storage.HoodieStorage;
@@ -48,6 +50,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   private final HoodieSchema readerSchema;
   private final InternalSchema internalSchema;
   private final HoodieTableConfig tableConfig;
+  private final Lazy<TypedProperties> props;
   private final StoragePath basePath;
   private final String recordKeyField;
   private final boolean enableInlineReading;
@@ -66,6 +69,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     this.logFiles = logFiles;
     this.storage = storage;
     this.tableConfig = tableConfig;
+    this.props = Lazy.lazily(() -> TypedProperties.copy(tableConfig.getProps()));
     this.basePath = basePath;
     this.readerSchema = readerSchema;
     this.bufferSize = bufferSize;
@@ -143,7 +147,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
           HoodieRecordUtils.getOrderingFieldNames(tableConfig.getRecordMergeMode(), tableConfig);
       return new HoodieNativeLogFileReader(storage, logFile, readerSchema, internalSchema,
           orderingFieldNames,
-          getRelativePartitionPath(logFile), tableConfig.getProps());
+          getRelativePartitionPath(logFile), props);
     }
     return new HoodieLogFileReader(storage, logFile, readerSchema, bufferSize, reverseLogReader,
         enableInlineReading, recordKeyField, internalSchema);
