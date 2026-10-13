@@ -228,7 +228,8 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
         ValidationUtils.checkState(fileSplit.getCdcFiles() != null && fileSplit.getCdcFiles().size() == 1,
             "CDC file path should exist and be singleton for LOG_FILE");
         String logFilePath = new Path(tablePath, fileSplit.getCdcFiles().get(0)).toString();
-        MergeOnReadInputSplit split = CdcIterators.singleLogFile2Split(tablePath, logFilePath, maxCompactionMemoryInBytes);
+        MergeOnReadInputSplit split = CdcIterators.singleLogFile2Split(
+            tablePath, logFilePath, fileSplit.getInstant(), maxCompactionMemoryInBytes);
         ClosableIterator<HoodieRecord<RowData>> recordIterator = getFileSliceHoodieRecordIterator(split);
         try {
           return new CdcIterators.DataLogFileIterator(

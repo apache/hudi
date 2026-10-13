@@ -157,7 +157,8 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         ValidationUtils.checkState(fileSplit.getCdcFiles() != null && fileSplit.getCdcFiles().size() == 1,
             "CDC file path should exist and be singleton");
         String logFilepath = new Path(tablePath, fileSplit.getCdcFiles().get(0)).toString();
-        MergeOnReadInputSplit split = CdcIterators.singleLogFile2Split(tablePath, logFilepath, maxCompactionMemoryInBytes);
+        MergeOnReadInputSplit split = CdcIterators.singleLogFile2Split(
+            tablePath, logFilepath, fileSplit.getInstant(), maxCompactionMemoryInBytes);
         ClosableIterator<HoodieRecord<RowData>> recordIterator = getSplitRecordIterator(split);
         try {
           return new CdcIterators.DataLogFileIterator(

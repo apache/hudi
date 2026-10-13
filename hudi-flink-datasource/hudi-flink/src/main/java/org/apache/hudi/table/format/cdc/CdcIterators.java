@@ -44,6 +44,7 @@ import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
 import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.table.read.DeleteContext;
+import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieStorageUtils;
@@ -755,8 +756,12 @@ public final class CdcIterators {
         Function<MergeOnReadInputSplit, ClosableIterator<RowData>> splitIteratorFunc) {
       ValidationUtils.checkState(fileSplit.getBeforeFileSlice().isPresent(),
           "Before file slice does not exist for instant: " + fileSplit.getInstant());
-      MergeOnReadInputSplit inputSplit = fileSlice2Split(
-          tablePath, fileSplit.getBeforeFileSlice().get(), maxCompactionMemoryInBytes);
+      FileSlice beforeSlice = fileSplit.getBeforeFileSlice().get();
+      // Before table version 8 the log file names carry the base instant, so the replace commit bounds the
+      // read. From version 8, non-blocking concurrency control lets a delta commit requested after the
+      // replace commit complete before it, and the log file names bound the read.
+      MergeOnReadInputSplit inputSplit = fileSlice2Split(tablePath, beforeSlice,
+          InstantComparison.maxInstant(beforeSlice.getLatestInstantTime(), fileSplit.getInstant()), maxCompactionMemoryInBytes);
       this.itr = splitIteratorFunc.apply(inputSplit);
       this.projection = RowDataProjection.instance(requiredRowType, requiredPositions);
     }
@@ -787,6 +792,20 @@ public final class CdcIterators {
           String tablePath,
           FileSlice fileSlice,
           long maxCompactionMemoryInBytes) {
+    return fileSlice2Split(tablePath, fileSlice, fileSlice.getLatestInstantTime(), maxCompactionMemoryInBytes);
+  }
+
+  /**
+   * Converts a file slice to a split whose log blocks are read up to {@code latestCommit}.
+   *
+   * <p>Before table version 8, log file names carry the base instant of the file slice rather than the
+   * instants of the delta commits that wrote them, so the bound has to come from the commit being read.
+   */
+  public static MergeOnReadInputSplit fileSlice2Split(
+          String tablePath,
+          FileSlice fileSlice,
+          String latestCommit,
+          long maxCompactionMemoryInBytes) {
     Option<List<String>> logPaths = Option.ofNullable(fileSlice.getLogFiles()
             .sorted(HoodieLogFile.getLogFileComparator())
             .map(logFile -> logFile.getPath().toString())
@@ -794,16 +813,22 @@ public final class CdcIterators {
             .filter(p -> !p.endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
             .collect(Collectors.toList()));
     String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
-    return new MergeOnReadInputSplit(0, basePath, logPaths, fileSlice.getLatestInstantTime(),
+    return new MergeOnReadInputSplit(0, basePath, logPaths, latestCommit,
             tablePath, maxCompactionMemoryInBytes, FlinkOptions.REALTIME_PAYLOAD_COMBINE, null,
             fileSlice.getFileId(), fileSlice.getPartitionPath());
   }
 
-  public static MergeOnReadInputSplit singleLogFile2Split(String tablePath, String filePath, long maxCompactionMemoryInBytes) {
+  /**
+   * Converts the log file written by the commit {@code latestCommit} to a split whose log blocks are read
+   * up to that commit, see {@link #fileSlice2Split(String, FileSlice, String, long)} for why the bound is
+   * not taken from the file name.
+   */
+  public static MergeOnReadInputSplit singleLogFile2Split(
+          String tablePath, String filePath, String latestCommit, long maxCompactionMemoryInBytes) {
     StoragePath logPath = new StoragePath(filePath);
     HoodieLogFile logFile = new HoodieLogFile(logPath);
     return new MergeOnReadInputSplit(0, null, Option.of(Collections.singletonList(filePath)),
-            logFile.getDeltaCommitTime(), tablePath, maxCompactionMemoryInBytes,
+            latestCommit, tablePath, maxCompactionMemoryInBytes,
             FlinkOptions.REALTIME_PAYLOAD_COMBINE, null, logFile.getFileId(),
             FSUtils.getRelativePartitionPath(new StoragePath(tablePath), logPath.getParent()));
   }
