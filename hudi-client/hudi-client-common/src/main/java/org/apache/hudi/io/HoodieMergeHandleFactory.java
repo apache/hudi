@@ -85,7 +85,7 @@ public class HoodieMergeHandleFactory {
       Map<String, HoodieRecord<T>> keyToNewRecords,
       String partitionPath,
       String fileId,
-      HoodieBaseFile dataFileToBeMerged,
+      HoodieBaseFile baseFile,
       TaskContextSupplier taskContextSupplier,
       Option<BaseKeyGenerator> keyGeneratorOpt) {
 
@@ -101,7 +101,7 @@ public class HoodieMergeHandleFactory {
 
     return instantiateMergeHandle(
         isFallbackEnabled, mergeHandleClasses.getLeft(), mergeHandleClasses.getRight(), logContext, constructorParamTypes,
-        writeConfig, instantTime, table, keyToNewRecords, partitionPath, fileId, dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
+        writeConfig, instantTime, table, keyToNewRecords, partitionPath, fileId, baseFile, taskContextSupplier, keyGeneratorOpt);
   }
 
   /**

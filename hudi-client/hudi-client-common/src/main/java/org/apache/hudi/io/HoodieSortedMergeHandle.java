@@ -59,8 +59,8 @@ public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieWriteMergeHandle<
    */
   public HoodieSortedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                  Map<String, HoodieRecord<T>> keyToNewRecordsOrig, String partitionPath, String fileId,
-                                 HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    super(config, instantTime, hoodieTable, keyToNewRecordsOrig, partitionPath, fileId, dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
+                                 HoodieBaseFile baseFile, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    super(config, instantTime, hoodieTable, keyToNewRecordsOrig, partitionPath, fileId, baseFile, taskContextSupplier, keyGeneratorOpt);
 
     newRecordKeysSorted.addAll(keyToNewRecords.keySet());
   }
