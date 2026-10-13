@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.cdc.HoodieCDCExtractor;
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
@@ -440,6 +441,8 @@ public class IncrementalInputSplits implements Serializable {
       InstantRange instantRange) {
     final AtomicInteger cnt = new AtomicInteger(0);
     final String mergeType = this.conf.get(FlinkOptions.MERGE_TYPE);
+    final boolean isPreV8 = metaClient.getTableConfig().getTableVersion()
+        .lesserThan(HoodieTableVersion.EIGHT);
     return fileSlices.stream().map(fileSlice -> {
       Option<List<String>> logPaths = Option.ofNullable(fileSlice.getLogFiles()
           .sorted(HoodieLogFile.getLogFileComparator())
@@ -447,9 +450,13 @@ public class IncrementalInputSplits implements Serializable {
           .filter(logPath -> !logPath.endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
           .collect(Collectors.toList()));
       String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
-      // the latest commit is used as the limit of the log reader instant upper threshold,
-      // it must be at least the latest instant time of the file slice to avoid data loss.
-      String latestCommit = InstantComparison.minInstant(fileSlice.getLatestInstantTime(), endInstant);
+      // Pre-v8 log file names can carry the base instant while containing blocks from later
+      // commits, so the filename-derived file slice instant is not a safe reader upper bound.
+      // Keep the existing per-split upper bound for v8+ tables. The instant range remains the
+      // logical query boundary for both paths.
+      String latestCommit = isPreV8
+          ? endInstant
+          : InstantComparison.minInstant(fileSlice.getLatestInstantTime(), endInstant);
       return new MergeOnReadInputSplit(cnt.getAndAdd(1), basePath, logPaths, latestCommit,
           metaClient.getBasePath().toString(), maxCompactionMemoryInBytes, mergeType, instantRange,
           fileSlice.getFileId(), fileSlice.getPartitionPath());

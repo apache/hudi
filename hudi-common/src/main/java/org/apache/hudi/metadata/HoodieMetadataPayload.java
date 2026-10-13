@@ -321,7 +321,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     filesAdded.forEach((fileName, fileSize) -> {
       // Assert that the file-size of the file being added is positive, since Hudi
       // should not be creating empty files
-      checkState(fileSize > 0, "File name " + fileName
+      checkState(fileSize > 0, () -> "File name " + fileName
           + ", is a 0 byte file. It does not have any contents");
       fileInfo.put(fileName, new HoodieMetadataFileInfo(fileSize, false));
     });
@@ -360,7 +360,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
                                                                                     String metadataPartitionName) {
     checkArgument(!baseFileName.contains(StoragePath.SEPARATOR)
             && FSUtils.isBaseFile(new StoragePath(baseFileName)),
-        "Invalid base file '" + baseFileName + "' for MetaIndexBloomFilter!");
+        () -> "Invalid base file '" + baseFileName + "' for MetaIndexBloomFilter!");
     final String bloomFilterIndexKey = getBloomFilterRecordKey(partitionName, baseFileName);
     HoodieKey key = new HoodieKey(bloomFilterIndexKey, metadataPartitionName);
 
@@ -383,9 +383,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
     // Validation of record merge scenario. Only records of same type and key can be combined. 
     checkArgument(previousRecord.type == type,
-        "Cannot combine " + previousRecord.type + " with " + type);
+        () -> "Cannot combine " + previousRecord.type + " with " + type);
     checkArgument(previousRecord.key.equals(key),
-        "Cannot combine " + previousRecord.key + " with " + key + " as the keys differ");
+        () -> "Cannot combine " + previousRecord.key + " with " + key + " as the keys differ");
 
     return MetadataPartitionType.get(type).combineMetadataPayloads(previousRecord, this);
   }

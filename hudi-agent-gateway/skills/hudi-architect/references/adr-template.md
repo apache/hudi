@@ -199,7 +199,13 @@ Same principle as the platform-managed section — emit config that changes beha
 
 ### 9.6 Sample submit command
 
-A runnable `spark-submit` (or Flink equivalent) for the derived writer, per config-templates.md → Sample submit commands. Not applicable to Spark DataSource, where the write lives in the user's own application code.
+A runnable `spark-submit` for the derived Spark writer, per config-templates.md → Sample submit commands. Not applicable to Spark DataSource, where the write lives in the user's own application code.
+
+For Flink requests, replace this subsection with the engine-specific envelope from
+`flink-config-templates.md`. A request with findings remains non-executable. A successful PR2
+request includes the validator-produced runtime SQL, Hudi DDL, and sink-side `INSERT INTO`, plus
+the expected source contract and deployment checks. It still does not include a submit command or
+complete source connector job.
 
 Split the flags explicitly:
 

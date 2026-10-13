@@ -24,6 +24,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
@@ -47,10 +48,11 @@ public class AutoRowDataKeyGen extends RowDataKeyGen {
       RowType rowType,
       boolean hiveStylePartitioning,
       boolean encodePartitionPath,
+      Option<ComplexKeyGenEncoding> complexKeygenEncoding,
       boolean useComplexKeygenNewEncoding,
       Option<TimestampBasedAvroKeyGenerator> keyGenOpt) {
     super(Option.empty(), partitionFields, rowType, hiveStylePartitioning, encodePartitionPath, false, keyGenOpt,
-            useComplexKeygenNewEncoding);
+            complexKeygenEncoding, useComplexKeygenNewEncoding);
     this.taskId = taskId;
     this.instantTime = instantTime;
   }
@@ -66,7 +68,7 @@ public class AutoRowDataKeyGen extends RowDataKeyGen {
     }
     return new AutoRowDataKeyGen(taskId, instantTime, conf.get(FlinkOptions.PARTITION_PATH_FIELD),
         rowType, conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING), conf.get(FlinkOptions.URL_ENCODE_PARTITIONING),
-        OptionsResolver.useComplexKeygenNewEncoding(conf), keyGeneratorOpt);
+        OptionsResolver.getComplexKeygenEncoding(conf), OptionsResolver.useComplexKeygenNewEncoding(conf), keyGeneratorOpt);
   }
 
   @Override

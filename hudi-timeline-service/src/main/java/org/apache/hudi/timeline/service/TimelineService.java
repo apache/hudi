@@ -303,16 +303,38 @@ public class TimelineService {
     }
   }
 
+  /**
+   * Shuts the service down.
+   *
+   * <p>Each stage is guarded so a failure in one does not skip the rest, and {@code app} is
+   * released either way. Without that, a throw from any stage leaves {@code app} set and the
+   * caller's reference non-null, so the instance can never be closed on a later attempt while
+   * its Jetty threads keep running.
+   */
   public void close() {
     log.info("Closing Timeline Service with port {}", serverPort);
-    if (requestHandler != null) {
-      this.requestHandler.stop();
+    try {
+      if (requestHandler != null) {
+        this.requestHandler.stop();
+      }
+    } catch (Exception e) {
+      log.warn("Failed to stop the timeline request handler on port {}; continuing shutdown",
+          serverPort, e);
     }
-    if (this.app != null) {
-      this.app.stop();
+    try {
+      if (this.app != null) {
+        this.app.stop();
+      }
+    } catch (Exception e) {
+      log.warn("Failed to stop the Javalin app on port {}; continuing shutdown", serverPort, e);
+    } finally {
       this.app = null;
     }
-    this.fsViewsManager.close();
+    try {
+      this.fsViewsManager.close();
+    } catch (Exception e) {
+      log.warn("Failed to close the file system view manager on port {}", serverPort, e);
+    }
     log.info("Closed Timeline Service with port {}", serverPort);
   }
 

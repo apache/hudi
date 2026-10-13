@@ -159,14 +159,14 @@ public class HoodieRecordUtils {
     }
   }
 
-  public static HoodieRecord createHoodieRecord(GenericRecord data, Comparable orderingVal, HoodieKey hKey, String payloadClass, boolean requiresPayload, Boolean isDelete) {
-    return createHoodieRecord(data, orderingVal, hKey, payloadClass, null, Option.empty(), requiresPayload, isDelete);
+  public static HoodieRecord createHoodieRecord(GenericRecord data, Comparable orderingVal, HoodieKey hKey, String payloadClass, Boolean isDelete) {
+    return createHoodieRecord(data, orderingVal, hKey, payloadClass, null, Option.empty(), isDelete);
   }
 
   public static HoodieRecord createHoodieRecord(GenericRecord data, Comparable orderingVal, HoodieKey hKey,
-                                                String payloadClass, HoodieOperation hoodieOperation, Option<HoodieRecordLocation> recordLocation, boolean requiresPayload, Boolean isDelete) {
+                                                String payloadClass, HoodieOperation hoodieOperation, Option<HoodieRecordLocation> recordLocation, Boolean isDelete) {
     HoodieRecord record;
-    if (!requiresPayload && isPayloadClassDeprecated(payloadClass)) {
+    if (isPayloadClassDeprecated(payloadClass)) {
       record = new HoodieAvroIndexedRecord(hKey, data, orderingVal, hoodieOperation, isDelete);
     } else {
       HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(payloadClass, data, orderingVal);
@@ -177,14 +177,14 @@ public class HoodieRecordUtils {
   }
 
   public static HoodieRecord createHoodieRecord(GenericRecord data, HoodieKey hKey,
-                                                String payloadClass, boolean requiresPayload, Boolean isDelete) {
-    return createHoodieRecord(data, hKey, payloadClass, Option.empty(), requiresPayload, isDelete);
+                                                String payloadClass, Boolean isDelete) {
+    return createHoodieRecord(data, hKey, payloadClass, Option.empty(), isDelete);
   }
 
   public static HoodieRecord createHoodieRecord(GenericRecord data, HoodieKey hKey,
-                                                String payloadClass, Option<HoodieRecordLocation> recordLocation, boolean requiresPayload, Boolean isDelete) {
+                                                String payloadClass, Option<HoodieRecordLocation> recordLocation, Boolean isDelete) {
     HoodieRecord record;
-    if (!requiresPayload && isPayloadClassDeprecated(payloadClass)) {
+    if (isPayloadClassDeprecated(payloadClass)) {
       record = new HoodieAvroIndexedRecord(hKey, data, null, (HoodieOperation) null, isDelete);
     } else {
       HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(payloadClass, data);

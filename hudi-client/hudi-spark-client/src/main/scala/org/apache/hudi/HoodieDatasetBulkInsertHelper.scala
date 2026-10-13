@@ -96,7 +96,7 @@ object HoodieDatasetBulkInsertHelper
 
       val prependedRdd: RDD[InternalRow] = {
         injectSQLConf(df.queryExecution.toRdd.mapPartitions { iter =>
-          val typedProps = TypedProperties.copy(config.getProps)
+          val typedProps = KeyGenUtils.withComplexKeyGenEncoding(TypedProperties.copy(config.getProps), tableConfig)
           if (autoGenerateRecordKeys) {
             typedProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, String.valueOf(TaskContext.getPartitionId()))
             typedProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime)

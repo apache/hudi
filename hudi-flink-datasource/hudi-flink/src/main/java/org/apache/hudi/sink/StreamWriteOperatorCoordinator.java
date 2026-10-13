@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CommitUtils;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -35,6 +36,7 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncTool;
+import org.apache.hudi.metrics.FlinkHiveSyncMetrics;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
@@ -189,6 +191,11 @@ public class StreamWriteOperatorCoordinator
    * Context that holds variables for asynchronous hive sync.
    */
   private HiveSyncContext hiveSyncContext;
+
+  /**
+   * Metrics for hive sync, registered on the coordinator's metric group when hive sync is enabled.
+   */
+  private FlinkHiveSyncMetrics hiveSyncMetrics;
 
   /**
    * The table state.
@@ -412,22 +419,21 @@ public class StreamWriteOperatorCoordinator
   }
 
   private CompletableFuture<CoordinationResponse> handleInstantRequest(Correspondent.InstantTimeRequest request) {
-    CompletableFuture<CoordinationResponse> response = new CompletableFuture<>();
-    instantRequestExecutor.execute(() -> {
-      long checkpointId = request.getCheckpointId();
-      Pair<String, EventBuffer> instantTimeAndEventBuffer = this.eventBuffers.getInstantAndEventBuffer(checkpointId);
-      final String instantTime;
-      if (instantTimeAndEventBuffer == null) {
-        // wait until previous instants are committed.
-        eventBuffers.awaitAllInstantsToCompleteIfNecessary();
-        instantTime = startInstant();
-        this.eventBuffers.initNewEventBuffer(checkpointId, instantTime);
-      } else {
-        instantTime = instantTimeAndEventBuffer.getLeft();
-      }
-      response.complete(CoordinationResponseSerDe.wrap(Correspondent.InstantTimeResponse.getInstance(instantTime)));
-    }, "request instant time");
-    return response;
+    long checkpointId = request.getCheckpointId();
+    // Existing instants must remain available while another checkpoint's creation is blocked.
+    Pair<String, EventBuffer> instantTimeAndEventBuffer = this.eventBuffers.getInstantAndEventBuffer(checkpointId);
+    if (instantTimeAndEventBuffer == null && !instantRequestExecutor.hasRunningTasks()) {
+      instantRequestExecutor.execute(() -> {
+        if (this.eventBuffers.getInstantAndEventBuffer(checkpointId) == null) {
+          // Wait until previous instants are committed.
+          eventBuffers.awaitAllInstantsToCompleteIfNecessary();
+          this.eventBuffers.initNewEventBuffer(checkpointId, startInstant());
+        }
+      }, "request instant time");
+      instantTimeAndEventBuffer = this.eventBuffers.getInstantAndEventBuffer(checkpointId);
+    }
+    String instantTime = instantTimeAndEventBuffer == null ? null : instantTimeAndEventBuffer.getLeft();
+    return CompletableFuture.completedFuture(CoordinationResponseSerDe.wrap(Correspondent.InstantTimeResponse.getInstance(instantTime)));
   }
 
   private CompletableFuture<CoordinationResponse> handleInFlightInstantsRequest(Correspondent.InflightInstantsRequest request) {
@@ -458,6 +464,8 @@ public class StreamWriteOperatorCoordinator
         .threadFactory(getThreadFactory("hive-sync"))
         .waitForTasksFinish(true).build();
     this.hiveSyncContext = HiveSyncContext.create(conf, this.storageConf);
+    this.hiveSyncMetrics = new FlinkHiveSyncMetrics(context.metricGroup());
+    this.hiveSyncMetrics.registerMetrics();
   }
 
   private void syncHiveAsync() {
@@ -477,9 +485,18 @@ public class StreamWriteOperatorCoordinator
    * Sync hoodie table metadata to Hive metastore.
    */
   public void doSyncHive() {
+    HoodieTimer timer = HoodieTimer.start();
     try (HiveSyncTool syncTool = hiveSyncContext.hiveSyncTool()) {
+      if (!syncTool.isSyncClientInitialized()) {
+        hiveSyncMetrics.markSyncFailed(timer.endTimer());
+        return;
+      }
       syncTool.syncHoodieTable();
+    } catch (Throwable t) {
+      hiveSyncMetrics.markSyncFailed(timer.endTimer());
+      throw t;
     }
+    hiveSyncMetrics.markSyncSucceeded(timer.endTimer());
   }
 
   private void scheduleTableServices(Boolean committed) {
@@ -519,9 +536,9 @@ public class StreamWriteOperatorCoordinator
   }
 
   private String startInstant() {
-    // refresh the meta client which is reused
-    metaClient.reloadActiveTimeline();
-    // refresh the last txn metadata
+    // Refresh table properties and the timeline before validating the new write.
+    this.metaClient.reload();
+    // Validate the write and refresh the last txn metadata.
     this.writeClient.preTxn(tableState.operationType, this.metaClient);
     // put the assignment in front of metadata generation,
     // because the instant request from write task is asynchronous.

@@ -302,7 +302,7 @@ public final class HoodieSchemaCompatibility {
    * @throws IllegalArgumentException if {@code writerSchema} is not a record
    */
   public static HoodieSchemaField lookupWriterField(final HoodieSchema writerSchema, final HoodieSchemaField readerField) {
-    ValidationUtils.checkArgument(writerSchema.getType() == HoodieSchemaType.RECORD, writerSchema + " is not a record");
+    ValidationUtils.checkArgument(writerSchema.getType() == HoodieSchemaType.RECORD, () -> writerSchema + " is not a record");
     return HoodieSchemaCompatibilityChecker.lookupWriterField(writerSchema, readerField);
   }
 

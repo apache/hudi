@@ -234,7 +234,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
           new StoragePath(config.getBasePath()),
           FSUtils.constructAbsolutePath(config.getBasePath(), partitionPath),
           hoodieTable.getPartitionMetafileFormat());
-      partitionMetadata.trySave();
+      partitionMetadata.trySave(partitionPath);
 
       String oldFileName = latestValidFilePath.isPresent() ? latestValidFilePath.get() : null;
       String newFileName = createNewFileName(oldFileName);
@@ -332,7 +332,8 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
         this.updatedRecordsWritten = readStats.getNumUpdates();
         this.recordsDeleted = readStats.getNumDeletes();
       }
-    } catch (IOException e) {
+    } catch (Exception e) {
+      closeFileWriterQuietly(e);
       throw new HoodieUpsertException("Failed to compact file group: " + fileId, e);
     }
   }

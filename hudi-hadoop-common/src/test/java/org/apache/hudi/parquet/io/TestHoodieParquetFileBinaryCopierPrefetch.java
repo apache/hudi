@@ -38,12 +38,15 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieParquetFileBinaryCopierPrefetch {
@@ -72,6 +75,24 @@ public class TestHoodieParquetFileBinaryCopierPrefetch {
       inputFiles.stream().map(TestHoodieParquetFileBinaryCopier.TestFile::getFileName)
           .forEach(TestHoodieParquetFileBinaryCopier.TestFileBuilder::deleteTempFile);
     }
+  }
+
+  @Test
+  public void testCloseAfterPrefetchFailureReleasesResources() throws Exception {
+    TestHoodieParquetFileBinaryCopier.TestFile first = new TestHoodieParquetFileBinaryCopier.TestFileBuilder(conf, schema)
+        .withNumRecord(5).build();
+    inputFiles.add(first);
+    ExecutorService executor;
+    try (HoodieParquetFileBinaryCopier copier = new HoodieParquetFileBinaryCopier(
+        conf, CompressionCodecName.UNCOMPRESSED, new HoodieFileMetadataMerger())) {
+      executor = copier.getPrefetchExecutor();
+      assertThrows(IOException.class, () -> copier.binaryCopy(
+          Arrays.asList(new StoragePath(first.getFileName()), new StoragePath(first.getFileName() + ".missing")),
+          Collections.singletonList(new StoragePath(outputFile)), schema, false));
+      assertEquals(5, copier.totalRecordsWritten);
+      assertTrue(Files.exists(Paths.get(outputFile)));
+    }
+    assertTrue(executor.isShutdown());
   }
 
   @Test

@@ -22,7 +22,6 @@ package org.apache.hudi.common.table.read.buffer;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.UpdateProcessor;
@@ -48,13 +47,12 @@ class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRecordBuff
   private Queue<String> logRecordKeysSorted = null;
 
   SortedKeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
-                                      HoodieTableMetaClient hoodieTableMetaClient,
                                       RecordMergeMode recordMergeMode,
                                       Option<PartialUpdateMode> partialUpdateModeOpt,
                                       TypedProperties props,
                                       List<String> orderingFieldNames,
                                       UpdateProcessor<T> updateProcessor) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateModeOpt, props, orderingFieldNames, updateProcessor);
+    super(readerContext, recordMergeMode, partialUpdateModeOpt, props, orderingFieldNames, updateProcessor);
   }
 
   @Override

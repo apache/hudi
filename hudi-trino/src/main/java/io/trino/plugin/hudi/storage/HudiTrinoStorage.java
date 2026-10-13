@@ -54,6 +54,17 @@ public class HudiTrinoStorage
         this.fileSystem = fileSystem;
     }
 
+    public HudiTrinoStorage(StoragePath path, StorageConfiguration<?> storageConf)
+    {
+        if (!(storageConf instanceof TrinoStorageConfiguration trinoConf)) {
+            throw new IllegalArgumentException("Storage configuration for " + path + " is not a TrinoStorageConfiguration");
+        }
+        TrinoFileSystem configuredFileSystem = trinoConf.getFileSystem()
+                .orElseThrow(() -> new IllegalArgumentException("Storage configuration for " + path + " carries no file system"));
+        super(trinoConf);
+        this.fileSystem = configuredFileSystem;
+    }
+
     public static Location convertToLocation(StoragePath path)
     {
         return Location.of(path.toString());

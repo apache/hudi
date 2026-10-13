@@ -240,13 +240,12 @@ public class TestMetadataCommand extends CLIFunctionalTestHarness {
     writeOneCommit(true);
     connectToTable();
 
-    // The command opens the reader with metadata metrics off, so there is nothing to report on,
-    // but the stat table is still rendered. Tracked in https://github.com/apache/hudi/issues/19880;
-    // once fixed, assert on the rows instead.
     Object stats = shell.evaluate(() -> "metadata stats");
     assertTrue(ShellEvaluationResultUtil.isSuccess(stats));
     assertTrue(stats.toString().contains("stat key"), stats.toString());
-    assertTrue(renderedRows(stats.toString()).isEmpty(), stats.toString());
+    assertTrue(renderedRows(stats.toString()).stream()
+        .anyMatch(row -> row.get(0).equals("partitionCount")
+            && Integer.parseInt(row.get(1)) > 0), stats.toString());
 
     Object partitions = shell.evaluate(() -> "metadata list-partitions");
     assertTrue(ShellEvaluationResultUtil.isSuccess(partitions));

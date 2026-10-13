@@ -124,7 +124,7 @@ public class TestHoodieFileMetadataMerger {
     int[] sizes = {100, 1000, 10000};
     BloomFilter bloomFilter = null;
     for (int size : sizes) {
-      BloomFilter filter = getBloomFilter(bloomFilterType, 1000, 0.000001, 100000);
+      BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.000001, 100000, bloomFilterType);
       for (int i = 0; i < size; i++) {
         String key = String.format("key%d", size + i);
         filter.add(key);
@@ -150,7 +150,7 @@ public class TestHoodieFileMetadataMerger {
   @Test
   public void testDifferentTypeOfBloomFilter() {
     HoodieFileMetadataMerger metaMerge = new HoodieFileMetadataMerger();
-    BloomFilter simpleFilter = getBloomFilter(BloomFilterTypeCode.SIMPLE.name(), 1000, 0.000001, 100000);
+    BloomFilter simpleFilter = BloomFilterFactory.createBloomFilter(1000, 0.000001, 100000, BloomFilterTypeCode.SIMPLE.name());
     for (int i = 0; i < 100; i++) {
       String key = String.format("key%d", 100 + i);
       simpleFilter.add(key);
@@ -160,7 +160,7 @@ public class TestHoodieFileMetadataMerger {
             HOODIE_BLOOM_FILTER_TYPE_CODE, BloomFilterTypeCode.SIMPLE.name(),
             HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY, simpleFilter.serializeToString())
     );
-    BloomFilter dynamicFilter = getBloomFilter(BloomFilterTypeCode.DYNAMIC_V0.name(), 1000, 0.000001, 100000);
+    BloomFilter dynamicFilter = BloomFilterFactory.createBloomFilter(1000, 0.000001, 100000, BloomFilterTypeCode.DYNAMIC_V0.name());
     for (int i = 0; i < 100; i++) {
       String key = String.format("key%d", 100 + i);
       dynamicFilter.add(key);
@@ -173,14 +173,6 @@ public class TestHoodieFileMetadataMerger {
                 HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY, dynamicFilter.serializeToString())
         )
     );
-  }
-
-  private BloomFilter getBloomFilter(String typeCode, int numEntries, double errorRate, int maxEntries) {
-    if (typeCode.equalsIgnoreCase(BloomFilterTypeCode.SIMPLE.name())) {
-      return BloomFilterFactory.createBloomFilter(numEntries, errorRate, -1, typeCode);
-    } else {
-      return BloomFilterFactory.createBloomFilter(numEntries, errorRate, maxEntries, typeCode);
-    }
   }
 
   private Map<String, String> newMap(String... kvs) {

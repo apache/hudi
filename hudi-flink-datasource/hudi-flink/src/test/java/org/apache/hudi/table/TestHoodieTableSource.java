@@ -22,9 +22,14 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.storage.StoragePath;
@@ -38,6 +43,7 @@ import org.apache.hudi.utils.TestUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.api.common.io.FileInputFormat;
 import org.apache.flink.api.common.io.InputFormat;
+import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.catalog.ResolvedSchema;
@@ -58,6 +64,7 @@ import org.junit.jupiter.api.function.ThrowingSupplier;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -588,6 +595,45 @@ public class TestHoodieTableSource {
     conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, isSourceV2);
 
     return createHoodieTableSource(conf);
+  }
+
+  /**
+   * A record key point lookup on a single-field complex keygen table prunes with the encoding the table stores,
+   * whether the property is recorded or, on a legacy table, deduced from the data.
+   */
+  @ParameterizedTest
+  @EnumSource(ComplexKeyGenEncoding.class)
+  void testRecordLevelIndexPruningHonorsRecordedEncoding(ComplexKeyGenEncoding encoding) throws Exception {
+    final String path = tempFile.getAbsolutePath();
+    conf = TestConfigurations.getDefaultConf(path);
+    conf.set(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
+    conf.setString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), encoding.name());
+    if (encoding == ComplexKeyGenEncoding.VALUE_ONLY) {
+      // Bare record keys belong to legacy tables; new tables at version 9 and above must use FIELD_PREFIXED.
+      conf.set(FlinkOptions.WRITE_TABLE_VERSION, HoodieTableVersion.EIGHT.versionCode());
+    }
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+    conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    assertThat(metaClient.getTableConfig().getComplexKeyGenEncoding().get(), is(encoding));
+
+    ResolvedExpression pointLookup = createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1");
+    HoodieTableSource recordedSource = createHoodieTableSource(conf);
+    recordedSource.applyFilters(Collections.singletonList(pointLookup));
+    assertThat("the lookup must keep only the file holding id1",
+        recordedSource.getBaseFileOnlyFileSlices(recordedSource.getMetaClient()).size(), is(1));
+
+    // a legacy table without the property: the reader deduces the encoding from the data
+    HoodieTableConfig.delete(metaClient.getStorage(), metaClient.getMetaPath(),
+        Collections.singleton(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()));
+    conf.removeConfig(ConfigOptions.key(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()).stringType().noDefaultValue());
+    HoodieTableSource legacySource = createHoodieTableSource(conf);
+    legacySource.applyFilters(Collections.singletonList(pointLookup));
+    assertThat("the lookup must keep only the file holding id1 on a legacy table",
+        legacySource.getBaseFileOnlyFileSlices(legacySource.getMetaClient()).size(), is(1));
   }
 
   private HoodieTableSource createHoodieTableSource(Configuration conf) {

@@ -251,6 +251,12 @@ public class TestHFileReader {
                 new KeyLookUpInfo("hudi-key-000019999b", SEEK_TO_EOF, "", "")
             )
         ),
+        // The first two data blocks have 12 checksum bytes each, replaced with gzip-like tails:
+        // block 0: 1f8b08000000000000000700 (invalid DEFLATE block type),
+        // block 1: 1f8b08000000000000000000 (truncated DEFLATE block).
+        // The native reader does not validate CRCs, but must exclude these bytes from decompression.
+        // All headers and compressed payloads are unchanged. This exercises both ZipException and
+        // EOFException regressions through the existing sequential, point, and prefix lookup checks.
         Arguments.of(
             "/hfile/hudi_1_0_hbase_2_4_9_512KB_GZ_20000.hfile",
             20000,

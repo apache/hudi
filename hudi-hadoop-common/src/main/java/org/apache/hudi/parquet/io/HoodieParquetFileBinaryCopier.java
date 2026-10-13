@@ -18,6 +18,7 @@
 
 package org.apache.hudi.parquet.io;
 
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.core.io.storage.HoodieFileBinaryCopier;
 import org.apache.hudi.core.io.storage.HoodieFileMetadataMerger;
 import org.apache.hudi.storage.StoragePath;
@@ -202,6 +203,16 @@ public class HoodieParquetFileBinaryCopier extends HoodieParquetBinaryCopyBase i
     this.prefetchExecutor = Executors.newSingleThreadExecutor();
   }
 
+  @VisibleForTesting
+  ExecutorService getPrefetchExecutor() {
+    return prefetchExecutor;
+  }
+
+  @VisibleForTesting
+  void setReader(CompressionConverter.TransParquetFileReader reader) {
+    this.reader = reader;
+  }
+
   @Override
   protected Map<String, String> finalizeMetadata() {
     return this.extraMetaData;
@@ -248,13 +259,17 @@ public class HoodieParquetFileBinaryCopier extends HoodieParquetBinaryCopyBase i
 
   @Override
   public void close() throws IOException {
-    super.close();
-    if (prefetchExecutor != null) {
-      prefetchExecutor.shutdownNow();
+    try (CompressionConverter.TransParquetFileReader input = reader) {
+      super.close();
+    } finally {
+      reader = null;
+      if (prefetchExecutor != null) {
+        prefetchExecutor.shutdownNow();
+      }
+      // Release buffers
+      currentBuffer = null;
+      nextBuffer = null;
     }
-    // Release buffers
-    currentBuffer = null;
-    nextBuffer = null;
   }
 
   // Queue input files to be processed

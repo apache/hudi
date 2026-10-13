@@ -451,7 +451,7 @@ public class HoodieIndexUtils {
         return Option.empty();
       }
       String partitionPath = inferPartitionPath(incoming, existing, writeSchemaWithMetaFields, keyGenerator, existingRecordContext, mergeResult);
-      if (config.isFileGroupReaderBasedMergeHandle() && HoodieRecordUtils.isPayloadClassDeprecated(ConfigUtils.getPayloadClass(properties))) {
+      if (HoodieRecordUtils.isPayloadClassDeprecated(ConfigUtils.getPayloadClass(properties))) {
         return Option.of(existingRecordContext.constructHoodieRecord(mergeResult, partitionPath));
       } else {
         HoodieRecord<R> result = existingRecordContext.constructHoodieRecord(mergeResult, partitionPath);

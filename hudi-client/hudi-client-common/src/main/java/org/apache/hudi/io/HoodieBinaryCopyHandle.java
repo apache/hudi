@@ -23,6 +23,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -120,7 +121,11 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
       log.info("Schema evolution enabled for binary copy: {}", schemaEvolutionEnabled);
       records = this.writer.binaryCopy(inputFiles, Collections.singletonList(path), writeScheMessageType, schemaEvolutionEnabled);
     } catch (IOException e) {
+      closeWriterQuietly(e);
       throw new HoodieIOException(e.getMessage(), e);
+    } catch (RuntimeException e) {
+      closeWriterQuietly(e);
+      throw e;
     } finally {
       this.recordsWritten = records;
       this.insertRecordsWritten = records;
@@ -128,10 +133,19 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
     log.info("Finish rewriting {}. Using {} mills", this.path, timer.endTimer());
   }
 
+  private void closeWriterQuietly(Throwable failure) {
+    markClosed();
+    CloseableUtils.closeSuppressing(writer::close, failure);
+  }
+
   @Override
   public List<WriteStatus> close() {
     log.info("Closing the file {} as we are done with all the records {}", writeStatus.getFileId(), recordsWritten);
     try {
+      if (isClosed()) {
+        return Collections.singletonList(writeStatus);
+      }
+      markClosed();
       this.writer.close();
 
       HoodieWriteStat stat = writeStatus.getStat();

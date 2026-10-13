@@ -24,12 +24,17 @@ public final class CloseableUtils {
   private CloseableUtils() {
   }
 
-  /** Closes {@code closeable}, attaching any failure to {@code primary} as a suppressed exception. */
+  /** Closes a non-null resource, attaching any distinct close failure to the original failure. */
   public static void closeSuppressing(AutoCloseable closeable, Throwable primary) {
+    if (closeable == null) {
+      return;
+    }
     try {
       closeable.close();
     } catch (Throwable closeError) {
-      primary.addSuppressed(closeError);
+      if (closeError != primary) {
+        primary.addSuppressed(closeError);
+      }
     }
   }
 }

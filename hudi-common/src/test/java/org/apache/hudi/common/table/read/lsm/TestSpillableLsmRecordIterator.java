@@ -26,11 +26,16 @@ import org.apache.hudi.exception.HoodieIOException;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -39,6 +44,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 
 class TestSpillableLsmRecordIterator {
 
@@ -67,10 +76,11 @@ class TestSpillableLsmRecordIterator {
     assertEquals(0, spillFileCount());
   }
 
-  @Test
-  void testSpillFailurePreservesSourceCloseFailureAsSuppressed() throws IOException {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void testSpillFailurePreservesSourceCloseFailureAsSuppressed(boolean closeError) throws IOException {
     Path spillBaseFile = Files.createTempFile(tempDir, "spill-base", ".tmp");
-    RuntimeException closeFailure = new RuntimeException("source close failed");
+    Throwable closeFailure = sourceCloseFailure(closeError);
 
     HoodieIOException exception = assertThrows(HoodieIOException.class, () -> new SpillableLsmRecordIterator<>(
         closeFailingIterator(closeFailure), new DefaultSerializer<>(), null, spillBaseFile.toString()));
@@ -106,12 +116,86 @@ class TestSpillableLsmRecordIterator {
     iterator.close();
   }
 
-  @Test
-  void testSuccessfulSpillPropagatesSourceCloseFailure() {
-    RuntimeException closeFailure = new RuntimeException("source close failed");
+  @ParameterizedTest
+  @CsvSource({"false, false", "false, true", "true, false", "true, true"})
+  void testSuccessfulSpillCleansUpOnSourceCloseFailure(boolean empty, boolean closeError) throws IOException {
+    Throwable closeFailure = sourceCloseFailure(closeError);
+    List<BufferedRecord<String>> records = empty ? Collections.emptyList()
+        : Collections.singletonList(new BufferedRecord<>("key", 1, null, null, null));
+    ClosableIterator<BufferedRecord<String>> sourceIterator = spy(ClosableIterator.wrap(records.iterator()));
+    doThrow(closeFailure).when(sourceIterator).close();
 
-    assertSame(closeFailure, assertThrows(RuntimeException.class, () -> new SpillableLsmRecordIterator<>(
-        closeFailingIterator(closeFailure), new DefaultSerializer<>(), null, tempDir.toString())));
+    assertSame(closeFailure, assertThrows(closeFailure.getClass(), () -> new SpillableLsmRecordIterator<>(
+        sourceIterator, new DefaultSerializer<>(), null, tempDir.toString())));
+    assertEquals(0, spillFileCount());
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void testSourceCloseFailurePreservesSpillCleanupFailureAsSuppressed(boolean closeError) {
+    Throwable closeFailure = sourceCloseFailure(closeError);
+    ClosableIterator<BufferedRecord<String>> sourceIterator = closeFailingIterator(closeFailure);
+    doAnswer(invocation -> {
+      replaceSpillFileWithNonEmptyDirectory();
+      throw closeFailure;
+    }).when(sourceIterator).close();
+
+    Throwable exception = assertThrows(closeFailure.getClass(), () -> new SpillableLsmRecordIterator<>(
+        sourceIterator, new DefaultSerializer<>(), null, tempDir.toString()));
+
+    assertSame(closeFailure, exception);
+    assertEquals(1, exception.getSuppressed().length);
+    assertTrue(exception.getSuppressed()[0] instanceof HoodieIOException);
+    assertTrue(exception.getSuppressed()[0].getCause() instanceof DirectoryNotEmptyException);
+  }
+
+  @ParameterizedTest
+  @CsvSource({"false, false", "false, true", "true, false", "true, true"})
+  void testSpillErrorPreservesCleanupAndSourceCloseFailures(boolean cleanupFails, boolean closeFails) throws IOException {
+    AssertionError spillFailure = new AssertionError("spill failed");
+    AssertionError closeFailure = new AssertionError("source close failed");
+    ClosableIterator<BufferedRecord<String>> sourceIterator = spy(ClosableIterator.wrap(Collections.emptyIterator()));
+    doAnswer(invocation -> {
+      assertEquals(1, spillFileCount());
+      if (cleanupFails) {
+        replaceSpillFileWithNonEmptyDirectory();
+      }
+      throw spillFailure;
+    }).when(sourceIterator).hasNext();
+    if (closeFails) {
+      doThrow(closeFailure).when(sourceIterator).close();
+    }
+
+    AssertionError exception = assertThrows(AssertionError.class, () -> new SpillableLsmRecordIterator<>(
+        sourceIterator, new DefaultSerializer<>(), null, tempDir.toString()));
+
+    assertSame(spillFailure, exception);
+    Throwable[] suppressed = exception.getSuppressed();
+    assertEquals((cleanupFails ? 1 : 0) + (closeFails ? 1 : 0), suppressed.length);
+    if (cleanupFails) {
+      assertTrue(suppressed[0] instanceof HoodieIOException);
+      assertTrue(suppressed[0].getCause() instanceof DirectoryNotEmptyException);
+    }
+    if (closeFails) {
+      assertSame(closeFailure, suppressed[suppressed.length - 1]);
+    }
+    verify(sourceIterator).close();
+    assertEquals(cleanupFails ? 1 : 0, spillFileCount());
+  }
+
+  private void replaceSpillFileWithNonEmptyDirectory() throws IOException {
+    Path spillFile;
+    try (Stream<Path> paths = Files.list(tempDir)) {
+      spillFile = paths.findFirst().get();
+    }
+    // A non-empty directory makes deletion fail reliably without relying on filesystem permissions.
+    Files.delete(spillFile);
+    Files.createDirectory(spillFile);
+    Files.createFile(spillFile.resolve("child"));
+  }
+
+  private static Throwable sourceCloseFailure(boolean error) {
+    return error ? new AssertionError("source close failed") : new RuntimeException("source close failed");
   }
 
   private long spillFileCount() throws IOException {
@@ -120,22 +204,9 @@ class TestSpillableLsmRecordIterator {
     }
   }
 
-  private ClosableIterator<BufferedRecord<String>> closeFailingIterator(RuntimeException closeFailure) {
-    return new ClosableIterator<BufferedRecord<String>>() {
-      @Override
-      public boolean hasNext() {
-        return false;
-      }
-
-      @Override
-      public BufferedRecord<String> next() {
-        throw new UnsupportedOperationException();
-      }
-
-      @Override
-      public void close() {
-        throw closeFailure;
-      }
-    };
+  private ClosableIterator<BufferedRecord<String>> closeFailingIterator(Throwable closeFailure) {
+    ClosableIterator<BufferedRecord<String>> sourceIterator = spy(ClosableIterator.wrap(Collections.emptyIterator()));
+    doThrow(closeFailure).when(sourceIterator).close();
+    return sourceIterator;
   }
 }

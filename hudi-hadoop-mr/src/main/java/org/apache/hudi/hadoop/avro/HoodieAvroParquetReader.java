@@ -82,7 +82,7 @@ public class HoodieAvroParquetReader extends RecordReader<Void, ArrayWritable> {
         AvroReadSupport.setRequestedProjection(conf, filterSchema.toAvroSchema());
       }
     }
-    parquetRecordReader = new ParquetRecordReader<>(new AvroReadSupport<>(), getFilter(conf));
+    parquetRecordReader = new ParquetRecordReader<>(new AvroReadSupport<>(GenericData.get()), getFilter(conf));
   }
 
   @Override

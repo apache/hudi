@@ -29,6 +29,8 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -77,9 +79,12 @@ class TestHoodieLookupFunction {
     }
   }
 
-  @Test
-  void testLookupCacheDoesNotReloadWhenCompletedCommitHasNotChanged() throws Exception {
+  @ParameterizedTest
+  @ValueSource(strings = {"heap", "rocksdb"})
+  void testLookupCacheDoesNotReloadWhenCompletedCommitHasNotChanged(String cacheType) throws Exception {
     Configuration conf = getConf();
+    conf.set(FlinkOptions.LOOKUP_JOIN_CACHE_TYPE, cacheType);
+    conf.set(FlinkOptions.LOOKUP_JOIN_ROCKSDB_PATH, new File(tempFile, "rocksdb").getAbsolutePath());
     TestData.writeData(TestData.DATA_SET_SINGLE_INSERT, conf);
 
     CountingLookupTableReader reader = new CountingLookupTableReader(TestData.DATA_SET_SINGLE_INSERT, conf);

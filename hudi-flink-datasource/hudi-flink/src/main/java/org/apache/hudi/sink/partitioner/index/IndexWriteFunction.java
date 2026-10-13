@@ -26,10 +26,11 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
+import org.apache.hudi.sink.buffer.StableSortBuffer;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
-import org.apache.hudi.sink.exception.MemoryPagesExhaustedException;
 import org.apache.hudi.sink.utils.BufferUtils;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.MutableIteratorWrapperIterator;
@@ -39,12 +40,11 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
-import org.apache.flink.table.runtime.operators.sort.BinaryInMemorySortBuffer;
 import org.apache.flink.table.runtime.util.MemorySegmentPool;
 import org.apache.flink.util.Collector;
+import org.apache.flink.util.IOUtils;
 
 import java.io.Closeable;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -78,7 +78,7 @@ public class IndexWriteFunction extends AbstractStreamWriteFunction<RowData> {
 
   private transient MemorySegmentPool memorySegmentPool;
 
-  private transient BinaryInMemorySortBuffer indexDataBuffer;
+  private transient StableSortBuffer indexDataBuffer;
 
   /**
    * Hoodie Flink table.
@@ -98,7 +98,7 @@ public class IndexWriteFunction extends AbstractStreamWriteFunction<RowData> {
     this.memorySegmentPool = this.memorySegmentPoolFactory.createMemorySegmentPool(
         config,
         config.get(FlinkOptions.INDEX_RLI_WRITE_BUFFER_SIZE) * 1024 * 1024);
-    this.indexDataBuffer = BufferUtils.createBuffer(IndexRowUtils.INDEX_ROW_TYPE, memorySegmentPool);
+    this.indexDataBuffer = BufferUtils.createStableSortBuffer(IndexRowUtils.INDEX_ROW_TYPE, memorySegmentPool);
     this.dedupKeyExtractor = this.writeClient.getConfig().isRecordLevelIndexEnabled()
         ? IndexWriteFunction::getPartitionedDedupKey : IndexRowUtils::getRecordKey;
   }
@@ -110,27 +110,14 @@ public class IndexWriteFunction extends AbstractStreamWriteFunction<RowData> {
 
   @Override
   public void processElement(RowData indexRow, Context ctx, Collector<RowData> out) throws Exception {
-    boolean success = bufferIndexRow(indexRow);
+    boolean success = indexDataBuffer.write(indexRow);
     if (!success) {
       // flushes the buffer if the memory pool is full
       flushBuffer(false, false);
       // try to write index row again
-      bufferIndexRow(indexRow);
-    }
-  }
-
-  /**
-   * Put the index row into the binary buffer.
-   *
-   * @param indexRow the incoming index row data
-   * @return true if the index row is put into the buffer successfully, false otherwise.
-   */
-  private boolean bufferIndexRow(RowData indexRow) throws IOException {
-    try {
-      return indexDataBuffer.write(indexRow);
-    } catch (MemoryPagesExhaustedException e) {
-      log.info("There is no enough free pages in memory pool to create buffer, need flushing first.", e);
-      return false;
+      if (!indexDataBuffer.write(indexRow)) {
+        throw new HoodieException("Index write buffer is too small to hold a single record.");
+      }
     }
   }
 
@@ -168,7 +155,7 @@ public class IndexWriteFunction extends AbstractStreamWriteFunction<RowData> {
     }
   }
 
-  private Pair<List<HoodieRecord>, Set<String>> prepareIndexRecordsAndPartitions(BinaryInMemorySortBuffer indexDataBuffer) {
+  private Pair<List<HoodieRecord>, Set<String>> prepareIndexRecordsAndPartitions(StableSortBuffer indexDataBuffer) {
     BinaryRowData reusedRow = new BinaryRowData(IndexRowUtils.INDEX_ROW_TYPE.getFieldCount());
     Iterator<BinaryRowData> rowItr = new MutableIteratorWrapperIterator<>(indexDataBuffer.getIterator(), () -> reusedRow);
     Set<String> dataPartitions = new HashSet<>();
@@ -211,10 +198,9 @@ public class IndexWriteFunction extends AbstractStreamWriteFunction<RowData> {
 
   @Override
   public void close() throws Exception {
-    this.indexDataBuffer.dispose();
-    if (this.memorySegmentPool instanceof Closeable) {
-      ((Closeable) this.memorySegmentPool).close();
-    }
-    super.close();
+    IOUtils.closeAll(
+        this.indexDataBuffer == null ? null : this.indexDataBuffer::dispose,
+        this.memorySegmentPool instanceof Closeable ? (Closeable) this.memorySegmentPool : null,
+        super::close);
   }
 }

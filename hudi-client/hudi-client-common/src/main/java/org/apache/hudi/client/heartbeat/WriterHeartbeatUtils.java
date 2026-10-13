@@ -22,6 +22,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -58,8 +59,10 @@ public class WriterHeartbeatUtils {
       } else {
         log.info("Deleted the heartbeat for instant {}", instantTime);
       }
-    } catch (IOException io) {
-      log.error("Unable to delete heartbeat for instant {}", instantTime, io);
+    } catch (IOException | HoodieIOException e) {
+      // HoodieStorage.deleteFile throws HoodieIOException when the object still exists after a
+      // rejected delete. Never fatal: the commit is already durable by postCommit.
+      log.error("Unable to delete heartbeat for instant {}", instantTime, e);
     }
     return deleted;
   }

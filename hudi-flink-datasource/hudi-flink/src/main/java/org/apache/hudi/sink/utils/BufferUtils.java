@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.sink.buffer.StableSortBuffer;
 import org.apache.hudi.sink.exception.MemoryPagesExhaustedException;
 
 import org.apache.flink.table.runtime.generated.NormalizedKeyComputer;
@@ -33,16 +34,31 @@ import org.apache.flink.table.types.logical.RowType;
  * Utilities to create binary buffer for writing functions.
  */
 public class BufferUtils {
-  // minimum pages for a BinaryInMemorySortBuffer
+  // minimum pages for either sort buffer
   private static final int MIN_REQUIRED_BUFFERS = 3;
 
-  public static BinaryInMemorySortBuffer createBuffer(RowType rowType, MemorySegmentPool memorySegmentPool) {
-    return createBuffer(rowType, memorySegmentPool,  new NaturalOrderKeyComputer(), new NaturalOrderRecordComparator());
+  public static StableSortBuffer createStableSortBuffer(RowType rowType, MemorySegmentPool memorySegmentPool) {
+    return createStableSortBuffer(rowType, memorySegmentPool,  new NaturalOrderKeyComputer(), new NaturalOrderRecordComparator());
   }
 
-  public static BinaryInMemorySortBuffer createBuffer(RowType rowType, MemorySegmentPool memorySegmentPool, NormalizedKeyComputer keyComputer, RecordComparator recordComparator) {
+  public static StableSortBuffer createStableSortBuffer(RowType rowType, MemorySegmentPool memorySegmentPool, NormalizedKeyComputer keyComputer, RecordComparator recordComparator) {
     if (memorySegmentPool.freePages() < MIN_REQUIRED_BUFFERS) {
       // there is no enough free pages to create a binary buffer, may need flush first.
+      throw new MemoryPagesExhaustedException("Free pages are not enough to create a StableSortBuffer.");
+    }
+    return StableSortBuffer.createBuffer(
+        keyComputer,
+        new RowDataSerializer(rowType),
+        new BinaryRowDataSerializer(rowType.getFieldCount()),
+        recordComparator,
+        memorySegmentPool);
+  }
+
+  /** Creates a Flink sort buffer, which do not require stable ordering. */
+  public static BinaryInMemorySortBuffer createSortBuffer(
+      RowType rowType, MemorySegmentPool memorySegmentPool,
+      NormalizedKeyComputer keyComputer, RecordComparator recordComparator) {
+    if (memorySegmentPool.freePages() < MIN_REQUIRED_BUFFERS) {
       throw new MemoryPagesExhaustedException("Free pages are not enough to create a BinaryInMemorySortBuffer.");
     }
     return BinaryInMemorySortBuffer.createBuffer(

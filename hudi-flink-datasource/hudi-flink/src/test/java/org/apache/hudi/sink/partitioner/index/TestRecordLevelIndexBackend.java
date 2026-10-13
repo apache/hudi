@@ -33,6 +33,8 @@ import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -43,7 +45,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -90,6 +95,37 @@ public class TestRecordLevelIndexBackend {
       assertFalse(backend.getPartitionBucketCaches().containsKey("par1"));
       assertTrue(backend.getPartitionBucketCaches().containsKey("par2"));
       assertTrue(backend.getPartitionBucketCaches().containsKey("par3"));
+    }
+  }
+
+  @Test
+  public void testLazyEvictMultiplePartitionsWithoutRepeatedHeapScans() throws Exception {
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      Map<String, ExternalSpillableMap<String, Integer>> maps = new HashMap<>();
+      for (String partition : Arrays.asList("protected", "old1", "recent", "old2", "old3", "retained")) {
+        ExternalSpillableMap<String, Integer> map = mapWithStorage(ONE_MB / 4);
+        maps.put(partition, map);
+        backend.getPartitionBucketCaches().put(partition,
+            backend.newBucketCache(map, partition.equals("recent") ? 2L : 1L));
+        doAnswer(invocation -> {
+          when(map.getCurrentInMemoryMapSize()).thenReturn(0L);
+          return null;
+        }).when(map).close();
+      }
+      backend.onCheckpointComplete(new TestCorrespondent(Collections.singletonMap(2L, "002")), 3L);
+
+      backend.cleanIfNecessary(ONE_MB / 4, "protected");
+
+      assertEquals(Arrays.asList("protected", "recent", "retained"),
+          new ArrayList<>(backend.getPartitionBucketCaches().keySet()));
+      for (Map.Entry<String, ExternalSpillableMap<String, Integer>> entry : maps.entrySet()) {
+        verify(entry.getValue(), atMost(2)).getCurrentInMemoryMapSize();
+        if (backend.getPartitionBucketCaches().containsKey(entry.getKey())) {
+          verify(entry.getValue(), never()).close();
+        } else {
+          verify(entry.getValue()).close();
+        }
+      }
     }
   }
 

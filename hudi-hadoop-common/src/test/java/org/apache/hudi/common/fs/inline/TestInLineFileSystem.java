@@ -21,6 +21,7 @@ package org.apache.hudi.common.fs.inline;
 import org.apache.hudi.common.testutils.FileSystemTestUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
+import org.apache.hudi.hadoop.fs.inline.InLineFsDataInputStream;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.inline.InLineFSUtils;
 
@@ -40,6 +41,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.hudi.common.testutils.FileSystemTestUtils.RANDOM;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -219,6 +221,29 @@ public class TestInLineFileSystem {
     }, "Should have thrown exception");
 
     fsDataInputStream.close();
+  }
+
+  @Test
+  public void testCloseClosesOuterStream() throws IOException {
+    OuterPathInfo outerPathInfo = generateOuterFileAndGetInfo(1000);
+    AtomicInteger outerCloseCount = new AtomicInteger(0);
+    FSDataInputStream outerStream = outerPathInfo.outerPath.getFileSystem(conf).open(outerPathInfo.outerPath);
+    FSDataInputStream trackingOuterStream = new FSDataInputStream(outerStream) {
+      @Override
+      public void close() throws IOException {
+        super.close();
+        outerCloseCount.incrementAndGet();
+      }
+    };
+
+    InLineFsDataInputStream inlineStream =
+        new InLineFsDataInputStream(outerPathInfo.startOffset, trackingOuterStream, outerPathInfo.length);
+    assertEquals(outerPathInfo.expectedBytes[0] & 0xff, inlineStream.read());
+    assertEquals(0, outerCloseCount.get());
+
+    inlineStream.close();
+    // closing the inline stream must close the outer file handle, otherwise it leaks until GC
+    assertEquals(1, outerCloseCount.get());
   }
 
   private void verifyArrayEquality(byte[] expected, int expectedOffset, int expectedLength,

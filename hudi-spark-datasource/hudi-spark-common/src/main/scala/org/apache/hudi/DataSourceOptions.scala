@@ -181,6 +181,20 @@ object DataSourceReadOptions {
     .withDocumentation("Whether to skip clustering instants to avoid reading base files of clustering operations "
       + "for streaming read to improve read performance.")
 
+  val INCREMENTAL_SIZE_ESTIMATION_ENABLE: ConfigProperty[Boolean] = ConfigProperty
+    .key("hoodie.datasource.read.incr.size.estimation.enable")
+    .defaultValue(false)
+    .markAdvanced()
+    .sinceVersion("1.3.0")
+    .withDocumentation("When enabled, the incremental file index reports the total size of the files written by "
+      + "the commits in the queried range, taken from commit metadata, as its sizeInBytes to the Spark planner, "
+      + "which may allow Spark to broadcast small incremental reads. When disabled, it reports "
+      + "spark.sql.defaultSizeInBytes (the default of BaseRelation.sizeInBytes, Long.MaxValue unless configured), "
+      + "matching the pre-1.0 IncrementalRelation and preventing Spark from choosing BroadcastHashJoin for any "
+      + "subexpression that includes the incremental source. Spark's selectivity estimates on filtered "
+      + "subexpressions of the incremental source can otherwise drop below the broadcast threshold, causing "
+      + "broadcast timeouts on large tables.")
+
   val TIME_TRAVEL_AS_OF_INSTANT: ConfigProperty[String] = HoodieCommonConfig.TIMESTAMP_AS_OF
 
   val ENABLE_DATA_SKIPPING: ConfigProperty[Boolean] = ConfigProperty

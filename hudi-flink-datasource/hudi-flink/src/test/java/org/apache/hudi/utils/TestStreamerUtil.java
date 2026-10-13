@@ -416,10 +416,15 @@ class TestStreamerUtil {
     StreamerUtil.checkOrderingFields(customPayloadConf, Collections.singletonList("id"));
     assertEquals(FlinkOptions.NO_PRE_COMBINE, customPayloadConf.get(FlinkOptions.ORDERING_FIELDS));
 
-    Configuration keygenConf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    Configuration keygenConf = new Configuration();
     StreamerUtil.checkKeygenGenerator(true, keygenConf);
     assertEquals(ComplexAvroKeyGenerator.class.getName(),
         keygenConf.get(FlinkOptions.KEYGEN_CLASS_NAME));
+    assertEquals("FIELD_PREFIXED", keygenConf.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null));
+
+    keygenConf.setString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), "VALUE_ONLY");
+    StreamerUtil.checkKeygenGenerator(true, keygenConf);
+    assertEquals("VALUE_ONLY", keygenConf.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null));
   }
 
   @Test

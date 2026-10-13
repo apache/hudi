@@ -17,6 +17,7 @@ import com.google.common.collect.ImmutableList;
 import io.airlift.configuration.Config;
 import io.airlift.configuration.ConfigDescription;
 import io.airlift.configuration.DefunctConfig;
+import io.airlift.configuration.LegacyConfig;
 import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
 import io.airlift.units.MinDataSize;
@@ -213,6 +214,7 @@ public class HudiConfig
     }
 
     @Config("hudi.target-split-size")
+    @LegacyConfig("hudi.max-split-size")
     @ConfigDescription("The target split size")
     public HudiConfig setTargetSplitSize(DataSize targetSplitSize)
     {

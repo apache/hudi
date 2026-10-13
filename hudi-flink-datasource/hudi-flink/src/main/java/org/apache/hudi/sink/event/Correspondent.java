@@ -34,6 +34,7 @@ import org.apache.flink.util.SerializedValue;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Correspondent between a write task with the coordinator.
@@ -41,6 +42,16 @@ import java.util.Map;
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @Getter
 public class Correspondent {
+
+  /**
+   * Initial backoff in milliseconds between two instant-time polls, allowing for instant creation latency.
+   */
+  private static final long POLL_BASE_MS = 200L;
+
+  /**
+   * Upper bound in milliseconds of the backoff between two instant-time polls.
+   */
+  private static final long POLL_CAP_MS = 1000L;
 
   private final OperatorID operatorID;
   private final TaskOperatorEventGateway gateway;
@@ -64,16 +75,50 @@ public class Correspondent {
   }
 
   /**
-   * Sends a request to the coordinator to fetch the instant time.
+   * Requests the instant time for the given checkpoint from the coordinator.
+   *
+   * <p>Polls with capped exponential backoff until the instant is non-null or the timeout expires.
+   * Request failures are propagated immediately.
+   *
+   * @param checkpointId The checkpoint id (or -1 for bulk insert)
+   * @param pollBudgetMs The overall budget to wait for an instant, in milliseconds
+   *
+   * @return the instant time to write with
    */
-  public String requestInstantTime(long checkpointId) {
+  public String requestInstantTime(long checkpointId, long pollBudgetMs) {
+    final long deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(pollBudgetMs);
+    long backoffMs = POLL_BASE_MS;
     try {
-      InstantTimeResponse response = CoordinationResponseSerDe.unwrap(this.gateway.sendRequestToCoordinator(this.operatorID,
-          new SerializedValue<>(InstantTimeRequest.getInstance(checkpointId))).get());
-      return response.getInstant();
+      do {
+        String instant = fetchInstantTimeResponse(checkpointId).getInstant();
+        if (instant != null) {
+          return instant;
+        }
+        long remainingNanos = deadlineNanos - System.nanoTime();
+        if (remainingNanos <= 0) {
+          break;
+        }
+        TimeUnit.NANOSECONDS.sleep(Math.min(remainingNanos, TimeUnit.MILLISECONDS.toNanos(backoffMs)));
+        backoffMs = Math.min(backoffMs * 2, POLL_CAP_MS);
+      } while (System.nanoTime() < deadlineNanos);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new HoodieException("Interrupted while requesting the instant time from the coordinator", e);
     } catch (Exception e) {
-      throw new HoodieException("Error requesting the instant time from the coordinator", e);
+      throw new HoodieException(
+          "Error requesting the instant time from the coordinator for checkpoint " + checkpointId, e);
     }
+    throw new HoodieException("Timeout waiting for the instant time from the coordinator for checkpoint " + checkpointId);
+  }
+
+  /**
+   * Sends a single instant-time request to the coordinator and returns its response.
+   *
+   * <p>Isolated so tests can stub the transport while reusing the poll loop in {@link #requestInstantTime}.
+   */
+  protected InstantTimeResponse fetchInstantTimeResponse(long checkpointId) throws Exception {
+    return CoordinationResponseSerDe.unwrap(this.gateway.sendRequestToCoordinator(this.operatorID,
+        new SerializedValue<>(InstantTimeRequest.getInstance(checkpointId))).get());
   }
 
   /**
@@ -121,6 +166,9 @@ public class Correspondent {
   @Getter
   public static class InstantTimeResponse implements CoordinationResponse {
 
+    /**
+     * The instant time, or null while the instant is still being created.
+     */
     private final String instant;
 
     public static InstantTimeResponse getInstance(String instant) {

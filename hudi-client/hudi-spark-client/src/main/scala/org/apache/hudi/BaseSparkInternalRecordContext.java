@@ -46,6 +46,7 @@ import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.UnaryOperator;
 
 import scala.Function1;
@@ -55,6 +56,9 @@ import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
 public abstract class BaseSparkInternalRecordContext extends RecordContext<InternalRow> {
 
   private OrderingValueEngineTypeConverter orderingValueConverter;
+  private UnaryOperator<StructType> rowShape;
+  // The row shape applied per engine schema, so the per-record accessors do not rebuild the overlay.
+  private final Map<HoodieSchema, StructType> rowStructTypes = new ConcurrentHashMap<>();
 
   protected BaseSparkInternalRecordContext(HoodieTableConfig tableConfig) {
     super(tableConfig, new DefaultJavaTypeConverter());
@@ -73,7 +77,10 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
   }
 
   private static Object getFieldValueFromInternalRowInternal(InternalRow row, HoodieSchema recordSchema, String fieldName, boolean convertToJavaType) {
-    StructType structType = getCachedSchema(recordSchema);
+    return getFieldValueFromInternalRowInternal(row, getCachedSchema(recordSchema), fieldName, convertToJavaType);
+  }
+
+  private static Object getFieldValueFromInternalRowInternal(InternalRow row, StructType structType, String fieldName, boolean convertToJavaType) {
     scala.Option<HoodieUnsafeRowUtils.NestedFieldPath> cachedNestedFieldPath =
         HoodieInternalRowUtils.getCachedPosList(structType, fieldName);
     if (cachedNestedFieldPath.isDefined()) {
@@ -106,7 +113,7 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
 
   @Override
   public Object getValue(InternalRow row, HoodieSchema schema, String fieldName) {
-    return getFieldValueFromInternalRow(row, schema, fieldName);
+    return getFieldValueFromInternalRowInternal(row, getRowStructType(schema), fieldName, false);
   }
 
   @Override
@@ -210,14 +217,43 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
     if (internalRow instanceof UnsafeRow) {
       return internalRow;
     }
-    final UnsafeProjection unsafeProjection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema);
+    final UnsafeProjection unsafeProjection;
+    if (rowShape == null) {
+      unsafeProjection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema);
+    } else {
+      StructType rowStructType = getRowStructType(schema);
+      unsafeProjection = HoodieInternalRowUtils.getCachedUnsafeProjection(rowStructType, rowStructType);
+    }
     return unsafeProjection.apply(internalRow);
+  }
+
+  /**
+   * Installs the Spark type the rows of an engine schema actually carry in this read; null, the default, means the
+   * plain conversion. {@code SparkFileFormatInternalRowReaderContext} installs the PushVariantIntoScan overlay here
+   * (see its setSchemaHandler), because every row writer and field accessor this context builds from an engine
+   * schema has to be typed over that shape: a VariantType-typed one reads a projection struct through
+   * UnsafeRow.getVariant instead of copying it across. That covers {@link #projectRecord}, {@link #getValue} (the
+   * partial-update merges read the older record through it) and {@link #toBinaryRow}; SparkRecordMergingUtils
+   * reads the merged record's fields through {@link #getRowStructType} too.
+   */
+  public void setRowShape(UnaryOperator<StructType> rowShape) {
+    this.rowShape = rowShape;
+    rowStructTypes.clear();
+  }
+
+  /**
+   * The Spark type the rows of {@code schema} carry in this read: the plain conversion, or the row shape installed
+   * by {@link #setRowShape} when the reader hands its rows over in a rewritten shape.
+   */
+  public StructType getRowStructType(HoodieSchema schema) {
+    StructType structType = getCachedSchema(schema);
+    return rowShape == null ? structType : rowStructTypes.computeIfAbsent(schema, s -> rowShape.apply(structType));
   }
 
   @Override
   public UnaryOperator<InternalRow> projectRecord(HoodieSchema from, HoodieSchema to, Map<String, String> renamedColumns) {
     Function1<InternalRow, UnsafeRow> unsafeRowWriter =
-        HoodieInternalRowUtils.getCachedUnsafeRowWriter(getCachedSchema(from), getCachedSchema(to), renamedColumns, Collections.emptyMap());
+        HoodieInternalRowUtils.getCachedUnsafeRowWriter(getRowStructType(from), getRowStructType(to), renamedColumns, Collections.emptyMap());
     return row -> (InternalRow) unsafeRowWriter.apply(row);
   }
 

@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hudi.common.model.IOType
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 class TestCallProcedure extends HoodieSparkProcedureTestBase {
 
@@ -130,6 +131,37 @@ class TestCallProcedure extends HoodieSparkProcedureTestBase {
       // 1 commits are left after rollback
       commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
       assertResult(1){commits.length}
+    }
+  }
+
+  test("Test Call rollback_to_instant Procedure on a version 6 table") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      // a table a 1.x writer keeps at version 6, so its timeline is still on the version 1 layout
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  orderingFields = 'ts',
+           |  'hoodie.write.table.version' = '6'
+           | )
+       """.stripMargin)
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
+      assertResult(6)(createMetaClient(spark, tablePath).getTableConfig.getTableVersion.versionCode())
+
+      val commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
+      assertResult(2)(commits.length)
+      checkAnswer(s"""call rollback_to_instant(table => '$tableName', instant_time => '${commits(0).get(0)}')""")(Seq(true))
+      assertResult(1)(spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect().length)
     }
   }
 

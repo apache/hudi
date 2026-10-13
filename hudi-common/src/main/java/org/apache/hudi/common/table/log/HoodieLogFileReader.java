@@ -190,14 +190,14 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
       case HFILE_DATA_BLOCK:
         checkState(nextBlockVersion.getVersion() != HoodieLogFormatVersion.DEFAULT_VERSION,
-            String.format("HFile block could not be of version (%d)", HoodieLogFormatVersion.DEFAULT_VERSION));
+            () -> String.format("HFile block could not be of version (%d)", HoodieLogFormatVersion.DEFAULT_VERSION));
         return new HoodieHFileDataBlock(
             () -> getDataInputStream(storage, this.logFile, bufferSize), content, true, logBlockContentLoc,
             Option.ofNullable(readerSchema), header, footer, enableRecordLookups, logFile.getPath());
 
       case PARQUET_DATA_BLOCK:
         checkState(nextBlockVersion.getVersion() != HoodieLogFormatVersion.DEFAULT_VERSION,
-            String.format("Parquet block could not be of version (%d)", HoodieLogFormatVersion.DEFAULT_VERSION));
+            () -> String.format("Parquet block could not be of version (%d)", HoodieLogFormatVersion.DEFAULT_VERSION));
 
         return new HoodieParquetDataBlock(() -> getDataInputStream(storage, this.logFile, bufferSize), content, true, logBlockContentLoc,
             getTargetReaderSchemaForBlock(), header, footer, keyField);
@@ -235,7 +235,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     }
 
     int type = inputStream.readInt();
-    checkArgument(type < HoodieLogBlockType.values().length, "Invalid block byte type found " + type);
+    checkArgument(type < HoodieLogBlockType.values().length, () -> "Invalid block byte type found " + type);
     return HoodieLogBlockType.values()[type];
   }
 

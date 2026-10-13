@@ -117,7 +117,7 @@ public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteH
         new StoragePath(config.getBasePath()),
         FSUtils.constructAbsolutePath(config.getBasePath(), partitionPath),
         hoodieTable.getPartitionMetafileFormat());
-    partitionMetadata.trySave();
+    partitionMetadata.trySave(partitionPath);
 
     String newFileName = createNewFileName(latestValidFilePath);
     oldFilePath = makeNewFilePath(partitionPath, latestValidFilePath);

@@ -68,6 +68,7 @@ import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
@@ -351,6 +352,8 @@ public class StreamerUtil {
           .setPayloadClassName(getPayloadClass(conf))
           .setDatabaseName(conf.get(FlinkOptions.DATABASE_NAME))
           .setRecordKeyFields(conf.getString(FlinkOptions.RECORD_KEY_FIELD.key(), null))
+          .setComplexKeyGenEncoding(conf.containsKey(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key())
+              ? ComplexKeyGenEncoding.fromString(conf.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null)) : null)
           .setOrderingFields(OptionsResolver.getOrderingFieldsStr(conf))
           .setArchiveLogFolder(TIMELINE_HISTORY_PATH.defaultValue())
           .setPartitionFields(conf.getString(FlinkOptions.PARTITION_PATH_FIELD.key(), null))
@@ -728,13 +731,19 @@ public class StreamerUtil {
   }
 
   /**
-   * Validate keygen generator.
+   * Validate the key generator and default its record key encoding if not already configured.
    */
   public static void checkKeygenGenerator(boolean isComplexHoodieKey, Configuration conf) {
-    if (isComplexHoodieKey && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.KEYGEN_CLASS_NAME)) {
-      conf.set(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
-      log.info("Table option [{}] is reset to {} because record key or partition path has two or more fields",
-          FlinkOptions.KEYGEN_CLASS_NAME.key(), ComplexAvroKeyGenerator.class.getName());
+    if (isComplexHoodieKey) {
+      if (FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.KEYGEN_CLASS_NAME)) {
+        conf.set(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
+        log.info("Table option [{}] is reset to {} because record key or partition path has two or more fields",
+            FlinkOptions.KEYGEN_CLASS_NAME.key(), ComplexAvroKeyGenerator.class.getName());
+      }
+      String encodingKey = HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key();
+      if (!conf.containsKey(encodingKey)) {
+        conf.setString(encodingKey, ComplexKeyGenEncoding.FIELD_PREFIXED.name());
+      }
     }
   }
 

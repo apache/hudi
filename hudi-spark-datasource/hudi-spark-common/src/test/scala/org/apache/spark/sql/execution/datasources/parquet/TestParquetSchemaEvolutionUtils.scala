@@ -20,15 +20,25 @@
 package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaField, HoodieSchemaType}
-import org.apache.hudi.common.schema.internal.InternalSchema
+import org.apache.hudi.common.schema.internal.{InternalSchema, Type => InternalType, Types => InternalTypes}
+import org.apache.hudi.common.schema.internal.action.TableChanges
 import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter
+import org.apache.hudi.common.schema.internal.utils.SchemaChangeUtils
+import org.apache.hudi.common.util
 import org.apache.hudi.exception.HoodieException
 
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
+import org.apache.parquet.filter2.compat.FilterCompat
+import org.apache.parquet.filter2.predicate.{FilterApi, FilterPredicate}
+import org.apache.parquet.hadoop.ParquetInputFormat
 import org.apache.parquet.hadoop.metadata.FileMetaData
 import org.apache.parquet.schema.{MessageType, Type, Types}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.spark.sql.execution.datasources.parquet.VariantParquetTestFixtures.{shreddedVariant, stringKeyMap, threeLevelList, twoLevelList, unshreddedVariant}
-import org.apache.spark.sql.types.{ArrayType, BinaryType, IntegerType, MapType, MetadataBuilder, StringType, StructField, StructType}
+import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.sources.{AlwaysFalse, AlwaysTrue, And, EqualNullSafe, EqualTo, Filter, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Not, Or, StringContains, StringEndsWith, StringStartsWith}
+import org.apache.spark.sql.types.{ArrayType, BinaryType, IntegerType, LongType, MapType, MetadataBuilder, StringType, StructField, StructType}
 import org.junit.jupiter.api.{Assertions, Test}
 
 import java.util.{Arrays, Collections, HashMap}
@@ -328,4 +338,187 @@ class TestParquetSchemaEvolutionUtils {
    */
   private def nestedVariantElement: Type =
     Types.optionalGroup().addField(shreddedVariant("inner")).named("e")
+
+  /**
+   * The filter rebuild the four legacy parquet formats share with the SparkNNParquetReader family.
+   * Field ids are positional, so the file's "original" carries the same id 1 the query spells
+   * "renamed", and "added" (id 2) has no field in the file at all.
+   */
+  @Test
+  def testRebuildFilterFromParquetRespellsFiltersOntoFileNames(): Unit = {
+    val intType = HoodieSchema.create(HoodieSchemaType.INT)
+    val stringType = HoodieSchema.create(HoodieSchemaType.STRING)
+    val querySchema = internalSchemaOf(("id", intType), ("renamed", stringType), ("added", intType))
+    val fileSchema = internalSchemaOf(("id", intType), ("original", stringType))
+
+    def rebuild(filter: Filter): Filter =
+      ParquetSchemaEvolutionUtils.rebuildFilterFromParquet(filter, fileSchema, querySchema)
+
+    // A renamed column is re-spelled to the name the file carries; an untouched one is left alone.
+    Assertions.assertEquals(EqualTo("original", "x"), rebuild(EqualTo("renamed", "x")))
+    Assertions.assertEquals(StringStartsWith("original", "a"), rebuild(StringStartsWith("renamed", "a")))
+    Assertions.assertEquals(GreaterThan("id", 1), rebuild(GreaterThan("id", 1)))
+
+    // A column added after the file was written has no field to filter on, and a filter that
+    // cannot be evaluated must not skip any of the file's row groups.
+    Assertions.assertEquals(AlwaysTrue, rebuild(IsNotNull("added")))
+
+    // Every leaf filter type takes all three arms: re-spelled when the file holds the column under
+    // another name, AlwaysTrue when it does not hold it at all, and AlwaysTrue when even the query
+    // schema does not hold the name, which is how a predicate on a PushVariantIntoScan projection
+    // member arrives (before, that threw IllegalArgumentException).
+    val leafFilters: Seq[String => Filter] = Seq(
+      EqualTo(_, "x"), EqualNullSafe(_, "x"), GreaterThan(_, "x"), GreaterThanOrEqual(_, "x"),
+      LessThan(_, "x"), LessThanOrEqual(_, "x"), In(_, Array[Any]("x", "y")), IsNull(_), IsNotNull(_),
+      StringStartsWith(_, "x"), StringEndsWith(_, "x"), StringContains(_, "x"))
+    leafFilters.foreach { leaf =>
+      Assertions.assertEquals(leaf("original"), rebuild(leaf("renamed")))
+      Assertions.assertEquals(AlwaysTrue, rebuild(leaf("added")), s"${leaf("added")} on an absent column")
+      Assertions.assertEquals(AlwaysTrue, rebuild(leaf("v.`0`")), s"${leaf("v.`0`")} on a name the query schema lacks")
+    }
+
+    // The constant filters reference no column and pass through as they are.
+    Assertions.assertEquals(AlwaysTrue, rebuild(AlwaysTrue))
+    Assertions.assertEquals(AlwaysFalse, rebuild(AlwaysFalse))
+
+    // And/Or/Not rebuild their children.
+    Assertions.assertEquals(
+      And(EqualTo("original", "x"), AlwaysTrue),
+      rebuild(And(EqualTo("renamed", "x"), IsNull("added"))))
+    Assertions.assertEquals(
+      And(EqualTo("original", "x"), AlwaysTrue),
+      rebuild(And(EqualTo("renamed", "x"), GreaterThan("v.`0`", 5))))
+    Assertions.assertEquals(
+      Or(Not(EqualTo("original", "x")), GreaterThanOrEqual("id", 2)),
+      rebuild(Or(Not(EqualTo("renamed", "x")), GreaterThanOrEqual("id", 2))))
+
+    // A table with no internal schema on either side pushes its filters down untouched.
+    val untouched = EqualTo("renamed", "x")
+    Assertions.assertSame(untouched,
+      ParquetSchemaEvolutionUtils.rebuildFilterFromParquet(untouched, null, querySchema))
+    Assertions.assertSame(untouched,
+      ParquetSchemaEvolutionUtils.rebuildFilterFromParquet(untouched, fileSchema, null))
+    Assertions.assertSame(untouched,
+      ParquetSchemaEvolutionUtils.rebuildFilterFromParquet(untouched, null, null))
+  }
+
+  /**
+   * A nested field renamed under schema-on-read is re-spelled onto the file's name, as a dotted
+   * path, rather than collapsing to AlwaysTrue (which would read correctly but skip nothing).
+   */
+  @Test
+  def testRebuildFilterFromParquetRespellsNestedFilters(): Unit = {
+    val intType = HoodieSchema.create(HoodieSchemaType.INT)
+    val stringType = HoodieSchema.create(HoodieSchemaType.STRING)
+    val fileSchema = internalSchemaOf(("id", intType),
+      ("item", recordOf("item", ("name", stringType), ("price", intType))))
+    val querySchema = evolve(fileSchema, renames = Seq("item.name" -> "title"), adds = Seq(("item", "added")))
+
+    def rebuild(filter: Filter): Filter =
+      ParquetSchemaEvolutionUtils.rebuildFilterFromParquet(filter, fileSchema, querySchema)
+
+    Assertions.assertEquals(EqualTo("item.name", "a1"), rebuild(EqualTo("item.title", "a1")))
+    Assertions.assertEquals(GreaterThan("item.price", 5), rebuild(GreaterThan("item.price", 5)))
+    Assertions.assertEquals(AlwaysTrue, rebuild(IsNotNull("item.added")))
+  }
+
+  /**
+   * With nested predicate pushdown, Spark quotes every name part that is not a plain identifier
+   * (non-ASCII, hyphens, dots), so the filter carries e.g. `名字` or item.`my-title`. The rebuild
+   * must resolve those against the internal schema and hand ParquetFilters the file's name quoted
+   * the same way, since that is how ParquetFilters keys its columns.
+   */
+  @Test
+  def testRebuildFilterFromParquetHandlesQuotedNames(): Unit = {
+    // Built from internal types directly, since these names are not valid Avro names.
+    def field(id: Int, name: String, fieldType: InternalType): InternalTypes.Field =
+      InternalTypes.Field.get(id, true, name, fieldType)
+    val fileSchema = new InternalSchema(InternalTypes.RecordType.get(
+      field(0, "名字", InternalTypes.StringType.get()),
+      field(1, "old col", InternalTypes.IntType.get()),
+      field(2, "a.b", InternalTypes.IntType.get()),
+      field(3, "item", InternalTypes.RecordType.get(
+        field(4, "my-name", InternalTypes.StringType.get()),
+        field(5, "price", InternalTypes.IntType.get())))))
+    val querySchema = evolve(fileSchema,
+      renames = Seq("old col" -> "new-col", "item.my-name" -> "my-title"), adds = Seq(("", "新增")))
+
+    def rebuild(filter: Filter): Filter =
+      ParquetSchemaEvolutionUtils.rebuildFilterFromParquet(filter, fileSchema, querySchema)
+
+    // Untouched columns keep their quoted spelling.
+    Assertions.assertEquals(EqualTo("`名字`", "x"), rebuild(EqualTo("`名字`", "x")))
+    Assertions.assertEquals(EqualTo("`a.b`", 1), rebuild(EqualTo("`a.b`", 1)))
+    // Renamed columns are re-spelled onto the file's name, quoted where it needs to be.
+    Assertions.assertEquals(GreaterThan("`old col`", 1), rebuild(GreaterThan("`new-col`", 1)))
+    Assertions.assertEquals(EqualTo("item.`my-name`", "x"), rebuild(EqualTo("item.`my-title`", "x")))
+    // A quoted column the file does not hold collapses to AlwaysTrue.
+    Assertions.assertEquals(AlwaysTrue, rebuild(IsNotNull("`新增`")))
+    // Without nested pushdown Spark passes top-level names through raw, which must keep working.
+    Assertions.assertEquals(EqualTo("名字", "x"), rebuild(EqualTo("名字", "x")))
+    Assertions.assertEquals(GreaterThan("old col", 1), rebuild(GreaterThan("new-col", 1)))
+  }
+
+  /** Applies schema-on-read renames, then adds int columns under the given parent ("" for top level). */
+  private def evolve(schema: InternalSchema,
+                     renames: Seq[(String, String)],
+                     adds: Seq[(String, String)]): InternalSchema = {
+    val updates = TableChanges.ColumnUpdateChange.get(schema)
+    renames.foreach { case (name, newName) => updates.renameColumn(name, newName) }
+    val renamed = SchemaChangeUtils.applyTableChanges2Schema(schema, updates)
+    val addChange = TableChanges.ColumnAddChange.get(renamed)
+    adds.foreach { case (parent, name) => addChange.addColumns(parent, name, InternalTypes.IntType.get(), null) }
+    SchemaChangeUtils.applyTableChanges2Schema(renamed, addChange)
+  }
+
+  private def recordOf(name: String, fields: (String, HoodieSchema)*): HoodieSchema =
+    HoodieSchema.createRecord(name, "org.apache.hudi.test", null,
+      Arrays.asList(fields.map { case (n, schema) => HoodieSchemaField.of(n, schema) }: _*))
+
+  /**
+   * The read configuration may be shared by other readers: a file that needs its own requested schema or a
+   * pushed filter gets a copy, and any other file reads with the read configuration itself.
+   */
+  @Test
+  def testGetFileReadConfNeverModifiesTheReadConf(): Unit = {
+    val readConf = new Configuration(false)
+    // The flags ParquetToSparkSchemaConverter needs, as SparkParquetReaderBase.read sets them
+    readConf.setBoolean(SQLConf.CASE_SENSITIVE.key, false)
+    readConf.setBoolean(SQLConf.PARQUET_BINARY_AS_STRING.key, false)
+    readConf.setBoolean(SQLConf.PARQUET_INT96_AS_TIMESTAMP.key, true)
+    readConf.setBoolean(SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.key, false)
+    readConf.setBoolean("spark.sql.parquet.inferTimestampNTZ.enabled", true)
+    val requiredSchema = new StructType().add("id", LongType)
+    readConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, requiredSchema.json)
+
+    def fileReadConf(fileType: PrimitiveTypeName, pushedFilter: Option[FilterPredicate]): Configuration =
+      new ParquetSchemaEvolutionUtils(readConf, new Path("/tmp/file.parquet"), requiredSchema, new StructType(), util.Option.empty())
+        .getFileReadConf(footerOf(Types.optional(fileType).named("id")), enableVectorizedReader = false, pushedFilter)
+
+    def pushedFilterOf(conf: Configuration): FilterPredicate = ParquetInputFormat.getFilter(conf) match {
+      case predicate: FilterCompat.FilterPredicateCompat => predicate.getFilterPredicate
+      case _ => null
+    }
+
+    val filter = FilterApi.eq(FilterApi.longColumn("id"), java.lang.Long.valueOf(1L))
+    Assertions.assertSame(readConf, fileReadConf(PrimitiveTypeName.INT64, None))
+    val filtered = fileReadConf(PrimitiveTypeName.INT64, Some(filter))
+    Assertions.assertNotSame(readConf, filtered)
+    Assertions.assertEquals(requiredSchema.json, filtered.get(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA))
+    Assertions.assertEquals(filter, pushedFilterOf(filtered))
+    // An int file read as long gets a copy that requests the int column
+    for (pushedFilter <- Seq(None, Some(filter))) {
+      val promoted = fileReadConf(PrimitiveTypeName.INT32, pushedFilter)
+      Assertions.assertNotSame(readConf, promoted)
+      Assertions.assertEquals(new StructType().add("id", IntegerType).json, promoted.get(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA))
+      Assertions.assertEquals(pushedFilter.orNull, pushedFilterOf(promoted))
+    }
+    Assertions.assertEquals(requiredSchema.json, readConf.get(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA))
+    Assertions.assertNull(pushedFilterOf(readConf))
+  }
+
+  /** An internal schema over the given top-level columns, in order; field ids are positional. */
+  private def internalSchemaOf(fields: (String, HoodieSchema)*): InternalSchema =
+    InternalSchemaConverter.convert(HoodieSchema.createRecord("query", "org.apache.hudi.test", null,
+      Arrays.asList(fields.map { case (name, schema) => HoodieSchemaField.of(name, schema) }: _*)))
 }

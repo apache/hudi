@@ -190,6 +190,14 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     }
   }
 
+  /**
+   * Returns whether the metastore client was created. It is not when creating it failed and
+   * {@code hoodie.datasource.hive_sync.ignore_exceptions} is set, in which case a sync does nothing.
+   */
+  public boolean isSyncClientInitialized() {
+    return syncClient != null;
+  }
+
   protected void doSync() {
     // create database if needed
     checkAndCreateDatabase();

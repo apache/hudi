@@ -57,7 +57,7 @@ public class TestBloomFilter {
     int[] sizes = {100, 1000, 10000};
     for (int size : sizes) {
       inputs = new ArrayList<>();
-      BloomFilter filter = getBloomFilter(typeCode, size, 0.000001, size * 10);
+      BloomFilter filter = BloomFilterFactory.createBloomFilter(size, 0.000001, size * 10, typeCode);
       for (int i = 0; i < size; i++) {
         String key = UUID.randomUUID().toString();
         inputs.add(key);
@@ -82,7 +82,7 @@ public class TestBloomFilter {
     int[] sizes = {100, 1000, 10000};
     BloomFilter bloomFilter = null;
     for (int size : sizes) {
-      BloomFilter filter = getBloomFilter(typeCode, 20000, 0.00000001, 100000);
+      BloomFilter filter = BloomFilterFactory.createBloomFilter(20000, 0.00000001, 100000, typeCode);
       for (int i = 0; i < size; i++) {
         String key = String.format("key%d",size + i);
         inputs.add(key);
@@ -164,7 +164,7 @@ public class TestBloomFilter {
     int[] sizes = {100, 1000, 10000};
     for (int size : sizes) {
       inputs = new ArrayList<>();
-      BloomFilter filter = getBloomFilter(typeCode, size, 0.000001, size * 10);
+      BloomFilter filter = BloomFilterFactory.createBloomFilter(size, 0.000001, size * 10, typeCode);
       for (int i = 0; i < size; i++) {
         String key = UUID.randomUUID().toString();
         inputs.add(key);
@@ -215,7 +215,7 @@ public class TestBloomFilter {
           + ".bf.data";
       serializedFilter = readLastLineFromResourceFile("/format/bloom-filter/hadoop/" + fileName);
     } else {
-      BloomFilter inputFilter = getBloomFilter(typeCode, numEntries, errorRate, maxEntries);
+      BloomFilter inputFilter = BloomFilterFactory.createBloomFilter(numEntries, errorRate, maxEntries, typeCode);
       for (String key : keyList) {
         inputFilter.add(key);
       }
@@ -223,14 +223,6 @@ public class TestBloomFilter {
     }
     validateBloomFilter(
         serializedFilter, keyList, lib, typeCode, numEntries, errorRate, hashType, maxEntries);
-  }
-
-  BloomFilter getBloomFilter(String typeCode, int numEntries, double errorRate, int maxEntries) {
-    if (typeCode.equalsIgnoreCase(BloomFilterTypeCode.SIMPLE.name())) {
-      return BloomFilterFactory.createBloomFilter(numEntries, errorRate, -1, typeCode);
-    } else {
-      return BloomFilterFactory.createBloomFilter(numEntries, errorRate, maxEntries, typeCode);
-    }
   }
 
   private void validateBloomFilter(String serializedFilter, List<String> keyList, String lib,
@@ -242,7 +234,7 @@ public class TestBloomFilter {
       assertTrue(bloomFilter.mightContain(key), "Filter should have returned true for " + key);
     }
     if ("hadoop".equals(lib) && hashType == Hash.MURMUR_HASH) {
-      BloomFilter hudiBloomFilter = getBloomFilter(typeCode, numEntries, errorRate, maxEntries);
+      BloomFilter hudiBloomFilter = BloomFilterFactory.createBloomFilter(numEntries, errorRate, maxEntries, typeCode);
       for (String key : keyList) {
         hudiBloomFilter.add(key);
       }

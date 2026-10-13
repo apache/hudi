@@ -80,7 +80,7 @@ public class PreemptiveMemorySegmentPool implements MemorySegmentPool, Closeable
     ValidationUtils.checkArgument(ownerId != null, "Memory segment pool owner must not be null");
     ValidationUtils.checkState(
         currentOwnerId == null,
-        "A memory segment pool owner is already active: " + currentOwnerId);
+        () -> "A memory segment pool owner is already active: " + currentOwnerId);
     this.currentOwnerId = ownerId;
   }
 

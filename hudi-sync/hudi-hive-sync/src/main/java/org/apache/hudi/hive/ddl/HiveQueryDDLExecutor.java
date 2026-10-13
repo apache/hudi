@@ -26,6 +26,7 @@ import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.util.HiveDriverPool;
 import org.apache.hudi.hive.util.HiveMetaStoreClientPool;
 import org.apache.hudi.hive.util.HivePartitionUtil;
+import org.apache.hudi.hive.util.HiveStatementExecutor;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -34,7 +35,6 @@ import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.Driver;
 import org.apache.hadoop.hive.ql.metadata.Hive;
-import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.apache.hadoop.security.UserGroupInformation;
 
@@ -181,17 +181,14 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
    * bound for the duration, and the thread handed back as found: it may belong to another executor
    * or to an application that embeds this sync and holds a session of its own.
    */
-  private List<CommandProcessorResponse> updateHiveSQLs(List<String> sqls) {
-    List<CommandProcessorResponse> responses = new ArrayList<>();
+  private void updateHiveSQLs(List<String> sqls) {
     HoodieTimer timer = HoodieTimer.start();
     SessionState previousSession = SessionState.get();
     ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
     try {
       SessionState.setCurrentSessionState(sessionState);
       for (String sql : sqls) {
-        if (hiveDriver != null) {
-          responses.add(hiveDriver.run(sql));
-        }
+        HiveStatementExecutor.executeOrThrow(hiveDriver, sql);
       }
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed in executing SQL", e);
@@ -199,7 +196,6 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       restoreThread(previousSession, previousLoader);
     }
     log.info("Executed {} SQL statements sequentially in {} ms", sqls.size(), timer.endTimer());
-    return responses;
   }
 
   //TODO Duplicating it here from HMSDLExecutor as HiveQueryQL has no way of doing it on its own currently. Need to refactor it

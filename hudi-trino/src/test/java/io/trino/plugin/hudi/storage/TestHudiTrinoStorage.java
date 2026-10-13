@@ -17,8 +17,16 @@ import io.trino.filesystem.FileEntry;
 import io.trino.filesystem.Location;
 import io.trino.filesystem.TrinoFileSystem;
 import io.trino.filesystem.memory.MemoryFileSystem;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.HoodieStorageUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -26,10 +34,14 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
+import static org.apache.hudi.common.config.HoodieStorageConfig.HOODIE_STORAGE_CLASS;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class TestHudiTrinoStorage
 {
+    private static final StoragePath EXTENSION_POINT_PATH = new StoragePath("memory:///warehouse/table");
+
     @Test
     void testConvertToPathInfo()
     {
@@ -130,6 +142,83 @@ class TestHudiTrinoStorage
         assertThat(entries.get(0).getPath()).isEqualTo(new StoragePath("memory:///table/b.parquet"));
         assertThat(entries.get(0).getLength()).isEqualTo(20);
         assertThat(entries.get(0).getBlockSize()).isEqualTo(20);
+    }
+
+    @Test
+    void testStorageResolvesFromConfiguration()
+    {
+        TrinoFileSystem fileSystem = new MemoryFileSystem();
+        StorageConfiguration<?> conf = new TrinoStorageConfiguration(fileSystem);
+
+        HoodieStorage storage = HoodieStorageUtils.getStorage(EXTENSION_POINT_PATH, conf);
+
+        assertThat(storage).isInstanceOf(HudiTrinoStorage.class);
+        assertThat(storage.getConf()).isSameAs(conf);
+    }
+
+    @Test
+    void testResolvedStorageCarriesPassedFileSystem()
+    {
+        TrinoFileSystem fileSystem = new MemoryFileSystem();
+
+        HoodieStorage storage = HoodieStorageUtils.getStorage(
+                EXTENSION_POINT_PATH, new TrinoStorageConfiguration(fileSystem));
+
+        assertThat(((HudiTrinoStorage) storage).getFileSystem()).isSameAs(fileSystem);
+    }
+
+    @Test
+    void testConfigurationWithoutFileSystemFailsClearly()
+    {
+        assertThatThrownBy(() -> HoodieStorageUtils.getStorage(EXTENSION_POINT_PATH, new TrinoStorageConfiguration()))
+                .rootCause()
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("carries no file system");
+    }
+
+    @Test
+    void testForeignConfigurationFailsClearly()
+    {
+        HadoopStorageConfiguration conf = new HadoopStorageConfiguration(new Configuration());
+        conf.set(HOODIE_STORAGE_CLASS.key(), HudiTrinoStorage.class.getName());
+
+        assertThatThrownBy(() -> HoodieStorageUtils.getStorage(EXTENSION_POINT_PATH, conf))
+                .rootCause()
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("is not a TrinoStorageConfiguration");
+    }
+
+    @Test
+    void testDerivedConfigurationsKeepTheFileSystem()
+    {
+        TrinoFileSystem fileSystem = new MemoryFileSystem();
+        TrinoStorageConfiguration conf = new TrinoStorageConfiguration(fileSystem);
+
+        assertThat(HoodieStorageUtils.getStorage(EXTENSION_POINT_PATH, conf.newInstance()))
+                .isInstanceOf(HudiTrinoStorage.class);
+        assertThat(HoodieStorageUtils.getStorage(EXTENSION_POINT_PATH, conf.getInline()))
+                .isInstanceOf(HudiTrinoStorage.class);
+        assertThat(((TrinoStorageConfiguration) conf.newInstance()).getFileSystem()).containsSame(fileSystem);
+        assertThat(((TrinoStorageConfiguration) conf.getInline()).getFileSystem()).containsSame(fileSystem);
+    }
+
+    @Test
+    void testInitTableWritesThroughExtensionPoint()
+            throws IOException
+    {
+        TrinoFileSystem fileSystem = new MemoryFileSystem();
+
+        HoodieTableMetaClient metaClient = HoodieTableMetaClient.newTableBuilder()
+                .setTableName("t")
+                .setTableType(HoodieTableType.COPY_ON_WRITE)
+                .initTable(new TrinoStorageConfiguration(fileSystem), EXTENSION_POINT_PATH);
+        metaClient.getActiveTimeline().createNewInstant(
+                metaClient.createNewInstant(HoodieInstant.State.REQUESTED, "commit", "001"));
+
+        assertThat(fileSystem.newInputFile(
+                Location.of(EXTENSION_POINT_PATH + "/.hoodie/hoodie.properties")).exists()).isTrue();
+        assertThat(fileSystem.newInputFile(
+                Location.of(EXTENSION_POINT_PATH + "/.hoodie/timeline/001.commit.requested")).exists()).isTrue();
     }
 
     private static HudiTrinoStorage createStorageWithFiles()

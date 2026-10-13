@@ -24,6 +24,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.HFileUtils;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
@@ -106,11 +107,17 @@ public class HoodieAvroHFileWriter
         .build();
     StorageConfiguration<Configuration> storageConf = new HadoopStorageConfiguration(conf);
     StoragePath filePath = new StoragePath(this.file.toUri());
-    OutputStream outputStream =  HoodieStorageUtils.getStorage(filePath, storageConf).create(filePath);
-    this.writer = new HFileWriterImpl(context, outputStream);
-    this.prevRecordKey = "";
-    writer.appendFileInfo(
-        HoodieAvroHFileReaderImplBase.SCHEMA_KEY, getUTF8Bytes(schema.toString()));
+    OutputStream outputStream = HoodieStorageUtils.getStorage(filePath, storageConf).create(filePath);
+    try {
+      this.writer = new HFileWriterImpl(context, outputStream);
+      this.prevRecordKey = "";
+      writer.appendFileInfo(
+          HoodieAvroHFileReaderImplBase.SCHEMA_KEY, getUTF8Bytes(schema.toString()));
+    } catch (RuntimeException e) {
+      CloseableUtils.closeSuppressing(writer != null ? writer : outputStream, e);
+      writer = null;
+      throw e;
+    }
   }
 
   @Override

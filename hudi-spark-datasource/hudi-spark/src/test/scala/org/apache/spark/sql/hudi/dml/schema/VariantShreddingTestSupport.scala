@@ -24,8 +24,10 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieLogFile
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.WriteOperationType
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.common.table.log.HoodieLogFormat
+import org.apache.hudi.common.table.log.block.{HoodieDataBlock, HoodieLogBlock}
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.storage.StoragePath
@@ -642,14 +644,47 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
    * Whether the physical plan of `sql` reads a variant through a PushVariantIntoScan projection
    * struct: the file scan's required schema carries the projected struct at some struct path.
    * Pins that the rule actually fired for a true arm, so it cannot silently become a copy of the
-   * arm with the rule off. `sparkPlan` rather than `executedPlan`: under AQE the latter is a
-   * placeholder whose children only exist once the query runs.
+   * arm with the rule off.
    */
-  protected def variantProjectionPushedIntoScan(sql: String): Boolean = {
+  protected def variantProjectionPushedIntoScan(sql: String): Boolean =
+    fileScansOf(sql).exists(_.requiredSchema.fields.exists(f =>
+      SparkAdapterSupport.sparkAdapter.containsVariantProjection(f.dataType)))
+
+  /**
+   * The ReadSchema of the one file scan in the physical plan of `sql`, as its explain line prints
+   * it (the catalog string of the scan's required schema). A variant that PushVariantIntoScan
+   * rewrote shows there as a projection struct with one ordinal-named member per pushed path,
+   * `v:struct<0:bigint>`; one that reaches the reader whole shows as `v:variant`. Where
+   * [[variantProjectionPushedIntoScan]] says whether the rule fired, this pins what it pushed.
+   */
+  protected def scanReadSchema(sql: String): String =
+    singleFileScanOf(sql).requiredSchema.catalogString
+
+  /**
+   * The PushedFilters of the one file scan in the physical plan of `sql`, as its explain line
+   * prints them. A predicate on a variant that PushVariantIntoScan rewrote shows there as a nested
+   * filter on the projection struct's ordinal-named member, e.g. GreaterThan(v.`0`,5). These are
+   * the filters Spark hands the reader, not the ones a file can serve - ParquetFilters drops a
+   * name that is no parquet leaf.
+   */
+  protected def scanPushedFilters(sql: String): String =
+    singleFileScanOf(sql).metadata.getOrElse("PushedFilters", "")
+
+  /**
+   * The file scans in the physical plan of `sql`. `sparkPlan` rather than `executedPlan`: under
+   * AQE the latter is a placeholder whose children only exist once the query runs.
+   */
+  private def fileScansOf(sql: String): Seq[FileSourceScanExec] = {
     val scans = spark.sql(sql).queryExecution.sparkPlan.collect { case scan: FileSourceScanExec => scan }
     assert(scans.nonEmpty, s"expected a file scan in the plan of: $sql")
-    scans.exists(_.requiredSchema.fields.exists(f =>
-      SparkAdapterSupport.sparkAdapter.containsVariantProjection(f.dataType)))
+    scans
+  }
+
+  /** The one file scan in the physical plan of `sql`. */
+  private def singleFileScanOf(sql: String): FileSourceScanExec = {
+    val scans = fileScansOf(sql)
+    assert(scans.size == 1, s"expected a single file scan in the plan of: $sql")
+    scans.head
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -743,7 +778,25 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
    * a log format assert on this rather than on file names: native logs carry a .log.parquet suffix,
    * but an inline log file is named the same whether its data blocks are avro or parquet.
    */
-  protected def listLogBlockTypes(tablePath: String): Seq[HoodieLogBlockType] = {
+  protected def listLogBlockTypes(tablePath: String): Seq[HoodieLogBlockType] =
+    mapLogBlocks(tablePath)(_.getBlockType)
+
+  /** The writer schema in the header of every data block in the table's log files, in log order. */
+  protected def logBlockSchemas(tablePath: String): Seq[HoodieSchema] =
+    mapLogBlocks(tablePath) {
+      case dataBlock: HoodieDataBlock =>
+        Some(HoodieSchema.parse(dataBlock.getLogBlockHeader.get(HoodieLogBlock.HeaderMetadataType.SCHEMA)))
+      case _ => None
+    }.flatten
+
+  /** Whether any data block in the table's log files carries a partial-update schema (IS_PARTIAL). */
+  protected def hasPartialLogBlock(tablePath: String): Boolean =
+    mapLogBlocks(tablePath) {
+      case dataBlock: HoodieDataBlock => dataBlock.containsPartialUpdates()
+      case _ => false
+    }.contains(true)
+
+  private def mapLogBlocks[T](tablePath: String)(f: HoodieLogBlock => T): Seq[T] = {
     val (metaClient, fsView) = getMetaClientAndFileSystemView(tablePath)
     val schema = new TableSchemaResolver(metaClient).getTableSchema
     val logFiles = fsView.getAllFileSlices("").iterator().asScala
@@ -752,11 +805,11 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
     logFiles.flatMap { path =>
       val reader = HoodieLogFormat.newReader(metaClient, new HoodieLogFile(path), schema)
       try {
-        val types = mutable.ArrayBuffer[HoodieLogBlockType]()
+        val results = mutable.ArrayBuffer[T]()
         while (reader.hasNext) {
-          types += reader.next().getBlockType
+          results += f(reader.next())
         }
-        types.toSeq
+        results.toSeq
       } finally {
         reader.close()
       }

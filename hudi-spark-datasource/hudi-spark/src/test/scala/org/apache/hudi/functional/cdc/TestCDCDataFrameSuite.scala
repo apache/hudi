@@ -22,7 +22,7 @@ import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions.{MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD_OPT_KEY, PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY}
 import org.apache.hudi.QuickstartUtils.getQuickstartWriteConfigs
 import org.apache.hudi.common.model.HoodieRecord
-import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplementalLoggingMode}
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils.schemaBySupplementalLoggingMode
@@ -479,14 +479,17 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
    */
   @ParameterizedTest
   @CsvSource(Array(
-    "COPY_ON_WRITE,data_before_after", "MERGE_ON_READ,data_before_after",
-    "COPY_ON_WRITE,data_before", "MERGE_ON_READ,data_before",
-    "COPY_ON_WRITE,op_key_only", "MERGE_ON_READ,op_key_only"))
-  def testDataSourceWriteWithPartitionField(tableType: String, loggingMode: String): Unit = {
+    "COPY_ON_WRITE,data_before_after,TEN", "MERGE_ON_READ,data_before_after,TEN",
+    "COPY_ON_WRITE,data_before,TEN", "MERGE_ON_READ,data_before,TEN",
+    "COPY_ON_WRITE,op_key_only,TEN", "MERGE_ON_READ,op_key_only,TEN",
+    "COPY_ON_WRITE,data_before_after,SIX", "COPY_ON_WRITE,data_before,SIX", "COPY_ON_WRITE,op_key_only,SIX"))
+  def testDataSourceWriteWithPartitionField(tableType: String, loggingMode: String, tableVersion: HoodieTableVersion): Unit = {
     val options = commonOpts ++ Map(
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
-      HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key -> loggingMode
+      HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key -> loggingMode,
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> tableVersion.versionCode().toString,
+      HoodieWriteConfig.AUTO_UPGRADE_VERSION.key -> "false"
     )
 
     var totalInsertedCnt = 0L

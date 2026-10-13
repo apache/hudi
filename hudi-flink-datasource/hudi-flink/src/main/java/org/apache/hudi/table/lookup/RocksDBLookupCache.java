@@ -19,6 +19,8 @@
 package org.apache.hudi.table.lookup;
 
 import org.apache.hudi.common.serialization.CustomSerializer;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.RocksDBDAO;
 
 import lombok.extern.slf4j.Slf4j;
@@ -33,7 +35,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 /**
  * Off-heap {@link LookupCache} backed by RocksDB.
@@ -68,6 +69,7 @@ public class RocksDBLookupCache implements LookupCache {
 
   private RocksDBDAO rocksDBDAO;
   private long rowCounter;
+  private final WriteBuffer writeBuffer = new WriteBuffer();
 
   public RocksDBLookupCache(
       TypeSerializer<RowData> keySerializer,
@@ -77,39 +79,33 @@ public class RocksDBLookupCache implements LookupCache {
     this.rowSerializer = rowSerializer;
     this.rocksDbBasePath = rocksDbBasePath;
     this.rocksDBDAO = createDAO();
-    this.rowCounter = 0L;
   }
 
   @Override
   public void addRow(RowData key, RowData row) throws IOException {
-    String keyHex = serializeKeyToHex(key);
-    String compoundKey = keyHex + KEY_SEPARATOR + rowCounter++;
-    byte[] valueBytes = serializeRow(row);
-    rocksDBDAO.put(COLUMN_FAMILY, compoundKey, valueBytes);
+    String compoundKey = serializeKeyToHex(key) + KEY_SEPARATOR + rowCounter++;
+    writeBuffer.add(rocksDBDAO, compoundKey, serializeRow(row));
+  }
+
+  @Override
+  public void flush() {
+    writeBuffer.flush(rocksDBDAO);
   }
 
   @Override
   @Nullable
   public List<RowData> getRows(RowData key) throws IOException {
+    flush();
     String prefix = serializeKeyToHex(key) + KEY_SEPARATOR;
-    List<byte[]> rawValues = rocksDBDAO.<byte[]>prefixSearch(COLUMN_FAMILY, prefix)
-        .map(pair -> pair.getValue())
-        .collect(Collectors.toList());
-    if (rawValues.isEmpty()) {
-      return null;
-    }
-    List<RowData> result = new ArrayList<>(rawValues.size());
-    for (byte[] bytes : rawValues) {
-      result.add(deserializeRow(bytes));
-    }
-    return result;
+    List<RowData> result = new ArrayList<>();
+    rocksDBDAO.<byte[], IOException>prefixSearch(COLUMN_FAMILY, prefix,
+        (storedKey, bytes) -> result.add(deserializeRow(bytes)));
+    return result.isEmpty() ? null : result;
   }
 
   @Override
   public void clear() {
-    if (rocksDBDAO != null) {
-      rocksDBDAO.close();
-    }
+    close();
     rocksDBDAO = createDAO();
     rowCounter = 0L;
     log.debug("RocksDB lookup cache cleared and reinitialized at {}", rocksDbBasePath);
@@ -117,6 +113,7 @@ public class RocksDBLookupCache implements LookupCache {
 
   @Override
   public void close() {
+    writeBuffer.clear();
     if (rocksDBDAO != null) {
       rocksDBDAO.close();
       rocksDBDAO = null;
@@ -138,7 +135,7 @@ public class RocksDBLookupCache implements LookupCache {
   private String serializeKeyToHex(RowData key) throws IOException {
     keyOutputBuffer.clear();
     keySerializer.serialize(key, keyOutputBuffer);
-    return bytesToHex(keyOutputBuffer.getCopyOfBuffer());
+    return StringUtils.toHexString(keyOutputBuffer.getCopyOfBuffer());
   }
 
   private byte[] serializeRow(RowData row) throws IOException {
@@ -152,12 +149,37 @@ public class RocksDBLookupCache implements LookupCache {
     return rowSerializer.deserialize(rowInputBuffer);
   }
 
-  private static String bytesToHex(byte[] bytes) {
-    StringBuilder sb = new StringBuilder(bytes.length * 2);
-    for (byte b : bytes) {
-      sb.append(String.format("%02x", b));
+  /**
+   * Pending serialized writes and their byte count, reset together after a successful flush
+   * or when the cache is discarded.
+   */
+  private static class WriteBuffer {
+    private static final int MAX_ROWS = 1024;
+    private static final int MAX_BYTES = 1024 * 1024;
+
+    private final List<Pair<String, byte[]>> entries = new ArrayList<>();
+    private long sizeInBytes;
+
+    private void add(RocksDBDAO dao, String key, byte[] value) {
+      entries.add(Pair.of(key, value));
+      sizeInBytes += key.length() + (long) value.length;
+      if (entries.size() >= MAX_ROWS || sizeInBytes >= MAX_BYTES) {
+        flush(dao);
+      }
     }
-    return sb.toString();
+
+    private void flush(RocksDBDAO dao) {
+      if (!entries.isEmpty()) {
+        dao.writeBatch(batch -> entries.forEach(
+            entry -> dao.putInBatch(batch, COLUMN_FAMILY, entry.getKey(), entry.getValue())));
+        clear();
+      }
+    }
+
+    private void clear() {
+      entries.clear();
+      sizeInBytes = 0;
+    }
   }
 
   /**

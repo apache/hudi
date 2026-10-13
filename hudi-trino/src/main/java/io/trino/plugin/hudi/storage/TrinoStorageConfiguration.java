@@ -13,12 +13,14 @@
  */
 package io.trino.plugin.hudi.storage;
 
+import io.trino.filesystem.TrinoFileSystem;
 import io.trino.plugin.hudi.io.HudiTrinoIOFactory;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.apache.hudi.common.config.HoodieStorageConfig.HOODIE_IO_FACTORY_CLASS;
 import static org.apache.hudi.common.config.HoodieStorageConfig.HOODIE_STORAGE_CLASS;
@@ -28,14 +30,32 @@ public class TrinoStorageConfiguration
 {
     private final Map<String, String> configMap;
 
+    private final transient TrinoFileSystem fileSystem;
+
     public TrinoStorageConfiguration()
     {
-        this(getDefaultConfigs());
+        this(getDefaultConfigs(), null);
+    }
+
+    public TrinoStorageConfiguration(TrinoFileSystem fileSystem)
+    {
+        this(getDefaultConfigs(), fileSystem);
     }
 
     public TrinoStorageConfiguration(Map<String, String> configMap)
     {
+        this(configMap, null);
+    }
+
+    public TrinoStorageConfiguration(Map<String, String> configMap, TrinoFileSystem fileSystem)
+    {
         this.configMap = configMap;
+        this.fileSystem = fileSystem;
+    }
+
+    public Optional<TrinoFileSystem> getFileSystem()
+    {
+        return Optional.ofNullable(fileSystem);
     }
 
     public static Map<String, String> getDefaultConfigs()
@@ -49,7 +69,7 @@ public class TrinoStorageConfiguration
     @Override
     public StorageConfiguration newInstance()
     {
-        return new TrinoStorageConfiguration(new HashMap<>(configMap));
+        return new TrinoStorageConfiguration(new HashMap<>(configMap), fileSystem);
     }
 
     @Override

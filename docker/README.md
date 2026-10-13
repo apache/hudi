@@ -207,8 +207,10 @@ changes are needed for the current amd64 plus arm64 image set in this repository
 ## Trino E2E image - `/trino`
 
 The Trino E2E stack does not use the `hoodie/hadoop` image tree. `docker/trino/` builds
-`apachehudi/hudi-trino-e2e` directly on top of the official `trinodb/trino` image at the
-root pom's `trino.e2e.version`, baking in a locally-assembled native `trino-hudi` plugin
+`apachehudi/hudi-trino-e2e` on top of a Trino server image built from the pinned
+`trinodb/trino` commit (`trino.sha`, via `docker/trino/build_trino_server_image.sh`; this is
+what CI does) or, for quick local runs, the released `trinodb/trino:<trino.e2e.version>`,
+baking in a locally-assembled native `trino-hudi` plugin
 directory and the E2E catalog config (`connector.name=hudi`, metastore at
 `thrift://hivemetastore:9083`).
 

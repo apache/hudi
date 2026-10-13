@@ -36,11 +36,11 @@ public class HoodieSourceSplitComparator implements SerializableComparator<Hoodi
   public int compare(HoodieSourceSplit o1, HoodieSourceSplit o2) {
     ValidationUtils.checkArgument(
         !StringUtils.isNullOrEmpty(o1.getLatestCommit()),
-        "The latest commit field of split can't be null or empty: " + o1);
+        () -> "The latest commit field of split can't be null or empty: " + o1);
 
     ValidationUtils.checkArgument(
         !StringUtils.isNullOrEmpty(o2.getLatestCommit()),
-        "The latest commit field of split can't be null or empty: " + o2);
+        () -> "The latest commit field of split can't be null or empty: " + o2);
 
     int commitComparison = CharSequence.compare(o1.getLatestCommit(), o2.getLatestCommit());
     if (commitComparison == 0) {

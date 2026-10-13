@@ -252,8 +252,11 @@ public class HoodieInlineLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
 
   @Override
   protected void closeLogWriter() throws IOException {
-    if (writer != null) {
-      writer.close();
+    try {
+      if (writer != null) {
+        writer.close();
+      }
+    } finally {
       writer = null;
     }
   }

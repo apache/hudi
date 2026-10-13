@@ -198,6 +198,83 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
     })
   }
 
+  test("Test variants nested in structs, arrays and maps read back after an update") {
+    assume(HoodieSparkUtils.gteqSpark4_0, "Variant type requires Spark 4.0 or higher")
+    // Spark 4.0 reads a variant group by position as [value, metadata] and Hudi reorders the
+    // requested group to match. Before #20157 only top-level variant columns were reordered on the
+    // row-based path, so once an update sent the read through the file group reader (MOR) or the
+    // Spark-record merge handle (COW), a variant below a struct, an array or a map came back with
+    // its bytes swapped: MALFORMED_VARIANT on read, and swapped bytes on disk after the COW rewrite.
+    Seq("cow", "mor").foreach { tableType =>
+      withRecordType()(withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  v variant,
+             |  s struct<inner: variant>,
+             |  arr array<variant>,
+             |  m map<string, variant>,
+             |  ts long
+             |) using hudi
+             | location '${tmp.getCanonicalPath}'
+             | tblproperties (
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts',
+             |  type = '$tableType',
+             |  hoodie.compact.inline = 'false'
+             | )
+           """.stripMargin)
+        spark.sql(s"insert into $tableName select cast(id as int) as id, " +
+          """parse_json(concat('{"k":"v', id, '"}')) as v, """ +
+          """named_struct('inner', parse_json(concat('{"k":"s', id, '"}'))) as s, """ +
+          """array(parse_json(concat('{"k":"a', id, '"}'))) as arr, """ +
+          """map('a', parse_json(concat('{"k":"m', id, '"}'))) as m, """ +
+          "1000L as ts from range(0, 4, 1, 1)")
+        // Assigns ts alone: ids 0 and 1 are carried over by the COW rewrite, ids 2 and 3 go through
+        // the merge (a log file on MOR).
+        spark.sql(s"update $tableName set ts = 1001 where id >= 2")
+
+        checkAnswer(s"select id, variant_get(v, '$$.k', 'string'), variant_get(s.inner, '$$.k', 'string'), " +
+          s"variant_get(arr[0], '$$.k', 'string'), variant_get(m['a'], '$$.k', 'string'), ts " +
+          s"from $tableName order by id")(
+          (0 until 4).map(id => Seq(id, s"v$id", s"s$id", s"a$id", s"m$id", if (id >= 2) 1001L else 1000L)): _*)
+      })
+    }
+  }
+
+  test("Test Spark 4.0 rejects reads rewritten by pushVariantIntoScan") {
+    // The conf is off by default on Spark 4.0 and on from 4.1 (SPARK-54454). Spark 4.0 still runs
+    // the rewrite once it is set but cannot read the projection struct it produces, so Hudi fails
+    // the scan up front instead of falling through to schema-change handling (#20032).
+    assume(HoodieSparkUtils.isSpark4_0, "Guards the Spark 4.0 read path only")
+
+    Seq("cow", "mor").foreach { tableType =>
+      withVariantTable(s"pushVariantIntoScan $tableType", tableType) { (tableName, _, _) =>
+        spark.sql(s"""insert into $tableName values (1, parse_json('{"key": "v1"}'), 1000)""")
+        // A second write so the MOR leg reads a log file too.
+        spark.sql(s"""update $tableName set v = parse_json('{"key": "v2"}') where id = 1""")
+
+        withSQLConf("spark.sql.variant.pushVariantIntoScan" -> "true") {
+          // An extraction and a whole-variant read are both rewritten into a projection struct.
+          // So is a query that never reads v: the rule rewrites every variant column of the
+          // relation, and one no expression asks for becomes a placeholder struct in the data
+          // schema of the scan. Without the guard that read dies on the placeholder's field name
+          // ("Illegal initial character: 0") instead of naming the conf.
+          Seq(s"select id, variant_get(v, '$$.key', 'string') from $tableName",
+            s"select id, cast(v as string) from $tableName",
+            s"select id, ts from $tableName").foreach { sql =>
+            checkNestedExceptionContains(() => spark.sql(sql).collect())(
+              "spark.sql.variant.pushVariantIntoScan")
+          }
+        }
+        // Back on the default the same reads work.
+        checkAnswer(s"select id, cast(v as string) from $tableName")(Seq(1, "{\"key\":\"v2\"}"))
+      }
+    }
+  }
+
   test("Test Query Log Only MOR Table With VARIANT column triggers compaction") {
     // Gated on Spark >= 4.1. Compaction writes the base file via the AVRO shredding writer, which
     // lays the variant group out as [metadata, value, typed_value]. Hudi's Spark 4.0 reader does not

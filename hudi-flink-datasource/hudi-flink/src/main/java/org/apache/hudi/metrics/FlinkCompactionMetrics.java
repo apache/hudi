@@ -27,7 +27,9 @@ import org.apache.hudi.sink.compact.CompactionPlanOperator;
 
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.MetricGroup;
+import org.apache.flink.metrics.SimpleCounter;
 
 import java.text.ParseException;
 import java.time.Duration;
@@ -72,6 +74,14 @@ public class FlinkCompactionMetrics extends FlinkWriteMetrics {
    */
   private long compactionStateSignal;
 
+  /**
+   * Counter for the number of compaction operations that failed, including the ones swallowed
+   * by the {@link org.apache.hudi.sink.utils.NonThrownExecutor} when compaction runs asynchronously.
+   *
+   * @see org.apache.hudi.sink.compact.CompactOperator
+   */
+  private final Counter compactionErrorCount = new SimpleCounter();
+
   public FlinkCompactionMetrics(MetricGroup metricGroup) {
     super(metricGroup, HoodieTimeline.COMPACTION_ACTION);
   }
@@ -83,6 +93,11 @@ public class FlinkCompactionMetrics extends FlinkWriteMetrics {
     metricGroup.gauge(getMetricsName(actionType, "compactionDelay"), () -> compactionDelay);
     metricGroup.gauge(getMetricsName(actionType, "compactionCost"), () -> compactionCost);
     metricGroup.gauge(getMetricsName(actionType, "compactionStateSignal"), () -> compactionStateSignal);
+    metricGroup.counter(getMetricsName(actionType, "compactionErrorCount"), compactionErrorCount);
+  }
+
+  public void markCompactionFailed() {
+    compactionErrorCount.inc();
   }
 
   public void setFirstPendingCompactionInstant(Option<HoodieInstant> firstPendingCompactionInstant) {

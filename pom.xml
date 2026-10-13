@@ -104,7 +104,9 @@
     <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
     <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
     <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
-    <kafka.version>2.0.0</kafka.version>
+    <!-- Used by every build that selects no Spark profile: the JDK-activated java11/java17 profiles always
+         turn off the activeByDefault spark3.5 profile. Keep in sync with spark3.5. -->
+    <kafka.version>3.4.1</kafka.version>
     <pulsar.version>3.0.2</pulsar.version>
     <tika.version>3.3.2</tika.version>
     <kafka.connect.api.version>2.5.0</kafka.connect.api.version>
@@ -140,7 +142,8 @@
     <presto.version>0.273</presto.version>
     <!-- trino.sha is the exact trinodb/trino commit hudi-trino builds against; its project
          version must equal trino.version and the two advance only together. trino.e2e.version is
-         the latest released Trino (e2e server image, trino-jdbc for the integ tests); the nightly
+         the latest released Trino (trino-jdbc for the integ tests, and the fallback server image
+         for local E2E runs; CI's E2E server image is built from trino.sha); the nightly
          pin-advance job refreshes all three, humans merge its bot/trino-pin branch. Keep each
          property on one line: the workflows and scripts/trino/bootstrap_trino.sh read them with sed. -->
     <trino.version>484-SNAPSHOT</trino.version>
@@ -917,12 +920,6 @@
         <groupId>com.fasterxml.jackson.module</groupId>
         <artifactId>jackson-module-afterburner</artifactId>
         <version>${fasterxml.version}</version>
-      </dependency>
-
-      <dependency>
-        <groupId>com.fasterxml.jackson.module</groupId>
-        <artifactId>jackson-module-afterburner</artifactId>
-        <version>${fasterxml.jackson.databind.version}</version>
       </dependency>
 
       <!-- Glassfish -->
@@ -2119,8 +2116,18 @@
             <configuration>
               <source>11</source>
               <doclint>none</doclint>
-              <failOnWarnings>false</failOnWarnings>
-              <failOnError>false</failOnError>
+              <!-- javadoc only puts dependency artifacts on its classpath, never the module's own output
+                   directory, so Java sources that import Scala classes compiled in the same module fail to
+                   resolve them. Put the module's own jar (built earlier in the package phase) on the classpath. -->
+              <additionalDependencies>
+                <additionalDependency>
+                  <groupId>${project.groupId}</groupId>
+                  <artifactId>${project.artifactId}</artifactId>
+                  <version>${project.version}</version>
+                  <scope>system</scope>
+                  <systemPath>${project.build.directory}/${project.build.finalName}.jar</systemPath>
+                </additionalDependency>
+              </additionalDependencies>
             </configuration>
           </plugin>
           <plugin>
