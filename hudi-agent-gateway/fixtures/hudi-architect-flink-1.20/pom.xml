@@ -88,6 +88,12 @@
           <include>*.sql</include>
         </includes>
       </testResource>
+      <testResource>
+        <directory>${project.basedir}/../../tests/fixtures/hudi_architect/flink_pr4</directory>
+        <includes>
+          <include>*.sql</include>
+        </includes>
+      </testResource>
     </testResources>
     <plugins>
       <plugin>

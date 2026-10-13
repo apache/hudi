@@ -75,14 +75,16 @@ that manifest with options discovered from the enclosing checkout. If the user e
 another Hudi or Flink version, do not silently reuse the baseline: add a `REVIEW_REQUIRED` finding
 unless a separate verified capability reference exists.
 
-The Flink implementation includes the PR1 safety foundation, the PR2 append-only path, and the
-first bounded PR3 mutable COW path. Both require a new table, confirmed single writer, no external
-catalog, streaming checkpointing, and `CONFIG_VALIDATED` from `validate_flink_design.py`. The
-mutable path additionally requires stable non-null identity, one event-time ordering field,
-normalized UPSERT changelog, full-row deletes when present, immutable partitions, and the fixed global
-FLINK_STATE/bootstrap/no-TTL settings. MOR, existing-table takeover, catalog, multi-writer,
-alternative indexes, custom mergers, retract normalization, and full CDC history still fail
-closed.
+The Flink implementation includes the PR1 safety foundation and three bounded executable paths:
+PR2 append-only COW, PR3 mutable COW, and PR4 mutable MOR. All require a new table, confirmed
+single writer, no external catalog, streaming checkpointing, and `CONFIG_VALIDATED` from
+`validate_flink_design.py`. Both mutable paths additionally require stable non-null identity, one
+event-time ordering field, normalized UPSERT changelog, full-row deletes when present, immutable
+partitions, and fixed global FLINK_STATE/bootstrap/no-TTL settings. The MOR path further requires
+snapshot/read-optimized expectations, compaction owned by the same Flink writer, fixed asynchronous
+five-delta-commit compaction, and clustering disabled. Append-only MOR, standalone table services,
+detailed compaction tuning, existing-table takeover, catalog, multi-writer, alternative indexes,
+custom mergers, retract normalization, and full CDC history still fail closed.
 
 ## Flow structure
 
@@ -91,7 +93,7 @@ The conversation has three parts:
 1. **Tier gate** — a single scoping question to figure out which downstream questions fire.
 2. **Rounds 1-3** — workload questions, gated conditionally by tier.
 3. **Output** — engine-specific output: the established Spark artifacts, a non-executable Flink
-  assessment, or bounded validator-rendered PR2/PR3 SQL artifacts.
+  assessment, or bounded validator-rendered PR2/PR3/PR4 SQL artifacts.
 
 Load `references/question-flow.md` for the full round-by-round question list with conditional gating.
 

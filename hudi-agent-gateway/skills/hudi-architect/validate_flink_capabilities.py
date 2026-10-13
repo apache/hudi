@@ -40,7 +40,7 @@ DEFAULT_MANIFEST = (
     SKILL_DIR / "references" / "flink-1.20-hudi-1.2.0-capabilities.toml"
 )
 
-EXPECTED_SCHEMA_VERSION = 3
+EXPECTED_SCHEMA_VERSION = 4
 EXPECTED_BASELINE_ID = "hudi-1.2.0-flink-1.20"
 EXPECTED_HUDI_VERSION = "1.2.0"
 EXPECTED_HUDI_SOURCE_REVISION = "f05c83f2b97732de7a558ff9b26959e1139c05f5"
@@ -101,6 +101,81 @@ EXPECTED_REQUIRED_SETTINGS = [
         "key": "write.operation",
         "value": "upsert",
         "applies_to": "pr3-mutable-cow",
+    },
+    {
+        "key": "changelog.enabled",
+        "value": False,
+        "applies_to": "pr4-mutable-mor",
+    },
+    {
+        "key": "clustering.async.enabled",
+        "value": False,
+        "applies_to": "pr4-mutable-mor",
+    },
+    {
+        "key": "clustering.schedule.enabled",
+        "value": False,
+        "applies_to": "pr4-mutable-mor",
+    },
+    {
+        "key": "compaction.async.enabled",
+        "value": True,
+        "applies_to": "pr4-mutable-mor",
+    },
+    {
+        "key": "compaction.delta_commits",
+        "value": 5,
+        "applies_to": "pr4-mutable-mor",
+    },
+    {
+        "key": "compaction.operation.execute.async.enabled",
+        "value": True,
+        "applies_to": "pr4-mutable-mor",
+    },
+    {
+        "key": "compaction.schedule.enabled",
+        "value": True,
+        "applies_to": "pr4-mutable-mor",
+    },
+    {
+        "key": "compaction.trigger.strategy",
+        "value": "num_commits",
+        "applies_to": "pr4-mutable-mor",
+    },
+    {
+        "key": "hoodie.write.record.merge.mode",
+        "value": "EVENT_TIME_ORDERING",
+        "applies_to": "pr4-mutable-mor",
+    },
+    {
+        "key": "index.bootstrap.enabled",
+        "value": True,
+        "applies_to": "pr4-mutable-mor",
+    },
+    {
+        "key": "index.global.enabled",
+        "value": True,
+        "applies_to": "pr4-mutable-mor",
+    },
+    {
+        "key": "index.state.ttl",
+        "value": 0.0,
+        "applies_to": "pr4-mutable-mor",
+    },
+    {
+        "key": "index.type",
+        "value": "FLINK_STATE",
+        "applies_to": "pr4-mutable-mor",
+    },
+    {
+        "key": "table.type",
+        "value": "MERGE_ON_READ",
+        "applies_to": "pr4-mutable-mor",
+    },
+    {
+        "key": "write.operation",
+        "value": "upsert",
+        "applies_to": "pr4-mutable-mor",
     },
 ]
 EXPECTED_PHYSICAL_TYPES = {
@@ -195,6 +270,26 @@ EXPECTED_ACCEPTANCE_EVIDENCE = {
     "FLINK_MUTABLE_INDEX_BOOTSTRAP_REQUIRED": (
         "test_pr3_requires_index_bootstrap",
         "testPinnedMutableIndexBootstrapConfiguration",
+    ),
+    "FLINK_MOR_CLUSTERING_UNSUPPORTED": (
+        "test_pr4_rejects_clustering",
+        "testPinnedMorClusteringDisabled",
+    ),
+    "FLINK_MOR_APPEND_ONLY_UNSUPPORTED": (
+        "test_pr4_rejects_append_only_mor",
+        "testPinnedAppendOnlyMorDoesNotScheduleCompaction",
+    ),
+    "FLINK_MOR_COMPACTION_CONFIGURATION_UNSUPPORTED": (
+        "test_pr4_rejects_incompatible_compaction_configuration",
+        "testPinnedMorCompactionConfiguration",
+    ),
+    "FLINK_MOR_READ_OPTIMIZED_FRESHNESS_UNSUPPORTED": (
+        "test_pr4_rejects_strict_read_optimized_freshness",
+        "testPinnedMorQuerySemantics",
+    ),
+    "FLINK_PR4_WRITE_PATH_UNSUPPORTED": (
+        "test_pr4_valid_mutable_mor_design_renders_exact_executable_sql",
+        "testMutableMorSinkAndCompactionPlan",
     ),
 }
 SHA1_PATTERN = re.compile(r"[0-9a-f]{40}")
@@ -331,6 +426,7 @@ def validate_manifest(manifest: dict[str, Any]) -> list[str]:
         if setting.get("applies_to") not in {
             "pr2-append-only-cow",
             "pr3-mutable-cow",
+            "pr4-mutable-mor",
         }:
             errors.append(
                 f"required_effective_settings[{index}].applies_to is unsupported"
@@ -396,6 +492,25 @@ def validate_manifest(manifest: dict[str, Any]) -> list[str]:
     if mutable_executable_contract != expected_mutable_contract:
         errors.append(
             "mutable_executable_contract does not match the bounded PR3 path"
+        )
+
+    mutable_mor_executable_contract = manifest.get("mutable_mor_executable_contract")
+    expected_mutable_mor_contract = {
+        **expected_mutable_contract,
+        "contract_schema": 3,
+        "table_type": "MERGE_ON_READ",
+        "operation": "upsert",
+        "compaction_owner": "flink_writer",
+        "compaction_mode": "async",
+        "compaction_trigger_strategy": "num_commits",
+        "compaction_delta_commits": 5,
+        "query_modes": ["snapshot", "read_optimized"],
+        "read_optimized_freshness": "after_compaction",
+        "clustering_enabled": False,
+    }
+    if mutable_mor_executable_contract != expected_mutable_mor_contract:
+        errors.append(
+            "mutable_mor_executable_contract does not match the bounded PR4 path"
         )
 
     physical_types = manifest.get("physical_types")
@@ -487,6 +602,7 @@ def validation_evidence(
         "supported_design_contract_schemas": [
             manifest["executable_contract"]["contract_schema"],
             manifest["mutable_executable_contract"]["contract_schema"],
+            manifest["mutable_mor_executable_contract"]["contract_schema"],
         ],
         "flink_fixture_version": manifest["flink"]["fixture_version"],
         "hudi_source_revision": manifest["hudi"]["source_revision"],

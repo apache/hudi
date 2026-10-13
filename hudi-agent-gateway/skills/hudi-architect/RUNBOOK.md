@@ -25,7 +25,8 @@ A practical guide to running the Hudi Architect agent: what it does, how to set 
 (ADR) with tradeoff tables and measurable revisit conditions, a ready-to-use `hoodie.*` config
 bundle, and a runnable submit command — all pinned to **Hudi 1.2.0**. The Flink route is pinned to
 **Hudi 1.2.0 / Flink 1.20** and remains fail-closed by default. It can emit validated Flink SQL for
-bounded append-only and first mutable new-table, single-writer, no-external-catalog COW paths.
+bounded append-only COW, mutable COW, and mutable MOR new-table, single-writer,
+no-external-catalog paths.
 
 ---
 
@@ -144,7 +145,8 @@ surface reaches `CONFIG_VALIDATED` only after the physical target and source sch
 source changelog, fixed write mode, and a checkpoint interval of at least 1000 ms pass deterministic
 validation. Mutable input additionally requires a stable non-null key, event-time ordering,
 normalized UPSERT changelog, full-row deletes when present, immutable partitions, and the fixed global
-FLINK_STATE/bootstrap/no-TTL contract. Its artifacts are runtime `SET`
+FLINK_STATE/bootstrap/no-TTL contract. Mutable MOR additionally requires same-writer asynchronous
+compaction, explicit snapshot/read-optimized freshness expectations, and disabled clustering. Its artifacts are runtime `SET`
 statements, Hudi `CREATE TABLE`, and an explicit-column `INSERT INTO`; deployment remains manual.
 
 Then: land a first commit in a staging path, run your real read patterns against it, and check the ADR's operational playbook section for what to monitor from day one (commit duration, pending compactions, active timeline size, small-file ratio).
@@ -153,8 +155,9 @@ Then: land a first commit in a staging path, run your real read patterns against
 
 Be aware of what the agent will *decline* to decide — it defers honestly rather than guessing, but plan for these yourself:
 
-- **Flink executable coverage** — bounded append-only and first mutable new-table, single-writer,
-  no-external-catalog COW streaming SQL sinks are implemented. MOR, existing-table takeover,
+- **Flink executable coverage** — bounded append-only COW, mutable COW, and mutable MOR
+  new-table, single-writer, no-external-catalog streaming SQL sinks are implemented. Append-only
+  MOR, standalone compaction, detailed compaction tuning, clustering, existing-table takeover,
   catalogs, multiple writers, alternative indexes, custom mergers, retract normalization,
   partition movement, key-only deletes, full CDC history, DataStream API, `HoodieFlinkStreamer`,
   source connector generation, and submit/deploy commands remain out of scope.

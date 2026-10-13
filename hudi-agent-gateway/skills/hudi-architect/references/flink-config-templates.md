@@ -30,8 +30,8 @@ Verified baseline: Apache Hudi 1.2.0 / Apache Flink 1.20
 Baseline ID: hudi-1.2.0-flink-1.20
 Hudi source revision: f05c83f2b97732de7a558ff9b26959e1139c05f5
 Fixture version: Apache Flink 1.20.1
-Capability manifest schema: 3
-Design contract schema: <1 append-only | 2 mutable COW>
+Capability manifest schema: 4
+Design contract schema: <1 append-only COW | 2 mutable COW | 3 mutable MOR>
 
 Confirmed facts:
 - <facts established by explicit answers>
@@ -65,8 +65,8 @@ Verified baseline: Apache Hudi 1.2.0 / Apache Flink 1.20
 Baseline ID: hudi-1.2.0-flink-1.20
 Hudi source revision: f05c83f2b97732de7a558ff9b26959e1139c05f5
 Fixture version: Apache Flink 1.20.1
-Capability manifest schema: 3
-Design contract schema: <1 append-only | 2 mutable COW>
+Capability manifest schema: 4
+Design contract schema: <1 append-only COW | 2 mutable COW | 3 mutable MOR>
 
 Confirmed facts:
 - New table; confirmed single writer; no current external-catalog requirement.
@@ -77,16 +77,18 @@ Confirmed facts:
 Source contract:
 - Existing table: <source identifier>
 - Expected physical schema: <Avro-compatible field names, bounded types, nullability>
-- Changelog: <INSERT_ONLY for schema 1 | normalized UPSERT (I/UA/D, no UB) for schema 2>
+- Changelog: <INSERT_ONLY for schema 1 | normalized UPSERT (I/UA/D, no UB) for schemas 2/3>
 - The source connector and live source availability were not validated.
 
 Target contract:
 - Table: <target identifier>
 - Path: <credential-free concrete path>
-- Table type: COPY_ON_WRITE
-- Operation: <insert for schema 1 | upsert for schema 2>
+- Table type: <COPY_ON_WRITE for schemas 1/2 | MERGE_ON_READ for schema 3>
+- Operation: <insert for schema 1 | upsert for schemas 2/3>
 - Path-specific fixed settings: <insert clustering false | EVENT_TIME_ORDERING plus global
   FLINK_STATE, TTL 0, bootstrap true, and changelog false>
+- MOR only: compaction owned by this Flink writer, snapshot/read-optimized freshness recorded,
+  fixed async five-delta-commit compaction, and clustering disabled.
 
 Runtime contract:
 - Execution: streaming
@@ -159,6 +161,37 @@ The mutable source must declare the same primary key as the target and normalize
 changelog (`I`, `UA`, `D`, no `UB`). Deletes, when emitted, must be full-row; partition values are immutable.
 This is a latest-state sink contract; it is not full changelog-history or CDC-query support.
 
+For schema 3 mutable MOR, preserve every schema-2 identity, ordering, source, index, and runtime
+invariant, replace only `table.type`, and append the bounded service settings:
+
+```sql
+WITH (
+  'connector' = 'hudi',
+  'path' = '<concrete credential-free target path>',
+  'table.type' = 'MERGE_ON_READ',
+  'write.operation' = 'upsert',
+  'ordering.fields' = '<one non-null BIGINT or TIMESTAMP(p<=6) field>',
+  'hoodie.write.record.merge.mode' = 'EVENT_TIME_ORDERING',
+  'index.type' = 'FLINK_STATE',
+  'index.global.enabled' = 'true',
+  'index.state.ttl' = '0',
+  'index.bootstrap.enabled' = 'true',
+  'changelog.enabled' = 'false',
+  'compaction.schedule.enabled' = 'true',
+  'compaction.async.enabled' = 'true',
+  'compaction.operation.execute.async.enabled' = 'true',
+  'compaction.trigger.strategy' = 'num_commits',
+  'compaction.delta_commits' = '5',
+  'clustering.schedule.enabled' = 'false',
+  'clustering.async.enabled' = 'false'
+)
+```
+
+Compaction is scheduled and executed by the same Flink writer job. Snapshot readers include log
+state at a visible completed instant; read-optimized readers expose compacted base files and are
+current only after compaction. Five delta commits is a trigger, not a time SLA. Reader-side
+`hoodie.datasource.query.type` is intentionally absent from sink DDL.
+
 ## Deployment checks
 
 Always retain these outside the static success claim:
@@ -176,8 +209,8 @@ Always retain these outside the static success claim:
 - A complete Kafka, CDC, JDBC, or other source connector job.
 - A Flink deployment or submit command.
 - A Spark fallback.
-- OCC, NBCC, lock-provider, alternative index, catalog, MOR, compaction, or clustering
-  configuration.
+- OCC, NBCC, lock-provider, alternative index, catalog, append-only MOR, standalone compaction,
+  detailed compaction tuning, or enabled clustering.
 - Existing-table takeover, multi-writer operation, expiring state index, key-only deletes,
   retract-stream normalization, partition movement, custom mergers, or full CDC history.
 - A claim that static validation checked live storage, the deployed JAR, the live source, active

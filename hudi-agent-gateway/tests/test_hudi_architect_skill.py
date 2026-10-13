@@ -41,6 +41,7 @@ FLINK_DESIGN_VALIDATOR = SKILL_DIR / "validate_flink_design.py"
 PINNED_HUDI_REVISION = "f05c83f2b97732de7a558ff9b26959e1139c05f5"
 PR2_FIXTURE_DIR = GATEWAY_DIR / "tests" / "fixtures" / "hudi_architect" / "flink_pr2"
 PR3_FIXTURE_DIR = GATEWAY_DIR / "tests" / "fixtures" / "hudi_architect" / "flink_pr3"
+PR4_FIXTURE_DIR = GATEWAY_DIR / "tests" / "fixtures" / "hudi_architect" / "flink_pr4"
 ASF_LICENSE_MARKER = "Licensed to the Apache Software Foundation (ASF) under one"
 PR2_JAVA_FIXTURE = (
     GATEWAY_DIR
@@ -170,7 +171,7 @@ def test_flink_baseline_has_bounded_append_and_mutable_contracts() -> None:
         "fixture_version": "1.20.1",
     }
     assert PINNED_HUDI_REVISION in capability
-    assert manifest["schema_version"] == 3
+    assert manifest["schema_version"] == 4
     assert manifest["fixture_artifacts"] == {
         "hudi_bundle": "org.apache.hudi:hudi-flink1.20-bundle:1.2.0",
         "flink_version": "1.20.1",
@@ -215,11 +216,11 @@ def test_flink_capability_validation_emits_pinned_evidence() -> None:
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout) == {
         "baseline_id": "hudi-1.2.0-flink-1.20",
-        "capability_manifest_schema": 3,
+        "capability_manifest_schema": 4,
         "design_contract_schema": 1,
         "flink_fixture_version": "1.20.1",
         "hudi_source_revision": PINNED_HUDI_REVISION,
-        "supported_design_contract_schemas": [1, 2],
+        "supported_design_contract_schemas": [1, 2, 3],
     }
 
 
@@ -348,6 +349,23 @@ def test_flink_capability_manifest_records_executable_acceptance_contracts() -> 
             "table.type": "COPY_ON_WRITE",
             "write.operation": "upsert",
         },
+        "pr4-mutable-mor": {
+            "changelog.enabled": False,
+            "clustering.async.enabled": False,
+            "clustering.schedule.enabled": False,
+            "compaction.async.enabled": True,
+            "compaction.delta_commits": 5,
+            "compaction.operation.execute.async.enabled": True,
+            "compaction.schedule.enabled": True,
+            "compaction.trigger.strategy": "num_commits",
+            "hoodie.write.record.merge.mode": "EVENT_TIME_ORDERING",
+            "index.bootstrap.enabled": True,
+            "index.global.enabled": True,
+            "index.state.ttl": 0.0,
+            "index.type": "FLINK_STATE",
+            "table.type": "MERGE_ON_READ",
+            "write.operation": "upsert",
+        },
     }
     assert implemented_checks == {
         "FLINK_APPEND_MODE_CLUSTERING_ENABLED": (
@@ -397,6 +415,26 @@ def test_flink_capability_manifest_records_executable_acceptance_contracts() -> 
         "FLINK_MUTABLE_INDEX_BOOTSTRAP_REQUIRED": (
             "test_pr3_requires_index_bootstrap",
             "testPinnedMutableIndexBootstrapConfiguration",
+        ),
+        "FLINK_MOR_CLUSTERING_UNSUPPORTED": (
+            "test_pr4_rejects_clustering",
+            "testPinnedMorClusteringDisabled",
+        ),
+        "FLINK_MOR_APPEND_ONLY_UNSUPPORTED": (
+            "test_pr4_rejects_append_only_mor",
+            "testPinnedAppendOnlyMorDoesNotScheduleCompaction",
+        ),
+        "FLINK_MOR_COMPACTION_CONFIGURATION_UNSUPPORTED": (
+            "test_pr4_rejects_incompatible_compaction_configuration",
+            "testPinnedMorCompactionConfiguration",
+        ),
+        "FLINK_MOR_READ_OPTIMIZED_FRESHNESS_UNSUPPORTED": (
+            "test_pr4_rejects_strict_read_optimized_freshness",
+            "testPinnedMorQuerySemantics",
+        ),
+        "FLINK_PR4_WRITE_PATH_UNSUPPORTED": (
+            "test_pr4_valid_mutable_mor_design_renders_exact_executable_sql",
+            "testMutableMorSinkAndCompactionPlan",
         ),
     }
     for check in manifest["implemented_acceptance_checks"]:
@@ -509,11 +547,11 @@ def test_pr2_valid_designs_render_exact_executable_sql(fixture_name: str) -> Non
     ).rstrip("\n")
     assert assessment["validation_evidence"] == {
         "baseline_id": "hudi-1.2.0-flink-1.20",
-        "capability_manifest_schema": 3,
+        "capability_manifest_schema": 4,
         "design_contract_schema": 1,
         "flink_fixture_version": "1.20.1",
         "hudi_source_revision": PINNED_HUDI_REVISION,
-        "supported_design_contract_schemas": [1, 2],
+        "supported_design_contract_schemas": [1, 2, 3],
     }
 
 
@@ -530,7 +568,191 @@ def test_pr3_valid_mutable_design_renders_exact_executable_sql() -> None:
         PR3_FIXTURE_DIR / "mutable_cow.sql"
     ).rstrip("\n")
     assert assessment["validation_evidence"]["design_contract_schema"] == 2
-    assert assessment["validation_evidence"]["capability_manifest_schema"] == 3
+    assert assessment["validation_evidence"]["capability_manifest_schema"] == 4
+
+
+def test_pr4_valid_mutable_mor_design_renders_exact_executable_sql() -> None:
+    result = _run_flink_design_validator(PR4_FIXTURE_DIR / "mutable_mor.json")
+
+    assert result.returncode == 0, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "CONFIG_VALIDATED"
+    assert assessment["executable_eligible"] is True
+    assert assessment["finding_codes"] == []
+    assert assessment["advisory_codes"] == []
+    assert assessment["artifacts"]["combined_sql"] == _read_sql_golden(
+        PR4_FIXTURE_DIR / "mutable_mor.sql"
+    ).rstrip("\n")
+    assert assessment["validation_evidence"] == {
+        "baseline_id": "hudi-1.2.0-flink-1.20",
+        "capability_manifest_schema": 4,
+        "design_contract_schema": 3,
+        "flink_fixture_version": "1.20.1",
+        "hudi_source_revision": PINNED_HUDI_REVISION,
+        "supported_design_contract_schemas": [1, 2, 3],
+    }
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("schedule_enabled", False),
+        ("async_enabled", False),
+        ("operation_execute_async_enabled", False),
+        ("mode", "inline"),
+        ("trigger_strategy", "time_elapsed"),
+        ("delta_commits", 6),
+    ],
+)
+def test_pr4_rejects_incompatible_compaction_configuration(
+    tmp_path: Path, field: str, value: object
+) -> None:
+    design = json.loads(_read(PR4_FIXTURE_DIR / "mutable_mor.json"))
+    design["table_services"]["compaction"][field] = value
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert "FLINK_MOR_COMPACTION_CONFIGURATION_UNSUPPORTED" in assessment["finding_codes"]
+    assert assessment["status"] == "BLOCKED"
+    assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize("field", ["schedule_enabled", "async_enabled"])
+def test_pr4_rejects_clustering(tmp_path: Path, field: str) -> None:
+    design = json.loads(_read(PR4_FIXTURE_DIR / "mutable_mor.json"))
+    design["write"]["clustering"][field] = True
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == ["FLINK_MOR_CLUSTERING_UNSUPPORTED"]
+    assert assessment["status"] == "BLOCKED"
+    assert "artifacts" not in assessment
+
+
+def test_pr4_rejects_strict_read_optimized_freshness(tmp_path: Path) -> None:
+    design = json.loads(_read(PR4_FIXTURE_DIR / "mutable_mor.json"))
+    design["read"]["read_optimized_freshness"] = "after_every_commit"
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == [
+        "FLINK_MOR_READ_OPTIMIZED_FRESHNESS_UNSUPPORTED"
+    ]
+    assert assessment["status"] == "BLOCKED"
+    assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize(
+    ("owner", "expected_code", "expected_status"),
+    [
+        (None, "FLINK_MOR_COMPACTION_OWNER_REQUIRED", "INCOMPLETE"),
+        ("standalone_service", "FLINK_MULTI_WRITER_REVIEW", "REVIEW_REQUIRED"),
+        ("unknown", "FLINK_WRITER_MODEL_UNRESOLVED", "REVIEW_REQUIRED"),
+    ],
+)
+def test_pr4_requires_same_job_compaction_owner(
+    tmp_path: Path, owner: object, expected_code: str, expected_status: str
+) -> None:
+    design = json.loads(_read(PR4_FIXTURE_DIR / "mutable_mor.json"))
+    if owner is None:
+        design["table_services"]["compaction"].pop("owner")
+    else:
+        design["table_services"]["compaction"]["owner"] = owner
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == [expected_code]
+    assert assessment["status"] == expected_status
+    assert "artifacts" not in assessment
+
+
+def test_pr4_rejects_detailed_compaction_tuning(tmp_path: Path) -> None:
+    design = json.loads(_read(PR4_FIXTURE_DIR / "mutable_mor.json"))
+    design["table_services"]["compaction"]["tasks"] = 4
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == ["FLINK_MOR_COMPACTION_TUNING_UNSUPPORTED"]
+    assert assessment["status"] == "BLOCKED"
+    assert "artifacts" not in assessment
+
+
+def test_pr4_preserves_combined_findings_and_withholds_artifacts(tmp_path: Path) -> None:
+    design = json.loads(_read(PR4_FIXTURE_DIR / "mutable_mor.json"))
+    design["table_services"]["compaction"].pop("owner")
+    design["write"]["clustering"]["schedule_enabled"] = True
+    design["read"]["read_optimized_freshness"] = "after_every_commit"
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == [
+        "FLINK_MOR_CLUSTERING_UNSUPPORTED",
+        "FLINK_MOR_COMPACTION_OWNER_REQUIRED",
+        "FLINK_MOR_READ_OPTIMIZED_FRESHNESS_UNSUPPORTED",
+    ]
+    assert assessment["status"] == "BLOCKED"
+    assert "artifacts" not in assessment
+
+
+def test_pr4_snapshot_only_contract_does_not_invent_read_optimized_freshness(
+    tmp_path: Path,
+) -> None:
+    design = json.loads(_read(PR4_FIXTURE_DIR / "mutable_mor.json"))
+    design["read"] = {
+        "query_modes": ["snapshot"],
+        "read_optimized_freshness": "NOT_APPLICABLE",
+    }
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 0, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "CONFIG_VALIDATED"
+    assert assessment["finding_codes"] == []
+
+
+def test_pr4_rejects_append_only_mor(tmp_path: Path) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    design["write"]["table_type"] = "MERGE_ON_READ"
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == ["FLINK_MOR_APPEND_ONLY_UNSUPPORTED"]
+    assert assessment["status"] == "BLOCKED"
+    assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("table_services", []), ("table_services", None), ("read", []), ("read", None)],
+)
+def test_pr4_malformed_service_and_read_objects_fail_closed(
+    tmp_path: Path, field: str, value: object
+) -> None:
+    design = json.loads(_read(PR4_FIXTURE_DIR / "mutable_mor.json"))
+    design[field] = value
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert "FLINK_DESIGN_CONTRACT_INVALID" in assessment["finding_codes"]
+    assert assessment["executable_eligible"] is False
+    assert "artifacts" not in assessment
 
 
 @pytest.mark.parametrize(
@@ -734,7 +956,7 @@ def test_pr2_fails_closed_when_capability_manifest_is_malformed(tmp_path: Path) 
     assert "artifacts" not in assessment
 
 
-@pytest.mark.parametrize("contract_schema", [True, 1.0, 3])
+@pytest.mark.parametrize("contract_schema", [True, 1.0, 4])
 def test_flink_design_rejects_non_exact_contract_schema(
     tmp_path: Path, contract_schema: object
 ) -> None:
@@ -1316,7 +1538,8 @@ def test_safety_gate_order_is_stable() -> None:
         "## F7 — Physical table and source contract",
         "## F8 — Source changelog contract",
         "## F9 — Streaming checkpoint contract",
-        "## PR2/PR3 validation and completion",
+        "## F10 — Mutable table type, query freshness, and MOR ownership",
+        "## PR2/PR3/PR4 validation and completion",
     ]
     offsets = [flow.index(heading) for heading in headings]
     assert offsets == sorted(offsets)
