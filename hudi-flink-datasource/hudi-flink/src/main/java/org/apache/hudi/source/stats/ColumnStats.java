@@ -32,5 +32,21 @@ public class ColumnStats {
   Object minVal;
   @Nullable
   Object maxVal;
+  /**
+   * Number of null values in the column for this file.
+   * A negative value (-1) is used as a sentinel to indicate that statistics
+   * are unavailable (e.g. after CSI column-list expansion). Missing stats
+   * must never be treated as "all values are null".
+   */
   long nullCnt;
+
+  /** Returns true when column statistics are not available for this file. */
+  public boolean isUnknown() {
+    return nullCnt < 0;
+  }
+
+  /** Returns true when the column is known to contain only null values. */
+  public boolean isAllNull() {
+    return !isUnknown() && minVal == null && maxVal == null && nullCnt > 0;
+  }
 }

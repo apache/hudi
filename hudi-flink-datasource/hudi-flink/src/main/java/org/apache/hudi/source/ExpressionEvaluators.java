@@ -237,6 +237,9 @@ public class ExpressionEvaluators {
 
     @Override
     protected boolean eval(@Nonnull Object val, ColumnStats columnStats, LogicalType type) {
+      if (columnStats.isUnknown()) {
+        return true; // cannot prove mismatch → keep the file
+      }
       Object minVal = columnStats.getMinVal();
       Object maxVal = columnStats.getMaxVal();
       if (minVal == null || maxVal == null) {
@@ -265,6 +268,9 @@ public class ExpressionEvaluators {
 
     @Override
     protected boolean eval(@Nonnull Object val, ColumnStats columnStats, LogicalType type) {
+      if (columnStats.isUnknown()) {
+        return true;
+      }
       Object minVal = columnStats.getMinVal();
       Object maxVal = columnStats.getMaxVal();
       if (minVal == null || maxVal == null) {
@@ -290,6 +296,9 @@ public class ExpressionEvaluators {
     @Override
     public boolean eval(Map<String, ColumnStats> columnStatsMap) {
       ColumnStats columnStats = getColumnStats(columnStatsMap);
+      if (columnStats.isUnknown()) {
+        return true;
+      }
       return columnStats.getNullCnt() > 0;
     }
   }
@@ -307,6 +316,9 @@ public class ExpressionEvaluators {
     @Override
     public boolean eval(Map<String, ColumnStats> columnStatsMap) {
       ColumnStats columnStats = getColumnStats(columnStatsMap);
+      if (columnStats.isUnknown()) {
+        return true;
+      }
       // should consider FLOAT/DOUBLE & NAN
       return columnStats.getMinVal() != null || columnStats.getNullCnt() <= 0;
     }
@@ -324,6 +336,9 @@ public class ExpressionEvaluators {
 
     @Override
     public boolean eval(@Nonnull Object val, ColumnStats columnStats, LogicalType type) {
+      if (columnStats.isUnknown()) {
+        return true;
+      }
       Object minVal = columnStats.getMinVal();
       if (minVal == null) {
         return false;
@@ -344,6 +359,9 @@ public class ExpressionEvaluators {
 
     @Override
     protected boolean eval(@Nonnull Object val, ColumnStats columnStats, LogicalType type) {
+      if (columnStats.isUnknown()) {
+        return true;
+      }
       Object maxVal = columnStats.getMaxVal();
       if (maxVal == null) {
         return false;
@@ -364,6 +382,9 @@ public class ExpressionEvaluators {
 
     @Override
     protected boolean eval(@Nonnull Object val, ColumnStats columnStats, LogicalType type) {
+      if (columnStats.isUnknown()) {
+        return true;
+      }
       Object minVal = columnStats.getMinVal();
       if (minVal == null) {
         return false;
@@ -384,6 +405,9 @@ public class ExpressionEvaluators {
 
     @Override
     protected boolean eval(@Nonnull Object val, ColumnStats columnStats, LogicalType type) {
+      if (columnStats.isUnknown()) {
+        return true;
+      }
       Object maxVal = columnStats.getMaxVal();
       if (maxVal == null) {
         return false;
@@ -413,6 +437,9 @@ public class ExpressionEvaluators {
         return false;
       }
       ColumnStats columnStats = getColumnStats(columnStatsMap);
+      if (columnStats.isUnknown()) {
+        return true;
+      }
       Object minVal = columnStats.getMinVal();
       Object maxVal = columnStats.getMaxVal();
       if (minVal == null) {
