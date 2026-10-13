@@ -73,6 +73,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
   private final KafkaControlAgent kafkaControlClient;
   private final ConnectTransactionServices transactionServices;
   private final KafkaPartitionProvider partitionProvider;
+  private final int eventLoopShutdownTimeoutMs;
   private final Map<Integer, List<WriteStatus>> partitionsWriteStatusReceived;
   private final Map<Integer, Long> currentConsumedKafkaOffsets;
   private final AtomicBoolean hasStarted = new AtomicBoolean(false);
@@ -103,11 +104,23 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
                                        KafkaControlAgent kafkaControlClient,
                                        ConnectTransactionServices transactionServices,
                                        KafkaPartitionProvider partitionProvider) {
+    this(configs, partition, kafkaControlClient, transactionServices, partitionProvider,
+        COORDINATOR_EVENT_LOOP_SHUTDOWN_TIMEOUT_MS);
+  }
+
+  @VisibleForTesting
+  ConnectTransactionCoordinator(KafkaConnectConfigs configs,
+                                TopicPartition partition,
+                                KafkaControlAgent kafkaControlClient,
+                                ConnectTransactionServices transactionServices,
+                                KafkaPartitionProvider partitionProvider,
+                                int eventLoopShutdownTimeoutMs) {
     this.configs = configs;
     this.partition = partition;
     this.kafkaControlClient = kafkaControlClient;
     this.transactionServices = transactionServices;
     this.partitionProvider = partitionProvider;
+    this.eventLoopShutdownTimeoutMs = eventLoopShutdownTimeoutMs;
     this.events = new LinkedBlockingQueue<>();
     scheduler = Executors.newSingleThreadScheduledExecutor();
     executorService = Executors.newSingleThreadExecutor();
@@ -148,6 +161,9 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
       if (!shutdownInitiated) {
         shutdownInitiated = true;
         shutdownEventLoop();
+      }
+      if (executorService.isTerminated()) {
+        closeTransactionServices();
       }
     }
   }
@@ -200,20 +216,14 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
     events.clear();
     executorService.shutdownNow();
     try {
-      if (!executorService.awaitTermination(COORDINATOR_EVENT_LOOP_SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+      if (!executorService.awaitTermination(eventLoopShutdownTimeoutMs, TimeUnit.MILLISECONDS)) {
         log.warn("Transaction coordinator event loop did not terminate within {} ms for topic {} partition {}",
-            COORDINATOR_EVENT_LOOP_SHUTDOWN_TIMEOUT_MS, partition.topic(), partition.partition());
+            eventLoopShutdownTimeoutMs, partition.topic(), partition.partition());
       }
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       log.warn("Interrupted while waiting for transaction coordinator event loop to terminate for topic {} partition {}",
           partition.topic(), partition.partition());
-    }
-
-    // The submitted event-loop task may have been cancelled before it started, in which case
-    // run() cannot close the transaction services itself.
-    if (executorService.isTerminated()) {
-      closeTransactionServices();
     }
   }
 

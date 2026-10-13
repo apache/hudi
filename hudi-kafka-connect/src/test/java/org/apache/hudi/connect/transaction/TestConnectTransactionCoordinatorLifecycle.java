@@ -32,11 +32,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -123,6 +125,61 @@ class TestConnectTransactionCoordinatorLifecycle {
   }
 
   @Test
+  void stopRetriesTransactionServicesCleanupAfterDelayedEventLoopExit() throws Exception {
+    KafkaControlAgent controlAgent = mock(KafkaControlAgent.class);
+    ConnectTransactionServices transactionServices = mock(ConnectTransactionServices.class);
+    CountDownLatch eventProcessingStarted = new CountDownLatch(1);
+    CountDownLatch releaseEventProcessing = new CountDownLatch(1);
+    CountDownLatch firstCloseAttempted = new CountDownLatch(1);
+    AtomicBoolean eventProcessingInterrupted = new AtomicBoolean(false);
+    AtomicBoolean failFirstClose = new AtomicBoolean(true);
+    when(transactionServices.fetchLatestExtraCommitMetadata()).thenReturn(Collections.emptyMap());
+    when(transactionServices.startCommit()).thenAnswer(invocation -> {
+      eventProcessingStarted.countDown();
+      boolean released = false;
+      while (!released) {
+        try {
+          releaseEventProcessing.await();
+          released = true;
+        } catch (InterruptedException e) {
+          eventProcessingInterrupted.set(true);
+        }
+      }
+      return "001";
+    });
+    doAnswer(invocation -> {
+      if (failFirstClose.compareAndSet(true, false)) {
+        firstCloseAttempted.countDown();
+        throw new IllegalStateException("close failed");
+      }
+      return null;
+    }).when(transactionServices).close();
+
+    ConnectTransactionCoordinator coordinator = createCoordinator(controlAgent, transactionServices, 100);
+    try {
+      coordinator.start();
+      assertTrue(eventProcessingStarted.await(5, TimeUnit.SECONDS));
+
+      coordinator.stop();
+
+      assertTrue(eventProcessingInterrupted.get());
+      assertFalse(coordinator.isEventLoopTerminated());
+      verify(transactionServices, never()).close();
+
+      releaseEventProcessing.countDown();
+      assertTrue(firstCloseAttempted.await(5, TimeUnit.SECONDS));
+      waitForEventLoopTermination(coordinator);
+      verify(transactionServices, times(1)).close();
+
+      assertDoesNotThrow(coordinator::stop);
+      verify(transactionServices, times(2)).close();
+    } finally {
+      releaseEventProcessing.countDown();
+      coordinator.stop();
+    }
+  }
+
+  @Test
   void stopRetriesDeregistrationAfterFailure() throws Exception {
     KafkaControlAgent controlAgent = mock(KafkaControlAgent.class);
     ConnectTransactionServices transactionServices = mock(ConnectTransactionServices.class);
@@ -155,6 +212,13 @@ class TestConnectTransactionCoordinatorLifecycle {
 
   private static ConnectTransactionCoordinator createCoordinator(
       KafkaControlAgent controlAgent, ConnectTransactionServices transactionServices) {
+    return createCoordinator(controlAgent, transactionServices, 5000);
+  }
+
+  private static ConnectTransactionCoordinator createCoordinator(
+      KafkaControlAgent controlAgent,
+      ConnectTransactionServices transactionServices,
+      int eventLoopShutdownTimeoutMs) {
     KafkaConnectConfigs configs = KafkaConnectConfigs.newBuilder()
         .withCommitIntervalSecs(60L)
         .withCoordinatorWriteTimeoutSecs(60L)
@@ -164,7 +228,17 @@ class TestConnectTransactionCoordinatorLifecycle {
         new TopicPartition(TOPIC_NAME, ConnectTransactionCoordinator.COORDINATOR_KAFKA_PARTITION),
         controlAgent,
         transactionServices,
-        (bootstrapServers, topicName) -> 1);
+        (bootstrapServers, topicName) -> 1,
+        eventLoopShutdownTimeoutMs);
+  }
+
+  private static void waitForEventLoopTermination(ConnectTransactionCoordinator coordinator)
+      throws InterruptedException {
+    long deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+    while (!coordinator.isEventLoopTerminated() && System.nanoTime() < deadlineNanos) {
+      TimeUnit.MILLISECONDS.sleep(10);
+    }
+    assertTrue(coordinator.isEventLoopTerminated());
   }
 
   private static ControlMessage writeStatusEvent() {
