@@ -26,7 +26,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantComparison;
-import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -57,10 +56,6 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THA
  */
 public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Serializable {
   private static final long serialVersionUID = 1L;
-
-  private static final Set<String> WRITE_AND_SAVEPOINT_ACTIONS = CollectionUtils.createSet(
-      HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.LOG_COMPACTION_ACTION,
-      HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.CLUSTERING_ACTION, HoodieTimeline.SAVEPOINT_ACTION);
 
   private static final long MILLI_SECONDS_IN_ONE_DAY = 24 * 3600 * 1000;
 
@@ -113,7 +108,7 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
     // or a savepointed commit left behind by archival would otherwise hide the archived write instants after it.
     // Instants before the cursor that are still active are loaded eagerly by #load. Without such a write instant,
     // nothing after the last active instant can be archived.
-    this.firstActiveWriteInstant = activeTimeline.getTimelineOfActions(WRITE_AND_SAVEPOINT_ACTIONS).getFirstNonSavepointCommit()
+    this.firstActiveWriteInstant = activeTimeline.getTimelineOfActions(HoodieTimeline.WRITE_AND_SAVEPOINT_ACTIONS).getFirstNonSavepointCommit()
         .or(activeTimeline::lastInstant).map(HoodieInstant::requestedTime).orElse("");
     this.activeSavepointedInstants = activeTimeline.getSavePointTimeline().getInstantsAsStream()
         .map(HoodieInstant::requestedTime).collect(Collectors.toSet());

@@ -280,6 +280,21 @@ public class TestCompletionTimeQueryView {
         is("00000003,00000004,00000005,00000006"));
     assertThat(queryContext.getActiveInstants().stream().map(HoodieInstant::requestedTime).collect(Collectors.joining(",")),
         is("00000007,00000008"));
+
+    // a query that starts before the savepointed commit: the archived commits after it are still read
+    queryContext = IncrementalQueryAnalyzer.builder()
+        .metaClient(metaClient)
+        .startCompletionTime(String.format("%08d", 1000))
+        .endCompletionTime(String.format("%08d", 1008))
+        .rangeType(InstantRange.RangeType.CLOSED_CLOSED)
+        .build()
+        .analyze();
+    assertThat(queryContext.getArchivedInstants().stream().map(HoodieInstant::requestedTime).collect(Collectors.joining(",")),
+        is("00000002,00000003,00000004,00000005,00000006"));
+    assertThat(queryContext.getActiveInstants().stream().map(HoodieInstant::requestedTime).collect(Collectors.joining(",")),
+        is("00000001,00000007,00000008"));
+    assertThat(String.join(",", queryContext.getInstantTimeList()),
+        is("00000001,00000002,00000003,00000004,00000005,00000006,00000007,00000008"));
   }
 
   @Test
