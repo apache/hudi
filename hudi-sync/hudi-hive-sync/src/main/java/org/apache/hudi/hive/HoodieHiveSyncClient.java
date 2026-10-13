@@ -283,7 +283,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     partitionDriverPool = maybeBuildHiveDriverPool(config);
     partitionClientPool = maybeBuildPartitionClientPool(config);
     return new HiveQueryDDLExecutor(config, client, partitionDriverPool, partitionClientPool,
-        config.getBooleanOrDefault(HIVE_SYNC_USE_SPARK_CATALOG) ? null : Thread.currentThread());
+        config.getBooleanOrDefault(HIVE_SYNC_USE_SPARK_CATALOG) ? Option.empty() : Option.of(Thread.currentThread()));
   }
 
   private Table getInitialTable(String table) {

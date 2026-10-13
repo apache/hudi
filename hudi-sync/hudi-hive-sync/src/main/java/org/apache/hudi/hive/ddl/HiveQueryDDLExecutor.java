@@ -65,17 +65,17 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
   // Owned by HoodieHiveSyncClient; close() is delegated through there. See
   // HiveMetaStoreClientPool javadoc for the usage contract (partition-row ops only).
   private final Option<HiveMetaStoreClientPool> metaStoreClientPool;
-  // Non-null while the sync client's metastore client is cached on this thread.
-  private volatile Thread threadCachingClient;
+  // Present while the sync client's metastore client is cached on this thread.
+  private volatile Option<Thread> threadCachingClient;
 
   public HiveQueryDDLExecutor(HiveSyncConfig config, IMetaStoreClient metaStoreClient) {
-    this(config, metaStoreClient, Option.empty(), Option.empty(), null);
+    this(config, metaStoreClient, Option.empty(), Option.empty(), Option.empty());
   }
 
   public HiveQueryDDLExecutor(HiveSyncConfig config, IMetaStoreClient metaStoreClient,
                               Option<HiveDriverPool> driverPool,
                               Option<HiveMetaStoreClientPool> metaStoreClientPool,
-                              Thread threadCachingClient) {
+                              Option<Thread> threadCachingClient) {
     super(config);
     this.metaStoreClient = metaStoreClient;
     this.driverPool = driverPool;
@@ -190,9 +190,9 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
     // Authorization can replace Hive's cached instance and close its client. Detach without
     // closing, only on the owning thread and only once. A sync with no statements stays cached
     // so session teardown can reuse its connection.
-    if (threadCachingClient == Thread.currentThread()) {
+    if (threadCachingClient.map(thread -> thread == Thread.currentThread()).orElse(false)) {
       Hive.set(null);
-      threadCachingClient = null;
+      threadCachingClient = Option.empty();
     }
     SessionState previousSession = SessionState.get();
     ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
@@ -326,7 +326,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
 
   @Override
   public void close() {
-    threadCachingClient = null;
+    threadCachingClient = Option.empty();
     // Close the pool first so the worker threads stop dispatching against their
     // Drivers before we tear down anything else. The pool's close() runs
     // Driver/SessionState cleanup on each worker's own thread.

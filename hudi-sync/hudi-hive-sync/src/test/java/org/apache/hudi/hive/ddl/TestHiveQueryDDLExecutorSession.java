@@ -182,7 +182,7 @@ class TestHiveQueryDDLExecutorSession {
   void detachesCachedClientOnceBeforeRunningStatements() throws Exception {
     Driver driver = mock(Driver.class);
     HiveQueryDDLExecutor executor = executorWith(driver, mock(SessionState.class));
-    setField(executor, "threadCachingClient", Thread.currentThread());
+    setField(executor, "threadCachingClient", Option.of(Thread.currentThread()));
 
     try (MockedStatic<Hive> hive = mockStatic(Hive.class)) {
       when(driver.run(anyString())).thenAnswer(invocation -> {
@@ -203,7 +203,7 @@ class TestHiveQueryDDLExecutorSession {
     Driver driver = mock(Driver.class);
     when(driver.run(anyString())).thenReturn(new CommandProcessorResponse(0));
     HiveQueryDDLExecutor executor = executorWith(driver, mock(SessionState.class));
-    setField(executor, "threadCachingClient", cachedOnAnotherThread ? new Thread() : null);
+    setField(executor, "threadCachingClient", cachedOnAnotherThread ? Option.of(new Thread()) : Option.empty());
 
     try (MockedStatic<Hive> hive = mockStatic(Hive.class)) {
       executor.runSQL("SHOW TABLES");
@@ -488,6 +488,7 @@ class TestHiveQueryDDLExecutorSession {
     setField(executor, "driverPool", Option.empty());
     setField(executor, "metaStoreClientPool", Option.empty());
     setField(executor, "metaStoreClient", null);
+    setField(executor, "threadCachingClient", Option.empty());
     setField(executor, "hiveDriver", driver);
     setField(executor, "sessionState", sessionState);
     return executor;
