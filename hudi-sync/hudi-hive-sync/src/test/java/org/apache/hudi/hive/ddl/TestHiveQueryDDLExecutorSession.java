@@ -34,6 +34,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InOrder;
 import org.mockito.MockedStatic;
 
@@ -174,6 +176,39 @@ class TestHiveQueryDDLExecutorSession {
     assertNull(SessionState.get(), "A thread that held no session must be left holding none");
     assertSame(callerLoader, Thread.currentThread().getContextClassLoader(),
         "detachSession() leaves the session's class loader on the thread, so the operation must take it off");
+  }
+
+  @Test
+  void detachesCachedClientOnceBeforeRunningStatements() throws Exception {
+    Driver driver = mock(Driver.class);
+    HiveQueryDDLExecutor executor = executorWith(driver, mock(SessionState.class));
+    setField(executor, "threadCachingClient", Thread.currentThread());
+
+    try (MockedStatic<Hive> hive = mockStatic(Hive.class)) {
+      when(driver.run(anyString())).thenAnswer(invocation -> {
+        hive.verify(() -> Hive.set(null), times(1));
+        return new CommandProcessorResponse(0);
+      });
+      hive.verifyNoInteractions();
+      executor.runSQL("SHOW TABLES");
+      executor.runSQL("SHOW DATABASES");
+      hive.verify(() -> Hive.set(null), times(1));
+      hive.verifyNoMoreInteractions();
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void leavesCacheAloneWhenClientIsNotCachedOnCallingThread(boolean cachedOnAnotherThread) throws Exception {
+    Driver driver = mock(Driver.class);
+    when(driver.run(anyString())).thenReturn(new CommandProcessorResponse(0));
+    HiveQueryDDLExecutor executor = executorWith(driver, mock(SessionState.class));
+    setField(executor, "threadCachingClient", cachedOnAnotherThread ? new Thread() : null);
+
+    try (MockedStatic<Hive> hive = mockStatic(Hive.class)) {
+      executor.runSQL("SHOW TABLES");
+      hive.verifyNoInteractions();
+    }
   }
 
   /**
@@ -453,7 +488,6 @@ class TestHiveQueryDDLExecutorSession {
     setField(executor, "driverPool", Option.empty());
     setField(executor, "metaStoreClientPool", Option.empty());
     setField(executor, "metaStoreClient", null);
-    setField(executor, "beforeSessionStatements", (Runnable) () -> { });
     setField(executor, "hiveDriver", driver);
     setField(executor, "sessionState", sessionState);
     return executor;

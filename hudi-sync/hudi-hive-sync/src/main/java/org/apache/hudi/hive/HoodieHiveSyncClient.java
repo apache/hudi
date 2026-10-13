@@ -90,9 +90,6 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   private final Map<String, Table> initialTableByName = new HashMap<>();
   DDLExecutor ddlExecutor;
   private IMetaStoreClient client;
-  // The thread whose Hive cache holds the instance that owns client, until
-  // releaseClientFromHiveCache() takes it out; null when no cache holds it.
-  private volatile Thread threadCachingClient;
   // Present only when HIVE_SYNC_BATCHING_ENABLED and sync mode is HIVEQL. Owned by
   // this class; closed in close() before Hive.closeCurrent(). HiveQueryDDLExecutor
   // uses it only for DROP (Hive Thrift, not Hive Driver) — see HiveMetaStoreClientPool
@@ -171,18 +168,6 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   }
 
   /**
-   * Detaches the client before HiveQL authorization can replace Hive's cached instance and
-   * close it. Delay detachment until the first statement so a no-op sync can reuse the client
-   * during session teardown. Hive.set(null) detaches without closing the client.
-   */
-  private void releaseClientFromHiveCache() {
-    if (threadCachingClient == Thread.currentThread()) {
-      Hive.set(null);
-      threadCachingClient = null;
-    }
-  }
-
-  /**
    * Closes {@link #client} directly, since Hive no longer closes it once it is out of the cache.
    * This also releases a client that RetryingMetaStoreClient rebuilt after a transient TException.
    * Hive.closeCurrent() then closes whatever instance is left in the cache.
@@ -198,7 +183,6 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     }
     Hive.closeCurrent();
     client = null;
-    threadCachingClient = null;
   }
 
   private void closePartitionPoolsQuietly() {
@@ -265,9 +249,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
             new Class<?>[] {HiveSyncConfig.class},
             config);
       }
-      IMetaStoreClient metaStoreClient = IMetaStoreClientUtil.getMSC(config.getHiveConf());
-      threadCachingClient = Thread.currentThread();
-      return metaStoreClient;
+      return IMetaStoreClientUtil.getMSC(config.getHiveConf());
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to create HiveMetaStoreClient", e);
     }
@@ -301,7 +283,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     partitionDriverPool = maybeBuildHiveDriverPool(config);
     partitionClientPool = maybeBuildPartitionClientPool(config);
     return new HiveQueryDDLExecutor(config, client, partitionDriverPool, partitionClientPool,
-        this::releaseClientFromHiveCache);
+        config.getBooleanOrDefault(HIVE_SYNC_USE_SPARK_CATALOG) ? null : Thread.currentThread());
   }
 
   private Table getInitialTable(String table) {
