@@ -42,6 +42,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.storage.StoragePath;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -55,6 +56,7 @@ final class TestHudiDdl
         extends AbstractTestQueryFramework
 {
     private final UnregisteredTableInitializer initializer = new UnregisteredTableInitializer();
+    private String tableToCleanup;
 
     @Override
     protected QueryRunner createQueryRunner()
@@ -66,10 +68,24 @@ final class TestHudiDdl
                 .build();
     }
 
+    @AfterEach
+    void cleanupRegisteredTable()
+    {
+        if (tableToCleanup != null && initializer.getMetastore().getTable("tests", tableToCleanup).isPresent()) {
+            assertUpdate("DROP TABLE " + tableToCleanup);
+        }
+    }
+
+    private String trackTable(String tableName)
+    {
+        tableToCleanup = tableName;
+        return tableName;
+    }
+
     @Test
     void testRegisterAndUnregisterExistingTableWithoutChangingStorage()
     {
-        String tableName = initializer.getTableName();
+        String tableName = trackTable(initializer.getTableName());
         String tableLocation = initializer.getTableLocation().toString();
 
         assertUpdate("CALL hudi.system.register_table(" +
@@ -114,7 +130,7 @@ final class TestHudiDdl
     void testRegisterRejectsNonParquetTable()
             throws Exception
     {
-        String tableName = "unregistered_orc_table";
+        String tableName = trackTable("unregistered_orc_table");
         Location tableLocation = initializer.getExternalLocation().appendPath(tableName);
         initializer.initializeTable(tableName, tableLocation, "tests", HoodieFileFormat.ORC);
 
@@ -128,7 +144,7 @@ final class TestHudiDdl
     void testRegisterCommittedTableWithLogicalAndNestedColumns()
             throws Exception
     {
-        String tableName = "committed_complex_table";
+        String tableName = trackTable("committed_complex_table");
         Location tableLocation = initializer.getExternalLocation().appendPath(tableName);
         initializer.initializeTable(tableName, tableLocation, "tests", HoodieFileFormat.PARQUET);
         Schema details = SchemaBuilder.record("details").fields().requiredLong("count").endRecord();
@@ -157,7 +173,7 @@ final class TestHudiDdl
     void testRegisterRejectsCommittedLocalTimestampWithoutCatalogEntry()
             throws Exception
     {
-        String tableName = "committed_local_timestamp";
+        String tableName = trackTable("committed_local_timestamp");
         Location tableLocation = initializer.getExternalLocation().appendPath(tableName);
         initializer.initializeTable(tableName, tableLocation, "tests", HoodieFileFormat.PARQUET);
         Schema committedSchema = SchemaBuilder.record(tableName).fields()
@@ -178,7 +194,7 @@ final class TestHudiDdl
     void testCreateRejectsNonEmptyLocationWithoutChangingStorage()
             throws Exception
     {
-        String tableName = "create_at_non_empty_location";
+        String tableName = trackTable("create_at_non_empty_location");
         Location tableLocation = initializer.getExternalLocation().appendPath(tableName);
         Location existingFile = tableLocation.appendPath("existing.txt");
         initializer.getFileSystem().newOutputFile(existingFile).createOrOverwrite(new byte[] {1});
@@ -195,7 +211,7 @@ final class TestHudiDdl
     @Test
     void testCreatePersistsAdvancedTableProperties()
     {
-        String tableName = "created_with_advanced_properties";
+        String tableName = trackTable("created_with_advanced_properties");
         Location tableLocation = initializer.getExternalLocation().appendPath(tableName);
 
         assertUpdate("""
@@ -237,7 +253,7 @@ final class TestHudiDdl
     @Test
     void testCreateRejectsHoodiePropertyThatWouldNotBePersisted()
     {
-        String tableName = "created_with_invalid_hoodie_property";
+        String tableName = trackTable("created_with_invalid_hoodie_property");
         Location tableLocation = initializer.getExternalLocation().appendPath(tableName);
 
         assertQueryFails("""
@@ -256,7 +272,7 @@ final class TestHudiDdl
     @Test
     void testCreateAndDropExternalMergeOnReadTablePreservesStorage()
     {
-        String tableName = "created_external_mor";
+        String tableName = trackTable("created_external_mor");
         Location tableLocation = initializer.getExternalLocation().appendPath(tableName);
 
         assertUpdate("""
@@ -304,7 +320,7 @@ final class TestHudiDdl
     @Test
     void testCreateAndDropManagedCopyOnWriteTableDeletesStorage()
     {
-        String tableName = "created_managed_cow";
+        String tableName = trackTable("created_managed_cow");
         String schemaLocation = initializer.getMetastore().getDatabase("tests").orElseThrow().getLocation().orElseThrow();
         Location tableLocation = Location.of(schemaLocation).appendPath(tableName);
 
@@ -334,7 +350,7 @@ final class TestHudiDdl
     @Test
     void testInflightOnlyTableHasNoValidCommit()
     {
-        String tableName = "inflight_only_table";
+        String tableName = trackTable("inflight_only_table");
         Location tableLocation = initializer.getExternalLocation().appendPath(tableName);
         assertUpdate("CREATE TABLE " + tableName + " (id bigint) WITH (location = '" + tableLocation + "')");
 
@@ -355,7 +371,7 @@ final class TestHudiDdl
     @Test
     void testUnregisterManagedTablePreservesStorageAndReregistersAsExternal()
     {
-        String tableName = "unregister_managed";
+        String tableName = trackTable("unregister_managed");
         String schemaLocation = initializer.getMetastore().getDatabase("tests").orElseThrow().getLocation().orElseThrow();
         Location tableLocation = Location.of(schemaLocation).appendPath(tableName);
         assertUpdate("CREATE TABLE " + tableName + " (id bigint)");

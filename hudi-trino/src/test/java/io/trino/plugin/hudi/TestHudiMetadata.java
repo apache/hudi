@@ -279,6 +279,37 @@ final class TestHudiMetadata
     }
 
     @Test
+    void testDropUnmarkedManagedTablePreservesStorage()
+            throws IOException
+    {
+        SchemaTableName tableName = new SchemaTableName("test_schema", "unmarked_managed");
+        TableFixture fixture = initializedTable(createTableMetadata(tableName));
+        Location dataFile = Location.of(fixture.basePath()).appendPath("existing.parquet");
+        fixture.fileSystem().newOutputFile(dataFile).createOrOverwrite(new byte[] {1});
+
+        Table table = HudiMetastoreTables.buildTable(
+                tableName, fixture.basePath(), HoodieTableType.COPY_ON_WRITE,
+                fixture.tableSchema(), List.of(), false, Optional.empty(), Optional.empty());
+        AtomicReference<Boolean> deleteData = new AtomicReference<>();
+        HiveMetastore metastore = fakeMetastore(Map.of(
+                "getTable", arguments -> Optional.of(table),
+                "dropTable", arguments -> {
+                    deleteData.set((Boolean) arguments[2]);
+                    return null;
+                }));
+        HudiMetadata metadata = new HudiMetadata(
+                metastore, fixture.fileSystemFactory(), unusedTypeManager(), newDirectExecutorService());
+
+        metadata.dropTable(SESSION, tableHandle(tableName, fixture, HoodieTableType.COPY_ON_WRITE));
+
+        assertThat(table.getTableType()).isEqualTo("MANAGED_TABLE");
+        assertThat(table.getParameters()).doesNotContainKey(HudiMetadata.TRINO_MANAGED_TABLE_PARAMETER);
+        assertThat(deleteData).hasValue(false);
+        assertThat(HudiUtil.hudiMetadataExists(fixture.fileSystem(), Location.of(fixture.basePath()))).isTrue();
+        assertThat(fixture.fileSystem().newInputFile(dataFile).exists()).isTrue();
+    }
+
+    @Test
     void testDropManagedHiveSyncViewsPreservesSharedStorage()
             throws IOException
     {
