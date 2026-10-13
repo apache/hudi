@@ -140,7 +140,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
             ddlExecutor = new HMSDDLExecutor(config, this.client);
             break;
           case HIVEQL:
-            ddlExecutor = buildHiveQueryDDLExecutor(config);
+            ddlExecutor = buildHiveQueryDDLExecutor();
             break;
           case JDBC:
             JDBCExecutor jdbcExecutor = new JDBCExecutor(config);
@@ -158,19 +158,12 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
           jdbcMetadataOperator = new JDBCBasedMetadataOperator(
               jdbcExecutor.getConnection(), databaseName);
         } else {
-          ddlExecutor = buildHiveQueryDDLExecutor(config);
+          ddlExecutor = buildHiveQueryDDLExecutor();
         }
       }
     } catch (Exception e) {
-      // The pools own live daemon threads, Hive Drivers, and Thrift sockets, and are
-      // built before the executor that would otherwise own their lifecycle. Any throw
-      // between those two points would leak them -- notably QueryBasedDDLExecutor's
-      // super(config), which runs the PartitionValueExtractor reflection before
-      // HiveQueryDDLExecutor's own try block is even entered. Closing here covers every
-      // such window; both close() methods are idempotent, so overlapping with the
-      // executor's cleanup (or buildHiveQueryDDLExecutor's rollback) is harmless.
-      // The metastore client is closed too: the caller never gets this object to close it, and
-      // Hive would close it only if something on this thread later replaced its cached instance.
+      // Construction failed, so no caller can close these resources. This also covers
+      // failures before HiveQueryDDLExecutor enters its own constructor try block.
       closePartitionPoolsQuietly();
       closeClient();
       throw new HoodieHiveSyncException("Failed to create HiveMetaStoreClient", e);
@@ -178,11 +171,9 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   }
 
   /**
-   * Takes the instance that owns {@link #client} out of Hive's cache for this thread, if it is
-   * there. Hive replaces the cached instance, closing its client, when a Hive session on the thread
-   * brings a different metastore conf, as a HiveQL-mode Driver's session does on its first
-   * statement, by setting the metastore filter hook for authorization. Until then the client stays
-   * cached, so that the session's teardown reuses it rather than opening a connection of its own.
+   * Detaches the client before HiveQL authorization can replace Hive's cached instance and
+   * close it. Delay detachment until the first statement so a no-op sync can reuse the client
+   * during session teardown. Hive.set(null) detaches without closing the client.
    */
   private void releaseClientFromHiveCache() {
     if (threadCachingClient == Thread.currentThread()) {
@@ -306,24 +297,11 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     return Option.of(new HiveDriverPool(config, size));
   }
 
-  /**
-   * Builds the (optional) partition-phase pools and the {@link HiveQueryDDLExecutor}
-   * that uses them, rolling back whichever pool(s) already got built if a later step
-   * in this sequence throws. Without this, a failure in {@code maybeBuildPartitionClientPool}
-   * (after {@code partitionDriverPool} was already built) or in the executor's own
-   * constructor would leak the already-built pool's worker threads and Thrift/Driver
-   * connections, since this constructor's outer catch just rethrows.
-   */
-  private HiveQueryDDLExecutor buildHiveQueryDDLExecutor(HiveSyncConfig config) {
-    try {
-      this.partitionDriverPool = maybeBuildHiveDriverPool(config);
-      this.partitionClientPool = maybeBuildPartitionClientPool(config);
-      return new HiveQueryDDLExecutor(config, this.client, this.partitionDriverPool, this.partitionClientPool,
-          this::releaseClientFromHiveCache);
-    } catch (Exception e) {
-      closePartitionPoolsQuietly();
-      throw e;
-    }
+  private HiveQueryDDLExecutor buildHiveQueryDDLExecutor() {
+    partitionDriverPool = maybeBuildHiveDriverPool(config);
+    partitionClientPool = maybeBuildPartitionClientPool(config);
+    return new HiveQueryDDLExecutor(config, client, partitionDriverPool, partitionClientPool,
+        this::releaseClientFromHiveCache);
   }
 
   private Table getInitialTable(String table) {
