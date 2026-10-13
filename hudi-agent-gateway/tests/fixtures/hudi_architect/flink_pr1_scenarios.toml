@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-schema_version = 3
+schema_version = 4
 status_precedence = ["INCOMPLETE", "REVIEW_REQUIRED", "BLOCKED"]
 
 [auto_key_acceptance]
@@ -105,12 +105,13 @@ executable_eligible = false
 
 [[scenarios]]
 case_id = "F07_MUTABLE"
-finding_codes = ["FLINK_MUTABLE_COW_DEFERRED"]
-expected_final_status = "BLOCKED"
-executable_eligible = false
+all_other_gates_pass = true
+passes_safety_gates = true
+next_contract_schema = 2
 
 [[scenarios]]
 case_id = "F08_REPLAY_COLLAPSE"
+inputs = { mutability = "append_only" }
 finding_codes = ["FLINK_REPLAY_IDEMPOTENCE_DEFERRED"]
 expected_final_status = "BLOCKED"
 executable_eligible = false

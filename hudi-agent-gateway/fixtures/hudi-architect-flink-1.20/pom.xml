@@ -26,7 +26,7 @@
   <packaging>jar</packaging>
 
   <name>Hudi Architect Flink 1.20 fixtures</name>
-  <description>Pinned factory and planner fixtures for the first executable Architect path.</description>
+  <description>Pinned factory and planner fixtures for bounded executable Architect paths.</description>
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -78,6 +78,12 @@
     <testResources>
       <testResource>
         <directory>${project.basedir}/../../tests/fixtures/hudi_architect/flink_pr2</directory>
+        <includes>
+          <include>*.sql</include>
+        </includes>
+      </testResource>
+      <testResource>
+        <directory>${project.basedir}/../../tests/fixtures/hudi_architect/flink_pr3</directory>
         <includes>
           <include>*.sql</include>
         </includes>

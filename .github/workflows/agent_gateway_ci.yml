@@ -71,6 +71,9 @@ jobs:
           python skills/hudi-architect/validate_flink_design.py \
             --input tests/fixtures/hudi_architect/flink_pr2/stable_key.json \
             --emit-sql > /dev/null
+          python skills/hudi-architect/validate_flink_design.py \
+            --input tests/fixtures/hudi_architect/flink_pr3/mutable_cow.json \
+            --emit-sql > /dev/null
       - name: Test
         run: python -m pytest tests -q
       - name: Lint
