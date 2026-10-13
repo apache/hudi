@@ -223,6 +223,59 @@ public class TestColumnStatsIndex {
       // Adding a matching age predicate must not turn missing name statistics into all-null data.
       assertEquals(Collections.singleton(oldFile), index.computeCandidateFiles(
           ColumnStatsProbe.newInstance(Arrays.asList(ageFilter, nameFilter)), new ArrayList<>(allFiles), Collections.emptyList()));
+
+      CallExpression nonMatchingAgeFilter = CallExpression.permanent(
+          BuiltInFunctionDefinitions.GREATER_THAN,
+          Arrays.asList(new FieldReferenceExpression("age", DataTypes.INT(), 0, 2), new ValueLiteralExpression(100)),
+          DataTypes.BOOLEAN());
+      assertEquals(Collections.emptySet(), index.computeCandidateFiles(
+          ColumnStatsProbe.newInstance(Collections.singletonList(nonMatchingAgeFilter)), new ArrayList<>(allFiles), Collections.emptyList()));
+      // Missing name statistics conservatively retain the old file even when age alone excludes it.
+      // The fully indexed new file can still be pruned.
+      assertEquals(Collections.singleton(oldFile), index.computeCandidateFiles(
+          ColumnStatsProbe.newInstance(Arrays.asList(nonMatchingAgeFilter, nameFilter)), new ArrayList<>(allFiles), Collections.emptyList()));
+    }
+  }
+
+  @Test
+  void testCandidatePartitionsWithMissingColumnStatsAfterIndexExpansion() throws Exception {
+    final String path = tempFile.getAbsolutePath();
+    Configuration conf = TestConfigurations.getDefaultConf(path);
+    conf.set(FlinkOptions.TABLE_TYPE, "COPY_ON_WRITE");
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "true");
+    conf.setString(HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key(), "age");
+    TestData.writeData(Collections.singletonList(TestData.insertRow(
+        StringData.fromString("id1"), StringData.fromString("alice"), 25,
+        TimestampData.fromEpochMillis(1), StringData.fromString("par1"))), conf);
+
+    conf.setString(HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key(), "age,name");
+    TestData.writeData(Collections.singletonList(TestData.insertRow(
+        StringData.fromString("id2"), StringData.fromString("bob"), 30,
+        TimestampData.fromEpochMillis(2), StringData.fromString("par2"))), conf);
+
+    try (PartitionStatsIndex index = new PartitionStatsIndex(path, TestConfigurations.ROW_TYPE, conf, StreamerUtil.createMetaClient(conf))) {
+      List<RowData> stats = index.readColumnStatsIndexByColumns(new String[] {"age", "name"}, Collections.emptyList());
+      List<String> actualStats = stats.stream().map(Object::toString).sorted().collect(Collectors.toList());
+      // Verify the old partition is partially indexed, rather than entirely absent from the index.
+      assertEquals(Arrays.asList(
+          "+I(par1,+I(25),+I(25),0,1,age)",
+          "+I(par2,+I(30),+I(30),0,1,age)",
+          "+I(par2,+I(bob),+I(bob),0,1,name)"), actualStats);
+
+      CallExpression ageFilter = CallExpression.permanent(
+          BuiltInFunctionDefinitions.GREATER_THAN_OR_EQUAL,
+          Arrays.asList(new FieldReferenceExpression("age", DataTypes.INT(), 0, 2), new ValueLiteralExpression(0)),
+          DataTypes.BOOLEAN());
+      CallExpression nameFilter = CallExpression.permanent(
+          BuiltInFunctionDefinitions.EQUALS,
+          Arrays.asList(new FieldReferenceExpression("name", DataTypes.STRING(), 0, 1), new ValueLiteralExpression("alice")),
+          DataTypes.BOOLEAN());
+      // Partition pruning must retain the matching old partition before file pruning runs.
+      assertEquals(Collections.singleton("par1"), index.computeCandidatePartitions(
+          ColumnStatsProbe.newInstance(Arrays.asList(ageFilter, nameFilter)), new ArrayList<>(Arrays.asList("par1", "par2"))));
     }
   }
 
