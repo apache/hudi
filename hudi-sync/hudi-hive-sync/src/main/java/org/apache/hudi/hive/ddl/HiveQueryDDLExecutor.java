@@ -104,15 +104,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       } catch (Exception teardownException) {
         log.error("Error while closing Hive Driver and SessionState", teardownException);
       }
-      // driverPool (if present) was already constructed by the caller before this
-      // ctor ran; since we're about to throw, no one else will call close() on it.
-      driverPool.ifPresent(pool -> {
-        try {
-          pool.close();
-        } catch (Exception poolCloseException) {
-          log.error("Error while closing HiveDriverPool", poolCloseException);
-        }
-      });
+      // The caller closes the supplied pools if construction fails.
       throw new HoodieHiveSyncException("Failed to create HiveQueryDDL object", e);
     } finally {
       restoreThread(previousSession, previousLoader);

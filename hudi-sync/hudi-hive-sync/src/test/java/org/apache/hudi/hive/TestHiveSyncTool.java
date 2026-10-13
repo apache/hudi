@@ -49,6 +49,8 @@ import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hive.ddl.HMSDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.hive.testutils.HiveTestUtil;
+import org.apache.hudi.hive.util.HiveDriverPool;
+import org.apache.hudi.hive.util.HiveMetaStoreClientPool;
 import org.apache.hudi.hive.util.IMetaStoreClientUtil;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
@@ -81,6 +83,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.MockedConstruction;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -142,6 +145,8 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mockConstruction;
+import static org.mockito.Mockito.verify;
 
 public class TestHiveSyncTool {
 
@@ -467,6 +472,26 @@ public class TestHiveSyncTool {
       assertThrows(HoodieHiveSyncException.class, () -> new HiveSyncTool(hiveSyncProps, getHiveClientConf()));
       assertEquals(1, connections.opened());
       assertEquals(1, connections.closed(), "The metastore client of a sync client that failed to build is closed");
+    }
+  }
+
+  @Test
+  void testSyncClientClosesPoolsWhenHiveQLSessionFailsToStart() throws Exception {
+    HiveTestUtil.createCOWTable("100", 5, true);
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), HiveSyncMode.HIVEQL.name());
+    hiveSyncProps.setProperty(HIVE_SYNC_BATCHING_ENABLED.key(), "true");
+    HiveConf hiveConf = getHiveClientConf();
+    // Fail session startup after both pools have been constructed.
+    hiveConf.setVar(HiveConf.ConfVars.SCRATCHDIR,
+        Files.createFile(tempDir.resolve("not-a-directory")).toUri().toString() + "/scratch");
+
+    try (MockedConstruction<HiveDriverPool> drivers = mockConstruction(HiveDriverPool.class);
+         MockedConstruction<HiveMetaStoreClientPool> clients = mockConstruction(HiveMetaStoreClientPool.class)) {
+      assertThrows(HoodieHiveSyncException.class, () -> new HiveSyncTool(hiveSyncProps, hiveConf));
+      assertEquals(1, drivers.constructed().size());
+      assertEquals(1, clients.constructed().size());
+      verify(drivers.constructed().get(0)).close();
+      verify(clients.constructed().get(0)).close();
     }
   }
 
