@@ -109,7 +109,7 @@ public class ColumnStatsProbe implements Serializable {
       //       here we have to decode those back into corresponding logical representation.
       case TIMESTAMP_WITHOUT_TIME_ZONE:
         TimestampType tsType = (TimestampType) colType;
-        return indexRow.getTimestamp(pos, tsType.getPrecision()).getMillisecond();
+        return indexRow.getTimestamp(pos, tsType.getPrecision()).toLocalDateTime();
       case TIME_WITHOUT_TIME_ZONE:
       case DATE:
       case BIGINT:

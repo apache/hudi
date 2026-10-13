@@ -23,6 +23,7 @@ import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.schema.internal.Types;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -33,22 +34,40 @@ import org.apache.hudi.table.format.cow.vector.reader.ParquetColumnarRowSplitRea
 
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.expressions.FieldReferenceExpression;
+import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.types.DataType;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.column.ColumnReader;
+import org.apache.parquet.example.data.Group;
+import org.apache.parquet.example.data.simple.SimpleGroupFactory;
 import org.apache.parquet.filter.RecordFilter;
 import org.apache.parquet.filter.UnboundRecordFilter;
 import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.hadoop.BadConfigurationException;
+import org.apache.parquet.hadoop.ParquetWriter;
+import org.apache.parquet.hadoop.example.ExampleParquetWriter;
 import org.apache.parquet.hadoop.util.SerializationUtil;
+import org.apache.parquet.schema.LogicalTypeAnnotation;
+import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.MockedStatic;
 
+import java.io.File;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 
 import static org.apache.parquet.filter2.predicate.FilterApi.eq;
 import static org.apache.parquet.filter2.predicate.FilterApi.intColumn;
@@ -72,9 +91,66 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Tests configuration and path handling used by {@link RecordIterators}.
+ * Tests configuration, path handling, and timestamp predicate pushdown used by {@link RecordIterators}.
  */
 class TestRecordIterators {
+
+  @TempDir
+  File tempDir;
+
+  @ParameterizedTest
+  @ValueSource(ints = {3, 6})
+  void testTimestampPredicateReadsMatchingParquetRow(int precision) throws Exception {
+    DataType dataType = DataTypes.TIMESTAMP(precision);
+    LocalDateTime value = LocalDateTime.parse(precision == 3
+        ? "1970-01-01T00:00:01.001" : "1970-01-01T00:00:01.000001");
+    long encoded = precision == 3 ? 1001L : 1000001L;
+    MessageType schema = org.apache.parquet.schema.Types.buildMessage().optional(PrimitiveTypeName.INT64)
+        .as(LogicalTypeAnnotation.timestampType(true, precision == 3
+            ? LogicalTypeAnnotation.TimeUnit.MILLIS : LogicalTypeAnnotation.TimeUnit.MICROS))
+        .named("ts").named("test");
+    org.apache.hadoop.fs.Path path = new org.apache.hadoop.fs.Path(new File(tempDir, "timestamps.parquet").toURI());
+    Configuration conf = new Configuration();
+    try (ParquetWriter<Group> writer = ExampleParquetWriter.builder(path).withConf(conf).withType(schema).build()) {
+      writer.write(new SimpleGroupFactory(schema).newGroup().append("ts", encoded));
+    }
+    FieldReferenceExpression field = new FieldReferenceExpression("ts", dataType, 0, 0);
+    ValueLiteralExpression literal = new ValueLiteralExpression(value);
+    Predicate equals = ExpressionPredicates.Equals.getInstance().bindFieldReference(field).bindValueLiteral(literal);
+    Predicate in = ExpressionPredicates.In.getInstance()
+        .bindValueLiterals(Arrays.asList(literal, new ValueLiteralExpression(value.plusSeconds(1))))
+        .bindFieldReference(field);
+    List<Predicate> filters = Arrays.asList(equals, in,
+        ExpressionPredicates.And.getInstance().bindPredicates(equals, equals),
+        ExpressionPredicates.Or.getInstance().bindPredicates(equals, equals),
+        ExpressionPredicates.Not.getInstance().bindPredicate(
+            ExpressionPredicates.NotEquals.getInstance().bindFieldReference(field).bindValueLiteral(literal)));
+    assertEquals(Collections.singletonList(value), readTimestamps(path, dataType, true, Collections.emptyList()));
+    for (Predicate filter : filters) {
+      assertEquals(Collections.singletonList(value), readTimestamps(path, dataType, true, Collections.singletonList(filter)));
+    }
+    Predicate absent = ExpressionPredicates.Equals.getInstance().bindFieldReference(field)
+        .bindValueLiteral(new ValueLiteralExpression(value.plusSeconds(1)));
+    assertTrue(readTimestamps(path, dataType, true, Collections.singletonList(absent)).isEmpty(),
+        "Both TIMESTAMP(3) and TIMESTAMP(6) predicates should prune non-matching row groups");
+
+    LocalDateTime localValue = java.sql.Timestamp.from(value.toInstant(ZoneOffset.UTC)).toLocalDateTime();
+    assertEquals(Collections.singletonList(localValue), readTimestamps(path, dataType, false, Collections.singletonList(equals)));
+  }
+
+  private List<LocalDateTime> readTimestamps(org.apache.hadoop.fs.Path path, DataType type,
+                                           boolean utcTimestamp, List<Predicate> predicates) throws Exception {
+    List<LocalDateTime> result = new ArrayList<>();
+    try (ClosableIterator<RowData> iterator = RecordIterators.getParquetRecordIterator(
+        InternalSchemaManager.DISABLED, utcTimestamp, true, new Configuration(), new String[] {"ts"},
+        new DataType[] {type}, Collections.emptyMap(), new int[] {0}, 16,
+        new org.apache.flink.core.fs.Path(path.toUri()), 0, Long.MAX_VALUE, predicates)) {
+      while (iterator.hasNext()) {
+        result.add(iterator.next().getTimestamp(0, 6).toLocalDateTime());
+      }
+    }
+    return result;
+  }
 
   @Test
   void testGetFileNameHandlesRegularAndInlinePaths() throws Exception {

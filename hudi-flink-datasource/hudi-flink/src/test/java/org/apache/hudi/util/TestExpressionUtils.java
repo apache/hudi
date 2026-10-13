@@ -19,7 +19,10 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.sink.bulk.RowDataKeyGen;
+
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.expressions.CallExpression;
 import org.apache.flink.table.expressions.Expression;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
@@ -33,7 +36,6 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.ZoneOffset;
 import java.time.temporal.ChronoField;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -77,6 +79,19 @@ class TestExpressionUtils {
       DataTypes.FIELD("f_timestamp", DataTypes.TIMESTAMP(3).notNull())
   ).notNull();
   
+  @Test
+  void testTimestampLiteralPreservesPrecision() {
+    for (String text : Arrays.asList("1970-01-01T00:00:01.000001", "1969-12-31T23:59:59.999999", "1970-01-01T00:00:01.000000001")) {
+      LocalDateTime timestamp = LocalDateTime.parse(text);
+      ValueLiteralExpression literal = new ValueLiteralExpression(timestamp);
+      assertEquals(timestamp, ExpressionUtils.getValueFromLiteral(literal));
+      for (boolean logicalTimestamp : new boolean[] {true, false}) {
+        assertEquals(RowDataKeyGen.getRecordKey(TimestampData.fromLocalDateTime(timestamp), "ts", logicalTimestamp),
+            ExpressionUtils.getKeyFromLiteral(literal, logicalTimestamp).toString());
+      }
+    }
+  }
+
   @Test
   void getValueFromLiteralForNull() {
     List<RowType.RowField> fields = ((RowType) ROW_DATA_TYPE.getLogicalType()).getFields();
@@ -141,8 +156,6 @@ class TestExpressionUtils {
         assertEquals(((LocalTime) dataList.get(i)).get(ChronoField.MILLI_OF_DAY), ExpressionUtils.getValueFromLiteral((ValueLiteralExpression) childExprs.get(1)));
       } else if (dataList.get(i) instanceof LocalDate) {
         assertEquals((int) ((LocalDate) dataList.get(i)).toEpochDay(), ExpressionUtils.getValueFromLiteral((ValueLiteralExpression) childExprs.get(1)));
-      } else if (dataList.get(i) instanceof LocalDateTime) {
-        assertEquals(((LocalDateTime) dataList.get(i)).toInstant(ZoneOffset.UTC).toEpochMilli(), ExpressionUtils.getValueFromLiteral((ValueLiteralExpression) childExprs.get(1)));
       } else {
         assertEquals(dataList.get(i), ExpressionUtils.getValueFromLiteral((ValueLiteralExpression) childExprs.get(1)));
       }
