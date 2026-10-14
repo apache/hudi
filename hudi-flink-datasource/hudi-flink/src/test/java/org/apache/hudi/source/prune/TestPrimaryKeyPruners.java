@@ -36,6 +36,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.function.Function;
 
+import static org.apache.flink.util.InstantiationUtil.deserializeObject;
+import static org.apache.flink.util.InstantiationUtil.serializeObject;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.mock;
@@ -60,6 +62,21 @@ class TestPrimaryKeyPruners {
   @Test
   void testPartitionBucketIdFunctionIsDisabledWithoutBucketFunction() {
     assertNull(PartitionBucketIdFunc.create(Option.empty(), mock(HoodieTableMetaClient.class), 8));
+  }
+
+  @Test
+  void testBucketIdFunctionIsSerializable() throws Exception {
+    Configuration conf = new Configuration();
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "id,tenant");
+    Function<Integer, Integer> bucketId = PrimaryKeyPruners.getBucketIdFunc(
+        Arrays.asList(equality("tenant", "tenant-a", true), equality("id", "id-1", false)), conf);
+
+    // the source V2 ships the function to the job manager within the job graph
+    Function<Integer, Integer> deserialized = deserializeObject(serializeObject(bucketId), getClass().getClassLoader());
+
+    List<String> orderedValues = Arrays.asList("id-1", "tenant-a");
+    assertEquals(BucketIdentifier.getBucketId(orderedValues, 8), deserialized.apply(8));
+    assertEquals(BucketIdentifier.getBucketId(orderedValues, 16), deserialized.apply(16));
   }
 
   private static ResolvedExpression equality(String field, String value, boolean literalFirst) {
