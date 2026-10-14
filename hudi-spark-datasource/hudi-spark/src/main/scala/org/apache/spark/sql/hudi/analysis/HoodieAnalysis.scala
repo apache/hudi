@@ -17,20 +17,22 @@
 
 package org.apache.spark.sql.hudi.analysis
 
-import org.apache.hudi.{HoodieSchemaUtils, HoodieSparkUtils, SparkAdapterSupport}
+import org.apache.hudi.{HoodieFileIndex, HoodieIncrementalFileIndex, HoodieSchemaUtils, HoodieSparkUtils, SparkAdapterSupport}
+import org.apache.hudi.cdc.HoodieCDCFileIndex
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ReflectionUtils.loadClass
 import org.apache.hudi.common.util.ValidationUtils
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable, HoodieCatalogTable}
+import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable, CatalogTableType, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSeq, Expression, GenericInternalRow}
 import org.apache.spark.sql.catalyst.optimizer.ReplaceExpressions
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command._
-import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
+import org.apache.spark.sql.execution.datasources.{CreateTable, FileIndex, HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isMetaField, removeMetaFields}
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{sparkAdapter, MatchCreateIndex, MatchCreateTableLike, MatchDropIndex, MatchInsertIntoStatement, MatchMergeIntoTable, MatchRefreshIndex, MatchShowIndexes, ResolvesToHudiTable}
 import org.apache.spark.sql.hudi.blob.ReadBlobRule
@@ -39,6 +41,7 @@ import org.apache.spark.sql.hudi.command.HoodieLeafRunnableCommand.stripMetaFiel
 import org.apache.spark.sql.hudi.command.InsertIntoHoodieTableCommand.alignQueryOutput
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.hudi.command.procedures.{HoodieProcedures, Procedure, ProcedureArgs}
+import org.apache.spark.sql.types.StructType
 
 import java.util
 
@@ -126,7 +129,8 @@ object HoodieAnalysis extends SparkAdapterSupport {
       // NOTE: By default all commands are converted into corresponding Hudi implementations during
       //       "post-hoc resolution" phase
       session => ResolveImplementations(session),
-      session => HoodiePostAnalysisRule(session)
+      session => HoodiePostAnalysisRule(session),
+      _ => HoodieIncrementalRelationIdentifier
     )
 
     val postHocResolutionClass = "org.apache.spark.sql.hudi.analysis.PostAnalysisRule"
@@ -636,6 +640,73 @@ case class HoodiePostAnalysisRule(sparkSession: SparkSession) extends Rule[Logic
           r
         }
       case _ => plan
+    }
+  }
+}
+
+/**
+ * Stamps a synthesized [[CatalogTable]] (table name, base path, schema) onto path-based
+ * Hudi reads whose underlying file index is incremental or CDC. Without it, lineage and
+ * governance tooling sees `LogicalRelation.catalogTable = None` and falls back to the
+ * relation's class name as the dataset identifier -- useless for tracking which table
+ * an incremental query came from.
+ *
+ * Scope is intentionally limited to incremental and CDC reads:
+ *  - Catalog-registered reads already have `catalogTable` populated.
+ *  - Path-based snapshot reads have a working file-path-based fallback in existing
+ *    lineage tooling; changing their behavior is a separate decision.
+ */
+object HoodieIncrementalRelationIdentifier extends Rule[LogicalPlan] {
+  override def apply(plan: LogicalPlan): LogicalPlan =
+    AnalysisHelper.allowInvokingTransformsInAnalyzer {
+      plan transform {
+        // Type pattern + nested match avoids destructuring `LogicalRelation`, whose
+        // case-class arity differs between Spark 3.x (4 args) and Spark 4.x (5 args). This
+        // rule lives in `hudi-spark`, which is compiled against every supported profile.
+        case lr: LogicalRelation if lr.catalogTable.isEmpty =>
+          lr.relation match {
+            case fsRelation: HadoopFsRelation =>
+              incrementalOrCDCIndex(fsRelation.location)
+                .flatMap(index => buildCatalogTable(index.metaClient, lr.schema))
+                .map(catalogTable => lr.copy(catalogTable = Some(catalogTable)))
+                .getOrElse(lr)
+            case _ => lr
+          }
+      }
+    }
+
+  /**
+   * Narrows a [[FileIndex]] to the incremental/CDC Hudi indexes this rule handles, or
+   * `None` for anything else. Both are [[HoodieFileIndex]] subclasses, so the widening is
+   * checked by the compiler rather than by an `asInstanceOf` that a future third index
+   * type could silently break.
+   */
+  private def incrementalOrCDCIndex(location: FileIndex): Option[HoodieFileIndex] =
+    location match {
+      case index: HoodieIncrementalFileIndex => Some(index)
+      case index: HoodieCDCFileIndex => Some(index)
+      case _ => None
+    }
+
+  private def buildCatalogTable(
+      metaClient: HoodieTableMetaClient,
+      schema: StructType): Option[CatalogTable] = {
+    val tableConfig = metaClient.getTableConfig
+    // `hoodie.table.name` is required for a valid Hudi table, but if it is somehow unset
+    // leave `catalogTable` as `None` -- the pre-existing behavior -- rather than synthesize
+    // a `TableIdentifier(null)` that would surface downstream as a garbage dataset name.
+    Option(tableConfig.getTableName).filter(_.nonEmpty).map { tableName =>
+      // Falls back to Spark's `default` database when `hoodie.database.name` is unset --
+      // matches existing path-based DataFrame read behavior.
+      val dbName = Option(tableConfig.getDatabaseName).filter(_.nonEmpty)
+      CatalogTable(
+        identifier = TableIdentifier(tableName, dbName),
+        tableType = CatalogTableType.EXTERNAL,
+        storage = CatalogStorageFormat.empty.copy(
+          locationUri = Some(metaClient.getBasePath.toUri)),
+        schema = schema,
+        provider = Some("hudi")
+      )
     }
   }
 }
