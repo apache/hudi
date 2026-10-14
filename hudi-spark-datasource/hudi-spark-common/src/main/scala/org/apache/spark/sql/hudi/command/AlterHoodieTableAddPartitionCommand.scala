@@ -73,10 +73,14 @@ case class AlterHoodieTableAddPartitionCommand(
           throw new HoodieAnalysisException(s"Partition metadata already exists for path: $fullPartitionPath")
         }
         None
-      } else Some(new HoodiePartitionMetadata(storage, HoodieTimeline.INIT_INSTANT_TS, basePath, fullPartitionPath, format))
+      } else {
+        Some((new HoodiePartitionMetadata(storage, HoodieTimeline.INIT_INSTANT_TS, basePath, fullPartitionPath, format), partitionPath))
+      }
       (metadata, CatalogTablePartition(spec, table.storage.copy(locationUri = Some(fullPartitionPath.toUri))))
     }.unzip
-    partitionMetadata.flatten.foreach(_.trySave)
+    partitionMetadata.flatten.foreach { case (metadata, relativePartitionPath) =>
+      metadata.trySave(relativePartitionPath)
+    }
 
     // Sync new partitions in batch, enable ignoreIfExists to be silent for existing partitions.
     val batchSize = sparkSession.sparkContext.conf.getInt("spark.sql.addPartitionInBatch.size", 100)

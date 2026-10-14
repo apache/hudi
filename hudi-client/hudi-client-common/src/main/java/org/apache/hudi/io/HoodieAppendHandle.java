@@ -272,7 +272,7 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
           new StoragePath(config.getBasePath()),
           FSUtils.constructAbsolutePath(config.getBasePath(), partitionPath),
           hoodieTable.getPartitionMetafileFormat());
-      partitionMetadata.trySave();
+      partitionMetadata.trySave(partitionPath);
 
       String logInstantTime = config.getWriteVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)
           ? getInstantTimeForLogFile(record) : deltaWriteStat.getPrevCommit();

@@ -20,6 +20,7 @@ package org.apache.hudi.connect.transaction;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.connect.ControlMessage;
 import org.apache.hudi.connect.kafka.KafkaControlAgent;
 import org.apache.hudi.connect.utils.KafkaConnectUtils;
@@ -42,6 +43,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -63,6 +65,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
   private static final Long START_COMMIT_INIT_DELAY_MS = 100L;
   private static final Long RESTART_COMMIT_DELAY_MS = 500L;
   private static final int COORDINATOR_EVENT_LOOP_TIMEOUT_MS = 1000;
+  private static final int COORDINATOR_EVENT_LOOP_SHUTDOWN_TIMEOUT_MS = 5000;
 
   private final KafkaConnectConfigs configs;
   @Getter
@@ -70,9 +73,11 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
   private final KafkaControlAgent kafkaControlClient;
   private final ConnectTransactionServices transactionServices;
   private final KafkaPartitionProvider partitionProvider;
+  private final int eventLoopShutdownTimeoutMs;
   private final Map<Integer, List<WriteStatus>> partitionsWriteStatusReceived;
   private final Map<Integer, Long> currentConsumedKafkaOffsets;
   private final AtomicBoolean hasStarted = new AtomicBoolean(false);
+  private final AtomicBoolean transactionServicesClosed = new AtomicBoolean(false);
   private final BlockingQueue<CoordinatorEvent> events;
   private final ExecutorService executorService;
   private final ScheduledExecutorService scheduler;
@@ -81,6 +86,8 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
   private Map<Integer, Long> globalCommittedKafkaOffsets;
   private State currentState;
   private int numPartitions;
+  private boolean deregistered;
+  private boolean shutdownInitiated;
 
   public ConnectTransactionCoordinator(KafkaConnectConfigs configs,
                                        TopicPartition partition,
@@ -97,11 +104,23 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
                                        KafkaControlAgent kafkaControlClient,
                                        ConnectTransactionServices transactionServices,
                                        KafkaPartitionProvider partitionProvider) {
+    this(configs, partition, kafkaControlClient, transactionServices, partitionProvider,
+        COORDINATOR_EVENT_LOOP_SHUTDOWN_TIMEOUT_MS);
+  }
+
+  @VisibleForTesting
+  ConnectTransactionCoordinator(KafkaConnectConfigs configs,
+                                TopicPartition partition,
+                                KafkaControlAgent kafkaControlClient,
+                                ConnectTransactionServices transactionServices,
+                                KafkaPartitionProvider partitionProvider,
+                                int eventLoopShutdownTimeoutMs) {
     this.configs = configs;
     this.partition = partition;
     this.kafkaControlClient = kafkaControlClient;
     this.transactionServices = transactionServices;
     this.partitionProvider = partitionProvider;
+    this.eventLoopShutdownTimeoutMs = eventLoopShutdownTimeoutMs;
     this.events = new LinkedBlockingQueue<>();
     scheduler = Executors.newSingleThreadScheduledExecutor();
     executorService = Executors.newSingleThreadExecutor();
@@ -131,25 +150,20 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
   }
 
   @Override
-  public void stop() {
-    kafkaControlClient.deregisterTransactionCoordinator(this);
-    scheduler.shutdownNow();
+  public synchronized void stop() {
     hasStarted.set(false);
-    if (executorService != null) {
-      boolean terminated = false;
-      try {
-        log.info("Shutting down executor service.");
-        executorService.shutdown();
-        log.info("Awaiting termination.");
-        terminated = executorService.awaitTermination(100, TimeUnit.MILLISECONDS);
-      } catch (InterruptedException e) {
-        // ignored
+    try {
+      if (!deregistered) {
+        kafkaControlClient.deregisterTransactionCoordinator(this);
+        deregistered = true;
       }
-
-      if (!terminated) {
-        log.warn(
-            "Unclean Kafka Control Manager executor service shutdown ");
-        executorService.shutdownNow();
+    } finally {
+      if (!shutdownInitiated) {
+        shutdownInitiated = true;
+        shutdownEventLoop();
+      }
+      if (executorService.isTerminated()) {
+        closeTransactionServices();
       }
     }
   }
@@ -173,14 +187,54 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
 
   @Override
   public void run() {
-    while (true) {
-      try {
-        CoordinatorEvent event = events.poll(COORDINATOR_EVENT_LOOP_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-        if (event != null) {
-          processCoordinatorEvent(event);
+    try {
+      while (hasStarted.get()) {
+        try {
+          CoordinatorEvent event = events.poll(COORDINATOR_EVENT_LOOP_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+          if (event != null && hasStarted.get()) {
+            processCoordinatorEvent(event);
+          }
+        } catch (InterruptedException exception) {
+          Thread.currentThread().interrupt();
+          log.debug("Transaction coordinator event loop interrupted for topic {} partition {}",
+              partition.topic(), partition.partition());
+          break;
         }
-      } catch (InterruptedException exception) {
-        log.warn("Error received while polling the event loop in Partition Coordinator", exception);
+      }
+    } finally {
+      closeTransactionServices();
+    }
+  }
+
+  @VisibleForTesting
+  boolean isEventLoopTerminated() {
+    return executorService.isTerminated();
+  }
+
+  private void shutdownEventLoop() {
+    scheduler.shutdownNow();
+    events.clear();
+    executorService.shutdownNow();
+    try {
+      if (!executorService.awaitTermination(eventLoopShutdownTimeoutMs, TimeUnit.MILLISECONDS)) {
+        log.warn("Transaction coordinator event loop did not terminate within {} ms for topic {} partition {}",
+            eventLoopShutdownTimeoutMs, partition.topic(), partition.partition());
+      }
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      log.warn("Interrupted while waiting for transaction coordinator event loop to terminate for topic {} partition {}",
+          partition.topic(), partition.partition());
+    }
+  }
+
+  private void closeTransactionServices() {
+    if (transactionServicesClosed.compareAndSet(false, true)) {
+      try {
+        transactionServices.close();
+      } catch (RuntimeException e) {
+        transactionServicesClosed.set(false);
+        log.warn("Failed to close transaction services for topic {} partition {}",
+            partition.topic(), partition.partition(), e);
       }
     }
   }
@@ -190,9 +244,22 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
   }
 
   private void submitEvent(CoordinatorEvent event, long delay, TimeUnit unit) {
-    scheduler.schedule(() -> {
-      events.add(event);
-    }, delay, unit);
+    if (!hasStarted.get()) {
+      return;
+    }
+    try {
+      scheduler.schedule(() -> {
+        if (hasStarted.get()) {
+          events.add(event);
+        }
+      }, delay, unit);
+    } catch (RejectedExecutionException e) {
+      if (hasStarted.get()) {
+        throw e;
+      }
+      log.debug("Ignoring coordinator event submitted during shutdown for topic {} partition {}",
+          partition.topic(), partition.partition());
+    }
   }
 
   private void processCoordinatorEvent(CoordinatorEvent event) {

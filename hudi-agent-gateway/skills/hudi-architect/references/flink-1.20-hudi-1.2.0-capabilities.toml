@@ -1,0 +1,418 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to you under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+schema_version = 3
+baseline_id = "hudi-1.2.0-flink-1.20"
+validation_surface = "initial-flink-sql-sink"
+
+[hudi]
+version = "1.2.0"
+source_revision = "f05c83f2b97732de7a558ff9b26959e1139c05f5"
+release_ref = "release-1.2.0"
+
+[flink]
+compatibility_line = "1.20"
+fixture_version = "1.20.1"
+
+[fixture_artifacts]
+hudi_bundle = "org.apache.hudi:hudi-flink1.20-bundle:1.2.0"
+flink_version = "1.20.1"
+java_version = 11
+
+[executable_contract]
+contract_schema = 1
+table_lifecycle = "new"
+writer_model = "single_writer"
+external_catalog = false
+mutability = "append_only"
+source_changelog_mode = "INSERT_ONLY"
+execution_mode = "STREAMING"
+require_checkpointing = true
+allow_record_key_modes = ["stable_key", "auto_key"]
+allow_replay_behaviors = ["cannot_occur", "duplicates_acceptable"]
+
+[mutable_executable_contract]
+contract_schema = 2
+table_lifecycle = "new"
+writer_model = "single_writer"
+external_catalog = false
+mutability = "mutable"
+source_changelog_mode = "UPSERT"
+execution_mode = "STREAMING"
+require_checkpointing = true
+record_key_mode = "stable_key"
+allow_replay_behaviors = ["cannot_occur", "duplicates_acceptable", "must_collapse"]
+ordering_mode = "event_time"
+ordering_field_types = ["BIGINT", "TIMESTAMP"]
+reserved_ordering_field_values = ["no_precombine"]
+allow_emits_deletes = [false, true]
+delete_payload_when_deletes = "FULL_ROW"
+delete_payload_without_deletes = "NOT_APPLICABLE"
+partition_fields_mutable = false
+
+# The executable paths intentionally validate a bounded scalar physical-schema surface. Complex,
+# computed, metadata, and watermark columns remain unverified rather than being guessed.
+[physical_types]
+simple = [
+  "BIGINT",
+  "BOOLEAN",
+  "BYTES",
+  "DATE",
+  "DOUBLE",
+  "FLOAT",
+  "INT",
+  "INTEGER",
+  "SMALLINT",
+  "STRING",
+  "TINYINT",
+]
+parameterized = [
+  "BINARY",
+  "CHAR",
+  "DECIMAL",
+  "TIME",
+  "TIMESTAMP",
+  "TIMESTAMP_LTZ",
+  "VARBINARY",
+  "VARCHAR",
+]
+
+[physical_schema_constraints]
+binary_routing_types = ["BINARY", "BYTES", "VARBINARY"]
+field_name_pattern = "^[A-Za-z_][A-Za-z0-9_]*$"
+reserved_target_field_names = [
+  "_hoodie_commit_seqno",
+  "_hoodie_commit_time",
+  "_hoodie_file_name",
+  "_hoodie_operation",
+  "_hoodie_partition_path",
+  "_hoodie_record_key",
+]
+temporal_precision_min = 0
+temporal_precision_max = 6
+temporal_types = ["TIME", "TIMESTAMP", "TIMESTAMP_LTZ"]
+
+[runtime_constraints]
+checkpoint_interval_min_ms = 1000
+flink_checkpoint_interval_min_ms = 10
+
+[[source_anchors]]
+id = "root_pom"
+path = "pom.xml"
+sha256 = "d6685c98ff28b4881018086927eb33b12535d288f2f183d7faff7e3eba087810"
+purpose = "Flink 1.20.1 fixture version and flink1.20 build profile"
+
+[[source_anchors]]
+id = "flink_options"
+path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/configuration/FlinkOptions.java"
+sha256 = "090f69445ce8baa700b06356c0165a7d0dc35cf57c12052d91813af0427d2f71"
+purpose = "Flink DynamicTable option keys and defaults"
+
+[[source_anchors]]
+id = "hoodie_schema_converter"
+path = "hudi-client/hudi-flink-client/src/main/java/org/apache/hudi/util/HoodieSchemaConverter.java"
+sha256 = "9fc500632bd250be48b0c9fa08faff7eb6cdb1ce9ad5ecce03a2532a69952e72"
+purpose = "Flink logical-type conversion limits and Avro-backed physical field construction"
+
+[[source_anchors]]
+id = "hoodie_record"
+path = "hudi-common/src/main/java/org/apache/hudi/common/model/HoodieRecord.java"
+sha256 = "11587947231d5a5727fea25169c986a20a3079d7f62787d3efe44c1f6e3f066e"
+purpose = "Canonical Hudi metadata field names reserved by the write path"
+
+[[source_anchors]]
+id = "flink_data_type_utils"
+path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/util/DataTypeUtils.java"
+sha256 = "62e99e81fede5fdf1e6b50ce81553812f4149502e821db300e227c03dce2c240"
+purpose = "Writer-side prepending of Hudi metadata fields to the Flink row type"
+
+[[source_anchors]]
+id = "options_resolver"
+path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/configuration/OptionsResolver.java"
+sha256 = "1a63ef88bbdf84cbcebb92f402557c21b6f84bdd0112726792ce22da635ad766"
+purpose = "Effective append-mode predicate and no-precombine ordering sentinel resolution"
+
+[[source_anchors]]
+id = "table_factory"
+path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/table/HoodieTableFactory.java"
+sha256 = "a029bd86cf1f2796c99c5639a69a495cf5fd16f06201f139023ecef93d1e678b"
+purpose = "Sink factory sanity checks and their append-mode boundary"
+
+[[source_anchors]]
+id = "catalog_options"
+path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/table/catalog/CatalogOptions.java"
+sha256 = "a2b3f87ad44e1475a6f4e06dfd7246436f035af256f28a4ebe2c622672a24aef"
+purpose = "Flink catalog option keys"
+
+[[source_anchors]]
+id = "key_generator_options"
+path = "hudi-common/src/main/java/org/apache/hudi/keygen/constant/KeyGeneratorOptions.java"
+sha256 = "2686e25676b4d59f8d5a30acb52326aeb74016ed35bb8e73b38757a36521b2cd"
+purpose = "Canonical record-key and partition-path option keys"
+
+[[source_anchors]]
+id = "table_factory_tests"
+path = "hudi-flink-datasource/hudi-flink/src/test/java/org/apache/hudi/table/TestHoodieTableFactory.java"
+sha256 = "ef0ae3752cc8ed63f9b6ae83a4aa34d61b30bc163282a658a2d52135154ff15a"
+purpose = "Release behavior exercised by the existing factory fixtures"
+
+[[source_anchors]]
+id = "table_sink"
+path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/table/HoodieTableSink.java"
+sha256 = "59c36ec6c97524386c4ce0fb7c70960816a6cfc9dee89e82de86f401f28e1087"
+purpose = "Sink changelog-mode negotiation for upsert writes"
+
+[[source_anchors]]
+id = "changelog_modes"
+path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/util/ChangelogModes.java"
+sha256 = "ca48d1fbc3cd7e1f6bd7009f8c1cf93d130284cba40a47b245e9002f1733797a"
+purpose = "Exact INSERT, UPDATE_AFTER, and DELETE upsert changelog contract"
+
+[[source_anchors]]
+id = "index_backend_factory"
+path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/sink/partitioner/index/IndexBackendFactory.java"
+sha256 = "57cc58e85475ae32c35da57e9d5df7e8ac040edfd26cccb8859407a25233b722"
+purpose = "FLINK_STATE backend and zero-TTL state behavior"
+
+[[source_anchors]]
+id = "pipelines"
+path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/sink/utils/Pipelines.java"
+sha256 = "9278096f0894a0ad34be09206ee06d317fda4185101833018a314e87ade5e262"
+purpose = "Index bootstrap insertion into the Flink write pipeline"
+
+[[source_anchors]]
+id = "bootstrap_operator"
+path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/sink/bootstrap/BootstrapOperator.java"
+sha256 = "67ea9f1dede0cfe81252613bf158d5fa64dec8e3040f56d50aa6795d7b501e1d"
+purpose = "Existing key and file-location recovery into Flink state"
+
+[[source_anchors]]
+id = "bucket_assign_function"
+path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/sink/partitioner/BucketAssignFunction.java"
+sha256 = "89c36a6c64fb4524505b0ee4c1ab7de68b4a2b9343df659bbc873ecc3b259cad"
+purpose = "Global-index record routing and partition-change behavior"
+
+[[source_anchors]]
+id = "streamer_util"
+path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/util/StreamerUtil.java"
+sha256 = "c771e137ebcd45c94a941857a246dc741e1dde2c0e0158900fd48fe8884f83e2"
+purpose = "Write-side record merge mode inference and table-property persistence"
+
+# This is an allowlist for the bounded executable sink paths, not a claim that it
+# enumerates every option available in Hudi 1.2.0.
+[[verified_options]]
+key = "changelog.enabled"
+value_type = "boolean"
+source_anchors = ["flink_options", "table_sink", "changelog_modes"]
+source_symbol = "CHANGELOG_ENABLED"
+
+[[verified_options]]
+key = "hoodie.datasource.write.partitionpath.field"
+value_type = "string"
+source_anchors = ["flink_options", "key_generator_options"]
+source_symbol = "PARTITION_PATH_FIELD"
+
+[[verified_options]]
+key = "hoodie.datasource.write.recordkey.field"
+value_type = "string"
+source_anchors = ["flink_options", "key_generator_options"]
+source_symbol = "RECORD_KEY_FIELD"
+
+[[verified_options]]
+key = "hoodie.write.record.merge.mode"
+value_type = "string"
+source_anchors = ["flink_options", "streamer_util"]
+source_symbol = "RECORD_MERGE_MODE"
+
+[[verified_options]]
+key = "index.bootstrap.enabled"
+value_type = "boolean"
+source_anchors = ["flink_options", "pipelines", "bootstrap_operator"]
+source_symbol = "INDEX_BOOTSTRAP_ENABLED"
+
+[[verified_options]]
+key = "index.global.enabled"
+value_type = "boolean"
+source_anchors = ["flink_options", "bucket_assign_function"]
+source_symbol = "INDEX_GLOBAL_ENABLED"
+
+[[verified_options]]
+key = "index.state.ttl"
+value_type = "double"
+source_anchors = ["flink_options", "index_backend_factory"]
+source_symbol = "INDEX_STATE_TTL"
+
+[[verified_options]]
+key = "index.type"
+value_type = "string"
+source_anchors = ["flink_options", "index_backend_factory"]
+source_symbol = "INDEX_TYPE"
+
+[[verified_options]]
+key = "ordering.fields"
+value_type = "string"
+source_anchors = ["flink_options", "options_resolver"]
+source_symbol = "ORDERING_FIELDS"
+
+[[verified_options]]
+key = "path"
+value_type = "string"
+source_anchors = ["flink_options"]
+source_symbol = "PATH"
+
+[[verified_options]]
+key = "table.type"
+value_type = "string"
+source_anchors = ["flink_options"]
+source_symbol = "TABLE_TYPE"
+
+[[verified_options]]
+key = "write.insert.cluster"
+value_type = "boolean"
+source_anchors = ["flink_options", "options_resolver"]
+source_symbol = "INSERT_CLUSTER"
+
+[[verified_options]]
+key = "write.operation"
+value_type = "string"
+source_anchors = ["flink_options", "options_resolver"]
+source_symbol = "OPERATION"
+
+[[required_effective_settings]]
+key = "table.type"
+value = "COPY_ON_WRITE"
+applies_to = "pr2-append-only-cow"
+
+[[required_effective_settings]]
+key = "write.insert.cluster"
+value = false
+applies_to = "pr2-append-only-cow"
+
+[[required_effective_settings]]
+key = "write.operation"
+value = "insert"
+applies_to = "pr2-append-only-cow"
+
+[[required_effective_settings]]
+key = "changelog.enabled"
+value = false
+applies_to = "pr3-mutable-cow"
+
+[[required_effective_settings]]
+key = "hoodie.write.record.merge.mode"
+value = "EVENT_TIME_ORDERING"
+applies_to = "pr3-mutable-cow"
+
+[[required_effective_settings]]
+key = "index.bootstrap.enabled"
+value = true
+applies_to = "pr3-mutable-cow"
+
+[[required_effective_settings]]
+key = "index.global.enabled"
+value = true
+applies_to = "pr3-mutable-cow"
+
+[[required_effective_settings]]
+key = "index.state.ttl"
+value = 0.0
+applies_to = "pr3-mutable-cow"
+
+[[required_effective_settings]]
+key = "index.type"
+value = "FLINK_STATE"
+applies_to = "pr3-mutable-cow"
+
+[[required_effective_settings]]
+key = "table.type"
+value = "COPY_ON_WRITE"
+applies_to = "pr3-mutable-cow"
+
+[[required_effective_settings]]
+key = "write.operation"
+value = "upsert"
+applies_to = "pr3-mutable-cow"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_BINARY_ROUTING_FIELD_UNSUPPORTED"
+requirement = "Reject binary record-key and partition fields whose Hudi 1.2.0 routing strings depend on Java object identity."
+python_test = "test_pr2_rejects_binary_routing_fields"
+java_test = "testPinnedBinaryValuesUseObjectIdentityForRouting"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_RECORD_KEY_FIELD_MISSING"
+requirement = "Reject an explicitly configured record-key field that is absent from the physical schema, including append mode."
+python_test = "test_pr2_rejects_record_key_missing_from_append_schema"
+java_test = "testPinnedFactorySkipsMissingRecordKeyCheckInAppendMode"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_APPEND_MODE_CLUSTERING_ENABLED"
+requirement = "Reject COW insert output whose effective write.insert.cluster value is not false."
+python_test = "test_pr2_rejects_insert_clustering_override"
+java_test = "testPinnedAppendModeRequiresInsertClusteringDisabled"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_SOURCE_CHANGELOG_NOT_APPEND_ONLY"
+requirement = "Validate generated INSERT INTO with a declared source schema and append-only changelog contract through a planner fixture."
+python_test = "test_pr2_rejects_non_append_source_changelog"
+java_test = "testStableKeySinkAndInsertPlan"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_TEMPORAL_PRECISION_UNSUPPORTED"
+requirement = "Reject TIME, TIMESTAMP, and TIMESTAMP_LTZ precision above the Hudi 1.2.0 connector limit of 6."
+python_test = "test_pr2_enforces_pinned_temporal_precision_limits"
+java_test = "testPinnedPlannerRejectsTemporalPrecisionAboveSix"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_SCHEMA_FIELD_NAME_UNSUPPORTED"
+requirement = "Reject physical field names that cannot be represented by the Avro-backed Hudi sink schema."
+python_test = "test_pr2_rejects_non_avro_physical_field_names"
+java_test = "testPinnedPlannerRejectsNonAvroFieldName"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_HUDI_METADATA_FIELD_CONFLICT"
+requirement = "Reject target physical field names reserved for Hudi metadata before the append writer prepends them."
+python_test = "test_pr2_rejects_reserved_hudi_metadata_field_names"
+java_test = "testPinnedWriterRejectsReservedHudiMetadataField"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_CHECKPOINT_INTERVAL_UNSUPPORTED"
+requirement = "Reject checkpoint intervals below the 1000 ms Architect safety floor while preserving the pinned Flink 10 ms runtime boundary as evidence."
+python_test = "test_pr2_enforces_checkpoint_interval_safety_floor"
+java_test = "testPinnedRuntimeCheckpointIntervalBoundary"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_MUTABLE_SOURCE_CHANGELOG_UNSUPPORTED"
+requirement = "Require a normalized UPSERT source and verify the Hudi sink consumes INSERT, UPDATE_AFTER, and DELETE without UPDATE_BEFORE."
+python_test = "test_pr3_rejects_unsupported_source_changelog"
+java_test = "testMutableCowSinkAndUpsertPlan"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_MUTABLE_ORDERING_FIELD_INVALID"
+requirement = "Require one non-null BIGINT or TIMESTAMP(p<=6) event-time ordering field and reject Hudi's no_precombine sentinel."
+python_test = "test_pr3_rejects_invalid_ordering_fields"
+java_test = "testPinnedMutableOrderingConfiguration"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_MUTABLE_INDEX_CONFIGURATION_UNSUPPORTED"
+requirement = "Pin global FLINK_STATE with no state expiry for replay-safe mutable routing."
+python_test = "test_pr3_rejects_unsafe_index_configuration"
+java_test = "testPinnedMutableIndexConfiguration"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_MUTABLE_INDEX_BOOTSTRAP_REQUIRED"
+requirement = "Require index bootstrap so a cold restart does not treat existing keys as new."
+python_test = "test_pr3_requires_index_bootstrap"
+java_test = "testPinnedMutableIndexBootstrapConfiguration"

@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
+import org.apache.hudi.common.table.read.TableState;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
@@ -105,7 +106,7 @@ public class TestFileGroupRecordBufferLoader extends BaseTestFileGroupRecordBuff
 
     HoodieFileGroupRecordBuffer fileGroupRecordBuffer = (HoodieFileGroupRecordBuffer) fileGroupRecordBufferLoader
         .getRecordBuffer(readerContext, storage, inputSplit, Collections.singletonList("ts"),
-            mockMetaClient, new TypedProperties(), readerParameters, readStats, fileGroupUpdateCallback).getLeft();
+            TableState.fromMetaClient(mockMetaClient), new TypedProperties(), readerParameters, readStats, fileGroupUpdateCallback).getLeft();
 
     switch (fileGroupRecordBufferType) {
       case "KeyBasedFileGroupRecordBuffer":

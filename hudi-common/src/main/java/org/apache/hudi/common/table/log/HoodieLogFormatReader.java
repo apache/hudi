@@ -22,6 +22,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.internal.InternalSchema;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.HoodieRecordUtils;
@@ -46,7 +47,8 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   private final HoodieStorage storage;
   private final HoodieSchema readerSchema;
   private final InternalSchema internalSchema;
-  private final HoodieTableMetaClient metaClient;
+  private final HoodieTableConfig tableConfig;
+  private final StoragePath basePath;
   private final String recordKeyField;
   private final boolean enableInlineReading;
   private final int bufferSize;
@@ -54,9 +56,17 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   HoodieLogFormatReader(HoodieStorage storage, HoodieTableMetaClient metaClient, List<HoodieLogFile> logFiles,
                         HoodieSchema readerSchema, boolean reverseLogReader, int bufferSize, boolean enableRecordLookups,
                         String recordKeyField, InternalSchema internalSchema) throws IOException {
+    this(storage, metaClient == null ? null : metaClient.getTableConfig(), metaClient == null ? null : metaClient.getBasePath(),
+        logFiles, readerSchema, reverseLogReader, bufferSize, enableRecordLookups, recordKeyField, internalSchema);
+  }
+
+  HoodieLogFormatReader(HoodieStorage storage, HoodieTableConfig tableConfig, StoragePath basePath, List<HoodieLogFile> logFiles,
+                        HoodieSchema readerSchema, boolean reverseLogReader, int bufferSize, boolean enableRecordLookups,
+                        String recordKeyField, InternalSchema internalSchema) throws IOException {
     this.logFiles = logFiles;
     this.storage = storage;
-    this.metaClient = metaClient;
+    this.tableConfig = tableConfig;
+    this.basePath = basePath;
     this.readerSchema = readerSchema;
     this.bufferSize = bufferSize;
     this.recordKeyField = recordKeyField;
@@ -126,14 +136,14 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
 
   private HoodieLogFormat.Reader createReader(HoodieLogFile logFile, boolean reverseLogReader) throws IOException {
     if (FSUtils.isNativeLogFile(logFile.getFileName())) {
-      if (metaClient == null) {
-        throw new HoodieNotSupportedException("Native log files require HoodieTableMetaClient");
+      if (tableConfig == null) {
+        throw new HoodieNotSupportedException("Native log files require the table config");
       }
       List<String> orderingFieldNames =
-          HoodieRecordUtils.getOrderingFieldNames(metaClient.getTableConfig().getRecordMergeMode(), metaClient);
+          HoodieRecordUtils.getOrderingFieldNames(tableConfig.getRecordMergeMode(), tableConfig);
       return new HoodieNativeLogFileReader(storage, logFile, readerSchema, internalSchema,
           orderingFieldNames,
-          getRelativePartitionPath(logFile), metaClient.getTableConfig().getProps());
+          getRelativePartitionPath(logFile), tableConfig.getProps());
     }
     return new HoodieLogFileReader(storage, logFile, readerSchema, bufferSize, reverseLogReader,
         enableInlineReading, recordKeyField, internalSchema);
@@ -141,6 +151,6 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
 
   private String getRelativePartitionPath(HoodieLogFile logFile) {
     StoragePath logFileParent = logFile.getPath().getParent();
-    return FSUtils.getRelativePartitionPath(metaClient.getBasePath(), logFileParent);
+    return FSUtils.getRelativePartitionPath(basePath, logFileParent);
   }
 }

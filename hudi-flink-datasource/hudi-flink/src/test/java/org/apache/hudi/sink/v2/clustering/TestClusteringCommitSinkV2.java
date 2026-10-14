@@ -47,15 +47,19 @@ import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
 import org.apache.flink.table.data.RowData;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.MockedStatic;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
@@ -70,6 +74,7 @@ class TestClusteringCommitSinkV2 {
 
   private Configuration conf;
   private HoodieFlinkWriteClient writeClient;
+  private HoodieFlinkWriteClient cleaningClient;
   private HoodieFlinkTable table;
   private HoodieTableMetaClient metaClient;
   private HoodieActiveTimeline activeTimeline;
@@ -82,6 +87,7 @@ class TestClusteringCommitSinkV2 {
     conf = new Configuration();
     conf.set(FlinkOptions.CLEAN_ASYNC_ENABLED, false);
     writeClient = mock(HoodieFlinkWriteClient.class);
+    cleaningClient = mock(HoodieFlinkWriteClient.class);
     table = mock(HoodieFlinkTable.class);
     metaClient = mock(HoodieTableMetaClient.class);
     activeTimeline = mock(HoodieActiveTimeline.class);
@@ -170,8 +176,10 @@ class TestClusteringCommitSinkV2 {
     }
   }
 
-  @Test
-  void testCommitSuccessfulClusteringAndCleanInline() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void testCommitSuccessfulClusteringAndCloseClientOnce(boolean asyncCleaning) throws Exception {
+    conf.set(FlinkOptions.CLEAN_ASYNC_ENABLED, asyncCleaning);
     HoodieClusteringPlan plan = planWithGroups(1);
     WriteStatus status = writeStatus("partition", "new-file", 0);
     stubWriteConfig();
@@ -190,7 +198,20 @@ class TestClusteringCommitSinkV2 {
     verify(metaClient).reloadActiveTimeline();
     verify(writeClient).completeTableService(
         eq(TableServiceType.CLUSTER), any(HoodieCommitMetadata.class), same(table), eq(INSTANT));
-    verify(writeClient).clean();
+    verify(writeClient, times(asyncCleaning ? 0 : 1)).clean();
+    verify(writeClient).close();
+    verify(cleaningClient, times(asyncCleaning ? 1 : 0)).clean();
+    verify(cleaningClient, times(asyncCleaning ? 1 : 0)).close();
+  }
+
+  @Test
+  void testClosesClusteringClientWhenCleaningClientCloseFails() throws Exception {
+    conf.set(FlinkOptions.CLEAN_ASYNC_ENABLED, true);
+    doThrow(new RuntimeException("expected")).when(cleaningClient).close();
+    OneInputStreamOperatorTestHarness<ClusteringCommitEvent, RowData> harness = openHarness();
+    assertThrows(Exception.class, harness::close);
+    verify(cleaningClient).close();
+    verify(writeClient).close();
   }
 
   private OneInputStreamOperatorTestHarness<ClusteringCommitEvent, RowData> openHarness() throws Exception {
@@ -199,9 +220,14 @@ class TestClusteringCommitSinkV2 {
     OneInputStreamOperatorTestHarness<ClusteringCommitEvent, RowData> harness =
         new OneInputStreamOperatorTestHarness<>(operator, 1, 1, 0);
     try (MockedStatic<FlinkWriteClients> writeClients = mockStatic(FlinkWriteClients.class)) {
-      writeClients.when(() -> FlinkWriteClients.createWriteClient(
-          eq(conf), any())).thenReturn(writeClient);
+      if (conf.get(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
+        writeClients.when(() -> FlinkWriteClients.createWriteClient(eq(conf), any())).thenReturn(cleaningClient, writeClient);
+      } else {
+        writeClients.when(() -> FlinkWriteClients.createWriteClient(eq(conf), any())).thenReturn(writeClient);
+      }
       harness.open();
+      writeClients.verify(() -> FlinkWriteClients.createWriteClient(eq(conf), any()),
+          times(conf.get(FlinkOptions.CLEAN_ASYNC_ENABLED) ? 2 : 1));
     }
     return harness;
   }

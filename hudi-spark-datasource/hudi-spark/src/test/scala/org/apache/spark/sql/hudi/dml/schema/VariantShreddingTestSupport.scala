@@ -657,11 +657,18 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
    * `v:struct<0:bigint>`; one that reaches the reader whole shows as `v:variant`. Where
    * [[variantProjectionPushedIntoScan]] says whether the rule fired, this pins what it pushed.
    */
-  protected def scanReadSchema(sql: String): String = {
-    val scans = fileScansOf(sql)
-    assert(scans.size == 1, s"expected a single file scan in the plan of: $sql")
-    scans.head.requiredSchema.catalogString
-  }
+  protected def scanReadSchema(sql: String): String =
+    singleFileScanOf(sql).requiredSchema.catalogString
+
+  /**
+   * The PushedFilters of the one file scan in the physical plan of `sql`, as its explain line
+   * prints them. A predicate on a variant that PushVariantIntoScan rewrote shows there as a nested
+   * filter on the projection struct's ordinal-named member, e.g. GreaterThan(v.`0`,5). These are
+   * the filters Spark hands the reader, not the ones a file can serve - ParquetFilters drops a
+   * name that is no parquet leaf.
+   */
+  protected def scanPushedFilters(sql: String): String =
+    singleFileScanOf(sql).metadata.getOrElse("PushedFilters", "")
 
   /**
    * The file scans in the physical plan of `sql`. `sparkPlan` rather than `executedPlan`: under
@@ -671,6 +678,13 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
     val scans = spark.sql(sql).queryExecution.sparkPlan.collect { case scan: FileSourceScanExec => scan }
     assert(scans.nonEmpty, s"expected a file scan in the plan of: $sql")
     scans
+  }
+
+  /** The one file scan in the physical plan of `sql`. */
+  private def singleFileScanOf(sql: String): FileSourceScanExec = {
+    val scans = fileScansOf(sql)
+    assert(scans.size == 1, s"expected a single file scan in the plan of: $sql")
+    scans.head
   }
 
   // ---------------------------------------------------------------------------------------------

@@ -20,7 +20,12 @@ package org.apache.hudi.sink.v2;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.sink.compact.handler.CleanHandler;
+import org.apache.hudi.sink.compact.handler.DefaultCleanHandler;
+import org.apache.hudi.sink.compact.handler.TableServiceHandlerFactory;
 import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.operators.ProcessOperator;
@@ -28,21 +33,23 @@ import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
 import org.apache.flink.table.data.RowData;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
+import org.mockito.MockedConstruction;
 import org.mockito.MockedStatic;
 
-import java.util.concurrent.Callable;
-import java.util.concurrent.TimeUnit;
-
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 /** Tests checkpoint-driven cleaning in {@link CleanFunctionV2}. */
 class TestCleanFunctionV2 {
@@ -52,46 +59,54 @@ class TestCleanFunctionV2 {
     Configuration conf = new Configuration();
     conf.set(FlinkOptions.CLEAN_ASYNC_ENABLED, true);
     HoodieFlinkWriteClient writeClient = mock(HoodieFlinkWriteClient.class);
-    CleanFunctionV2<String> function = new CleanFunctionV2<>(conf);
+    CleanHandler cleanHandler = mock(CleanHandler.class);
 
-    try (OneInputStreamOperatorTestHarness<String, RowData> harness =
-             openHarness(conf, function, writeClient)) {
-      // Opening waits for any cleaning left by a previous job attempt.
-      verify(writeClient, timeout(5000)).clean();
-      assertTrue(waitUntil(() -> !function.isCleaning));
-
-      harness.processElement(new StreamRecord<>("ignored"));
-      assertTrue(harness.getOutput().isEmpty());
-
-      harness.snapshot(1, 1);
-      verify(writeClient).startAsyncCleaning();
-      assertTrue(function.isCleaning);
-
-      harness.notifyOfCompletedCheckpoint(1);
-      verify(writeClient, timeout(5000)).waitForCleaningFinish();
-      assertTrue(waitUntil(() -> !function.isCleaning));
+    try (MockedStatic<TableServiceHandlerFactory> factory = mockStatic(TableServiceHandlerFactory.class)) {
+      factory.when(() -> TableServiceHandlerFactory.createCleanHandler(conf, writeClient)).thenReturn(cleanHandler);
+      try (OneInputStreamOperatorTestHarness<String, RowData> harness = openHarness(conf, writeClient)) {
+        harness.processElement(new StreamRecord<>("ignored"));
+        assertTrue(harness.getOutput().isEmpty());
+        harness.snapshot(1, 1);
+        harness.notifyOfCompletedCheckpoint(1);
+      }
     }
 
-    verify(writeClient).close();
+    InOrder order = inOrder(cleanHandler);
+    order.verify(cleanHandler).clean();
+    order.verify(cleanHandler).startAsyncCleaning();
+    order.verify(cleanHandler).waitForCleaningFinish();
+    order.verify(cleanHandler).close();
+    verifyNoMoreInteractions(cleanHandler);
+    // The handler owns the write client and closes it itself.
+    verify(writeClient, never()).close();
   }
 
   @Test
-  void testSnapshotDoesNotPropagateCleaningFailure() throws Exception {
+  void testCleaningIncludesMetadataTable() throws Exception {
     Configuration conf = new Configuration();
     conf.set(FlinkOptions.CLEAN_ASYNC_ENABLED, true);
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
     HoodieFlinkWriteClient writeClient = mock(HoodieFlinkWriteClient.class);
-    CleanFunctionV2<String> function = new CleanFunctionV2<>(conf);
-    doThrow(new RuntimeException("expected")).when(writeClient).startAsyncCleaning();
+    HoodieFlinkWriteClient metadataClient = mock(HoodieFlinkWriteClient.class);
 
-    try (OneInputStreamOperatorTestHarness<String, RowData> harness =
-             openHarness(conf, function, writeClient)) {
-      verify(writeClient, timeout(5000)).clean();
-      assertTrue(waitUntil(() -> !function.isCleaning));
+    try (MockedStatic<StreamerUtil> streamerUtil = mockStatic(StreamerUtil.class);
+         MockedConstruction<DefaultCleanHandler> handlers = mockConstruction(DefaultCleanHandler.class)) {
+      streamerUtil.when(() -> StreamerUtil.createMetadataWriteClient(writeClient)).thenReturn(metadataClient);
+      try (OneInputStreamOperatorTestHarness<String, RowData> harness = openHarness(conf, writeClient)) {
+        harness.snapshot(1, 1);
+        harness.notifyOfCompletedCheckpoint(1);
+      }
 
-      harness.snapshot(1, 1);
-
-      assertFalse(function.isCleaning);
-      verify(writeClient).startAsyncCleaning();
+      assertEquals(2, handlers.constructed().size());
+      for (CleanHandler handler : handlers.constructed()) {
+        InOrder order = inOrder(handler);
+        order.verify(handler).clean();
+        order.verify(handler).startAsyncCleaning();
+        order.verify(handler).waitForCleaningFinish();
+        order.verify(handler).close();
+        verifyNoMoreInteractions(handler);
+      }
     }
   }
 
@@ -100,43 +115,31 @@ class TestCleanFunctionV2 {
     Configuration conf = new Configuration();
     conf.set(FlinkOptions.CLEAN_ASYNC_ENABLED, false);
     HoodieFlinkWriteClient writeClient = mock(HoodieFlinkWriteClient.class);
-    CleanFunctionV2<String> function = new CleanFunctionV2<>(conf);
 
-    try (OneInputStreamOperatorTestHarness<String, RowData> harness =
-             openHarness(conf, function, writeClient)) {
-      harness.snapshot(1, 1);
-      harness.notifyOfCompletedCheckpoint(1);
-      harness.processElement(new StreamRecord<>("ignored"));
-
-      verify(writeClient, never()).clean();
-      verify(writeClient, never()).startAsyncCleaning();
-      verify(writeClient, never()).waitForCleaningFinish();
-      assertTrue(harness.getOutput().isEmpty());
+    try (MockedStatic<TableServiceHandlerFactory> factory = mockStatic(TableServiceHandlerFactory.class)) {
+      try (OneInputStreamOperatorTestHarness<String, RowData> harness = openHarness(conf, writeClient)) {
+        harness.snapshot(1, 1);
+        harness.notifyOfCompletedCheckpoint(1);
+        harness.processElement(new StreamRecord<>("ignored"));
+        assertTrue(harness.getOutput().isEmpty());
+      }
+      factory.verifyNoInteractions();
     }
+    verifyNoInteractions(writeClient);
   }
 
   private OneInputStreamOperatorTestHarness<String, RowData> openHarness(
       Configuration conf,
-      CleanFunctionV2<String> function,
       HoodieFlinkWriteClient writeClient) throws Exception {
     OneInputStreamOperatorTestHarness<String, RowData> harness =
-        new OneInputStreamOperatorTestHarness<>(new ProcessOperator<>(function), 1, 1, 0);
+        new OneInputStreamOperatorTestHarness<>(new ProcessOperator<>(new CleanFunctionV2<String>(conf)), 1, 1, 0);
     try (MockedStatic<FlinkWriteClients> writeClients = mockStatic(FlinkWriteClients.class)) {
       writeClients.when(() -> FlinkWriteClients.createWriteClient(
           eq(conf), any())).thenReturn(writeClient);
       harness.open();
+      writeClients.verify(() -> FlinkWriteClients.createWriteClient(eq(conf), any()),
+          times(conf.get(FlinkOptions.CLEAN_ASYNC_ENABLED) ? 1 : 0));
     }
     return harness;
-  }
-
-  private boolean waitUntil(Callable<Boolean> condition) throws Exception {
-    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-    while (System.nanoTime() < deadline) {
-      if (condition.call()) {
-        return true;
-      }
-      Thread.sleep(10);
-    }
-    return condition.call();
   }
 }

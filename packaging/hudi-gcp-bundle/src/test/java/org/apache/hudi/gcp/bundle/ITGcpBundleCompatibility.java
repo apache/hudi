@@ -23,12 +23,19 @@ import com.google.cloud.bigquery.BigQueryOptions;
 import com.google.cloud.storage.StorageOptions;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.InputStream;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 class ITGcpBundleCompatibility {
 
@@ -45,6 +52,25 @@ class ITGcpBundleCompatibility {
   @Test
   void testBundleBeforeHostDependencies() throws Exception {
     runSmokeTest(ClasspathOrder.BUNDLE_FIRST);
+  }
+
+  @Test
+  void testOrcUtilsDoesNotLinkToShadedProtobuf() throws Exception {
+    try (JarFile bundle = new JarFile(System.getProperty("gcp.bundle.jar"))) {
+      JarEntry entry = bundle.getJarEntry("org/apache/hudi/common/util/OrcUtils.class");
+      assertNotNull(entry);
+      try (InputStream input = bundle.getInputStream(entry);
+           ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+        byte[] buffer = new byte[4096];
+        int count;
+        while ((count = input.read(buffer)) != -1) {
+          output.write(buffer, 0, count);
+        }
+        String bytecode = new String(output.toByteArray(), StandardCharsets.ISO_8859_1);
+        assertFalse(bytecode.contains("org/apache/hudi/gcp/shaded/com/google/protobuf/"),
+            "OrcUtils must not link to protobuf types relocated by the GCP bundle");
+      }
+    }
   }
 
   private static void runSmokeTest(ClasspathOrder order) throws Exception {

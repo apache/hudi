@@ -37,7 +37,7 @@ import java.util.Map;
  */
 public interface HoodieCompactionHandler<T> {
   Iterator<List<WriteStatus>> handleUpdate(String instantTime, String partitionPath, String fileId,
-                                           Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile) throws IOException;
+                                           Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile baseFile) throws IOException;
 
   Iterator<List<WriteStatus>> handleInsert(String instantTime, String partitionPath, String fileId,
                                            Map<String, HoodieRecord<?>> recordMap);

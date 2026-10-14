@@ -119,9 +119,9 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     if (metadataWriteConfig.isMetricsOn()) {
       Registry registry;
       if (metadataWriteConfig.isExecutorMetricsEnabled() && metadataWriteConfig.getMetricsReporterType() != MetricsReporterType.INMEMORY) {
-        registry = Registry.getRegistry("HoodieMetadata", DistributedRegistry.class.getName());
+        DistributedRegistry distRegistry = (DistributedRegistry) Registry.getRegistry("HoodieMetadata", DistributedRegistry.class.getName());
         HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext) engineContext;
-        ((DistributedRegistry) registry).register(sparkEngineContext.getJavaSparkContext());
+        registry = distRegistry.register(sparkEngineContext.getJavaSparkContext());
       } else {
         registry = Registry.getRegistry("HoodieMetadata");
       }

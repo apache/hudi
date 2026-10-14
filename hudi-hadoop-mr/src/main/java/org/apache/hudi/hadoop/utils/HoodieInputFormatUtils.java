@@ -495,19 +495,19 @@ public class HoodieInputFormatUtils {
    * 3. Generation of splits looks at FileStatus size to create splits, which skips this file
    *
    * @param conf
-   * @param dataFile
+   * @param baseFile
    * @return
    */
-  private static HoodieBaseFile refreshFileStatus(Configuration conf, HoodieBaseFile dataFile) {
-    StoragePath dataPath = dataFile.getPathInfo().getPath();
+  private static HoodieBaseFile refreshFileStatus(Configuration conf, HoodieBaseFile baseFile) {
+    StoragePath dataPath = baseFile.getPathInfo().getPath();
     try {
-      if (dataFile.getFileSize() == 0) {
+      if (baseFile.getFileSize() == 0) {
         HoodieStorage storage = HoodieStorageUtils.getStorage(dataPath, HadoopFSUtils.getStorageConf(conf));
-        LOG.info("Refreshing file status {}", dataFile.getPath());
+        LOG.info("Refreshing file status {}", baseFile.getPath());
         return new HoodieBaseFile(storage.getPathInfo(dataPath),
-            dataFile.getBootstrapBaseFile().orElse(null));
+            baseFile.getBootstrapBaseFile().orElse(null));
       }
-      return dataFile;
+      return baseFile;
     } catch (IOException e) {
       throw new HoodieIOException("Could not get FileStatus on path " + dataPath);
     }
