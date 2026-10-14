@@ -3196,14 +3196,15 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
-  @EnumSource(value = HoodieTableType.class)
-  void testBucketPruning(HoodieTableType tableType) {
+  @MethodSource("tableTypeAndBooleanTrueFalseParams")
+  void testBucketPruning(HoodieTableType tableType, boolean useSourceV2) {
     TableEnvironment tableEnv = batchTableEnv;
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .options(getDefaultKeys())
         .option(FlinkOptions.INDEX_TYPE, "BUCKET")
         .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(FlinkOptions.READ_SOURCE_V2_ENABLED, useSourceV2)
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 
