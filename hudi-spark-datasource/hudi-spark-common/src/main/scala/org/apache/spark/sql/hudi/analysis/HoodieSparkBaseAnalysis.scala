@@ -84,7 +84,7 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
           bucketSpec = table.bucketSpec,
           className = table.provider.get,
           options = table.storage.properties ++ pathOption ++ Map(
-            DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key -> asOfInstant.get.toString),
+            DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key -> asOfInstant.get),
           catalogTable = Some(table))
 
       val relation = dataSource.resolveRelation(checkFilesExist = false)
@@ -452,9 +452,16 @@ case class PostAnalysisRule(sparkSession: SparkSession) extends Rule[LogicalPlan
    * corresponding commit instant on the table's timeline.
    *
    * Versions are 0-indexed, matching Delta Lake semantics: version 0 is the table's first
-   * completed commit, version 1 the second, and so on. Both commit and delta-commit instants
-   * that produced data are counted, in timeline order. Only completed instants on the active
-   * timeline are addressable; archived (cleaned) commits cannot be resolved by version.
+   * completed commit, version 1 the second, and so on.
+   *
+   * Versions are resolved against the full commit history (archived + active timelines), so
+   * version numbers stay stable even after archival moves old commits off the active timeline.
+   * Instants are ordered by completion time rather than requested time: completion order is
+   * append-only and therefore stable under multi-writer, whereas a late-completing
+   * early-requested commit would otherwise renumber already-issued versions.
+   *
+   * Data-producing commits (commit, delta-commit) as well as clustering replace commits all
+   * count as versions, mirroring Delta Lake where OPTIMIZE also bumps the table version.
    */
   private def resolveVersionToInstant(table: CatalogTable, versionExpr: Expression): String = {
     val version = versionExpr match {
@@ -475,14 +482,19 @@ case class PostAnalysisRule(sparkSession: SparkSession) extends Rule[LogicalPlan
       .setBasePath(basePath)
       .setConf(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()))
       .build()
-    val completedCommits = metaClient.getActiveTimeline.getCommitsTimeline
-      .filterCompletedInstants.getInstants.asScala.toSeq.sortBy(_.requestedTime)
-    if (version >= completedCommits.size) {
+    val activeCommits = metaClient.getActiveTimeline.getCommitsTimeline
+      .filterCompletedInstants.getInstantsOrderedByCompletionTime.iterator().asScala.toSeq
+    val archivedCommits = metaClient.getArchivedTimeline.getCommitsTimeline
+      .filterCompletedInstants.getInstantsOrderedByCompletionTime.iterator().asScala.toSeq
+    // Archived instants always completed before active ones (archival only moves old instants),
+    // so concatenation yields the global completion-time order.
+    val allCommits = archivedCommits ++ activeCommits
+    if (version >= allCommits.size) {
       throw new HoodieAnalysisException(
-        s"Version $version is out of range: table has ${completedCommits.size} completed commit(s), " +
-          s"valid versions are 0 to ${completedCommits.size - 1}")
+        s"Version $version is out of range: table has ${allCommits.size} completed commit(s), " +
+          s"valid versions are 0 to ${allCommits.size - 1}")
     }
-    completedCommits(version.toInt).requestedTime
+    allCommits(version.toInt).requestedTime
   }
 }
 
