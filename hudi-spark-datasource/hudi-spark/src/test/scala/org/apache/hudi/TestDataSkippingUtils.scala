@@ -38,7 +38,7 @@ import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{Arguments, MethodSource}
+import org.junit.jupiter.params.provider.{Arguments, MethodSource, ValueSource}
 import org.junit.jupiter.params.provider.Arguments.arguments
 
 import java.sql.Timestamp
@@ -118,6 +118,34 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
         indexDefinitionOpt = Some(definition))
     }
     assertEquals(expected + "unindexed", support.candidates)
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(false, true))
+  def testUnsupportedPredicatesDoNotScanIndex(separateFilters: Boolean): Unit = {
+    val input = Seq(IndexRow("indexed"))
+    val indexDf = spark.createDataFrame(spark.sparkContext.parallelize(input.map(_.toRow), 1), indexSchema)
+    val definition = HoodieIndexDefinition.newBuilder().withIndexName("column_stats")
+      .withIndexType("column_stats").withSourceFields(indexedCols.asJava).build()
+    val predicate = resolveExpr(spark, "A % 2 = 1 AND length(B) > 2", sourceTableSchema)
+    val filters = predicate match {
+      case And(left, right) if separateFilters => Seq(left, right)
+      case other => Seq(other)
+    }
+    val expected = Set("indexed", "unindexed")
+    val support = new ColumnStatsIndexSupport(spark, sourceTableSchema, null,
+      HoodieMetadataConfig.newBuilder().build(), null) {
+      def candidates: Set[String] = getCandidateFiles(indexDf, filters, expected, _ => indexedCols,
+        indexDefinitionOpt = Some(definition))
+    }
+    val jobGroup = s"unsupported-column-stats-predicates-$separateFilters"
+    spark.sparkContext.setJobGroup(jobGroup, "Unsupported predicates must not scan the index")
+    try {
+      assertEquals(expected, support.candidates)
+      assertEquals(0, spark.sparkContext.statusTracker.getJobIdsForGroup(jobGroup).length)
+    } finally {
+      spark.sparkContext.clearJobGroup()
+    }
   }
 
   @ParameterizedTest
@@ -211,6 +239,8 @@ object TestDataSkippingUtils {
       "A >= 0 AND (B = 'alice' OR B = 'ann')" -> matching,
       "A > 100 AND B = 'alice'" -> Set.empty[String],
       "A > 100 AND NOT (B = 'alice')" -> Set.empty[String],
+      "A > 100 AND length(B) > 2" -> Set.empty[String],
+      "length(B) > 2 AND A > 100" -> Set.empty[String],
       "A > 100 OR B = 'alice'" -> matching,
       "NOT (A > 100 OR B = 'aaa')" -> matching,
       "NOT (A > 100 AND B = 'alice')" -> Set("missing", "matching", "nonmatching", "all_null")

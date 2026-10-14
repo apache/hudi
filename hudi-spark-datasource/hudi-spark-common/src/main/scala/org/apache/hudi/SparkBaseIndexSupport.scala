@@ -31,8 +31,7 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_ST
 
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{DataFrame, SparkSession}
-import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Expression}
+import org.apache.spark.sql.catalyst.expressions.{Expression, PredicateHelper}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
 
@@ -42,7 +41,7 @@ import scala.util.control.NonFatal
 
 abstract class SparkBaseIndexSupport(spark: SparkSession,
                                      metadataConfig: HoodieMetadataConfig,
-                                     metaClient: HoodieTableMetaClient) extends SparkAdapterSupport {
+                                     metaClient: HoodieTableMetaClient) extends SparkAdapterSupport with PredicateHelper {
   @transient protected lazy val engineCtx = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
   @transient protected lazy val metadataTable: HoodieTableMetadata =
     metaClient.getTableFormat.getMetadataFactory.create(engineCtx, metaClient.getStorage, metadataConfig, metaClient.getBasePath.toString)
@@ -104,12 +103,6 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
     (prunedPartitions, prunedFiles)
   }
 
-  // Only split AND at the root; preserve OR and NOT subtrees as independent conjuncts.
-  private def splitConjuncts(expression: Expression): Seq[Expression] = expression match {
-    case And(left, right) => splitConjuncts(left) ++ splitConjuncts(right)
-    case other => Seq(other)
-  }
-
   protected def getCandidateFiles(indexDf: DataFrame, queryFilters: Seq[Expression], fileNamesFromPrunedPartitions: Set[String],
                                   getValidIndexedColumnsFunc: HoodieIndexDefinition => Seq[String], isExpressionIndex: Boolean = false,
                                   indexDefinitionOpt: Option[HoodieIndexDefinition] = Option.empty): Set[String] = {
@@ -121,24 +114,29 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
     }
 
     val validIndexedColumns = getValidIndexedColumnsFunc.apply(indexDefinition)
-    val indexFilters = queryFilters.flatMap(splitConjuncts)
+    // Only split top-level AND predicates; keep OR and NOT subtrees intact.
+    val indexFilters = queryFilters.flatMap(splitConjunctivePredicates)
       .map(translateIntoColumnStatsIndexFilterExpr(_, isExpressionIndex, validIndexedColumns))
-    val indexFilter = indexFilters.reduce(And)
-    if (indexFilter.equals(TrueLiteral)) {
-      // if there are any non indexed cols or we can't translate source expr, we have to read all files and may not benefit from col stats lookup.
-       fileNamesFromPrunedPartitions
+      .filterNot(_.equals(TrueLiteral))
+    if (indexFilters.isEmpty) {
+      // No translated predicate can prune files, so avoid scanning the index.
+      fileNamesFromPrunedPartitions
     } else {
+      val projectedColumns = indexDf.columns.toSet
+      val statsToNullCount = validIndexedColumns.flatMap { column =>
+        val nullCountColumn = getNullCountColumnNameFor(column)
+        if (projectedColumns.contains(nullCountColumn)) {
+          Seq(getMinColumnNameFor(column), getMaxColumnNameFor(column), nullCountColumn)
+            .map(_ -> nullCountColumn)
+        } else {
+          Seq.empty
+        }
+      }.toMap
       // Guard each independent conjunct using only the statistics it reads. Complete conjuncts
       // can still exclude a file when another conjunct has missing statistics.
       val candidateFilter = indexFilters.map { conjunct =>
-        val referencedStats = conjunct.collect {
-          case attr: UnresolvedAttribute => attr.name
-          case attr: AttributeReference => attr.name
-        }.toSet
-        val nullCountColumns = validIndexedColumns.filter { column =>
-          Seq(getMinColumnNameFor(column), getMaxColumnNameFor(column), getNullCountColumnNameFor(column))
-            .exists(referencedStats.contains)
-        }.map(getNullCountColumnNameFor).filter(indexDf.columns.contains)
+        val referencedStats = conjunct.references.map(_.name).toSet
+        val nullCountColumns = referencedStats.flatMap(statsToNullCount.get)
         // Apply the missing-statistics guard outside the whole translated conjunct, including NOT.
         // Replacing a missing-statistics leaf with true before negation would incorrectly prune files.
         nullCountColumns.foldLeft(sparkAdapter.createColumnFromExpression(conjunct)) { (filter, column) =>
