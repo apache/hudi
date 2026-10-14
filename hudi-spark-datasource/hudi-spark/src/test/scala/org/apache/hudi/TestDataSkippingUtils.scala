@@ -19,13 +19,15 @@ package org.apache.hudi
 
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
+import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.model.HoodieIndexDefinition
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.resolveExpr
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.encoders.DummyExpressionHolder
-import org.apache.spark.sql.catalyst.expressions.{Expression, InSet, Not}
+import org.apache.spark.sql.catalyst.expressions.{And, Expression, InSet, Not}
 import org.apache.spark.sql.catalyst.optimizer.OptimizeIn
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
@@ -87,6 +89,36 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
     )
 
   val (indexSchema: StructType, targetIndexedColumns:  Seq[String]) = composeIndexSchema(indexedCols, indexedCols, sourceTableSchema)
+
+  @ParameterizedTest
+  @MethodSource(Array("missingColumnStatsPredicates"))
+  def testCandidateFilesWithMissingColumnStats(predicate: String, expected: Set[String], separateFilters: Boolean): Unit = {
+    val input = Seq(
+      IndexRow("missing", A_minValue = 25, A_maxValue = 25, A_nullCount = 0),
+      IndexRow("all_null", A_minValue = 25, A_maxValue = 25, A_nullCount = 0, B_nullCount = 1),
+      IndexRow("matching", A_minValue = 25, A_maxValue = 25, A_nullCount = 0,
+        B_minValue = "alice", B_maxValue = "alice", B_nullCount = 0),
+      IndexRow("nonmatching", A_minValue = 25, A_maxValue = 25, A_nullCount = 0,
+        B_minValue = "aaa", B_maxValue = "aaa", B_nullCount = 0)
+    )
+    // C is indexed globally but not referenced by this query, so it is absent from the projection.
+    val indexDf = spark.createDataFrame(input.map(_.toRow).asJava, indexSchema)
+      .drop("C_minValue", "C_maxValue", "C_nullCount")
+    val definition = HoodieIndexDefinition.newBuilder().withIndexName("column_stats")
+      .withIndexType("column_stats").withSourceFields(indexedCols.asJava).build()
+    val resolvedPredicate = resolveExpr(spark, predicate, sourceTableSchema)
+    val filters = resolvedPredicate match {
+      case And(left, right) if separateFilters => Seq(left, right)
+      case other => Seq(other)
+    }
+    val support = new ColumnStatsIndexSupport(spark, sourceTableSchema, null,
+      HoodieMetadataConfig.newBuilder().build(), null) {
+      def candidates: Set[String] = getCandidateFiles(indexDf, filters,
+        input.map(_.fileName).toSet + "unindexed", _ => indexedCols,
+        indexDefinitionOpt = Some(definition))
+    }
+    assertEquals(expected + "unindexed", support.candidates)
+  }
 
   @ParameterizedTest
   @MethodSource(Array(
@@ -169,6 +201,25 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
 }
 
 object TestDataSkippingUtils {
+  def missingColumnStatsPredicates(): java.util.stream.Stream[Arguments] = {
+    val matching = Set("missing", "matching")
+    val cases = Seq(
+      "A >= 0 AND B = 'alice'" -> matching,
+      "A >= 0 AND B > 'aaa'" -> matching,
+      "A >= 0 AND B IN ('alice', 'ann')" -> matching,
+      "A >= 0 AND NOT (B = 'aaa')" -> matching,
+      "A >= 0 AND (B = 'alice' OR B = 'ann')" -> matching,
+      "A > 100 AND B = 'alice'" -> Set.empty[String],
+      "A > 100 AND NOT (B = 'alice')" -> Set.empty[String],
+      "A > 100 OR B = 'alice'" -> matching,
+      "NOT (A > 100 OR B = 'aaa')" -> matching,
+      "NOT (A > 100 AND B = 'alice')" -> Set("missing", "matching", "nonmatching", "all_null")
+    )
+    cases.flatMap { case (predicate, expected) =>
+      Seq(false, true).map(separate => arguments(predicate, expected, Boolean.box(separate)))
+    }.asJava.stream()
+  }
+
   def testStringsLookupFilterExpressionsSource(): java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(
       arguments(
