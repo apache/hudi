@@ -30,40 +30,12 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test cases for {@link EventBuffers}.
  */
 public class TestEventBuffers {
-
-  @Test
-  void testBootstrapEventsTrackedPerWriter() {
-    EventBuffers buffers = EventBuffers.getInstance(new Configuration(), 2);
-    WriteMetadataEvent initial = newWriteEvent(-1L, "000");
-    WriteMetadataEvent newer = newWriteEvent(2L, "002");
-    WriteMetadataEvent older = newWriteEvent(1L, "001");
-    initial.setBootstrap(true);
-    newer.setBootstrap(true);
-    older.setBootstrap(true);
-    assertNotNull(buffers.addBootstrapEvent(initial), "Checkpoint -1 is a valid first batch");
-    assertNull(buffers.addBootstrapEvent(initial));
-    assertNotNull(buffers.addBootstrapEvent(newer));
-    assertNull(buffers.addBootstrapEvent(older), "An older event from the same writer is stale");
-    assertNull(buffers.getEventBuffer(1L), "Stale events must not create buffers");
-    buffers.reset(2L);
-    assertNull(buffers.addBootstrapEvent(newer), "Committing a buffer must retain deduplication history");
-    assertNull(buffers.addBootstrapEvent(initial));
-
-    older.setTaskID(1);
-    assertNotNull(buffers.addBootstrapEvent(older), "Another writer may still be on an older checkpoint");
-    assertNull(buffers.addBootstrapEvent(older));
-    buffers.resetBootstrapCheckpoints();
-    assertNotNull(buffers.addBootstrapEvent(initial), "Global recovery allows metadata to be replayed");
-    assertNotNull(buffers.addBootstrapEvent(older), "Global recovery resets every writer");
-  }
 
   @Test
   void testAwaitAllInstantsWaitsUntilAllPendingInstantsReset() throws Exception {

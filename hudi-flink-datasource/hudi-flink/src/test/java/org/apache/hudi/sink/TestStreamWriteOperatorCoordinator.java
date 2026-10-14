@@ -537,14 +537,44 @@ public class TestStreamWriteOperatorCoordinator {
     assertThat("Recommits the instant with partial uncommitted events", lastCompleted, is(instant));
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = {"COPY_ON_WRITE", "MERGE_ON_READ"})
+  void testLateBootstrapAfterNormalCommit(String tableType) throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.TABLE_TYPE, tableType);
+    conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1_000L);
+    coordinator.close();
+    reset();
+    coordinator = startCoordinator(conf, 2);
+    String instant = requestInstantTime(41);
+    coordinator.handleEventFromOperator(0, createOperatorEvent(0, 41, instant, "par1", false, true, 0.1));
+    coordinator.handleEventFromOperator(1, createOperatorEvent(1, 41, instant, "par2", false, true, 0.1));
+
+    // The restored writer observes a pending instant, but its event is handled after the normal commit.
+    WriteMetadataEvent delayed = createBootstrapEvent(0, 41, instant, "par1");
+    coordinator.notifyCheckpointComplete(42);
+    assertEquals(instant, TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()));
+    assertNull(coordinator.getEventBuffer(41));
+    coordinator.handleEventFromOperator(0, delayed);
+    assertNull(coordinator.getEventBuffer(41), "A late bootstrap must not recreate a normally committed buffer");
+
+    // COW instant creation must not block on a buffer recreated by the late event.
+    String nextInstant = requestInstantTime(42);
+    coordinator.handleEventFromOperator(0, createOperatorEvent(0, 42, nextInstant, "par1", false, true, 0.1));
+    coordinator.handleEventFromOperator(1, createOperatorEvent(1, 42, nextInstant, "par2", false, true, 0.1));
+    coordinator.notifyCheckpointComplete(43);
+    assertEquals(nextInstant, TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()));
+    assertNull(((MockOperatorCoordinatorContext) coordinator.getContext()).getJobFailureReason());
+  }
+
   @Test
   void testDuplicateBootstrapEvents() {
     String instant = requestInstantTime(-1);
     WriteMetadataEvent first = createBootstrapEvent(0, -1, instant, "par1");
     coordinator.handleEventFromOperator(0, first);
-    coordinator.handleEventFromOperator(0, createBootstrapEvent(0, -1, instant, "duplicate"));
-    assertEquals(first, coordinator.getEventBuffer(-1).getDataWriteEventBuffer()[0],
-        "A retry must not replace already accepted metadata");
+    coordinator.handleEventFromOperator(0, createBootstrapEvent(0, -1, instant, "par1"));
+    assertEquals(1, coordinator.getEventBuffer(-1).collectDataWriteStatuses().size(),
+        "A retry must replace the task's slot without accumulating write statuses");
     assertNull(TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()));
 
     // The other task's first delivery was lost; its retry completes the recovered batch.
@@ -577,8 +607,9 @@ public class TestStreamWriteOperatorCoordinator {
     EventBuffers.EventBuffer buffer = coordinator.getEventBuffer(-1);
     assertEquals(dataEvent, buffer.getDataWriteEventBuffer()[0]);
     assertEquals(indexEvent, buffer.getIndexWriteEventBuffer()[0]);
-    coordinator.handleEventFromOperator(0, createOperatorEvent(0, -1, instant, "duplicate", true, true, 0.1, true));
-    assertEquals(indexEvent, buffer.getIndexWriteEventBuffer()[0]);
+    coordinator.handleEventFromOperator(0, createOperatorEvent(0, -1, instant, "record_index", true, true, 0.1, true));
+    assertEquals(1, buffer.collectIndexWriteStatuses().size(), "An index retry must not accumulate write statuses");
+    assertEquals(dataEvent, buffer.getDataWriteEventBuffer()[0], "An index retry must not replace the data writer's slot");
     assertFalse(buffer.allBootstrapEventsReceived());
   }
 

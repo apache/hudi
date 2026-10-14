@@ -353,9 +353,6 @@ public class StreamWriteOperatorCoordinator
         restoreEvents(checkpointID);
       }
     }
-    if (this.eventBuffers != null) {
-      this.eventBuffers.resetBootstrapCheckpoints();
-    }
   }
 
   @Override
@@ -595,8 +592,15 @@ public class StreamWriteOperatorCoordinator
       this.eventBuffers.cleanLegacyEvents(event);
       return;
     }
-    EventBuffer bootstrapBuffer = this.eventBuffers.addBootstrapEvent(event);
-    if (bootstrapBuffer != null && bootstrapBuffer.allBootstrapEventsReceived()) {
+    // The writer may have observed a pending instant before its normal commit finished.
+    // Do not recreate the committed buffer when that bootstrap event arrives later.
+    if (this.eventBuffers.getEventBuffer(event.getCheckpointId()) == null
+        && this.metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(event.getInstantTime())) {
+      return;
+    }
+    EventBuffer bootstrapBuffer = this.eventBuffers.getOrCreateBootstrapBuffer(event);
+    bootstrapBuffer.addBootstrapEvent(event);
+    if (bootstrapBuffer.allBootstrapEventsReceived()) {
       // start to recommit the instant.
       boolean committed = recommitInstant(event.getCheckpointId(), event.getInstantTime(), bootstrapBuffer);
       if (committed && tableState.isRecordLevelIndex) {

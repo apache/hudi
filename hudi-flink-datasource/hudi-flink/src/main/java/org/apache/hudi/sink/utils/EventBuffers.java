@@ -29,8 +29,6 @@ import org.apache.hudi.sink.event.WriteMetadataEvent;
 import lombok.Getter;
 import org.apache.flink.configuration.Configuration;
 
-import javax.annotation.Nullable;
-
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collection;
@@ -50,9 +48,6 @@ public class EventBuffers implements Serializable {
 
   // {checkpointId -> (instant, data write events, index write events)}
   private final Map<Long, Pair<String, EventBuffer>> eventBuffers;
-  // Retain each writer's latest accepted bootstrap checkpoint after commit to reject retries.
-  private final long[] dataBootstrapCheckpoints;
-  private final long[] indexBootstrapCheckpoints;
   private final Option<CommitGuard> commitGuardOption;
   private final int dataWriteParallelism;
   private final int indexWriteParallelism;
@@ -66,9 +61,6 @@ public class EventBuffers implements Serializable {
     this.commitGuardOption = commitGuardOption;
     this.dataWriteParallelism = dataWriteParallelism;
     this.indexWriteParallelism = indexWriteParallelism;
-    this.dataBootstrapCheckpoints = new long[dataWriteParallelism];
-    this.indexBootstrapCheckpoints = new long[indexWriteParallelism];
-    resetBootstrapCheckpoints();
   }
 
   public static EventBuffers getInstance(Configuration conf, int dataWriteParallelism) {
@@ -99,32 +91,11 @@ public class EventBuffers implements Serializable {
   }
 
   /**
-   * Adds recovered metadata when its checkpoint is newer than the writer's last accepted checkpoint.
-   * Returns null for duplicate or stale deliveries, including retries after commit.
-   *
-   * <p>Each writer sends one merged bootstrap event per restored attempt. Local retries restore the
-   * same or a newer completed checkpoint; global recovery resets this tracking before replay.
-   * Data and index writers advance independently.
+   * Returns existing bootstrap buffer or creates a new one.
    */
-  @Nullable
-  public EventBuffer addBootstrapEvent(WriteMetadataEvent event) {
-    long[] checkpoints = event.isMetadataTable() ? indexBootstrapCheckpoints : dataBootstrapCheckpoints;
-    if (event.getCheckpointId() <= checkpoints[event.getTaskID()]) {
-      return null;
-    }
-    EventBuffer buffer = this.eventBuffers.computeIfAbsent(event.getCheckpointId(),
+  public EventBuffer getOrCreateBootstrapBuffer(WriteMetadataEvent event) {
+    return this.eventBuffers.computeIfAbsent(event.getCheckpointId(),
         ckpId -> Pair.of(event.getInstantTime(), new EventBuffer(dataWriteParallelism, indexWriteParallelism))).getRight();
-    buffer.addBootstrapEvent(event);
-    checkpoints[event.getTaskID()] = event.getCheckpointId();
-    return buffer;
-  }
-
-  /**
-   * Starts a new recovery on global coordinator reset, allowing restored metadata to be replayed.
-   */
-  public void resetBootstrapCheckpoints() {
-    Arrays.fill(dataBootstrapCheckpoints, Long.MIN_VALUE);
-    Arrays.fill(indexBootstrapCheckpoints, Long.MIN_VALUE);
   }
 
   /**
