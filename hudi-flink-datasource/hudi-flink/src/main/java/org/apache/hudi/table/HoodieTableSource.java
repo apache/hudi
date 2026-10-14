@@ -499,6 +499,16 @@ public class HoodieTableSource extends FileIndexReader implements
     if (!ExpressionUtils.isFilteringByAllFields(indexKeyFilters, indexKeyFields)) {
       return Option.empty();
     }
+    return resolvePrefixedSingleFieldKey()
+        .map(prefixedSingleFieldKey -> PrimaryKeyPruners.getBucketIdFunc(indexKeyFilters, conf, prefixedSingleFieldKey));
+  }
+
+  /**
+   * Resolves whether the bucket writers hash a single record key field as {@code <field>:<value>}.
+   *
+   * @return empty when the form of the stored record keys cannot be determined, which skips the bucket pruning
+   */
+  private Option<Boolean> resolvePrefixedSingleFieldKey() {
     if (metaClient == null) {
       // a streaming read of a table that does not exist yet has no record key encoding to follow
       return Option.empty();
@@ -515,11 +525,13 @@ public class HoodieTableSource extends FileIndexReader implements
     if (metaClient.getTableConfig().isComplexKeyGenWithSingleRecordKeyField() && !encodingOpt.isPresent()) {
       return Option.empty();
     }
-    // the Flink key generator prefixes by the job configuration, which can disagree with the table's encoding
-    // (an explicit complex key generator with a single partition field writes bare keys), so require both
-    boolean prefixedSingleFieldKey = encodingOpt.map(ComplexKeyGenEncoding::encodesFieldName).orElse(false)
-        && RowDataKeyGen.isFieldPrefixedSingleRecordKey(conf);
-    return Option.of(PrimaryKeyPruners.getBucketIdFunc(indexKeyFilters, conf, prefixedSingleFieldKey));
+    if (!encodingOpt.map(ComplexKeyGenEncoding::encodesFieldName).orElse(false)) {
+      return Option.of(false);
+    }
+    // Spark writes `<field>:<value>` keys into a FIELD_PREFIXED table, while the Flink key generator follows the job
+    // configuration and writes bare keys for an explicit complex key generator with a single partition field, so
+    // when this job would not prefix, the stored keys can take either form
+    return RowDataKeyGen.isFieldPrefixedSingleRecordKey(conf) ? Option.of(true) : Option.empty();
   }
 
   public InputFormat<RowData, ?> getInputFormat() {

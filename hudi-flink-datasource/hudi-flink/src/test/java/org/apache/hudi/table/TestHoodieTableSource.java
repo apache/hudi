@@ -32,6 +32,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.sink.bulk.RowDataKeyGens;
@@ -95,6 +96,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -432,6 +434,13 @@ public class TestHoodieTableSource {
 
     RowDataKeyGen writerKeyGen = RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE);
     assertBucketIdsFollowWriter(createHoodieTableSource(conf), dataset, writerKeyGen);
+    if (encoding == ComplexKeyGenEncoding.VALUE_ONLY) {
+      // Spark keys a VALUE_ONLY table with bare values, and Flink records VALUE_ONLY only for a job configured with
+      // it, so a job that would prefix still prunes by the bare key
+      Configuration prefixingConf = conf.clone();
+      prefixingConf.setString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), ComplexKeyGenEncoding.FIELD_PREFIXED.name());
+      assertBucketIdsFollowWriter(createHoodieTableSource(prefixingConf), dataset, writerKeyGen);
+    }
 
     // a literal holding ',' before several ':' is hashed the way the writer hashes it, without looping forever
     RowData separatorKey = TestData.insertRow(StringData.fromString("a,b:c:d"), StringData.fromString("Jo"), 40,
@@ -455,21 +464,32 @@ public class TestHoodieTableSource {
   }
 
   /**
-   * An explicit complex key generator with a single partition field records FIELD_PREFIXED on the table while the
-   * Flink key generator writes bare keys, so the pruning follows the keys the writer stored.
+   * A table recording FIELD_PREFIXED holds `<field>:<value>` keys from Spark, but bare keys from an explicit complex
+   * key generator with a single partition field in Flink, so a job whose key generator would not prefix skips the
+   * bucket pruning rather than guess which writer stored the keys.
    */
-  @Test
-  void testBucketPruningFollowsBareKeysOfExplicitComplexKeyGenerator() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testBucketPruningSkippedWhenJobDisagreesWithFieldPrefixedTable(boolean prefixedKeys) throws Exception {
     conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.set(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
     conf.set(FlinkOptions.INDEX_TYPE, "BUCKET");
-    TestData.writeDataAsBatch(TestData.DATA_SET_INSERT, conf);
-    assertThat(StreamerUtil.createMetaClient(conf).getTableConfig().getComplexKeyGenEncoding().get(),
-        is(ComplexKeyGenEncoding.FIELD_PREFIXED));
+    Configuration writeConf = conf.clone();
+    if (prefixedKeys) {
+      // stores `uuid:<value>`, the keys Spark writes into a FIELD_PREFIXED table
+      writeConf.setString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), ComplexKeyGenEncoding.FIELD_PREFIXED.name());
+    }
+    TestData.writeDataAsBatch(TestData.DATA_SET_INSERT, writeConf);
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    assertThat(metaClient.getTableConfig().getComplexKeyGenEncoding().get(), is(ComplexKeyGenEncoding.FIELD_PREFIXED));
+    assertThat(KeyGenUtils.deduceComplexKeyGenEncodingFromData(metaClient).get(),
+        is(prefixedKeys ? ComplexKeyGenEncoding.FIELD_PREFIXED : ComplexKeyGenEncoding.VALUE_ONLY));
+    assertFalse(RowDataKeyGen.isFieldPrefixedSingleRecordKey(conf));
 
-    RowDataKeyGen writerKeyGen = RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE);
-    assertThat(writerKeyGen.getRecordKey(TestData.DATA_SET_INSERT.get(0)), is("id1"));
-    assertBucketIdsFollowWriter(createHoodieTableSource(conf), TestData.DATA_SET_INSERT, writerKeyGen);
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    tableSource.applyFilters(Collections.singletonList(
+        createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1")));
+    assertTrue(tableSource.getDataBucketFunc().isEmpty());
   }
 
   @Test

@@ -39,6 +39,8 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils;
+import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.sink.buffer.BufferMemoryType;
@@ -3272,6 +3274,46 @@ public class ITTestHoodieDataSource {
         () -> tableEnv.sqlQuery("select uuid from t1").execute().collect());
     assertEquals(8, allRows.size());
     // an equality filter on the record key must find the rows the unfiltered scan finds
+    for (String uuid : Arrays.asList("id1", "id8")) {
+      List<Row> result = CollectionUtil.iterableToList(
+          () -> tableEnv.sqlQuery("select uuid from t1 where uuid = '" + uuid + "'").execute().collect());
+      assertRowsEquals(result, "[+I[" + uuid + "]]");
+    }
+  }
+
+  /**
+   * Spark stores `<field>:<value>` keys in a single-field complex keygen table recording FIELD_PREFIXED whatever its
+   * partition fields, while a Flink job with a single partition field and no encoding option keys records with the
+   * bare value: an equality filter on the record key from such a job still finds the rows.
+   */
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testBucketPruningWithPrefixedKeysAndSinglePartitionField(HoodieTableType tableType) {
+    TableEnvironment tableEnv = batchTableEnv;
+    String path = tempFile.getAbsolutePath();
+    // the encoding option makes the Flink writer store `uuid:<value>` keys, the way Spark keys this table
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, path)
+        .options(getDefaultKeys())
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(FlinkOptions.INDEX_TYPE, "BUCKET")
+        .option(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName())
+        .option(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), ComplexKeyGenEncoding.FIELD_PREFIXED.name())
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+    execInsertSql(tableEnv, TestSQL.INSERT_T1);
+    assertEquals(ComplexKeyGenEncoding.FIELD_PREFIXED,
+        KeyGenUtils.deduceComplexKeyGenEncodingFromData(HoodieTestUtils.createMetaClient(path)).get());
+
+    tableEnv.executeSql("drop table t1");
+    hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, path)
+        .options(getDefaultKeys())
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(FlinkOptions.INDEX_TYPE, "BUCKET")
+        .option(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName())
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
     for (String uuid : Arrays.asList("id1", "id8")) {
       List<Row> result = CollectionUtil.iterableToList(
           () -> tableEnv.sqlQuery("select uuid from t1 where uuid = '" + uuid + "'").execute().collect());
