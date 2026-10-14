@@ -19,6 +19,7 @@
 package org.apache.hudi.table.format.cow;
 
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.table.format.cow.vector.HeapArrayVector;
 import org.apache.hudi.table.format.cow.vector.HeapDecimalVector;
 import org.apache.hudi.table.format.cow.vector.HeapMapColumnVector;
@@ -562,10 +563,11 @@ public class ParquetSplitReaderUtil {
         return new HeapDecimalVector(batchSize);
       case ARRAY:
         ArrayType arrayType = (ArrayType) fieldType;
+        Pair<Type, Integer> element = unwrapListElementType(physicalType, depth);
         return new HeapArrayVector(
             batchSize,
             createWritableColumnVector(
-                batchSize, arrayType.getElementType(), physicalType, descriptors, depth));
+                batchSize, arrayType.getElementType(), element.getLeft(), descriptors, element.getRight()));
       case MAP: {
         MapType mapType = (MapType) fieldType;
         GroupType repeatedType = unwrapMapRepeatedType(physicalType);
@@ -620,6 +622,40 @@ public class ParquetSplitReaderUtil {
       default:
         throw new UnsupportedOperationException(fieldType + " is not supported now.");
     }
+  }
+
+  /**
+   * Returns the element type of a LIST physical type and its depth, unwrapping it with the same
+   * backward-compatibility rules as {@link #getArrayElementColumn} so that the vectors line up with
+   * the {@code ParquetField} tree.
+   */
+  private static Pair<Type, Integer> unwrapListElementType(Type listType, int depth) {
+    Type elementType = listType;
+    String listName = null;
+    int elementDepth = depth;
+    while (!elementType.isPrimitive() && !elementType.isRepetition(REPEATED)) {
+      listName = elementType.getName();
+      elementType = elementType.asGroupType().getType(0);
+      elementDepth++;
+    }
+    if (isThreeLevelListRepeatedType(elementType, listName)) {
+      elementType = elementType.asGroupType().getType(0);
+      elementDepth++;
+    }
+    return Pair.of(elementType, elementDepth);
+  }
+
+  /**
+   * Returns whether the repeated type of a list is the synthetic wrapper of a three-level list,
+   * rather than the element itself. Type-based counterpart of the check in
+   * {@link #getArrayElementColumn}.
+   */
+  private static boolean isThreeLevelListRepeatedType(Type repeatedType, @Nullable String listName) {
+    return !repeatedType.isPrimitive()
+        && repeatedType.getLogicalTypeAnnotation() == null
+        && repeatedType.asGroupType().getFieldCount() == 1
+        && !repeatedType.getName().equals("array")
+        && (listName == null || !repeatedType.getName().equals(listName + "_tuple"));
   }
 
   /**

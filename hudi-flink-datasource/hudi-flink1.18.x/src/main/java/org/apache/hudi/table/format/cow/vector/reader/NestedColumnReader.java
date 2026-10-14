@@ -49,6 +49,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.table.format.cow.ParquetSplitReaderUtil.createVectorFromConstant;
+
 /**
  * ColumnReader used to read a {@code Group} type in Parquet ({@code Map}, {@code Array}, {@code
  * Row}). Resolves nested structures using Dremel striping/assembly; see <a
@@ -138,6 +140,16 @@ public class NestedColumnReader implements ColumnReader<WritableColumnVector> {
             field,
             levelDelegation.getDefinitionLevel(),
             levelDelegation.getRepetitionLevel());
+
+    // Inside an array the row has one position per element, which can exceed the batch size the
+    // placeholders of absent fields were sized with, so grow them to the position count.
+    int positionsCount = rowPosition.getPositionsCount();
+    for (int i = 0; i < children.size(); i++) {
+      if (children.get(i) == null && vectorLength(finalChildrenVectors[i]) < positionsCount) {
+        finalChildrenVectors[i] = (WritableColumnVector) createVectorFromConstant(
+            ((RowType) field.getType()).getTypeAt(i), null, positionsCount);
+      }
+    }
 
     // If row was inside the structure, then we need to renew the vector to reset the
     // capacity.
