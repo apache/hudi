@@ -25,11 +25,16 @@ import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
+import org.apache.hudi.sink.bulk.RowDataKeyGen;
+import org.apache.hudi.sink.bulk.RowDataKeyGens;
 import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.storage.StoragePath;
@@ -51,6 +56,8 @@ import org.apache.flink.table.connector.source.LookupTableSource;
 import org.apache.flink.table.connector.source.lookup.AsyncLookupFunctionProvider;
 import org.apache.flink.table.connector.source.lookup.LookupFunctionProvider;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.StringData;
+import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.expressions.CallExpression;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.expressions.ResolvedExpression;
@@ -70,6 +77,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -90,6 +98,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -395,6 +404,110 @@ public class TestHoodieTableSource {
     assertThat(tableSource3.getDataBucketFunc().get().apply(numBuckets), is(0));
     List<FileSlice> fileSlices3 = tableSource3.getBaseFileOnlyFileSlices(tableSource3.getMetaClient());
     assertThat("Files should be pruned", fileSlices3.size(), CoreMatchers.is(1));
+  }
+
+  /**
+   * A record key equality filter on a single-field complex keygen table selects the bucket the writer hashed the
+   * stored record key into, whether the encoding is recorded or, on a legacy table, deduced from the data; a table
+   * whose encoding cannot be resolved is not pruned by key.
+   */
+  @ParameterizedTest
+  @EnumSource(ComplexKeyGenEncoding.class)
+  void testBucketPruningHonorsRecordedEncoding(ComplexKeyGenEncoding encoding) throws Exception {
+    conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
+    conf.setString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), encoding.name());
+    if (encoding == ComplexKeyGenEncoding.VALUE_ONLY) {
+      // Bare record keys belong to legacy tables; new tables at version 9 and above must use FIELD_PREFIXED.
+      conf.set(FlinkOptions.WRITE_TABLE_VERSION, HoodieTableVersion.EIGHT.versionCode());
+    }
+    conf.set(FlinkOptions.INDEX_TYPE, "BUCKET");
+    List<RowData> dataset = new ArrayList<>(TestData.DATA_SET_INSERT);
+    // the stored key `uuid:id9,x` holds both separators, so the writer hashes the value extracted from it
+    dataset.add(TestData.insertRow(StringData.fromString("id9,x"), StringData.fromString("Ivy"), 30,
+        TimestampData.fromEpochMillis(9), StringData.fromString("par1")));
+    TestData.writeDataAsBatch(dataset, conf);
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    assertThat(metaClient.getTableConfig().getComplexKeyGenEncoding().get(), is(encoding));
+
+    RowDataKeyGen writerKeyGen = RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE);
+    assertBucketIdsFollowWriter(createHoodieTableSource(conf), dataset, writerKeyGen);
+
+    // a literal holding ',' before several ':' is hashed the way the writer hashes it, without looping forever
+    RowData separatorKey = TestData.insertRow(StringData.fromString("a,b:c:d"), StringData.fromString("Jo"), 40,
+        TimestampData.fromEpochMillis(10), StringData.fromString("par1"));
+    assertTimeoutPreemptively(Duration.ofSeconds(10), () ->
+        assertBucketIdsFollowWriter(createHoodieTableSource(conf), Collections.singletonList(separatorKey), writerKeyGen));
+
+    // a legacy table without the property: the reader deduces the encoding from the data
+    HoodieTableConfig.delete(metaClient.getStorage(), metaClient.getMetaPath(),
+        Collections.singleton(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()));
+    assertBucketIdsFollowWriter(createHoodieTableSource(conf), dataset, writerKeyGen);
+
+    // a legacy table without data files to deduce the encoding from is not pruned by key
+    for (String partition : Arrays.asList("par1", "par2", "par3", "par4")) {
+      metaClient.getStorage().deleteDirectory(new StoragePath(metaClient.getBasePath(), partition));
+    }
+    HoodieTableSource unknownEncodingSource = createHoodieTableSource(conf);
+    unknownEncodingSource.applyFilters(Collections.singletonList(
+        createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1")));
+    assertTrue(unknownEncodingSource.getDataBucketFunc().isEmpty());
+  }
+
+  /**
+   * An explicit complex key generator with a single partition field records FIELD_PREFIXED on the table while the
+   * Flink key generator writes bare keys, so the pruning follows the keys the writer stored.
+   */
+  @Test
+  void testBucketPruningFollowsBareKeysOfExplicitComplexKeyGenerator() throws Exception {
+    conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
+    conf.set(FlinkOptions.INDEX_TYPE, "BUCKET");
+    TestData.writeDataAsBatch(TestData.DATA_SET_INSERT, conf);
+    assertThat(StreamerUtil.createMetaClient(conf).getTableConfig().getComplexKeyGenEncoding().get(),
+        is(ComplexKeyGenEncoding.FIELD_PREFIXED));
+
+    RowDataKeyGen writerKeyGen = RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE);
+    assertThat(writerKeyGen.getRecordKey(TestData.DATA_SET_INSERT.get(0)), is("id1"));
+    assertBucketIdsFollowWriter(createHoodieTableSource(conf), TestData.DATA_SET_INSERT, writerKeyGen);
+  }
+
+  @Test
+  void testBucketPruningSkippedWhenEncodingResolutionFails() {
+    conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "");
+    conf.set(FlinkOptions.INDEX_TYPE, "BUCKET");
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    when(metaClient.getTableConfig()).thenThrow(new HoodieIOException("Failed to read the table config"));
+    HoodieTableSource tableSource = new HoodieTableSource(SerializableSchema.create(TestConfigurations.TABLE_SCHEMA),
+        new StoragePath(conf.get(FlinkOptions.PATH)), Collections.singletonList(""), "default-par", conf,
+        null, null, null, Option.empty(), null, null, metaClient, null);
+    tableSource.applyFilters(Collections.singletonList(
+        createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1")));
+    assertTrue(tableSource.getDataBucketFunc().isEmpty());
+  }
+
+  @Test
+  void testBucketPruningSkippedForStreamingReadBeforeTableExists() {
+    conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    conf.set(FlinkOptions.INDEX_TYPE, "BUCKET");
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    assertNull(tableSource.getMetaClient());
+    tableSource.applyFilters(Collections.singletonList(
+        createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1")));
+    assertTrue(tableSource.getDataBucketFunc().isEmpty());
+  }
+
+  private void assertBucketIdsFollowWriter(HoodieTableSource tableSource, List<RowData> dataset, RowDataKeyGen writerKeyGen) {
+    int numBuckets = FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.defaultValue();
+    for (RowData row : dataset) {
+      String uuid = row.getString(0).toString();
+      tableSource.applyFilters(Collections.singletonList(
+          createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), uuid)));
+      assertThat("bucket id of " + uuid, tableSource.getDataBucketFunc().get().apply(numBuckets),
+          is(BucketIdentifier.getBucketId(writerKeyGen.getRecordKey(row), "uuid", numBuckets)));
+    }
   }
 
   @ParameterizedTest

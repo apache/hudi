@@ -131,11 +131,7 @@ public class RowDataKeyGen implements Serializable {
       multiplePartitions = true;
     }
     if (simpleRecordKey) {
-      // the table's recorded encoding decides whether a single record key carries the `<field>:` prefix;
-      // without one (a table this job does not track), a single key with multiple partition fields is prefixed
-      boolean prefixSingleRecordKey = complexKeygenEncoding.isPresent()
-          ? complexKeygenEncoding.get().encodesFieldName()
-          : multiplePartitions && !useComplexKeygenNewEncoding;
+      boolean prefixSingleRecordKey = isFieldPrefixedSingleRecordKey(complexKeygenEncoding, multiplePartitions, useComplexKeygenNewEncoding);
       if (prefixSingleRecordKey) {
         this.simpleRecordKeyFunc = rowData -> {
           String oriKey = getRecordKey(recordKeyFieldGetter.getFieldOrNull(rowData), this.recordKeyFields[0], consistentLogicalTimestampEnabled);
@@ -162,6 +158,24 @@ public class RowDataKeyGen implements Serializable {
         rowType, conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING), conf.get(FlinkOptions.URL_ENCODE_PARTITIONING),
         consistentLogicalTimestampEnabled, keyGeneratorOpt, OptionsResolver.getComplexKeygenEncoding(conf),
         OptionsResolver.useComplexKeygenNewEncoding(conf));
+  }
+
+  /**
+   * Returns whether the key generator of the given configuration stores a single record key as {@code <field>:<value>}.
+   */
+  public static boolean isFieldPrefixedSingleRecordKey(Configuration conf) {
+    return isFieldPrefixedSingleRecordKey(OptionsResolver.getComplexKeygenEncoding(conf),
+        conf.get(FlinkOptions.PARTITION_PATH_FIELD).split(DEFAULT_FIELD_SEPARATOR).length > 1,
+        OptionsResolver.useComplexKeygenNewEncoding(conf));
+  }
+
+  private static boolean isFieldPrefixedSingleRecordKey(
+      Option<ComplexKeyGenEncoding> complexKeygenEncoding, boolean multiplePartitions, boolean useComplexKeygenNewEncoding) {
+    // the table's recorded encoding decides whether a single record key carries the `<field>:` prefix;
+    // without one (a table this job does not track), a single key with multiple partition fields is prefixed
+    return complexKeygenEncoding.isPresent()
+        ? complexKeygenEncoding.get().encodesFieldName()
+        : multiplePartitions && !useComplexKeygenNewEncoding;
   }
 
   public HoodieKey getHoodieKey(RowData rowData) {

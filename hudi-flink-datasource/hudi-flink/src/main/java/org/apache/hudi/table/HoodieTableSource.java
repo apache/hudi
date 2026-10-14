@@ -39,6 +39,9 @@ import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
+import org.apache.hudi.keygen.KeyGenUtils;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
+import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.source.ExpressionEvaluators;
 import org.apache.hudi.source.ExpressionPredicates;
@@ -496,7 +499,27 @@ public class HoodieTableSource extends FileIndexReader implements
     if (!ExpressionUtils.isFilteringByAllFields(indexKeyFilters, indexKeyFields)) {
       return Option.empty();
     }
-    return Option.of(PrimaryKeyPruners.getBucketIdFunc(indexKeyFilters, conf));
+    if (metaClient == null) {
+      // a streaming read of a table that does not exist yet has no record key encoding to follow
+      return Option.empty();
+    }
+    // a single-field complex keygen table stores `<field>:<value>` record keys under the FIELD_PREFIXED encoding,
+    // and cannot be pruned by key while its encoding is unknown
+    Option<ComplexKeyGenEncoding> encodingOpt;
+    try {
+      encodingOpt = KeyGenUtils.resolveComplexKeyGenEncoding(metaClient);
+    } catch (Exception e) {
+      log.warn("Failed to resolve the record key encoding of table {}, skipping the bucket pruning", path, e);
+      return Option.empty();
+    }
+    if (metaClient.getTableConfig().isComplexKeyGenWithSingleRecordKeyField() && !encodingOpt.isPresent()) {
+      return Option.empty();
+    }
+    // the Flink key generator prefixes by the job configuration, which can disagree with the table's encoding
+    // (an explicit complex key generator with a single partition field writes bare keys), so require both
+    boolean prefixedSingleFieldKey = encodingOpt.map(ComplexKeyGenEncoding::encodesFieldName).orElse(false)
+        && RowDataKeyGen.isFieldPrefixedSingleRecordKey(conf);
+    return Option.of(PrimaryKeyPruners.getBucketIdFunc(indexKeyFilters, conf, prefixedSingleFieldKey));
   }
 
   public InputFormat<RowData, ?> getInputFormat() {
