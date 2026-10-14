@@ -303,8 +303,11 @@ public enum MetadataPartitionType {
       payload.filesystemMetadata = metadata;
       payload.filesystemMetadata.keySet().forEach(k -> {
         GenericRecord v = payload.filesystemMetadata.get(k);
+        // A record written before sourcePartitionPath existed has no such field, and
+        // GenericRecord#get throws rather than returning null for one it does not know.
+        Object sourcePartitionPath = getNestedFieldValue(v, "sourcePartitionPath");
         payload.filesystemMetadata.put(k, new HoodieMetadataFileInfo((Long) v.get("size"), (Boolean) v.get("isDeleted"),
-            v.get("sourceBasePath") == null ? null : v.get("sourceBasePath").toString()));
+            sourcePartitionPath == null ? null : sourcePartitionPath.toString()));
       });
     }
   }

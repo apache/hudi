@@ -315,12 +315,13 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   }
 
   /**
-   * @param fileToSourceBasePath for each added file that lives outside the table, the base path it
-   *                             lives under. Files absent from this map resolve under the table as usual.
+   * @param fileToSourcePartitionPath for each added file that lives outside the table, the absolute
+   *                                  path of the directory it lives in. Files absent from this map
+   *                                  resolve under the table partition as usual.
    */
   public static HoodieRecord<HoodieMetadataPayload> createPartitionFilesRecord(String partition,
                                                                                Map<String, Long> filesAdded,
-                                                                               Map<String, String> fileToSourceBasePath,
+                                                                               Map<String, String> fileToSourcePartitionPath,
                                                                                List<String> filesDeleted,
                                                                                boolean isPartitionDeleted) {
     String partitionIdentifier = getPartitionIdentifierForFilesPartition(partition);
@@ -336,7 +337,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       // should not be creating empty files
       checkState(fileSize > 0, () -> "File name " + fileName
           + ", is a 0 byte file. It does not have any contents");
-      fileInfo.put(fileName, new HoodieMetadataFileInfo(fileSize, false, fileToSourceBasePath.get(fileName)));
+      fileInfo.put(fileName, new HoodieMetadataFileInfo(fileSize, false, fileToSourcePartitionPath.get(fileName)));
     });
 
     filesDeleted.forEach(fileName -> fileInfo.put(fileName, DELETE_FILE_METADATA));
@@ -518,11 +519,11 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         .map(e -> {
           // NOTE: Since we know that the Metadata Table's Payload is simply a file-name we're
           //       creating Hadoop's Path using more performant unsafe variant
-          // A registered file lives outside the table, so it resolves against the base path it was
+          // A registered file lives outside the table, so it resolves against the directory it was
           // registered with rather than against this table's partition path.
-          StoragePath basePath = e.getValue().getSourceBasePath() == null
-              ? partitionPath : new StoragePath(e.getValue().getSourceBasePath());
-          return new StoragePathInfo(new StoragePath(basePath, e.getKey()), e.getValue().getSize(),
+          String sourcePartitionPath = e.getValue().getSourcePartitionPath();
+          StoragePath parent = sourcePartitionPath == null ? partitionPath : new StoragePath(sourcePartitionPath);
+          return new StoragePathInfo(new StoragePath(parent, e.getKey()), e.getValue().getSize(),
               false, (short) 0, blockSize, 0);
         })
         .collect(Collectors.toList());

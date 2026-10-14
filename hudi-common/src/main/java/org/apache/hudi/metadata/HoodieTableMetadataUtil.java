@@ -2462,9 +2462,10 @@ public class HoodieTableMetadataUtil {
                 }
                 return null;
               }
+              String sourcePartitionPath = newFileInfo.getSourcePartitionPath() != null
+                  ? newFileInfo.getSourcePartitionPath() : oldFileInfo.getSourcePartitionPath();
               return new HoodieMetadataFileInfo(
-                  Math.max(newFileInfo.getSize(), oldFileInfo.getSize()), false,
-                  newFileInfo.getSourceBasePath() != null ? newFileInfo.getSourceBasePath() : oldFileInfo.getSourceBasePath());
+                  Math.max(newFileInfo.getSize(), oldFileInfo.getSize()), false, sourcePartitionPath);
             });
       });
     }

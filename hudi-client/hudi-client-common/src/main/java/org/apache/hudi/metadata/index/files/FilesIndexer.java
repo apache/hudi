@@ -174,9 +174,9 @@ public class FilesIndexer extends BaseIndexer {
               List<HoodieWriteStat> writeStats = entry.getValue();
 
               HashMap<String, Long> updatedFilesToSizesMapping = new HashMap<>(writeStats.size());
-              // Files registered from outside the table (REGISTER_ONLY bootstrap) carry the base path
-              // they live under, so the files partition can address them where they are.
-              Map<String, String> fileToSourceBasePath = new HashMap<>();
+              // Files registered from outside the table (REGISTER_ONLY bootstrap) carry the directory
+              // they live in, so the files partition can address them where they are.
+              Map<String, String> fileToSourcePartitionPath = new HashMap<>();
               for (HoodieWriteStat stat : writeStats) {
                 String pathWithPartition = stat.getPath();
                 if (pathWithPartition == null) {
@@ -192,8 +192,8 @@ public class FilesIndexer extends BaseIndexer {
                 // of the sizes as reported after every write, since file-sizes are
                 // monotonically increasing (ie file-size never goes down, unless deleted)
                 updatedFilesToSizesMapping.merge(fileName, stat.getFileSizeInBytes(), Math::max);
-                if (stat.getSourceBasePath() != null) {
-                  fileToSourceBasePath.put(fileName, stat.getSourceBasePath());
+                if (stat.getSourcePartitionPath() != null) {
+                  fileToSourcePartitionPath.put(fileName, stat.getSourcePartitionPath());
                 }
 
                 Map<String, Long> cdcPathAndSizes = stat.getCdcStats();
@@ -205,7 +205,7 @@ public class FilesIndexer extends BaseIndexer {
 
               newFileCount.add(updatedFilesToSizesMapping.size());
               return HoodieMetadataPayload.createPartitionFilesRecord(partitionStatName, updatedFilesToSizesMapping,
-                  fileToSourceBasePath, Collections.emptyList(), false);
+                  fileToSourcePartitionPath, Collections.emptyList(), false);
             })
             .collect(Collectors.toList());
 

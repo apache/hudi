@@ -62,12 +62,14 @@ public class HoodieWriteStat extends HoodieReadStats {
   private String path;
 
   /**
-   * Base path the file lives under, when the file is not under the table base path. Set only for
-   * files registered into the table without being rewritten (REGISTER_ONLY bootstrap); null
-   * otherwise, in which case {@link #path} is relative to the table base path as usual.
+   * Absolute path of the directory the file lives in, when the file is not under the table base
+   * path. The file name — the last segment of {@link #path}, not the whole relative path — is
+   * resolved against it. Set only for files registered into the table without being rewritten
+   * (REGISTER_ONLY bootstrap); null otherwise, in which case {@link #path} is relative to the
+   * table base path as usual.
    */
   @Nullable
-  private String sourceBasePath;
+  private String sourcePartitionPath;
 
   /**
    * Relative CDC file path that store the CDC data and its size.
