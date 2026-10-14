@@ -34,7 +34,8 @@ public class HFileCursor {
 
   private static final int INVALID_POSITION = -1;
 
-  private int offset;
+  // Absolute position in the HFile, which can exceed Integer.MAX_VALUE for files larger than 2GB
+  private long offset;
   private Option<KeyValue> keyValue;
   @Getter(AccessLevel.NONE)
   private boolean eof;
@@ -53,12 +54,12 @@ public class HFileCursor {
     return !(offset == INVALID_POSITION || eof);
   }
 
-  public void set(int offset, KeyValue keyValue) {
+  public void set(long offset, KeyValue keyValue) {
     this.offset = offset;
     this.keyValue = Option.of(keyValue);
   }
 
-  public void setOffset(int offset) {
+  public void setOffset(long offset) {
     this.offset = offset;
     this.keyValue = Option.empty();
   }
