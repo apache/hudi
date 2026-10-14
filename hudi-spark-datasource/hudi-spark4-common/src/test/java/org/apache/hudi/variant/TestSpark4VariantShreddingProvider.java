@@ -26,6 +26,7 @@ import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.Conversions;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -228,6 +229,9 @@ class TestSpark4VariantShreddingProvider {
   @Test
   void decimalLeafShredsToBigDecimal() throws Exception {
     assertScalarShredsTo("123.45", HoodieSchema.createDecimal(10, 2), new BigDecimal("123.45"));
+    // Decimal-on-fixed still shreds: the decimal logical-type check runs before the FIXED decline.
+    assertScalarShredsTo("123.45", HoodieSchema.createDecimal("dec_fixed", "org.apache.hudi.test", null, 10, 2, 8),
+        new BigDecimal("123.45"));
   }
 
   @Test
@@ -266,6 +270,18 @@ class TestSpark4VariantShreddingProvider {
     // to the residual.
     assertStaysInResidual(scalar(b -> b.appendString("A")),
         HoodieSchema.createEnum("e", "org.apache.hudi.test", null, Arrays.asList("A", "B")));
+  }
+
+  @Test
+  void fixedLeafIsNotShredded() {
+    // Spark's VariantSchema has no fixed-length binary type, so a fixed typed_value (plain, or with
+    // a uuid logical type) declines to the residual instead of emitting a ByteBuffer / String that
+    // the fixed branch cannot hold (GH 19442).
+    assertStaysInResidual(scalar(b -> b.appendBinary(new byte[] {1, 2, 3, 4})),
+        HoodieSchema.createFixed("fixed4", "org.apache.hudi.test", null, 4));
+    UUID uuid = UUID.fromString("12345678-1234-1234-1234-123456789abc");
+    assertStaysInResidual(scalar(b -> b.appendUuid(uuid)), HoodieSchema.fromAvroSchema(
+        LogicalTypes.uuid().addToSchema(Schema.createFixed("uuid_fixed", null, "org.apache.hudi.test", 16))));
   }
 
   @Test

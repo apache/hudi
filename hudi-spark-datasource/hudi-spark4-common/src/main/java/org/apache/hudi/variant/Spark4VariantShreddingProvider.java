@@ -226,7 +226,9 @@ public class Spark4VariantShreddingProvider implements VariantShreddingProvider 
         return null;
       }
       if ("uuid".equals(name)) {
-        return new VariantSchema.UuidType();
+        // UuidType yields a UUID that convertScalarToAvro writes as a string, which a fixed(16)
+        // typed_value cannot hold. Decline to shred uuid-on-fixed; the value stays in the residual.
+        return schema.getType() == Schema.Type.FIXED ? null : new VariantSchema.UuidType();
       }
     }
 
@@ -246,7 +248,10 @@ public class Spark4VariantShreddingProvider implements VariantShreddingProvider 
       case BYTES:
         return new VariantSchema.BinaryType();
       case FIXED:
-        return new VariantSchema.BinaryType();
+        // Spark's VariantSchema has no fixed-length binary type: BinaryType would emit a ByteBuffer
+        // (not a GenericFixed) and ignore the fixed size. Decline to shred; the value stays in the
+        // residual. Decimal-on-fixed is unaffected (handled by the logical-type check above).
+        return null;
       default:
         return null;
     }
