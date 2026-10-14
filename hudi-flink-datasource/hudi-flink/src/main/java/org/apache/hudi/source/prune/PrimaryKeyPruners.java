@@ -22,9 +22,11 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.index.bucket.BucketIdentifier;
+import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.util.ExpressionUtils;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.expressions.Expression;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
@@ -42,7 +44,24 @@ import java.util.stream.Collectors;
 @Slf4j
 public class PrimaryKeyPruners {
 
+  /**
+   * Returns the bucket id function for a table whose single-field record keys are stored as the bare value,
+   * see {@link #getBucketIdFunc(List, Configuration, boolean)}.
+   */
+  @VisibleForTesting
   public static SerializableFunction<Integer, Integer> getBucketIdFunc(List<ResolvedExpression> hashKeyFilters, Configuration conf) {
+    return getBucketIdFunc(hashKeyFilters, conf, false);
+  }
+
+  /**
+   * Returns the function that computes the bucket id of the given hash key filters by the number of buckets.
+   *
+   * @param hashKeyFilters         The equivalence filters on all the bucket index key fields
+   * @param conf                   The table configuration
+   * @param prefixedSingleFieldKey Whether a single-field record key is stored as {@code <field>:<value>}
+   */
+  public static SerializableFunction<Integer, Integer> getBucketIdFunc(
+      List<ResolvedExpression> hashKeyFilters, Configuration conf, boolean prefixedSingleFieldKey) {
     List<String> pkFields = Arrays.asList(OptionsResolver.getRecordKeys(conf));
     // step1: resolve the hash key values
     final boolean logicalTimestamp = OptionsResolver.isConsistentLogicalTimestampEnabled(conf);
@@ -57,6 +76,12 @@ public class PrimaryKeyPruners {
         .map(Pair::getValue)
         .collect(Collectors.toList());
     // step2: generate bucket id
+    if (prefixedSingleFieldKey && pkFields.size() == 1) {
+      // writers hash the record key as stored, so rebuild the `<field>:<value>` key and hash it the same way
+      String recordKey = pkFields.get(0) + KeyGenerator.DEFAULT_COLUMN_VALUE_SEPARATOR + values.get(0);
+      List<String> indexKeyFields = OptionsResolver.getIndexKeyFields(conf);
+      return (numBuckets) -> BucketIdentifier.getBucketId(recordKey, indexKeyFields, numBuckets);
+    }
     return (numBuckets) -> BucketIdentifier.getBucketId(values, numBuckets);
   }
 
