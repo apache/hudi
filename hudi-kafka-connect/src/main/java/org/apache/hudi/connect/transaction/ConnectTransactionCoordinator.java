@@ -302,9 +302,9 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
   }
 
   private void startNewCommit() {
-    numPartitions = partitionProvider.getLatestNumPartitions(configs.getString(BOOTSTRAP_SERVERS_CFG), partition.topic());
     partitionsWriteStatusReceived.clear();
     try {
+      numPartitions = partitionProvider.getLatestNumPartitions(configs.getString(BOOTSTRAP_SERVERS_CFG), partition.topic());
       currentCommitTime = transactionServices.startCommit();
       kafkaControlClient.publishMessage(buildControlMessage(ControlMessage.EventType.START_COMMIT));
       currentState = State.STARTED_COMMIT;
