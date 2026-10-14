@@ -337,7 +337,14 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       // should not be creating empty files
       checkState(fileSize > 0, () -> "File name " + fileName
           + ", is a 0 byte file. It does not have any contents");
-      fileInfo.put(fileName, new HoodieMetadataFileInfo(fileSize, false, fileToSourcePartitionPath.get(fileName)));
+      String sourcePartitionPath = fileToSourcePartitionPath.get(fileName);
+      // Resolving the file name against anything but an absolute directory would silently yield a
+      // path relative to the process working directory, so refuse it here rather than on read.
+      checkState(sourcePartitionPath == null
+              || (!sourcePartitionPath.isEmpty() && new StoragePath(sourcePartitionPath).isAbsolute()),
+          () -> "Source partition path for file " + fileName + " must be an absolute directory, got '"
+              + sourcePartitionPath + "'");
+      fileInfo.put(fileName, new HoodieMetadataFileInfo(fileSize, false, sourcePartitionPath));
     });
 
     filesDeleted.forEach(fileName -> fileInfo.put(fileName, DELETE_FILE_METADATA));

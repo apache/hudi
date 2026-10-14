@@ -27,9 +27,15 @@ import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericDatumReader;
+import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.io.DecoderFactory;
+import org.apache.avro.io.Encoder;
+import org.apache.avro.io.EncoderFactory;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -37,6 +43,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -61,6 +68,12 @@ public class TestHoodieMetadataPayloadSourcePartitionPath {
           + "{\"type\":\"record\",\"name\":\"HoodieMetadataFileInfo\",\"fields\":["
           + "{\"name\":\"size\",\"type\":\"long\"},"
           + "{\"name\":\"isDeleted\",\"type\":\"boolean\"}]}}],\"default\":null}]}";
+
+  /** The same, for the file-info record on its own. */
+  private static final String FILE_INFO_SCHEMA_WITHOUT_SOURCE_PARTITION_PATH =
+      "{\"type\":\"record\",\"name\":\"HoodieMetadataFileInfo\",\"namespace\":\"org.apache.hudi.avro.model\","
+          + "\"fields\":[{\"name\":\"size\",\"type\":\"long\"},"
+          + "{\"name\":\"isDeleted\",\"type\":\"boolean\"}]}";
 
   private HoodieStorage storage() {
     HoodieStorage storage = mock(HoodieStorage.class);
@@ -152,6 +165,56 @@ public class TestHoodieMetadataPayloadSourcePartitionPath {
         HoodieTableMetadataUtil.combineFileSystemMetadata(registered, deleted);
 
     assertNull(combined.get("f1.parquet"));
+  }
+
+  @Test
+  public void testConflictingSourcePartitionPathsResolveTheSameWayInEitherOrder() {
+    HoodieMetadataPayload here = payloadFor(
+        Collections.singletonMap("f1.parquet", new HoodieMetadataFileInfo(64L, false, "/data/a/datestr=2022-06-15")));
+    HoodieMetadataPayload there = payloadFor(
+        Collections.singletonMap("f1.parquet", new HoodieMetadataFileInfo(64L, false, "/data/b/datestr=2022-06-15")));
+
+    Map<String, HoodieMetadataFileInfo> oneWay = HoodieTableMetadataUtil.combineFileSystemMetadata(here, there);
+    Map<String, HoodieMetadataFileInfo> otherWay = HoodieTableMetadataUtil.combineFileSystemMetadata(there, here);
+
+    assertEquals(otherWay.get("f1.parquet").getSourcePartitionPath(),
+        oneWay.get("f1.parquet").getSourcePartitionPath());
+  }
+
+  @Test
+  public void testASourcePartitionPathThatIsNotAnAbsoluteDirectoryIsRejected() {
+    Map<String, Long> filesAdded = Collections.singletonMap("f1.parquet", 128L);
+
+    assertThrows(IllegalStateException.class, () -> HoodieMetadataPayload.createPartitionFilesRecord(
+        "datestr=2022-06-15", filesAdded, Collections.singletonMap("f1.parquet", ""),
+        Collections.emptyList(), false));
+    assertThrows(IllegalStateException.class, () -> HoodieMetadataPayload.createPartitionFilesRecord(
+        "datestr=2022-06-15", filesAdded, Collections.singletonMap("f1.parquet", "data/hive_table"),
+        Collections.emptyList(), false));
+  }
+
+  /**
+   * Reads bytes written against the old schema back through the current one, so Avro's own writer
+   * /reader resolution is what fills the absent field in, rather than a hand-built record.
+   */
+  @Test
+  public void testFileInfoWrittenAgainstTheOldSchemaResolvesToANullSourcePartitionPath() throws Exception {
+    Schema oldFileInfoSchema = new Schema.Parser().parse(FILE_INFO_SCHEMA_WITHOUT_SOURCE_PARTITION_PATH);
+
+    GenericRecord oldFileInfo = new GenericData.Record(oldFileInfoSchema);
+    oldFileInfo.put("size", 128L);
+    oldFileInfo.put("isDeleted", false);
+
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    Encoder encoder = EncoderFactory.get().binaryEncoder(out, null);
+    new GenericDatumWriter<GenericRecord>(oldFileInfoSchema).write(oldFileInfo, encoder);
+    encoder.flush();
+
+    GenericRecord resolved = new GenericDatumReader<GenericRecord>(oldFileInfoSchema, HoodieMetadataFileInfo.SCHEMA$)
+        .read(null, DecoderFactory.get().binaryDecoder(out.toByteArray(), null));
+
+    assertEquals(128L, resolved.get("size"));
+    assertNull(resolved.get("sourcePartitionPath"));
   }
 
   @Test

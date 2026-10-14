@@ -57,6 +57,7 @@ public abstract class BaseTestCommitMetadataSerDe {
   protected static final String TEST_FILE_ID = "test-file-id";
   protected static final String TEST_PREV_COMMIT = "000001";
   protected static final String TEST_BASE_FILE = "test-base-file";
+  protected static final String TEST_SOURCE_PARTITION_PATH = "/data/hive_table/2023/01/01";
 
   protected String testPath;
 
@@ -282,6 +283,7 @@ public abstract class BaseTestCommitMetadataSerDe {
     writeStat.setTotalLogReadTimeMs(150L);
     writeStat.setTotalLogSizeCompacted(1024L);
     writeStat.setTempPath("temp/path/file1");
+    writeStat.setSourcePartitionPath(TEST_SOURCE_PARTITION_PATH);
 
     return writeStat;
   }
@@ -325,6 +327,7 @@ public abstract class BaseTestCommitMetadataSerDe {
     assertEquals(1024L, stat.getTotalLogSizeCompacted());
     assertEquals("temp/path/file1", stat.getTempPath());
     assertEquals(0L, stat.getNumUpdates());
+    assertEquals(TEST_SOURCE_PARTITION_PATH, stat.getSourcePartitionPath());
   }
 
   private void verifyReplaceFileIds(Map<String, List<String>> replaceFileIds) {
