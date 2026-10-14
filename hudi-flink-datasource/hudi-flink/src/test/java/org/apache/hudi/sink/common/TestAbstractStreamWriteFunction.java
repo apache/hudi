@@ -115,20 +115,21 @@ class TestAbstractStreamWriteFunction {
     assertEquals(42L, snapshot.getCheckpointId(), "Saved metadata belongs to the batch before checkpoint 43");
     assertEquals("002", snapshot.getInstantTime());
     assertTrue(snapshot.isBootstrap());
+    assertTrue(snapshot.isLastBatch(), "Checkpoint metadata contains the complete flushed batch");
     function.instantToWrite(true);
     verify(correspondent).requestInstantTime(43L, instantRequestPollBudget());
   }
 
   @ParameterizedTest
-  @ValueSource(ints = {0, 1, 2})
-  void testRestoredMetadataKeepsOriginalCheckpointId(int attempt) throws Exception {
+  @CsvSource({"0, false", "0, true", "1, false", "1, true", "2, false", "2, true"})
+  void testRestoredMetadataKeepsOriginalCheckpointId(int attempt, boolean lastBatch) throws Exception {
     WriteMetadataEvent restored = WriteMetadataEvent.builder()
         .taskID(0)
         .checkpointId(41L)
         .instantTime("001")
         .writeStatus(Collections.emptyList())
         .bootstrap(true)
-        .lastBatch(true)
+        .lastBatch(lastBatch)
         .build();
     writeMetadataState().add(restored);
     when(pendingTimeline.containsInstant("001")).thenReturn(true);
@@ -140,6 +141,7 @@ class TestAbstractStreamWriteFunction {
     assertEquals(2, bootstrap.getTaskID(), "Restore must use the new subtask ID");
     assertEquals(41L, bootstrap.getCheckpointId());
     assertEquals("001", bootstrap.getInstantTime());
+    assertEquals(lastBatch, bootstrap.isLastBatch(), "Replay preserves the checkpointed completion flag");
     function.instantToWrite(true);
     verify(correspondent).requestInstantTime(42L, instantRequestPollBudget());
   }

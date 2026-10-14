@@ -241,6 +241,7 @@ public abstract class AbstractStreamWriteFunction<I>
         .checkpointId(checkpointId)
         .instantTime(currentInstant)
         .writeStatus(new ArrayList<>(writeStatuses))
+        .lastBatch(true)
         .bootstrap(true)
         .metadataTable(isMetadataTable)
         .build();
