@@ -20,6 +20,7 @@
 package org.apache.hudi.variant;
 
 import org.apache.hudi.common.avro.ConvertingGenericData;
+import org.apache.hudi.common.avro.VariantShreddingProvider;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
@@ -30,6 +31,16 @@ import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.util.Utf8;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.parquet.avro.AvroSchemaConverterWithTimestampNTZ;
+import org.apache.parquet.schema.GroupType;
+import org.apache.parquet.schema.LogicalTypeAnnotation;
+import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.MessageTypeParser;
+import org.apache.parquet.schema.PrimitiveType;
+import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName;
+import org.apache.parquet.schema.Type;
 import org.apache.spark.types.variant.Variant;
 import org.apache.spark.types.variant.VariantBuilder;
 import org.junit.jupiter.api.Test;
@@ -41,14 +52,36 @@ import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.time.ZoneOffset;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Stream;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.apache.hudi.common.avro.HoodieAvroUtils.unwrapNullable;
 import static org.apache.hudi.common.schema.HoodieSchema.Variant.VARIANT_METADATA_FIELD;
 import static org.apache.hudi.common.schema.HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD;
 import static org.apache.hudi.common.schema.HoodieSchema.Variant.VARIANT_VALUE_FIELD;
+import static org.apache.parquet.schema.LogicalTypeAnnotation.TimeUnit.MICROS;
+import static org.apache.parquet.schema.LogicalTypeAnnotation.TimeUnit.MILLIS;
+import static org.apache.parquet.schema.LogicalTypeAnnotation.TimeUnit.NANOS;
+import static org.apache.parquet.schema.LogicalTypeAnnotation.bsonType;
+import static org.apache.parquet.schema.LogicalTypeAnnotation.decimalType;
+import static org.apache.parquet.schema.LogicalTypeAnnotation.enumType;
+import static org.apache.parquet.schema.LogicalTypeAnnotation.float16Type;
+import static org.apache.parquet.schema.LogicalTypeAnnotation.intType;
+import static org.apache.parquet.schema.LogicalTypeAnnotation.intervalType;
+import static org.apache.parquet.schema.LogicalTypeAnnotation.jsonType;
+import static org.apache.parquet.schema.LogicalTypeAnnotation.timeType;
+import static org.apache.parquet.schema.LogicalTypeAnnotation.timestampType;
+import static org.apache.parquet.schema.LogicalTypeAnnotation.uuidType;
+import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.BINARY;
+import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY;
+import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.INT32;
+import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.INT64;
+import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.INT96;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -58,12 +91,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Round-trip and behavior-pinning coverage for {@link Spark4VariantShreddingProvider}: shred an
  * unshredded variant, then reconstruct it, asserting both the intermediate shredded schema/values and
- * the reconstructed variant. This exercises {@code shredVariantRecord}, {@code rebuildVariantRecord},
- * {@code avroTypeToScalarType}, {@code convertScalarToAvro}, and the
+ * the reconstructed variant. This exercises {@code shredVariantRecord}, {@code avroTypeToScalarType},
+ * {@code convertScalarToAvro}, {@code prepareRebuild} (the read schema built from the file's parquet
+ * type, with each scalar leaf's {@code LeafDecoding}), and the
  * {@code AvroVariantRow}/{@code AvroObjectRow}/{@code AvroArrayRow} accessors across every reachable
  * scalar leaf type, object/array shapes, partial (residual) shredding, and the null/error guards - the
  * AVRO read-path reconstruction that the Spark MOR SQL test cannot reach (Spark compaction reads base
- * files via the InternalRow reader, not HoodieAvroParquetReader).
+ * files via the InternalRow reader, not HoodieAvroParquetReader). Parquet encodings Hudi's writer never
+ * produces are read straight from a parquet group and pinned against what Spark 4's reader returns.
  */
 class TestSpark4VariantShreddingProvider {
 
@@ -87,9 +122,19 @@ class TestSpark4VariantShreddingProvider {
     return record;
   }
 
+  /** Prepares the rebuild of {@code shredded} from the parquet group it is written as. */
+  private VariantShreddingProvider.VariantRebuilder rebuilder(HoodieSchema.Variant shredded) {
+    HoodieSchema record = HoodieSchema.createRecord("r", "org.apache.hudi.test", null,
+        Collections.singletonList(HoodieSchemaField.of("v", shredded)));
+    GroupType parquetType = new AvroSchemaConverterWithTimestampNTZ().convert(record).getType("v").asGroupType();
+    return provider.prepareRebuild("v", parquetType, unshreddedSchema);
+  }
+
   private Variant rebuild(GenericRecord shreddedRecord, HoodieSchema.Variant shredded) {
-    GenericRecord rebuilt =
-        provider.rebuildVariantRecord(shreddedRecord, shredded.getAvroSchema(), unshreddedSchema);
+    return toVariant(rebuilder(shredded).rebuild(shreddedRecord));
+  }
+
+  private static Variant toVariant(GenericRecord rebuilt) {
     return new Variant(toBytes(rebuilt.get(VARIANT_VALUE_FIELD)), toBytes(rebuilt.get(VARIANT_METADATA_FIELD)));
   }
 
@@ -162,14 +207,15 @@ class TestSpark4VariantShreddingProvider {
   }
 
   // ---------------------------------------------------------------------------
-  // Scalar leaf types: one per reachable branch of avroTypeToScalarType / convertScalarToAvro
-  // (the Byte/Short widening arms in convertScalarToAvro are unreachable: Avro has no byte/short).
+  // Scalar leaf types: one per branch of avroTypeToScalarType / convertScalarToAvro, each read back
+  // from the parquet type Hudi's writer gives it.
   // ---------------------------------------------------------------------------
 
   @Test
   void intLeafShredsToInteger() {
     // An integral variant shreds into an INT typed_value as a boxed Integer (Avro has no byte/short,
-    // so avroTypeToScalarType only ever emits IntegralSize.INT here).
+    // so the write side only ever emits IntegralSize.INT here; the narrower parquet INT(8) / INT(16)
+    // leaves only come from other writers, see rebuildsLeafFromItsParquetEncodingLikeSpark).
     assertScalarShredsTo(scalar(b -> b.appendLong(1000)), HoodieSchema.create(HoodieSchemaType.INT), 1000);
   }
 
@@ -205,19 +251,6 @@ class TestSpark4VariantShreddingProvider {
     byte[] payload = {'n', 'o', 't', '-', 'u', 't', 'f', '8', (byte) 0xC0, (byte) 0xFF};
     assertScalarShredsTo(scalar(b -> b.appendBinary(payload)),
         HoodieSchema.create(HoodieSchemaType.BYTES), ByteBuffer.wrap(payload));
-  }
-
-  @Test
-  void rebuildUuidFromStringLeaf() {
-    // A uuid typed_value is rejected on write (see rejectsTypedValueLeafSparkCannotShred) but stays
-    // readable, so the shredded record is built directly rather than through shred().
-    UUID uuid = UUID.fromString("12345678-1234-1234-1234-123456789abc");
-    Variant original = scalar(b -> b.appendUuid(uuid));
-    HoodieSchema.Variant shredded = shreddedLeaf(HoodieSchema.createUUID());
-    GenericRecord shreddedRecord = new GenericData.Record(shredded.getAvroSchema());
-    shreddedRecord.put(VARIANT_METADATA_FIELD, ByteBuffer.wrap(original.getMetadata()));
-    shreddedRecord.put(VARIANT_TYPED_VALUE_FIELD, uuid.toString());
-    assertEquals(original.toJson(ZoneOffset.UTC), rebuild(shreddedRecord, shredded).toJson(ZoneOffset.UTC));
   }
 
   @Test
@@ -415,7 +448,188 @@ class TestSpark4VariantShreddingProvider {
     GenericRecord shreddedRecord = shred(scalar(b -> b.appendDecimal(new BigDecimal("1.00"))), shredded);
     shreddedRecord.put(VARIANT_TYPED_VALUE_FIELD, "not-a-decimal");
     assertThrows(IllegalStateException.class,
-        () -> provider.rebuildVariantRecord(shreddedRecord, shredded.getAvroSchema(), unshreddedSchema));
+        () -> rebuilder(shredded).rebuild(shreddedRecord));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Reading a shredded file: each typed_value leaf is decoded by its parquet type, as Spark 4's own
+  // reader does. The footer's Avro conversion drops the encodings that matter here (unsigned and
+  // decimal INT32 / INT64, JSON, millisecond timestamps), so these leaves are built straight from a
+  // parquet group, fed the value parquet-avro reads for them, and compared with Spark's variant.
+  // ---------------------------------------------------------------------------
+
+  private static final byte[] EMPTY_METADATA = scalar(VariantBuilder::appendNull).getMetadata();
+
+  /** A typed_value leaf, built directly because Types refuses some encodings under test (e.g. DECIMAL(10, 0) on INT32). */
+  private static PrimitiveType leaf(PrimitiveTypeName type, int length, LogicalTypeAnnotation annotation) {
+    return new PrimitiveType(Type.Repetition.OPTIONAL, type, length, VARIANT_TYPED_VALUE_FIELD)
+        .withLogicalTypeAnnotation(annotation);
+  }
+
+  private static PrimitiveType leaf(PrimitiveTypeName type, LogicalTypeAnnotation annotation) {
+    return leaf(type, 0, annotation);
+  }
+
+  /** A top-level shredded variant column {@code v} with a scalar typed_value. */
+  private static GroupType shreddedColumn(PrimitiveType typedValue) {
+    return new GroupType(Type.Repetition.OPTIONAL, "v",
+        new PrimitiveType(Type.Repetition.REQUIRED, BINARY, VARIANT_METADATA_FIELD),
+        new PrimitiveType(Type.Repetition.OPTIONAL, BINARY, VARIANT_VALUE_FIELD),
+        typedValue);
+  }
+
+  /** The variant column {@code v} declared by a parquet schema snippet. */
+  private static GroupType column(String group) {
+    return MessageTypeParser.parseMessageType("message r { " + group + " }").getType("v").asGroupType();
+  }
+
+  /** The Avro schema HoodieAvroParquetReader reads {@code column} at: its footer conversion, lists unwrapped. */
+  private static Schema avroReadSchema(GroupType column) {
+    Configuration conf = new Configuration(false);
+    conf.setBoolean(AvroSchemaConverterWithTimestampNTZ.ADD_LIST_ELEMENT_RECORDS, false);
+    Schema record = new AvroSchemaConverterWithTimestampNTZ(conf).convert(new MessageType("r", column)).toAvroSchema();
+    return unwrapNullable(record.getField(column.getName()).schema());
+  }
+
+  private static Schema fieldSchema(Schema record, String field) {
+    return unwrapNullable(record.getField(field).schema());
+  }
+
+  private static GenericRecord record(Schema schema, String field, Object value) {
+    GenericRecord record = new GenericData.Record(schema);
+    record.put(field, value);
+    return record;
+  }
+
+  private static void assertSameVariant(Variant expected, Variant actual) {
+    assertEquals(expected.toJson(ZoneOffset.UTC), actual.toJson(ZoneOffset.UTC));
+    // The binary also pins the variant type, which the json can hide.
+    assertArrayEquals(expected.getValue(), actual.getValue(), "variant type or encoding differs");
+  }
+
+  private static Stream<Arguments> typedValueEncodingsSparkReads() {
+    byte[] bytes = {1, 2, 3, (byte) 0xFF};
+    String json = "{\"a\":[1,2]}";
+    long millis = 1_700_000_000_123L;
+    BigDecimal negative = new BigDecimal("-123.45");
+    Schema fixed5 = Schema.createFixed(VARIANT_TYPED_VALUE_FIELD, null, null, 5);
+    return Stream.of(
+        // Narrow and unsigned ints widen to the next signed size; INT(64, false) becomes DECIMAL(20, 0).
+        Arguments.of(leaf(INT32, intType(8, true)), -5, scalar(b -> b.appendLong(-5))),
+        Arguments.of(leaf(INT32, intType(16, false)), 60000, scalar(b -> b.appendLong(60000))),
+        Arguments.of(leaf(INT32, intType(32, false)), -1, scalar(b -> b.appendLong(4294967295L))),
+        Arguments.of(leaf(INT64, intType(64, false)), -1L,
+            scalar(b -> b.appendDecimal(new BigDecimal("18446744073709551615")))),
+        // A decimal on INT32 / INT64 arrives as its unscaled value.
+        Arguments.of(leaf(INT32, decimalType(2, 9)), 150, scalar(b -> b.appendDecimal(new BigDecimal("1.50")))),
+        Arguments.of(leaf(INT32, decimalType(2, 9)), -12345, scalar(b -> b.appendDecimal(negative))),
+        Arguments.of(leaf(INT64, decimalType(4, 18)), 123456789012345678L,
+            scalar(b -> b.appendDecimal(new BigDecimal("12345678901234.5678")))),
+        Arguments.of(leaf(FIXED_LEN_BYTE_ARRAY, 5, decimalType(2, 10)),
+            new Conversions.DecimalConversion().toFixed(negative, fixed5, LogicalTypes.decimal(10, 2)),
+            scalar(b -> b.appendDecimal(negative))),
+        // Millisecond timestamps scale to micros and keep the UTC / local distinction.
+        Arguments.of(leaf(INT64, timestampType(true, MILLIS)), millis, scalar(b -> b.appendTimestamp(millis * 1000))),
+        Arguments.of(leaf(INT64, timestampType(false, MILLIS)), millis, scalar(b -> b.appendTimestampNtz(millis * 1000))),
+        // JSON and ENUM read as strings; BSON and a plain FIXED_LEN_BYTE_ARRAY as binary.
+        Arguments.of(leaf(BINARY, jsonType()), ByteBuffer.wrap(json.getBytes(UTF_8)), scalar(b -> b.appendString(json))),
+        Arguments.of(leaf(BINARY, enumType()), new Utf8("A"), scalar(b -> b.appendString("A"))),
+        Arguments.of(leaf(BINARY, bsonType()), ByteBuffer.wrap(bytes), scalar(b -> b.appendBinary(bytes))),
+        Arguments.of(leaf(FIXED_LEN_BYTE_ARRAY, 4, null),
+            new GenericData.Fixed(Schema.createFixed(VARIANT_TYPED_VALUE_FIELD, null, null, 4), bytes),
+            scalar(b -> b.appendBinary(bytes))));
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("typedValueEncodingsSparkReads")
+  void rebuildsLeafFromItsParquetEncodingLikeSpark(PrimitiveType leaf, Object typedValue, Variant expected) {
+    GroupType column = shreddedColumn(leaf);
+    GenericRecord shreddedRecord = record(avroReadSchema(column), VARIANT_TYPED_VALUE_FIELD, typedValue);
+    shreddedRecord.put(VARIANT_METADATA_FIELD, ByteBuffer.wrap(EMPTY_METADATA));
+    assertSameVariant(expected, toVariant(provider.prepareRebuild("v", column, unshreddedSchema).rebuild(shreddedRecord)));
+  }
+
+  private static Stream<Arguments> typedValueEncodingsSparkRejects() {
+    String sparkRejects = "which Spark 4 does not support reading";
+    return Stream.of(
+        Arguments.of(leaf(INT32, timeType(true, MILLIS)), sparkRejects),
+        Arguments.of(leaf(INT64, timeType(true, MICROS)), sparkRejects),
+        Arguments.of(leaf(INT64, timeType(false, MICROS)), sparkRejects),
+        Arguments.of(leaf(INT64, timeType(true, NANOS)), sparkRejects),
+        Arguments.of(leaf(INT64, timestampType(true, NANOS)), sparkRejects),
+        Arguments.of(leaf(INT64, timestampType(false, NANOS)), sparkRejects),
+        Arguments.of(leaf(FIXED_LEN_BYTE_ARRAY, 2, float16Type()), sparkRejects),
+        Arguments.of(leaf(FIXED_LEN_BYTE_ARRAY, 16, uuidType()), sparkRejects),
+        Arguments.of(leaf(FIXED_LEN_BYTE_ARRAY, 12, intervalType()), sparkRejects),
+        Arguments.of(leaf(INT32, decimalType(0, 10)), sparkRejects),
+        Arguments.of(leaf(INT64, decimalType(0, 19)), sparkRejects),
+        Arguments.of(leaf(INT96, null), "INT96 typed_value is not supported by Hudi's Avro reader"));
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("typedValueEncodingsSparkRejects")
+  void rejectsLeafSparkCannotReadWhenPrepared(PrimitiveType leaf, String reason) {
+    // Fails when the file is opened, before any record, naming the column and the parquet type.
+    HoodieException e = assertThrows(HoodieException.class,
+        () -> provider.prepareRebuild("v", shreddedColumn(leaf), unshreddedSchema));
+    String message = e.getMessage();
+    assertTrue(message.contains("column 'v'") && message.contains("'" + leaf + "'") && message.contains(reason), message);
+  }
+
+  @Test
+  void rebuildsAndRejectsNestedLeavesByTheirParquetEncoding() throws Exception {
+    // DECIMAL(9, 2) on INT32 as an object field and as the element of a 3-level list.
+    GroupType column = column("optional group v { required binary metadata; optional binary value;"
+        + " optional group typed_value {"
+        + "   required group price { optional binary value; optional int32 typed_value (DECIMAL(9,2)); }"
+        + "   required group history { optional binary value; optional group typed_value (LIST) {"
+        + "     repeated group list { required group element {"
+        + "       optional binary value; optional int32 typed_value (DECIMAL(9,2)); } } } } } }");
+    Variant expected = VariantBuilder.parseJson("{\"price\":1.50,\"history\":[1.25,-0.75]}", false);
+
+    Schema v = avroReadSchema(column);
+    Schema typedValue = fieldSchema(v, VARIANT_TYPED_VALUE_FIELD);
+    Schema history = fieldSchema(typedValue, "history");
+    Schema element = unwrapNullable(fieldSchema(history, VARIANT_TYPED_VALUE_FIELD).getElementType());
+    GenericRecord typedValueRecord = new GenericData.Record(typedValue);
+    typedValueRecord.put("price", record(fieldSchema(typedValue, "price"), VARIANT_TYPED_VALUE_FIELD, 150));
+    typedValueRecord.put("history", record(history, VARIANT_TYPED_VALUE_FIELD, Arrays.asList(
+        record(element, VARIANT_TYPED_VALUE_FIELD, 125), record(element, VARIANT_TYPED_VALUE_FIELD, -75))));
+    GenericRecord shreddedRecord = record(v, VARIANT_TYPED_VALUE_FIELD, typedValueRecord);
+    shreddedRecord.put(VARIANT_METADATA_FIELD, ByteBuffer.wrap(expected.getMetadata()));
+    assertSameVariant(expected, toVariant(provider.prepareRebuild("v", column, unshreddedSchema).rebuild(shreddedRecord)));
+
+    // A leaf Spark rejects below an object field: the error carries the column's and the leaf's paths.
+    GroupType rejected = column("optional group v { required binary metadata; optional binary value;"
+        + " optional group typed_value {"
+        + "   required group t { optional binary value; optional int64 typed_value (TIME(MICROS,true)); } } }");
+    HoodieException e = assertThrows(HoodieException.class,
+        () -> provider.prepareRebuild("s.v", rejected, unshreddedSchema));
+    assertTrue(e.getMessage().contains("column 's.v'")
+        && e.getMessage().contains("typed_value 's.v.typed_value.t.typed_value'"), e.getMessage());
+  }
+
+  private static Stream<Arguments> invalidShreddingLayouts() {
+    String header = "optional group v { required binary metadata; optional binary value;";
+    return Stream.of(
+        Arguments.of("unknown field in an object field group", header
+            + " optional group typed_value { required group a {"
+            + "   optional binary value; optional int32 typed_value; optional binary extra; } } }", "v.typed_value.a"),
+        Arguments.of("MAP typed_value", header
+            + " optional group typed_value (MAP) { repeated group key_value { required binary key (STRING);"
+            + "   required group value { optional binary value; optional int32 typed_value; } } } }", "v.typed_value"),
+        Arguments.of("LIST typed_value of non-struct elements", header
+            + " optional group typed_value (LIST) { repeated group list { optional int32 element; } } }", "v.typed_value"),
+        Arguments.of("no top-level metadata",
+            "optional group v { optional binary value; optional int32 typed_value; }", "v"));
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("invalidShreddingLayouts")
+  void rejectsInvalidShreddingLayoutWhenPrepared(String layout, String group, String offendingPath) {
+    HoodieException e = assertThrows(HoodieException.class,
+        () -> provider.prepareRebuild("v", column(group), unshreddedSchema));
+    assertTrue(e.getMessage().contains("'" + offendingPath + "' is not a valid shredded variant layout"), e.getMessage());
   }
 
   // ---------------------------------------------------------------------------
@@ -439,9 +653,9 @@ class TestSpark4VariantShreddingProvider {
   @Test
   void rebuildReturnsNullForNullRecord() {
     // Coverage of a defensive guard only: the sole production caller (HoodieVariantReconstruction)
-    // already checks instanceof GenericRecord before calling rebuildVariantRecord.
+    // already checks instanceof GenericRecord before calling the rebuilder.
     HoodieSchema.Variant shredded = shreddedLeaf(HoodieSchema.create(HoodieSchemaType.LONG));
-    assertNull(provider.rebuildVariantRecord(null, shredded.getAvroSchema(), unshreddedSchema));
+    assertNull(rebuilder(shredded).rebuild(null));
   }
 
   @Test
@@ -450,7 +664,7 @@ class TestSpark4VariantShreddingProvider {
     GenericRecord shreddedRecord = shred(scalar(b -> b.appendLong(7)), shredded);
     shreddedRecord.put(VARIANT_METADATA_FIELD, null);
     assertThrows(HoodieException.class,
-        () -> provider.rebuildVariantRecord(shreddedRecord, shredded.getAvroSchema(), unshreddedSchema));
+        () -> rebuilder(shredded).rebuild(shreddedRecord));
   }
 
   private static byte[] toBytes(Object byteBuffer) {
