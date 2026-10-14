@@ -118,6 +118,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -570,11 +571,18 @@ public class TestStreamWriteOperatorCoordinator {
   @Test
   void testDuplicateBootstrapEvents() {
     String instant = requestInstantTime(-1);
+    WriteMetadataEvent partial = createOperatorEvent(0, -1, instant, "par1", false, false, 0.1);
+    partial.setLastBatch(false);
+    coordinator.handleEventFromOperator(0, partial);
     WriteMetadataEvent first = createBootstrapEvent(0, -1, instant, "par1");
     coordinator.handleEventFromOperator(0, first);
+    assertSame(first, coordinator.getEventBuffer(-1).getDataWriteEventBuffer()[0],
+        "Recovery must replace an incomplete ordinary event");
     coordinator.handleEventFromOperator(0, createBootstrapEvent(0, -1, instant, "par1"));
+    assertSame(first, coordinator.getEventBuffer(-1).getDataWriteEventBuffer()[0],
+        "A retry must preserve the existing bootstrap event");
     assertEquals(1, coordinator.getEventBuffer(-1).collectDataWriteStatuses().size(),
-        "A retry must replace the task's slot without accumulating write statuses");
+        "A retry must not accumulate write statuses");
     assertNull(TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()));
 
     // The other task's first delivery was lost; its retry completes the recovered batch.
@@ -608,6 +616,7 @@ public class TestStreamWriteOperatorCoordinator {
     assertEquals(dataEvent, buffer.getDataWriteEventBuffer()[0]);
     assertEquals(indexEvent, buffer.getIndexWriteEventBuffer()[0]);
     coordinator.handleEventFromOperator(0, createOperatorEvent(0, -1, instant, "record_index", true, true, 0.1, true));
+    assertSame(indexEvent, buffer.getIndexWriteEventBuffer()[0], "An index retry must preserve the existing bootstrap event");
     assertEquals(1, buffer.collectIndexWriteStatuses().size(), "An index retry must not accumulate write statuses");
     assertEquals(dataEvent, buffer.getDataWriteEventBuffer()[0], "An index retry must not replace the data writer's slot");
     assertFalse(buffer.allBootstrapEventsReceived());
