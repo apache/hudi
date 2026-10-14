@@ -41,7 +41,6 @@ import org.apache.flink.streaming.api.operators.collect.utils.MockFunctionSnapsh
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.util.Collector;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -120,8 +119,9 @@ class TestAbstractStreamWriteFunction {
     verify(correspondent).requestInstantTime(43L, instantRequestPollBudget());
   }
 
-  @Test
-  void testRestoredMetadataKeepsOriginalCheckpointId() throws Exception {
+  @ParameterizedTest
+  @ValueSource(ints = {0, 1, 2})
+  void testRestoredMetadataKeepsOriginalCheckpointId(int attempt) throws Exception {
     WriteMetadataEvent restored = WriteMetadataEvent.builder()
         .taskID(0)
         .checkpointId(41L)
@@ -133,9 +133,9 @@ class TestAbstractStreamWriteFunction {
     writeMetadataState().add(restored);
     when(pendingTimeline.containsInstant("001")).thenReturn(true);
 
-    initialize(42L, 0);
+    initialize(42L, attempt);
 
-    assertEquals(1, events.size());
+    assertEquals(attempt == 0 ? 1 : 2, events.size());
     WriteMetadataEvent bootstrap = (WriteMetadataEvent) events.get(0);
     assertEquals(2, bootstrap.getTaskID(), "Restore must use the new subtask ID");
     assertEquals(41L, bootstrap.getCheckpointId());

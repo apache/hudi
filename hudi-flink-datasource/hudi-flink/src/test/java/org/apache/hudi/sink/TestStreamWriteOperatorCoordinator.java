@@ -537,6 +537,51 @@ public class TestStreamWriteOperatorCoordinator {
     assertThat("Recommits the instant with partial uncommitted events", lastCompleted, is(instant));
   }
 
+  @Test
+  void testDuplicateBootstrapEvents() {
+    String instant = requestInstantTime(-1);
+    WriteMetadataEvent first = createBootstrapEvent(0, -1, instant, "par1");
+    coordinator.handleEventFromOperator(0, first);
+    coordinator.handleEventFromOperator(0, createBootstrapEvent(0, -1, instant, "duplicate"));
+    assertEquals(first, coordinator.getEventBuffer(-1).getDataWriteEventBuffer()[0],
+        "A retry must not replace already accepted metadata");
+    assertNull(TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()));
+
+    // The other task's first delivery was lost; its retry completes the recovered batch.
+    coordinator.handleEventFromOperator(1, createBootstrapEvent(1, -1, instant, "par2"));
+    assertEquals(instant, TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()));
+    assertNull(coordinator.getEventBuffer(-1));
+    coordinator.handleEventFromOperator(0, first);
+    assertNull(coordinator.getEventBuffer(-1), "A late retry must not recreate a committed buffer");
+
+    String nextInstant = requestInstantTime(1);
+    coordinator.handleEventFromOperator(0, createBootstrapEvent(0, 1, nextInstant, "par1"));
+    coordinator.handleEventFromOperator(1, createBootstrapEvent(1, 1, nextInstant, "par2"));
+    assertEquals(nextInstant, TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()));
+    coordinator.handleEventFromOperator(0, first);
+    assertNull(coordinator.getEventBuffer(-1), "Older retries must remain ignored after a newer checkpoint");
+  }
+
+  @Test
+  void testBootstrapDeduplicationSeparatesDataAndIndexWriters() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.INDEX_TYPE, GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.set(FlinkOptions.INDEX_WRITE_TASKS, 2);
+    coordinator.close();
+    coordinator = startCoordinator(conf, 2);
+    String instant = requestInstantTime(-1);
+    WriteMetadataEvent dataEvent = createBootstrapEvent(0, -1, instant, "par1");
+    WriteMetadataEvent indexEvent = createOperatorEvent(0, -1, instant, "record_index", true, true, 0.1, true);
+    coordinator.handleEventFromOperator(0, dataEvent);
+    coordinator.handleEventFromOperator(0, indexEvent);
+    EventBuffers.EventBuffer buffer = coordinator.getEventBuffer(-1);
+    assertEquals(dataEvent, buffer.getDataWriteEventBuffer()[0]);
+    assertEquals(indexEvent, buffer.getIndexWriteEventBuffer()[0]);
+    coordinator.handleEventFromOperator(0, createOperatorEvent(0, -1, instant, "duplicate", true, true, 0.1, true));
+    assertEquals(indexEvent, buffer.getIndexWriteEventBuffer()[0]);
+    assertFalse(buffer.allBootstrapEventsReceived());
+  }
+
   @ParameterizedTest
   @ValueSource(strings = {"GLOBAL_RECORD_LEVEL_INDEX", "RECORD_LEVEL_INDEX"})
   public void testRecordLevelIndexFlag(String indexType) throws Exception {

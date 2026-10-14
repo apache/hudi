@@ -98,16 +98,21 @@ import static org.apache.hudi.util.StreamerUtil.initTableIfNotExists;
  *
  * <p>Task failover workflow:
  * <pre>
- *             task failover
- *                  |
- *           initially started ?
- *            /(yes)     \(no)
- *           /            \
- *       has pending      send an empty
- *     instant event ?    bootstrap event
- *        /(yes)  \(no)
- *       /         \
- *    resend      no-op
+ *                task failover
+ *                     |
+ *       restored pending instant event ?
+ *               /(yes)     \(no)
+ *              /            \
+ *       resend metadata     |
+ *       on every attempt    |
+ *              \           /
+ *               \         /
+ *               attempt > 0 ?
+ *               /(yes)     \(no)
+ *              /           \
+ *       send an empty      no-op
+ *       bootstrap event
+ *       to clear legacy events
  * </pre>
  *
  * @see StreamWriteFunction         for the data inputs checkpointing and semantics
@@ -348,6 +353,9 @@ public class StreamWriteOperatorCoordinator
         restoreEvents(checkpointID);
       }
     }
+    if (this.eventBuffers != null) {
+      this.eventBuffers.resetBootstrapCheckpoints();
+    }
   }
 
   @Override
@@ -587,11 +595,10 @@ public class StreamWriteOperatorCoordinator
       this.eventBuffers.cleanLegacyEvents(event);
       return;
     }
-    EventBuffer eventBuffer = this.eventBuffers.getOrCreateBootstrapBuffer(event);
-    eventBuffer.addBootstrapEvent(event);
-    if (eventBuffer.allBootstrapEventsReceived()) {
+    EventBuffer bootstrapBuffer = this.eventBuffers.addBootstrapEvent(event);
+    if (bootstrapBuffer != null && bootstrapBuffer.allBootstrapEventsReceived()) {
       // start to recommit the instant.
-      boolean committed = recommitInstant(event.getCheckpointId(), event.getInstantTime(), eventBuffer);
+      boolean committed = recommitInstant(event.getCheckpointId(), event.getInstantTime(), bootstrapBuffer);
       if (committed && tableState.isRecordLevelIndex) {
         context.failJob(new HoodieException("There are pending instants recommitted on job restart,"
             + "triggering a global failover so that RLI bootstrap operator can load the record level index completely."));
