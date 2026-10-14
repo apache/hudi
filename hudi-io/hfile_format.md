@@ -323,8 +323,14 @@ blocks, and that is all Hudi's writer ever produces: it writes a single root lev
 
 With more than one level, the root index entries point at index blocks rather than data blocks. Those
 intermediate levels use the `IDXINTE2` (`INTERMEDIATE_INDEX`) magic and the bottom level uses `IDXLEAF2`
-(`LEAF_INDEX`); both carry the same block index entry layout described above. HBase produces these once a
-file has more data blocks than fit in a single root index.
+(`LEAF_INDEX`). HBase produces these once a file has more data blocks than fit in a single root index.
+
+The "Data" part of an intermediate or leaf index block does not use the root entry layout described above.
+It starts with a 4-byte integer entry count, followed by a secondary index of `count + 1` 4-byte integers,
+each the offset of an entry relative to the end of the secondary index (the last one points just past the
+final entry). The entries follow: an 8-byte long block offset, a 4-byte integer on-disk block size, and the
+key bytes with no length prefix, the key length being the distance to the next secondary index offset. The
+key bytes have the same format as in the root data index.
 
 Hudi's reader handles this so it can read HFiles written by HBase: starting from the root entries it walks
 down `num_data_index_levels`, reading each level's index blocks until the entries it holds are data block
@@ -446,3 +452,35 @@ Here are the meaning of each field:
 The last 4 bytes of the Trailer content contain the HFile version: the number represented by the first byte indicates
 the minor version, and the number represented by the last three bytes indicates the major version. In the case of Hudi,
 the major version should always be 3, if written by HBase HFile writer.
+
+## Offsets and size limits
+
+The format uses two different integer widths, and they bound different things: offsets bound the file, sizes bound a
+block.
+
+| Quantity                                                                                   | Width            |
+|--------------------------------------------------------------------------------------------|------------------|
+| Previous Block Offset (block header)                                                       | 8 bytes, long    |
+| Block Offset (root, intermediate and leaf index entries)                                   | 8 bytes, long    |
+| `file_info_offset`, `load_on_open_data_offset`, `first_data_block_offset`, `last_data_block_offset` (trailer) | `uint64` |
+| On-disk Size Without Header, Uncompressed Size Without Header, On-disk Data Size With Header (block header) | 4 bytes, integer |
+| Block Size on Disk (index entries)                                                         | 4 bytes, integer |
+| Key Length, Value Length (key-value pair)                                                  | 4 bytes, integer |
+| Entry count and secondary index offsets (intermediate and leaf index blocks)               | 4 bytes, integer |
+
+Every position in the file is 8 bytes, so an HFile can grow past 2 GiB (2^31 bytes) and past 4 GiB (2^32 bytes) with no
+change in layout. Hudi relies on this: the base file of a metadata table record index or secondary index file group is a
+single HFile, and the number of file groups is fixed when the index is built, so these files exceed 2 GiB on large
+tables.
+
+Every size is 4 bytes, so a single block (its on-disk and uncompressed sizes), a single key and a single value are each
+bounded to less than 2 GiB. HBase enforces the block bound by rejecting an on-disk block size of `Integer.MAX_VALUE` or
+more, and Hudi's reader reads each block into a single byte array of at most that length. In practice blocks are far
+smaller: Hudi's writer targets `hoodie.hfile.block.size`, 1 MiB by default.
+
+For an implementation this means that any absolute position in the file, such as the start offset of a block or the
+position of a read cursor, must be kept in a 64-bit integer, while a 32-bit integer is only safe for a position relative
+to the start of a block, which the block size bounds. A reader that narrows an absolute position to 32 bits reads the
+right bytes as long as it only ever subtracts two positions that wrapped the same way, and goes wrong the first time it
+compares such a position with an unwrapped one. This was the cause of valid lookups on metadata table HFiles larger than
+2 GiB being rejected as backward seeks, fixed in the native reader by widening the cursor position to a long.
