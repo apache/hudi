@@ -138,8 +138,6 @@ Header:
 - **On-disk Data Size With Header**: 4 bytes, integer, on disk data size with header.
 
   The three sizes are 4-byte integers, so a single block is bounded to less than 2 GiB, both on disk and uncompressed.
-  HBase rejects an on-disk block size of `Integer.MAX_VALUE` or more, and Hudi's reader reads each block into a single
-  byte array. In practice blocks are far smaller: Hudi's writer targets `hoodie.hfile.block.size`, 1 MiB by default.
 
 Data:
 
@@ -279,7 +277,7 @@ Each block index entry, referencing one relevant Data or Meta Block, has the fol
 ```
 
 - **Block Offset**: 8 bytes, long, the start offset of a data or meta block in the file. Being 8 bytes, it can address
-  a block anywhere in a file larger than 4 GiB; a reader must hold it in a 64-bit integer.
+  a block anywhere in a file larger than 4 GiB.
 - **Block Size on Disk**: 4 bytes, integer, the on-disk size of the block, so the block can be skipped based on the
   size. Being 4 bytes, it is another statement of the under-2-GiB bound on a single block.
 - **Key Length**: the length of the "Key" part, encoded as a Hadoop `WritableUtils` variable-length integer (VInt). A
@@ -426,12 +424,6 @@ It starts with the entry count and a secondary index of entry offsets, then the 
   `Entry Offset i+1 - Entry Offset i - 12`. The bytes have the same format as the key in a root data index
   entry.
 
-Hudi's reader handles this so it can read HFiles written by HBase. Rather than walking the tree on every
-lookup, it reads every index block once when opening the file: starting from the root entries it walks down
-`num_data_index_levels`, reading each level's index blocks until the entries it holds are data block
-entries, and keeps those in one in-memory map. Opening a multi-level file therefore costs one extra block
-read per index block below the root, and lookups then cost the same as on a single-level file.
-
 ## File Info Block
 
 The "Data" part of the File Info Block has the following format:
@@ -559,19 +551,9 @@ offset, the block offset in every index entry, the four trailer offsets) is 8 by
 header sizes, the block size in every index entry, key and value lengths, the entry count and entry offsets of a
 non-root index block) is 4 bytes. Offsets bound the file; sizes bound a block.
 
-- **File size is unbounded.** An HFile can grow past 2 GiB and past 4 GiB with no change in layout. Hudi relies on
-  this: the base file of a metadata table record index or secondary index file group is a single HFile, and the number
-  of file groups is fixed when the index is built, so these files exceed 2 GiB on large tables.
+- **File size is unbounded.** An HFile can grow past 2 GiB and past 4 GiB with no change in layout.
 - **A block, a key and a value are each bounded to less than 2 GiB**, as described under
   [Block format](#block-format) and [Data Block](#data-block).
 
-For an implementation, this means:
-
-- an absolute position in the file, such as the start offset of a block or the position of a read cursor, must be held
-  in a 64-bit integer;
-- a 32-bit integer is only safe for a position relative to the start of a block, which the block size bounds.
-
-A reader that narrows an absolute position to 32 bits still reads the right bytes as long as it only subtracts two
-positions that wrapped the same way, and breaks the first time it compares such a position with an unwrapped one. That
-is how valid lookups on metadata table HFiles larger than 2 GiB came to be rejected as backward seeks; the native reader
-now keeps the cursor position in a long.
+It follows that a position in the file needs 64 bits, while a position relative to the start of a block fits in 32
+bits.
