@@ -21,6 +21,7 @@ package org.apache.hudi.io.hfile;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
@@ -30,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -48,7 +50,7 @@ public class TestHFileBlockCache {
     HFileBlockCache.BlockCacheKey key3 = new HFileBlockCache.BlockCacheKey(null, 300, 64);
 
     assertNotEquals(key1, key2);
-    assertEquals(new HFileBlockCache.BlockCacheKey(null,100, 64), key1);
+    assertEquals(new HFileBlockCache.BlockCacheKey(null, 100, 64), key1);
 
     // Create test blocks using mock implementation with valid HFile block data
     HFileContext context = HFileContext.builder()
@@ -137,6 +139,87 @@ public class TestHFileBlockCache {
 
     // 6. Final check: ensure the pre-existing block is still accessible
     assertSame(preExistingBlock, cache.getBlock(preExistingKey), "Pre-existing block should remain untouched.");
+  }
+
+  @Test
+  public void testGetOrComputeSurfacesLoaderIOExceptionAndCachesNothing() throws Exception {
+    HFileBlockCache cache = new HFileBlockCache(10, 30, TimeUnit.MINUTES);
+    HFileBlockCache.BlockCacheKey key = new HFileBlockCache.BlockCacheKey("file-A", 1024, 128);
+    IOException loadFailure = new IOException("block read failed");
+    AtomicInteger loaderExecutionCount = new AtomicInteger(0);
+
+    IOException thrown = assertThrows(IOException.class, () -> cache.getOrCompute(key, () -> {
+      loaderExecutionCount.incrementAndGet();
+      throw loadFailure;
+    }));
+    assertSame(loadFailure, thrown, "The loader's IOException should surface unwrapped.");
+    assertEquals(0, cache.size(), "A failed load should leave nothing in the cache.");
+
+    IllegalStateException unchecked = assertThrows(IllegalStateException.class, () -> cache.getOrCompute(key, () -> {
+      throw new IllegalStateException("unchecked");
+    }));
+    assertEquals("unchecked", unchecked.getMessage());
+
+    MockHFileDataBlock block = new MockHFileDataBlock(HFileContext.builder().build(), createValidHFileBlockData(), 0);
+    assertSame(block, cache.getOrCompute(key, () -> {
+      loaderExecutionCount.incrementAndGet();
+      return block;
+    }));
+    assertEquals(2, loaderExecutionCount.get(), "The key should be loaded again after the failed attempt.");
+    assertEquals(1, cache.size());
+  }
+
+  @Test
+  public void testByteWeightedEviction() {
+    HFileContext context = HFileContext.builder().build();
+    byte[] validBlockData = createValidHFileBlockData();
+    int blockWeight = new MockHFileDataBlock(context, validBlockData, 0).heapSize();
+    assertTrue(blockWeight > 0, "heapSize must be positive to weigh blocks");
+
+    // Room for two blocks and a half: the third insert must evict by weight even though the
+    // count bound would hold a million blocks.
+    long maxWeightBytes = 2L * blockWeight + (blockWeight / 2);
+    HFileBlockCache cache = new HFileBlockCache(1_000_000, maxWeightBytes, 30, TimeUnit.MINUTES);
+
+    cache.putBlock(new HFileBlockCache.BlockCacheKey("f", 100, 64), new MockHFileDataBlock(context, validBlockData, 0));
+    cache.putBlock(new HFileBlockCache.BlockCacheKey("f", 200, 64), new MockHFileDataBlock(context, validBlockData, 0));
+    cache.putBlock(new HFileBlockCache.BlockCacheKey("f", 300, 64), new MockHFileDataBlock(context, validBlockData, 0));
+    cache.cleanUp();
+
+    assertTrue(cache.size() <= 2, "Byte-weighted cache must evict by weight, not count. size=" + cache.size());
+  }
+
+  @Test
+  public void testStatsStringReportsHitsAndMisses() throws Exception {
+    HFileContext context = HFileContext.builder().build();
+    MockHFileDataBlock block = new MockHFileDataBlock(context, createValidHFileBlockData(), 0);
+    HFileBlockCache cache = new HFileBlockCache(10, 4L * 1024 * 1024, 30, TimeUnit.MINUTES);
+
+    HFileBlockCache.BlockCacheKey key = new HFileBlockCache.BlockCacheKey("f", 1024, 128);
+    cache.getOrCompute(key, () -> block);
+    cache.getOrCompute(key, () -> block);
+
+    String stats = cache.statsString();
+    assertTrue(stats.contains("blocks=1"), "expected one block in: " + stats);
+    assertTrue(stats.contains("hits=1"), "expected one hit in: " + stats);
+    assertTrue(stats.contains("misses=1"), "expected one miss in: " + stats);
+  }
+
+  @Test
+  public void testHeapSizeWeighsBlockSpanNotBackingArray() {
+    HFileContext context = HFileContext.builder().build();
+    byte[] block = createValidHFileBlockData();
+    int expectedSpan = block.length;
+
+    // The same block embedded at an offset inside a much larger shared array, as a block sliced
+    // from a load-on-open buffer is.
+    int pad = 400;
+    byte[] backing = new byte[pad + block.length + 128];
+    System.arraycopy(block, 0, backing, pad, block.length);
+    MockHFileDataBlock sliced = new MockHFileDataBlock(context, backing, pad);
+
+    assertEquals(expectedSpan, sliced.heapSize(),
+        "heapSize must weigh the block span, not the shared backing array length");
   }
 
   /**
