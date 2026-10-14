@@ -33,6 +33,9 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.types.variant.Variant;
 import org.apache.spark.types.variant.VariantBuilder;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
@@ -41,6 +44,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.schema.HoodieSchema.Variant.VARIANT_METADATA_FIELD;
 import static org.apache.hudi.common.schema.HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD;
@@ -204,9 +208,16 @@ class TestSpark4VariantShreddingProvider {
   }
 
   @Test
-  void uuidShredsToString() {
+  void rebuildUuidFromStringLeaf() {
+    // A uuid typed_value is rejected on write (see rejectsTypedValueLeafSparkCannotShred) but stays
+    // readable, so the shredded record is built directly rather than through shred().
     UUID uuid = UUID.fromString("12345678-1234-1234-1234-123456789abc");
-    assertScalarShredsTo(scalar(b -> b.appendUuid(uuid)), HoodieSchema.createUUID(), uuid.toString());
+    Variant original = scalar(b -> b.appendUuid(uuid));
+    HoodieSchema.Variant shredded = shreddedLeaf(HoodieSchema.createUUID());
+    GenericRecord shreddedRecord = new GenericData.Record(shredded.getAvroSchema());
+    shreddedRecord.put(VARIANT_METADATA_FIELD, ByteBuffer.wrap(original.getMetadata()));
+    shreddedRecord.put(VARIANT_TYPED_VALUE_FIELD, uuid.toString());
+    assertEquals(original.toJson(ZoneOffset.UTC), rebuild(shreddedRecord, shredded).toJson(ZoneOffset.UTC));
   }
 
   @Test
@@ -229,7 +240,7 @@ class TestSpark4VariantShreddingProvider {
   @Test
   void decimalLeafShredsToBigDecimal() throws Exception {
     assertScalarShredsTo("123.45", HoodieSchema.createDecimal(10, 2), new BigDecimal("123.45"));
-    // Decimal-on-fixed still shreds: the decimal logical-type check runs before the FIXED decline.
+    // Decimal-on-fixed still shreds: a fixed typed_value is rejected unless it carries a decimal.
     assertScalarShredsTo("123.45", HoodieSchema.createDecimal("dec_fixed", "org.apache.hudi.test", null, 10, 2, 8),
         new BigDecimal("123.45"));
   }
@@ -248,16 +259,6 @@ class TestSpark4VariantShreddingProvider {
   // ---------------------------------------------------------------------------
 
   @Test
-  void microsTimestampIsNotShreddedIntoMillisLeaf() {
-    // A millisecond-precision typed_value cannot represent a micros variant timestamp, so
-    // avroTypeToScalarType returns null and the value is left unshredded in the residual.
-    assertStaysInResidual(scalar(b -> b.appendTimestamp(1_700_000_000_000_000L)),
-        HoodieSchema.createTimestampMillis());
-    assertStaysInResidual(scalar(b -> b.appendTimestampNtz(1_700_000_000_000_000L)),
-        HoodieSchema.createLocalTimestampMillis());
-  }
-
-  @Test
   void lossyDecimalIsNotShredded() {
     // decimal(10,2) cannot represent 123.456 exactly, so the value must fall to the residual.
     assertStaysInResidual(scalar(b -> b.appendDecimal(new BigDecimal("123.456"))),
@@ -265,29 +266,49 @@ class TestSpark4VariantShreddingProvider {
   }
 
   @Test
-  void enumLeafIsNotShredded() {
-    // avroTypeToScalarType has no mapping for ENUM (the default: branch), so the value declines
-    // to the residual.
-    assertStaysInResidual(scalar(b -> b.appendString("A")),
-        HoodieSchema.createEnum("e", "org.apache.hudi.test", null, Arrays.asList("A", "B")));
-  }
-
-  @Test
-  void fixedLeafIsNotShredded() {
-    // Spark's VariantSchema has no fixed-length binary type, so a fixed typed_value (plain, or with
-    // a uuid logical type) declines to the residual instead of emitting a ByteBuffer / String that
-    // the fixed branch cannot hold (GH 19442).
-    assertStaysInResidual(scalar(b -> b.appendBinary(new byte[] {1, 2, 3, 4})),
-        HoodieSchema.createFixed("fixed4", "org.apache.hudi.test", null, 4));
-    UUID uuid = UUID.fromString("12345678-1234-1234-1234-123456789abc");
-    assertStaysInResidual(scalar(b -> b.appendUuid(uuid)), HoodieSchema.fromAvroSchema(
-        LogicalTypes.uuid().addToSchema(Schema.createFixed("uuid_fixed", null, "org.apache.hudi.test", 16))));
-  }
-
-  @Test
   void noTypedValueSchemaRoundTrips() throws Exception {
     // A shredded schema without typed_value keeps the whole variant in the residual value.
     assertRoundTrips("{\"a\":1}", HoodieSchema.createVariantShredded(null));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Leaf types Spark 4 cannot shred: rejected on write, as Spark's own
+  // SparkShreddingUtils.buildVariantSchema rejects them (GH 19442).
+  // ---------------------------------------------------------------------------
+
+  private static Stream<Arguments> typedValueLeavesSparkCannotShred() {
+    UUID uuid = UUID.fromString("12345678-1234-1234-1234-123456789abc");
+    long micros = 1_700_000_000_000_000L;
+    return Stream.of(
+        Arguments.of("fixed", HoodieSchema.createFixed("fixed4", "org.apache.hudi.test", null, 4),
+            scalar(b -> b.appendBinary(new byte[] {1, 2, 3, 4}))),
+        Arguments.of("uuid on fixed", HoodieSchema.fromAvroSchema(
+            LogicalTypes.uuid().addToSchema(Schema.createFixed("uuid_fixed", null, "org.apache.hudi.test", 16))),
+            scalar(b -> b.appendUuid(uuid))),
+        Arguments.of("uuid on string", HoodieSchema.createUUID(), scalar(b -> b.appendUuid(uuid))),
+        Arguments.of("timestamp-millis", HoodieSchema.createTimestampMillis(),
+            scalar(b -> b.appendTimestamp(micros))),
+        Arguments.of("local-timestamp-millis", HoodieSchema.createLocalTimestampMillis(),
+            scalar(b -> b.appendTimestampNtz(micros))),
+        Arguments.of("timestamp-nanos", HoodieSchema.fromAvroSchema(
+            LogicalTypes.timestampNanos().addToSchema(Schema.create(Schema.Type.LONG))),
+            scalar(b -> b.appendTimestamp(micros))),
+        Arguments.of("local-timestamp-nanos", HoodieSchema.fromAvroSchema(
+            LogicalTypes.localTimestampNanos().addToSchema(Schema.create(Schema.Type.LONG))),
+            scalar(b -> b.appendTimestampNtz(micros))),
+        Arguments.of("time-millis", HoodieSchema.createTimeMillis(), scalar(b -> b.appendLong(1000))),
+        Arguments.of("time-micros", HoodieSchema.createTimeMicros(), scalar(b -> b.appendLong(1000))),
+        Arguments.of("enum", HoodieSchema.createEnum("e", "org.apache.hudi.test", null, Arrays.asList("A", "B")),
+            scalar(b -> b.appendString("A"))),
+        Arguments.of("map", HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.LONG)),
+            scalar(b -> b.appendLong(1))));
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("typedValueLeavesSparkCannotShred")
+  void rejectsTypedValueLeafSparkCannotShred(String leaf, HoodieSchema typedValue, Variant variant) {
+    HoodieException e = assertThrows(HoodieException.class, () -> shred(variant, shreddedLeaf(typedValue)));
+    assertTrue(e.getMessage().contains("Spark 4 cannot shred"), "unexpected message: " + e.getMessage());
   }
 
   // ---------------------------------------------------------------------------

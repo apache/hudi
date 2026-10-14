@@ -176,7 +176,16 @@ public class Spark4VariantShreddingProvider implements VariantShreddingProvider 
           break;
 
         default:
-          // Scalar shredding
+          // Scalar shredding. On write (non-null builder), reject leaf types Spark 4 cannot shred,
+          // as SparkShreddingUtils.buildVariantSchema does with invalidVariantShreddingSchema.
+          if (builder != null && !isSparkShreddableScalar(tvSchema)) {
+            LogicalType logicalType = tvSchema.getLogicalType();
+            String typeName = tvSchema.getType().getName()
+                + (logicalType == null ? "" : " (" + logicalType.getName() + ")");
+            throw new HoodieException("Variant shredding schema has a typed_value of type " + typeName
+                + ", which Spark 4 cannot shred. Supported typed_value types: boolean, int, long, float, "
+                + "double, string, bytes, decimal, date, timestamp-micros, local-timestamp-micros.");
+          }
           scalarSchema = avroTypeToScalarType(tvSchema);
           break;
       }
@@ -193,6 +202,34 @@ public class Spark4VariantShreddingProvider implements VariantShreddingProvider 
     }
 
     return result;
+  }
+
+  /**
+   * Whether a scalar {@code typed_value} is the Avro equivalent of a scalar type Spark 4's
+   * {@code SparkShreddingUtils.buildVariantSchema} accepts.
+   */
+  private static boolean isSparkShreddableScalar(Schema schema) {
+    LogicalType logicalType = schema.getLogicalType();
+    String logicalName = logicalType == null ? null : logicalType.getName();
+    switch (schema.getType()) {
+      case BOOLEAN:
+      case FLOAT:
+      case DOUBLE:
+      case STRING: // a uuid string is not allowed
+        return logicalName == null;
+      case INT:
+        return logicalName == null || "date".equals(logicalName);
+      case LONG:
+        return logicalName == null
+            || "timestamp-micros".equals(logicalName)
+            || "local-timestamp-micros".equals(logicalName);
+      case BYTES:
+        return logicalName == null || "decimal".equals(logicalName);
+      case FIXED:
+        return "decimal".equals(logicalName);
+      default:
+        return false;
+    }
   }
 
   /**
@@ -219,16 +256,14 @@ public class Spark4VariantShreddingProvider implements VariantShreddingProvider 
         return new VariantSchema.TimestampNTZType();
       }
       // The Variant binary spec stores timestamps in microseconds, so a millisecond-precision
-      // typed_value cannot represent a variant timestamp. Decline to shred it as a scalar (the value
-      // stays in the residual unshredded binary) rather than mapping it to the micros TimestampType,
-      // which would silently scale the value by 1000x.
+      // typed_value cannot represent a variant timestamp. Map it to no scalar type rather than the
+      // micros TimestampType, which would silently scale the value by 1000x. (The write path
+      // rejects such a leaf before reaching here.)
       if ("timestamp-millis".equals(name) || "local-timestamp-millis".equals(name)) {
         return null;
       }
       if ("uuid".equals(name)) {
-        // UuidType yields a UUID that convertScalarToAvro writes as a string, which a fixed(16)
-        // typed_value cannot hold. Decline to shred uuid-on-fixed; the value stays in the residual.
-        return schema.getType() == Schema.Type.FIXED ? null : new VariantSchema.UuidType();
+        return new VariantSchema.UuidType();
       }
     }
 
@@ -248,10 +283,7 @@ public class Spark4VariantShreddingProvider implements VariantShreddingProvider 
       case BYTES:
         return new VariantSchema.BinaryType();
       case FIXED:
-        // Spark's VariantSchema has no fixed-length binary type: BinaryType would emit a ByteBuffer
-        // (not a GenericFixed) and ignore the fixed size. Decline to shred; the value stays in the
-        // residual. Decimal-on-fixed is unaffected (handled by the logical-type check above).
-        return null;
+        return new VariantSchema.BinaryType();
       default:
         return null;
     }
