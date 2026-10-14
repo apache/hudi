@@ -64,8 +64,7 @@ public abstract class HFileBlock {
   // KeyValue key suffix beyond the row: column-family length (1) + timestamp (8) + type (1).
   private static final int KEY_METADATA_SUFFIX_LENGTH = SIZEOF_BYTE + SIZEOF_INT64 + SIZEOF_BYTE;
 
-  // A serialized block (header, data, checksum) is held in one byte array, whose size a JVM caps a
-  // few bytes short of Integer.MAX_VALUE.
+  // A serialized block is held in one byte array, which the JVM caps just below Integer.MAX_VALUE.
   static final long MAX_SERIALIZED_BLOCK_SIZE = Integer.MAX_VALUE - 8;
 
   static class Header {
@@ -145,11 +144,7 @@ public abstract class HFileBlock {
   }
 
   /**
-   * Rejects a block header whose sizes cannot be right, before they are used to allocate buffers
-   * or locate content: a negative size, a checksum chunk size of zero, an on-disk size that runs
-   * past the end of the buffer holding the block, an uncompressed size that exceeds the on-disk
-   * size although the block is not compressed, or an uncompressed size too large for one byte
-   * array once the header and checksum bytes are added.
+   * Rejects impossible header sizes before they are used to allocate buffers or locate content.
    */
   private void validateHeader(byte[] byteBuff, int startOffsetInBuff) {
     long blockEndInBuff = (long) startOffsetInBuff + HFILEBLOCK_HEADER_SIZE + onDiskSizeWithoutHeader;

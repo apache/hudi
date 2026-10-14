@@ -100,9 +100,8 @@ class TestHFileWriter {
           + "616161616161616161616161616161616161616161007fffffffffffffff0400000000";
 
   /**
-   * With the data block capacity lowered to 100 bytes, a second record under the same key (kept in
-   * the same block) and a single record larger than a block are both rejected before they change
-   * the writer's state, so the file written afterwards only reflects the accepted record.
+   * Same-key and oversized records beyond the block capacity are rejected without changing the
+   * writer's state.
    */
   @Test
   void testAppendRejectsRecordsExceedingDataBlockCapacity() throws IOException {
