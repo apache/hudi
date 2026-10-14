@@ -1023,4 +1023,32 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       }
     }
   }
+
+  @ParameterizedTest
+  @CsvSource(Array("COPY_ON_WRITE,earliest", "MERGE_ON_READ,earliest", "COPY_ON_WRITE,EARLIEST", "MERGE_ON_READ,EARLIEST"))
+  def testCDCReadFromEarliest(tableType: String, beginInstant: String): Unit = {
+    val options = commonOpts ++ Map(DataSourceWriteOptions.TABLE_TYPE.key() -> tableType)
+
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
+    spark.read.json(spark.sparkContext.parallelize(records1, 2))
+      .write.format("org.apache.hudi")
+      .options(options)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    metaClient = createMetaClient(spark, basePath)
+    val commitTime1 = metaClient.reloadActiveTimeline.lastInstant().get().requestedTime
+
+    val records2 = recordsToStrings(dataGen.generateUniqueUpdates("001", 30)).asScala.toList
+    spark.read.json(spark.sparkContext.parallelize(records2, 2))
+      .write.format("org.apache.hudi")
+      .options(options)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val cdcFromEarliest = cdcDataFrame(beginInstant)
+    assertCDCOpCnt(cdcFromEarliest, 100, 30, 0)
+    assertEquals(
+      cdcDataFrame(instantBefore(commitTime1)).collect().map(_.toString).sorted.toSeq,
+      cdcFromEarliest.collect().map(_.toString).sorted.toSeq)
+  }
 }
