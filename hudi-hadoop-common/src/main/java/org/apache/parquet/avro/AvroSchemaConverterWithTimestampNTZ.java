@@ -354,7 +354,7 @@ public class AvroSchemaConverterWithTimestampNTZ extends HoodieAvroParquetSchema
   }
 
   private HoodieSchema convertFields(String name, List<Type> parquetFields, Map<String, Integer> names) {
-    String ns = namespace(name, names);
+    String ns = nextDedupNamespace(name, names);
     List<HoodieSchemaField> fields = new ArrayList<>(parquetFields.size());
     for (Type parquetType : parquetFields) {
       HoodieSchema fieldSchema = convertField(parquetType, names);
@@ -373,7 +373,7 @@ public class AvroSchemaConverterWithTimestampNTZ extends HoodieAvroParquetSchema
   }
 
   // PARQUET-2456: repeated record and fixed names get a dedup namespace so the schema survives toString and parse
-  private static String namespace(String name, Map<String, Integer> names) {
+  private static String nextDedupNamespace(String name, Map<String, Integer> names) {
     Integer nameCount = names.merge(name, 1, (oldValue, value) -> oldValue + 1);
     return nameCount > 1 ? name + nameCount : null;
   }
@@ -431,7 +431,7 @@ public class AvroSchemaConverterWithTimestampNTZ extends HoodieAvroParquetSchema
               } else {
                 int size = parquetType.asPrimitiveType().getTypeLength();
                 String name = parquetType.getName();
-                String ns = namespace(name, names);
+                String ns = nextDedupNamespace(name, names);
                 return HoodieSchema.createFixed(name, ns, null, size);
               }
             }
@@ -555,7 +555,7 @@ public class AvroSchemaConverterWithTimestampNTZ extends HoodieAvroParquetSchema
         if (primitiveType == FIXED_LEN_BYTE_ARRAY) {
           int fixedSize = parquetType.asPrimitiveType().getTypeLength();
           String name = parquetType.getName();
-          String ns = namespace(name, names);
+          String ns = nextDedupNamespace(name, names);
           return java.util.Optional.of(HoodieSchema.createDecimal(name, ns, null,
               decimalLogicalType.getPrecision(), decimalLogicalType.getScale(), fixedSize));
         } else if (primitiveType == BINARY) {
