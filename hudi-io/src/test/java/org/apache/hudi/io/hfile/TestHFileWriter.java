@@ -66,6 +66,7 @@ import static org.apache.hudi.io.hfile.HFileInfo.MAX_MVCC_TS_KEY;
 import static org.apache.hudi.io.hfile.HFileTrailer.TRAILER_SIZE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestHFileWriter {
@@ -97,6 +98,40 @@ class TestHFileWriter {
           + "746161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161"
           + "616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161"
           + "616161616161616161616161616161616161616161007fffffffffffffff0400000000";
+
+  /**
+   * With the data block capacity lowered to 100 bytes, a second record under the same key (kept in
+   * the same block) and a single record larger than a block are both rejected before they change
+   * the writer's state, so the file written afterwards only reflects the accepted record.
+   */
+  @Test
+  void testAppendRejectsRecordsExceedingDataBlockCapacity() throws IOException {
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    // One entry costs 21 bytes of framing plus key and value
+    byte[] fittingValue = new byte[50];
+    byte[] oversizedValue = new byte[100];
+    try (HFileWriter writer = new HFileWriterImpl(CONTEXT, out, 100L)) {
+      writer.append("a", fittingValue);
+      IllegalStateException sameKey = assertThrows(IllegalStateException.class,
+          () -> writer.append("a", fittingValue));
+      assertTrue(sameKey.getMessage().startsWith(
+          "Data block would hold 144 uncompressed bytes after appending key a, exceeding the maximum of 100 bytes"),
+          sameKey.getMessage());
+      IllegalStateException oversized = assertThrows(IllegalStateException.class,
+          () -> writer.append("bbbbb", oversizedValue));
+      assertTrue(oversized.getMessage().startsWith(
+          "Data block would hold 126 uncompressed bytes after appending key bbbbb, exceeding the maximum of 100 bytes"),
+          oversized.getMessage());
+    }
+    byte[] hfile = out.toByteArray();
+    try (HFileReader reader = new HFileReaderImpl(
+        new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(hfile)), hfile.length)) {
+      assertEquals(1, reader.getNumKeyValueEntries());
+      assertEquals("a", new Key(reader.getMetaInfo(LAST_KEY).get()).getContentInString());
+      assertEquals(1, IOUtils.readInt(reader.getMetaInfo(AVG_KEY_LEN).get(), 0));
+      assertEquals(fittingValue.length, IOUtils.readInt(reader.getMetaInfo(AVG_VALUE_LEN).get(), 0));
+    }
+  }
 
   @Test
   void testOverflow() throws Exception {

@@ -50,6 +50,14 @@ public class HFileWriterImpl implements HFileWriter {
   //           + 2 bytes (length of key length)
   //           + 10 bytes (check sum, timestamp, key type).
   private static final int EXTRA_BYTES_PER_DATA_ENTRY = 21;
+  // The block header stores sizes as 4-byte integers and a serialized block is held in one byte
+  // array, so the uncompressed data of a block must stay below Integer.MAX_VALUE with room for
+  // the header, the checksum bytes (4 bytes per 16 KiB chunk, under 512 KiB for the largest
+  // block) and the growth of incompressible data under compression (5 bytes per 16 KiB stored
+  // deflate block, under 660 KiB). HFileBlock#serialize enforces the exact bound after
+  // compression; this early check keeps a run of records sharing one key from being buffered
+  // only to fail there.
+  static final long MAX_UNCOMPRESSED_DATA_BLOCK_BYTES = Integer.MAX_VALUE - (2L << 20);
   private final OutputStream outputStream;
   private final HFileContext context;
   // Meta Info map.
@@ -65,6 +73,7 @@ public class HFileWriterImpl implements HFileWriter {
   private long currentOffset;
   private long loadOnOpenSectionOffset;
   private final int blockSize;
+  private final long maxUncompressedDataBlockBytes;
 
   // Variables used to record necessary information to reduce
   // the memory usage.
@@ -76,9 +85,20 @@ public class HFileWriterImpl implements HFileWriter {
   private long totalValueLength = 0;
 
   public HFileWriterImpl(HFileContext context, OutputStream outputStream) {
+    this(context, outputStream, MAX_UNCOMPRESSED_DATA_BLOCK_BYTES);
+  }
+
+  /**
+   * @param maxUncompressedDataBlockBytes the most uncompressed data bytes one data block may hold;
+   *                                      tests lower it to exercise the limit without large input.
+   */
+  HFileWriterImpl(HFileContext context, OutputStream outputStream, long maxUncompressedDataBlockBytes) {
     this.outputStream = outputStream;
     this.context = context;
-    this.blockSize = this.context.getBlockSize();
+    this.maxUncompressedDataBlockBytes = maxUncompressedDataBlockBytes;
+    // A block is flushed once it reaches the configured block size, which cannot usefully exceed
+    // what one block may hold.
+    this.blockSize = (int) Math.min(this.context.getBlockSize(), maxUncompressedDataBlockBytes);
     this.uncompressedDataBlockBytes = 0L;
     this.totalUncompressedDataBlockBytes = 0L;
     this.currentOffset = 0L;
@@ -92,19 +112,40 @@ public class HFileWriterImpl implements HFileWriter {
   // Append a data kv pair.
   public void append(String key, byte[] value) throws IOException {
     byte[] keyBytes = StringUtils.getUTF8Bytes(key);
+    long entryBytes = (long) keyBytes.length + value.length + EXTRA_BYTES_PER_DATA_ENTRY;
+    // Records with the same key must be put into the same block.
+    boolean flushBeforeAppend = !Arrays.equals(currentDataBlock.getLastKeyContent(), keyBytes)
+        && uncompressedDataBlockBytes + entryBytes > blockSize;
+    // Reject before any state changes, so a rejected record leaves no trace in the file info.
+    checkDataBlockCapacity((flushBeforeAppend ? 0 : uncompressedDataBlockBytes) + entryBytes, key);
     lastKey = keyBytes;
     totalKeyLength += keyBytes.length;
     totalValueLength += value.length;
-    // Records with the same key must be put into the same block.
-    if (!Arrays.equals(currentDataBlock.getLastKeyContent(), keyBytes)
-        && uncompressedDataBlockBytes + keyBytes.length + value.length + EXTRA_BYTES_PER_DATA_ENTRY > blockSize) {
+    if (flushBeforeAppend) {
       flushCurrentDataBlock();
       uncompressedDataBlockBytes = 0;
     }
     currentDataBlock.add(keyBytes, value);
-    int uncompressedKeyValueSize = keyBytes.length + value.length;
-    uncompressedDataBlockBytes += uncompressedKeyValueSize + EXTRA_BYTES_PER_DATA_ENTRY;
-    totalUncompressedDataBlockBytes += uncompressedKeyValueSize + EXTRA_BYTES_PER_DATA_ENTRY;
+    uncompressedDataBlockBytes += entryBytes;
+    totalUncompressedDataBlockBytes += entryBytes;
+  }
+
+  /**
+   * Rejects a data block that the block format cannot represent. A block only grows past the
+   * configured block size through a single oversized record or a run of records sharing one key,
+   * which are kept in the same block.
+   *
+   * @param uncompressedBytes the uncompressed data bytes the block would hold after the append
+   * @param key               the key being appended, for the error message
+   */
+  private void checkDataBlockCapacity(long uncompressedBytes, String key) {
+    if (uncompressedBytes > maxUncompressedDataBlockBytes) {
+      throw new IllegalStateException(String.format(
+          "Data block would hold %d uncompressed bytes after appending key %s, exceeding the "
+              + "maximum of %d bytes: a single record, or records sharing the same key, cannot "
+              + "exceed the maximum size of one data block",
+          uncompressedBytes, key, maxUncompressedDataBlockBytes));
+    }
   }
 
   // Append a metadata kv pair.

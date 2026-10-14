@@ -20,6 +20,7 @@
 package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.compress.CompressionCodec;
 
 import lombok.AccessLevel;
@@ -62,6 +63,10 @@ public abstract class HFileBlock {
   private static final byte KEY_TYPE_PUT = (byte) 4;
   // KeyValue key suffix beyond the row: column-family length (1) + timestamp (8) + type (1).
   private static final int KEY_METADATA_SUFFIX_LENGTH = SIZEOF_BYTE + SIZEOF_INT64 + SIZEOF_BYTE;
+
+  // A serialized block (header, data, checksum) is held in one byte array, whose size a JVM caps a
+  // few bytes short of Integer.MAX_VALUE.
+  static final long MAX_SERIALIZED_BLOCK_SIZE = Integer.MAX_VALUE - 8;
 
   static class Header {
     // Format of header is:
@@ -122,7 +127,9 @@ public abstract class HFileBlock {
         byteBuff, startOffsetInBuff + Header.UNCOMPRESSED_SIZE_WITHOUT_HEADER_INDEX);
     this.bytesPerChecksum = readInt(
         byteBuff, startOffsetInBuff + Header.BYTES_PER_CHECKSUM_INDEX);
-    this.sizeCheckSum = numChecksumBytes(getOnDiskSizeWithHeader(), bytesPerChecksum);
+    this.sizeCheckSum = bytesPerChecksum > 0
+        ? numChecksumBytes(getOnDiskSizeWithHeader(), bytesPerChecksum) : -1;
+    validateHeader(byteBuff, startOffsetInBuff);
     if (CompressionCodec.NONE.equals(context.getCompressionCodec())) {
       isUnpacked = true;
       this.startOffsetInBuff = startOffsetInBuff;
@@ -135,6 +142,29 @@ public abstract class HFileBlock {
     }
     this.uncompressedEndOffset =
         this.startOffsetInBuff + HFILEBLOCK_HEADER_SIZE + uncompressedSizeWithoutHeader;
+  }
+
+  /**
+   * Rejects a block header whose sizes cannot be right, before they are used to allocate buffers
+   * or locate content: a negative size, a checksum chunk size of zero, an on-disk size that runs
+   * past the end of the buffer holding the block, an uncompressed size that exceeds the on-disk
+   * size although the block is not compressed, or an uncompressed size too large for one byte
+   * array once the header and checksum bytes are added.
+   */
+  private void validateHeader(byte[] byteBuff, int startOffsetInBuff) {
+    long blockEndInBuff = (long) startOffsetInBuff + HFILEBLOCK_HEADER_SIZE + onDiskSizeWithoutHeader;
+    long unpackedSize = (long) HFILEBLOCK_HEADER_SIZE + uncompressedSizeWithoutHeader + sizeCheckSum;
+    boolean uncompressedExceedsOnDisk = CompressionCodec.NONE.equals(context.getCompressionCodec())
+        && uncompressedSizeWithoutHeader > onDiskSizeWithoutHeader;
+    if (onDiskSizeWithoutHeader < 0 || uncompressedSizeWithoutHeader < 0 || bytesPerChecksum <= 0
+        || blockEndInBuff > byteBuff.length || uncompressedExceedsOnDisk
+        || unpackedSize > MAX_SERIALIZED_BLOCK_SIZE) {
+      throw new HoodieIOException(String.format(
+          "Corrupt %s block header at buffer offset %d: onDiskSizeWithoutHeader=%d, "
+              + "uncompressedSizeWithoutHeader=%d, bytesPerChecksum=%d, buffer length=%d",
+          blockType, startOffsetInBuff, onDiskSizeWithoutHeader, uncompressedSizeWithoutHeader,
+          bytesPerChecksum, byteBuff.length));
+    }
   }
 
   /**
@@ -295,8 +325,15 @@ public abstract class HFileBlock {
       dataOutputStream.write(blockType.getMagic(), 0, 8);
       // 2. onDiskSizeWithoutHeader.
       int compressedDataSize = compressedBlockData.limit();
-      int onDiskDataSizeWithHeader = HFileBlock.HFILEBLOCK_HEADER_SIZE + compressedDataSize;
-      int numChecksumBytes = numChecksumBytes(onDiskDataSizeWithHeader, DEFAULT_BYTES_PER_CHECKSUM);
+      long onDiskDataSizeWithHeaderLong = (long) HFileBlock.HFILEBLOCK_HEADER_SIZE + compressedDataSize;
+      int numChecksumBytes = numChecksumBytes(onDiskDataSizeWithHeaderLong, DEFAULT_BYTES_PER_CHECKSUM);
+      if (onDiskDataSizeWithHeaderLong + numChecksumBytes > MAX_SERIALIZED_BLOCK_SIZE) {
+        throw new IllegalStateException(String.format(
+            "%s block of %d compressed bytes with %d checksum bytes exceeds the maximum serialized "
+                + "block size of %d bytes",
+            blockType, compressedDataSize, numChecksumBytes, MAX_SERIALIZED_BLOCK_SIZE));
+      }
+      int onDiskDataSizeWithHeader = (int) onDiskDataSizeWithHeaderLong;
       dataOutputStream.writeInt(compressedDataSize + numChecksumBytes);
       // 3. uncompressedSizeWithoutHeader.
       dataOutputStream.writeInt(uncompressedBlockData.limit());
