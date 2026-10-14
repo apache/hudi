@@ -125,6 +125,36 @@ public class TestHoodieMetadataPayloadSourcePartitionPath {
   }
 
   @Test
+  public void testMergeIsCommutativeWhenOnlyOneSideNamesASourcePartitionPath() {
+    HoodieMetadataPayload owned = payloadFor(
+        Collections.singletonMap("f1.parquet", new HoodieMetadataFileInfo(128L, false, null)));
+    HoodieMetadataPayload registered = payloadFor(
+        Collections.singletonMap("f1.parquet", new HoodieMetadataFileInfo(64L, false, SOURCE_PARTITION_PATH)));
+
+    Map<String, HoodieMetadataFileInfo> ownedFirst =
+        HoodieTableMetadataUtil.combineFileSystemMetadata(owned, registered);
+    Map<String, HoodieMetadataFileInfo> registeredFirst =
+        HoodieTableMetadataUtil.combineFileSystemMetadata(registered, owned);
+
+    assertEquals(registeredFirst.get("f1.parquet").getSourcePartitionPath(),
+        ownedFirst.get("f1.parquet").getSourcePartitionPath());
+    assertEquals(registeredFirst.get("f1.parquet").getSize(), ownedFirst.get("f1.parquet").getSize());
+  }
+
+  @Test
+  public void testDeletingARegisteredFileDropsItRatherThanKeepingItsSourcePartitionPath() {
+    HoodieMetadataPayload registered = payloadFor(
+        Collections.singletonMap("f1.parquet", new HoodieMetadataFileInfo(64L, false, SOURCE_PARTITION_PATH)));
+    HoodieMetadataPayload deleted = payloadFor(
+        Collections.singletonMap("f1.parquet", new HoodieMetadataFileInfo(0L, true, null)));
+
+    Map<String, HoodieMetadataFileInfo> combined =
+        HoodieTableMetadataUtil.combineFileSystemMetadata(registered, deleted);
+
+    assertNull(combined.get("f1.parquet"));
+  }
+
+  @Test
   public void testRecordWrittenBeforeTheFieldExistedStillReads() {
     Schema oldSchema = new Schema.Parser().parse(SCHEMA_WITHOUT_SOURCE_PARTITION_PATH);
     Schema fileInfoSchema = oldSchema.getField("filesystemMetadata").schema()
