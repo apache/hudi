@@ -39,7 +39,6 @@ import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
-import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.sink.utils.Pipelines;
@@ -513,19 +512,17 @@ public class HoodieTableSource extends FileIndexReader implements
       // a streaming read of a table that does not exist yet has no record key encoding to follow
       return Option.empty();
     }
-    // a single-field complex keygen table stores `<field>:<value>` record keys under the FIELD_PREFIXED encoding,
-    // and cannot be pruned by key while its encoding is unknown
-    Option<ComplexKeyGenEncoding> encodingOpt;
-    try {
-      encodingOpt = KeyGenUtils.resolveComplexKeyGenEncoding(metaClient);
-    } catch (Exception e) {
-      log.warn("Failed to resolve the record key encoding of table {}, skipping the bucket pruning", path, e);
+    if (!metaClient.getTableConfig().isComplexKeyGenWithSingleRecordKeyField()) {
+      return Option.of(false);
+    }
+    // a single-field complex keygen table stores `<field>:<value>` record keys under the FIELD_PREFIXED encoding;
+    // only the recorded encoding is followed, because deducing it from the data would read files at planning time,
+    // so a table that has not recorded it yet is not pruned by key until a write or an upgrade records it
+    Option<ComplexKeyGenEncoding> encodingOpt = metaClient.getTableConfig().getComplexKeyGenEncoding();
+    if (!encodingOpt.isPresent()) {
       return Option.empty();
     }
-    if (metaClient.getTableConfig().isComplexKeyGenWithSingleRecordKeyField() && !encodingOpt.isPresent()) {
-      return Option.empty();
-    }
-    if (!encodingOpt.map(ComplexKeyGenEncoding::encodesFieldName).orElse(false)) {
+    if (!encodingOpt.get().encodesFieldName()) {
       return Option.of(false);
     }
     // Spark writes `<field>:<value>` keys into a FIELD_PREFIXED table, while the Flink key generator follows the job

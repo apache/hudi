@@ -25,10 +25,8 @@ import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
@@ -410,8 +408,8 @@ public class TestHoodieTableSource {
 
   /**
    * A record key equality filter on a single-field complex keygen table selects the bucket the writer hashed the
-   * stored record key into, whether the encoding is recorded or, on a legacy table, deduced from the data; a table
-   * whose encoding cannot be resolved is not pruned by key.
+   * stored record key into, following the encoding recorded on the table; a legacy table that has not recorded its
+   * encoding is not pruned by key, rather than deducing the encoding from its data at planning time.
    */
   @ParameterizedTest
   @EnumSource(ComplexKeyGenEncoding.class)
@@ -448,19 +446,14 @@ public class TestHoodieTableSource {
     assertTimeoutPreemptively(Duration.ofSeconds(10), () ->
         assertBucketIdsFollowWriter(createHoodieTableSource(conf), Collections.singletonList(separatorKey), writerKeyGen));
 
-    // a legacy table without the property: the reader deduces the encoding from the data
+    // a legacy table without the property is not pruned by key, although its data files would reveal the encoding
     HoodieTableConfig.delete(metaClient.getStorage(), metaClient.getMetaPath(),
         Collections.singleton(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()));
-    assertBucketIdsFollowWriter(createHoodieTableSource(conf), dataset, writerKeyGen);
-
-    // a legacy table without data files to deduce the encoding from is not pruned by key
-    for (String partition : Arrays.asList("par1", "par2", "par3", "par4")) {
-      metaClient.getStorage().deleteDirectory(new StoragePath(metaClient.getBasePath(), partition));
-    }
-    HoodieTableSource unknownEncodingSource = createHoodieTableSource(conf);
-    unknownEncodingSource.applyFilters(Collections.singletonList(
+    assertThat(KeyGenUtils.deduceComplexKeyGenEncodingFromData(metaClient).get(), is(encoding));
+    HoodieTableSource unrecordedEncodingSource = createHoodieTableSource(conf);
+    unrecordedEncodingSource.applyFilters(Collections.singletonList(
         createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1")));
-    assertTrue(unknownEncodingSource.getDataBucketFunc().isEmpty());
+    assertTrue(unrecordedEncodingSource.getDataBucketFunc().isEmpty());
   }
 
   /**
@@ -487,21 +480,6 @@ public class TestHoodieTableSource {
     assertFalse(RowDataKeyGen.isFieldPrefixedSingleRecordKey(conf));
 
     HoodieTableSource tableSource = createHoodieTableSource(conf);
-    tableSource.applyFilters(Collections.singletonList(
-        createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1")));
-    assertTrue(tableSource.getDataBucketFunc().isEmpty());
-  }
-
-  @Test
-  void testBucketPruningSkippedWhenEncodingResolutionFails() {
-    conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "");
-    conf.set(FlinkOptions.INDEX_TYPE, "BUCKET");
-    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
-    when(metaClient.getTableConfig()).thenThrow(new HoodieIOException("Failed to read the table config"));
-    HoodieTableSource tableSource = new HoodieTableSource(SerializableSchema.create(TestConfigurations.TABLE_SCHEMA),
-        new StoragePath(conf.get(FlinkOptions.PATH)), Collections.singletonList(""), "default-par", conf,
-        null, null, null, Option.empty(), null, null, metaClient, null);
     tableSource.applyFilters(Collections.singletonList(
         createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1")));
     assertTrue(tableSource.getDataBucketFunc().isEmpty());
