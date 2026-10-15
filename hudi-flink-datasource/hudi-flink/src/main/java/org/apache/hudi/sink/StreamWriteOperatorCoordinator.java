@@ -344,8 +344,8 @@ public class StreamWriteOperatorCoordinator
         initEventBuffer();
         this.eventBuffers.addEventsToBuffer(SerializationUtils.deserialize(checkpointData));
       } else {
-        // case2: restore the events directly.
-        restoreEvents(checkpointID);
+        // case2: wait for queued events and commits before restoring, and finish recovery before returning.
+        executor.executeSync(() -> restoreEvents(checkpointID), "restore events for checkpoint %d", checkpointID);
       }
     }
   }

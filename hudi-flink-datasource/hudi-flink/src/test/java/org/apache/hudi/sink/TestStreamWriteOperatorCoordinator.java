@@ -103,7 +103,12 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX;
@@ -304,6 +309,74 @@ public class TestStreamWriteOperatorCoordinator {
     assertNull(((MockOperatorCoordinatorContext) coordinator.getContext()).getJobFailureReason());
     assertTrue(StreamerUtil.createMetaClient(conf).reloadActiveTimeline()
         .filterCompletedInstants().containsInstant(instant));
+  }
+
+  @Test
+  void testGlobalRestoreWaitsForPendingCommit() throws Exception {
+    coordinator.close();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.METADATA_ENABLED, false);
+    conf.set(FlinkOptions.TABLE_SERVICES_ENABLED, false);
+    coordinator = startCoordinator(conf, 2);
+    String instant = requestInstantTime(-1);
+    CompletableFuture<byte[]> checkpoint = new CompletableFuture<>();
+    coordinator.checkpointCoordinator(1, checkpoint);
+    coordinator.handleEventFromOperator(0, createOperatorEvent(0, instant, "par1", true, 0.1));
+    coordinator.handleEventFromOperator(1, createOperatorEvent(1, instant, "par2", true, 0.2));
+    byte[] checkpointData = checkpoint.get();
+
+    CountDownLatch commitEntered = new CountDownLatch(1);
+    CountDownLatch releaseCommit = new CountDownLatch(1);
+    AtomicInteger commitCalls = new AtomicInteger();
+    HoodieFlinkWriteClient client = Mockito.spy(coordinator.getWriteClient());
+    Mockito.doAnswer(invocation -> {
+      if (commitCalls.incrementAndGet() == 1) {
+        commitEntered.countDown();
+        assertTrue(releaseCommit.await(10, TimeUnit.SECONDS));
+      }
+      return invocation.callRealMethod();
+    }).when(client).commit(Mockito.eq(instant), Mockito.anyList(), Mockito.any(), Mockito.anyString(), Mockito.anyMap());
+    Field clientField = StreamWriteOperatorCoordinator.class.getDeclaredField("writeClient");
+    clientField.setAccessible(true);
+    clientField.set(coordinator, client);
+
+    MockOperatorCoordinatorContext ctx = (MockOperatorCoordinatorContext) coordinator.getContext();
+    NonThrownExecutor worker = NonThrownExecutor.builder(Mockito.mock(Logger.class))
+        .exceptionHook((message, cause) -> ctx.failJob(new HoodieException(message, cause)))
+        .waitForTasksFinish(true).build();
+    coordinator.setExecutor(worker);
+    ExecutorService resetExecutor = Executors.newSingleThreadExecutor();
+    CountDownLatch resetStarted = new CountDownLatch(1);
+    try {
+      coordinator.notifyCheckpointComplete(1);
+      assertTrue(commitEntered.await(10, TimeUnit.SECONDS));
+      // Global failover reuses the coordinator while its event executor is still committing.
+      Future<?> reset = resetExecutor.submit(() -> {
+        resetStarted.countDown();
+        coordinator.resetToCheckpoint(1, checkpointData);
+        assertNull(coordinator.getEventBuffer(-1), "Recovery must finish before reset returns");
+      });
+      assertTrue(resetStarted.await(10, TimeUnit.SECONDS));
+      assertThrows(TimeoutException.class, () -> reset.get(200, TimeUnit.MILLISECONDS),
+          "Reset must wait for the ongoing checkpoint commit");
+      releaseCommit.countDown();
+      reset.get(10, TimeUnit.SECONDS);
+    } finally {
+      releaseCommit.countDown();
+      resetExecutor.shutdown();
+      worker.close();
+      assertTrue(resetExecutor.awaitTermination(10, TimeUnit.SECONDS));
+    }
+
+    assertNull(ctx.getJobFailureReason());
+    assertEquals(1, commitCalls.get(), "Recovery must not commit the same instant again");
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    // The logical timeline deduplicates completed entries, so inspect the physical files.
+    long completedFiles = metaClient.getStorage().listDirectEntries(metaClient.getTimelinePath()).stream()
+        .map(info -> info.getPath().getName())
+        .filter(name -> name.startsWith(instant + "_") && name.endsWith(".commit"))
+        .count();
+    assertEquals(1L, completedFiles);
   }
 
   /**
