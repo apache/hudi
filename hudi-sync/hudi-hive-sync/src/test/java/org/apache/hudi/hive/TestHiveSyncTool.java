@@ -1142,6 +1142,36 @@ public class TestHiveSyncTool {
   }
 
   @ParameterizedTest
+  @MethodSource("syncMode")
+  public void testSyncWithNullTypeFields(String syncMode) throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    String commitTime = "100";
+    HiveTestUtil.createCOWTableWithSchema(commitTime, HoodieSchema.parse("{\"type\": \"record\", \"name\": \"User\", "
+        + "\"namespace\": \"example.avro\", \"fields\": ["
+        + "{\"name\": \"name\", \"type\": \"string\"},"
+        + "{\"name\": \"clientPromotion\", \"type\": \"null\", \"default\": null},"
+        + "{\"name\": \"address\", \"type\": {\"type\": \"record\", \"name\": \"Address\", \"fields\": ["
+        + "{\"name\": \"city\", \"type\": \"string\"},"
+        + "{\"name\": \"nestedPromotion\", \"type\": \"null\", \"default\": null}]}}]}"));
+
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+    assertEquals(commitTime, hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get(),
+        "The last commit that was synced should be updated in the TBLPROPERTIES");
+    Map<String, String> hiveSchema = hiveClient.getMetastoreSchema(HiveTestUtil.TABLE_NAME);
+    assertEquals("string", hiveSchema.get("name").toLowerCase(Locale.ROOT));
+    assertFalse(hiveSchema.containsKey("clientpromotion"), "null type field should not be synced");
+    String addressType = hiveSchema.get("address").toLowerCase(Locale.ROOT);
+    assertTrue(addressType.contains("city"), "nested field should be synced");
+    assertFalse(addressType.contains("nestedpromotion"), "nested null type field should not be synced");
+    String sparkSchema = IMetaStoreClientUtil.getMSC(getHiveConf())
+        .getTable(HiveTestUtil.DB_NAME, HiveTestUtil.TABLE_NAME).getParameters().get("spark.sql.sources.schema.part.0");
+    assertTrue(sparkSchema.contains("\"city\""), "spark schema should contain the nested field");
+    assertFalse(sparkSchema.contains("clientPromotion"), "spark schema should not contain the null type field");
+    assertFalse(sparkSchema.contains("nestedPromotion"), "spark schema should not contain the nested null type field");
+  }
+
+  @ParameterizedTest
   @MethodSource("syncModeAndEnablePushDown")
   public void testSyncIncremental(String syncMode, String enablePushDown) throws Exception {
     hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
