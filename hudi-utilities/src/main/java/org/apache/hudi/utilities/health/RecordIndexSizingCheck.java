@@ -205,7 +205,7 @@ public class RecordIndexSizingCheck implements HealthCheck {
           footprint.largestFileGroupId, footprint.largestFileGroupBytes, sizing.maxFileGroupSizeBytes,
           MAX_FILE_GROUP_SIZE_SLACK_FACTOR));
     }
-    result.finding(rebootstrapRemedy());
+    result.finding(rebootstrapRemedy(partitionedIndex));
     return result.build();
   }
 
@@ -255,14 +255,26 @@ public class RecordIndexSizingCheck implements HealthCheck {
   /**
    * The one remedy for a mis-sized record index. The file-group count is fixed at initialization,
    * so there is no in-place resize; the operator has to drop the index and build it again.
+   *
+   * <p>The rebuild path differs by layout. {@code HoodieIndexer} cannot currently rebuild a
+   * partitioned record index -- see HUDI issue #20343 -- so for that layout the remedy says what
+   * is broken rather than naming a command that silently produces a global index instead.
    */
-  private static String rebootstrapRemedy() {
-    return "The file-group count of the record index is fixed when the index is initialized and cannot be "
-        + "changed in place. To resize it, re-bootstrap the index: drop it with 'metadata delete-record-index' in "
-        + "hudi-cli (or HoodieIndexer --mode dropindex --index-types RECORD_INDEX), correct the sizing "
-        + "configuration, then rebuild it with HoodieIndexer --mode scheduleAndExecute --index-types RECORD_INDEX. "
-        + "This is disruptive: the record index is unavailable until the rebuild completes, and the drop cannot be "
-        + "undone in place. Plan it as a maintenance window.";
+  private static String rebootstrapRemedy(boolean partitionedIndex) {
+    String preamble = "The file-group count of the record index is fixed when the index is initialized and cannot "
+        + "be changed in place. Resizing it means dropping the index and building it again, which is disruptive: "
+        + "the record index is unavailable until the rebuild completes, and the drop cannot be undone in place. "
+        + "Plan it as a maintenance window.";
+    if (partitionedIndex) {
+      return preamble + " Note that HoodieIndexer cannot currently rebuild a partitioned record index: it maps the "
+          + "on-storage 'record_index' partition to the global enable flag unconditionally, so a rebuild produces a "
+          + "global index with default sizing, and supplying the partitioned key in its own --props does not help "
+          + "because that mapping overwrites it. See https://github.com/apache/hudi/issues/20343. Until that is "
+          + "fixed, treat this finding as a sizing problem to plan around rather than one to re-bootstrap away.";
+    }
+    return preamble + " Drop it with 'metadata delete-record-index' in hudi-cli (or HoodieIndexer --mode dropindex "
+        + "--index-types RECORD_INDEX; note the hudi-cli command takes a backup by default), correct the sizing "
+        + "configuration, then rebuild it with HoodieIndexer --mode scheduleAndExecute --index-types RECORD_INDEX.";
   }
 
   /**
