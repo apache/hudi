@@ -43,6 +43,8 @@ import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -508,6 +510,58 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         .setPartitionFields("dt")
         .setKeyGeneratorType(KeyGeneratorType.COMPLEX.name())
         .setComplexKeyGenEncoding(encoding);
+  }
+
+  /**
+   * Readers of a table below version 9 know only the deprecated {@code hoodie.table.precombine.field}: 0.x for
+   * version 6 and 1.0.x for version 8. Such a table records its ordering fields under that key too, the key the
+   * 9 to 8 downgrade writes, while a table at version 9 or above records them only under
+   * {@code hoodie.table.ordering.fields}.
+   */
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT", "NINE", "TEN"})
+  void testOrderingFieldsKeysFollowTableVersion(HoodieTableVersion version) throws IOException {
+    HoodieTableMetaClient created = orderingFieldsTableBuilder(version)
+        .setOrderingFields("ts")
+        .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath() + Path.SEPARATOR + "ordering-v" + version.versionCode());
+    assertOrderingFieldsKeys(version, created.getTableConfig());
+  }
+
+  /**
+   * ALTER TABLE RENAME re-creates the table from its own properties. A table below version 9 that records its
+   * ordering fields only under the deprecated precombine key, as 0.x, 1.0.x and the 9 to 8 downgrade write them,
+   * must keep that key.
+   */
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT"})
+  void testReInitFromPropertiesKeepsLegacyOrderingFieldsKey(HoodieTableVersion version) throws IOException {
+    String path = tempDir.toAbsolutePath() + Path.SEPARATOR + "legacy-ordering-v" + version.versionCode();
+    HoodieTableMetaClient created = orderingFieldsTableBuilder(version).initTable(this.metaClient.getStorageConf(), path);
+    Properties legacyOrderingFields = new Properties();
+    legacyOrderingFields.setProperty(HoodieTableConfig.PRECOMBINE_FIELD.key(), "ts");
+    HoodieTableConfig.update(created.getStorage(), created.getMetaPath(), legacyOrderingFields);
+    created.reloadTableConfig();
+    assertFalse(created.getTableConfig().getProps().containsKey(HoodieTableConfig.ORDERING_FIELDS.key()));
+
+    HoodieTableMetaClient reInitialised = HoodieTableMetaClient.newTableBuilder()
+        .fromProperties(created.getTableConfig().getProps())
+        .initTable(this.metaClient.getStorageConf(), path);
+    assertOrderingFieldsKeys(version, reInitialised.getTableConfig());
+  }
+
+  private static HoodieTableMetaClient.TableBuilder orderingFieldsTableBuilder(HoodieTableVersion version) {
+    return HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.MERGE_ON_READ.name())
+        .setTableName("table")
+        .setTableVersion(version)
+        .setRecordKeyFields("id");
+  }
+
+  private static void assertOrderingFieldsKeys(HoodieTableVersion version, HoodieTableConfig tableConfig) {
+    assertEquals("ts", tableConfig.getProps().getProperty(HoodieTableConfig.ORDERING_FIELDS.key()));
+    assertEquals(version.lesserThan(HoodieTableVersion.NINE) ? "ts" : null,
+        tableConfig.getProps().getProperty(HoodieTableConfig.PRECOMBINE_FIELD.key()),
+        "precombine key at version " + version.versionCode());
   }
 
   @Test
