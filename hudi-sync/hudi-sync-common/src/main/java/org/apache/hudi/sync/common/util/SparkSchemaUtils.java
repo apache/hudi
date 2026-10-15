@@ -42,11 +42,14 @@ public class SparkSchemaUtils {
    */
   public static String convertToSparkSchemaJson(HoodieSchema schema, boolean includeFieldDocs) {
     // Fields of the "null" type always hold null and are not written to the data files, so they are skipped
-    String fieldsJsonString = schema.getFields().stream().filter(field -> !field.schema().isSchemaNull()).map(field -> {
-      String metadata = convertFieldMetadata(field, includeFieldDocs);
-      return "{\"name\":\"" + field.name() + "\",\"type\":" + convertFieldType(field.getNonNullSchema(), includeFieldDocs)
-                + ",\"nullable\":" + field.isNullable() + ",\"metadata\":" + metadata + "}";
-    }).reduce((a, b) -> a + "," + b).orElse("");
+    String fieldsJsonString = schema.getFields().stream()
+        .filter(field -> !field.schema().isSchemaNull())
+        .map(field -> {
+          String metadata = convertFieldMetadata(field, includeFieldDocs);
+          return "{\"name\":\"" + field.name() + "\",\"type\":" + convertFieldType(field.getNonNullSchema(), includeFieldDocs)
+              + ",\"nullable\":" + field.isNullable() + ",\"metadata\":" + metadata + "}";
+        })
+        .reduce((a, b) -> a + "," + b).orElse("");
     return "{\"type\":\"struct\",\"fields\":[" + fieldsJsonString + "]}";
   }
 

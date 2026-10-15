@@ -174,7 +174,9 @@ public class HiveSchemaUtil {
     LinkedHashMap<String, String> hiveSchema = new LinkedHashMap<>();
     List<HoodieSchemaField> fields = schema.getFields();
     for (HoodieSchemaField field : fields) {
-      if (isNullTypeField(field)) {
+      // Fields of the "null" type always hold null and have no Hive equivalent. They are skipped, the same
+      // way the parquet writer skips them, so the Hive schema matches the columns present in the data files.
+      if (field.schema().isSchemaNull()) {
         continue;
       }
       hiveSchema.put(field.name(), convertField(field.schema(), supportTimestamp, doFormat));
@@ -272,7 +274,7 @@ public class HiveSchemaUtil {
     StringBuilder struct = new StringBuilder();
     struct.append(doFormat ? "STRUCT< " : "STRUCT<");
     for (HoodieSchemaField field : fields) {
-      if (isNullTypeField(field)) {
+      if (field.schema().isSchemaNull()) {
         continue;
       }
       // TODO: struct field name is only translated to support special char($)
@@ -289,14 +291,6 @@ public class HiveSchemaUtil {
     // HDrone sync should not fail because of this.
     finalStr = finalStr.replaceAll("-", "_");
     return finalStr;
-  }
-
-  /**
-   * Fields of the "null" type always hold null and have no Hive equivalent. They are skipped, the same
-   * way the parquet writer skips them, so the Hive schema matches the columns present in the data files.
-   */
-  private static boolean isNullTypeField(HoodieSchemaField field) {
-    return field.schema().isSchemaNull();
   }
 
   private static String hiveCompatibleFieldName(String fieldName, boolean isNested, boolean doFormat) {
