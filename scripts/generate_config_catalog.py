@@ -1134,9 +1134,66 @@ def resolve_constant(expr, owner_class, constant_index):
     parts = expr.split(".")
     const = parts[-1]
     qualifier = parts[-2] if len(parts) >= 2 else None
-    return (constant_index.get((qualifier, const))
-            or (constant_index.get((owner_class, const)) if qualifier is None else None)
-            or constant_index.get((None, const)))
+    # Order matters. A bare `INDEX_TYPE` has no qualifier, and the (None, const)
+    # bucket holds whichever class won the race -- INDEX_TYPE is declared both in
+    # HoodieIndexConfig (hoodie.index.type) and HoodieIndexingConfig
+    # (hoodie.expression.index.type). The file we are reading is the better
+    # evidence, so try the owning class before the ambiguous bare name.
+    if qualifier is not None:
+        resolved = constant_index.get((qualifier, const))
+        if resolved:
+            return resolved
+    else:
+        resolved = constant_index.get((owner_class, const))
+        if resolved:
+            return resolved
+    return constant_index.get((None, const))
+
+
+# Method names too common to attribute a config to. HoodieIndexConfig.Builder
+# has a build() that mentions exactly one config constant, which made every
+# .build() call in the tree -- AvroParquetReader.builder().build(), HoodiePath
+# .newBuilder().build(), every writer constructor -- resolve to that config.
+# A name like this cannot identify a consumer at a call site, whatever its body
+# looks like.
+GENERIC_METHOD_NAMES = frozenset((
+    "build", "builder", "newBuilder", "get", "getInstance", "newInstance",
+    "create", "of", "from", "apply", "value", "valueOf", "parse", "toString",
+))
+
+
+# Hudi names a getter after the config it reads: hoodie.table.service.manager.enabled
+# -> isTableServiceManagerEnabled, hoodie.archive.beyond.savepoint ->
+# shouldArchiveBeyondSavepoint. Booleans take is/should/do/can/has, values take
+# get, and some take no prefix at all. That convention is strong enough to use
+# as a cross-check on a constant that resolved by bare name: INDEX_TYPE is
+# declared in both HoodieIndexConfig (hoodie.index.type) and
+# HoodieIndexingConfig (hoodie.expression.index.type), and without the name
+# check HoodieIndexingConfig.getIndexType is filed under the wrong key.
+ACCESSOR_PREFIXES = ("get", "is", "should", "do", "does", "use", "can", "has")
+
+
+def accessor_name_matches_key(method_name, key):
+    """True when a getter's name is the camelCase of the config key."""
+    parts = [p for p in key.split(".") if p]
+    if parts and parts[0] in ("hoodie", "_hoodie", "_"):
+        parts = parts[1:]
+    if not parts:
+        return False
+    core = method_name
+    lowered = method_name.lower()
+    for prefix in ACCESSOR_PREFIXES:
+        if lowered.startswith(prefix) and len(method_name) > len(prefix):
+            core = method_name[len(prefix):]
+            break
+    core = core.lower()
+    # the full key, and every suffix of it, in camelCase
+    for start in range(len(parts)):
+        tail = parts[start:]
+        candidate = (tail[0] + "".join(w[:1].upper() + w[1:] for w in tail[1:])).lower()
+        if core == candidate:
+            return True
+    return False
 
 
 def collect_accessors(repo_root, constant_index):
@@ -1173,9 +1230,20 @@ def collect_accessors(repo_root, constant_index):
                     key = resolve_constant(call.group("arg"), owner_class, constant_index)
                     if key:
                         keys.add(key)
-            if len(keys) == 1:
+            if len(keys) == 1 and name not in GENERIC_METHOD_NAMES:
                 only = next(iter(keys))
-                accessors[name].add(only)
+                # If the method name follows the naming convention but names a
+                # *different* config than the body resolved to, the body's bare
+                # name hit the wrong class's constant. Trust the name.
+                better = None
+                if not accessor_name_matches_key(name, only):
+                    for candidate_key in sorted(set(constant_index.values())):
+                        if accessor_name_matches_key(name, candidate_key):
+                            if better is not None:
+                                better = None
+                                break
+                            better = candidate_key
+                accessors[name].add(better or only)
                 accessor_sites.setdefault(name, (owner_class, os.path.relpath(file_path, repo_root), sig_line))
     # An accessor name that maps to more than one key across classes is
     # ambiguous at a call site; drop it rather than mis-attribute.

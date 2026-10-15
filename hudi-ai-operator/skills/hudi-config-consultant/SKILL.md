@@ -78,7 +78,10 @@ Exact key match first. If there is no exact match:
 3. Report the closest matches and say plainly that the exact key is not in the catalog.
 
 **Never invent a key, a default or a valid value.** If the catalog does not have it, the answer is
-"that key is not in this catalog" plus the nearest candidates. A plausible-looking invented key is
+"that key is not in this catalog" plus the nearest candidates. The inverse is worth a sentence too:
+when a key looks malformed but matches the catalog exactly — `hoodie.archive.block.on.latest.clean.ectr`
+— say so explicitly, because the user probably suspects they mistyped it and may "correct" a key
+that was right. A plausible-looking invented key is
 the one failure mode that costs the user a production incident, because it will be accepted
 silently by every Hudi writer — unknown properties are not rejected.
 
@@ -209,12 +212,37 @@ that are accessors — those are real consumers, not the config class's own plum
 
 **"What should I set for `<goal>`?"** — Open with the shortest configuration that reaches the
 goal. Then the ranked list, each with one line on why it is relevant, and what must be set
-together. Search `documentation` and `configGroup` for the goal's vocabulary. Prefer non-advanced
-configs; flag advanced ones and do not recommend changing them without a reason tied to something
-the user has measured.
+together.
+
+**Do not let a substring search over `documentation` be your retrieval.** The goal's vocabulary and
+the config's wording often do not meet: searching "small file" finds
+`hoodie.parquet.small.file.limit` but misses `hoodie.parquet.max.file.size`, which is the config
+that actually sets the target size, while returning streamer and timeline keys that merely contain
+the phrase. Use the search to find a foothold, then expand through `configGroup` and `coConfigs`
+from the configs you know are relevant, and sanity-check the result against what the code path for
+that goal actually reads.
+
+**Say which table type and engine the answer assumes.** The catalog has no field for this — a
+config that only applies to MOR says so, if at all, inside its documentation prose. When a goal is
+table-type specific, find the code path (the partitioner, the action executor) and read what it
+branches on. Guard clauses are the usual mechanism and the catalog cannot see them: a helper that
+returns early for one index type will make the configs below that early return completely inert,
+with no gate recorded anywhere.
+
+Prefer non-advanced configs; flag advanced ones and do not recommend changing them without a reason
+tied to something the user has measured. Within a narrow goal-scoped set, `advanced` does real
+ranking work even though most configs carry it.
 
 **"I set X and nothing happened."** — The highest-value question. Open with the most likely cause
-in one sentence, then the evidence. Work this order and stop at the first hit:
+in one sentence, then the evidence.
+
+**Before the ladder: if `readContextResolved` is `false`, open the Scala read sites.** The ladder
+below reasons over `gatingConditions`, `coConfigs` and read context, none of which are recovered
+for Scala. Run it on an unresolved config and every step passes vacuously, landing you on step 7
+("read sites exist, so it is live") — a confident wrong answer. For a `hoodie.datasource.*` key
+that verdict is never earned from the catalog alone. Read the sites, then run the ladder.
+
+Work this order and stop at the first hit:
 
 1. **Is the read gated?** `gatingConditions` — a read under a `switch` on a strategy enum, or an
    `if` on another config, is usually the answer.
@@ -240,17 +268,29 @@ in one sentence, then the evidence. Work this order and stop at the first hit:
 7. **Are there no read sites?** `readSites: []` with a `parseWarnings` entry is a gap in the
    catalog, not proof the config is dead. Say which it is.
 
+   Reaching the end of the ladder is **not** a finding that the config works. It means the catalog
+   has no explanation, which is a reason to read the code, not to reassure the user. Say that
+   plainly: "nothing in the catalog explains this — here is where I would look."
+
 Close with the one thing to check: a `file:line`, or the companion config to set.
 
 **"What is the difference between X and Y?"** — Open with the distinction in one sentence. Usually
 it is one of: which code path reads them, which strategy value they apply under, or which engine
 they take effect on. Then the side-by-side.
 
-**"What else must I set alongside X?"** — Open with what breaks if they set X alone. Then
-`coConfigs` ordered by `sharedMethods`. Always say this is a co-occurrence measure: it tells you
-what the code reads together, not what Hudi requires. Where you can confirm a real requirement by
-reading the validation or the accessor, say so and cite it — that distinction is the whole value
-of the answer.
+**"What else must I set alongside X?"** — Open with what breaks if they set X alone, then name
+the companions.
+
+`coConfigs` is a **lead list, never a ranking you can hand over**. `sharedMethods` counts mentions
+in the same method body, so a config read inside a large builder (`HoodieWriteConfig.Builder.build`,
+`setDefaults`) accumulates dozens of unrelated neighbours, and the ordering puts noise first. Worse,
+it has a systematic blind spot: a companion read through a typed accessor rather than by key —
+`getWriteConcurrencyMode() == SINGLE_WRITER` — never appears at all, and that is exactly the kind of
+config whose absence silently defeats the one the user set.
+
+So: open the shared method before you present a companion, and prefer a requirement you confirmed
+in validation or in a builder's adjustment logic over anything `sharedMethods` ranked highly. State
+plainly that co-occurrence is what the code reads together, not what Hudi requires.
 
 ### A config may be declared and never read
 
@@ -258,9 +298,20 @@ Watch for configs whose only consumer is one code path that is no longer the def
 implementation superseded by V2, an engine-specific client, a legacy format. A user setting such a
 key gets silence, not an error, because Hudi does not reject unknown or unused properties.
 
-`readSites` is how you catch it. If every non-plumbing read site sits in one superseded class,
-say so plainly and name the class. That is worth more to an operator than any correctly-reported
-default.
+`readSites` is how you catch it, and a **short** `readSites` array is the signal — two plumbing
+entries and one real consumer tells you more than twenty ever will.
+
+Naming the class is only half the job, and the half that does not help anyone. **Finish it: find
+the factory that chooses between the implementations and report the condition.** When a read site
+sits in a class suffixed `V1`, `V2`, `Legacy` or `Deprecated`, locate the selector — usually a
+`getInstance` on a sibling `*s` class — and read what it branches on, then follow that to the
+current value.
+
+`hoodie.archive.block.on.latest.clean.ectr` is the worked example. Its only real consumer is
+`TimelineArchiverV1`. `TimelineArchivers.getInstance` picks V1 only for timeline layout versions 0
+and 1, and `TimelineLayoutVersion.CURR_VERSION` is `VERSION_2`. The sentence the operator needs is
+not "read by TimelineArchiverV1" but **"on any table at the current timeline layout, setting this
+does nothing, and you get no warning"** — two hops past where the catalog stops.
 
 ## Interpreting gating conditions honestly
 
@@ -278,6 +329,13 @@ What it misses or gets wrong:
 
 - Conditions in a *caller* — the read itself is unconditional but the whole method only runs in one
   mode. The catalog cannot see that.
+- Conditions in a *callee*, which is the common shape when a value is passed as an argument. A
+  parallelism or size config is read unconditionally and handed to a helper that decides whether to
+  use it — `deduceShuffleParallelism(input, configured)` returns the configured value only
+  `if (configured > 0)`, so the declared default `0` is a sentinel meaning "work it out yourself",
+  not a literal zero. The read site looks unconditional and `gates: []` is reported with
+  `gatesResolved: true`. Whenever a numeric config's default is `0` or `-1`, assume a sentinel and
+  open the method it is passed to before describing the default.
 - Early returns and guard clauses, which gate without an enclosing block.
 - Conditions on local variables whose own derivation is the real gate (`if (compactable)` tells you
   nothing on its own).
@@ -311,8 +369,10 @@ config is unconditional.
 - `parseWarnings` on an entry means the generator could not fully read that declaration. Check it
   before answering, and pass the caveat on.
 - A computed default (`defaultValueIsLiteral: false`) is shown as its source expression, for
-  example `String.valueOf(104857600)`. Give the user the evaluated value when it is obvious, and
-  say it is computed at class-init time.
+  example `String.valueOf(104857600)` or `String.valueOf(120 * 1024 * 1024)`. **Always evaluate
+  arithmetic on literals and give both forms** — the user is going to paste a value into a config
+  file, and a source expression is not settable. Say it is computed at class-init time. If the
+  expression names a constant you cannot resolve, say that rather than guessing.
 - Do not recommend changing an `advanced` config without a stated reason tied to something the user
   has measured.
 - If the user asks what to do about a table that is misbehaving rather than what a config means,
