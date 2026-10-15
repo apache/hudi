@@ -31,7 +31,7 @@ limitations under the License.
 
 `schemaVersion` 2 adds `engineDefaults` / `conditionalEngineDefaults`, the `language` field, and
 the `readContextResolved` honesty flag for Scala-declared configs. `schemaVersion` 3 adds
-`shortCircuits` / `shortCircuitHeuristic`.
+`shortCircuits` / `shortCircuitHeuristic`, `gatedBy` and `noExternalConsumer`.
 
 `configs` is sorted by `key`, so regeneration produces a readable diff. Read `hudiVersion` and
 `generatedFrom` on every query; they belong in your answer.
@@ -119,6 +119,8 @@ The conditional ones:
 | `gatingHeuristic` | The standing caveat. Repeat its substance when you quote a gate. |
 | `shortCircuits` | Wrapper methods that may answer without reading the key: `{method, class, file, line, viaAccessor, condition, literalReturnedFirst, verified}`. `verified` is always `false` — the shape is matched textually and the attribution is not checked. About half are real; open the `file:line` before citing one. |
 | `shortCircuitHeuristic` | The standing caveat, present only when `shortCircuits` is non-empty. |
+| `gatedBy` | Configs named inside this config's own gating conditions: `{key, viaAccessor, at}`. Stronger than `coConfigs` — the gate decides whether this config is read at all — and it catches companions compared as typed enums, which the co-config pass cannot see. |
+| `noExternalConsumer` | `true` when every read site is in this config's own declaring file, so no consumer was found elsewhere. Either a parser gap or a config that is declared but not wired up — a commented-out call site looks exactly like this. Check before describing behaviour. |
 
 ## Reading `readSites` well
 

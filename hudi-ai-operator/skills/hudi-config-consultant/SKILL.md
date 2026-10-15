@@ -288,7 +288,11 @@ it has a systematic blind spot: a companion read through a typed accessor rather
 `getWriteConcurrencyMode() == SINGLE_WRITER` — never appears at all, and that is exactly the kind of
 config whose absence silently defeats the one the user set.
 
-So: open the shared method before you present a companion, and prefer a requirement you confirmed
+**Check `gatedBy` first.** It lists configs named inside this config's own gating conditions, which
+is a stronger relationship than co-occurrence — the gate decides whether this config is read at
+all — and it is the right place to look for the enum-compared companions `coConfigs` misses.
+
+Then: open the shared method before you present a companion, and prefer a requirement you confirmed
 in validation or in a builder's adjustment logic over anything `sharedMethods` ranked highly. State
 plainly that co-occurrence is what the code reads together, not what Hudi requires.
 
@@ -298,7 +302,13 @@ Watch for configs whose only consumer is one code path that is no longer the def
 implementation superseded by V2, an engine-specific client, a legacy format. A user setting such a
 key gets silence, not an error, because Hudi does not reject unknown or unused properties.
 
-`readSites` is how you catch it, and a **short** `readSites` array is the signal — two plumbing
+`noExternalConsumer: true` is the catalog's flag for it: every read site is in the config's own
+declaring file, so nothing else was found reading it. A commented-out call site looks exactly like
+this — `hoodie.datasource.read.incr.skip_cluster` is fully declared, documented and versioned, and
+its one Spark call site is commented out with a reference to HUDI-9672. **Never describe behaviour
+for a config carrying this flag without first opening the code that should consume it.**
+
+`readSites` is how you catch the subtler case, and a **short** `readSites` array is the signal — two plumbing
 entries and one real consumer tells you more than twenty ever will.
 
 Naming the class is only half the job, and the half that does not help anyone. **Finish it: find
@@ -329,6 +339,9 @@ What it misses or gets wrong:
 
 - Conditions in a *caller* — the read itself is unconditional but the whole method only runs in one
   mode. The catalog cannot see that.
+- **`gates: []` with `gatesResolved: true` is not a clean bill of health.** It means no enclosing
+  condition was found at that site, not that the read is unconditional. Treat it as "nothing found
+  here", never as "verified unconditional".
 - Conditions in a *callee*, which is the common shape when a value is passed as an argument. A
   parallelism or size config is read unconditionally and handed to a helper that decides whether to
   use it — `deduceShuffleParallelism(input, configured)` returns the configured value only
