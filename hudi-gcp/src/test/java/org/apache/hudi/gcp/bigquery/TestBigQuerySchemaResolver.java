@@ -254,8 +254,9 @@ public class TestBigQuerySchemaResolver {
         Field.newBuilder("name", StandardSQLTypeName.STRING).setMode(Field.Mode.REQUIRED).build(),
         Field.newBuilder("age", StandardSQLTypeName.INT64).setMode(Field.Mode.NULLABLE).build());
 
-    Assertions.assertEquals(expected, SCHEMA_RESOLVER.convertSchema(input));
-    Assertions.assertEquals("`name` STRING NOT NULL, `age` INT64", schemaToSqlString(SCHEMA_RESOLVER.convertSchema(input)));
+    Schema result = SCHEMA_RESOLVER.convertSchema(input);
+    Assertions.assertEquals(expected, result);
+    Assertions.assertEquals("`name` STRING NOT NULL, `age` INT64", schemaToSqlString(result));
   }
 
   @Test
@@ -272,9 +273,10 @@ public class TestBigQuerySchemaResolver {
                 Field.newBuilder("city", StandardSQLTypeName.STRING).setMode(Field.Mode.REQUIRED).build())
             .setMode(Field.Mode.REQUIRED).build());
 
-    Assertions.assertEquals(expected, SCHEMA_RESOLVER.convertSchema(input));
+    Schema result = SCHEMA_RESOLVER.convertSchema(input);
+    Assertions.assertEquals(expected, result);
     Assertions.assertEquals("`name` STRING NOT NULL, `address` STRUCT<`city` STRING NOT NULL> NOT NULL",
-        schemaToSqlString(SCHEMA_RESOLVER.convertSchema(input)));
+        schemaToSqlString(result));
   }
 
   @Test
