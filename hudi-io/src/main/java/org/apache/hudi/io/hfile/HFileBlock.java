@@ -126,8 +126,10 @@ public abstract class HFileBlock {
         byteBuff, startOffsetInBuff + Header.UNCOMPRESSED_SIZE_WITHOUT_HEADER_INDEX);
     this.bytesPerChecksum = readInt(
         byteBuff, startOffsetInBuff + Header.BYTES_PER_CHECKSUM_INDEX);
-    validateHeader(byteBuff, startOffsetInBuff);
-    this.sizeCheckSum = (int) numChecksumBytes(getOnDiskSizeWithHeader(), bytesPerChecksum);
+    long checksumBytes = bytesPerChecksum > 0
+        ? numChecksumBytes((long) HFILEBLOCK_HEADER_SIZE + onDiskSizeWithoutHeader, bytesPerChecksum) : 0;
+    validateHeader(byteBuff, startOffsetInBuff, checksumBytes);
+    this.sizeCheckSum = (int) checksumBytes;
     if (CompressionCodec.NONE.equals(context.getCompressionCodec())) {
       isUnpacked = true;
       this.startOffsetInBuff = startOffsetInBuff;
@@ -145,10 +147,9 @@ public abstract class HFileBlock {
   /**
    * Rejects impossible header sizes before they are used to allocate buffers or locate content.
    */
-  private void validateHeader(byte[] byteBuff, int startOffsetInBuff) {
+  private void validateHeader(byte[] byteBuff, int startOffsetInBuff, long checksumBytes) {
     long onDiskSizeWithHeader = (long) HFILEBLOCK_HEADER_SIZE + onDiskSizeWithoutHeader;
     long blockEndInBuff = startOffsetInBuff + onDiskSizeWithHeader;
-    long checksumBytes = bytesPerChecksum > 0 ? numChecksumBytes(onDiskSizeWithHeader, bytesPerChecksum) : 0;
     long unpackedSize = (long) HFILEBLOCK_HEADER_SIZE + uncompressedSizeWithoutHeader + checksumBytes;
     boolean uncompressedExceedsOnDisk = CompressionCodec.NONE.equals(context.getCompressionCodec())
         && uncompressedSizeWithoutHeader > onDiskSizeWithoutHeader;
