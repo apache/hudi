@@ -1,7 +1,7 @@
 {
   "schemaVersion": 3,
   "hudiVersion": "1.3.0-SNAPSHOT",
-  "generatedFrom": "6300ff2f6824bd6591e0f787a77bda74c64b562d",
+  "generatedFrom": "f10d54c9b607854ea574593688c9a87aa565d543",
   "configs": [
     {
       "key": "_.hoodie.allow.multi.write.on.same.instant",
@@ -4184,6 +4184,12 @@
           "line": 51
         },
         {
+          "method": "checkRequiredProps",
+          "class": "FileSystemBasedLockProvider",
+          "file": "hudi-client/hudi-client-common/src/main/java/org/apache/hudi/client/transaction/lock/FileSystemBasedLockProvider.java",
+          "line": 272
+        },
+        {
           "method": "ZookeeperBasedImplicitBasePathLockProvider",
           "class": "ZookeeperBasedImplicitBasePathLockProvider",
           "file": "hudi-client/hudi-client-common/src/main/java/org/apache/hudi/client/transaction/lock/ZookeeperBasedImplicitBasePathLockProvider.java",
@@ -4196,7 +4202,15 @@
           "line": 87
         }
       ],
-      "aliasConstants": [],
+      "aliasConstants": [
+        {
+          "key": "hoodie.base.path",
+          "aliasClass": "HoodieWriteConfig",
+          "aliasConstant": "BASE_PATH",
+          "file": "hudi-client/hudi-client-common/src/main/java/org/apache/hudi/config/HoodieWriteConfig.java",
+          "line": 359
+        }
+      ],
       "shortCircuits": [],
       "engineDefaults": null,
       "readSites": [
@@ -4217,6 +4231,26 @@
           "via": "constant",
           "gatesResolved": true,
           "gates": []
+        },
+        {
+          "class": "HiveMetastoreBasedLockProvider",
+          "method": "HiveMetastoreBasedLockProvider",
+          "file": "hudi-sync/hudi-hive-sync/src/main/java/org/apache/hudi/hive/transaction/lock/HiveMetastoreBasedLockProvider.java",
+          "line": 115,
+          "via": "accessor:checkRequiredProps",
+          "gatesResolved": true,
+          "gates": []
+        },
+        {
+          "class": "HoodieTableMetaserverClient",
+          "method": "initOrGetTable",
+          "file": "hudi-platform-service/hudi-metaserver/hudi-metaserver-client/src/main/java/org/apache/hudi/common/table/HoodieTableMetaserverClient.java",
+          "line": 95,
+          "via": "constant",
+          "gatesResolved": true,
+          "gates": [
+            "if (e.getCause() instanceof NoSuchObjectException)"
+          ]
         },
         {
           "class": "InProcessLockProvider",
@@ -4246,6 +4280,15 @@
           "gates": []
         },
         {
+          "class": "StorageBasedLockConfig",
+          "method": "fromProperties",
+          "file": "hudi-client/hudi-client-common/src/main/java/org/apache/hudi/config/StorageBasedLockConfig.java",
+          "line": 77,
+          "via": "accessor:checkRequiredProps",
+          "gatesResolved": true,
+          "gates": []
+        },
+        {
           "class": "ZookeeperBasedImplicitBasePathLockProvider",
           "method": "ZookeeperBasedImplicitBasePathLockProvider",
           "file": "hudi-client/hudi-client-common/src/main/java/org/apache/hudi/client/transaction/lock/ZookeeperBasedImplicitBasePathLockProvider.java",
@@ -4267,15 +4310,50 @@
           "class": "BaseZookeeperBasedLockProvider",
           "method": "BaseZookeeperBasedLockProvider",
           "file": "hudi-client/hudi-client-common/src/main/java/org/apache/hudi/client/transaction/lock/BaseZookeeperBasedLockProvider.java",
-          "line": 69,
-          "via": "accessor:getZkBasePath",
+          "line": 67,
+          "via": "accessor:checkRequiredProps",
+          "gatesResolved": true,
+          "gates": []
+        },
+        {
+          "class": "FileSystemBasedLockProvider",
+          "method": "FileSystemBasedLockProvider",
+          "file": "hudi-client/hudi-client-common/src/main/java/org/apache/hudi/client/transaction/lock/FileSystemBasedLockProvider.java",
+          "line": 113,
+          "via": "accessor:checkRequiredProps",
+          "gatesResolved": true,
+          "gates": []
+        },
+        {
+          "class": "FileSystemBasedLockProvider",
+          "method": "checkRequiredProps",
+          "file": "hudi-client/hudi-client-common/src/main/java/org/apache/hudi/client/transaction/lock/FileSystemBasedLockProvider.java",
+          "line": 274,
+          "via": "constant",
+          "gatesResolved": true,
+          "gates": []
+        },
+        {
+          "class": "HoodieIndexer",
+          "method": "getHoodieMetadataConfig",
+          "file": "hudi-utilities/src/main/java/org/apache/hudi/utilities/HoodieIndexer.java",
+          "line": 255,
+          "via": "constant",
           "gatesResolved": true,
           "gates": []
         }
       ],
       "coConfigs": [
         {
-          "key": "hoodie.bootstrap.base.path",
+          "key": "hoodie.fs.atomic_creation.support",
+          "sharedMethods": 1
+        },
+        {
+          "key": "hoodie.storage.class",
+          "sharedMethods": 1
+        },
+        {
+          "key": "hoodie.table.type",
           "sharedMethods": 1
         },
         {
@@ -4307,7 +4385,12 @@
           "sharedMethods": 1
         }
       ],
-      "gatingConditions": [],
+      "gatingConditions": [
+        {
+          "condition": "if (e.getCause() instanceof NoSuchObjectException)",
+          "at": "HoodieTableMetaserverClient.initOrGetTable (hudi-platform-service/hudi-metaserver/hudi-metaserver-client/src/main/java/org/apache/hudi/common/table/HoodieTableMetaserverClient.java:95)"
+        }
+      ],
       "scalaReadSites": 0,
       "readContextResolved": true,
       "gatingHeuristic": "Conditions are recovered by text matching on enclosing if/switch blocks. They indicate where a read is conditional; they are not a complete or verified account of when the config takes effect. Confirm at the cited line."
@@ -5837,12 +5920,6 @@
       "module": "hudi-common",
       "accessors": [
         {
-          "method": "checkRequiredProps",
-          "class": "FileSystemBasedLockProvider",
-          "file": "hudi-client/hudi-client-common/src/main/java/org/apache/hudi/client/transaction/lock/FileSystemBasedLockProvider.java",
-          "line": 272
-        },
-        {
           "method": "getBootstrapBasePath",
           "class": "HoodieTableConfig",
           "file": "hudi-common/src/main/java/org/apache/hudi/common/table/HoodieTableConfig.java",
@@ -5877,15 +5954,6 @@
       "shortCircuitHeuristic": "Candidate wrappers found textually: a method that returns an accessor's value on one branch and a literal on another, so the literal path never reads the key. The shape is matched, the attribution is not verified -- roughly half of these are real gates and the rest call the accessor incidentally. Open the cited file:line and confirm the literal return really bypasses this config before telling a user it does.",
       "engineDefaults": null,
       "readSites": [
-        {
-          "class": "HiveMetastoreBasedLockProvider",
-          "method": "HiveMetastoreBasedLockProvider",
-          "file": "hudi-sync/hudi-hive-sync/src/main/java/org/apache/hudi/hive/transaction/lock/HiveMetastoreBasedLockProvider.java",
-          "line": 115,
-          "via": "accessor:checkRequiredProps",
-          "gatesResolved": true,
-          "gates": []
-        },
         {
           "class": "HoodieSyncClient",
           "method": "isBootstrap",
@@ -6026,15 +6094,6 @@
           "gates": []
         },
         {
-          "class": "StorageBasedLockConfig",
-          "method": "fromProperties",
-          "file": "hudi-client/hudi-client-common/src/main/java/org/apache/hudi/config/StorageBasedLockConfig.java",
-          "line": 77,
-          "via": "accessor:checkRequiredProps",
-          "gatesResolved": true,
-          "gates": []
-        },
-        {
           "class": "HoodieWriteConfig",
           "method": "getBootstrapSourceBasePath",
           "file": "hudi-client/hudi-client-common/src/main/java/org/apache/hudi/config/HoodieWriteConfig.java",
@@ -6044,20 +6103,42 @@
           "gates": []
         },
         {
-          "class": "BaseZookeeperBasedLockProvider",
-          "method": "BaseZookeeperBasedLockProvider",
-          "file": "hudi-client/hudi-client-common/src/main/java/org/apache/hudi/client/transaction/lock/BaseZookeeperBasedLockProvider.java",
-          "line": 67,
-          "via": "accessor:checkRequiredProps",
-          "gatesResolved": true,
-          "gates": []
-        },
-        {
           "class": "StorageBasedLockProvider",
           "method": "StorageBasedLockProvider",
           "file": "hudi-client/hudi-client-common/src/main/java/org/apache/hudi/client/transaction/lock/StorageBasedLockProvider.java",
           "line": 205,
           "via": "accessor:getHudiTableBasePath",
+          "gatesResolved": true,
+          "gates": []
+        },
+        {
+          "class": "HoodieSparkCopyOnWriteTable",
+          "method": "getUpdateHandle",
+          "file": "hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/table/HoodieSparkCopyOnWriteTable.java",
+          "line": 262,
+          "via": "accessor:getBootstrapBasePath",
+          "gatesResolved": true,
+          "gates": [
+            "if (mergeHandle.getOldFilePath() != null && mergeHandle.baseFileForMerge().getBootstrapBaseFile().isPresent())"
+          ]
+        },
+        {
+          "class": "BaseSparkCommitActionExecutor",
+          "method": "getUpdateHandle",
+          "file": "hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/table/action/commit/BaseSparkCommitActionExecutor.java",
+          "line": 456,
+          "via": "accessor:getBootstrapBasePath",
+          "gatesResolved": true,
+          "gates": [
+            "if (mergeHandle.getOldFilePath() != null && mergeHandle.baseFileForMerge().getBootstrapBaseFile().isPresent())"
+          ]
+        },
+        {
+          "class": "BaseBootstrapMetadataHandler",
+          "method": "runMetadataBootstrap",
+          "file": "hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/table/action/bootstrap/BaseBootstrapMetadataHandler.java",
+          "line": 77,
+          "via": "accessor:getBootstrapSourceBasePath",
           "gatesResolved": true,
           "gates": []
         }
@@ -6172,6 +6253,10 @@
         {
           "condition": "if (null != bootstrapBasePath)",
           "at": "HoodieTableMetaClient.build (hudi-common/src/main/java/org/apache/hudi/common/table/HoodieTableMetaClient.java:1565)"
+        },
+        {
+          "condition": "if (mergeHandle.getOldFilePath() != null && mergeHandle.baseFileForMerge().getBootstrapBaseFile().isPresent())",
+          "at": "HoodieSparkCopyOnWriteTable.getUpdateHandle (hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/table/HoodieSparkCopyOnWriteTable.java:262)"
         }
       ],
       "scalaReadSites": 3,
@@ -24502,6 +24587,13 @@
       "aliasConstants": [
         {
           "key": "hoodie.datasource.hive_sync.auto_create_database",
+          "aliasClass": "HiveSyncConfig",
+          "aliasConstant": "HIVE_AUTO_CREATE_DATABASE",
+          "file": "hudi-sync/hudi-hive-sync/src/main/java/org/apache/hudi/hive/HiveSyncConfig.java",
+          "line": 59
+        },
+        {
+          "key": "hoodie.datasource.hive_sync.auto_create_database",
           "aliasClass": "DataSourceWriteOptions",
           "aliasConstant": "HIVE_AUTO_CREATE_DATABASE",
           "file": "hudi-spark-datasource/hudi-spark-common/src/main/scala/org/apache/hudi/DataSourceOptions.scala",
@@ -24920,6 +25012,13 @@
       "aliasConstants": [
         {
           "key": "hoodie.datasource.hive_sync.batch_num",
+          "aliasClass": "HiveSyncConfig",
+          "aliasConstant": "HIVE_BATCH_SYNC_PARTITION_NUM",
+          "file": "hudi-sync/hudi-hive-sync/src/main/java/org/apache/hudi/hive/HiveSyncConfig.java",
+          "line": 69
+        },
+        {
+          "key": "hoodie.datasource.hive_sync.batch_num",
           "aliasClass": "DataSourceWriteOptions",
           "aliasConstant": "HIVE_BATCH_SYNC_PARTITION_NUM",
           "file": "hudi-spark-datasource/hudi-spark-common/src/main/scala/org/apache/hudi/DataSourceOptions.scala",
@@ -25244,6 +25343,13 @@
       "aliasConstants": [
         {
           "key": "hoodie.datasource.hive_sync.bucket_sync",
+          "aliasClass": "HiveSyncConfig",
+          "aliasConstant": "HIVE_SYNC_BUCKET_SYNC",
+          "file": "hudi-sync/hudi-hive-sync/src/main/java/org/apache/hudi/hive/HiveSyncConfig.java",
+          "line": 72
+        },
+        {
+          "key": "hoodie.datasource.hive_sync.bucket_sync",
           "aliasClass": "DataSourceWriteOptions",
           "aliasConstant": "HIVE_SYNC_BUCKET_SYNC",
           "file": "hudi-spark-datasource/hudi-spark-common/src/main/scala/org/apache/hudi/DataSourceOptions.scala",
@@ -25333,7 +25439,15 @@
       "parseWarnings": [],
       "module": "hudi-sync",
       "accessors": [],
-      "aliasConstants": [],
+      "aliasConstants": [
+        {
+          "key": "hoodie.datasource.hive_sync.bucket_sync_spec",
+          "aliasClass": "HiveSyncConfig",
+          "aliasConstant": "HIVE_SYNC_BUCKET_SYNC_SPEC",
+          "file": "hudi-sync/hudi-hive-sync/src/main/java/org/apache/hudi/hive/HiveSyncConfig.java",
+          "line": 73
+        }
+      ],
       "shortCircuits": [],
       "engineDefaults": null,
       "readSites": [
@@ -25425,6 +25539,13 @@
       "module": "hudi-sync",
       "accessors": [],
       "aliasConstants": [
+        {
+          "key": "hoodie.datasource.hive_sync.create_managed_table",
+          "aliasClass": "HiveSyncConfig",
+          "aliasConstant": "HIVE_CREATE_MANAGED_TABLE",
+          "file": "hudi-sync/hudi-hive-sync/src/main/java/org/apache/hudi/hive/HiveSyncConfig.java",
+          "line": 67
+        },
         {
           "key": "hoodie.datasource.hive_sync.create_managed_table",
           "aliasClass": "DataSourceWriteOptions",
@@ -25917,6 +26038,13 @@
       "aliasConstants": [
         {
           "key": "hoodie.datasource.hive_sync.enable",
+          "aliasClass": "HiveSyncConfig",
+          "aliasConstant": "HIVE_SYNC_ENABLED",
+          "file": "hudi-sync/hudi-hive-sync/src/main/java/org/apache/hudi/hive/HiveSyncConfig.java",
+          "line": 49
+        },
+        {
+          "key": "hoodie.datasource.hive_sync.enable",
           "aliasClass": "DataSourceWriteOptions",
           "aliasConstant": "HIVE_SYNC_ENABLED",
           "file": "hudi-spark-datasource/hudi-spark-common/src/main/scala/org/apache/hudi/DataSourceOptions.scala",
@@ -26355,6 +26483,13 @@
       "aliasConstants": [
         {
           "key": "hoodie.datasource.hive_sync.ignore_exceptions",
+          "aliasClass": "HiveSyncConfig",
+          "aliasConstant": "HIVE_IGNORE_EXCEPTIONS",
+          "file": "hudi-sync/hudi-hive-sync/src/main/java/org/apache/hudi/hive/HiveSyncConfig.java",
+          "line": 60
+        },
+        {
+          "key": "hoodie.datasource.hive_sync.ignore_exceptions",
           "aliasClass": "DataSourceWriteOptions",
           "aliasConstant": "HIVE_IGNORE_EXCEPTIONS",
           "file": "hudi-spark-datasource/hudi-spark-common/src/main/scala/org/apache/hudi/DataSourceOptions.scala",
@@ -26524,6 +26659,13 @@
       "module": "hudi-sync",
       "accessors": [],
       "aliasConstants": [
+        {
+          "key": "hoodie.datasource.hive_sync.jdbcurl",
+          "aliasClass": "HiveSyncConfig",
+          "aliasConstant": "HIVE_URL",
+          "file": "hudi-sync/hudi-hive-sync/src/main/java/org/apache/hudi/hive/HiveSyncConfig.java",
+          "line": 52
+        },
         {
           "key": "hoodie.datasource.hive_sync.jdbcurl",
           "aliasClass": "DataSourceWriteOptions",
@@ -26715,6 +26857,13 @@
       "aliasConstants": [
         {
           "key": "hoodie.datasource.hive_sync.metastore.uris",
+          "aliasClass": "HiveSyncConfig",
+          "aliasConstant": "METASTORE_URIS",
+          "file": "hudi-sync/hudi-hive-sync/src/main/java/org/apache/hudi/hive/HiveSyncConfig.java",
+          "line": 58
+        },
+        {
+          "key": "hoodie.datasource.hive_sync.metastore.uris",
           "aliasClass": "DataSourceWriteOptions",
           "aliasConstant": "METASTORE_URIS",
           "file": "hudi-spark-datasource/hudi-spark-common/src/main/scala/org/apache/hudi/DataSourceOptions.scala",
@@ -26807,6 +26956,13 @@
       "module": "hudi-sync",
       "accessors": [],
       "aliasConstants": [
+        {
+          "key": "hoodie.datasource.hive_sync.mode",
+          "aliasClass": "HiveSyncConfig",
+          "aliasConstant": "HIVE_SYNC_MODE",
+          "file": "hudi-sync/hudi-hive-sync/src/main/java/org/apache/hudi/hive/HiveSyncConfig.java",
+          "line": 70
+        },
         {
           "key": "hoodie.datasource.hive_sync.mode",
           "aliasClass": "DataSourceWriteOptions",
@@ -27144,7 +27300,15 @@
       "parseWarnings": [],
       "module": "hudi-sync",
       "accessors": [],
-      "aliasConstants": [],
+      "aliasConstants": [
+        {
+          "key": "hoodie.datasource.hive_sync.omit_metadata_fields",
+          "aliasClass": "HiveSyncConfig",
+          "aliasConstant": "HIVE_SYNC_OMIT_METADATA_FIELDS",
+          "file": "hudi-sync/hudi-hive-sync/src/main/java/org/apache/hudi/hive/HiveSyncConfig.java",
+          "line": 68
+        }
+      ],
       "shortCircuits": [],
       "engineDefaults": null,
       "readSites": [
@@ -27922,6 +28086,13 @@
       "aliasConstants": [
         {
           "key": "hoodie.datasource.hive_sync.password",
+          "aliasClass": "HiveSyncConfig",
+          "aliasConstant": "HIVE_PASS",
+          "file": "hudi-sync/hudi-hive-sync/src/main/java/org/apache/hudi/hive/HiveSyncConfig.java",
+          "line": 51
+        },
+        {
+          "key": "hoodie.datasource.hive_sync.password",
           "aliasClass": "DataSourceWriteOptions",
           "aliasConstant": "HIVE_PASS",
           "file": "hudi-spark-datasource/hudi-spark-common/src/main/scala/org/apache/hudi/DataSourceOptions.scala",
@@ -28219,7 +28390,15 @@
       ],
       "module": "hudi-sync",
       "accessors": [],
-      "aliasConstants": [],
+      "aliasConstants": [
+        {
+          "key": "hoodie.datasource.hive_sync.schema_string_length_thresh",
+          "aliasClass": "HiveSyncConfig",
+          "aliasConstant": "HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD",
+          "file": "hudi-sync/hudi-hive-sync/src/main/java/org/apache/hudi/hive/HiveSyncConfig.java",
+          "line": 66
+        }
+      ],
       "shortCircuits": [],
       "engineDefaults": null,
       "readSites": [
@@ -28335,6 +28514,13 @@
       "module": "hudi-sync",
       "accessors": [],
       "aliasConstants": [
+        {
+          "key": "hoodie.datasource.hive_sync.serde_properties",
+          "aliasClass": "HiveSyncConfig",
+          "aliasConstant": "HIVE_TABLE_SERDE_PROPERTIES",
+          "file": "hudi-sync/hudi-hive-sync/src/main/java/org/apache/hudi/hive/HiveSyncConfig.java",
+          "line": 64
+        },
         {
           "key": "hoodie.datasource.hive_sync.serde_properties",
           "aliasClass": "DataSourceWriteOptions",
@@ -28467,6 +28653,13 @@
       "module": "hudi-sync",
       "accessors": [],
       "aliasConstants": [
+        {
+          "key": "hoodie.datasource.hive_sync.skip_ro_suffix",
+          "aliasClass": "HiveSyncConfig",
+          "aliasConstant": "HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE",
+          "file": "hudi-sync/hudi-hive-sync/src/main/java/org/apache/hudi/hive/HiveSyncConfig.java",
+          "line": 61
+        },
         {
           "key": "hoodie.datasource.hive_sync.skip_ro_suffix",
           "aliasClass": "DataSourceWriteOptions",
@@ -28630,6 +28823,13 @@
         }
       ],
       "aliasConstants": [
+        {
+          "key": "hoodie.datasource.hive_sync.support_timestamp",
+          "aliasClass": "HiveSyncConfig",
+          "aliasConstant": "HIVE_SUPPORT_TIMESTAMP_TYPE",
+          "file": "hudi-sync/hudi-hive-sync/src/main/java/org/apache/hudi/hive/HiveSyncConfig.java",
+          "line": 62
+        },
         {
           "key": "hoodie.datasource.hive_sync.support_timestamp",
           "aliasClass": "DataSourceWriteOptions",
@@ -28893,6 +29093,13 @@
       "aliasConstants": [
         {
           "key": "hoodie.datasource.hive_sync.sync_as_datasource",
+          "aliasClass": "HiveSyncConfig",
+          "aliasConstant": "HIVE_SYNC_AS_DATA_SOURCE_TABLE",
+          "file": "hudi-sync/hudi-hive-sync/src/main/java/org/apache/hudi/hive/HiveSyncConfig.java",
+          "line": 65
+        },
+        {
+          "key": "hoodie.datasource.hive_sync.sync_as_datasource",
           "aliasClass": "DataSourceWriteOptions",
           "aliasConstant": "HIVE_SYNC_AS_DATA_SOURCE_TABLE",
           "file": "hudi-spark-datasource/hudi-spark-common/src/main/scala/org/apache/hudi/DataSourceOptions.scala",
@@ -29020,7 +29227,15 @@
       "parseWarnings": [],
       "module": "hudi-sync",
       "accessors": [],
-      "aliasConstants": [],
+      "aliasConstants": [
+        {
+          "key": "hoodie.datasource.hive_sync.sync_comment",
+          "aliasClass": "HiveSyncConfig",
+          "aliasConstant": "HIVE_SYNC_COMMENT",
+          "file": "hudi-sync/hudi-hive-sync/src/main/java/org/apache/hudi/hive/HiveSyncConfig.java",
+          "line": 74
+        }
+      ],
       "shortCircuits": [],
       "engineDefaults": null,
       "readSites": [
@@ -29469,7 +29684,15 @@
       "parseWarnings": [],
       "module": "hudi-sync",
       "accessors": [],
-      "aliasConstants": [],
+      "aliasConstants": [
+        {
+          "key": "hoodie.datasource.hive_sync.table.strategy",
+          "aliasClass": "HiveSyncConfig",
+          "aliasConstant": "HIVE_SYNC_TABLE_STRATEGY",
+          "file": "hudi-sync/hudi-hive-sync/src/main/java/org/apache/hudi/hive/HiveSyncConfig.java",
+          "line": 75
+        }
+      ],
       "shortCircuits": [],
       "engineDefaults": null,
       "readSites": [
@@ -29574,6 +29797,13 @@
       "module": "hudi-sync",
       "accessors": [],
       "aliasConstants": [
+        {
+          "key": "hoodie.datasource.hive_sync.table_properties",
+          "aliasClass": "HiveSyncConfig",
+          "aliasConstant": "HIVE_TABLE_PROPERTIES",
+          "file": "hudi-sync/hudi-hive-sync/src/main/java/org/apache/hudi/hive/HiveSyncConfig.java",
+          "line": 63
+        },
         {
           "key": "hoodie.datasource.hive_sync.table_properties",
           "aliasClass": "DataSourceWriteOptions",
@@ -29706,6 +29936,13 @@
       "module": "hudi-sync",
       "accessors": [],
       "aliasConstants": [
+        {
+          "key": "hoodie.datasource.hive_sync.use_jdbc",
+          "aliasClass": "HiveSyncConfig",
+          "aliasConstant": "HIVE_USE_JDBC",
+          "file": "hudi-sync/hudi-hive-sync/src/main/java/org/apache/hudi/hive/HiveSyncConfig.java",
+          "line": 57
+        },
         {
           "key": "hoodie.datasource.hive_sync.use_jdbc",
           "aliasClass": "DataSourceWriteOptions",
@@ -29897,7 +30134,15 @@
           "line": 230
         }
       ],
-      "aliasConstants": [],
+      "aliasConstants": [
+        {
+          "key": "hoodie.datasource.hive_sync.use_spark_catalog",
+          "aliasClass": "HiveSyncConfig",
+          "aliasConstant": "HIVE_SYNC_USE_SPARK_CATALOG",
+          "file": "hudi-sync/hudi-hive-sync/src/main/java/org/apache/hudi/hive/HiveSyncConfig.java",
+          "line": 71
+        }
+      ],
       "shortCircuits": [],
       "engineDefaults": null,
       "readSites": [
@@ -30005,6 +30250,13 @@
       "module": "hudi-sync",
       "accessors": [],
       "aliasConstants": [
+        {
+          "key": "hoodie.datasource.hive_sync.username",
+          "aliasClass": "HiveSyncConfig",
+          "aliasConstant": "HIVE_USER",
+          "file": "hudi-sync/hudi-hive-sync/src/main/java/org/apache/hudi/hive/HiveSyncConfig.java",
+          "line": 50
+        },
         {
           "key": "hoodie.datasource.hive_sync.username",
           "aliasClass": "DataSourceWriteOptions",
@@ -36120,6 +36372,13 @@
           "aliasConstant": "HIVE_STYLE_PARTITIONING",
           "file": "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/configuration/FlinkOptions.java",
           "line": 722
+        },
+        {
+          "key": "hoodie.datasource.write.hive_style_partitioning",
+          "aliasClass": "HoodieTableConfig",
+          "aliasConstant": "HIVE_STYLE_PARTITIONING_ENABLE",
+          "file": "hudi-common/src/main/java/org/apache/hudi/common/table/HoodieTableConfig.java",
+          "line": 430
         }
       ],
       "shortCircuits": [],
@@ -38408,6 +38667,13 @@
           "aliasConstant": "URL_ENCODE_PARTITIONING",
           "file": "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/configuration/FlinkOptions.java",
           "line": 716
+        },
+        {
+          "key": "hoodie.datasource.write.partitionpath.urlencode",
+          "aliasClass": "HoodieTableConfig",
+          "aliasConstant": "URL_ENCODE_PARTITIONING",
+          "file": "hudi-common/src/main/java/org/apache/hudi/common/table/HoodieTableConfig.java",
+          "line": 429
         }
       ],
       "shortCircuits": [],
@@ -40078,7 +40344,15 @@
           "line": 1370
         }
       ],
-      "aliasConstants": [],
+      "aliasConstants": [
+        {
+          "key": "hoodie.datasource.write.slash.separated.date.partitioning",
+          "aliasClass": "HoodieTableConfig",
+          "aliasConstant": "SLASH_SEPARATED_DATE_PARTITIONING",
+          "file": "hudi-common/src/main/java/org/apache/hudi/common/table/HoodieTableConfig.java",
+          "line": 431
+        }
+      ],
       "shortCircuits": [],
       "engineDefaults": null,
       "readSites": [
@@ -43325,19 +43599,69 @@
         "sinceVersion",
         "withDocumentation"
       ],
-      "parseWarnings": [
-        "no read site resolved for this config"
-      ],
+      "parseWarnings": [],
       "module": "hudi-common",
-      "accessors": [],
-      "aliasConstants": [],
+      "accessors": [
+        {
+          "method": "getExpressionIndexType",
+          "class": "HoodieMetadataConfig",
+          "file": "hudi-common/src/main/java/org/apache/hudi/common/config/HoodieMetadataConfig.java",
+          "line": 909
+        }
+      ],
+      "aliasConstants": [
+        {
+          "key": "hoodie.expression.index.type",
+          "aliasClass": "HoodieMetadataConfig",
+          "aliasConstant": "EXPRESSION_INDEX_TYPE",
+          "file": "hudi-common/src/main/java/org/apache/hudi/common/config/HoodieMetadataConfig.java",
+          "line": 512
+        }
+      ],
       "shortCircuits": [],
       "engineDefaults": null,
-      "readSites": [],
-      "coConfigs": [],
+      "readSites": [
+        {
+          "class": "HoodieMetadataConfig",
+          "method": "getExpressionIndexType",
+          "file": "hudi-common/src/main/java/org/apache/hudi/common/config/HoodieMetadataConfig.java",
+          "line": 910,
+          "via": "constant",
+          "gatesResolved": true,
+          "gates": []
+        },
+        {
+          "class": "HoodieMetadataConfig",
+          "method": "withExpressionIndexType",
+          "file": "hudi-common/src/main/java/org/apache/hudi/common/config/HoodieMetadataConfig.java",
+          "line": 1319,
+          "via": "constant",
+          "gatesResolved": true,
+          "gates": []
+        },
+        {
+          "class": "HoodieTableMetadataUtil",
+          "method": "getExpressionIndexPartitionsToInit",
+          "file": "hudi-common/src/main/java/org/apache/hudi/metadata/HoodieTableMetadataUtil.java",
+          "line": 2488,
+          "via": "accessor:getExpressionIndexType",
+          "gatesResolved": true,
+          "gates": []
+        }
+      ],
+      "coConfigs": [
+        {
+          "key": "hoodie.index.name",
+          "sharedMethods": 1
+        },
+        {
+          "key": "hoodie.metadata.index.expression.column",
+          "sharedMethods": 1
+        }
+      ],
       "gatingConditions": [],
       "scalaReadSites": 0,
-      "readContextResolved": false,
+      "readContextResolved": true,
       "gatingHeuristic": "Conditions are recovered by text matching on enclosing if/switch blocks. They indicate where a read is conditional; they are not a complete or verified account of when the config takes effect. Confirm at the cited line."
     },
     {
@@ -47753,7 +48077,7 @@
       ],
       "coConfigs": [
         {
-          "key": "hoodie.bootstrap.base.path",
+          "key": "hoodie.base.path",
           "sharedMethods": 1
         },
         {
@@ -50979,9 +51303,36 @@
           "class": "HoodieIndexingConfig",
           "file": "hudi-common/src/main/java/org/apache/hudi/common/config/HoodieIndexingConfig.java",
           "line": 280
+        },
+        {
+          "method": "getExpressionIndexName",
+          "class": "HoodieMetadataConfig",
+          "file": "hudi-common/src/main/java/org/apache/hudi/common/config/HoodieMetadataConfig.java",
+          "line": 905
+        },
+        {
+          "method": "getSecondaryIndexName",
+          "class": "HoodieMetadataConfig",
+          "file": "hudi-common/src/main/java/org/apache/hudi/common/config/HoodieMetadataConfig.java",
+          "line": 987
         }
       ],
-      "aliasConstants": [],
+      "aliasConstants": [
+        {
+          "key": "hoodie.index.name",
+          "aliasClass": "HoodieMetadataConfig",
+          "aliasConstant": "EXPRESSION_INDEX_NAME",
+          "file": "hudi-common/src/main/java/org/apache/hudi/common/config/HoodieMetadataConfig.java",
+          "line": 510
+        },
+        {
+          "key": "hoodie.index.name",
+          "aliasClass": "HoodieMetadataConfig",
+          "aliasConstant": "SECONDARY_INDEX_NAME",
+          "file": "hudi-common/src/main/java/org/apache/hudi/common/config/HoodieMetadataConfig.java",
+          "line": 554
+        }
+      ],
       "shortCircuits": [
         {
           "method": "EXPRESSION_INDEX",
@@ -51200,6 +51551,14 @@
       ],
       "coConfigs": [
         {
+          "key": "hoodie.metadata.index.expression.column",
+          "sharedMethods": 3
+        },
+        {
+          "key": "hoodie.metadata.index.secondary.column",
+          "sharedMethods": 3
+        },
+        {
           "key": "hoodie.expression.index.function",
           "sharedMethods": 2
         },
@@ -51217,6 +51576,10 @@
         },
         {
           "key": "hoodie.bloom.index.parallelism",
+          "sharedMethods": 1
+        },
+        {
+          "key": "hoodie.expression.index.type",
           "sharedMethods": 1
         },
         {
@@ -56828,7 +57191,15 @@
           "line": 93
         }
       ],
-      "aliasConstants": [],
+      "aliasConstants": [
+        {
+          "key": "hoodie.memory.compaction.max.size",
+          "aliasClass": "HoodieMemoryConfig",
+          "aliasConstant": "MAX_MEMORY_FOR_COMPACTION",
+          "file": "hudi-common/src/main/java/org/apache/hudi/common/config/HoodieMemoryConfig.java",
+          "line": 74
+        }
+      ],
       "shortCircuits": [],
       "engineDefaults": null,
       "readSites": [
@@ -57044,7 +57415,15 @@
           "line": 2780
         }
       ],
-      "aliasConstants": [],
+      "aliasConstants": [
+        {
+          "key": "hoodie.memory.dfs.buffer.max.size",
+          "aliasClass": "HoodieMemoryConfig",
+          "aliasConstant": "MAX_DFS_STREAM_BUFFER_SIZE",
+          "file": "hudi-common/src/main/java/org/apache/hudi/common/config/HoodieMemoryConfig.java",
+          "line": 76
+        }
+      ],
       "shortCircuits": [],
       "engineDefaults": null,
       "readSites": [
@@ -65837,11 +66216,19 @@
       ],
       "coConfigs": [
         {
+          "key": "hoodie.index.name",
+          "sharedMethods": 3
+        },
+        {
           "key": "hoodie.metadata.index.secondary.column",
           "sharedMethods": 2
         },
         {
           "key": "hoodie.expression.index.function",
+          "sharedMethods": 1
+        },
+        {
+          "key": "hoodie.expression.index.type",
           "sharedMethods": 1
         },
         {
@@ -66674,6 +67061,10 @@
         }
       ],
       "coConfigs": [
+        {
+          "key": "hoodie.index.name",
+          "sharedMethods": 3
+        },
         {
           "key": "hoodie.metadata.index.expression.column",
           "sharedMethods": 2
@@ -88806,10 +89197,6 @@
           "sharedMethods": 3
         },
         {
-          "key": "hoodie.bootstrap.base.path",
-          "sharedMethods": 2
-        },
-        {
           "key": "hoodie.clean.failed.writes.policy",
           "sharedMethods": 2
         },
@@ -88839,6 +89226,10 @@
         },
         {
           "key": "hoodie.memory.writestatus.failure.fraction",
+          "sharedMethods": 2
+        },
+        {
+          "key": "hoodie.metadata.enable",
           "sharedMethods": 2
         }
       ],
@@ -91791,7 +92182,15 @@
       "parseWarnings": [],
       "module": "hudi-utilities",
       "accessors": [],
-      "aliasConstants": [],
+      "aliasConstants": [
+        {
+          "key": "hoodie.streamer.schemaprovider.proto.class.name",
+          "aliasClass": "ProtoClassBasedSchemaProvider",
+          "aliasConstant": "PROTO_SCHEMA_CLASS_NAME",
+          "file": "hudi-utilities/src/main/java/org/apache/hudi/utilities/schema/ProtoClassBasedSchemaProvider.java",
+          "line": 49
+        }
+      ],
       "shortCircuits": [],
       "engineDefaults": null,
       "readSites": [
@@ -91883,7 +92282,15 @@
       "parseWarnings": [],
       "module": "hudi-utilities",
       "accessors": [],
-      "aliasConstants": [],
+      "aliasConstants": [
+        {
+          "key": "hoodie.streamer.schemaprovider.proto.flatten.wrappers",
+          "aliasClass": "ProtoClassBasedSchemaProvider",
+          "aliasConstant": "PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS",
+          "file": "hudi-utilities/src/main/java/org/apache/hudi/utilities/schema/ProtoClassBasedSchemaProvider.java",
+          "line": 52
+        }
+      ],
       "shortCircuits": [],
       "engineDefaults": null,
       "readSites": [
@@ -91952,7 +92359,15 @@
       "parseWarnings": [],
       "module": "hudi-utilities",
       "accessors": [],
-      "aliasConstants": [],
+      "aliasConstants": [
+        {
+          "key": "hoodie.streamer.schemaprovider.proto.max.recursion.depth",
+          "aliasClass": "ProtoClassBasedSchemaProvider",
+          "aliasConstant": "PROTO_SCHEMA_MAX_RECURSION_DEPTH",
+          "file": "hudi-utilities/src/main/java/org/apache/hudi/utilities/schema/ProtoClassBasedSchemaProvider.java",
+          "line": 58
+        }
+      ],
       "shortCircuits": [],
       "engineDefaults": null,
       "readSites": [
@@ -92021,7 +92436,15 @@
       "parseWarnings": [],
       "module": "hudi-utilities",
       "accessors": [],
-      "aliasConstants": [],
+      "aliasConstants": [
+        {
+          "key": "hoodie.streamer.schemaprovider.proto.timestamps.as.records",
+          "aliasClass": "ProtoClassBasedSchemaProvider",
+          "aliasConstant": "PROTO_SCHEMA_TIMESTAMPS_AS_RECORDS",
+          "file": "hudi-utilities/src/main/java/org/apache/hudi/utilities/schema/ProtoClassBasedSchemaProvider.java",
+          "line": 55
+        }
+      ],
       "shortCircuits": [],
       "engineDefaults": null,
       "readSites": [
@@ -97962,7 +98385,15 @@
       "parseWarnings": [],
       "module": "hudi-utilities",
       "accessors": [],
-      "aliasConstants": [],
+      "aliasConstants": [
+        {
+          "key": "hoodie.streamer.source.kafka.append.offsets",
+          "aliasClass": "KafkaOffsetPostProcessor",
+          "aliasConstant": "KAFKA_APPEND_OFFSETS",
+          "file": "hudi-utilities/src/main/java/org/apache/hudi/utilities/schema/KafkaOffsetPostProcessor.java",
+          "line": 48
+        }
+      ],
       "shortCircuits": [],
       "engineDefaults": null,
       "readSites": [
@@ -101850,7 +102281,15 @@
       "parseWarnings": [],
       "module": "hudi-utilities",
       "accessors": [],
-      "aliasConstants": [],
+      "aliasConstants": [
+        {
+          "key": "hoodie.streamer.source.sanitize.invalid.char.mask",
+          "aliasClass": "SanitizationUtils",
+          "aliasConstant": "SCHEMA_FIELD_NAME_INVALID_CHAR_MASK",
+          "file": "hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/helpers/SanitizationUtils.java",
+          "line": 63
+        }
+      ],
       "shortCircuits": [],
       "engineDefaults": null,
       "readSites": [
@@ -101909,7 +102348,15 @@
       "parseWarnings": [],
       "module": "hudi-utilities",
       "accessors": [],
-      "aliasConstants": [],
+      "aliasConstants": [
+        {
+          "key": "hoodie.streamer.source.sanitize.invalid.schema.field.names",
+          "aliasClass": "SanitizationUtils",
+          "aliasConstant": "SANITIZE_SCHEMA_FIELD_NAMES",
+          "file": "hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/helpers/SanitizationUtils.java",
+          "line": 59
+        }
+      ],
       "shortCircuits": [],
       "engineDefaults": null,
       "readSites": [
@@ -122883,10 +123330,6 @@
           "sharedMethods": 1
         },
         {
-          "key": "hoodie.bootstrap.base.path",
-          "sharedMethods": 1
-        },
-        {
           "key": "hoodie.write.lock.client.num_retries",
           "sharedMethods": 1
         },
@@ -123001,10 +123444,6 @@
         },
         {
           "key": "hoodie.base.path",
-          "sharedMethods": 1
-        },
-        {
-          "key": "hoodie.bootstrap.base.path",
           "sharedMethods": 1
         },
         {
@@ -123836,10 +124275,6 @@
           "sharedMethods": 1
         },
         {
-          "key": "hoodie.bootstrap.base.path",
-          "sharedMethods": 1
-        },
-        {
           "key": "hoodie.write.lock.client.num_retries",
           "sharedMethods": 1
         },
@@ -124003,10 +124438,6 @@
       "coConfigs": [
         {
           "key": "hoodie.base.path",
-          "sharedMethods": 1
-        },
-        {
-          "key": "hoodie.bootstrap.base.path",
           "sharedMethods": 1
         },
         {
@@ -124226,10 +124657,6 @@
           "sharedMethods": 1
         },
         {
-          "key": "hoodie.bootstrap.base.path",
-          "sharedMethods": 1
-        },
-        {
           "key": "hoodie.write.lock.max_wait_time_ms_between_retry",
           "sharedMethods": 1
         },
@@ -124318,10 +124745,6 @@
       "coConfigs": [
         {
           "key": "hoodie.base.path",
-          "sharedMethods": 1
-        },
-        {
-          "key": "hoodie.bootstrap.base.path",
           "sharedMethods": 1
         },
         {

@@ -627,6 +627,18 @@ DECLARATION_RE = re.compile(
     r"(?P<builder>ConfigProperty|ConfigOptions)\b"
 )
 
+# `public static final ConfigProperty<String> EXPRESSION_INDEX_TYPE =
+#  HoodieIndexingConfig.INDEX_TYPE;` -- a re-export that is a plain reference,
+# not a builder chain, so DECLARATION_RE never sees it. Without this the
+# re-exporting class's own getter (getExpressionIndexType) cannot be resolved.
+DIRECT_ALIAS_RE = re.compile(
+    r"(?:public|protected|private)?\s*(?:static\s+)?(?:final\s+)?"
+    r"(?:ConfigProperty|ConfigOption)\s*<[^>]*>\s+"
+    r"(?P<name>[A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*"
+    r"(?P<target>[A-Za-z_$][A-Za-z0-9_$]*\.[A-Za-z_$][A-Za-z0-9_$]*)\s*;"
+)
+
+
 CLASS_DECL_RE = re.compile(
     r"\b(?:public|protected|private)?\s*(?:static\s+)?(?:final\s+)?(?:abstract\s+)?"
     r"(?:class|interface|enum)\s+([A-Za-z_$][A-Za-z0-9_$]*)"
@@ -1039,6 +1051,29 @@ def collect_declarations(repo_root, verbose=False):
                 ("file", os.path.relpath(file_path, repo_root)),
                 ("line", line_of(original, match.start()))]))
             stats["scalaAliasesResolved"] += 1
+
+    # Direct re-exports (`FOO = OtherHolder.FOO`), which are a plain reference
+    # rather than a builder chain and so are invisible to DECLARATION_RE.
+    for file_path in walk_source_files(repo_root, (".java",)):
+        if SOURCE_DIR_MARKER not in file_path:
+            continue
+        try:
+            with open(file_path, "r", encoding="utf-8", errors="replace") as handle:
+                original = handle.read()
+        except OSError:
+            continue
+        if "ConfigProperty" not in original and "ConfigOption" not in original:
+            continue
+        masked = strip_comments_and_strings(original)
+        class_match = CLASS_DECL_RE.search(masked)
+        owner = class_match.group(1) if class_match else None
+        if owner is None:
+            continue
+        rel = os.path.relpath(file_path, repo_root)
+        for m in DIRECT_ALIAS_RE.finditer(masked):
+            alias_pending.append((
+                owner, m.group("name"), m.group("target"), rel,
+                masked[:m.start()].count("\n") + 1))
 
     # Resolve re-export aliases (`FOO = OtherHolder.FOO`) to the real key so a
     # read site that uses the alias still lands on the right config.
