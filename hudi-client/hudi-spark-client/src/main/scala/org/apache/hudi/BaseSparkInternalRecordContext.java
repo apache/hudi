@@ -124,7 +124,7 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
   @Override
   public HoodieRecord<InternalRow> constructHoodieRecord(BufferedRecord<InternalRow> bufferedRecord, String partitionPath) {
     HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
-    if (bufferedRecord.isDelete()) {
+    if (bufferedRecord.isDelete() && bufferedRecord.isEmpty()) {
       return new HoodieEmptyRecord<>(
           hoodieKey,
           bufferedRecord.getHoodieOperation(),
