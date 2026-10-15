@@ -170,10 +170,14 @@ failure sits in write profiling rather than the index lookup, and what lives in 
 investigate it themselves. That is the product.
 
 Three facts from the workflow catalog that contradict common understanding often enough to be worth
-stating when relevant: shuffle-parallelism configs default to `0`, **not 200**, where `0` means
-"inherit the input RDD's partition count"; the write stage's task count is bucket-shaped, so tuning
-`hoodie.upsert.shuffle.parallelism` does **not** move it; and archival stops at the **earliest**
-savepoint, so one forgotten savepoint pins the whole timeline after it.
+stating when relevant. Shuffle-parallelism configs default to `0`, **not 200**, and `0` does not mean
+"inherit the input partition count" — `HoodieJavaRDD.deduceNumPartitions` resolves it in order: an
+existing partitioner on the RDD, then `spark.sql.shuffle.partitions`, then `spark.default.parallelism`,
+and only then the input's own partition count. On a tuned cluster one of the Spark properties almost
+always wins, so a task count cannot be read backwards as an input partition count. The write stage's
+task count is bucket-shaped, so tuning `hoodie.upsert.shuffle.parallelism` does **not** move it. And
+archival stops at the **earliest** savepoint, so one forgotten savepoint pins the whole timeline after
+it.
 
 ## Special case: the MOR deferred-failure trap
 

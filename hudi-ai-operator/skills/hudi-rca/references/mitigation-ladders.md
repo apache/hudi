@@ -97,9 +97,12 @@ first is right in only one of them.
 is no error, and you will find out later from query results. The ambiguity is the signal, not an
 obstacle to work around.
 
-A human drives this procedure. An agent may explain it, point at the evidence that would satisfy
-step 4, and say which files it believes are implicated — but **an agent must not perform, script, or
-sequence the deletion.** See the explain-only block on HUDI-RCA-025.
+A human drives this procedure. An agent may explain it and point at the evidence that would satisfy
+step 4 — but **must not perform, script, sequence, or enumerate the deletion**, including naming the
+files it believes are implicated. A file list is the deletion, one copy-paste removed; the whole
+point of step 4 is that the human derives it from two independent verifications. The right answer to
+"just tell me which files" is to restate what step 4 requires. See the explain-only block on
+HUDI-RCA-025, which this must not contradict.
 
 ---
 

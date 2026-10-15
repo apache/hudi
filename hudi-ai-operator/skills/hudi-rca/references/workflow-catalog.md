@@ -712,7 +712,9 @@ Archival stops at the **earliest** savepoint — not the latest. An old forgotte
 entire timeline after it. `hoodie.archive.beyond.savepoint` (`HoodieArchivalConfig.java:107`)
 changes this to merely skipping the savepointed commits themselves (`TimelineArchiverV2.java:299-301`),
 but that is a deliberate trade: the savepoint is no longer restorable once the surrounding
-timeline is archived.
+timeline is archived. Described here because it explains the archiver's behaviour; it is **not**
+something to recommend. The feature is not fully supported, and `restore` is refused outright while
+it is on (`BaseHoodieWriteClient.java:883`).
 
 Clean and rollback instants are archived separately, bounded by the latest commit instant being
 archived (`:159-178`) — the ASCII diagram in that comment (`:167-173`) is the clearest statement

@@ -160,16 +160,26 @@ data or config; nothing is wrong with Hudi or the cluster.
 ## HUDI-RCA-003 — Source drops a column the table still has
 
 - **Category:** `input/config` · **Discoverability:** `needs-expertise`
-- **Signature** (innermost cause):
+- **Signature** (innermost cause), **1.x and 0.14.1+** — the write fails on the **driver**, before any
+  Parquet is read:
+  - `org\.apache\.hudi\.exception\.MissingSchemaFieldException: Schema validation failed due to missing field\. Fields missing from incoming schema: \{([^}]+)\}`
+  - Frames: `HoodieSchemaUtils.deduceWriterSchema` → `HoodieSchemaCompatibility.checkSchemaCompatible`
+    (`HoodieSchemaCompatibility.java:117`, and `:159` for the recursive path)
+  - Note `MissingSchemaFieldException extends SchemaCompatibilityException`, so a handler matching the
+    parent still catches it. Match the specific class: it is what names the dropped fields.
+- **Signature, pre-0.14 variant** — the same cause surfacing later, on the merge path while *reading
+  existing Parquet*:
   - `org\.apache\.parquet\.io\.InvalidRecordException: Parquet/Avro schema mismatch: Avro field '([^']+)' not found`
   - Frames, in order: `AvroRecordConverter.getAvroField` → `ParquetReaderIterator.hasNext` →
     `HoodieMergeHelper.runMerge`
   - Wrapped by `HoodieUpsertException: Error upserting bucketType UPDATE for partition :\d+`
-- **Symptom:** Every sync fails after an upstream schema change. The exception arrives on the **merge**
-  path while *reading existing Parquet*, so operators look at their table instead of their batch.
-- **Root cause:** The incoming batch no longer carries a column the table's base files have. Hudi reads
-  existing records using the latest (incoming) schema, and the Parquet-to-Avro converter cannot find
-  the field.
+- **Symptom:** Every sync fails after an upstream schema change. On the pre-0.14 variant the exception
+  arrives while reading the *table's* Parquet, so operators look at their table instead of their batch.
+  On 1.x it fails earlier and names the missing fields directly.
+- **Root cause:** The incoming batch no longer carries a column the table has. On 1.x this is caught as
+  **Step 1** of `checkSchemaCompatible` — a missing-field check gated only by `allowProjection` — which
+  is why it fails before any data file is touched. Before that check existed, the write proceeded and
+  the Parquet-to-Avro converter failed on the merge path instead.
 - **Evidence required:** stacktrace · writer props · last commit metadata (`extraMetadata.schema`) for
   the field's declared type
 - **Disambiguation:** same exception class as HUDI-RCA-001's field-not-found variant. The
@@ -178,14 +188,25 @@ data or config; nothing is wrong with Hudi or the cluster.
   before re-adding it, or the re-add fails differently.
 - **Mitigation ladder:**
   1. Re-add the column to the incoming batch as a **typed** null via a transformer — `cast(null as
-     string)`, or `cast(null as date)` where the logical type demands it. Cheapest and reversible.
-  2. Set `hoodie.avro.schema.validate=false` only as a stopgap, not as the fix.
-  3. **Config-layering trap:** if your config system overrides rather than merges list-valued settings,
+     string)`, or `cast(null as date)` where the logical type demands it. Cheapest and reversible, and
+     it keeps the table's schema honest about what the column is.
+  2. Or set `hoodie.write.set.null.for.missing.columns=true` (0.14.1+, default `false`) to have Hudi
+     fill the missing column with nulls itself. Less work than a transformer; the cost is that a
+     column silently going missing upstream no longer fails the write, so an accidental drop looks
+     like an intentional one.
+  3. If the column is genuinely meant to go, set
+     `hoodie.datasource.write.schema.allow.auto.evolution.column.drop=true` (default `false`) and let
+     the table schema follow the source. Dropping a column from the table is durable, so treat this as
+     a human decision rather than a mitigation.
+  4. **Not** `hoodie.avro.schema.validate`. It gates **Step 2** of the same method, and on 1.x Step 1
+     has already thrown, so the write never reaches it — and it already defaults to `false`. It had an
+     effect on the pre-0.14 path only.
+  5. **Config-layering trap:** if your config system overrides rather than merges list-valued settings,
      adding a transformer silently drops the transformer that was already configured. Re-list all of
      them, and verify the resolved config rather than the file you edited.
-- **Governing configs:** `hoodie.avro.schema.validate`,
+- **Governing configs:** `hoodie.write.set.null.for.missing.columns`,
   `hoodie.datasource.write.schema.allow.auto.evolution.column.drop`,
-  `hoodie.datasource.write.reconcile.schema`
+  `hoodie.datasource.write.reconcile.schema`, `hoodie.avro.schema.validate` (pre-0.14 only)
 - **`fixedInVersion`:** not a defect · **`preflightGuardExists`:** no
 - **`alsoAppliesWhenHealthy`:** false
 - **Provenance:** #8040
@@ -272,7 +293,16 @@ data or config; nothing is wrong with Hudi or the cluster.
     exception is the *lucky* case where you found out. Severity: urgent.
   - Treat "is a second writer intended?" as a question to ask the user, not something to infer.
 - **Mitigation ladder:**
-  1. If two writers exist and no lock provider is set, set one. Non-negotiable; absence is silent
+  1. If two writers exist and no lock provider is set, set one **together with
+     `hoodie.write.concurrency.mode`**. The provider alone is not enough, and can be silently undone:
+     the mode defaults to `SINGLE_WRITER`, and `HoodieWriteConfig.Builder.autoAdjustConfigsForConcurrencyMode`
+     (`HoodieWriteConfig.java:3938-3948`) **replaces an explicitly configured provider with
+     `InProcessLockProvider`** when the mode is single-writer and no table service is async, logging
+     only a WARN. The job then succeeds with a non-distributed lock, which is the corruption case
+     wearing a green tick. Set `hoodie.clean.failed.writes.policy=LAZY` explicitly in the same change:
+     `validate()` (`:3987-3993`) throws when a multi-writer mode is paired with the default `EAGER`,
+     and relying on the builder to infer it leaves the dependency invisible to the next reader.
+     Non-negotiable; absence is silent
      corruption, not a performance choice.
   2. **Lower** `hoodie.write.lock.wait_time_ms` to around 5000. Counter-intuitive: a long wait converts
      a fast, retryable rejection into a long stall that looks like a hang, and the later writer has to
@@ -285,7 +315,7 @@ data or config; nothing is wrong with Hudi or the cluster.
      control, which pairs best with a bucket index.
 - **Governing configs:** `hoodie.write.concurrency.mode`, `hoodie.write.lock.provider`,
   `hoodie.write.lock.wait_time_ms`, `hoodie.write.lock.num_retries`, `hoodie.write.lock.dynamodb.*`,
-  `hoodie.write.lock.zookeeper.*`, `hoodie.cleaner.policy.failed.writes`
+  `hoodie.write.lock.zookeeper.*`, `hoodie.clean.failed.writes.policy`
 - **`fixedInVersion`:** n/a — NBCC added in 1.x as an alternative mode, not a fix
 - **`preflightGuardExists`:** no — Hudi does not detect "two writers, no lock" at write time
 - **`alsoAppliesWhenHealthy`:** true — lock wait tuning is an optimization on a merely-slow multi-writer setup
@@ -567,6 +597,14 @@ advice, because several ladders here run *downward*.
   wide gap between p75 and max task input is skew; a small task count with uniformly large tasks is low
   parallelism. They have different fixes.
 - **Mitigation ladder:**
+  0. **Confirm the index type first.** This signature names no Hudi class, so it is matched on shape
+     alone and says nothing about which index produced it. `hoodie.index.type` has **no declared
+     default**: the effective one is set per engine in `HoodieIndexConfig.Builder.build()` — `SIMPLE`
+     on Spark, `INMEMORY` on Flink, `SIMPLE` on Java. On a default Spark table every bloom key below
+     is read by nothing, so applying them changes the job's configuration and not its behaviour.
+     Branch here.
+
+  **If BLOOM or GLOBAL_BLOOM:**
   1. **Low parallelism:** raise input partitioning at the source first, since the index stage inherits
      it. For Kafka that is `hoodie.streamer.source.kafka.minPartitions`. Only then set
      `hoodie.bloom.index.parallelism` explicitly.
@@ -578,9 +616,30 @@ advice, because several ladders here run *downward*.
   4. If the OOM frame is `ExternalSorter`, lower
      `spark.shuffle.spill.numElementsForceSpillThreshold` (e.g. to 100000) to force earlier spilling.
   5. Only then change index type or add executor memory.
-- **Governing configs:** `hoodie.bloom.index.parallelism`, `hoodie.bloom.index.keys.per.bucket`,
+
+  **If SIMPLE or GLOBAL_SIMPLE** — fewer levers, and that asymmetry is itself the finding. A simple
+  index joins the incoming keys against the base files of the affected partitions; there is no
+  bucketing to retune, so the ladder runs out quickly:
+  1. Raise input partitioning at the source, as above. Then set `hoodie.simple.index.parallelism`
+     (or `hoodie.global.simple.index.parallelism` for `GLOBAL_SIMPLE`) — both default to `0`,
+     meaning the parallelism is deduced rather than fixed.
+  2. If the OOM is on the *input* side rather than the join, `hoodie.simple.index.use.caching`
+     (default `true`) and `hoodie.simple.index.input.storage.level` control how the incoming
+     records are cached; moving to a disk-backed level relieves heap at the cost of IO.
+  3. If the OOM frame is `ExternalSorter`, step 4 above applies here too.
+  4. Past that, a simple index has little headroom left on key volume. Changing index type is the
+     real answer rather than a last resort: a record-level index or a bucket index bounds the lookup
+     instead of scanning base files. Treat that as a planned migration, not a mitigation — it
+     rewrites the metadata table.
+
+  **If INMEMORY, BUCKET or FLINK_STATE:** this pattern does not apply. An OOM on those paths is not
+  an index-lookup sizing problem, and the bloom and simple keys are read by nothing.
+- **Governing configs:** `hoodie.index.type` (**check first** — it selects which of the rest apply),
+  `hoodie.bloom.index.parallelism`, `hoodie.bloom.index.keys.per.bucket`,
   `hoodie.bloom.index.fileid.key.sorting.enable`, `hoodie.bloom.index.bucketized.checking`,
-  `hoodie.index.type`, `spark.shuffle.spill.numElementsForceSpillThreshold`
+  `hoodie.simple.index.parallelism`, `hoodie.global.simple.index.parallelism`,
+  `hoodie.simple.index.use.caching`, `hoodie.simple.index.input.storage.level`,
+  `spark.shuffle.spill.numElementsForceSpillThreshold`
 - **`fixedInVersion`:** n/a · **`preflightGuardExists`:** no
 - **`alsoAppliesWhenHealthy`:** **true** — the same parallelism and skew analysis is the first move on an
   index stage that merely runs slowly
@@ -811,16 +870,24 @@ advice, because several ladders here run *downward*.
      exists precisely for this.
   2. **Immediate unblock:** disable remote timeline initialization / the embedded timeline server so the
      oversized request is never made. Minutes, and buys room to do the real fix.
-  3. **Remove the stray savepoint.** This is the actual fix; archival resumes and the timeline shrinks on
-     its own.
+  3. **Remove the stray savepoint.** This is the actual fix; archival resumes and the timeline shrinks
+     on its own.
+
+     **Human gate — this is durable and unrecoverable.** A savepoint is the only thing standing
+     between its file slices and the cleaner; once released, a restore to that point is gone for good.
+     An agent may identify the savepoint, say why it is blocking archival and state what releasing it
+     costs, but **must not run or script the release**. Confirm with whoever took it that the
+     recovery point is genuinely no longer needed — a savepoint nobody remembers taking is not the
+     same as one nobody needs. Note that `hoodie.archive.beyond.savepoint` is **not** an alternative
+     here: the feature is not fully supported, and archival will not move past the first savepoint
+     regardless of the setting.
   4. **Do not reach for aggressive archival scheduling first.** Counter-intuitive but load-bearing: with
      the savepoint still in place, a more frequent archival job prunes nothing and costs object-store
      requests. It is pointless until the savepoint is gone.
   5. Re-enable remote timeline init once the instant count is back to a few thousand.
   6. Tune archival so it is not trying to prune the whole backlog in one round.
 - **Governing configs:** `hoodie.embed.timeline.server`,
-  `hoodie.filesystem.remote.backup.view.enable`, `hoodie.keep.min.commits`, `hoodie.keep.max.commits`,
-  `hoodie.archive.beyond.savepoint`
+  `hoodie.filesystem.remote.backup.view.enable`, `hoodie.keep.min.commits`, `hoodie.keep.max.commits`
 - **`fixedInVersion`:** n/a · **`preflightGuardExists`:** yes — the `savepoint` health check
 - **`alsoAppliesWhenHealthy`:** **true** — a forgotten savepoint is worth finding long before it is terminal
 - **Provenance:** #9478
@@ -1043,7 +1110,7 @@ user's mistake, and saying so plainly is part of the job.
      alternative to hand-deletion — it rewrites the timeline, so it is also expert-only and also L3.
   6. Upgrade: the deltacommit-removed-while-requested-remained trigger is fixed in later releases, so
      establishing the version is worthwhile before anything else.
-- **Governing configs:** `hoodie.cleaner.policy.failed.writes`, `hoodie.rollback.using.markers`,
+- **Governing configs:** `hoodie.clean.failed.writes.policy`, `hoodie.rollback.using.markers`,
   `hoodie.filesystem.view.incr.timeline.sync.enable` (experimental; if it is on, that alone can produce
   plans naming wrong filenames — turn it off)
 - **`fixedInVersion`:** 1.0.x for the requested/inflight-orphan trigger · **`preflightGuardExists`:** partial
@@ -1069,7 +1136,7 @@ user's mistake, and saying so plainly is part of the job.
   `spark.speculation=true`, which could trigger a record-index purge; a deltacommit deleted while its
   requested/inflight state remained.
 - **Evidence required:** validator output · **both timelines, active and archived** · writer props
-  (`hoodie.cleaner.policy.failed.writes`, `hoodie.write.concurrency.mode`,
+  (`hoodie.clean.failed.writes.policy`, `hoodie.write.concurrency.mode`,
   `hoodie.write.lock.provider` — these gate which rollback path can fire)
 - **Disambiguation — classify the direction first, per table, before touching anything:**
 
@@ -1090,8 +1157,9 @@ user's mistake, and saying so plainly is part of the job.
      evidence is gone.
   2. Confirm the signal is real before investigating at all — see ladder **L6**. Several tables failing
      the same check within minutes usually means the *check* changed, not the data.
-  3. **Branch A, metadata table is wrong:** rebuild. Set `hoodie.metadata.enable=false`, let one write
-     proceed, re-enable so the `files` partition rebuilds from scratch, then re-run the validator.
+  3. **Branch A, metadata table is wrong:** rebuild it with `metadata delete` then `metadata create`
+     in hudi-cli, then re-run the validator.
+     **Human gate — this drops every index.** `hoodie.metadata.auto.delete.partitions` defaults to `true`, so disabling the metadata table deletes it outright via `HoodieTable.maybeDeleteMetadataTable` — record index, column stats, bloom filters and secondary indexes, not only `files`. With it set to `false` the table instead stays on storage, unmaintained, while readers keep using it, which is worse. Stop every other writer first. Prefer `metadata delete` then `metadata create` in hudi-cli: same outcome, stated plainly rather than achieved as a config side effect. What comes back is whatever the writer properties enable, so confirm the index settings before recreating, and expect to rebuild the non-`files` indexes.
   4. **Branch B, metadata table is right and storage has orphans:** rebuilding will not fix it. The
      orphans must be removed under the safe-deletion protocol (L3), human-driven — see HUDI-RCA-025.
   5. **If neither branch matches positively, do not mitigate. Escalate.** A wrong branch either leaves the
@@ -1137,7 +1205,7 @@ user's mistake, and saying so plainly is part of the job.
   4. Last resort: savepoint, then restore to a known-good instant. This rewrites the timeline — expert-only.
   5. If the rollback is not failing but merely never finishing, stop and read HUDI-RCA-021 before
      restarting anything.
-- **Governing configs:** `hoodie.cleaner.policy.failed.writes`, `hoodie.write.lock.provider`,
+- **Governing configs:** `hoodie.clean.failed.writes.policy`, `hoodie.write.lock.provider`,
   `hoodie.rollback.using.markers`, `hoodie.rollback.parallelism`
 - **`fixedInVersion`:** n/a · **`preflightGuardExists`:** no
 - **`alsoAppliesWhenHealthy`:** false
@@ -1173,9 +1241,11 @@ user's mistake, and saying so plainly is part of the job.
      post-compaction base file, excluding records a later commit updated (they may now live in a different
      file group), and re-ingest whatever is genuinely missing. **There is no shortcut here.**
   4. Validate, resume, let a few commits land, then pause, delete the savepoint, resume.
-  5. If the writer failed during metadata-table initialization because of these files, disable the
-     metadata table so the stream progresses, do the cleanup in a quiet window, then re-enable.
-- **Governing configs:** `hoodie.metadata.enable`, `spark.speculation`, `hoodie.cleaner.policy.failed.writes`
+  5. If the writer failed during metadata-table initialization because of these files, rebuild the
+     metadata table (`metadata delete` then `metadata create` in hudi-cli) after doing the cleanup in
+     a quiet window.
+     **Human gate — this drops every index.** `hoodie.metadata.auto.delete.partitions` defaults to `true`, so disabling the metadata table deletes it outright via `HoodieTable.maybeDeleteMetadataTable` — record index, column stats, bloom filters and secondary indexes, not only `files`. With it set to `false` the table instead stays on storage, unmaintained, while readers keep using it, which is worse. Stop every other writer first. Prefer `metadata delete` then `metadata create` in hudi-cli: same outcome, stated plainly rather than achieved as a config side effect. What comes back is whatever the writer properties enable, so confirm the index settings before recreating, and expect to rebuild the non-`files` indexes.
+- **Governing configs:** `hoodie.metadata.enable`, `spark.speculation`, `hoodie.clean.failed.writes.policy`
 - **`fixedInVersion`:** later releases made file-slice resolution deterministic; the cleanup procedure is
   the durable value · **`preflightGuardExists`:** partial
 - **`alsoAppliesWhenHealthy`:** false
@@ -1309,8 +1379,9 @@ user's mistake, and saying so plainly is part of the job.
   3. With no backup, reconstruct from the writer's known configuration: table type, key generator, record
      key and partition fields, payload class, table version. **Get expert eyes on this** — a wrong value
      silently changes how every future read resolves records, which is worse than the outage.
-  4. If the **metadata table** is the affected one, do not hand-repair it. Disable the metadata table, let
-     the data table proceed, then re-enable to rebuild from scratch.
+  4. If the **metadata table** is the affected one, do not hand-repair it. Rebuild it with
+     `metadata delete` then `metadata create` in hudi-cli.
+     **Human gate — this drops every index.** `hoodie.metadata.auto.delete.partitions` defaults to `true`, so disabling the metadata table deletes it outright via `HoodieTable.maybeDeleteMetadataTable` — record index, column stats, bloom filters and secondary indexes, not only `files`. With it set to `false` the table instead stays on storage, unmaintained, while readers keep using it, which is worse. Stop every other writer first. Prefer `metadata delete` then `metadata create` in hudi-cli: same outcome, stated plainly rather than achieved as a config side effect. What comes back is whatever the writer properties enable, so confirm the index settings before recreating, and expect to rebuild the non-`files` indexes.
 - **Governing configs:** `hoodie.metadata.enable`, and every immutable key listed under HUDI-RCA-008
 - **`fixedInVersion`:** n/a · **`preflightGuardExists`:** no
 - **`alsoAppliesWhenHealthy`:** false
@@ -1374,7 +1445,9 @@ user's mistake, and saying so plainly is part of the job.
      change rather than a state repair.
   3. If it persists on a current release, treat it as a regression — this signature was fixed upstream and
      should not recur.
-  4. Last resort: disable the metadata table, let the data table progress, re-enable to rebuild.
+  4. Last resort: rebuild the metadata table with `metadata delete` then `metadata create` in
+     hudi-cli.
+     **Human gate — this drops every index.** `hoodie.metadata.auto.delete.partitions` defaults to `true`, so disabling the metadata table deletes it outright via `HoodieTable.maybeDeleteMetadataTable` — record index, column stats, bloom filters and secondary indexes, not only `files`. With it set to `false` the table instead stays on storage, unmaintained, while readers keep using it, which is worse. Stop every other writer first. Prefer `metadata delete` then `metadata create` in hudi-cli: same outcome, stated plainly rather than achieved as a config side effect. What comes back is whatever the writer properties enable, so confirm the index settings before recreating, and expect to rebuild the non-`files` indexes.
 - **Governing configs:** `hoodie.metadata.enable`,
   `hoodie.metadata.derive.from.datatable.clean.policy`, `hoodie.metadata.compact.max.delta.commits`,
   `hoodie.clean.automatic`, `hoodie.cleaner.commits.retained`
