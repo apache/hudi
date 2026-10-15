@@ -98,7 +98,7 @@ import java.util.stream.Collectors;
  *   <li>Table-level base-file size distribution (count, total, min / max / mean / median,
  *       p50 / p90 / p95 / p99) and the per-partition file-count distribution.</li>
  *   <li>Partition-size skew: coefficient of variation, Gini coefficient, largest / top-10
- *       partition share, and partitions above mean + 2 sigma.</li>
+ *       partition share, and partitions above both mean + 2 sigma and 1.5x the mean.</li>
  *   <li>With {@code --enable-partition-stats}, one row per partition sorted by total bytes
  *       (capped with {@code --top-n}).</li>
  *   <li>With {@code --include-row-counts}, per-partition record counts, taken from the metadata
@@ -652,7 +652,10 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
 
   private SmallFileVerdict classifySmallFileVerdict(int qualifying, double flaggedPct) {
     if (qualifying == 0) {
-      return SmallFileVerdict.CLEAN;
+      // Nothing was examined: no partition held enough base files to qualify. That is not evidence
+      // the table is clean -- a table of 2,000 partitions holding one small file each has exactly
+      // this shape -- so say the detector did not look rather than assert health it cannot support.
+      return SmallFileVerdict.SKIPPED;
     } else if (flaggedPct >= cfg.smallFilesSeverePct) {
       return SmallFileVerdict.SEVERE;
     } else if (flaggedPct >= cfg.smallFilesModeratePct) {
@@ -1084,7 +1087,8 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
 
   /**
    * Emits skew metrics over per-partition total bytes: coefficient of variation, Gini,
-   * top-N share, and an outlier list for partitions whose totalBytes exceeds mean+2sigma.
+   * top-N share, and an outlier list for partitions whose totalBytes exceeds both mean+2sigma
+   * and 1.5x the mean.
    */
   private void emitSkewSection(List<PartitionRow> rows, long tableTotalBytes) {
     if (rows.size() < 2 || tableTotalBytes == 0) {
@@ -1102,7 +1106,7 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
 
     List<PartitionRow> outliers = skew.outliers(rows);
     if (!outliers.isEmpty()) {
-      System.out.printf("  outliers (>mean+2σ = %s): %d partition(s)%n",
+      System.out.printf("  outliers (>max(mean+2σ, 1.5×mean) = %s): %d partition(s)%n",
           formatBytes((long) skew.outlierThreshold), outliers.size());
       int shown = Math.min(outliers.size(), 5);
       for (int i = 0; i < shown; i++) {
@@ -1135,9 +1139,13 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
     emitTopKSmallest("    top-" + cfg.printTopK + " smallest (files>=" + cfg.microPartitionMinFiles + ")", tc.microTopKSmallest);
 
     // Small files (table-level verdict based on prevalence)
-    if (tc.smallFileVerdict == SmallFileVerdict.SKIPPED) {
+    if (tc.smallFileVerdict == SmallFileVerdict.SKIPPED
+        && tc.smallFileTableIngestCommitCount < cfg.smallFilesMinTableCommits) {
       System.out.printf("  Small-file pile-up: SKIPPED (table has only %d ingest commits; need >= %d)%n",
           tc.smallFileTableIngestCommitCount, cfg.smallFilesMinTableCommits);
+    } else if (tc.smallFileVerdict == SmallFileVerdict.SKIPPED) {
+      System.out.printf("  Small-file pile-up: SKIPPED (no partition holds >= %d base files; nothing examined)%n",
+          cfg.smallFilesMinFilesPerPartition);
     } else {
       System.out.printf("  Small-file pile-up: %s%n", tc.smallFileVerdict.name());
       System.out.printf("    %d of %d qualifying partitions flagged (%.1f%%; threshold=%s, min-files=%d)%n",
@@ -1256,9 +1264,14 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
     String flaggedPct = String.format(Locale.ROOT, "%.1f%%", 100.0 * tc.smallFileFlaggedPct);
     String summary;
     List<String> findings = new ArrayList<>();
-    if (tc.smallFileVerdict == SmallFileVerdict.SKIPPED) {
+    if (tc.smallFileVerdict == SmallFileVerdict.SKIPPED
+        && tc.smallFileTableIngestCommitCount < cfg.smallFilesMinTableCommits) {
       summary = "Skipped: table has only " + tc.smallFileTableIngestCommitCount + " ingest commits (needs >= "
           + cfg.smallFilesMinTableCommits + ") so the small-file signal is not yet reliable.";
+    } else if (tc.smallFileVerdict == SmallFileVerdict.SKIPPED) {
+      summary = "Skipped: no partition holds >= " + cfg.smallFilesMinFilesPerPartition + " base files, so the "
+          + "detector examined nothing. This is not a clean verdict -- a table of many partitions holding one or "
+          + "two files each has exactly this shape and is not measured by this rule.";
     } else {
       summary = tc.smallFileFlaggedPartitions + " of " + tc.smallFileQualifyingPartitions + " partitions with >= "
           + cfg.smallFilesMinFilesPerPartition + " base files average under " + threshold + " (" + flaggedPct
@@ -1308,7 +1321,8 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
       summary = "Skipped: no completed ingest commits on the active timeline (compaction and clustering are excluded).";
     } else {
       summary = tc.hotPartitions.size() + " partition(s) were written by >= " + sharePct + " of the last " + window
-          + " ingest commits (compaction and clustering excluded).";
+          + " ingest commits (compaction and clustering excluded). Informational: write concentration"
+          + " does not set the table's overall status.";
       int shown = Math.min(10, tc.hotPartitions.size());
       for (int i = 0; i < shown; i++) {
         HotPartition h = tc.hotPartitions.get(i);
@@ -1320,9 +1334,12 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
         findings.add((tc.hotPartitions.size() - shown) + " more hot partitions are listed under partitions[].");
       }
       if (!tc.hotPartitions.isEmpty()) {
-        findings.add("If these are not the partitions expected to absorb current writes (for example the latest date partition of a "
-            + "time-partitioned table), revisit the partition key so writes spread across partitions; otherwise size the writer's "
-            + "small-file handling and clustering around these partitions.");
+        findings.add("This measures where writes landed, not whether the layout is wrong, which is why it does not set the overall "
+            + "status. Concentration is expected and correct for a time-partitioned table taking current data -- the newest partition "
+            + "absorbs everything -- and for a non-partitioned table, where every commit carries the same empty partition path.");
+        findings.add("It is worth acting on only when these are not the partitions you expect to absorb current writes. In that case "
+            + "revisit the partition key so writes spread across partitions; otherwise size the writer's small-file handling and "
+            + "clustering around these partitions.");
       }
     }
 
@@ -1562,6 +1579,13 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
   enum DetectorStatus { CLEAN, FLAGGED, SKIPPED }
 
   /** Small-file verdict tiers based on prevalence (flagged / qualifying ratio). */
+  /**
+   * A partition must be at least this multiple of the mean to count as a size outlier, on top of
+   * the mean + 2 sigma test. Without a floor the standard-deviation test is purely relative and
+   * finds "outliers" in any distribution, however tight.
+   */
+  static final double OUTLIER_MIN_MEAN_MULTIPLE = 1.5;
+
   enum SmallFileVerdict { CLEAN, MODERATE, SEVERE, SKIPPED }
 
   /** Aggregated per-partition stats, accumulated during the iteration and sorted for output. */
@@ -1613,7 +1637,12 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
       for (int i = 0; i < topN; i++) {
         topNBytes += rows.get(i).totalBytes;
       }
-      return new SkewMetrics(mean == 0 ? 0 : stdev / mean, giniCoefficient(sizes), mean + 2 * stdev, topN, topNBytes);
+      // mean + 2 sigma on its own is purely relative, so on a uniform table -- where sigma is tiny --
+      // a partition a few percent above the mean clears the bar and gets reported as an outlier.
+      // Require it to be substantially larger in absolute terms too, so "outlier" means something
+      // on a table whose partitions are all much the same size.
+      double threshold = Math.max(mean + 2 * stdev, OUTLIER_MIN_MEAN_MULTIPLE * mean);
+      return new SkewMetrics(mean == 0 ? 0 : stdev / mean, giniCoefficient(sizes), threshold, topN, topNBytes);
     }
 
     List<PartitionRow> outliers(List<PartitionRow> rows) {
@@ -1667,12 +1696,21 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
     }
 
     /**
-     * FLAGGED if any detector found something, CLEAN otherwise. Never SKIPPED: the
-     * micro-partition count rule always runs, so at least one detector always judges.
+     * FLAGGED if any detector that judges layout found something, CLEAN otherwise. Never SKIPPED:
+     * the micro-partition count rule always runs, so at least one detector always judges.
+     *
+     * <p>The hot-partition detector is deliberately excluded. It measures how often a partition
+     * appears in recent commits, which is write concentration rather than a layout defect, and for
+     * a time-partitioned table the answer is always "the newest partition" -- a streaming job
+     * committing every ten minutes puts its whole recent window into today's. A non-partitioned
+     * table is worse: every commit carries the same empty partition path, so concentration is 100%
+     * by construction. Letting that drive the verdict reported every actively-written table as
+     * having a layout problem, every day, with nothing to act on. Its findings are still reported;
+     * they just do not decide the table's status.
      */
     DetectorStatus overallStatus() {
       boolean smallFilesFlagged = smallFileVerdict == SmallFileVerdict.MODERATE || smallFileVerdict == SmallFileVerdict.SEVERE;
-      if (microPartitioned || smallFilesFlagged || hotPartitionStatus() == DetectorStatus.FLAGGED) {
+      if (microPartitioned || smallFilesFlagged) {
         return DetectorStatus.FLAGGED;
       }
       return DetectorStatus.CLEAN;

@@ -1118,4 +1118,82 @@ class TestHoodieTableLayoutAnalyzer {
 
     assertEquals(a, b, "equality restored after each mutation reverted");
   }
+
+  @Test
+  void hotPartitionsAreInformationalAndDoNotSetOverallStatus() throws Exception {
+    // given a healthy layout where one partition absorbs every write -- the normal shape of a
+    // time-partitioned table taking current data, and of any non-partitioned table
+    createPartition("p0", 6, 64 * 1024 * 1024, 0);
+    for (int i = 0; i < 6; i++) {
+      completeFixtureCommit("p0");
+    }
+
+    // when the detectors render JSON with a share low enough that p0 is hot
+    HoodieTableLayoutAnalyzer.Config cfg = detectorConfig();
+    cfg.output = "JSON";
+    cfg.microPartitionMinAgeDays = 99999;
+    cfg.microPartitionCountThreshold = 100;
+    cfg.smallFilesMinTableCommits = 1;
+    cfg.hotPartitionCommitShare = 0.5;
+    runAnalyzer(cfg);
+    String json = extractJsonObject(capturedAsString());
+
+    // then the hot partition is reported, but it does not make the table's layout look broken
+    assertTrue(json.contains("\"name\": \"hot-partitions\", \"status\": \"FLAGGED\""),
+        "expected the hot partition to still be reported, json:\n" + json);
+    assertTrue(json.contains("\"overallStatus\": \"CLEAN\""),
+        "write concentration must not drive overallStatus, json:\n" + json);
+    assertTrue(json.contains("Informational"),
+        "expected the summary to mark it informational, json:\n" + json);
+  }
+
+  @Test
+  void smallFileVerdictSkippedWhenNoPartitionQualifies() throws Exception {
+    // given the classic micro-partition shape: many partitions, one small file each, so no
+    // partition reaches the minimum file count the small-file rule needs
+    createPartition("p0", 1, 435 * 1024, 0);
+    createPartition("p1", 1, 435 * 1024, 0);
+    createPartition("p2", 1, 435 * 1024, 0);
+    for (int i = 0; i < 10; i++) {
+      completeFixtureCommit("p0", "p1", "p2");
+    }
+
+    // when the detectors run with the usual five-file minimum
+    HoodieTableLayoutAnalyzer.Config cfg = detectorConfig();
+    cfg.microPartitionMinAgeDays = 99999;
+    cfg.microPartitionCountThreshold = 100;
+    cfg.smallFilesMinTableCommits = 1;
+    cfg.smallFilesMinFilesPerPartition = 5;
+    runAnalyzer(cfg);
+    String out = capturedAsString();
+
+    // then the detector says it examined nothing rather than asserting the table is clean
+    assertTrue(out.contains("Small-file pile-up: SKIPPED"),
+        "nothing qualified, so this is not a CLEAN verdict, output:\n" + out);
+    assertTrue(out.contains("nothing examined"),
+        "expected the reason to be the file-count floor, output:\n" + out);
+  }
+
+  @Test
+  void uniformPartitionSizesProduceNoOutliers() throws Exception {
+    // given partitions of near-identical size: sigma is tiny, so mean + 2 sigma sits just above
+    // the mean and would flag a partition only marginally larger than its peers
+    createPartition("p0", 4, 10 * 1024 * 1024, 0);
+    createPartition("p1", 4, 10 * 1024 * 1024, 0);
+    createPartition("p2", 4, 10 * 1024 * 1024, 0);
+    createPartition("p3", 4, 11 * 1024 * 1024, 0);
+    completeFixtureCommit("p0", "p1", "p2", "p3");
+
+    // when the skew section runs
+    HoodieTableLayoutAnalyzer.Config cfg = detectorConfig();
+    cfg.microPartitionMinAgeDays = 99999;
+    cfg.microPartitionCountThreshold = 100;
+    cfg.smallFilesMinTableCommits = 1;
+    runAnalyzer(cfg);
+    String out = capturedAsString();
+
+    // then the 1.5x floor keeps a marginally larger partition from being called an outlier
+    assertTrue(!out.matches("(?s).*outliers \\([^)]*\\): [1-9].*"),
+        "a near-uniform table should produce no outliers, output:\n" + out);
+  }
 }

@@ -68,7 +68,10 @@ limitations under the License.
 
 `effectiveConfigs` key convention: `effective.*` are the thresholds the detector actually used,
 after command-line overrides; `observed.*` are measurements taken from the table. `overallStatus`
-is `FLAGGED` when any detector is `FLAGGED`, `MODERATE` or `SEVERE`, and `CLEAN` otherwise.
+is `FLAGGED` when `micro-partition` or `small-files` is `FLAGGED`, `MODERATE` or `SEVERE`, and
+`CLEAN` otherwise. **`hot-partitions` is informational and does not contribute**: it measures where
+writes landed rather than whether the layout is wrong, and for a time-partitioned table taking
+current data, or any non-partitioned table, concentration is expected and correct.
 `micro-partition` and `small-files` carry `topKSmallestPartitions` (filled by `--print-top-k`);
 `hot-partitions` carries `partitions`, the full hot list sorted by commit count then bytes.
 
@@ -116,16 +119,18 @@ tables with a long tail of old, small partitions are legitimately skewed.
 | | |
 |---|---|
 | Measures | Which partitions were written by a large share of recent ingest commits. Scans the last `effective.hot.window.commits` completed `commit`, `deltacommit` and `replacecommit` instants (`--hot-window-commits`, default 50), skipping compaction and clustering; `observed.hot.window.effective.commits` is how many ingests were actually found. A partition is hot when it appears in at least `effective.hot.partition.commit.share` of them (`--hot-partition-commit-share`, default 0.5), which is `effective.hot.partition.min.commit.count` commits. |
-| `FLAGGED` | At least one hot partition; `partitions[]` lists them with commit count, bytes and records written. |
+| `FLAGGED` | At least one hot partition; `partitions[]` lists them with commit count, bytes and records written. **Does not set `overallStatus`** — this detector reports, it does not judge. |
 | `CLEAN` | No partition reached the share. |
 | `SKIPPED` | No completed ingest commit on the active timeline, or the timeline could not be read. |
-| Expected hotness | On a time-partitioned table the latest date partition is supposed to be hot. Say so and do not recommend a change for it. |
+| Expected hotness | On a time-partitioned table the latest date partition is supposed to be hot, and a non-partitioned table has 100% concentration on the empty partition path by construction. Both are `FLAGGED` here and both are fine. Say so and do not recommend a change. |
 | Unexpected hotness | On a value-partitioned table (customer, region, category), a few hot partitions mean the partition key concentrates writes: those partitions will accumulate small files and be the ones clustering has to chase. |
 | Remedy | If the hotness is expected, size the writer's small-file handling and clustering around those partitions. If not, revisit the partition key (a higher-cardinality or composite key, or bucketing) so writes spread out; that means a new table. |
 
 ## Recommended reading order
 
-1. `overallStatus`, then any `SKIPPED` detector so the user knows what was not judged.
+1. `overallStatus`, then any `SKIPPED` detector so the user knows what was not judged. A `SKIPPED`
+   `small-files` with no qualifying partitions is not a clean table — it means no partition held
+   enough base files to measure, which is itself worth saying.
 2. `small-files` and `micro-partition` together: both point at clustering and writer file-size
    settings, so one recommendation usually covers both.
 3. `hot-partitions`, interpreted against the partitioning scheme the user describes.
