@@ -21,6 +21,7 @@ package org.apache.hudi.index;
 
 import org.apache.hudi.common.index.vector.VectorIndexOptions;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
@@ -29,9 +30,12 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.exception.HoodieMetadataIndexException;
+import org.apache.hudi.metadata.MetadataPartitionType;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.MockedConstruction;
 
 import java.util.Collections;
@@ -58,7 +62,9 @@ class TestVectorIndexDefinition {
     metaClient = mock(HoodieTableMetaClient.class);
     tableConfig = mock(HoodieTableConfig.class);
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
-    when(tableConfig.getMetadataPartitions()).thenReturn(Collections.emptySet());
+    when(metaClient.getTableType()).thenReturn(HoodieTableType.COPY_ON_WRITE);
+    when(tableConfig.getMetadataPartitions())
+        .thenReturn(Collections.singleton(MetadataPartitionType.RECORD_INDEX.getPartitionPath()));
     when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.current());
   }
 
@@ -103,6 +109,29 @@ class TestVectorIndexDefinition {
               "embedding_idx",
               singleColumn("embedding"),
               Collections.singletonMap("vector.dimension", "128")));
+    }
+  }
+
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  void rejectsTablesWithoutRecordIndex(HoodieTableType tableType) {
+    when(metaClient.getTableType()).thenReturn(tableType);
+    when(tableConfig.getMetadataPartitions()).thenReturn(Collections.emptySet());
+    try (MockedConstruction<TableSchemaResolver> ignored = schemaResolverFor(
+        HoodieSchemaField.of("embedding", HoodieSchema.createVector(128)))) {
+      assertThrows(HoodieMetadataIndexException.class,
+          () -> HoodieIndexUtils.getVectorIndexDefinition(
+              metaClient, "embedding_idx", singleColumn("embedding"), Collections.emptyMap()));
+    }
+  }
+
+  @Test
+  void acceptsMergeOnReadTablesWithRecordIndex() throws Exception {
+    when(metaClient.getTableType()).thenReturn(HoodieTableType.MERGE_ON_READ);
+    try (MockedConstruction<TableSchemaResolver> ignored = schemaResolverFor(
+        HoodieSchemaField.of("embedding", HoodieSchema.createVector(128)))) {
+      HoodieIndexUtils.getVectorIndexDefinition(
+          metaClient, "embedding_idx", singleColumn("embedding"), Collections.emptyMap());
     }
   }
 

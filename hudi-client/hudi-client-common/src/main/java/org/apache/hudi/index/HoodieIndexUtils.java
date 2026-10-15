@@ -707,6 +707,20 @@ public class HoodieIndexUtils {
       HoodieTableMetaClient metaClient,
       Map<String, Map<String, String>> columns,
       String userIndexName) throws Exception {
+    // Vector search arbitrates every finalist against the record level index, so the RLI partition
+    // must already be built before the vector index is registered.
+    boolean hasRecordIndex = metaClient.getTableConfig().getMetadataPartitions().stream()
+        .anyMatch(partition -> partition.equals(MetadataPartitionType.RECORD_INDEX.getPartitionPath()));
+    if (!hasRecordIndex) {
+      throw new HoodieMetadataIndexException(String.format(
+          "Cannot create vector index '%s': the record level index is required but the metadata table "
+              + "partition '%s' is not present on table '%s'. Enable it with '%s' = 'true' on a write, "
+              + "or run: CREATE INDEX record_index ON %s USING record_index; then retry.",
+          userIndexName, MetadataPartitionType.RECORD_INDEX.getPartitionPath(),
+          metaClient.getTableConfig().getTableName(), GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(),
+          metaClient.getTableConfig().getTableName()));
+    }
+
     String columnName = columns.keySet().iterator().next();
     HoodieSchema tableSchema = new TableSchemaResolver(metaClient).getTableSchema();
     HoodieSchema fieldSchema = HoodieSchemaUtils.getNestedField(tableSchema, columnName)
