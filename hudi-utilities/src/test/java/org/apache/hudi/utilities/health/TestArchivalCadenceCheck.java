@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieArchivalConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -143,7 +144,42 @@ public class TestArchivalCadenceCheck {
 
     // then both the configured value and the derived threshold are reported
     assertEquals("20", result.getEffectiveConfigs().get(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key()));
-    assertEquals("22", result.getEffectiveConfigs().get("effective.unhealthy.threshold.write.instants"));
-    assertEquals("3", result.getEffectiveConfigs().get("observed.write.instants"));
+    assertEquals("22", result.getEffectiveConfigs().get("effective.unhealthy.threshold.completed.commits"));
+    assertEquals("3", result.getEffectiveConfigs().get("observed.completed.commits"));
+  }
+
+  @Test
+  public void cleanerRetentionRaisesTheBoundTheArchiverEnforces() throws Exception {
+    // given a table whose cleaner retains far more history than archival would on its own --
+    // ArchivalUtils raises the archiver's bounds to cover the cleaner, so ~100 instants is correct
+    HoodieTableMetaClient metaClient = tableWithCommits(100);
+    TypedProperties props = propsWithRetention(30);
+    props.setProperty(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "20");
+    props.setProperty(HoodieCleanConfig.CLEANER_POLICY.key(), "KEEP_LATEST_COMMITS");
+    props.setProperty(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "80");
+
+    // when the check runs
+    HealthCheckResult result = runCheck(metaClient, props);
+
+    // then the table is not flagged merely for honouring its own cleaner configuration
+    assertEquals(HealthStatus.HEALTHY, result.getStatus(),
+        "a timeline held open by cleaner retention is not an archival failure");
+    assertTrue(Integer.parseInt(result.getEffectiveConfigs().get("effective.max.commits.to.keep")) > 30,
+        "the effective bound should be raised above the configured maximum");
+  }
+
+  @Test
+  public void pendingWriteInstantIsNamedAsTheBlocker() throws Exception {
+    // given a long timeline with an inflight commit that archival cannot move past
+    HoodieTableMetaClient metaClient = tableWithCommits(60);
+    HoodieTestTable.of(metaClient).addInflightCommit("00061");
+
+    // when the check runs against a small retention
+    HealthCheckResult result = runCheck(metaClient, propsWithRetention(10));
+
+    // then the finding names the instant to act on rather than only listing possible causes
+    assertEquals(HealthStatus.UNHEALTHY, result.getStatus());
+    assertTrue(result.getFindings().stream().anyMatch(f -> f.contains("00061")),
+        "expected the pending instant to be named, got: " + result.getFindings());
   }
 }

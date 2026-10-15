@@ -36,15 +36,9 @@ spark-submit \
   --props s3://bucket/path/to/writer.properties
 ```
 
-The checks currently shipped are timeline-only, so no Spark session is actually required. Running
-it as a plain Java process works too, and is cheaper:
-
-```bash
-java -cp $HUDI_DIR/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.12-1.3.0-SNAPSHOT.jar \
-  org.apache.hudi.utilities.HoodieTableHealthChecker \
-  --base-path /path/to/table \
-  --props /path/to/writer.properties
-```
+The checks currently shipped are timeline-only, so no Spark session is used for the work itself --
+but the bundle still needs the Hadoop, Jackson and slf4j classes that `spark-submit` puts on the
+classpath, so run it that way rather than as a bare `java -cp`.
 
 ## Why writer properties are required
 
@@ -153,8 +147,13 @@ Governing property: `hoodie.keep.max.commits`.
 | Code | Meaning |
 |---|---|
 | `0` | Every check that ran reported healthy (or was skipped) |
-| `1` | At least one check reported unhealthy |
-| `2` | Bad arguments, the table could not be read, or a check failed to run |
+| `2` | Bad arguments, or the table could not be read |
+| `3` | At least one check reported unhealthy |
+| `4` | No check reported unhealthy, but at least one could not run |
+
+`1` is deliberately unused. The JVM returns it when the process fails to start at all — a missing
+class, a bad classpath — and a verdict sharing that code would make a setup mistake look like a
+finding about the table.
 
 Note that a run where everything skipped exits `0`. A skipped check is *silent* about health, not
 an assertion of it — if you want skips to be loud, check for `SKIPPED` in the output or use JSON.
@@ -195,16 +194,19 @@ thresholds derived from the configuration. Everything else is a writer property 
 # Daily table health check.
 set -uo pipefail
 
-java -cp "$HUDI_BUNDLE" org.apache.hudi.utilities.HoodieTableHealthChecker \
+spark-submit --master local \
+  --class org.apache.hudi.utilities.HoodieTableHealthChecker "$HUDI_BUNDLE" \
   --base-path "$TABLE" \
   --props "$WRITER_PROPS" \
   --output JSON > /tmp/health.json
 status=$?
 
-if [ $status -eq 1 ]; then
+if [ $status -eq 3 ]; then
   alert "Hudi table $TABLE is unhealthy" < /tmp/health.json
-elif [ $status -eq 2 ]; then
-  alert "Hudi health check could not run for $TABLE" < /tmp/health.json
+elif [ $status -eq 4 ]; then
+  alert "Hudi health check: a check could not run for $TABLE" < /tmp/health.json
+elif [ $status -ne 0 ]; then
+  alert "Hudi health check failed to run for $TABLE (exit $status)" < /tmp/health.json
 fi
 ```
 

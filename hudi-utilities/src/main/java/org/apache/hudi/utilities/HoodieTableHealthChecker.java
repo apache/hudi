@@ -75,9 +75,13 @@ import java.util.Map;
  * <h3>Exit codes</h3>
  * <ul>
  *   <li>{@code 0} -- every check that ran reported healthy</li>
- *   <li>{@code 1} -- at least one check reported unhealthy</li>
  *   <li>{@code 2} -- bad arguments, or the table could not be read</li>
+ *   <li>{@code 3} -- at least one check reported unhealthy</li>
+ *   <li>{@code 4} -- no check reported unhealthy, but at least one could not run</li>
  * </ul>
+ *
+ * <p>{@code 1} is deliberately unused: the JVM returns it when the process fails to start at all,
+ * so sharing it would make a classpath mistake read as a finding about the table.
  *
  * <h3>Example</h3>
  * <pre>
@@ -95,8 +99,16 @@ public class HoodieTableHealthChecker implements Serializable {
   private static final long serialVersionUID = 1L;
 
   static final int EXIT_HEALTHY = 0;
-  static final int EXIT_UNHEALTHY = 1;
+  /**
+   * Reserved. The JVM itself exits 1 when the process fails to start -- a missing class, a bad
+   * classpath -- so a verdict must not share that code, or a broken invocation reads as a finding
+   * about the table.
+   */
   static final int EXIT_ERROR = 2;
+  /** At least one check reported UNHEALTHY. Outranks {@link #EXIT_CHECK_ERRORED}. */
+  static final int EXIT_UNHEALTHY = 3;
+  /** No check reported UNHEALTHY, but at least one could not run. */
+  static final int EXIT_CHECK_ERRORED = 4;
 
   private static final ObjectMapper JSON_MAPPER =
       new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
@@ -152,10 +164,15 @@ public class HoodieTableHealthChecker implements Serializable {
       System.out.println(renderTable(results, erroredChecks));
     }
 
-    if (!erroredChecks.isEmpty()) {
-      return EXIT_ERROR;
+    // An unhealthy table is the more actionable finding, so it outranks a check that could not
+    // run. Both are still reported in full in the output above.
+    if (results.stream().anyMatch(r -> r.getStatus().isUnhealthy())) {
+      return EXIT_UNHEALTHY;
     }
-    return results.stream().anyMatch(r -> r.getStatus().isUnhealthy()) ? EXIT_UNHEALTHY : EXIT_HEALTHY;
+    if (!erroredChecks.isEmpty()) {
+      return EXIT_CHECK_ERRORED;
+    }
+    return EXIT_HEALTHY;
   }
 
   private List<HealthCheck> selectChecks(String requested) {
@@ -322,6 +339,6 @@ public class HoodieTableHealthChecker implements Serializable {
   private static void printAvailableChecks() {
     System.out.println("\nAvailable checks:");
     allChecks().forEach(c -> System.out.printf("  %-12s %s%n", c.getName(), c.getDescription()));
-    System.out.println("\nExit codes: 0 = healthy, 1 = unhealthy, 2 = error\n");
+    System.out.println("\nExit codes: 0 = healthy, 2 = error, 3 = unhealthy, 4 = a check could not run\n");
   }
 }

@@ -19,11 +19,13 @@
 package org.apache.hudi.utilities.health;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 
 /**
@@ -124,10 +126,56 @@ public class CleanerCadenceCheck implements HealthCheck {
           + "stuck clean in the writer logs; a clean that repeatedly fails to acquire the table lock "
           + "under concurrent writers is a common cause.");
     } else {
-      result.finding("No clean is scheduled. Check that cleaning is enabled for this table ("
-          + HoodieCleanConfig.AUTO_CLEAN.key() + ") and that the job responsible for it is running.");
+      // Name the configuration conflict before blaming the service: if archival trims the timeline
+      // below what the cleaner needs to see, the cleaner is starved by construction and no amount
+      // of checking that it is enabled will help.
+      Option<String> starvedByArchival = archivalStarvesCleaner(context);
+      if (starvedByArchival.isPresent()) {
+        result.finding(starvedByArchival.get());
+      } else {
+        result.finding("No clean is scheduled. Check that cleaning is enabled for this table ("
+            + HoodieCleanConfig.AUTO_CLEAN.key() + ") and that the job responsible for it is running.");
+      }
     }
     return result.build();
+  }
+
+  /**
+   * Whether archival is configured to trim the timeline before the cleaner can act on it.
+   *
+   * <p>Under {@code KEEP_LATEST_COMMITS} the cleaner only retains history once it can see more than
+   * {@code hoodie.clean.commits.retained} completed commits. If {@code hoodie.keep.min.commits} is
+   * at or below that number, archival removes instants from the active timeline first and the
+   * cleaner never reaches its trigger -- file versions accumulate while no clean is ever scheduled.
+   * Hudi warns about this at write time and the archiver raises its own bounds to compensate, but a
+   * table already in this state reads as "cleaning is not running" when the cause is the pairing of
+   * the two configs.
+   *
+   * @return the finding to report, or empty when the configuration is not the explanation.
+   */
+  private static Option<String> archivalStarvesCleaner(HealthCheckContext context) {
+    String policy = context.getProps().getString(HoodieCleanConfig.CLEANER_POLICY.key(),
+        HoodieCleanConfig.CLEANER_POLICY.defaultValue());
+    if (!HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name().equals(policy)) {
+      return Option.empty();
+    }
+    int commitsRetained = Integer.parseInt(
+        context.getProps().getString(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(),
+            HoodieCleanConfig.CLEANER_COMMITS_RETAINED.defaultValue()));
+    int minCommitsToKeep = Integer.parseInt(
+        context.getProps().getString(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(),
+            HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.defaultValue()));
+    if (minCommitsToKeep > commitsRetained) {
+      return Option.empty();
+    }
+    return Option.of(String.format(
+        "%s=%d is not greater than %s=%d, so archival trims the active timeline before the cleaner "
+            + "has enough commits to act on. Raise %s above %d. Until then file versions accumulate "
+            + "and no clean is scheduled, whatever %s is set to.",
+        HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), minCommitsToKeep,
+        HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), commitsRetained,
+        HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), commitsRetained,
+        HoodieCleanConfig.AUTO_CLEAN.key()));
   }
 
   /** Surfaces what the last clean retained, so the operator can see the retention watermark moving. */

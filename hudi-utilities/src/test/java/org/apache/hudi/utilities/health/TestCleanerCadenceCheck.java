@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -218,5 +219,48 @@ public class TestCleanerCadenceCheck {
     // then the supplied value is echoed and the unsupplied policy is not invented
     assertEquals("20", result.getEffectiveConfigs().get(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key()));
     assertTrue(!result.getEffectiveConfigs().containsKey(HoodieCleanConfig.CLEANER_POLICY.key()));
+  }
+
+  @Test
+  public void archivalStarvingTheCleanerIsNamedInsteadOfBlamingAutoClean() throws Exception {
+    // given keep.min.commits at or below clean.commits.retained: archival trims the timeline
+    // before the cleaner ever sees enough commits, so no clean is scheduled by construction
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
+    tableWithCommits(metaClient, 1, 60);
+    TypedProperties props = propsWithTrigger(1);
+    props.setProperty(HoodieCleanConfig.CLEANER_POLICY.key(), "KEEP_LATEST_COMMITS");
+    props.setProperty(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "30");
+    props.setProperty(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "20");
+
+    // when the check runs
+    HealthCheckResult result = runCheck(metaClient, props, false);
+
+    // then the finding points at the config pairing, not at hoodie.clean.automatic
+    assertEquals(HealthStatus.UNHEALTHY, result.getStatus());
+    assertTrue(result.getFindings().stream()
+            .anyMatch(f -> f.contains(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key())
+                && f.contains(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key())),
+        "expected the archival/cleaner conflict to be named, got: " + result.getFindings());
+    assertTrue(result.getFindings().stream().noneMatch(f -> f.startsWith("No clean is scheduled.")),
+        "should not fall back to the generic finding when the configs explain it");
+  }
+
+  @Test
+  public void healthyArchivalPairingStillGivesTheGenericFinding() throws Exception {
+    // given keep.min.commits comfortably above clean.commits.retained, the supported pairing
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
+    tableWithCommits(metaClient, 1, 60);
+    TypedProperties props = propsWithTrigger(1);
+    props.setProperty(HoodieCleanConfig.CLEANER_POLICY.key(), "KEEP_LATEST_COMMITS");
+    props.setProperty(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "10");
+    props.setProperty(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "20");
+
+    // when the check runs
+    HealthCheckResult result = runCheck(metaClient, props, false);
+
+    // then the configuration is not blamed, and the operator is pointed at the service
+    assertEquals(HealthStatus.UNHEALTHY, result.getStatus());
+    assertTrue(result.getFindings().stream().anyMatch(f -> f.startsWith("No clean is scheduled.")),
+        "expected the generic finding, got: " + result.getFindings());
   }
 }
