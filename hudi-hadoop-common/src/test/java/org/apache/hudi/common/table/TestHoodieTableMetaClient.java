@@ -565,8 +565,8 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
 
   /**
    * Readers of a table below version 9 know only the deprecated {@code hoodie.table.precombine.field}: 0.x for
-   * version 6 and 1.0.x for version 8. Such a table records its ordering fields under that key too, the key the
-   * 9 to 8 downgrade writes, while a table at version 9 or above records them only under
+   * version 6 and 1.0.x for version 8. Such a table records its ordering field under that key too, the key the
+   * 9 to 8 downgrade writes, while a table at version 9 or above records it only under
    * {@code hoodie.table.ordering.fields}.
    */
   @ParameterizedTest
@@ -576,6 +576,21 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         .setOrderingFields("ts")
         .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath() + Path.SEPARATOR + "ordering-v" + version.versionCode());
     assertOrderingFieldsKeys(version, created.getTableConfig());
+  }
+
+  /**
+   * Readers of a table below version 9 take the deprecated precombine key as one field name, so a table ordered on
+   * several fields records them only under {@code hoodie.table.ordering.fields}.
+   */
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT"})
+  void testMultipleOrderingFieldsStayOffLegacyKey(HoodieTableVersion version) throws IOException {
+    Properties props = orderingFieldsTableBuilder(version)
+        .setOrderingFields("ts,seq")
+        .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath() + Path.SEPARATOR + "multi-ordering-v" + version.versionCode())
+        .getTableConfig().getProps();
+    assertEquals("ts,seq", props.getProperty(HoodieTableConfig.ORDERING_FIELDS.key()));
+    assertFalse(props.containsKey(HoodieTableConfig.PRECOMBINE_FIELD.key()), "precombine key at version " + version.versionCode());
   }
 
   /**
