@@ -68,7 +68,7 @@ Four signatures map to more than one pattern. Resolve them here before attributi
 |---|---|---|
 | `ConcurrentModificationException` / `HoodieWriteConflictException` | HUDI-RCA-006 healthy OCC retry **vs** HUDI-RCA-006 no lock provider | **Writer config, not the trace** — the stacktrace is identical. If `hoodie.write.lock.provider` is set and two writers are intended, this is a by-design rejection: retry the application attempt. If no lock provider is set and two writers exist, the table is being corrupted silently and the conflict exception is the lucky case. |
 | `HoodieRollbackException` | HUDI-RCA-027 rollback wedge · HUDI-RCA-026 metadata-table divergence · HUDI-RCA-025 dangling files | **The frame below `rollbackFailedWrites`.** `AsyncCleanerService.waitForCompletion` → cleaner/metadata-table path (026). A lock-provider frame (`LockManager.lock`, `*LockProvider.acquireLock`) → lock problem first (006). `HoodieMergeHandle.getLatestBaseFile` with `FileID ... does not exist` → 025. |
-| `OutOfMemoryError` | HUDI-RCA-015 merge-side · HUDI-RCA-015 archival-side · HUDI-RCA-014 bloom index · HUDI-RCA-021 driver/timeline-server | **The Hudi frame.** `HoodieMergedLogRecordScanner` / `ExternalSpillableMap` → merge side (015a). `HoodieTimelineArchiveLog.writeToFile` / `HoodieAvroDataBlock.serializeRecords` → **archival side (015b), where adding executor memory is the wrong answer entirely** — the fix is to shrink commit metadata. Kryo / `ExternalSorter` frames under a shuffle read with no Hudi frame → bloom index (014). `Requested array size exceeds VM limit` in a driver Jetty thread → 021, a structural ceiling that more heap cannot move. |
+| `OutOfMemoryError` | HUDI-RCA-015 merge-side · HUDI-RCA-015 archival-side · HUDI-RCA-014 bloom index · HUDI-RCA-021 driver/timeline-server | **The Hudi frame.** `HoodieMergedLogRecordScanner` / `ExternalSpillableMap` → merge side (015a). `TimelineArchiverV1`/`TimelineArchiverV2.writeToFile` (pre-1.0: `HoodieTimelineArchiveLog`) / `HoodieAvroDataBlock.serializeRecords` → **archival side (015b), where adding executor memory is the wrong answer entirely** — the fix is to shrink commit metadata. Kryo / `ExternalSorter` frames under a shuffle read with no Hudi frame → bloom index (014). `Requested array size exceeds VM limit` in a driver Jetty thread → 021, a structural ceiling that more heap cannot move. |
 | `FileNotFoundException` | HUDI-RCA-031 markers · HUDI-RCA-033 archiver race · HUDI-RCA-025 stale plan · HUDI-RCA-036 source file | **The path.** `MARKERS*` or `.hoodie/.temp/` → 031. A `.commit` / `.deltacommit` under `.hoodie/` → 033. A data or log file named in a compaction plan → 025. A path under the **source** bucket, not under the table → 036. A path under the table ending `.log.<n>` → treat as a compaction race, see 025's note. |
 
 ## Cross-cutting trap: MOR defers the failure
@@ -96,7 +96,7 @@ data or config; nothing is wrong with Hudi or the cluster.
 - **Signature** (innermost cause):
   - `org\.apache\.avro\.AvroTypeException: Cannot encode decimal with precision (\d+) as max precision (\d+)`
   - `org\.apache\.parquet\.io\.InvalidRecordException: Parquet/Avro schema mismatch: Avro field '([^']+)' not found`
-  - Hudi frames: `HoodieAvroUtils.rewriteRecordWithNewSchema`, `HoodieAvroUtils.rewritePrimaryTypeWithDiffSchemaType`, `HoodieMergeHelper.runMerge`, `AbstractHoodieLogRecordReader.scanInternal`, `HoodieCompactor.compact`
+  - Hudi frames: `HoodieAvroUtils.rewriteRecordWithNewSchema`, `HoodieAvroUtils.rewritePrimaryTypeWithDiffSchemaType`, `HoodieMergeHelper.runMerge`, `BaseHoodieLogRecordReader.scanInternal` (pre-1.0: `AbstractHoodieLogRecordReader`), `HoodieCompactor.compact`
 - **Symptom:** A write that worked yesterday fails after an upstream column was retyped or a decimal
   widened. On MOR the write succeeds and **compaction** fails hours later, permanently, for every
   subsequent write.
@@ -597,8 +597,8 @@ advice, because several ladders here run *downward*.
   - **(a) merge side** — Hudi frames `ExternalSpillableMap`, `HoodieMergedLogRecordScanner`,
     `BoundedInMemoryExecutor`
   - **(b) archival side** — frames `ByteArrayOutputStream.hugeCapacity` →
-    `HoodieAvroDataBlock.serializeRecords` → `HoodieTimelineArchiveLog.writeToFile` →
-    `HoodieTimelineArchiveLog.archiveIfRequired`; or
+    `HoodieAvroDataBlock.serializeRecords` → `TimelineArchiverV1`/`TimelineArchiverV2.writeToFile` →
+    `archiveIfRequired` (pre-1.0 these frames read `HoodieTimelineArchiveLog`); or
     `java\.lang\.NullPointerException: null of string of map of union in field extraMetadata of org\.apache\.hudi\.avro\.model\.HoodieCommitMetadata`
     at the same frame
 - **Symptom:** The job runs fine at small volume, then OOMs persistently as the key space or log-file
@@ -615,7 +615,8 @@ advice, because several ladders here run *downward*.
   `mitigation-ladders.md`. Exit 137 with a healthy Java heap is native memory, not heap. A
   `FetchFailedException` is **not memory at all**; it is ephemeral local disk, and it does not show up
   in the Spark UI. Reacting to a FetchFailed by adding heap wastes a tuning cycle. Then split (a) from
-  (b) on the Hudi frame: a `HoodieTimelineArchiveLog` frame means the archival variant, where **adding
+  (b) on the Hudi frame: a `TimelineArchiverV1`/`TimelineArchiverV2` frame — `HoodieTimelineArchiveLog`
+  before 1.0 — means the archival variant, where **adding
   executor memory does not help at all** and the fix is to shrink commit metadata.
 - **Mitigation ladder:**
   1. Classify the OOM first (L2), then split merge-side from archival-side on the frame. The remedies do
@@ -712,7 +713,8 @@ advice, because several ladders here run *downward*.
   surfaces as:
   - `INFO No Instants to archive`
   - `Not archiving as there is no compaction yet on the metadata table`
-  - OOM inside `HoodieTimelineArchiveLog.archive` (see HUDI-RCA-015, archival variant)
+  - OOM inside `TimelineArchiverV1`/`TimelineArchiverV2.archive`, `HoodieTimelineArchiveLog.archive`
+    before 1.0 (see HUDI-RCA-015, archival variant)
 - **Symptom:** Writes get progressively slower, `.hoodie` accumulates thousands of instants, object-store
   list costs climb, and eventually something fails hard.
 - **Root cause:** A pending or stuck instant blocks archival; the timeline cannot archive past an
