@@ -166,13 +166,11 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .assertEmptyEvent()
         .checkpoint(3)
         .assertEmptyEvent()
-        // 1. triggers a new checkpoint;
-        // 2. triggers task 0 failover, there is no pending instant that needs to recommit,
-        // the task sends an empty bootstrap event to trigger cleaning of legacy events;
-        // 3. triggers a checkpoint ack to simulate a following-up checkpoint success,
-        // the handling of the checkpoint ack event would recommit 3.
+        // Recover the pending checkpoint metadata on retry, then clean events from the failed attempt.
+        // A following checkpoint notification must not commit the recovered instant again.
         .subTaskFails(0, 2)
-        .assertEmptyEvent()
+        .assertEmptyEvent() // recovered metadata
+        .assertEmptyEvent() // cleanup of the failed attempt
         .checkpointComplete(4)
         .checkCompletedInstantCount(3)
         // rollback the last complete instant to inflight state, to simulate an instant commit failure
@@ -218,7 +216,8 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .assertEmptyEvent()
         // trigger a partial failure
         .subTaskFails(0, 1)
-        .assertNextEvent()
+        .assertNextEvent() // recovered metadata
+        .assertEmptyEvent() // cleanup of the failed attempt
         // make sure coordinator send an ack event to unblock the writers.
         .assertNextSubTaskEvent()
         // write a set of data and check the result.

@@ -98,16 +98,21 @@ import static org.apache.hudi.util.StreamerUtil.initTableIfNotExists;
  *
  * <p>Task failover workflow:
  * <pre>
- *             task failover
- *                  |
- *           initially started ?
- *            /(yes)     \(no)
- *           /            \
- *       has pending      send an empty
- *     instant event ?    bootstrap event
- *        /(yes)  \(no)
- *       /         \
- *    resend      no-op
+ *                task failover
+ *                     |
+ *       restored pending instant event ?
+ *               /(yes)     \(no)
+ *              /            \
+ *       resend metadata     |
+ *       on every attempt    |
+ *              \           /
+ *               \         /
+ *               attempt > 0 ?
+ *               /(yes)     \(no)
+ *              /           \
+ *       send an empty      no-op
+ *       bootstrap event
+ *       to clear legacy events
  * </pre>
  *
  * @see StreamWriteFunction         for the data inputs checkpointing and semantics
@@ -587,11 +592,17 @@ public class StreamWriteOperatorCoordinator
       this.eventBuffers.cleanLegacyEvents(event);
       return;
     }
-    EventBuffer eventBuffer = this.eventBuffers.getOrCreateBootstrapBuffer(event);
-    eventBuffer.addBootstrapEvent(event);
-    if (eventBuffer.allBootstrapEventsReceived()) {
+    // The writer may have observed a pending instant before its normal commit finished.
+    // Do not recreate the committed buffer when that bootstrap event arrives later.
+    if (this.eventBuffers.getEventBuffer(event.getCheckpointId()) == null
+        && this.metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(event.getInstantTime())) {
+      return;
+    }
+    EventBuffer bootstrapBuffer = this.eventBuffers.getOrCreateBootstrapBuffer(event);
+    bootstrapBuffer.addBootstrapEvent(event);
+    if (bootstrapBuffer.allBootstrapEventsReceived()) {
       // start to recommit the instant.
-      boolean committed = recommitInstant(event.getCheckpointId(), event.getInstantTime(), eventBuffer);
+      boolean committed = recommitInstant(event.getCheckpointId(), event.getInstantTime(), bootstrapBuffer);
       if (committed && tableState.isRecordLevelIndex) {
         context.failJob(new HoodieException("There are pending instants recommitted on job restart,"
             + "triggering a global failover so that RLI bootstrap operator can load the record level index completely."));
