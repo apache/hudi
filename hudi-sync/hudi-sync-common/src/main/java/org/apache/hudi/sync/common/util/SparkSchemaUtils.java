@@ -41,7 +41,8 @@ public class SparkSchemaUtils {
    *                         as {@code comment}, which spark displays as the column comment
    */
   public static String convertToSparkSchemaJson(HoodieSchema schema, boolean includeFieldDocs) {
-    String fieldsJsonString = schema.getFields().stream().map(field -> {
+    // Fields of the "null" type always hold null and are not written to the data files, so they are skipped
+    String fieldsJsonString = schema.getFields().stream().filter(field -> !field.schema().isSchemaNull()).map(field -> {
       String metadata = convertFieldMetadata(field, includeFieldDocs);
       return "{\"name\":\"" + field.name() + "\",\"type\":" + convertFieldType(field.getNonNullSchema(), includeFieldDocs)
                 + ",\"nullable\":" + field.isNullable() + ",\"metadata\":" + metadata + "}";
