@@ -31,13 +31,16 @@ import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.table.HoodieTable;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -69,6 +72,7 @@ import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.PAYLOAD_CLASSE
  *     set hoodie.record.merge.strategy.id accordingly
  *   remove any properties with prefix hoodie.record.merge.property.
  *   fix precombine field value for MySqlDebeziumAvroPayload.
+ *   refuse a table that orders records on several fields, since Hudi 1.0.x reads the precombine field as one field name.
  */
 public class NineToEightDowngradeHandler implements DowngradeHandler {
   @Override
@@ -78,6 +82,7 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
                                                          SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     HoodieTableMetaClient metaClient = table.getMetaClient();
+    validateOrderingFields(metaClient.getTableConfig(), HoodieTableVersion.EIGHT);
     // Handle index Changes
     UpgradeDowngradeUtils.dropNonV1IndexPartitions(
         config, context, table, upgradeDowngradeHelper, "downgrading from table version nine to eight");
@@ -138,12 +143,37 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
   private void reconcileOrderingFieldsConfig(Map<ConfigProperty, String> propertiesToAdd,
                                              Set<ConfigProperty> propertiesToRemove,
                                              HoodieTableConfig tableConfig) {
-    Option<String> orderingFieldsOpt = MySqlDebeziumAvroPayload.class.getName().equals(tableConfig.getLegacyPayloadClass())
-        ? Option.of(DebeziumConstants.ADDED_SEQ_COL_NAME)
-        : tableConfig.getOrderingFieldsStr();
-    orderingFieldsOpt.ifPresent(orderingFields -> {
-      propertiesToAdd.put(HoodieTableConfig.PRECOMBINE_FIELD, orderingFields);
+    List<String> orderingFields = getOrderingFieldsBelowVersionNine(tableConfig);
+    if (orderingFields.size() == 1) {
+      // the parsed field, so that a stray separator as in `ts,` does not end up in a key read as one field name
+      propertiesToAdd.put(HoodieTableConfig.PRECOMBINE_FIELD, orderingFields.get(0));
       propertiesToRemove.add(HoodieTableConfig.ORDERING_FIELDS);
-    });
+    }
+  }
+
+  /**
+   * Refuses to take a table that orders records on several fields below version 9. Below version 9 the ordering field
+   * is recorded under {@link HoodieTableConfig#PRECOMBINE_FIELD}, which Hudi 1.0.x and 0.x read as a single field name.
+   * {@link UpgradeDowngrade} calls this before it changes anything, the rollback and compaction included.
+   */
+  static void validateOrderingFields(HoodieTableConfig tableConfig, HoodieTableVersion toVersion) {
+    if (getOrderingFieldsBelowVersionNine(tableConfig).size() > 1) {
+      throw new HoodieUpgradeDowngradeException(String.format(
+          "Cannot downgrade to table version %d: %s=%s orders records on several fields, which Hudi 1.0.x and 0.x cannot "
+              + "read. Below version 9 the ordering field is recorded under %s, which they take as a single field name. "
+              + "Keep the table at version 9 or above, or recreate it with a single ordering field.",
+          toVersion.versionCode(), HoodieTableConfig.ORDERING_FIELDS.key(), tableConfig.getOrderingFieldsStr().get(),
+          HoodieTableConfig.PRECOMBINE_FIELD.key()));
+    }
+  }
+
+  /**
+   * The ordering fields of the table once it is below version 9, where MySqlDebeziumAvroPayload orders on its single
+   * sequence field again.
+   */
+  private static List<String> getOrderingFieldsBelowVersionNine(HoodieTableConfig tableConfig) {
+    return MySqlDebeziumAvroPayload.class.getName().equals(tableConfig.getLegacyPayloadClass())
+        ? Collections.singletonList(DebeziumConstants.ADDED_SEQ_COL_NAME)
+        : StringUtils.split(tableConfig.getOrderingFieldsStr().orElse(null), ",");
   }
 }
