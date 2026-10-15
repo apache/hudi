@@ -41,7 +41,7 @@ import scala.util.control.NonFatal
 
 abstract class SparkBaseIndexSupport(spark: SparkSession,
                                      metadataConfig: HoodieMetadataConfig,
-                                     metaClient: HoodieTableMetaClient) extends SparkAdapterSupport with PredicateHelper {
+                                     metaClient: HoodieTableMetaClient) extends SparkAdapterSupport {
   @transient protected lazy val engineCtx = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
   @transient protected lazy val metadataTable: HoodieTableMetadata =
     metaClient.getTableFormat.getMetadataFactory.create(engineCtx, metaClient.getStorage, metadataConfig, metaClient.getBasePath.toString)
@@ -115,7 +115,7 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
 
     val validIndexedColumns = getValidIndexedColumnsFunc.apply(indexDefinition)
     // Only split top-level AND predicates; keep OR and NOT subtrees intact.
-    val indexFilters = queryFilters.flatMap(splitConjunctivePredicates)
+    val indexFilters = queryFilters.flatMap(SparkBaseIndexSupport.splitConjuncts)
       .map(translateIntoColumnStatsIndexFilterExpr(_, isExpressionIndex, validIndexedColumns))
       .filterNot(_.equals(TrueLiteral))
     if (indexFilters.isEmpty) {
@@ -134,6 +134,13 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
       }.toMap
       // Guard each independent conjunct using only the statistics it reads. Complete conjuncts
       // can still exclude a file when another conjunct has missing statistics.
+      // For example, age > 100 AND name = 'alice' becomes:
+      //   (age_maxValue > 100 OR age_nullCount IS NULL)
+      //   AND (
+      //     (name_minValue <= 'alice' AND name_maxValue >= 'alice')
+      //     OR name_nullCount IS NULL
+      //   )
+      // A file with age_maxValue = 30 and age_nullCount = 0 is still excluded even if name statistics are missing.
       val candidateFilter = indexFilters.map { conjunct =>
         val referencedStats = conjunct.references.map(_.name).toSet
         val nullCountColumns = referencedStats.flatMap(statsToNullCount.get)
@@ -263,4 +270,9 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
     // Convert the Hudi Option to Scala Option and return if present
     Option(recordKeysOpt.orElse(null)).filter(_.nonEmpty)
   }
+}
+
+// Keep PredicateHelper's Logging trait out of the index support class hierarchy.
+private object SparkBaseIndexSupport extends PredicateHelper {
+  def splitConjuncts(expression: Expression): Seq[Expression] = splitConjunctivePredicates(expression)
 }
