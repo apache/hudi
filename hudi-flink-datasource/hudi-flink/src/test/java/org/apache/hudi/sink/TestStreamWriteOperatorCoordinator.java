@@ -177,9 +177,7 @@ public class TestStreamWriteOperatorCoordinator {
     conf.set(FlinkOptions.OPERATION, operation);
     coordinator = startCoordinator(conf, 2);
     HoodieFlinkWriteClient writeClient = Mockito.spy(coordinator.getWriteClient());
-    Field writeClientField = StreamWriteOperatorCoordinator.class.getDeclaredField("writeClient");
-    writeClientField.setAccessible(true);
-    writeClientField.set(coordinator, writeClient);
+    setWriteClient(writeClient);
 
     String firstInstant = requestInstantTime(1);
     assertEquals(firstInstant, requestInstantTime(1));
@@ -341,9 +339,7 @@ public class TestStreamWriteOperatorCoordinator {
       }
       return invocation.callRealMethod();
     }).when(client).commit(Mockito.eq(instant), Mockito.anyList(), Mockito.any(), Mockito.anyString(), Mockito.anyMap());
-    Field clientField = StreamWriteOperatorCoordinator.class.getDeclaredField("writeClient");
-    clientField.setAccessible(true);
-    clientField.set(coordinator, client);
+    setWriteClient(client);
 
     MockOperatorCoordinatorContext ctx = (MockOperatorCoordinatorContext) coordinator.getContext();
     NonThrownExecutor worker = NonThrownExecutor.builder(Mockito.mock(Logger.class))
@@ -1431,6 +1427,12 @@ public class TestStreamWriteOperatorCoordinator {
     coordinator.start();
     setSynchronousExecutors(coordinator);
     return coordinator;
+  }
+
+  private void setWriteClient(HoodieFlinkWriteClient writeClient) throws ReflectiveOperationException {
+    Field writeClientField = StreamWriteOperatorCoordinator.class.getDeclaredField("writeClient");
+    writeClientField.setAccessible(true);
+    writeClientField.set(coordinator, writeClient);
   }
 
   private static void setSynchronousExecutors(StreamWriteOperatorCoordinator coordinator) throws Exception {
