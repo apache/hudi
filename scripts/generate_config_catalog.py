@@ -83,6 +83,49 @@ PRUNED_DIR_NAMES = {"target", "node_modules", ".git", ".claude", ".idea", "docke
 READ_SITE_EXTENSIONS = (".java", ".scala")
 
 MAX_READ_SITES = 20
+
+# Collect well past the reported cap so that ranking, not file-walk order, picks
+# which sites survive. Without this the twenty slots fill alphabetically and the
+# CLI's MOR-to-COW helper crowds out the archiver and the compaction scheduler
+# for hoodie.compact.inline.max.delta.commits.
+COLLECT_READ_SITES = 200
+
+# How much a read site is worth to someone trying to understand runtime
+# behaviour. Core engine code first; CLI, examples and test harnesses last --
+# they are real reads, so they are kept, just not at the expense of the code
+# that actually runs during a write.
+READ_SITE_MODULE_RANK = (
+    ("hudi-client", 0),
+    ("hudi-common", 0),
+    ("hudi-spark-datasource", 1),
+    ("hudi-flink-datasource", 1),
+    ("hudi-utilities", 1),
+    ("hudi-sync", 2),
+    ("hudi-aws", 2),
+    ("hudi-gcp", 2),
+    ("hudi-cli", 3),
+    ("hudi-examples", 4),
+    ("hudi-integ-test", 4),
+)
+
+
+def read_site_rank(site):
+    """Lower sorts first. Config-class plumbing ranks below real consumers."""
+    path = site.get("file") or ""
+    module_rank = 2
+    for prefix, rank in READ_SITE_MODULE_RANK:
+        if path.startswith(prefix):
+            module_rank = rank
+            break
+    # A read inside the config class that declares it is plumbing, not a
+    # consumer -- builders and getters, which tell you nothing about behaviour.
+    owner = site.get("class") or ""
+    plumbing = 1 if (owner.startswith("Hoodie") and owner.endswith("Config")) else 0
+    # An accessor call site names a real caller; a bare constant reference is
+    # often the declaration's neighbourhood.
+    via = site.get("via") or ""
+    via_rank = 0 if via.startswith("accessor:") else 1
+    return (plumbing, module_rank, via_rank, path, site.get("line") or 0)
 MAX_CO_CONFIGS = 25
 MAX_GATES_PER_SITE = 3
 
@@ -1786,7 +1829,7 @@ def collect_read_sites(repo_root, constant_index, accessors, config_keys, verbos
                     continue
                 bucket = result[key]
                 bucket["scalaReferences"] = bucket.get("scalaReferences", 0) + 1
-                if len(bucket["readSites"]) < MAX_READ_SITES:
+                if len(bucket["readSites"]) < COLLECT_READ_SITES:
                     bucket["readSites"].append(OrderedDict([
                         ("class", owner_class),
                         ("method", None),
@@ -1835,7 +1878,7 @@ def collect_read_sites(repo_root, constant_index, accessors, config_keys, verbos
                     if other != key:
                         bucket["coConfigs"][other] += 1
 
-                if len(bucket["readSites"]) >= MAX_READ_SITES:
+                if len(bucket["readSites"]) >= COLLECT_READ_SITES:
                     stats["readSitesCapped"] += 1
                     continue
                 # Reading the declaration itself is not a read site.
@@ -2072,7 +2115,8 @@ def build_catalog(repo_root, verbose=False):
 
         data = read_data.get(key)
         if data:
-            entry["readSites"] = data["readSites"]
+            entry["readSites"] = sorted(
+                data["readSites"], key=read_site_rank)[:MAX_READ_SITES]
             co_configs = sorted(data["coConfigs"].items(), key=lambda kv: (-kv[1], kv[0]))
             entry["coConfigs"] = [OrderedDict([("key", k), ("sharedMethods", c)])
                                   for k, c in co_configs[:MAX_CO_CONFIGS]]
@@ -2080,7 +2124,9 @@ def build_catalog(repo_root, verbose=False):
             # is close to useless -- "if (compactable)" means nothing without
             # the method it came from.
             gates = OrderedDict()
-            for site in data["readSites"]:
+            # Same ranking as the read sites: a gate from the CLI's table-type
+            # helper should not outrank the archiver's own condition.
+            for site in sorted(data["readSites"], key=read_site_rank):
                 for gate in site["gates"]:
                     where = "%s.%s (%s:%d)" % (
                         site["class"] or "?", site["method"] or "?",
