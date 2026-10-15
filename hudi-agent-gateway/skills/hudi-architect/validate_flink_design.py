@@ -503,20 +503,24 @@ def assess_design(
         assessment,
     )
     contract_schema = contract.get("contract_schema")
-    if (
-        not isinstance(contract_schema, int)
-        or isinstance(contract_schema, bool)
-        or contract_schema not in SUPPORTED_CONTRACT_SCHEMAS
-    ):
+    supported_contract_schema = (
+        isinstance(contract_schema, int)
+        and not isinstance(contract_schema, bool)
+        and contract_schema in SUPPORTED_CONTRACT_SCHEMAS
+    )
+    if not supported_contract_schema:
         assessment.add(
             "FLINK_DESIGN_CONTRACT_INVALID",
             "contract_schema must be 1 (append-only), 2 (mutable COW), or 3 (mutable MOR)",
         )
-    mutable_contract = contract_schema in {
+    mutable_contract = supported_contract_schema and contract_schema in {
         MUTABLE_CONTRACT_SCHEMA_VERSION,
         MUTABLE_MOR_CONTRACT_SCHEMA_VERSION,
     }
-    mutable_mor_contract = contract_schema == MUTABLE_MOR_CONTRACT_SCHEMA_VERSION
+    mutable_mor_contract = (
+        supported_contract_schema
+        and contract_schema == MUTABLE_MOR_CONTRACT_SCHEMA_VERSION
+    )
     if mutable_mor_contract:
         contract_profile = manifest["mutable_mor_executable_contract"]
     elif mutable_contract:
@@ -1191,7 +1195,12 @@ def assess_design(
             )
         read_optimized_freshness = read.get("read_optimized_freshness")
         if "read_optimized" in query_modes:
-            if read_optimized_freshness != "after_compaction":
+            if read_optimized_freshness is None or read_optimized_freshness == "unknown":
+                assessment.add(
+                    "FLINK_MOR_QUERY_REQUIREMENT_UNRESOLVED",
+                    "The acceptable read-optimized freshness must be explicit",
+                )
+            elif read_optimized_freshness != "after_compaction":
                 assessment.add(
                     "FLINK_MOR_READ_OPTIMIZED_FRESHNESS_UNSUPPORTED",
                     "Read-optimized results can be current only after compaction",

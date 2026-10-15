@@ -648,6 +648,27 @@ def test_pr4_rejects_strict_read_optimized_freshness(tmp_path: Path) -> None:
     assert "artifacts" not in assessment
 
 
+@pytest.mark.parametrize("freshness", [None, "unknown"])
+def test_pr4_requires_resolved_read_optimized_freshness(
+    tmp_path: Path, freshness: object
+) -> None:
+    design = json.loads(_read(PR4_FIXTURE_DIR / "mutable_mor.json"))
+    if freshness is None:
+        design["read"].pop("read_optimized_freshness")
+    else:
+        design["read"]["read_optimized_freshness"] = freshness
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == [
+        "FLINK_MOR_QUERY_REQUIREMENT_UNRESOLVED"
+    ]
+    assert assessment["status"] == "INCOMPLETE"
+    assert "artifacts" not in assessment
+
+
 @pytest.mark.parametrize(
     ("owner", "expected_code", "expected_status"),
     [
@@ -956,7 +977,7 @@ def test_pr2_fails_closed_when_capability_manifest_is_malformed(tmp_path: Path) 
     assert "artifacts" not in assessment
 
 
-@pytest.mark.parametrize("contract_schema", [True, 1.0, 4])
+@pytest.mark.parametrize("contract_schema", [True, 1.0, 4, [], {}])
 def test_flink_design_rejects_non_exact_contract_schema(
     tmp_path: Path, contract_schema: object
 ) -> None:
@@ -967,6 +988,7 @@ def test_flink_design_rejects_non_exact_contract_schema(
 
     assert result.returncode == 1
     assessment = json.loads(result.stdout)
+    assert "Traceback" not in result.stderr
     assert "FLINK_DESIGN_CONTRACT_INVALID" in assessment["finding_codes"]
     assert assessment["executable_eligible"] is False
     assert "artifacts" not in assessment
