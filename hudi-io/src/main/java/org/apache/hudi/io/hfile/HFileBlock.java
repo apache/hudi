@@ -127,7 +127,7 @@ public abstract class HFileBlock {
     this.bytesPerChecksum = readInt(
         byteBuff, startOffsetInBuff + Header.BYTES_PER_CHECKSUM_INDEX);
     validateHeader(byteBuff, startOffsetInBuff);
-    this.sizeCheckSum = numChecksumBytes(getOnDiskSizeWithHeader(), bytesPerChecksum);
+    this.sizeCheckSum = (int) numChecksumBytes(getOnDiskSizeWithHeader(), bytesPerChecksum);
     if (CompressionCodec.NONE.equals(context.getCompressionCodec())) {
       isUnpacked = true;
       this.startOffsetInBuff = startOffsetInBuff;
@@ -148,9 +148,7 @@ public abstract class HFileBlock {
   private void validateHeader(byte[] byteBuff, int startOffsetInBuff) {
     long onDiskSizeWithHeader = (long) HFILEBLOCK_HEADER_SIZE + onDiskSizeWithoutHeader;
     long blockEndInBuff = startOffsetInBuff + onDiskSizeWithHeader;
-    // Long math, unlike numChecksumBytes, so a corrupt bytesPerChecksum cannot throw here
-    long checksumBytes = bytesPerChecksum > 0
-        ? (onDiskSizeWithHeader + bytesPerChecksum - 1) / bytesPerChecksum * CHECKSUM_SIZE : 0;
+    long checksumBytes = bytesPerChecksum > 0 ? numChecksumBytes(onDiskSizeWithHeader, bytesPerChecksum) : 0;
     long unpackedSize = (long) HFILEBLOCK_HEADER_SIZE + uncompressedSizeWithoutHeader + checksumBytes;
     boolean uncompressedExceedsOnDisk = CompressionCodec.NONE.equals(context.getCompressionCodec())
         && uncompressedSizeWithoutHeader > onDiskSizeWithoutHeader;
@@ -230,7 +228,7 @@ public abstract class HFileBlock {
    * @param bytesPerChecksum number of bytes covered by one checksum.
    * @return the number of bytes needed to store the checksum values.
    */
-  static int numChecksumBytes(long numBytes, int bytesPerChecksum) {
+  static long numChecksumBytes(long numBytes, int bytesPerChecksum) {
     return numChecksumChunks(numBytes, bytesPerChecksum) * HFileBlock.CHECKSUM_SIZE;
   }
 
@@ -241,15 +239,12 @@ public abstract class HFileBlock {
    * @param bytesPerChecksum number of bytes in a checksum chunk.
    * @return the number of checksum chunks.
    */
-  static int numChecksumChunks(long numBytes, int bytesPerChecksum) {
+  static long numChecksumChunks(long numBytes, int bytesPerChecksum) {
     long numChunks = numBytes / bytesPerChecksum;
     if (numBytes % bytesPerChecksum != 0) {
       numChunks++;
     }
-    if (numChunks > Integer.MAX_VALUE / HFileBlock.CHECKSUM_SIZE) {
-      throw new IllegalArgumentException("The number of chunks is too large: " + numChunks);
-    }
-    return (int) numChunks;
+    return numChunks;
   }
 
   public int getOnDiskSizeWithHeader() {
@@ -331,7 +326,7 @@ public abstract class HFileBlock {
       // 2. onDiskSizeWithoutHeader.
       int compressedDataSize = compressedBlockData.limit();
       long onDiskDataSizeWithHeaderLong = (long) HFileBlock.HFILEBLOCK_HEADER_SIZE + compressedDataSize;
-      int numChecksumBytes = numChecksumBytes(onDiskDataSizeWithHeaderLong, DEFAULT_BYTES_PER_CHECKSUM);
+      int numChecksumBytes = (int) numChecksumBytes(onDiskDataSizeWithHeaderLong, DEFAULT_BYTES_PER_CHECKSUM);
       if (onDiskDataSizeWithHeaderLong + numChecksumBytes > MAX_SERIALIZED_BLOCK_SIZE) {
         throw new HoodieIOException(String.format(
             "%s block of %d compressed bytes with %d checksum bytes exceeds the maximum serialized "
