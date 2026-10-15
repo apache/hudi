@@ -16,9 +16,10 @@
 
 """SQL guardrails for model-written queries.
 
-AST-level (sqlglot, Trino dialect) rather than regex: read-only enforcement
-survives comments, CTEs, and string literals; the row cap is injected as a
-real ``LIMIT``. Fail-closed: anything that does not parse is rejected.
+AST-level (sqlglot, per-engine dialect) rather than regex: read-only
+enforcement survives comments, CTEs, and string literals; the row cap is
+injected as a real ``LIMIT``. Fail-closed: anything that does not parse is
+rejected.
 """
 
 from __future__ import annotations
@@ -43,30 +44,38 @@ _FORBIDDEN_NODES: tuple[type[exp.Expression], ...] = (
     exp.Use,
 )
 
-_HINT = "Provide exactly one read-only SELECT statement (Trino SQL)."
+_DIALECT_LABELS = {"trino": "Trino SQL", "spark": "Spark SQL"}
 
 
-def enforce_guardrails(sql: str, row_cap: int) -> str:
+def _hint(dialect: str) -> str:
+    label = _DIALECT_LABELS.get(dialect, f"{dialect} SQL")
+    return f"Provide exactly one read-only SELECT statement ({label})."
+
+
+def enforce_guardrails(sql: str, row_cap: int, dialect: str = "trino") -> str:
     """Validate ``sql`` as a single read-only SELECT and cap its LIMIT.
 
+    ``dialect`` is the sqlglot dialect the SQL is parsed and re-rendered in
+    (``trino`` for the Trino backend, ``spark`` for the Spark Thrift backend).
     Returns the (possibly rewritten) SQL to execute. Raises
     :class:`ToolInputError` on any violation.
     """
+    hint = _hint(dialect)
     try:
-        statements = sqlglot.parse(sql, read="trino")
+        statements = sqlglot.parse(sql, read=dialect)
     except sqlglot.errors.SqlglotError as e:
-        raise ToolInputError(f"could not parse SQL: {e}", hint=_HINT) from e
+        raise ToolInputError(f"could not parse SQL: {e}", hint=hint) from e
 
     statements = [s for s in statements if s is not None]
     if len(statements) != 1:
         raise ToolInputError(
-            f"exactly one statement is allowed, got {len(statements)}", hint=_HINT
+            f"exactly one statement is allowed, got {len(statements)}", hint=hint
         )
     stmt = statements[0]
 
     if not isinstance(stmt, (exp.Select, exp.SetOperation)):
         raise ToolInputError(
-            f"read-only: only SELECT is allowed, got {type(stmt).__name__}", hint=_HINT
+            f"read-only: only SELECT is allowed, got {type(stmt).__name__}", hint=hint
         )
 
     # Defense in depth: no write/DDL/command node anywhere in the tree
@@ -74,10 +83,10 @@ def enforce_guardrails(sql: str, row_cap: int) -> str:
     for node in stmt.walk():
         if isinstance(node, _FORBIDDEN_NODES):
             raise ToolInputError(
-                f"read-only: {type(node).__name__} is not allowed", hint=_HINT
+                f"read-only: {type(node).__name__} is not allowed", hint=hint
             )
 
-    return _cap_limit(stmt, row_cap).sql(dialect="trino")
+    return _cap_limit(stmt, row_cap).sql(dialect=dialect)
 
 
 def _cap_limit(stmt: exp.Query, row_cap: int) -> exp.Query:
