@@ -218,10 +218,18 @@ in one sentence, then the evidence. Work this order and stop at the first hit:
 
 1. **Is the read gated?** `gatingConditions` — a read under a `switch` on a strategy enum, or an
    `if` on another config, is usually the answer.
-2. **Is it gated before the config is even consulted?** Some accessors return a fixed value on a
-   condition and never read the key — a table-version check, an engine check, an unsupported
-   operation type. Check the accessor body, not just the read site. This is invisible in
-   `gatingConditions` and is a common cause of "the config does nothing".
+2. **Is it gated before the config is even consulted?** `shortCircuits` lists wrapper methods
+   that can return a fixed value without ever reading the key — a table-version check, an engine
+   check, an unsupported operation type. `hoodie.metadata.streaming.write.enabled` is the clearest
+   case: `HoodieWriteConfig.isMetadataStreamingWritesEnabled` returns `false` outright below table
+   version eight and never consults the key, so on an older table the setting is inert and Hudi
+   reports nothing. This is invisible in both `readSites` and `gatingConditions`, because the read
+   itself is real and unconditional and the branch lives a frame above it.
+
+   **Open the cited `file:line` before you use one.** Roughly half of these entries are real gates
+   and the rest call the accessor incidentally; the shape is matched textually, the attribution is
+   not verified. Confirm the literal return really bypasses this config, then report it. An
+   unverified entry is a lead, not a finding.
 3. **Were they relying on the default?** `engineDefaults` differing from the declared value
    explains most "it was already on/off" reports. `setDefaultValue` applies only when the key is
    unset; an explicit value always wins.

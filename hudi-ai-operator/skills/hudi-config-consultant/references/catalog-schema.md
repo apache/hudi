@@ -22,7 +22,7 @@ limitations under the License.
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "hudiVersion": "1.3.0-SNAPSHOT",
   "generatedFrom": "<git sha of the tree it was generated from>",
   "configs": [ ... ]
@@ -30,7 +30,8 @@ limitations under the License.
 ```
 
 `schemaVersion` 2 adds `engineDefaults` / `conditionalEngineDefaults`, the `language` field, and
-the `readContextResolved` honesty flag for Scala-declared configs.
+the `readContextResolved` honesty flag for Scala-declared configs. `schemaVersion` 3 adds
+`shortCircuits` / `shortCircuitHeuristic`.
 
 `configs` is sorted by `key`, so regeneration produces a readable diff. Read `hudiVersion` and
 `generatedFrom` on every query; they belong in your answer.
@@ -116,6 +117,8 @@ The conditional ones:
 | `coConfigs` | Up to 25 `{key, sharedMethods}` — other configs mentioned in the same method bodies. A **co-occurrence** measure, not a declared dependency. |
 | `gatingConditions` | Up to 12 `{condition, at}` — enclosing `if`/`switch` conditions, with the `class.method (file:line)` they came from. |
 | `gatingHeuristic` | The standing caveat. Repeat its substance when you quote a gate. |
+| `shortCircuits` | Wrapper methods that may answer without reading the key: `{method, class, file, line, viaAccessor, condition, literalReturnedFirst, verified}`. `verified` is always `false` — the shape is matched textually and the attribution is not checked. About half are real; open the `file:line` before citing one. |
+| `shortCircuitHeuristic` | The standing caveat, present only when `shortCircuits` is non-empty. |
 
 ## Reading `readSites` well
 
