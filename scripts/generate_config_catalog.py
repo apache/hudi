@@ -1084,12 +1084,12 @@ NON_METHOD_KEYWORDS = frozenset((
 GETTER_CALL_RE = re.compile(
     r"\bget(?:String|Int|Integer|Long|Boolean|Double|Float|StringOrDefault|"
     r"IntOrDefault|BooleanOrDefault|LongOrDefault|Enum|Class)?\s*\(\s*"
-    r"(?P<arg>[A-Za-z_$][A-Za-z0-9_$.]*)\s*[,)]"
+    r"(?P<arg>[A-Za-z_$][A-Za-z0-9_$.]*?)(?:\.key\(\))?\s*[,)]"
 )
 
 ALT_KEYS_CALL_RE = re.compile(
     r"\b(?:get|contains)(?:String|Int|Integer|Long|Boolean|Double|Raw)?WithAltKeys\s*\([^)]*?"
-    r"\b(?P<arg>[A-Za-z_$][A-Za-z0-9_$.]*)\s*[,)]"
+    r"\b(?P<arg>[A-Za-z_$][A-Za-z0-9_$.]*?)(?:\.key\(\))?\s*[,)]"
 )
 
 
@@ -1124,6 +1124,13 @@ def find_method_bodies(masked, original):
 
 def resolve_constant(expr, owner_class, constant_index):
     """Map a (possibly qualified) constant reference to a config key."""
+    # `props.getBoolean(ERROR_TABLE_ENABLED.key(), ...)` -- a very common shape,
+    # especially in hudi-utilities where configs are read straight off a
+    # TypedProperties rather than through a HoodieWriteConfig getter. Without
+    # this the trailing member swallows the constant name and the read site is
+    # lost, which made a dozen configs look like they had no consumer at all.
+    if expr.endswith(".key"):
+        expr = expr[:-len(".key")]
     parts = expr.split(".")
     const = parts[-1]
     qualifier = parts[-2] if len(parts) >= 2 else None
@@ -1174,6 +1181,105 @@ def collect_accessors(repo_root, constant_index):
     # ambiguous at a call site; drop it rather than mis-attribute.
     return ({name: next(iter(keys)) for name, keys in accessors.items() if len(keys) == 1},
             accessor_sites)
+
+
+SHORT_CIRCUIT_HEURISTIC = (
+    "Candidate wrappers found textually: a method that returns an accessor's value on one "
+    "branch and a literal on another, so the literal path never reads the key. The shape is "
+    "matched, the attribution is not verified -- roughly half of these are real gates and the "
+    "rest call the accessor incidentally. Open the cited file:line and confirm the literal "
+    "return really bypasses this config before telling a user it does."
+)
+
+LITERAL_RETURN_RE = re.compile(r"return\s+(true|false)\s*;")
+IF_RE = re.compile(r"\bif\s*\(")
+
+
+def collect_short_circuits(repo_root, accessors):
+    """Pass 2a. Wrapper methods that can answer without reading the config.
+
+    A config is normally found by its constant or by a resolved accessor. But a
+    second-level wrapper -- one that calls an accessor rather than reading the
+    key itself -- can return a fixed value on some branch and never reach the
+    read at all. The canonical case is
+
+        public boolean isMetadataStreamingWritesEnabled(HoodieTableVersion v) {
+          if (v.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+            return metadataConfig.isStreamingWriteEnabled();
+          } else {
+            return false;
+          }
+        }
+
+    On a table below version eight the key is never consulted, so setting it
+    does nothing and Hudi reports no error. That is invisible in both
+    readSites and gatingConditions: the read site is real and unconditional,
+    and the condition lives one frame up in the caller.
+
+    Returns {config key: [ {method, class, file, line, condition, ...} ]}.
+    """
+    result = defaultdict(list)
+    for file_path in walk_source_files(repo_root, (".java",)):
+        if SOURCE_DIR_MARKER not in file_path:
+            continue
+        try:
+            with open(file_path, "r", encoding="utf-8", errors="replace") as handle:
+                original = handle.read()
+        except OSError:
+            continue
+        masked = strip_comments_and_strings(original)
+        owner_class = None
+        class_match = CLASS_DECL_RE.search(masked)
+        if class_match:
+            owner_class = class_match.group(1)
+
+        for name, body_start, body_end, sig_line in find_method_bodies(masked, original):
+            if name in accessors:
+                continue
+            body = masked[body_start:body_end]
+            if len(body) > 1200:
+                continue
+            if not LITERAL_RETURN_RE.search(body) or not IF_RE.search(body):
+                continue
+            called = sorted({a for a in accessors
+                             if re.search(r"\b" + re.escape(a) + r"\s*\(", body)})
+            if not called:
+                continue
+            # Require the shape that actually matters: the method returns the
+            # accessor's value on one branch and a literal on the other, so the
+            # literal path never reads the key. Anything looser matches every
+            # helper that happens to call a getter and return a boolean.
+            for accessor_name in called:
+                call_re = re.compile(r"return\s+[^;]*\b" + re.escape(accessor_name) + r"\s*\(")
+                call_match = call_re.search(body)
+                if not call_match:
+                    continue
+                literal_match = LITERAL_RETURN_RE.search(body)
+                if not literal_match:
+                    continue
+                # The two returns must be distinct statements, and an `if` must
+                # sit above the earlier of them.
+                first = min(call_match.start(), literal_match.start())
+                if call_match.start() == literal_match.start():
+                    continue
+                guard = re.search(r"\bif\s*\(([^{;]{3,200})\)", body[:first + 1])
+                if not guard:
+                    continue
+                condition = " ".join(guard.group(1).split())
+                returns_literal_first = literal_match.start() < call_match.start()
+                result[accessors[accessor_name]].append(OrderedDict([
+                    ("method", name),
+                    ("class", owner_class),
+                    ("file", os.path.relpath(file_path, repo_root)),
+                    ("line", sig_line),
+                    ("viaAccessor", accessor_name),
+                    ("condition", condition),
+                    ("literalReturnedFirst", returns_literal_first),
+                    ("verified", False),
+                ]))
+    for key in result:
+        result[key].sort(key=lambda s: (s["class"] or "", s["method"]))
+    return result
 
 
 # --------------------------------------------------------------------------
@@ -1767,6 +1873,11 @@ def build_catalog(repo_root, verbose=False):
     if verbose:
         print("  accessor methods resolved: %d" % len(accessors), file=sys.stderr)
 
+    short_circuits = collect_short_circuits(repo_root, accessors)
+    if verbose:
+        print("  configs with a short-circuiting wrapper: %d" % len(short_circuits),
+              file=sys.stderr)
+
     engine_defaults, engine_stats = collect_engine_defaults(repo_root, constant_index)
     if verbose:
         print("  configs with engine-specific defaults: %d" % len(engine_defaults),
@@ -1827,6 +1938,9 @@ def build_catalog(repo_root, verbose=False):
         entry["accessors"] = sorted(accessor_by_key.get(key, []),
                                     key=lambda a: (a["class"] or "", a["method"]))
         entry["aliasConstants"] = alias_by_key.get(key, [])
+        entry["shortCircuits"] = short_circuits.get(key, [])
+        if entry["shortCircuits"]:
+            entry["shortCircuitHeuristic"] = SHORT_CIRCUIT_HEURISTIC
 
         # Engine-specific effective defaults, alongside the declared one rather
         # than replacing it: both are facts a user may need, and which applies
@@ -1904,6 +2018,7 @@ def build_catalog(repo_root, verbose=False):
         entry["readContextResolved"] = False
         entry["accessors"] = []
         entry["aliasConstants"] = []
+        entry["shortCircuits"] = []
         configs.append(entry)
 
     stats = {
@@ -2060,7 +2175,7 @@ def main(argv=None):
     catalog = OrderedDict([
         # 2: adds engineDefaults / conditionalEngineDefaults, and Scala-declared
         # configs with their readContextResolved honesty flag.
-        ("schemaVersion", 2),
+        ("schemaVersion", 3),
         ("hudiVersion", read_project_version(repo_root)),
         ("generatedFrom", read_git_sha(repo_root)),
         ("configs", configs),
