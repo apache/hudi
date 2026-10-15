@@ -95,16 +95,21 @@ import static org.apache.hudi.util.StreamerUtil.initTableIfNotExists;
  *
  * <p>Task failover workflow:
  * <pre>
- *             task failover
- *                  |
- *           initially started ?
- *            /(yes)     \(no)
- *           /            \
- *       has pending      send an empty
- *     instant event ?    bootstrap event
- *        /(yes)  \(no)
- *       /         \
- *    resend      no-op
+ *                task failover
+ *                     |
+ *       restored pending instant event ?
+ *               /(yes)     \(no)
+ *              /            \
+ *       resend metadata     |
+ *       on every attempt    |
+ *              \           /
+ *               \         /
+ *               attempt > 0 ?
+ *               /(yes)     \(no)
+ *              /           \
+ *       send an empty      no-op
+ *       bootstrap event
+ *       to clear legacy events
  * </pre>
  *
  * @see StreamWriteFunction         for the data inputs checkpointing and semantics
@@ -534,8 +539,17 @@ public class StreamWriteOperatorCoordinator
       this.eventBuffers.cleanLegacyEvents(event);
       return;
     }
+    // The writer may have observed a pending instant before its normal commit finished.
+    // Do not recreate the committed buffer when that bootstrap event arrives later.
+    if (this.eventBuffers.getEventBuffer(event.getCheckpointId()) == null
+        && this.metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(event.getInstantTime())) {
+      return;
+    }
     WriteMetadataEvent[] eventBuffer = this.eventBuffers.getOrCreateBootstrapBuffer(event, this.parallelism);
-    eventBuffer[event.getTaskID()] = event;
+    WriteMetadataEvent existing = eventBuffer[event.getTaskID()];
+    if (existing == null || !existing.isBootstrap()) {
+      eventBuffer[event.getTaskID()] = event;
+    }
     if (Arrays.stream(eventBuffer).allMatch(evt -> evt != null && evt.isBootstrap())) {
       // start to recommit the instant.
       recommitInstant(event.getCheckpointId(), event.getInstantTime(), eventBuffer);

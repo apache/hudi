@@ -190,25 +190,20 @@ public abstract class AbstractStreamWriteFunction<I>
   // -------------------------------------------------------------------------
 
   protected void sendBootstrapEvent(int attemptId, boolean isRestored) throws Exception {
-    if (attemptId <= 0) {
-      if (isRestored) {
-        HoodieTimeline pendingTimeline = this.metaClient.getActiveTimeline().filterPendingExcludingCompaction();
-        // if the task is initially started, resend the pending event.
-        for (WriteMetadataEvent event : this.writeMetadataState.get()) {
-          // Must filter out the completed instants in case it is a partial failover,
-          // the write status should not be accumulated in such case.
-          if (pendingTimeline.containsInstant(event.getInstantTime())) {
-            // Reset taskID for event
-            event.setTaskID(taskID);
-            // The checkpoint succeed but the meta does not commit,
-            // re-commit the inflight instant
-            this.eventGateway.sendEventToCoordinator(event);
-            LOG.info("Send uncommitted write metadata event to coordinator, task[{}].", taskID);
-          }
+    if (isRestored) {
+      HoodieTimeline pendingTimeline = this.metaClient.getActiveTimeline().filterPendingExcludingCompaction();
+      // Resend pending metadata on every attempt in case an earlier delivery failed.
+      for (WriteMetadataEvent event : this.writeMetadataState.get()) {
+        // A partial failover may restore metadata for an already completed instant.
+        if (pendingTimeline.containsInstant(event.getInstantTime())) {
+          event.setTaskID(taskID);
+          this.eventGateway.sendEventToCoordinator(event);
+          LOG.info("Send uncommitted write metadata event to coordinator, task[{}].", taskID);
         }
       }
-    } else {
-      // otherwise sends an empty bootstrap event instead.
+    }
+    if (attemptId > 0) {
+      // Clear events from the failed attempt at or after the restored checkpoint.
       this.eventGateway.sendEventToCoordinator(WriteMetadataEvent.emptyBootstrap(taskID, checkpointId));
       LOG.info("Send bootstrap write metadata event to coordinator, task[{}].", taskID);
     }
@@ -224,6 +219,7 @@ public abstract class AbstractStreamWriteFunction<I>
         .checkpointId(checkpointId)
         .instantTime(currentInstant)
         .writeStatus(new ArrayList<>(writeStatuses))
+        .lastBatch(true)
         .bootstrap(true)
         .build();
     this.writeMetadataState.add(event);
