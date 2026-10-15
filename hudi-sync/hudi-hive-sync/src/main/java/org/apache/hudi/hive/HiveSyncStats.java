@@ -28,14 +28,25 @@ import org.apache.hudi.common.util.Option;
  * since each gets the same partitions and the same schema.
  *
  * <p>After a failed sync, the stats cover the steps that ran before the failure.
+ *
+ * <p>Unless {@code hoodie.datasource.hive_sync.stats.enabled} is set, the sync records into
+ * disabled stats, which stay empty.
  */
 public class HiveSyncStats {
 
+  private final boolean enabled;
   private long totalMs = -1;
   private long schemaReadMs = -1;
   private long partitionScanMs = -1;
   private int partitionsAdded = 0;
   private boolean schemaEvolved = false;
+
+  /**
+   * @param enabled whether to keep what is recorded; disabled stats ignore it and stay empty
+   */
+  public HiveSyncStats(boolean enabled) {
+    this.enabled = enabled;
+  }
 
   /**
    * Time spent reading the table schema from storage, or empty when no step read it, as when the
@@ -77,15 +88,21 @@ public class HiveSyncStats {
   }
 
   void setTotalMs(long totalMs) {
-    this.totalMs = totalMs;
+    if (enabled) {
+      this.totalMs = totalMs;
+    }
   }
 
   void addSchemaReadMs(long durationMs) {
-    schemaReadMs = Math.max(0, schemaReadMs) + durationMs;
+    if (enabled) {
+      schemaReadMs = Math.max(0, schemaReadMs) + durationMs;
+    }
   }
 
   void addPartitionScanMs(long durationMs) {
-    partitionScanMs = Math.max(0, partitionScanMs) + durationMs;
+    if (enabled) {
+      partitionScanMs = Math.max(0, partitionScanMs) + durationMs;
+    }
   }
 
   /**
@@ -93,10 +110,14 @@ public class HiveSyncStats {
    * the same partitions, so summing would count them once per table.
    */
   void recordPartitionsAdded(int count) {
-    partitionsAdded = Math.max(partitionsAdded, count);
+    if (enabled) {
+      partitionsAdded = Math.max(partitionsAdded, count);
+    }
   }
 
   void markSchemaEvolved() {
-    schemaEvolved = true;
+    if (enabled) {
+      schemaEvolved = true;
+    }
   }
 }

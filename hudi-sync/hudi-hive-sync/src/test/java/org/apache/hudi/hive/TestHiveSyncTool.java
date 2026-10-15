@@ -121,6 +121,7 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BATCHING_ENABL
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BATCHING_THREADS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_COMMENT;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_MODE;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_STATS_ENABLED;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_TABLE_STRATEGY;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_PROPERTIES;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_SERDE_PROPERTIES;
@@ -1220,9 +1221,24 @@ public class TestHiveSyncTool {
         "The last commit that was synced should be 101");
   }
 
+  @Test
+  void testSyncStatsAreEmptyUnlessEnabled() throws Exception {
+    HiveTestUtil.createCOWTable("100", 5, true);
+    reInitHiveSyncClient();
+
+    HiveSyncStats stats = syncAndGetStats();
+    assertEquals(5, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size());
+    assertFalse(stats.getSchemaReadMs().isPresent());
+    assertFalse(stats.getPartitionScanMs().isPresent());
+    assertFalse(stats.getRemainingMs().isPresent());
+    assertEquals(0, stats.getPartitionsAdded());
+    assertFalse(stats.isSchemaEvolved());
+  }
+
   @ParameterizedTest
   @MethodSource("syncMode")
   void testSyncStatsDescribeWhatTheSyncDid(String syncMode) throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_STATS_ENABLED.key(), "true");
     hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
     HiveTestUtil.createCOWTable("100", 5, true);
     reInitHiveSyncClient();
@@ -1251,6 +1267,7 @@ public class TestHiveSyncTool {
   @ParameterizedTest
   @MethodSource("syncMode")
   void testSyncStatsCountAMergeOnReadTableOnce(String syncMode) throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_STATS_ENABLED.key(), "true");
     hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
     HiveTestUtil.createMORTable("100", "101", 5, true, true);
     reInitHiveSyncClient();
@@ -1264,6 +1281,7 @@ public class TestHiveSyncTool {
 
   @Test
   void testSyncStatsOfGlobalHiveSyncTool() throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_STATS_ENABLED.key(), "true");
     HiveTestUtil.createCOWTable("100", 5, true);
 
     try (GlobalHiveSyncTool tool = new GlobalHiveSyncTool(hiveSyncProps, HiveTestUtil.getHiveConf())) {
@@ -1276,6 +1294,7 @@ public class TestHiveSyncTool {
 
   @Test
   void testSyncStatsCountTheBatchesAddedBeforeAFailure() throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_STATS_ENABLED.key(), "true");
     hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), HiveSyncMode.HMS.name());
     hiveSyncProps.setProperty(HIVE_BATCH_SYNC_PARTITION_NUM.key(), "2");
     HiveTestUtil.createCOWTable("100", 5, true);

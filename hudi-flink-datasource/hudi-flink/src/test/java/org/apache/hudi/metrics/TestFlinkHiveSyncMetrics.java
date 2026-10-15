@@ -48,6 +48,7 @@ import static org.apache.hudi.metrics.FlinkHiveSyncMetrics.HIVE_SYNC_SCHEMA_READ
 import static org.apache.hudi.metrics.FlinkHiveSyncMetrics.HIVE_SYNC_SUCCESS_COUNT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -63,7 +64,7 @@ class TestFlinkHiveSyncMetrics {
   @BeforeEach
   void setUp() {
     metricGroup = new CapturingMetricGroup();
-    metrics = new FlinkHiveSyncMetrics(metricGroup);
+    metrics = new FlinkHiveSyncMetrics(metricGroup, true);
     metrics.registerMetrics();
   }
 
@@ -79,6 +80,23 @@ class TestFlinkHiveSyncMetrics {
     assertNotNull(metricGroup.histograms.get(HIVE_SYNC_REMAINING_DURATION_MS));
     assertNotNull(metricGroup.counters.get(HIVE_SYNC_PARTITIONS_ADDED_COUNT));
     assertNotNull(metricGroup.counters.get(HIVE_SYNC_SCHEMA_EVOLVED_COUNT));
+  }
+
+  @Test
+  void testBreakdownMetricsNotRegisteredWhenStatsDisabled() {
+    CapturingMetricGroup group = new CapturingMetricGroup();
+    new FlinkHiveSyncMetrics(group, false).registerMetrics();
+
+    assertNotNull(group.counters.get(HIVE_SYNC_SUCCESS_COUNT));
+    assertNotNull(group.counters.get(HIVE_SYNC_FAILURE_COUNT));
+    assertNotNull(group.histograms.get(HIVE_SYNC_DURATION_MS));
+    assertNotNull(group.gauges.get(HIVE_SYNC_LAST_SUCCESS_TIME_MS));
+    assertNull(group.histograms.get(HIVE_SYNC_INIT_DURATION_MS));
+    assertNull(group.histograms.get(HIVE_SYNC_SCHEMA_READ_DURATION_MS));
+    assertNull(group.histograms.get(HIVE_SYNC_PARTITION_SCAN_DURATION_MS));
+    assertNull(group.histograms.get(HIVE_SYNC_REMAINING_DURATION_MS));
+    assertNull(group.counters.get(HIVE_SYNC_PARTITIONS_ADDED_COUNT));
+    assertNull(group.counters.get(HIVE_SYNC_SCHEMA_EVOLVED_COUNT));
   }
 
   @Test

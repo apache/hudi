@@ -31,7 +31,7 @@ class TestHiveSyncStats {
 
   @Test
   void testNothingRecordedBeforeASync() {
-    HiveSyncStats stats = new HiveSyncStats();
+    HiveSyncStats stats = new HiveSyncStats(true);
     assertFalse(stats.getSchemaReadMs().isPresent());
     assertFalse(stats.getPartitionScanMs().isPresent());
     assertFalse(stats.getRemainingMs().isPresent());
@@ -41,7 +41,7 @@ class TestHiveSyncStats {
 
   @Test
   void testMetastoreTimeIsWhatTheOtherStepsLeave() {
-    HiveSyncStats stats = new HiveSyncStats();
+    HiveSyncStats stats = new HiveSyncStats(true);
     stats.addSchemaReadMs(10);
     stats.addSchemaReadMs(5);
     stats.addPartitionScanMs(30);
@@ -54,7 +54,7 @@ class TestHiveSyncStats {
 
   @Test
   void testMetastoreTimeWithoutOtherSteps() {
-    HiveSyncStats stats = new HiveSyncStats();
+    HiveSyncStats stats = new HiveSyncStats(true);
     stats.setTotalMs(40);
 
     assertFalse(stats.getSchemaReadMs().isPresent());
@@ -64,7 +64,7 @@ class TestHiveSyncStats {
 
   @Test
   void testPartitionsAddedAndSchemaEvolvedDescribeOneTable() {
-    HiveSyncStats stats = new HiveSyncStats();
+    HiveSyncStats stats = new HiveSyncStats(true);
     stats.recordPartitionsAdded(3);
     stats.recordPartitionsAdded(3);
     stats.markSchemaEvolved();
@@ -72,5 +72,21 @@ class TestHiveSyncStats {
 
     assertEquals(3, stats.getPartitionsAdded());
     assertTrue(stats.isSchemaEvolved());
+  }
+
+  @Test
+  void testDisabledStatsRecordNothing() {
+    HiveSyncStats stats = new HiveSyncStats(false);
+    stats.addSchemaReadMs(10);
+    stats.addPartitionScanMs(30);
+    stats.setTotalMs(100);
+    stats.recordPartitionsAdded(3);
+    stats.markSchemaEvolved();
+
+    assertFalse(stats.getSchemaReadMs().isPresent());
+    assertFalse(stats.getPartitionScanMs().isPresent());
+    assertFalse(stats.getRemainingMs().isPresent());
+    assertEquals(0, stats.getPartitionsAdded());
+    assertFalse(stats.isSchemaEvolved());
   }
 }

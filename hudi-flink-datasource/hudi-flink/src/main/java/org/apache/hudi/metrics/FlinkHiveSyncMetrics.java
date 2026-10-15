@@ -34,6 +34,9 @@ import org.apache.flink.metrics.ThreadSafeSimpleCounter;
  * <p>A sync runs on the coordinator's Hive sync executor after a checkpoint commit, and on its event
  * executor after the commit that ends a bounded input, so each metric may be updated from either
  * thread.
+ *
+ * <p>The breakdown of each sync, from the init duration to the schema evolved count, is only
+ * registered when {@code hoodie.datasource.hive_sync.stats.enabled} is set.
  */
 public class FlinkHiveSyncMetrics extends HoodieFlinkMetrics {
   private static final int HISTOGRAM_WINDOW_SIZE = 100;
@@ -104,8 +107,14 @@ public class FlinkHiveSyncMetrics extends HoodieFlinkMetrics {
    */
   private final Counter schemaEvolvedCount = new ThreadSafeSimpleCounter();
 
-  public FlinkHiveSyncMetrics(MetricGroup metricGroup) {
+  private final boolean statsEnabled;
+
+  /**
+   * @param statsEnabled whether to register the breakdown of each sync, which the sync records only when its stats are enabled
+   */
+  public FlinkHiveSyncMetrics(MetricGroup metricGroup, boolean statsEnabled) {
     super(metricGroup);
+    this.statsEnabled = statsEnabled;
   }
 
   @Override
@@ -114,12 +123,14 @@ public class FlinkHiveSyncMetrics extends HoodieFlinkMetrics {
     metricGroup.counter(HIVE_SYNC_FAILURE_COUNT, syncFailureCount);
     metricGroup.histogram(HIVE_SYNC_DURATION_MS, syncDurationMs);
     metricGroup.gauge(HIVE_SYNC_LAST_SUCCESS_TIME_MS, () -> lastSyncSuccessTimeMs);
-    metricGroup.histogram(HIVE_SYNC_INIT_DURATION_MS, initDurationMs);
-    metricGroup.histogram(HIVE_SYNC_SCHEMA_READ_DURATION_MS, schemaReadDurationMs);
-    metricGroup.histogram(HIVE_SYNC_PARTITION_SCAN_DURATION_MS, partitionScanDurationMs);
-    metricGroup.histogram(HIVE_SYNC_REMAINING_DURATION_MS, remainingDurationMs);
-    metricGroup.counter(HIVE_SYNC_PARTITIONS_ADDED_COUNT, partitionsAddedCount);
-    metricGroup.counter(HIVE_SYNC_SCHEMA_EVOLVED_COUNT, schemaEvolvedCount);
+    if (statsEnabled) {
+      metricGroup.histogram(HIVE_SYNC_INIT_DURATION_MS, initDurationMs);
+      metricGroup.histogram(HIVE_SYNC_SCHEMA_READ_DURATION_MS, schemaReadDurationMs);
+      metricGroup.histogram(HIVE_SYNC_PARTITION_SCAN_DURATION_MS, partitionScanDurationMs);
+      metricGroup.histogram(HIVE_SYNC_REMAINING_DURATION_MS, remainingDurationMs);
+      metricGroup.counter(HIVE_SYNC_PARTITIONS_ADDED_COUNT, partitionsAddedCount);
+      metricGroup.counter(HIVE_SYNC_SCHEMA_EVOLVED_COUNT, schemaEvolvedCount);
+    }
   }
 
   public void updateInitDuration(long durationMs) {

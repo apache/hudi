@@ -35,6 +35,7 @@ import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.hive.HiveSyncConfigHolder;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.metrics.FlinkHiveSyncMetrics;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
@@ -48,6 +49,7 @@ import org.apache.hudi.sink.utils.HiveSyncContext;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.sink.validator.FlinkValidatorUtils;
 import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.util.ClientIds;
 import org.apache.hudi.util.ClusteringUtil;
 import org.apache.hudi.util.CompactionUtil;
@@ -464,7 +466,8 @@ public class StreamWriteOperatorCoordinator
         .threadFactory(getThreadFactory("hive-sync"))
         .waitForTasksFinish(true).build();
     this.hiveSyncContext = HiveSyncContext.create(conf, this.storageConf);
-    this.hiveSyncMetrics = new FlinkHiveSyncMetrics(context.metricGroup());
+    this.hiveSyncMetrics = new FlinkHiveSyncMetrics(context.metricGroup(),
+        FormatUtils.getBooleanWithAltKeys(conf, HiveSyncConfigHolder.HIVE_SYNC_STATS_ENABLED));
     this.hiveSyncMetrics.registerMetrics();
   }
 

@@ -70,6 +70,7 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_AS_DATA_SOURCE
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_COMMENT;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_OMIT_METADATA_FIELDS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_STATS_ENABLED;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_TABLE_STRATEGY;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_PROPERTIES;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_SERDE_PROPERTIES;
@@ -112,8 +113,10 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
 
   private String hiveSyncTableStrategy;
 
+  private final boolean statsEnabled;
+
   // never null, so getSyncStats() also works when no sync ran, e.g. when the metastore client could not be created
-  private HiveSyncStats syncStats = new HiveSyncStats();
+  private HiveSyncStats syncStats;
 
   public HiveSyncTool(Properties props, Configuration hadoopConf) {
     this(props, hadoopConf, Option.empty());
@@ -134,6 +137,8 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     }
 
     this.config = new HiveSyncConfig(props, hadoopConfForSync);
+    this.statsEnabled = config.getBooleanOrDefault(HIVE_SYNC_STATS_ENABLED);
+    this.syncStats = new HiveSyncStats(statsEnabled);
     HoodieTableMetaClient metaClient = metaClientOption.orElseGet(() -> buildMetaClient(config));
     initSyncClient(config, metaClient);
     // initSyncClient leaves syncClient as null
@@ -212,7 +217,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
 
   protected void doSync() {
     // the durations add up across the Hive tables of one sync, so start fresh rather than adding to the previous sync's
-    syncStats = new HiveSyncStats();
+    syncStats = new HiveSyncStats(statsEnabled);
     HoodieTimer timer = HoodieTimer.start();
     try {
       syncTables();
