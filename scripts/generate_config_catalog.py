@@ -72,10 +72,13 @@ EXCLUDED_PATH_PARTS = (
     os.sep + "src" + os.sep + "test" + os.sep,
     os.sep + "node_modules" + os.sep,
     os.sep + ".git" + os.sep,
+    os.sep + ".claude" + os.sep,
 )
 
-# Directories we never descend into at all.
-PRUNED_DIR_NAMES = {"target", "node_modules", ".git", ".idea", "docker", "rfc"}
+# Directories we never descend into at all. ".claude" matters: a nested git
+# worktree under .claude/worktrees/ is a second full copy of the tree, and
+# scanning it yields duplicate declarations with unusable paths.
+PRUNED_DIR_NAMES = {"target", "node_modules", ".git", ".claude", ".idea", "docker", "rfc"}
 
 READ_SITE_EXTENSIONS = (".java", ".scala")
 
