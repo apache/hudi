@@ -54,7 +54,6 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -1112,10 +1111,6 @@ class TestHoodieTableLayoutAnalyzer {
     assertNotEquals(a, b, "propsFilePath differs");
     b.propsFilePath = a.propsFilePath;
 
-    b.configs = new ArrayList<>(Collections.singletonList("k=v"));
-    assertNotEquals(a, b, "configs differs");
-    b.configs = a.configs;
-
     assertEquals(a, b, "equality restored after each mutation reverted");
   }
 
@@ -1195,5 +1190,60 @@ class TestHoodieTableLayoutAnalyzer {
     // then the 1.5x floor keeps a marginally larger partition from being called an outlier
     assertTrue(!out.matches("(?s).*outliers \\([^)]*\\): [1-9].*"),
         "a near-uniform table should produce no outliers, output:\n" + out);
+  }
+
+  @Test
+  void numDaysWindowIncludesToday() {
+    // given --num-days 1 and nothing else
+    HoodieTableLayoutAnalyzer.Config cfg = new HoodieTableLayoutAnalyzer.Config();
+    cfg.numDays = 1;
+
+    // when the date interval is resolved
+    java.time.LocalDate[] interval = HoodieTableLayoutAnalyzer.getUserSpecifiedDateInterval(cfg);
+
+    // then today is inside the half-open [start, end) window -- today's partition is usually the
+    // one being asked about, so "the last 1 day" must not mean "yesterday only"
+    java.time.LocalDate today = java.time.LocalDate.now();
+    assertTrue(!today.isBefore(interval[0]) && today.isBefore(interval[1]),
+        "expected today in [" + interval[0] + ", " + interval[1] + ")");
+  }
+
+  @Test
+  void explicitEndDateSurvivesNumDays() {
+    // given both --end-date and --num-days
+    HoodieTableLayoutAnalyzer.Config cfg = new HoodieTableLayoutAnalyzer.Config();
+    cfg.endDate = "2026-01-10";
+    cfg.numDays = 3;
+
+    // when the date interval is resolved
+    java.time.LocalDate[] interval = HoodieTableLayoutAnalyzer.getUserSpecifiedDateInterval(cfg);
+
+    // then the user's end date wins and num-days measures back from it
+    assertEquals(java.time.LocalDate.parse("2026-01-10"), interval[1], "explicit --end-date must not be overridden");
+    assertEquals(java.time.LocalDate.parse("2026-01-07"), interval[0], "start should be end minus num-days");
+  }
+
+  @Test
+  void compactionCommitsAreNotCountedAsIngests() throws Exception {
+    // given a MOR-shaped history: real ingests plus a compaction, which is written as a plain
+    // commit and so is indistinguishable from an ingest by action alone
+    Map<String, Long> bytes = new HashMap<>();
+    bytes.put("p0", 10L * 1024);
+    for (int i = 0; i < 3; i++) {
+      writeCommit(String.format("2026010112%07d", i), WriteOperationType.UPSERT, bytes);
+    }
+    writeCommit("20260101120000009", WriteOperationType.COMPACT, bytes);
+
+    // when the small-file gate counts ingest commits, with the gate set just above the real count
+    HoodieTableLayoutAnalyzer.Config cfg = detectorConfig();
+    cfg.microPartitionCountThreshold = 100;
+    cfg.microPartitionMinAgeDays = 99999;
+    cfg.smallFilesMinTableCommits = 4;
+    runAnalyzer(cfg);
+    String out = capturedAsString();
+
+    // then the compaction did not inflate the count past the gate
+    assertTrue(out.contains("only 3 ingest commits"),
+        "a COMPACT commit must not count as an ingest, output:\n" + out);
   }
 }

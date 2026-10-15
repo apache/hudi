@@ -22,7 +22,6 @@ package org.apache.hudi.utilities;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -37,6 +36,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -145,30 +145,11 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
 
   // Spark context
   private transient JavaSparkContext jsc;
-  // config
   private final Config cfg;
-  // Properties with source, hoodie client, key generator etc.
-  private final TypedProperties props;
 
   public HoodieTableLayoutAnalyzer(JavaSparkContext jsc, Config cfg) {
     this.jsc = jsc;
     this.cfg = cfg;
-
-    this.props = cfg.propsFilePath == null
-        ? UtilHelpers.buildProperties(cfg.configs)
-        : readConfigFromFileSystem(jsc, cfg);
-  }
-
-  /**
-   * Reads config from the file system.
-   *
-   * @param jsc {@link JavaSparkContext} instance.
-   * @param cfg {@link Config} instance.
-   * @return the {@link TypedProperties} instance.
-   */
-  private TypedProperties readConfigFromFileSystem(JavaSparkContext jsc, Config cfg) {
-    return UtilHelpers.readConfig(jsc.hadoopConfiguration(), new Path(cfg.propsFilePath), cfg.configs)
-        .getProps(true);
   }
 
   public static class Config implements Serializable {
@@ -285,11 +266,6 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
     @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = false)
     public String sparkMemory = "1g";
 
-    @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
-        + "(using the CLI parameter \"--props\") can also be passed command line using this parameter. This can be repeated",
-        splitter = IdentitySplitter.class)
-    public List<String> configs = new ArrayList<>();
-
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
 
@@ -321,8 +297,7 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
           + "   --parallelism " + parallelism + ", \n"
           + "   --spark-master " + sparkMaster + ", \n"
           + "   --spark-memory " + sparkMemory + ", \n"
-          + "   --props " + propsFilePath + ", \n"
-          + "   --hoodie-conf " + configs
+          + "   --props-path " + propsFilePath
           + "\n}";
     }
 
@@ -360,8 +335,7 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
           && Objects.equals(parallelism, config.parallelism)
           && Objects.equals(sparkMaster, config.sparkMaster)
           && Objects.equals(sparkMemory, config.sparkMemory)
-          && Objects.equals(propsFilePath, config.propsFilePath)
-          && Objects.equals(configs, config.configs);
+          && Objects.equals(propsFilePath, config.propsFilePath);
     }
 
     @Override
@@ -370,7 +344,7 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
           analyzeTableCharacteristics, printTopK, microPartitionCountThreshold, microPartitionMinFiles, microPartitionMaxAvgBytes,
           microPartitionMinAgeDays, smallFilesMinFilesPerPartition, smallFilesThresholdBytes, smallFilesModeratePct,
           smallFilesSeverePct, smallFilesMinTableCommits, hotWindowCommits, hotPartitionCommitShare,
-          parallelism, sparkMaster, sparkMemory, propsFilePath, configs, help);
+          parallelism, sparkMaster, sparkMemory, propsFilePath, help);
     }
   }
 
@@ -387,15 +361,26 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
     sparkConfigMap.put("spark.executor.memory", cfg.sparkMemory);
     JavaSparkContext jsc = UtilHelpers.buildSparkContext("Table-Layout-Analyzer", cfg.sparkMaster, false, sparkConfigMap);
 
+    // run() wraps every failure in HoodieException, so a TableNotFoundException branch here would
+    // never match. Report the cause instead, and exit non-zero: this tool is driven by agents and
+    // schedulers, and a failed run that exits 0 is indistinguishable from a run that found nothing.
+    int exitCode = 0;
     try {
       HoodieTableLayoutAnalyzer analyzer = new HoodieTableLayoutAnalyzer(jsc, cfg);
       analyzer.run();
-    } catch (TableNotFoundException e) {
-      log.warn("The Hudi data table is not found: [{}].", cfg.basePath, e);
     } catch (Throwable throwable) {
-      log.error("Failed to analyze table layout for {}", cfg, throwable);
+      Throwable cause = throwable.getCause() != null ? throwable.getCause() : throwable;
+      if (cause instanceof TableNotFoundException) {
+        log.error("No Hudi table at [{}].", cfg.basePath, cause);
+      } else {
+        log.error("Failed to analyze table layout for {}", cfg, throwable);
+      }
+      exitCode = 1;
     } finally {
       jsc.stop();
+    }
+    if (exitCode != 0) {
+      System.exit(exitCode);
     }
   }
 
@@ -527,7 +512,13 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
     // per partition and would explode driver heap on tables with many partitions. When we
     // do build it, use a 4096-slot reservoir, plenty of headroom for the per-partition
     // file count in practice, while keeping the per-partition cost at ~32 KB.
-    Histogram partitionSizeHist = cfg.partitionStats ? new Histogram(new UniformReservoir(4096)) : null;
+    // Size the reservoir to the partition rather than allocating the cap every time: a 4096-slot
+    // reservoir costs ~32 KB, and the tables this detector targets are exactly the ones with very
+    // many small partitions, where that fixed cost dominates driver heap (100k partitions would be
+    // ~3.2 GB). A partition never has more samples than it has base files.
+    Histogram partitionSizeHist = cfg.partitionStats
+        ? new Histogram(new UniformReservoir(Math.max(1, Math.min(4096, baseFiles.size()))))
+        : null;
     long partitionTotalBytes = 0L;
     List<Long> sizes = new ArrayList<>(baseFiles.size());
     for (HoodieBaseFile baseFile : baseFiles) {
@@ -734,27 +725,37 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
   }
 
   /**
-   * Counts completed ingest commits on a single timeline. Commit/deltacommit are counted
-   * unconditionally; each replacecommit is read to distinguish real ingests
-   * (INSERT_OVERWRITE / INSERT_OVERWRITE_TABLE) from clustering, which is skipped. When
-   * {@code detailsReadable} is false, replacecommits are skipped rather than read.
+   * Counts completed ingest commits on a single timeline. The action alone does not identify an
+   * ingest: on Merge-on-Read a completed compaction is written as a plain {@code commit}, and
+   * clustering as a {@code replacecommit}, so each commit body is read and anything
+   * {@link WriteOperationType#isTableService} is excluded. When {@code detailsReadable} is false
+   * the bodies cannot be read, so commits and deltacommits are counted and replacecommits skipped.
    */
   private long countIngestCommits(HoodieTimeline timeline, boolean detailsReadable) {
     return timeline.filterCompletedInstants().getInstantsAsStream()
         .filter(i -> {
           String action = i.getAction();
-          if (action.equals(HoodieTimeline.COMMIT_ACTION) || action.equals(HoodieTimeline.DELTA_COMMIT_ACTION)) {
-            return true;
-          }
-          if (!action.equals(HoodieTimeline.REPLACE_COMMIT_ACTION) || !detailsReadable) {
+          boolean isCommitLike = action.equals(HoodieTimeline.COMMIT_ACTION)
+              || action.equals(HoodieTimeline.DELTA_COMMIT_ACTION)
+              || action.equals(HoodieTimeline.REPLACE_COMMIT_ACTION);
+          if (!isCommitLike) {
             return false;
           }
+          if (!detailsReadable) {
+            // Without commit bodies the operation type is unknowable. Plain commits and
+            // deltacommits are usually ingests, so count them; a replacecommit is as likely to be
+            // clustering as an overwrite, so skip it.
+            return !action.equals(HoodieTimeline.REPLACE_COMMIT_ACTION);
+          }
           try {
-            return timeline.readCommitMetadata(i).getOperationType() != WriteOperationType.CLUSTER;
+            // The action alone does not identify an ingest. On Merge-on-Read a completed
+            // compaction is written as a plain commit, and clustering is written as a
+            // replacecommit, so both have to be excluded by operation type.
+            return !WriteOperationType.isTableService(timeline.readCommitMetadata(i).getOperationType());
           } catch (Exception e) {
-            // Best-effort: an unreadable replacecommit body shouldn't fail the whole run.
+            // Best-effort: an unreadable commit body shouldn't fail the whole run.
             // Skip it; undercounting is preferable to misclassifying.
-            log.warn("Skipping replacecommit {} during ingest-commit count: {}", i.requestedTime(), e.toString());
+            log.warn("Skipping {} {} during ingest-commit count: {}", action, i.requestedTime(), e.toString());
             return false;
           }
         }).count();
@@ -785,7 +786,7 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
 
   /**
    * Most-recent first. We walk until we've accumulated {@code hotWindowCommits} post-filter
-   * ingest commits (true ingests, not COMPACT/CLUSTER). The window can grow to fill
+   * ingest commits (true ingests, excluding every table service). The window can grow to fill
    * arbitrarily many raw instants on tables where compaction/clustering dominate recent
    * activity, bounded only by the active timeline size.
    */
@@ -819,7 +820,9 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
         WriteOperationType op = cm.getOperationType();
         // Exclude compaction + clustering: they touch many partitions per commit and
         // would skew hotness toward "every partition is hot".
-        if (op == WriteOperationType.COMPACT || op == WriteOperationType.CLUSTER) {
+        // isTableService covers COMPACT, LOG_COMPACT, CLUSTER and INDEX; naming them individually
+        // here missed LOG_COMPACT, which inflated the window on log-compacted MOR tables.
+        if (WriteOperationType.isTableService(op)) {
           continue;
         }
         kept++;
@@ -845,7 +848,7 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
    */
   private List<HotPartition> flagHotPartitions(Map<String, HotPartitionCounters> counters, int kept) {
     List<HotPartition> hot = new ArrayList<>();
-    // When no ingest commits fell in the window (e.g., recent activity was all COMPACT/CLUSTER),
+    // When no ingest commits fell in the window (e.g., recent activity was all table services),
     // ceil(share * 0) is 0 and every partition would falsely be flagged as hot. Bail early.
     if (kept == 0) {
       return hot;
@@ -969,7 +972,10 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
     if (cfg.tableStats || !cfg.partitionStats) {
       Snapshot ts = tableSizeHist.getSnapshot();
       System.out.println("Table-level file size distribution:");
-      System.out.printf("  numFiles=%d  totalBytes=%s%n", ts.size(), formatBytes(tableTotalBytes));
+      // ts.size() is the reservoir's sample count, which saturates at its capacity -- a table with
+      // more base files than that would report the capacity as its file count. The exact total is
+      // already summed from the per-partition rows.
+      System.out.printf("  numFiles=%d  totalBytes=%s%n", tableTotalFiles, formatBytes(tableTotalBytes));
       System.out.printf("  min=%s  max=%s  mean=%s  median=%s%n",
           formatBytes((long) ts.getMin()),
           formatBytes((long) ts.getMax()),
@@ -1789,7 +1795,8 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
     return filePaths;
   }
 
-  private static LocalDate[] getUserSpecifiedDateInterval(Config cfg) {
+  @VisibleForTesting
+  static LocalDate[] getUserSpecifiedDateInterval(Config cfg) {
     // Set endDate to null by default.
     LocalDate endDate = null;
     if (cfg.endDate != null) {
@@ -1814,9 +1821,17 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
       if (cfg.numDays == 0) {
         log.info("Start date not specified: {}.", startDate);
       } else if (cfg.numDays > 0) {
-        endDate = LocalDate.now();
+        // The window is half-open -- a partition qualifies when it is before endDate -- so endDate
+        // has to be tomorrow for today's partition to be included. Today is usually the partition
+        // the user is asking about, and "the last N days" that silently omits it is a trap.
+        // Only default endDate here: an explicit --end-date is the user's, and must not be
+        // overridden by --num-days.
+        if (endDate == null) {
+          endDate = LocalDate.now().plusDays(1);
+        }
         startDate = endDate.minusDays(cfg.numDays);
-        log.info("Setting starting date to {} ({} - {} days). ", startDate, endDate, cfg.numDays);
+        log.info("Setting starting date to {} (through end of {}, {} day(s)). ",
+            startDate, endDate.minusDays(1), cfg.numDays);
       } else {
         throw new HoodieException("--num-days must specify a positive value.");
       }
