@@ -25,6 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -79,10 +80,11 @@ final class VectorPostingScorer {
         ? multibitMetricQueryState.forRotatedCentroid(new float[queryVector.length])
         : null;
 
+    final int signCodeBytes = (dimension + 7) / 8;
     long queryPrepMs = System.currentTimeMillis() - queryPrepStartMs;
     LOG.info("[vector_search][stage][score_postings_setup] queryDim={} queryCodeBytes={} metric={} bits={} asymmetric={} residualEncoding={} elapsedMs={}",
         dimension,
-        sharedQueryState == null ? Math.max(1, (dimension + 7) / 8) : sharedQueryState.getBinaryCode().length,
+        sharedQueryState == null ? Math.max(1, signCodeBytes) : sharedQueryState.getBinaryCode().length,
         scoringMetric,
         effectiveBits,
         useAsymmetric,
@@ -143,9 +145,14 @@ final class VectorPostingScorer {
           approxDistance = (float) multibitMetricQueryState.rankingDistance(rip, centerRip, residualNorm, vectorNorm, clusterQuery);
         } else {
           float effectiveScalar = match.getScalar() != null ? match.getScalar() : 1.0f;
+          // Posting-block sign rows are padded to codeRowBytes (a multiple of 8 bytes); the
+          // single-bit scorer expects exactly ceil(dimension / 8) bytes.
+          byte[] binaryCode = match.getBinaryCode().length > signCodeBytes
+              ? Arrays.copyOf(match.getBinaryCode(), signCodeBytes)
+              : match.getBinaryCode();
           approxDistance = encoder.estimateDistance(
               activeQueryState,
-              new QuantizedVector(match.getBinaryCode(), effectiveScalar),
+              new QuantizedVector(binaryCode, effectiveScalar),
               scoringMetric,
               useAsymmetric);
         }
