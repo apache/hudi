@@ -1191,6 +1191,9 @@ def resolve_constant(expr, owner_class, constant_index):
 # .newBuilder().build(), every writer constructor -- resolve to that config.
 # A name like this cannot identify a consumer at a call site, whatever its body
 # looks like.
+ACCESSOR_CALL_IN_GATE_RE = re.compile(r"\b([a-z][A-Za-z0-9_]*)\s*\(")
+
+
 GENERIC_METHOD_NAMES = frozenset((
     "build", "builder", "newBuilder", "get", "getInstance", "newInstance",
     "create", "of", "from", "apply", "value", "valueOf", "parse", "toString",
@@ -2086,11 +2089,48 @@ def build_catalog(repo_root, verbose=False):
             entry["gatingConditions"] = [
                 OrderedDict([("condition", gate), ("at", where)])
                 for gate, where in list(gates.items())[:12]]
+
+            # A config named inside a gate on this config is a stronger signal
+            # than co-occurrence: the gate decides whether this config's read
+            # happens at all. These are often invisible to the co-config pass,
+            # which keys on config constants -- `getWriteConcurrencyMode() ==
+            # SINGLE_WRITER` names no key, yet it is what silently replaces an
+            # explicit lock provider with the in-process one. Recorded
+            # separately so they are not flattened into a co-occurrence count.
+            gating_refs = OrderedDict()
+            for gate, where in gates.items():
+                for call in ACCESSOR_CALL_IN_GATE_RE.finditer(gate):
+                    other = accessors.get(call.group(1))
+                    if other and other != key:
+                        gating_refs.setdefault(other, (call.group(1), where))
+            entry["gatedBy"] = [
+                OrderedDict([("key", k), ("viaAccessor", meth), ("at", where)])
+                for k, (meth, where) in list(gating_refs.items())[:12]]
         else:
             entry["readSites"] = []
             entry["coConfigs"] = []
             entry["gatingConditions"] = []
+            entry["gatedBy"] = []
             entry["parseWarnings"].append("no read site resolved for this config")
+
+        # Every recorded read site sitting in the config's own declaring file
+        # means no consumer was found anywhere else -- the only mentions are the
+        # declaration and its own accessors. Sometimes that is a parser gap, but
+        # it is also exactly what a config whose call site has been commented
+        # out looks like: hoodie.datasource.read.incr.skip_cluster is fully
+        # declared, documented and versioned, and its one Spark call site is
+        # commented out at MergeOnReadIncrementalRelationV2.scala:231 with a
+        # reference to HUDI-9672. Comments are stripped before scanning, so the
+        # catalog correctly records no read -- but nothing said so out loud.
+        sites = entry.get("readSites") or []
+        entry["noExternalConsumer"] = bool(sites) and all(
+            site["file"] == entry["declaredIn"]["file"] for site in sites)
+        if entry["noExternalConsumer"]:
+            entry["parseWarnings"].append(
+                "every read site is in this config's own declaring file; no "
+                "external consumer was found. Check whether the call site is "
+                "commented out or the feature is not wired up, before "
+                "describing behaviour this config may not have")
 
         # Say plainly how much of this config's read context was actually
         # recovered. A Scala-only config has locations but no method, no
@@ -2117,6 +2157,7 @@ def build_catalog(repo_root, verbose=False):
         entry["readSites"] = []
         entry["coConfigs"] = []
         entry["gatingConditions"] = []
+        entry["gatedBy"] = []
         entry["scalaReadSites"] = 0
         entry["readContextResolved"] = False
         entry["accessors"] = []
