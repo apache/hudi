@@ -245,6 +245,9 @@ public abstract class HFileBlock {
     if (numBytes % bytesPerChecksum != 0) {
       numChunks++;
     }
+    if (numChunks > Integer.MAX_VALUE / HFileBlock.CHECKSUM_SIZE) {
+      throw new IllegalArgumentException("The number of chunks is too large: " + numChunks);
+    }
     return numChunks;
   }
 

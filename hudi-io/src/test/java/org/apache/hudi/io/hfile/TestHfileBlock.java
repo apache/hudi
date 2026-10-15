@@ -165,4 +165,12 @@ class TestHfileBlock {
   void testNumChecksumChunksSingleChunk() {
     Assertions.assertEquals(1, HFileBlock.numChecksumChunks(200L, 512));
   }
+
+  @Test
+  void testNumChecksumChunksOverflowThrows() {
+    long numBytes = ((long) Integer.MAX_VALUE / HFileBlock.CHECKSUM_SIZE + 1)
+        * 1024; // force too many chunks
+    assertThrows(IllegalArgumentException.class,
+        () -> HFileBlock.numChecksumChunks(numBytes, 1024));
+  }
 }
