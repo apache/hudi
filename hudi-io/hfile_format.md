@@ -383,6 +383,13 @@ To look up `k250`: the greatest root key less than or equal to `k250` is `k000`,
 that key is `k200`, so read Data 2; scan Data 2 for `k250`. That is three block reads where a single-level
 file needs two.
 
+In a multi-level file, the root data index block does not end at its last entry: HBase appends 16 bytes of
+mid-key metadata after the entries, the offset (8 bytes) and on-disk size (4 bytes) of the leaf index block
+holding the file's middle key, then the index (4 bytes) of that key's entry within the leaf block. A
+single-level file has no such bytes. A reader that walks the root block by `data_index_count` from the
+[Trailer](#trailer) is unaffected, but one that parses the block's "Data" part to its end must stop at the last
+entry.
+
 The "Data" part of an intermediate or leaf index block does not use the root entry layout described above.
 It starts with the entry count and a secondary index of entry offsets, then the entries themselves:
 
@@ -537,8 +544,10 @@ Here are the meaning of each field:
 - `encryption_key`: Encryption key (not used by Hudi)
 
 The four offsets (`file_info_offset`, `load_on_open_data_offset`, `first_data_block_offset`,
-`last_data_block_offset`) are `uint64`, so the trailer can address any position in a file larger than 4 GiB; only the
-counts are `uint32`.
+`last_data_block_offset`) are `uint64`, so the trailer can address any position in a file larger than 4 GiB. The
+fields that describe the whole file rather than one block (`uncompressed_data_index_size`, `total_uncompressed_bytes`,
+`entry_count`) are `uint64` as well. The `uint32` fields are `data_index_count`, `meta_index_count`,
+`num_data_index_levels` and `compression_codec`.
 
 The last 4 bytes of the Trailer content contain the HFile version: the number represented by the first byte indicates
 the minor version, and the number represented by the last three bytes indicates the major version. In the case of Hudi,
@@ -547,9 +556,11 @@ the major version should always be 3, if written by HBase HFile writer.
 ## Offsets and size limits
 
 To sum up the widths noted in the sections above: every position in the file (the block header's previous block
-offset, the block offset in every index entry, the four trailer offsets) is 8 bytes, and every size (the three block
-header sizes, the block size in every index entry, key and value lengths, the entry count and entry offsets of a
-non-root index block) is 4 bytes. Offsets bound the file; sizes bound a block.
+offset, the block offset in every index entry, the four trailer offsets) is 8 bytes, and every size that describes a
+block or its contents (the three block header sizes, the block size in every index entry, key and value lengths, the
+entry count and entry offsets of a non-root index block) is 4 bytes. The trailer's totals over the whole file
+(`uncompressed_data_index_size`, `total_uncompressed_bytes`, `entry_count`) are 8 bytes, like the offsets. Offsets and
+file totals bound the file; block sizes bound a block.
 
 - **File size is unbounded.** An HFile can grow past 2 GiB and past 4 GiB with no change in layout.
 - **A block, a key and a value are each bounded to less than 2 GiB**, as described under
