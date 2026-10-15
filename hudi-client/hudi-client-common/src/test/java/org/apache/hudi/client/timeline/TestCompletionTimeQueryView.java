@@ -225,6 +225,9 @@ public class TestCompletionTimeQueryView {
 
     try (CompletionTimeQueryView view =
              metaClient.getTableFormat().getTimelineFactory().createCompletionTimeQueryView(metaClient)) {
+      assertFalse(view.isArchived(staleRollback));
+      assertTrue(view.isArchived(String.format("%08d", 4)));
+      assertFalse(view.isArchived(String.format("%08d", 7)));
       // archived commits newer than the rollback are found, not reported as pending
       assertThat(view.getCompletionTime(String.format("%08d", 4)).orElse(""), is(String.format("%08d", 1004)));
       assertThat(getInstantTimeSetFormattedString(view, 3 + 1000, 6 + 1000), is("00000003,00000004,00000005,00000006"));
