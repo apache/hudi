@@ -47,12 +47,15 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
 
 /**
@@ -177,6 +180,7 @@ public class FilesIndexer extends BaseIndexer {
               // Files registered from outside the table (REGISTER_ONLY bootstrap) carry the directory
               // they live in, so the files partition can address them where they are.
               Map<String, String> fileToSourcePartitionPath = new HashMap<>();
+              Set<String> seenFileNames = new HashSet<>();
               for (HoodieWriteStat stat : writeStats) {
                 String pathWithPartition = stat.getPath();
                 if (pathWithPartition == null) {
@@ -192,8 +196,20 @@ public class FilesIndexer extends BaseIndexer {
                 // of the sizes as reported after every write, since file-sizes are
                 // monotonically increasing (ie file-size never goes down, unless deleted)
                 updatedFilesToSizesMapping.merge(fileName, stat.getFileSizeInBytes(), Math::max);
-                if (stat.getSourcePartitionPath() != null) {
-                  fileToSourcePartitionPath.put(fileName, stat.getSourcePartitionPath());
+                // Repeated names above are the same file written twice, but two registered files can
+                // genuinely be different files that happen to share a name, and a files-partition
+                // entry is keyed by name alone and so cannot hold both. Registration decides which
+                // files to take; this is the last place both are still visible, so refuse rather
+                // than let one of them vanish.
+                String statSourcePartitionPath = stat.getSourcePartitionPath();
+                if (!seenFileNames.add(fileName)) {
+                  String seen = fileToSourcePartitionPath.get(fileName);
+                  checkState(Objects.equals(seen, statSourcePartitionPath),
+                      () -> "File " + fileName + " in partition " + partitionStatName
+                          + " comes from two different places: " + seen + " and " + statSourcePartitionPath);
+                }
+                if (statSourcePartitionPath != null) {
+                  fileToSourcePartitionPath.put(fileName, statSourcePartitionPath);
                 }
 
                 Map<String, Long> cdcPathAndSizes = stat.getCdcStats();

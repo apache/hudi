@@ -53,6 +53,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -226,5 +227,54 @@ class TestFilesIndexer {
     assertEquals(Collections.singletonList("f2.parquet"), payloadByKey.get("p1").getFilenames());
     assertEquals(Collections.singletonList("f3.parquet"), payloadByKey.get("p2").getDeletions());
     assertEquals(Collections.singletonList("p3"), payloadByKey.get(HoodieTableMetadata.RECORDKEY_PARTITION_LIST).getDeletions());
+  }
+
+  private List<HoodieRecord> buildUpdateFor(HoodieWriteStat... stats) {
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    commitMetadata.setOperationType(WriteOperationType.INSERT);
+    for (HoodieWriteStat stat : stats) {
+      commitMetadata.addWriteStat(stat.getPartitionPath(), stat);
+    }
+
+    FilesIndexer indexer = new FilesIndexer(
+        new HoodieLocalEngineContext(getDefaultStorageConf()),
+        mock(HoodieWriteConfig.class),
+        mock(HoodieTableMetaClient.class));
+
+    return indexer.buildUpdate(IndexUpdateContext.of(
+        "004",
+        mock(HoodieBackedTableMetadata.class),
+        Lazy.lazily(() -> mock(HoodieTableFileSystemView.class)),
+        commitMetadata)).get(0).indexRecords().collectAsList();
+  }
+
+  private static HoodieWriteStat writeStat(String fileName, long size, String sourcePartitionPath) {
+    HoodieWriteStat stat = new HoodieWriteStat();
+    stat.setPartitionPath("p1");
+    stat.setPath("p1/" + fileName);
+    stat.setFileSizeInBytes(size);
+    stat.setSourcePartitionPath(sourcePartitionPath);
+    return stat;
+  }
+
+  @Test
+  void testTwoFilesOfTheSameNameFromDifferentSourcesAreRefused() {
+    // A files-partition entry is keyed by name alone, so taking both would drop one of them.
+    IllegalStateException ex = assertThrows(IllegalStateException.class, () -> buildUpdateFor(
+        writeStat("000000_0", 123L, "/src/dt=1/h=01"),
+        writeStat("000000_0", 456L, "/src/dt=1/h=02")));
+
+    assertTrue(ex.getMessage().contains("000000_0"), ex.getMessage());
+  }
+
+  @Test
+  void testTheSameOrdinaryFileReportedTwiceStillMergesToTheLargestSize() {
+    List<HoodieRecord> records = buildUpdateFor(
+        writeStat("f1.parquet", 123L, null),
+        writeStat("f1.parquet", 456L, null));
+
+    Map<String, HoodieMetadataPayload> payloadByKey = records.stream()
+        .collect(Collectors.toMap(HoodieRecord::getRecordKey, r -> (HoodieMetadataPayload) r.getData()));
+    assertEquals(Collections.singletonList("f1.parquet"), payloadByKey.get("p1").getFilenames());
   }
 }
