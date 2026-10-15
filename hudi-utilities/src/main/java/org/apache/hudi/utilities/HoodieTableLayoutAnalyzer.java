@@ -463,7 +463,7 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
       rows.sort(Comparator.comparingLong((PartitionRow r) -> r.totalBytes).reversed());
 
       TableCharacteristics characteristics = cfg.analyzeTableCharacteristics
-          ? analyzeCharacteristics(metaClient, rows)
+          ? analyzeCharacteristics(metaClient, rows, allPartitions.size())
           : null;
 
       OutputFormat output = parseOutputFormat(cfg.output);
@@ -544,11 +544,16 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
    * detector's verdict is independent; the umbrella flag {@code --analyze-table-characteristics}
    * gates whether any of them run, and thresholds are individually configurable.
    */
-  private TableCharacteristics analyzeCharacteristics(HoodieTableMetaClient metaClient, List<PartitionRow> rows) {
+  private TableCharacteristics analyzeCharacteristics(HoodieTableMetaClient metaClient, List<PartitionRow> rows,
+                                                      int totalPartitionCount) {
     TableCharacteristics tc = new TableCharacteristics();
     tc.tableType = metaClient.getTableType();
     tc.tableAgeDays = computeTableAgeDays(metaClient);
-    tc.numPartitions = rows.size();
+    // "Does this table have too many partitions?" is a question about the whole table, so it must
+    // not be answered from a date-filtered slice -- --num-days 7 against a 50k-partition table
+    // would otherwise judge the count rule on about seven partitions and report CLEAN.
+    tc.numPartitions = totalPartitionCount;
+    tc.partitionsExamined = rows.size();
 
     runMicroPartitionDetector(rows, tc);
     runSmallFileDetector(metaClient, rows, tc);
@@ -1206,6 +1211,7 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
     StringBuilder sb = new StringBuilder("{");
     sb.append("\n    \"tableAgeDays\": ").append(tc.tableAgeDays);
     sb.append(",\n    \"numPartitions\": ").append(tc.numPartitions);
+    sb.append(",\n    \"partitionsExamined\": ").append(tc.partitionsExamined);
     sb.append(",\n    \"overallStatus\": ").append(quote(tc.overallStatus().name()));
     sb.append(",\n    \"detectors\": [");
     sb.append("\n      ").append(microPartitionDetectorJson(tc));
@@ -1687,6 +1693,7 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
 
     // Hot-partition verdict.
     int hotWindowEffectiveCommits;
+    int partitionsExamined;
     boolean hotPartitionDetectionFailed;
     final List<HotPartition> hotPartitions = new ArrayList<>();
 
