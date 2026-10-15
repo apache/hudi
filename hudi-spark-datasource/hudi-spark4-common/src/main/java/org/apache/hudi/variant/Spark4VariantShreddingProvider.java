@@ -183,8 +183,7 @@ public class Spark4VariantShreddingProvider implements VariantShreddingProvider 
             String typeName = tvSchema.getType().getName()
                 + (logicalType == null ? "" : " (" + logicalType.getName() + ")");
             throw new HoodieException("Variant shredding schema has a typed_value of type " + typeName
-                + ", which Spark 4 cannot shred. Supported typed_value types: boolean, int, long, float, "
-                + "double, string, bytes, decimal, date, timestamp-micros, local-timestamp-micros.");
+                + ", which Spark 4 cannot shred. Supported typed_value types: " + SPARK_SHREDDABLE_SCALAR_TYPES + ".");
           }
           scalarSchema = avroTypeToScalarType(tvSchema);
           break;
@@ -203,6 +202,13 @@ public class Spark4VariantShreddingProvider implements VariantShreddingProvider 
 
     return result;
   }
+
+  /**
+   * The scalar {@code typed_value} types {@link #isSparkShreddableScalar} accepts, for error messages.
+   * Keep in sync with that switch.
+   */
+  private static final String SPARK_SHREDDABLE_SCALAR_TYPES = "boolean, int, long, float, double, string, bytes, "
+      + "decimal, date, timestamp-micros, local-timestamp-micros";
 
   /**
    * Whether a scalar {@code typed_value} is the Avro equivalent of a scalar type Spark 4's
