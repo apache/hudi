@@ -144,10 +144,11 @@ public class NestedColumnReader implements ColumnReader<WritableColumnVector> {
     // Inside an array the row has one position per element, which can exceed the batch size the
     // placeholders of absent fields were sized with, so grow them to the position count.
     int positionsCount = rowPosition.getPositionsCount();
+    RowType rowType = (RowType) field.getType();
     for (int i = 0; i < children.size(); i++) {
       if (children.get(i) == null && vectorLength(finalChildrenVectors[i]) < positionsCount) {
         finalChildrenVectors[i] = (WritableColumnVector) createVectorFromConstant(
-            ((RowType) field.getType()).getTypeAt(i), null, positionsCount);
+            rowType.getTypeAt(i), null, positionsCount);
       }
     }
 
