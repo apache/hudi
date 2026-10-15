@@ -119,8 +119,7 @@ public class KafkaConnectUtils {
   public static int getLatestNumPartitions(String bootstrapServers, String topicName) {
     Properties props = new Properties();
     props.put("bootstrap.servers", bootstrapServers);
-    try {
-      AdminClient client = AdminClient.create(props);
+    try (AdminClient client = AdminClient.create(props)) {
       DescribeTopicsResult result = client.describeTopics(Collections.singletonList(topicName));
       Map<String, KafkaFuture<TopicDescription>> values = result.values();
       KafkaFuture<TopicDescription> topicDescription = values.get(topicName);
