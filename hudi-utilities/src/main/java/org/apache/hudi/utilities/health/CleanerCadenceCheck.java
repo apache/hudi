@@ -20,9 +20,12 @@ package org.apache.hudi.utilities.health;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieArchivalConfig;
@@ -89,6 +92,21 @@ public class CleanerCadenceCheck implements HealthCheck {
         .config("observed.completed.write.commits", completedWrites.countInstants());
     echoIfSupplied(context, result, HoodieCleanConfig.CLEANER_POLICY.key());
     echoIfSupplied(context, result, HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key());
+
+    // A pure-append table never produces a clean instant, because nothing is ever
+    // superseded: every file group has a single slice and nothing is replaced. The
+    // cleaner is behaving correctly by doing nothing, so judging it on elapsed
+    // commits would flag such a table every day with no action available.
+    if (!lastClean.isPresent() && isAppendOnly(completedWrites)) {
+      return result.status(HealthStatus.HEALTHY)
+          .summary(String.format("No clean has run, and none is expected: all %d write commit(s) are "
+              + "inserts, so no file slice has been superseded", completedWrites.countInstants()))
+          .finding("Every completed write on this timeline is an insert or bulk_insert. Cleaning "
+              + "retires superseded file slices, and an append-only workload never creates any, so "
+              + "an empty cleaner timeline is the correct state rather than a stalled service. This "
+              + "check becomes meaningful once the table takes updates or deletes.")
+          .build();
+    }
 
     int commitsSinceClean;
     if (lastClean.isPresent()) {
@@ -176,6 +194,34 @@ public class CleanerCadenceCheck implements HealthCheck {
         HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), commitsRetained,
         HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), commitsRetained,
         HoodieCleanConfig.AUTO_CLEAN.key()));
+  }
+
+  /**
+   * Whether every completed write on the timeline is an insert.
+   *
+   * <p>Read from the commit metadata rather than from
+   * {@code hoodie.datasource.write.operation}, because what the table has actually received is the
+   * question -- a writer configured for upsert that has only ever inserted still has nothing to
+   * clean, and a property file can be stale or absent.
+   *
+   * <p>Conservative on failure: an unreadable or unknown commit means this returns false and the
+   * normal cadence judgement applies. Suppressing a real finding is the worse error here.
+   */
+  private static boolean isAppendOnly(HoodieTimeline completedWrites) {
+    if (completedWrites.empty()) {
+      return false;
+    }
+    for (HoodieInstant instant : completedWrites.getInstants()) {
+      try {
+        HoodieCommitMetadata metadata = TimelineUtils.getCommitMetadata(instant, completedWrites);
+        if (!WriteOperationType.isInsertWithoutReplace(metadata.getOperationType())) {
+          return false;
+        }
+      } catch (Exception e) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /** Surfaces what the last clean retained, so the operator can see the retention watermark moving. */

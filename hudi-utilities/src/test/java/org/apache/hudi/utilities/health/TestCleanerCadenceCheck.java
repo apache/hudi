@@ -22,10 +22,12 @@ import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 
@@ -262,5 +264,66 @@ public class TestCleanerCadenceCheck {
     assertEquals(HealthStatus.UNHEALTHY, result.getStatus());
     assertTrue(result.getFindings().stream().anyMatch(f -> f.startsWith("No clean is scheduled.")),
         "expected the generic finding, got: " + result.getFindings());
+  }
+
+  @Test
+  public void appendOnlyTableWithNoCleanIsHealthy() throws Exception {
+    // given a table that has only ever received inserts -- nothing is superseded, so the
+    // cleaner correctly never runs and no clean instant ever appears
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
+    HoodieTestTable table = HoodieTestTable.of(metaClient);
+    for (int i = 1; i <= 60; i++) {
+      String instant = String.format("%05d", i);
+      table.addCommit(instant, Option.of(table.createCommitMetadata(
+          instant, WriteOperationType.INSERT, Collections.singletonList("p1"), 1, false)));
+    }
+
+    // when the check runs well past the trigger threshold
+    HealthCheckResult result = runCheck(metaClient, propsWithTrigger(1), false);
+
+    // then an empty cleaner timeline is the expected state, not a stalled service
+    assertEquals(HealthStatus.HEALTHY, result.getStatus(),
+        "an append-only table has nothing to clean: " + result.getFindings());
+    assertTrue(result.getSummary().contains("none is expected"),
+        "expected the summary to say why, got: " + result.getSummary());
+  }
+
+  @Test
+  public void upsertTableWithNoCleanIsStillJudged() throws Exception {
+    // given the same timeline length, but writes that supersede file slices
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
+    HoodieTestTable table = HoodieTestTable.of(metaClient);
+    for (int i = 1; i <= 60; i++) {
+      String instant = String.format("%05d", i);
+      table.addCommit(instant, Option.of(table.createCommitMetadata(
+          instant, WriteOperationType.UPSERT, Collections.singletonList("p1"), 1, false)));
+    }
+
+    // when the check runs
+    HealthCheckResult result = runCheck(metaClient, propsWithTrigger(1), false);
+
+    // then the append-only exemption must not swallow a genuine finding
+    assertEquals(HealthStatus.UNHEALTHY, result.getStatus(),
+        "an upsert table with no clean is a real finding");
+  }
+
+  @Test
+  public void mixedInsertAndUpsertIsStillJudged() throws Exception {
+    // given a table that is mostly inserts but took updates at some point
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
+    HoodieTestTable table = HoodieTestTable.of(metaClient);
+    for (int i = 1; i <= 60; i++) {
+      String instant = String.format("%05d", i);
+      WriteOperationType op = (i == 30) ? WriteOperationType.UPSERT : WriteOperationType.INSERT;
+      table.addCommit(instant, Option.of(table.createCommitMetadata(
+          instant, op, Collections.singletonList("p1"), 1, false)));
+    }
+
+    // when the check runs
+    HealthCheckResult result = runCheck(metaClient, propsWithTrigger(1), false);
+
+    // then one update is enough to make cleaning meaningful again
+    assertEquals(HealthStatus.UNHEALTHY, result.getStatus(),
+        "a single upsert means file slices can be superseded");
   }
 }
