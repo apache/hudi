@@ -373,7 +373,11 @@ public class TestRecordIndexSizingCheckWithSpark extends SparkClientFunctionalTe
     assertTrue(result.getFindings().stream().anyMatch(f -> f.contains(
         String.format("Data partition '%s' of the record index was initialized with 1 file group(s)", worstPartition))),
         "expected the finding to name the worst data partition, got: " + result.getFindings());
-    assertTrue(result.getFindings().stream().anyMatch(f -> f.contains("metadata delete-record-index")),
-        "expected the re-bootstrap remedy, got: " + result.getFindings());
+    // HoodieIndexer cannot rebuild a partitioned index (apache/hudi#20343), so the remedy must say
+    // so rather than name a command that would silently produce a global index instead
+    assertTrue(result.getFindings().stream().anyMatch(f -> f.contains("issues/20343")),
+        "expected the partitioned-rebuild caveat, got: " + result.getFindings());
+    assertTrue(result.getFindings().stream().noneMatch(f -> f.contains("metadata delete-record-index")),
+        "the global re-bootstrap command must not be offered for a partitioned index, got: " + result.getFindings());
   }
 }
