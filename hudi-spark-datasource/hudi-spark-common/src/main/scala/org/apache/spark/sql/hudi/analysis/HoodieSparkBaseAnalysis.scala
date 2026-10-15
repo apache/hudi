@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.analysis
 
 import org.apache.hudi.{DataSourceReadOptions, DefaultSource, SparkAdapterSupport}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.StoragePath
 
@@ -452,16 +453,22 @@ case class PostAnalysisRule(sparkSession: SparkSession) extends Rule[LogicalPlan
    * corresponding commit instant on the table's timeline.
    *
    * Versions are 0-indexed, matching Delta Lake semantics: version 0 is the table's first
-   * completed commit, version 1 the second, and so on.
+   * completed commit, version 1 the second, and so on. Instants are ordered by requested time,
+   * which is what Hudi's time-travel read path filters on, so every version maps to a valid
+   * historical snapshot.
    *
    * Versions are resolved against the full commit history (archived + active timelines), so
    * version numbers stay stable even after archival moves old commits off the active timeline.
-   * Instants are ordered by completion time rather than requested time: completion order is
-   * append-only and therefore stable under multi-writer, whereas a late-completing
-   * early-requested commit would otherwise renumber already-issued versions.
+   * Nothing is silently dropped: instants without a known completion time (old archive entries)
+   * still count toward version numbering.
    *
    * Data-producing commits (commit, delta-commit) as well as clustering replace commits all
    * count as versions, mirroring Delta Lake where OPTIMIZE also bumps the table version.
+   *
+   * Limitation: correct snapshots require commits to have completed in requested order (always
+   * true for single-writer). If out-of-order multi-writer completion is detected among instants
+   * with known completion times, resolution fails with an actionable error instead of returning
+   * a misleading snapshot; use TIMESTAMP AS OF in that case.
    */
   private def resolveVersionToInstant(table: CatalogTable, versionExpr: Expression): String = {
     val version = versionExpr match {
@@ -482,19 +489,42 @@ case class PostAnalysisRule(sparkSession: SparkSession) extends Rule[LogicalPlan
       .setBasePath(basePath)
       .setConf(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()))
       .build()
-    val activeCommits = metaClient.getActiveTimeline.getCommitsTimeline
-      .filterCompletedInstants.getInstantsOrderedByCompletionTime.iterator().asScala.toSeq
-    val archivedCommits = metaClient.getArchivedTimeline.getCommitsTimeline
-      .filterCompletedInstants.getInstantsOrderedByCompletionTime.iterator().asScala.toSeq
-    // Archived instants always completed before active ones (archival only moves old instants),
-    // so concatenation yields the global completion-time order.
-    val allCommits = archivedCommits ++ activeCommits
-    if (version >= allCommits.size) {
-      throw new HoodieAnalysisException(
-        s"Version $version is out of range: table has ${allCommits.size} completed commit(s), " +
-          s"valid versions are 0 to ${allCommits.size - 1}")
+
+    val activeTimeline = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants
+    val archivedTimeline = metaClient.getArchivedTimeline.getCommitsTimeline.filterCompletedInstants
+
+    // All completed instants, ordered by requested time. Unlike getInstantsOrderedByCompletionTime,
+    // nothing is dropped here: instants with unknown completion time still count.
+    val allInstants = (activeTimeline.getInstants.asScala ++ archivedTimeline.getInstants.asScala).toSeq
+      .sortBy(_.requestedTime)
+
+    // Completion rank for instants with known completion times (archived always completed first,
+    // so concatenation yields the global completion order). Used only to detect out-of-order
+    // multi-writer completion; instants without a known completion time are not checked.
+    val completionRank = {
+      val activeOrdered = activeTimeline.getInstantsOrderedByCompletionTime.iterator().asScala.map(_.requestedTime)
+      val archivedOrdered = archivedTimeline.getInstantsOrderedByCompletionTime.iterator().asScala.map(_.requestedTime)
+      (archivedOrdered ++ activeOrdered).toSeq.zipWithIndex.toMap
     }
-    allCommits(version.toInt).requestedTime
+    // Fail loudly on out-of-order completion instead of returning a misleading snapshot.
+    // Only data commits are checked: replace (clustering) commits are logically transparent and
+    // cannot produce a wrong snapshot.
+    val dataCommitRanks = allInstants
+      .filter(i => i.getAction == HoodieTimeline.COMMIT_ACTION || i.getAction == HoodieTimeline.DELTA_COMMIT_ACTION)
+      .flatMap(i => completionRank.get(i.requestedTime))
+    if (dataCommitRanks != dataCommitRanks.sorted) {
+      throw new HoodieAnalysisException(
+        "Cannot resolve version-based time travel: the table has commits that completed out of requested order " +
+          "(concurrent writers). Version numbers would map to misleading snapshots; " +
+          "use TIMESTAMP AS OF instead.")
+    }
+
+    if (version >= allInstants.size) {
+      throw new HoodieAnalysisException(
+        s"Version $version is out of range: table has ${allInstants.size} completed commit(s), " +
+          s"valid versions are 0 to ${allInstants.size - 1}")
+    }
+    allInstants(version.toInt).requestedTime
   }
 }
 
