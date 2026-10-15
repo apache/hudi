@@ -34,7 +34,8 @@ public class HFileCursor {
 
   private static final int INVALID_POSITION = -1;
 
-  // Absolute position in the HFile, which can exceed Integer.MAX_VALUE for files larger than 2GB
+  // Block start offset in the HFile plus the offset within the uncompressed block. A long since
+  // the block start can exceed 2GB; the in-block part fits an int as a block is under 2GB.
   private long offset;
   private Option<KeyValue> keyValue;
   @Getter(AccessLevel.NONE)
