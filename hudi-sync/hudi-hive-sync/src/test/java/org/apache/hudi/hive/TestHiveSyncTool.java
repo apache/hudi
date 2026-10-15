@@ -1149,10 +1149,10 @@ public class TestHiveSyncTool {
     HiveTestUtil.createCOWTableWithSchema(commitTime, HoodieSchema.parse("{\"type\": \"record\", \"name\": \"User\", "
         + "\"namespace\": \"example.avro\", \"fields\": ["
         + "{\"name\": \"name\", \"type\": \"string\"},"
-        + "{\"name\": \"clientPromotion\", \"type\": \"null\", \"default\": null},"
+        + "{\"name\": \"clientpromotion\", \"type\": \"null\", \"default\": null},"
         + "{\"name\": \"address\", \"type\": {\"type\": \"record\", \"name\": \"Address\", \"fields\": ["
         + "{\"name\": \"city\", \"type\": \"string\"},"
-        + "{\"name\": \"nestedPromotion\", \"type\": \"null\", \"default\": null}]}}]}"));
+        + "{\"name\": \"nestedpromotion\", \"type\": \"null\", \"default\": null}]}}]}"));
 
     reInitHiveSyncClient();
     reSyncHiveTable();
@@ -1167,8 +1167,8 @@ public class TestHiveSyncTool {
     String sparkSchema = IMetaStoreClientUtil.getMSC(getHiveConf())
         .getTable(HiveTestUtil.DB_NAME, HiveTestUtil.TABLE_NAME).getParameters().get("spark.sql.sources.schema.part.0");
     assertTrue(sparkSchema.contains("\"city\""), "spark schema should contain the nested field");
-    assertFalse(sparkSchema.contains("clientPromotion"), "spark schema should not contain the null type field");
-    assertFalse(sparkSchema.contains("nestedPromotion"), "spark schema should not contain the nested null type field");
+    assertFalse(sparkSchema.contains("clientpromotion"), "spark schema should not contain the null type field");
+    assertFalse(sparkSchema.contains("nestedpromotion"), "spark schema should not contain the nested null type field");
   }
 
   @ParameterizedTest
