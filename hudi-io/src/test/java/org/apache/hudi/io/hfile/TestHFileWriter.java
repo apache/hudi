@@ -111,12 +111,12 @@ class TestHFileWriter {
     byte[] oversizedValue = new byte[100];
     try (HFileWriter writer = new HFileWriterImpl(CONTEXT, out, 100L)) {
       writer.append("a", fittingValue);
-      IllegalStateException sameKey = assertThrows(IllegalStateException.class,
+      IllegalArgumentException sameKey = assertThrows(IllegalArgumentException.class,
           () -> writer.append("a", fittingValue));
       assertTrue(sameKey.getMessage().startsWith(
           "Data block would hold 144 uncompressed bytes after appending key a, exceeding the maximum of 100 bytes"),
           sameKey.getMessage());
-      IllegalStateException oversized = assertThrows(IllegalStateException.class,
+      IllegalArgumentException oversized = assertThrows(IllegalArgumentException.class,
           () -> writer.append("bbbbb", oversizedValue));
       assertTrue(oversized.getMessage().startsWith(
           "Data block would hold 126 uncompressed bytes after appending key bbbbb, exceeding the maximum of 100 bytes"),

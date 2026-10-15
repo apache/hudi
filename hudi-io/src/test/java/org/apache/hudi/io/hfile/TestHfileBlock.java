@@ -30,7 +30,9 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
+import static org.apache.hudi.io.hfile.HFileBlock.HFILEBLOCK_HEADER_SIZE;
 import static org.apache.hudi.io.hfile.HFileBlock.Header.BYTES_PER_CHECKSUM_INDEX;
+import static org.apache.hudi.io.hfile.HFileBlock.Header.ON_DISK_DATA_SIZE_WITH_HEADER_INDEX;
 import static org.apache.hudi.io.hfile.HFileBlock.Header.ON_DISK_SIZE_WITHOUT_HEADER_INDEX;
 import static org.apache.hudi.io.hfile.HFileBlock.Header.UNCOMPRESSED_SIZE_WITHOUT_HEADER_INDEX;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -44,6 +46,19 @@ class TestHfileBlock {
   void testParseDataBlock() throws IOException {
     HFileBlock block = HFileBlock.parse(CONTEXT, serializedDataBlock(), 0);
     assertEquals(HFileBlockType.DATA, block.getBlockType());
+  }
+
+  @Test
+  void testParseRejectsTruncatedHeader() throws IOException {
+    byte[] bytes = serializedDataBlock();
+    // A header-only buffer describing an empty block is the smallest parseable input
+    byte[] headerOnly = Arrays.copyOf(bytes, HFILEBLOCK_HEADER_SIZE);
+    ByteBuffer.wrap(headerOnly).putInt(ON_DISK_SIZE_WITHOUT_HEADER_INDEX, 0)
+        .putInt(UNCOMPRESSED_SIZE_WITHOUT_HEADER_INDEX, 0)
+        .putInt(ON_DISK_DATA_SIZE_WITH_HEADER_INDEX, HFILEBLOCK_HEADER_SIZE);
+    assertEquals(HFileBlockType.DATA, HFileBlock.parse(CONTEXT, headerOnly, 0).getBlockType());
+    assertTruncatedHeader(Arrays.copyOf(bytes, HFILEBLOCK_HEADER_SIZE - 1), 0);
+    assertTruncatedHeader(bytes, bytes.length - HFILEBLOCK_HEADER_SIZE + 1);
   }
 
   @Test
@@ -78,6 +93,24 @@ class TestHfileBlock {
   }
 
   @Test
+  void testParseRejectsOnDiskDataSizeOutsideBlock() throws IOException {
+    HFileContext gzipContext = HFileContext.builder().compressionCodec(CompressionCodec.GZIP).build();
+    byte[] bytes = serializedDataBlock(gzipContext);
+    int onDiskSizeWithHeader =
+        HFILEBLOCK_HEADER_SIZE + ByteBuffer.wrap(bytes).getInt(ON_DISK_SIZE_WITHOUT_HEADER_INDEX);
+    for (int atBound : new int[] {HFILEBLOCK_HEADER_SIZE, onDiskSizeWithHeader}) {
+      byte[] copy = bytes.clone();
+      ByteBuffer.wrap(copy).putInt(ON_DISK_DATA_SIZE_WITH_HEADER_INDEX, atBound);
+      assertEquals(HFileBlockType.DATA, HFileBlock.parse(gzipContext, copy, 0).getBlockType());
+    }
+    for (int outOfBound : new int[] {HFILEBLOCK_HEADER_SIZE - 1, onDiskSizeWithHeader + 1}) {
+      byte[] copy = bytes.clone();
+      ByteBuffer.wrap(copy).putInt(ON_DISK_DATA_SIZE_WITH_HEADER_INDEX, outOfBound);
+      assertCorruptHeader(gzipContext, copy);
+    }
+  }
+
+  @Test
   void testParseRejectsUncompressedSizeTooLargeForOneArray() throws IOException {
     HFileContext gzipContext = HFileContext.builder().compressionCodec(CompressionCodec.GZIP).build();
     byte[] bytes = serializedDataBlock(gzipContext);
@@ -104,6 +137,13 @@ class TestHfileBlock {
     HoodieIOException e = assertThrows(HoodieIOException.class,
         () -> HFileBlock.parse(context, bytes, 0));
     assertTrue(e.getMessage().startsWith("Corrupt DATA block header at buffer offset 0:"), e.getMessage());
+  }
+
+  private static void assertTruncatedHeader(byte[] bytes, int startOffset) {
+    HoodieIOException e = assertThrows(HoodieIOException.class,
+        () -> HFileBlock.parse(CONTEXT, bytes, startOffset));
+    assertEquals(String.format("Truncated HFile block header at buffer offset %d: %d bytes remain, %d needed",
+        startOffset, bytes.length - startOffset, HFILEBLOCK_HEADER_SIZE), e.getMessage());
   }
 
   @Test

@@ -128,7 +128,7 @@ public class HFileWriterImpl implements HFileWriter {
    */
   private void checkDataBlockCapacity(long uncompressedBytes, String key) {
     if (uncompressedBytes > maxUncompressedDataBlockBytes) {
-      throw new IllegalStateException(String.format(
+      throw new IllegalArgumentException(String.format(
           "Data block would hold %d uncompressed bytes after appending key %s, exceeding the "
               + "maximum of %d bytes: a single record, or records sharing the same key, cannot "
               + "exceed the maximum size of one data block",
