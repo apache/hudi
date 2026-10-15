@@ -64,12 +64,16 @@ public class TestMetadataTableSyncCheckFunctional extends HoodieSparkClientTestB
   }
 
   private HealthCheckResult runCheck() throws Exception {
+    return runCheck(propsWithMetadataEnabled());
+  }
+
+  private HealthCheckResult runCheck(TypedProperties props) throws Exception {
     HoodieTableMetaClient freshMetaClient = HoodieTableMetaClient.builder()
         .setConf(storageConf.newInstance())
         .setBasePath(basePath)
         .setLoadActiveTimelineOnLoad(true)
         .build();
-    return check.check(new HealthCheckContext(freshMetaClient, propsWithMetadataEnabled(), false));
+    return check.check(new HealthCheckContext(freshMetaClient, props, false));
   }
 
   private HoodieWriteConfig writeConfigWithMetadataTable() {
@@ -188,5 +192,41 @@ public class TestMetadataTableSyncCheckFunctional extends HoodieSparkClientTestB
         "expected a warning against rebuilding, got: " + result.getFindings());
     assertFalse(result.getFindings().stream().anyMatch(f -> f.contains("HoodieMetadataTableValidator")),
         "listing was consistent, so the full validator should not be recommended: " + result.getFindings());
+  }
+
+  @Test
+  public void metadataTableLeftOnStorageWithWriterDisabledIsUnhealthy() throws Exception {
+    // given a real metadata table on storage, and a writer configured with it off --
+    // what happens whenever hoodie.metadata.auto.delete.partitions is false
+    writeTableWithMetadataTable();
+    TypedProperties disabled = new TypedProperties();
+    disabled.setProperty(HoodieMetadataConfig.ENABLE.key(), "false");
+
+    // when the check runs
+    HealthCheckResult result = runCheck(disabled);
+
+    // then it does not skip: nothing maintains the table while readers still use it
+    assertEquals(HealthStatus.UNHEALTHY, result.getStatus(),
+        "a metadata table nothing maintains is the risky case, not an uninteresting one");
+    assertTrue(result.getFindings().stream().anyMatch(f -> f.contains("Readers are not bound")),
+        "expected the reader consequence to be named, got: " + result.getFindings());
+  }
+
+  @Test
+  public void rebuildRemedyDoesNotRecommendTheDisableReEnableDance() throws Exception {
+    // given a metadata table whose listing has drifted from storage
+    writeTableWithMetadataTable();
+    deleteOneFileFromStorage("2015/03/16", path -> path.getName().endsWith(".parquet"));
+
+    // when the check reports the inconsistency
+    HealthCheckResult result = runCheck();
+
+    // then the remedy is explicit about what it does, and warns off the config side effect
+    assertEquals(HealthStatus.UNHEALTHY, result.getStatus());
+    assertTrue(result.getFindings().stream().anyMatch(f -> f.contains("metadata delete")
+            && f.contains("metadata create")),
+        "expected the hudi-cli remedy, got: " + result.getFindings());
+    assertTrue(result.getFindings().stream().anyMatch(f -> f.contains("drops every index")),
+        "expected the dropped indexes to be named, got: " + result.getFindings());
   }
 }

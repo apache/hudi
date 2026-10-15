@@ -115,13 +115,40 @@ public class MetadataTableSyncCheck implements HealthCheck {
 
     boolean metadataEnabled = Boolean.parseBoolean(context.getProps().getString(
         HoodieMetadataConfig.ENABLE.key(), String.valueOf(HoodieMetadataConfig.ENABLE.defaultValue())));
-    if (!metadataEnabled) {
-      return HealthCheckResult.skipped(NAME, "Metadata table is disabled for this writer ("
-          + HoodieMetadataConfig.ENABLE.key() + "=false), so there is nothing to compare against");
-    }
 
     HoodieTableMetaClient metaClient = context.getMetaClient();
     Option<String> noMetadataTable = MetadataTablePresence.reasonAbsent(metaClient);
+
+    if (!metadataEnabled) {
+      // Order matters: a writer with the metadata table disabled is only uninteresting when no
+      // metadata table exists. When one is still on storage -- which is what happens whenever
+      // hoodie.metadata.auto.delete.partitions is false -- nothing maintains it while readers that
+      // enable the metadata table keep serving listings from it. Skipping here would stay silent on
+      // the one configuration in this check's remit that actively returns wrong results.
+      if (noMetadataTable.isPresent()) {
+        return HealthCheckResult.skipped(NAME, "Metadata table is disabled for this writer ("
+            + HoodieMetadataConfig.ENABLE.key() + "=false) and none exists on storage, so there is "
+            + "nothing to compare against");
+      }
+      return HealthCheckResult.builder(NAME)
+          .config(HoodieMetadataConfig.ENABLE.key(), false)
+          .status(HealthStatus.UNHEALTHY)
+          .summary("Metadata table exists on storage but the writer has it disabled, so nothing is "
+              + "maintaining it")
+          .finding("The supplied writer properties set " + HoodieMetadataConfig.ENABLE.key()
+              + "=false, yet a metadata table is present. It is not being updated by this writer, so "
+              + "it falls further behind with every commit.")
+          .finding("Readers are not bound by the writer's setting. Any reader that enables the "
+              + "metadata table will serve file listings from this stale copy and silently miss data "
+              + "written since the writer stopped maintaining it.")
+          .finding("Decide which you want. To stop using it, delete it explicitly ("
+              + "`metadata delete` in hudi-cli) rather than leaving it in place -- note that "
+              + HoodieMetadataConfig.AUTO_DELETE_PARTITIONS.key() + " defaults to true, so a write "
+              + "with the metadata table disabled normally removes it, and its being here means that "
+              + "was turned off. To resume using it, re-enable it on the writer and let it rebuild.")
+          .build();
+    }
+
     if (noMetadataTable.isPresent()) {
       return HealthCheckResult.skipped(NAME, noMetadataTable.get());
     }
@@ -179,9 +206,18 @@ public class MetadataTableSyncCheck implements HealthCheck {
     if (inconsistent) {
       result.finding("The metadata table's listing has drifted from storage. Confirm the extent with the full "
           + "comparison before acting: run HoodieMetadataTableValidator (spark-submit, hudi-utilities) with "
-          + "--validate-latest-file-slices --validate-latest-base-files. If it confirms the drift, the remedy "
-          + "is to rebuild the metadata table by disabling it for one write and re-enabling it; that is "
-          + "disruptive (a full listing and re-indexing of the table) and should be scheduled deliberately.");
+          + "--validate-latest-file-slices --validate-latest-base-files.");
+      result.finding("If it confirms the drift, rebuild the metadata table with `metadata delete` then "
+          + "`metadata create` in hudi-cli, with writers stopped. Do not rebuild by disabling the "
+          + "metadata table for one write: that only deletes it when "
+          + HoodieMetadataConfig.AUTO_DELETE_PARTITIONS.key() + " is true (the default), and when it is "
+          + "false the write rebuilds nothing and merely adds another instant the metadata table has "
+          + "missed.");
+      result.finding("Either way the rebuild drops every index the metadata table holds -- record "
+          + "index, column stats, bloom filters, secondary indexes -- not only the FILES partition. "
+          + "What comes back is whatever the writer properties enable, so confirm those settings "
+          + "before recreating, and expect to rebuild the other indexes. It is a full listing and "
+          + "re-indexing of the table, so schedule it deliberately.");
     }
 
     String summary = inconsistent
