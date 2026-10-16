@@ -20,6 +20,7 @@
 package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.data.HoodieBroadcast;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableBiFunction;
@@ -38,6 +39,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.HoodieKeyLookupResult;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.metadata.MetadataPartitionReader;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
@@ -112,6 +114,8 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
 
       Broadcast<HoodieTableFileSystemView> baseFileOnlyViewBroadcast =
           ((HoodieSparkEngineContext) context).getJavaSparkContext().broadcast(baseFileOnlyView);
+      HoodieBroadcast<MetadataPartitionReader> bloomFilterReaderBroadcast =
+          context.broadcast(hoodieTable.getTableMetadata().getPartitionReader(BLOOM_FILTERS.getPartitionPath()));
 
       // When leveraging MT we're aiming for following goals:
       //    - (G1) All requests to MT are made in batch (ie we're trying to fetch all the values
@@ -154,7 +158,7 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
       // NOTE: Sorting records w/in individual partitions is required to make sure that we cluster
       //       together keys co-located w/in the MT files (sorted by keys)
       keyLookupResultRDD = fileComparisonsRDD.repartitionAndSortWithinPartitions(partitioner)
-          .mapPartitionsToPair(new HoodieMetadataBloomFilterProbingFunction(baseFileOnlyViewBroadcast, hoodieTable))
+          .mapPartitionsToPair(new HoodieMetadataBloomFilterProbingFunction(baseFileOnlyViewBroadcast, bloomFilterReaderBroadcast))
           // Second, we use [[HoodieFileProbingFunction]] to open actual file and check whether it
           // contains the records with candidate keys that were filtered in by the Bloom Filter
           .mapPartitions(new HoodieFileProbingFunction(baseFileOnlyViewBroadcast, storageConf), true);

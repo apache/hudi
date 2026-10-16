@@ -19,8 +19,8 @@
 package org.apache.hudi.index;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieBroadcast;
 import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableBiFunction;
@@ -28,11 +28,9 @@ import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.util.Either;
-import org.apache.hudi.common.util.HoodieDataUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
@@ -40,7 +38,9 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.metadata.MetadataPartitionReader;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.metadata.RecordIndexRawKey;
 import org.apache.hudi.metrics.RecordIndexLookupMetrics;
 import org.apache.hudi.table.HoodieTable;
 
@@ -51,6 +51,7 @@ import org.apache.spark.api.java.function.PairFlatMapFunction;
 
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -135,8 +136,10 @@ public class SparkMetadataTableGlobalRecordLevelIndex extends HoodieIndex<Object
 
     // Resolved on the driver so the closure carries it to executors.
     Option<Registry> lookupMetrics = RecordIndexLookupMetrics.resolveRegistry(context, hoodieTable.getConfig());
+    HoodieBroadcast<MetadataPartitionReader> recordIndexReader =
+        context.broadcast(hoodieTable.getTableMetadata().getPartitionReader(RECORD_INDEX.getPartitionPath()));
     return HoodieJavaPairRDD.of(partitionedKeyRDD.mapPartitionsToPair(
-        new RecordIndexFileGroupLookupFunction(hoodieTable, lookupMetrics)));
+        new RecordIndexFileGroupLookupFunction(recordIndexReader, lookupMetrics)));
   }
 
   protected Either<Integer, Map<String, Integer>> fetchFileGroupSize(HoodieTable hoodieTable) {
@@ -186,12 +189,12 @@ public class SparkMetadataTableGlobalRecordLevelIndex extends HoodieIndex<Object
    * Function that lookups a list of keys in a single shard of the record index
    */
   private static class RecordIndexFileGroupLookupFunction implements PairFlatMapFunction<Iterator<String>, String, HoodieRecordGlobalLocation> {
-    private final HoodieTable hoodieTable;
+    private final HoodieBroadcast<MetadataPartitionReader> recordIndexReader;
     /** Empty when no counters should be collected; see RecordIndexLookupMetrics#resolveRegistry. */
     private final Option<Registry> lookupMetrics;
 
-    public RecordIndexFileGroupLookupFunction(HoodieTable hoodieTable, Option<Registry> lookupMetrics) {
-      this.hoodieTable = hoodieTable;
+    public RecordIndexFileGroupLookupFunction(HoodieBroadcast<MetadataPartitionReader> recordIndexReader, Option<Registry> lookupMetrics) {
+      this.recordIndexReader = recordIndexReader;
       this.lookupMetrics = lookupMetrics;
     }
 
@@ -203,22 +206,15 @@ public class SparkMetadataTableGlobalRecordLevelIndex extends HoodieIndex<Object
       // Started only when collecting: an unused timer is an allocation per shard on the disabled path.
       HoodieTimer shardTimer = lookupMetrics.isPresent() ? HoodieTimer.start() : null;
       // recordIndexInfo object only contains records that are present in record_index.
-      HoodiePairData<String, HoodieRecordGlobalLocation> recordIndexData =
-          hoodieTable.getTableMetadata().readRecordIndexLocationsWithKeys(HoodieListData.eager(keysToLookup));
-      try {
-        List<Pair<String, HoodieRecordGlobalLocation>> recordIndexInfo = HoodieDataUtils.dedupeAndCollectAsList(recordIndexData);
-        // Guarded rather than checked inside the helper: the found set is O(hits) and Java evaluates it
-        // as an argument first, so an unguarded call would cost every shard that on the disabled path.
-        if (lookupMetrics.isPresent()) {
-          RecordIndexLookupMetrics.recordShardLookup(lookupMetrics.get(), keysToLookup,
-              recordIndexInfo.stream().map(Pair::getKey).collect(Collectors.toSet()), shardTimer.endTimer());
-        }
-        return recordIndexInfo.stream()
-            .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator();
-      } finally {
-        // Clean up the RDD to avoid memory leaks
-        recordIndexData.unpersistWithDependencies();
+      Map<String, HoodieRecordGlobalLocation> recordIndexInfo = new LinkedHashMap<>();
+      recordIndexReader.value().lookupRecords(keysToLookup.stream().map(RecordIndexRawKey::new).collect(Collectors.toList()))
+          .forEach(record -> recordIndexInfo.put(record.getRecordKey(), record.getData().getRecordGlobalLocation()));
+      // recordIndexInfo is keyed by record key, so its key set is the found set with no extra allocation.
+      if (lookupMetrics.isPresent()) {
+        RecordIndexLookupMetrics.recordShardLookup(lookupMetrics.get(), keysToLookup, recordIndexInfo.keySet(), shardTimer.endTimer());
       }
+      return recordIndexInfo.entrySet().stream()
+          .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator();
     }
   }
 
@@ -229,7 +225,7 @@ public class SparkMetadataTableGlobalRecordLevelIndex extends HoodieIndex<Object
    * NOTE: This is a workaround for SPARK-39391, which moved the PartitionIdPassthrough from
    * {@link org.apache.spark.sql.execution.ShuffledRowRDD} to {@link Partitioner}.
    */
-  protected class PartitionIdPassthrough extends Partitioner {
+  protected static class PartitionIdPassthrough extends Partitioner {
 
     private final int numPartitions;
 
