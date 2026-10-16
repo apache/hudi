@@ -121,7 +121,7 @@ public class FileGroupReaderBasedNativeLogAppendHandle<T, I, K, O> extends Hoodi
     if (!record.isDelete()) {
       return record;
     }
-    Comparable orderingValue = readerContext.getRecordContext().convertOrderingValueToJava(record.getOrderingValue());
+    Comparable<?> orderingValue = readerContext.getRecordContext().convertOrderingValueToJava(record.getOrderingValue());
     return new BufferedRecord<>(record.getRecordKey(), orderingValue, record.getRecord(), record.getSchemaId(), record.getHoodieOperation());
   }
 

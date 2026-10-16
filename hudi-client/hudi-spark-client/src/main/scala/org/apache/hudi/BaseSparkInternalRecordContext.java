@@ -130,6 +130,8 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
           hoodieKey,
           bufferedRecord.getHoodieOperation(),
           bufferedRecord.getOrderingValue(),
+          // Comparisons keep the engine ordering value, delete blocks store the Java one.
+          convertOrderingValueToJava(bufferedRecord.getOrderingValue()),
           HoodieRecord.HoodieRecordType.SPARK);
     }
 

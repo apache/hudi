@@ -20,7 +20,10 @@
 package org.apache.hudi;
 
 import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieOperation;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
@@ -49,9 +52,12 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -148,12 +154,7 @@ class TestBaseSparkInternalRowReaderContext {
   @Test
   void testConvertOrderingValueToJava() {
     RecordContext<InternalRow> recordContext = readerContext.getRecordContext();
-    HoodieUTF8String comparableString = new HoodieUTF8String(UTF8String.fromString("abc")) {
-      @Override
-      public int compareTo(HoodieUTF8String other) {
-        return toString().compareTo(other.toString());
-      }
-    };
+    HoodieUTF8String comparableString = comparableString("abc");
     assertEquals("abc", recordContext.convertOrderingValueToJava(comparableString));
     assertEquals("raw", recordContext.convertOrderingValueToJava(UTF8String.fromString("raw")));
     assertEquals(new BigDecimal("1.50"), recordContext.convertOrderingValueToJava(Decimal.apply(new BigDecimal("1.50"))));
@@ -161,6 +162,52 @@ class TestBaseSparkInternalRowReaderContext {
     assertEquals(
         new ArrayComparable(new Comparable[]{"abc", new BigDecimal("1.50"), 5L}),
         recordContext.convertOrderingValueToJava(new ArrayComparable(new Comparable[]{comparableString, Decimal.apply(new BigDecimal("1.50")), 5L})));
+  }
+
+  @Test
+  void testConstructHoodieRecordKeepsBothOrderingValuesOfDelete() {
+    HoodieUTF8String comparableString = comparableString("abc");
+    Decimal decimal = Decimal.apply(new BigDecimal("1.50"));
+    assertDeleteOrderingValues(comparableString, "abc");
+    assertDeleteOrderingValues(decimal, new BigDecimal("1.50"));
+    assertDeleteOrderingValues(
+        new ArrayComparable(new Comparable[]{comparableString, decimal, 5L}),
+        new ArrayComparable(new Comparable[]{"abc", new BigDecimal("1.50"), 5L}));
+    assertDeleteOrderingValues(5L, 5L);
+  }
+
+  @Test
+  void testDeleteWithRowKeepsBothOrderingValues() {
+    RecordContext<InternalRow> recordContext = readerContext.getRecordContext();
+    HoodieUTF8String comparableName = comparableString("abc");
+    InternalRow row = recordContext.constructEngineRecord(SCHEMA, new Object[]{1, UTF8String.fromString("abc"), true});
+    HoodieRecord<InternalRow> record = recordContext.constructHoodieRecord(
+        new BufferedRecord<>("key", comparableName, row, recordContext.encodeSchema(SCHEMA), HoodieOperation.DELETE), "partition");
+    Properties props = new Properties();
+    String[] orderingFields = {"name"};
+    // Whether a delete keeps its row or becomes an empty record, each getter returns its own form of the value.
+    assertSame(comparableName, record.getOrderingValue(SCHEMA, props, orderingFields));
+    assertEquals("abc", record.getOrderingValueAsJava(SCHEMA, props, orderingFields));
+  }
+
+  private void assertDeleteOrderingValues(Comparable engineValue, Comparable javaValue) {
+    Properties props = new Properties();
+    String[] orderingFields = {"ts"};
+    HoodieRecord<InternalRow> record = readerContext.getRecordContext().constructHoodieRecord(
+        new BufferedRecord<>("key", engineValue, null, null, HoodieOperation.DELETE), "partition");
+    assertInstanceOf(HoodieEmptyRecord.class, record);
+    // Comparisons with other records, e.g., in precombine, need the engine value, delete blocks the Java one.
+    assertSame(engineValue, record.getOrderingValue(null, props, orderingFields));
+    assertEquals(javaValue, record.getOrderingValueAsJava(null, props, orderingFields));
+  }
+
+  private static HoodieUTF8String comparableString(String value) {
+    return new HoodieUTF8String(UTF8String.fromString(value)) {
+      @Override
+      public int compareTo(HoodieUTF8String other) {
+        return toString().compareTo(other.toString());
+      }
+    };
   }
 
   static class DummySparkReaderContext extends BaseSparkInternalRowReaderContext {
