@@ -27,12 +27,12 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadata;
-import org.apache.hudi.storage.StoragePath;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -194,10 +194,20 @@ public class MetadataTableSyncCheck implements HealthCheck {
               + "metadata table will not see files from those writes.",
           lag.syncedInstant.orElse("nothing"), lag.latestDataInstant.orElse("nothing"), lag.commitsBehind));
       result.finding("If a writer is running right now, this can be a write that is still being finalized: "
-          + "rerun once it completes. If the metadata table stays behind, look for failed or incomplete "
-          + "metadata-table delta commits ('metadata timeline show incomplete' in hudi-cli) and for "
-          + "metadata-table errors in the writer logs. Do not delete or rebuild the metadata table for "
-          + "lag alone; the next successful write brings it up to date.");
+          + "rerun once it completes. Look for failed or incomplete metadata-table delta commits "
+          + "('metadata timeline show incomplete' in hudi-cli) and for metadata-table errors in the "
+          + "writer logs.");
+      result.finding("Do not wait for the lag to clear on its own. A later write does not replay an "
+          + "instant the metadata table missed: the writer only re-initializes when the metadata "
+          + "timeline is empty (HoodieBackedTableMetadataWriter.isBootstrapNeeded), so the next write "
+          + "simply writes its own delta commit and moves the synced instant past the gap. This check "
+          + "will then read as healthy while the missed write's files stay absent from metadata-table "
+          + "listings.");
+      result.finding("Treat lag that does not correspond to an in-flight write as a possible "
+          + "inconsistency rather than a delay. Confirm with HoodieMetadataTableValidator "
+          + "(spark-submit, hudi-utilities) using --validate-latest-file-slices "
+          + "--validate-latest-base-files, which compares listings rather than instant times, and act "
+          + "on what it reports.");
     }
 
     for (PartitionDifference difference : listing.differences) {
@@ -232,13 +242,27 @@ public class MetadataTableSyncCheck implements HealthCheck {
   private SyncLag measureSyncLag(HoodieTableMetaClient metaClient, HoodieTableMetadata metadataBacked) {
     HoodieTimeline completedDataWrites = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     Option<String> latestDataInstant = completedDataWrites.lastInstant().map(HoodieInstant::requestedTime);
-    Option<String> syncedInstant = metadataBacked.getSyncedInstantTime();
+    // The FILES-partition bootstrap delta commit is stamped from SOLO_COMMIT_TIMESTAMP rather than
+    // a real clock time. A metadata table created with no write after it -- `metadata create` in
+    // hudi-cli, or a write that triggered initialization and then failed -- reports that
+    // placeholder as its synced instant. Every real instant sorts after it, so counting from it
+    // would call every completed commit behind, when the bootstrap listing already covers them.
+    // MetadataCompactionLagCheck.lagStartTime skips the same placeholder.
+    Option<String> reportedSyncedInstant = metadataBacked.getSyncedInstantTime();
+    Option<String> syncedInstant = reportedSyncedInstant.isPresent()
+        && !HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP.equals(reportedSyncedInstant.get())
+        && TimelineUtils.parseDateFromInstantTimeSafely(reportedSyncedInstant.get()).isPresent()
+        ? reportedSyncedInstant
+        : Option.empty();
 
     int commitsBehind;
     if (!latestDataInstant.isPresent()) {
       commitsBehind = 0;
     } else if (!syncedInstant.isPresent()) {
-      commitsBehind = completedDataWrites.countInstants();
+      // Either the metadata table reports no synced instant, or it reports the bootstrap
+      // placeholder. In both cases the initial listing covers what exists, so there is no measured
+      // lag to report; a real inconsistency would surface through the listing comparison instead.
+      commitsBehind = 0;
     } else {
       commitsBehind = completedDataWrites.findInstantsAfter(syncedInstant.get()).countInstants();
     }
@@ -372,30 +396,8 @@ public class MetadataTableSyncCheck implements HealthCheck {
       }
       List<String> named = files.stream().limit(MAX_DIFFERING_FILES_TO_NAME).collect(Collectors.toList());
       String more = files.size() > named.size() ? String.format(" (+%d more)", files.size() - named.size()) : "";
-      sb.append(String.format("%d %s %s%s. ", files.size(), label, named, more));
+      sb.append(String.format("%d %s %s%s. ", files.size(), label, String.join(", ", named), more));
     }
   }
 
-  /**
-   * Whether a metadata table exists for the data table. Shared by the metadata-table checks so
-   * they skip for the same reasons in the same words.
-   */
-  static final class MetadataTablePresence {
-
-    private MetadataTablePresence() {
-    }
-
-    /** Empty when the metadata table is present; otherwise the reason to skip, for the operator. */
-    static Option<String> reasonAbsent(HoodieTableMetaClient metaClient) throws IOException {
-      if (!metaClient.getTableConfig().isMetadataTableAvailable()) {
-        return Option.of("Table has no metadata table (its FILES partition has not been initialized)");
-      }
-      StoragePath metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath());
-      if (!metaClient.getStorage().exists(metadataTablePath)) {
-        return Option.of("Metadata table is registered in hoodie.properties but " + metadataTablePath
-            + " does not exist on storage; the next write will re-initialize it");
-      }
-      return Option.empty();
-    }
-  }
 }

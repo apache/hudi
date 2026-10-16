@@ -94,7 +94,7 @@ public class MetadataCompactionLagCheck implements HealthCheck {
     }
 
     HoodieTableMetaClient dataMetaClient = context.getMetaClient();
-    Option<String> noMetadataTable = MetadataTableSyncCheck.MetadataTablePresence.reasonAbsent(dataMetaClient);
+    Option<String> noMetadataTable = MetadataTablePresence.reasonAbsent(dataMetaClient);
     if (noMetadataTable.isPresent()) {
       return HealthCheckResult.skipped(NAME, noMetadataTable.get());
     }
@@ -126,7 +126,17 @@ public class MetadataCompactionLagCheck implements HealthCheck {
     int deltaCommitsSinceCompaction = deltaCommitsSince.countInstants();
     Option<Long> lagMinutes = latestDeltaCommit.flatMap(latest -> minutesBetween(lagStart, latest.requestedTime()));
     int pendingMetadataCompactions = metadataTimeline.filterPendingCompactionTimeline().countInstants();
-    Option<HoodieInstant> earliestPendingDataInstant = dataMetaClient.getActiveTimeline().filterInflightsAndRequested().firstInstant();
+    // Only a pending data-table instant that is already completed in the metadata table pins the
+    // compaction instant -- compactIfNecessary filters on exactly that
+    // (HoodieBackedTableMetadataWriter: filter(instant -> metadataCompletedTimeline.containsInstant(...))).
+    // Taking the earliest pending instant of any action would, on a MOR table with async table
+    // services, usually name a pending compaction or clean that is not blocking anything, and then
+    // suggest rolling it back.
+    HoodieTimeline metadataCompletedTimeline = metadataTimeline.filterCompletedInstants();
+    Option<HoodieInstant> earliestPendingDataInstant = dataMetaClient.getActiveTimeline()
+        .filterInflightsAndRequested()
+        .filter(instant -> metadataCompletedTimeline.containsInstant(instant.requestedTime()))
+        .firstInstant();
 
     result.config("observed.mdt.delta.commits.since.compaction", deltaCommitsSinceCompaction)
         .config("observed.last.mdt.compaction.instant", lastCompaction.map(HoodieInstant::requestedTime).orElse("none"))
@@ -166,7 +176,8 @@ public class MetadataCompactionLagCheck implements HealthCheck {
               + "lists it).",
           earliestPendingDataInstant.get().requestedTime(), earliestPendingDataInstant.get().getAction()));
     } else {
-      result.finding("No data-table instant is pending, so nothing is pinning the compaction instant. Confirm the "
+      result.finding("No pending data-table instant has been applied to the metadata table, so nothing is pinning "
+          + "the compaction instant. Confirm the "
           + "writer runs metadata-table table services after its commits, and look in the writer logs for "
           + "'Error in scheduling and executing compaction in metadata table'.");
     }

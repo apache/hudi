@@ -45,7 +45,6 @@ import java.util.function.Predicate;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -172,7 +171,7 @@ public class TestMetadataTableSyncCheckFunctional extends HoodieSparkClientTestB
   }
 
   @Test
-  public void dataTableWriteMissingFromMetadataTableIsUnhealthyWithoutRecommendingRebuild() throws Exception {
+  public void dataTableWriteMissingFromMetadataTableIsUnhealthyAndNotTreatedAsSelfHealing() throws Exception {
     // given a consistent table, then a completed data-table write the metadata table never saw
     writeTableWithMetadataTable();
     HoodieTableMetaClient dataMetaClient = HoodieTableMetaClient.builder()
@@ -183,15 +182,17 @@ public class TestMetadataTableSyncCheckFunctional extends HoodieSparkClientTestB
     // when the check runs
     HealthCheckResult result = runCheck();
 
-    // then the lag is reported, and the operator is steered away from rebuilding for lag alone
+    // then the lag is reported, and the operator is told not to wait it out: a later write does
+    // not replay the missed instant, it only moves the synced instant past the gap
     assertEquals(HealthStatus.UNHEALTHY, result.getStatus());
     assertEquals("1", result.getEffectiveConfigs().get("observed.data.table.writes.behind"));
     assertEquals(unmirroredInstant, result.getEffectiveConfigs().get("observed.data.table.latest.completed.instant"));
     assertEquals("0", result.getEffectiveConfigs().get("observed.partitions.inconsistent"));
-    assertTrue(result.getFindings().stream().anyMatch(f -> f.contains("Do not delete or rebuild")),
-        "expected a warning against rebuilding, got: " + result.getFindings());
-    assertFalse(result.getFindings().stream().anyMatch(f -> f.contains("HoodieMetadataTableValidator")),
-        "listing was consistent, so the full validator should not be recommended: " + result.getFindings());
+    assertTrue(result.getFindings().stream().anyMatch(f -> f.contains("Do not wait for the lag to clear")),
+        "expected the finding to say lag does not clear itself, got: " + result.getFindings());
+    assertTrue(result.getFindings().stream().anyMatch(f -> f.contains("HoodieMetadataTableValidator")),
+        "lag with no in-flight write is a possible inconsistency, so the validator is the next step: "
+            + result.getFindings());
   }
 
   @Test
