@@ -62,11 +62,13 @@ case class CreateIndexCommand(table: CatalogTable,
         throw new HoodieIndexException("Column stats index without expression on any column can be created using datasource configs. " +
           "Please refer https://hudi.apache.org/docs/metadata for more info")
       }
-      new HoodieSparkIndexClient(sparkSession).create(metaClient, indexName, indexType, columnsMap, options.asJava, table.properties.asJava)
+      new HoodieSparkIndexClient(sparkSession)
+        .create(metaClient, indexName, indexType, columnsMap, options.asJava, table.properties.asJava, ignoreIfExists)
     } else if (indexName.equals(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)) {
       ValidationUtils.checkArgument(CreateIndexCommand.matchesRecordKeys(columnsMap.keySet().asScala.toSet, metaClient.getTableConfig),
         "Input columns should match configured record key columns: " + metaClient.getTableConfig.getRecordKeyFieldProp)
-      new HoodieSparkIndexClient(sparkSession).create(metaClient, indexName, HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX, columnsMap, options.asJava, table.properties.asJava)
+      new HoodieSparkIndexClient(sparkSession)
+        .create(metaClient, indexName, HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX, columnsMap, options.asJava, table.properties.asJava, ignoreIfExists)
     } else if (StringUtils.isNullOrEmpty(indexType)) {
       val columnNames = columnsMap.keySet().asScala.toSet
       val derivedIndexType: String = if (CreateIndexCommand.matchesRecordKeys(columnNames, metaClient.getTableConfig)) {
@@ -74,7 +76,8 @@ case class CreateIndexCommand(table: CatalogTable,
       } else {
         HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX
       }
-      new HoodieSparkIndexClient(sparkSession).create(metaClient, indexName, derivedIndexType, columnsMap, options.asJava, table.properties.asJava)
+      new HoodieSparkIndexClient(sparkSession)
+        .create(metaClient, indexName, derivedIndexType, columnsMap, options.asJava, table.properties.asJava, ignoreIfExists)
     } else {
       throw new HoodieIndexException(String.format("%s is not supported", indexType))
     }
