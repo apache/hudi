@@ -22,6 +22,8 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 
+import org.apache.spark.api.java.JavaSparkContext;
+
 /**
  * Everything a {@link HealthCheck} is given: the table, the writer properties it is judged against,
  * and whether unset properties may fall back to Hudi defaults.
@@ -44,15 +46,39 @@ public class HealthCheckContext {
   private final HoodieTableMetaClient metaClient;
   private final TypedProperties props;
   private final boolean applyAllDefaults;
+  private final Option<JavaSparkContext> jsc;
 
   public HealthCheckContext(HoodieTableMetaClient metaClient, TypedProperties props, boolean applyAllDefaults) {
+    this(metaClient, props, applyAllDefaults, Option.empty());
+  }
+
+  public HealthCheckContext(HoodieTableMetaClient metaClient, TypedProperties props, boolean applyAllDefaults,
+                            Option<JavaSparkContext> jsc) {
     this.metaClient = metaClient;
     this.props = props;
     this.applyAllDefaults = applyAllDefaults;
+    this.jsc = jsc;
   }
 
   public HoodieTableMetaClient getMetaClient() {
     return metaClient;
+  }
+
+  /**
+   * The Spark context, when the driver was given one.
+   *
+   * <p>Checks that only read the timeline do not need it. Two kinds do: one delegating to a
+   * Spark-based tool, as the metadata-table sync check does with
+   * {@code HoodieMetadataTableValidator}, and one whose work does not fit on the driver -- walking
+   * file slices per file group for compaction, or file versions for cleaning, is a driver-side loop
+   * today and will not stay one on a table with hundreds of thousands of file groups.
+   *
+   * <p>A check that needs it must handle its absence by reporting {@link HealthStatus#SKIPPED} and
+   * saying what it needed, rather than failing the run: the checker is meant to stay usable
+   * without a cluster for the checks that do not require one.
+   */
+  public Option<JavaSparkContext> getJsc() {
+    return jsc;
   }
 
   public TypedProperties getProps() {

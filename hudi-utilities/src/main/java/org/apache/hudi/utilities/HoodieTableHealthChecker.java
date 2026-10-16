@@ -20,6 +20,7 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.health.ArchivalCadenceCheck;
@@ -39,6 +40,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -116,9 +118,20 @@ public class HoodieTableHealthChecker implements Serializable {
   private final Config cfg;
   private final TypedProperties props;
   private final HoodieTableMetaClient metaClient;
+  private final Option<JavaSparkContext> jsc;
 
   public HoodieTableHealthChecker(Configuration hadoopConf, Config cfg) {
+    this(hadoopConf, cfg, Option.empty());
+  }
+
+  /**
+   * @param jsc a Spark context for checks that need one. Checks that only read the timeline do not,
+   *            and the tool stays usable without one; a check that needs it and is not given it
+   *            reports SKIPPED rather than failing the run.
+   */
+  public HoodieTableHealthChecker(Configuration hadoopConf, Config cfg, Option<JavaSparkContext> jsc) {
     this.cfg = cfg;
+    this.jsc = jsc;
     this.props = UtilHelpers.buildProperties(hadoopConf, cfg.propsFilePath, cfg.configs);
     this.metaClient = HoodieTableMetaClient.builder()
         .setConf(HadoopFSUtils.getStorageConfWithCopy(hadoopConf))
@@ -143,7 +156,7 @@ public class HoodieTableHealthChecker implements Serializable {
    */
   public int run() {
     List<HealthCheck> selected = selectChecks(cfg.checks);
-    HealthCheckContext context = new HealthCheckContext(metaClient, props, cfg.applyAllDefaults);
+    HealthCheckContext context = new HealthCheckContext(metaClient, props, cfg.applyAllDefaults, jsc);
 
     List<HealthCheckResult> results = new ArrayList<>();
     List<String> erroredChecks = new ArrayList<>();
