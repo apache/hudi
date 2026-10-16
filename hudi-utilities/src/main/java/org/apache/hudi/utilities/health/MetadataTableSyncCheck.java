@@ -33,8 +33,10 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.storage.StoragePath;
 
 import java.io.IOException;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -172,11 +174,12 @@ public class MetadataTableSyncCheck implements HealthCheck {
       ListingComparison listing = compareSampledPartitions(metaClient, metadataBacked, fileSystemBacked);
       listing.report(result);
 
-      return verdict(result, lag, listing);
+      return verdict(result, metaClient, lag, listing);
     }
   }
 
-  private HealthCheckResult verdict(HealthCheckResult.Builder result, SyncLag lag, ListingComparison listing) {
+  private HealthCheckResult verdict(HealthCheckResult.Builder result, HoodieTableMetaClient metaClient,
+                                    SyncLag lag, ListingComparison listing) {
     boolean behind = lag.commitsBehind > 0;
     boolean inconsistent = !listing.differences.isEmpty();
 
@@ -207,7 +210,9 @@ public class MetadataTableSyncCheck implements HealthCheck {
           + "inconsistency rather than a delay. Confirm with HoodieMetadataTableValidator "
           + "(spark-submit, hudi-utilities) using --validate-latest-file-slices "
           + "--validate-latest-base-files, which compares listings rather than instant times, and act "
-          + "on what it reports.");
+          + "on what it reports. Pass --base-path with its scheme (" + schemeQualifiedBasePath(metaClient)
+          + "): the validator compares full path strings, and a bare path makes every file look "
+          + "different from the file-system listing, reporting drift on a healthy table.");
     }
 
     for (PartitionDifference difference : listing.differences) {
@@ -216,7 +221,10 @@ public class MetadataTableSyncCheck implements HealthCheck {
     if (inconsistent) {
       result.finding("The metadata table's listing has drifted from storage. Confirm the extent with the full "
           + "comparison before acting: run HoodieMetadataTableValidator (spark-submit, hudi-utilities) with "
-          + "--validate-latest-file-slices --validate-latest-base-files.");
+          + "--base-path " + schemeQualifiedBasePath(metaClient) + " --validate-latest-file-slices "
+          + "--validate-latest-base-files. The scheme matters: the validator compares full path strings, "
+          + "and a bare path makes every file look different from the file-system listing, reporting "
+          + "drift even on a healthy table.");
       result.finding("If it confirms the drift, rebuild the metadata table with `metadata delete` then "
           + "`metadata create` in hudi-cli, with writers stopped. Do not rebuild by disabling the "
           + "metadata table for one write: that only deletes it when "
@@ -237,6 +245,25 @@ public class MetadataTableSyncCheck implements HealthCheck {
         : String.format("Metadata table is %d completed data-table write(s) behind (synced to %s, latest write %s)",
             lag.commitsBehind, lag.syncedInstant.orElse("nothing"), lag.latestDataInstant.orElse("nothing"));
     return result.status(HealthStatus.UNHEALTHY).summary(summary).build();
+  }
+
+  /**
+   * The table's base path with a scheme, for the validator command this check recommends.
+   *
+   * <p>{@code HoodieMetadataTableValidator} compares the metadata-table listing against a
+   * file-system listing by full path string. The metadata side reconstructs paths from the base
+   * path it was given ({@code HoodieMetadataPayload.getFileList}), while the file-system side is
+   * returned scheme-qualified by the filesystem itself. A bare {@code --base-path} therefore makes
+   * every file compare unequal and the validator reports drift on a table that is fine. The
+   * validator's own tests pass {@code "file:" + basePath} for this reason.
+   */
+  private static String schemeQualifiedBasePath(HoodieTableMetaClient metaClient) {
+    StoragePath basePath = metaClient.getBasePath();
+    URI uri = basePath.toUri();
+    if (uri.getScheme() != null) {
+      return basePath.toString();
+    }
+    return metaClient.getStorage().getScheme() + ":" + basePath;
   }
 
   private SyncLag measureSyncLag(HoodieTableMetaClient metaClient, HoodieTableMetadata metadataBacked) {
