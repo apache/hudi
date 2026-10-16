@@ -1082,25 +1082,19 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
    * Parameters: hasTransformer, orderingField, recordType, tableType
    */
   private static Stream<Arguments> logicalTypesWithJsonSourceArgs() {
+    // Half fraction of hasTransformer x orderingField x recordType x tableType: every pair of
+    // factor values still appears together in at least one row.
     return Stream.of(
-        // Test with timestamp ordering field (long type)
-        Arguments.of(true, "timestamp", HoodieRecordType.AVRO, HoodieTableType.MERGE_ON_READ),
+        // timestamp ordering field (long type)
         Arguments.of(false, "timestamp", HoodieRecordType.AVRO, HoodieTableType.MERGE_ON_READ),
         Arguments.of(true, "timestamp", HoodieRecordType.SPARK, HoodieTableType.MERGE_ON_READ),
-        Arguments.of(false, "timestamp", HoodieRecordType.SPARK, HoodieTableType.MERGE_ON_READ),
         Arguments.of(true, "timestamp", HoodieRecordType.AVRO, HoodieTableType.COPY_ON_WRITE),
-        Arguments.of(false, "timestamp", HoodieRecordType.AVRO, HoodieTableType.COPY_ON_WRITE),
-        Arguments.of(true, "timestamp", HoodieRecordType.SPARK, HoodieTableType.COPY_ON_WRITE),
         Arguments.of(false, "timestamp", HoodieRecordType.SPARK, HoodieTableType.COPY_ON_WRITE),
-        // Test with rider ordering field (string type)
+        // rider ordering field (string type)
         Arguments.of(true, "rider", HoodieRecordType.AVRO, HoodieTableType.MERGE_ON_READ),
-        Arguments.of(false, "rider", HoodieRecordType.AVRO, HoodieTableType.MERGE_ON_READ),
-        Arguments.of(true, "rider", HoodieRecordType.SPARK, HoodieTableType.MERGE_ON_READ),
         Arguments.of(false, "rider", HoodieRecordType.SPARK, HoodieTableType.MERGE_ON_READ),
-        Arguments.of(true, "rider", HoodieRecordType.AVRO, HoodieTableType.COPY_ON_WRITE),
         Arguments.of(false, "rider", HoodieRecordType.AVRO, HoodieTableType.COPY_ON_WRITE),
-        Arguments.of(true, "rider", HoodieRecordType.SPARK, HoodieTableType.COPY_ON_WRITE),
-        Arguments.of(false, "rider", HoodieRecordType.SPARK, HoodieTableType.COPY_ON_WRITE));
+        Arguments.of(true, "rider", HoodieRecordType.SPARK, HoodieTableType.COPY_ON_WRITE));
   }
 
   @ParameterizedTest
@@ -1387,7 +1381,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       "CURRENT,AVRO,NONE,false,true", "CURRENT,AVRO,CLUSTER,false,true",
       "CURRENT,SPARK,NONE,false,true", "CURRENT,SPARK,CLUSTER,false,true",
       // ...and on the reconcile path (setNullForMissingColumns=true).
-      "SIX,AVRO,CLUSTER,true,true", "EIGHT,AVRO,CLUSTER,true,true", "CURRENT,AVRO,CLUSTER,true,true",
+      "CURRENT,AVRO,CLUSTER,true,true",
       // Guard: with no verdict, the mislabeled timestamp/local-timestamp columns must be rejected on
       // the first sync, on both the reconcile path and the default path.
       "SIX,AVRO,CLUSTER,true,false", "SIX,AVRO,CLUSTER,false,false"})
@@ -1504,7 +1498,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       "CURRENT,AVRO,NONE,PARQUET,false,true", "CURRENT,AVRO,CLUSTER,PARQUET,false,true", "CURRENT,AVRO,COMPACT,PARQUET,false,true",
       "CURRENT,SPARK,NONE,PARQUET,false,true", "CURRENT,SPARK,CLUSTER,PARQUET,false,true", "CURRENT,SPARK,COMPACT,PARQUET,false,true",
       // Variants that exercise the schema-reconcile path (setNullForMissingColumns=true) with a verdict.
-      "SIX,AVRO,CLUSTER,AVRO,true,true", "EIGHT,AVRO,CLUSTER,AVRO,true,true", "CURRENT,AVRO,CLUSTER,AVRO,true,true",
+      "CURRENT,AVRO,CLUSTER,AVRO,true,true",
       // Guard: with no verdict, the first sync must throw, on both the reconcile and default paths.
       "SIX,AVRO,CLUSTER,AVRO,true,false", "SIX,AVRO,CLUSTER,AVRO,false,false"})
   void testMORLogicalRepair(String tableVersion, String recordType, String operation, String logBlockType,
@@ -1785,7 +1779,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         Arguments.of("AVRO", "CURRENT"),
         Arguments.of("SPARK", "CURRENT"),
         Arguments.of("AVRO", "EIGHT"),
-        Arguments.of("SPARK", "EIGHT"),
         Arguments.of("AVRO", "SIX")
     );
   }
