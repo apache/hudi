@@ -175,6 +175,10 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
       // into HoodieUTF8String.
       return UTF8String.fromString((String) value);
     }
+    if (value instanceof HoodieUTF8String) {
+      // An ordering value wraps the UTF8String to make it comparable; an engine record stores the raw UTF8String.
+      return ((HoodieUTF8String) value).getUtf8String();
+    }
     return value;
   }
 

@@ -213,7 +213,8 @@ public abstract class RecordContext<T> implements Serializable {
   /**
    * Converts the value to the engine-native type representation that can be stored directly
    * as a field value inside an engine record, e.g., {@code UTF8String} for a {@link String}
-   * value in Spark.
+   * value in Spark. An ordering value in its comparable form, see {@link #ensureComparability},
+   * is converted back to the stored form, e.g., {@code HoodieUTF8String} to {@code UTF8String} in Spark.
    * <p>
    * NOTE: The returned value is NOT guaranteed to support comparison on every engine
    * (e.g., Spark's {@code UTF8String} no longer supports {@code compareTo}, see SPARK-46832).
