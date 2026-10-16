@@ -1,0 +1,253 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.hudi.utilities.health;
+
+import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
+import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.testutils.HoodieSparkClientTestBase;
+
+import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+import java.util.function.Predicate;
+
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * Tests {@link MetadataTableSyncCheck} against a table with a real metadata table, which needs a
+ * Spark write client to produce. The skip paths that need no metadata table live in the lighter
+ * {@link TestMetadataTableSyncCheck}.
+ */
+public class TestMetadataTableSyncCheckFunctional extends HoodieSparkClientTestBase {
+
+  private final MetadataTableSyncCheck check = new MetadataTableSyncCheck();
+
+  private TypedProperties propsWithMetadataEnabled() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(HoodieMetadataConfig.ENABLE.key(), "true");
+    return props;
+  }
+
+  private HealthCheckResult runCheck() throws Exception {
+    return runCheck(propsWithMetadataEnabled());
+  }
+
+  private HealthCheckResult runCheck(TypedProperties props) throws Exception {
+    HoodieTableMetaClient freshMetaClient = HoodieTableMetaClient.builder()
+        .setConf(storageConf.newInstance())
+        .setBasePath(basePath)
+        .setLoadActiveTimelineOnLoad(true)
+        .build();
+    return check.check(new HealthCheckContext(freshMetaClient, props, false));
+  }
+
+  private HoodieWriteConfig writeConfigWithMetadataTable() {
+    return HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withParallelism(2, 2)
+        .withBulkInsertParallelism(2)
+        .forTable("health_check_table")
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.SIMPLE).build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withInlineCompaction(false).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
+        .build();
+  }
+
+  /** A Merge-on-Read table with a metadata table, holding both base files and log files. */
+  private void writeTableWithMetadataTable() throws Exception {
+    initMetaClient(HoodieTableType.MERGE_ON_READ);
+    try (SparkRDDWriteClient client = getHoodieWriteClient(writeConfigWithMetadataTable())) {
+      String insertInstant = WriteClientTestUtils.createNewInstantTime();
+      List<HoodieRecord> inserts = dataGen.generateInserts(insertInstant, 30);
+      WriteClientTestUtils.startCommitWithTime(client, insertInstant);
+      JavaRDD<WriteStatus> insertStatuses = client.bulkInsert(jsc.parallelize(inserts, 1), insertInstant);
+      client.commit(insertInstant, insertStatuses);
+
+      String updateInstant = WriteClientTestUtils.createNewInstantTime();
+      List<HoodieRecord> updates = dataGen.generateUpdates(updateInstant, 15);
+      WriteClientTestUtils.startCommitWithTime(client, updateInstant);
+      JavaRDD<WriteStatus> updateStatuses = client.upsert(jsc.parallelize(updates, 1), updateInstant);
+      client.commit(updateInstant, updateStatuses);
+    }
+  }
+
+  /** Removes one file of the given kind directly on storage, bypassing the timeline and the metadata table. */
+  private StoragePath deleteOneFileFromStorage(String partition, Predicate<StoragePath> kind) throws Exception {
+    List<StoragePathInfo> entries = storage.listDirectEntries(new StoragePath(basePath, partition));
+    StoragePathInfo victim = entries.stream()
+        .filter(e -> kind.test(e.getPath()))
+        .findFirst()
+        .orElseThrow(() -> new IllegalStateException("no matching file in " + partition));
+    assertTrue(storage.deleteFile(victim.getPath()));
+    return victim.getPath();
+  }
+
+  private void assertInconsistencyNames(HealthCheckResult result, String partition, StoragePath file, String fileKind) {
+    assertEquals(HealthStatus.UNHEALTHY, result.getStatus());
+    assertEquals("1", result.getEffectiveConfigs().get("observed.partitions.inconsistent"));
+    assertTrue(result.getFindings().stream().anyMatch(
+            f -> f.contains("'" + partition + "'") && f.contains(file.getName()) && f.contains(fileKind + " files listed by the metadata table")),
+        "expected the partition and " + fileKind + " file to be named, got: " + result.getFindings());
+    assertTrue(result.getFindings().stream().anyMatch(f -> f.contains("HoodieMetadataTableValidator")),
+        "expected a pointer to the full validator, got: " + result.getFindings());
+  }
+
+  @Test
+  public void caughtUpTableWithConsistentListingIsHealthy() throws Exception {
+    // given a table whose every write was mirrored into the metadata table
+    writeTableWithMetadataTable();
+
+    // when the check runs
+    HealthCheckResult result = runCheck();
+
+    // then the metadata table is synced and agrees with storage in every sampled partition
+    assertEquals(HealthStatus.HEALTHY, result.getStatus(), result.getSummary() + " " + result.getFindings());
+    assertEquals("0", result.getEffectiveConfigs().get("observed.data.table.writes.behind"));
+    assertEquals("0", result.getEffectiveConfigs().get("observed.partitions.inconsistent"));
+    assertEquals(result.getEffectiveConfigs().get("observed.data.table.latest.completed.instant"),
+        result.getEffectiveConfigs().get("observed.mdt.synced.instant"));
+    assertTrue(Integer.parseInt(result.getEffectiveConfigs().get("observed.partitions.sampled")) > 0);
+  }
+
+  @Test
+  public void baseFileMissingFromStorageIsUnhealthyNamingThePartitionAndFile() throws Exception {
+    // given a consistent table, with one base file then removed directly on storage
+    writeTableWithMetadataTable();
+    StoragePath deleted = deleteOneFileFromStorage(DEFAULT_FIRST_PARTITION_PATH, FSUtils::isBaseFile);
+
+    // when the check runs
+    HealthCheckResult result = runCheck();
+
+    // then the metadata table and storage disagree, and the finding says where and on what
+    assertInconsistencyNames(result, DEFAULT_FIRST_PARTITION_PATH, deleted, "base");
+  }
+
+  @Test
+  public void logFileMissingFromStorageIsUnhealthyNamingThePartitionAndFile() throws Exception {
+    // given a consistent table, with one log file then removed directly on storage
+    writeTableWithMetadataTable();
+    StoragePath deleted = deleteOneFileFromStorage(DEFAULT_FIRST_PARTITION_PATH, FSUtils::isLogFile);
+
+    // when the check runs
+    HealthCheckResult result = runCheck();
+
+    // then log files are compared too, not only base files
+    assertInconsistencyNames(result, DEFAULT_FIRST_PARTITION_PATH, deleted, "log");
+  }
+
+  @Test
+  public void dataTableWriteMissingFromMetadataTableIsUnhealthyAndNotTreatedAsSelfHealing() throws Exception {
+    // given a consistent table, then a completed data-table write the metadata table never saw
+    writeTableWithMetadataTable();
+    HoodieTableMetaClient dataMetaClient = HoodieTableMetaClient.builder()
+        .setConf(storageConf.newInstance()).setBasePath(basePath).build();
+    String unmirroredInstant = dataMetaClient.createNewInstantTime(false);
+    HoodieTestTable.of(dataMetaClient).addCommit(unmirroredInstant);
+
+    // when the check runs
+    HealthCheckResult result = runCheck();
+
+    // then the lag is reported, and the operator is told not to wait it out: a later write does
+    // not replay the missed instant, it only moves the synced instant past the gap
+    assertEquals(HealthStatus.UNHEALTHY, result.getStatus());
+    assertEquals("1", result.getEffectiveConfigs().get("observed.data.table.writes.behind"));
+    assertEquals(unmirroredInstant, result.getEffectiveConfigs().get("observed.data.table.latest.completed.instant"));
+    assertEquals("0", result.getEffectiveConfigs().get("observed.partitions.inconsistent"));
+    assertTrue(result.getFindings().stream().anyMatch(f -> f.contains("Do not wait for the lag to clear")),
+        "expected the finding to say lag does not clear itself, got: " + result.getFindings());
+    assertTrue(result.getFindings().stream().anyMatch(f -> f.contains("HoodieMetadataTableValidator")),
+        "lag with no in-flight write is a possible inconsistency, so the validator is the next step: "
+            + result.getFindings());
+  }
+
+  @Test
+  public void metadataTableLeftOnStorageWithWriterDisabledIsUnhealthy() throws Exception {
+    // given a real metadata table on storage, and a writer configured with it off --
+    // what happens whenever hoodie.metadata.auto.delete.partitions is false
+    writeTableWithMetadataTable();
+    TypedProperties disabled = new TypedProperties();
+    disabled.setProperty(HoodieMetadataConfig.ENABLE.key(), "false");
+
+    // when the check runs
+    HealthCheckResult result = runCheck(disabled);
+
+    // then it does not skip: nothing maintains the table while readers still use it
+    assertEquals(HealthStatus.UNHEALTHY, result.getStatus(),
+        "a metadata table nothing maintains is the risky case, not an uninteresting one");
+    assertTrue(result.getFindings().stream().anyMatch(f -> f.contains("Readers are not bound")),
+        "expected the reader consequence to be named, got: " + result.getFindings());
+  }
+
+  @Test
+  public void rebuildRemedyDoesNotRecommendTheDisableReEnableDance() throws Exception {
+    // given a metadata table whose listing has drifted from storage
+    writeTableWithMetadataTable();
+    deleteOneFileFromStorage("2015/03/16", path -> path.getName().endsWith(".parquet"));
+
+    // when the check reports the inconsistency
+    HealthCheckResult result = runCheck();
+
+    // then the remedy is explicit about what it does, and warns off the config side effect
+    assertEquals(HealthStatus.UNHEALTHY, result.getStatus());
+    assertTrue(result.getFindings().stream().anyMatch(f -> f.contains("metadata delete")
+            && f.contains("metadata create")),
+        "expected the hudi-cli remedy, got: " + result.getFindings());
+    assertTrue(result.getFindings().stream().anyMatch(f -> f.contains("drops every index")),
+        "expected the dropped indexes to be named, got: " + result.getFindings());
+  }
+
+  @Test
+  public void validatorCommandCarriesTheSchemeQualifiedBasePath() throws Exception {
+    // given a drifted listing, so the finding that recommends the validator is emitted
+    writeTableWithMetadataTable();
+    deleteOneFileFromStorage("2015/03/16", path -> path.getName().endsWith(".parquet"));
+
+    // when the check runs
+    HealthCheckResult result = runCheck();
+
+    // then the recommended command names a scheme-qualified path. HoodieMetadataTableValidator
+    // compares the two listings by full path string: the metadata side echoes the path it was
+    // given, the file-system side is always returned scheme-qualified, so a bare --base-path makes
+    // every file compare unequal and the validator reports drift on a healthy table.
+    assertEquals(HealthStatus.UNHEALTHY, result.getStatus());
+    assertTrue(result.getFindings().stream().anyMatch(f -> f.contains("--base-path file:")),
+        "expected a scheme-qualified --base-path in the validator command, got: " + result.getFindings());
+    assertTrue(result.getFindings().stream().anyMatch(f -> f.contains("The scheme matters")),
+        "expected the finding to say why the scheme matters, got: " + result.getFindings());
+  }
+}
