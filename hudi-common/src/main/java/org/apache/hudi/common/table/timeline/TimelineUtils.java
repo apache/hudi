@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
-import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -67,7 +66,6 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_AC
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LOG_COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.SAVEPOINT_ACTION;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
@@ -362,26 +360,15 @@ public class TimelineUtils {
    * for the archival in metadata table.
    * <p>
    * the qualified earliest instant is chosen as the earlier one between the earliest
-   * commit (COMMIT, DELTA_COMMIT, and REPLACE_COMMIT only, considering non-savepoint
-   * commit only if enabling archive beyond savepoint) and the earliest inflight
+   * commit (COMMIT, DELTA_COMMIT, and REPLACE_COMMIT only) and the earliest inflight
    * instant (all actions).
    *
-   * @param dataTableActiveTimeline      the active timeline of the data table.
-   * @param shouldArchiveBeyondSavepoint whether to archive beyond savepoint.
+   * @param dataTableActiveTimeline the active timeline of the data table.
    * @return the instant meeting the requirement.
    */
-  public static Option<HoodieInstant> getEarliestInstantForMetadataArchival(
-      HoodieActiveTimeline dataTableActiveTimeline, boolean shouldArchiveBeyondSavepoint) {
+  public static Option<HoodieInstant> getEarliestInstantForMetadataArchival(HoodieActiveTimeline dataTableActiveTimeline) {
     // This is for commits only, not including CLEAN, ROLLBACK, etc.
-    // When archive beyond savepoint is enabled, there are chances that there could be holes
-    // in the timeline due to archival and savepoint interplay.  So, the first non-savepoint
-    // commit in the data timeline is considered as beginning of the active timeline.
-    Option<HoodieInstant> earliestCommit = shouldArchiveBeyondSavepoint
-        ? dataTableActiveTimeline.getTimelineOfActions(
-            CollectionUtils.createSet(
-                COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION, CLUSTERING_ACTION, SAVEPOINT_ACTION))
-        .getFirstNonSavepointCommit()
-        : dataTableActiveTimeline.getCommitsTimeline().firstInstant();
+    Option<HoodieInstant> earliestCommit = dataTableActiveTimeline.getCommitsTimeline().firstInstant();
     // This is for all instants which are in-flight
     Option<HoodieInstant> earliestInflight =
         dataTableActiveTimeline.filterInflightsAndRequested().firstInstant();

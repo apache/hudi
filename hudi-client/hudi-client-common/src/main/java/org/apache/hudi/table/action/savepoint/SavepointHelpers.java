@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.action.savepoint;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
@@ -61,6 +62,20 @@ public class SavepointHelpers {
     ValidationUtils.checkArgument(lastInstant.get().requestedTime().equals(savepointTime),
         () -> savepointTime + " is not the last commit after restoring to savepoint, last commit was "
             + lastInstant.get().requestedTime());
+  }
+
+  /**
+   * Restore rolls back only the commits on the active timeline. A table that archived commits beyond a savepoint
+   * (no longer supported, see {@code HoodieArchivalConfig#ARCHIVE_BEYOND_SAVEPOINT}) can have archived commits after
+   * it, whose files a restore would leave behind, so restoring to such a savepoint is rejected.
+   */
+  public static void validateNoArchivedCommitsAfterSavepoint(HoodieTableMetaClient metaClient, String savepointTime) {
+    Option<HoodieInstant> archivedCommitAfterSavepoint = metaClient.getArchivedTimeline(savepointTime, false)
+        .getCommitsTimeline().findInstantsAfter(savepointTime).firstInstant();
+    if (archivedCommitAfterSavepoint.isPresent()) {
+      throw new HoodieRollbackException("Cannot restore to savepoint " + savepointTime + ": commit "
+          + archivedCommitAfterSavepoint.get().requestedTime() + " after it has been archived");
+    }
   }
 
   public static void validateSavepointPresence(HoodieTable table, String savepointTime) {
