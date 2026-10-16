@@ -284,10 +284,12 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
             .initTable(this.metaClient.getStorageConf(), oldPath)
             .getTableConfig();
         assertEquals(mode, oldTable.getMetaFieldsMode());
-        assertEquals(Boolean.toString(mode.toLegacyPopulateMetaFields()),
+        assertEquals(Boolean.toString(mode.toPersistedPopulateMetaFields()),
             oldTable.getProps().getProperty(HoodieTableConfig.POPULATE_META_FIELDS.key()),
             "a table at version " + oldVersion.versionCode()
-                + " must persist the derived boolean for unpatched readers, " + mode);
+                + " must persist the wide boolean for unpatched readers, " + mode);
+        assertEquals(mode.toLegacyPopulateMetaFields(), oldTable.populateMetaFields(),
+            "the accessor stays narrow, resolving through the mode, " + mode);
       }
     }
   }
