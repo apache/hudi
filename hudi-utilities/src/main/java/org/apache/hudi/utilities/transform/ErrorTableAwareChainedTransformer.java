@@ -64,20 +64,30 @@ public class ErrorTableAwareChainedTransformer extends ChainedTransformer {
       Transformer transformer = transformerInfo.getTransformer();
       Dataset<Row> input = dataset;
       dataset = transformer.apply(jsc, sparkSession, input, transformerInfo.getProperties(properties, transformers));
-      if (ErrorTableUtils.isErrorTableCorruptRecordColumnPresent(dataset)) {
-        corruptRecordMayHaveValues = true;
-        continue;
+      boolean keptCorruptRecordColumn = ErrorTableUtils.isErrorTableCorruptRecordColumnPresent(dataset);
+      if (!keptCorruptRecordColumn) {
+        if (corruptRecordMayHaveValues) {
+          validateNoErrorRecordsDropped(input, transformer);
+        }
+        // The column held no values, so re-adding it as null loses nothing.
+        dataset = ErrorTableUtils.addNullValueErrorTableCorruptRecordColumn(dataset);
       }
-      if (corruptRecordMayHaveValues && !input.filter(new Column(ERROR_TABLE_CURRUPT_RECORD_COL_NAME).isNotNull()).isEmpty()) {
-        throw new HoodieValidationException(String.format("Transformer %s dropped column %s, which holds error records "
-            + "marked by the source or an earlier transformer. Keep the column in its output, or apply it before the "
-            + "transformers that mark error records.", transformer.getClass().getName(), ERROR_TABLE_CURRUPT_RECORD_COL_NAME));
-      }
-      // The column held no values, so re-adding it as null loses nothing.
-      dataset = ErrorTableUtils.addNullValueErrorTableCorruptRecordColumn(dataset);
-      corruptRecordMayHaveValues = false;
+      corruptRecordMayHaveValues = keptCorruptRecordColumn;
     }
     return dataset;
+  }
+
+  /**
+   * Fails if {@code transformer} dropped a {@code _corrupt_record} column that held values in its input. Those error
+   * records cannot be realigned with the transformer output, and re-adding the column as null would write them to
+   * the target table.
+   */
+  private static void validateNoErrorRecordsDropped(Dataset<Row> input, Transformer transformer) {
+    if (!input.filter(new Column(ERROR_TABLE_CURRUPT_RECORD_COL_NAME).isNotNull()).isEmpty()) {
+      throw new HoodieValidationException(String.format("Transformer %s dropped column %s, which holds error records "
+          + "marked by the source or an earlier transformer. Keep the column in its output, or apply it before the "
+          + "transformers that mark error records.", transformer.getClass().getName(), ERROR_TABLE_CURRUPT_RECORD_COL_NAME));
+    }
   }
 
   @Override
