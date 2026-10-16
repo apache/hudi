@@ -23,15 +23,23 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.MetadataValues;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.AppendResult;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
@@ -47,6 +55,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.MockedConstruction;
 
@@ -55,6 +64,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -340,7 +350,71 @@ public class TestHoodieNativeLogAppendHandle {
       assertFalse(handle.isClosed());
       assertEquals(1, handle.writeStatus.getTotalErrorRecords());
       verify(writers.constructed().get(0), never()).close();
-      handle.close();
+      // No block was appended; the failure must still reach the caller.
+      List<WriteStatus> statuses = handle.close();
+      assertEquals(1, statuses.stream().mapToLong(WriteStatus::getTotalErrorRecords).sum());
+      // Table services fail on the errors counted in the stats.
+      assertEquals(1, statuses.stream().mapToLong(status -> status.getStat().getTotalWriteErrors()).sum());
+      // A caller that commits despite the errors must not commit a stat without a file.
+      HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(
+          statuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()), Collections.emptyMap(),
+          Option.empty(), WriteOperationType.UPSERT, "", HoodieTimeline.DELTA_COMMIT_ACTION);
+      assertTrue(commitMetadata.getPartitionToWriteStats().isEmpty());
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"insert", "update", "delete", "deleteWithoutRow", "payloadDeleteWithoutRow", "deleteWithRow",
+      "logCompaction"})
+  void testRecordRoutingWhenOperationFieldAllowed(String kind) throws Exception {
+    HoodieWriteConfig config = config();
+    config.setValue(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD, "true");
+    try (MockedConstruction<HoodieNativeLogFormatWriter> writers = mockConstruction(
+        HoodieNativeLogFormatWriter.class, (writer, context) -> {
+          when(writer.canWriteDataFile()).thenReturn(true);
+          when(writer.canWriteDeleteFile()).thenReturn(true);
+        })) {
+      TestableNativeLogAppendHandle handle = new TestableNativeLogAppendHandle(config, table(config));
+      handle.createWriter();
+      handle.doInit = false;
+      handle.isLogCompaction = kind.equals("logCompaction");
+      HoodieRecord record = mock(HoodieRecord.class);
+      when(record.getPartitionPath()).thenReturn("partition");
+      when(record.getMetadata()).thenReturn(Option.empty());
+      when(record.prependMetaFields(any(), any(), any(), any())).thenReturn(record);
+      when(record.isDelete(any(), any())).thenReturn(kind.startsWith("delete") || kind.startsWith("payloadDelete"));
+      if (kind.equals("update") || kind.equals("logCompaction")) {
+        when(record.getCurrentLocation()).thenReturn(new HoodieRecordLocation("001", "file-1"));
+      }
+      if (kind.endsWith("Row")) {
+        // e.g. a delete merged during deduplication carries the operation, with or without its row
+        when(record.getOperation()).thenReturn(HoodieOperation.DELETE);
+      }
+      if (kind.equals("payloadDeleteWithoutRow")) {
+        HoodieRecordPayload payload = mock(HoodieRecordPayload.class);
+        when(payload.getInsertValue(any(), any())).thenReturn(Option.empty());
+        when(record.getData()).thenReturn(payload);
+      } else if (kind.equals("deleteWithRow")) {
+        when(record.getData()).thenReturn(new Object());
+      }
+
+      assertTrue(handle.writeRecord(record));
+      assertEquals(0, handle.writeStatus.getTotalErrorRecords());
+      HoodieNativeLogFormatWriter writer = writers.constructed().get(0);
+      if (kind.equals("delete") || kind.endsWith("WithoutRow")) {
+        // A delete without an operation or without a row cannot be written as a data record, so it goes to the
+        // delete file.
+        verify(writer).appendDeleteRecord(eq(record), any(HoodieSchema.class));
+        verify(writer, never()).appendRecord(any(), any());
+      } else {
+        ArgumentCaptor<MetadataValues> metadataValues = ArgumentCaptor.forClass(MetadataValues.class);
+        verify(record).prependMetaFields(any(), any(), metadataValues.capture(), any());
+        // Log compaction sets no operation, so the value stored with the record is kept.
+        String expectedOperation = kind.equals("logCompaction") ? null
+            : kind.equals("deleteWithRow") ? "D" : kind.equals("update") ? "U" : "I";
+        assertEquals(expectedOperation, metadataValues.getValue().getValues()[5]);
+        verify(writer).appendRecord(eq(record), any(HoodieSchema.class));
+      }
     }
   }
 

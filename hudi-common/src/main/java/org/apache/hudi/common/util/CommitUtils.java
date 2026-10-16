@@ -115,6 +115,10 @@ public class CommitUtils {
     }
 
     for (HoodieWriteStat writeStat : writeStats) {
+      // A handle whose records all failed reports its errors with a stat that has no file; nothing was written for it.
+      if (writeStat.getPath() == null) {
+        continue;
+      }
       String partition = writeStat.getPartitionPath();
       commitMetadata.addWriteStat(partition, writeStat);
     }

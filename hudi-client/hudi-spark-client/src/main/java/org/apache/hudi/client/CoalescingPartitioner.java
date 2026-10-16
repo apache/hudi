@@ -20,6 +20,8 @@ package org.apache.hudi.client;
 
 import org.apache.spark.Partitioner;
 
+import java.util.Objects;
+
 /**
  * Partitioner to route all records to just 1 partition.
  */
@@ -42,8 +44,9 @@ public class CoalescingPartitioner extends Partitioner {
       return 0;
     } else {
       // Math.abs leaves Integer.MIN_VALUE negative, and a Partitioner must answer in
-      // [0, numPartitions). floorMod is non-negative for every input.
-      return Math.floorMod(key.hashCode(), numPartitions);
+      // [0, numPartitions). floorMod is non-negative for every input. A null key (the file path of a write
+      // status whose records all failed) goes to partition 0, as with Spark's HashPartitioner.
+      return Math.floorMod(Objects.hashCode(key), numPartitions);
     }
   }
 }
