@@ -34,6 +34,7 @@ import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.hadoop.fs.{Path => HadoopPath}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
+import org.apache.parquet.schema.Type
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.execution.FileSourceScanExec
@@ -841,8 +842,8 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
             val srcPath = s"${tmp.getCanonicalPath}/source"
             val tablePath = s"${tmp.getCanonicalPath}/hudi"
 
-            // The source is written by Spark's own parquet writer: a plain unshredded variant
-            // column that no Hudi write path ever touched.
+            // The source is written by Spark's own parquet writer: a variant column that no Hudi
+            // write path ever touched, shredded by Spark 4.1's default inference and REQUIRED.
             spark.sql("""select cast(id as int) as id, parse_json(concat('{"a":', id, '}')) as v, """ +
               "1000L as ts from range(0, 10, 1, 1)")
               .write.parquet(srcPath)
@@ -876,8 +877,8 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
 
             if (tableType == "mor") {
               // A log over the bootstrapped file group, so the merged read joins skeleton, source
-              // file and log. COW stays read-only: an upsert there would rewrite the file group
-              // into a regular base file and the bootstrap read path would be gone.
+              // file and log. COW stays read-only until its last step: an upsert rewrites the file
+              // group into a regular base file and the bootstrap read path would be gone.
               spark.sql("""select cast(id as int) as id, case when id = 9 then null """ +
                 """else parse_json(concat('{"a":', 100 + id, '}')) end as v, """ +
                 "1001L as ts from range(5, 10, 1, 1)")
@@ -925,9 +926,71 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
               Seq("2", 2L, null, null, null, null, null, null, null))
             assert(variantProjectionPushedIntoScan(projectedSql) == pushed,
               s"[$leg] PushVariantIntoScan $verdict rewritten v into a projection struct")
+
+            if (tableType == "cow") {
+              // Spark 4.1 writes the non-null parse_json source column REQUIRED, while the
+              // bootstrapped table schema has it nullable, so the COW merge reads the source file
+              // through a nullable request (#20349).
+              spark.sql("""select 2 as id, parse_json('{"a":102}') as v, 1001L as ts""")
+                .write.format("hudi")
+                .options(writeOpts)
+                .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+                .mode(SaveMode.Append)
+                .save(tablePath)
+              spark.read.format("hudi").load(tablePath).createOrReplaceTempView(view)
+              checkAnswer(s"select id, variant_get(v, '$$.a', 'bigint') from $view where id in (1, 2) order by id")(
+                Seq(1, 1L), Seq(2, 102L))
+            }
             spark.catalog.dropTempView(view)
           }
         }
+      }
+    }
+  }
+
+  test("An upsert merges against a base file that holds the shredded variant REQUIRED") {
+    assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
+
+    // In Spark 4.1 parse_json over a non-null expression is a non-nullable column and Hudi keeps
+    // that nullability, so a DataFrame insert writes `v` REQUIRED. An upsert whose `v` is nullable
+    // then merges against that file through a nullable requested schema (#20349). Default layout
+    // configs; a DataFrame write takes the merger as an option, not as a session conf.
+    Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK).foreach { recordType =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val tablePath = tmp.getCanonicalPath
+        val leg = s"$recordType, $tableName"
+        val writeOpts = Map(
+          HoodieWriteConfig.TBL_NAME.key -> tableName,
+          DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
+          DataSourceWriteOptions.ORDERING_FIELDS.key -> "ts",
+          DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getName) ++
+          (if (recordType == HoodieRecordType.SPARK) {
+            Map(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key -> classOf[DefaultSparkRecordMerger].getName)
+          } else {
+            Map.empty[String, String]
+          })
+        def write(sql: String, operation: String, mode: SaveMode): Unit =
+          spark.sql(sql).write.format("hudi").options(writeOpts)
+            .option(DataSourceWriteOptions.OPERATION.key, operation).mode(mode).save(tablePath)
+
+        write("""select cast(id as int) as id, parse_json(concat('{"a":', id, '}')) as v, 1000L as ts """ +
+          "from range(0, 10, 1, 1)", DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL, SaveMode.Overwrite)
+        val baseFiles = listDataParquetFiles(tablePath)
+        assert(baseFiles.size == 1, s"[$leg] expected one base file: $baseFiles")
+        val v = variantGroupOf(baseFiles.head, "v")
+        assert(v.isRepetition(Type.Repetition.REQUIRED) && v.containsField("typed_value"),
+          s"[$leg] expected a REQUIRED shredded v: $v")
+
+        write("""select cast(id as int) as id, case when id = 6 then null """ +
+          """else parse_json(concat('{"a":', 100 + id, '}')) end as v, 1001L as ts from range(5, 7, 1, 1)""",
+          DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL, SaveMode.Append)
+
+        val view = s"${tableName}_view"
+        spark.read.format("hudi").load(tablePath).createOrReplaceTempView(view)
+        checkAnswer(s"select id, variant_get(v, '$$.a', 'bigint') from $view order by id")(
+          (0 until 10).map(id => Seq(id, if (id == 5) 105L else if (id == 6) null else id.toLong)): _*)
+        spark.catalog.dropTempView(view)
       }
     }
   }
