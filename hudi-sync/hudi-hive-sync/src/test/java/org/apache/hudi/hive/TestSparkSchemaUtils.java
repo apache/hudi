@@ -258,4 +258,25 @@ public class TestSparkSchemaUtils {
     StructType variantStruct = (StructType) sparkSchema.fields()[1].dataType();
     assertEquals(2, variantStruct.fields().length);
   }
+
+  @Test
+  public void testConvertSchemaSkipsNullTypeFields() {
+    HoodieSchema nested = HoodieSchema.createRecord("nested", null, null, false, Arrays.asList(
+        HoodieSchemaField.of("name", HoodieSchema.createNullable(HoodieSchemaType.STRING), null, null),
+        HoodieSchemaField.of("nested_null", HoodieSchema.create(HoodieSchemaType.NULL), null, null)
+    ));
+    HoodieSchema schema = HoodieSchema.createRecord("root", null, null, false, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+        HoodieSchemaField.of("top_level_null", HoodieSchema.create(HoodieSchemaType.NULL), null, null),
+        HoodieSchemaField.of("nested", HoodieSchema.createNullable(nested), null, null)
+    ));
+
+    StructType sparkSchema = (StructType) StructType.fromJson(SparkSchemaUtils.convertToSparkSchemaJson(schema));
+    assertEquals(2, sparkSchema.fields().length);
+    assertEquals("id", sparkSchema.fields()[0].name());
+    assertEquals("nested", sparkSchema.fields()[1].name());
+    StructType nestedStruct = (StructType) sparkSchema.fields()[1].dataType();
+    assertEquals(1, nestedStruct.fields().length);
+    assertEquals("name", nestedStruct.fields()[0].name());
+  }
 }

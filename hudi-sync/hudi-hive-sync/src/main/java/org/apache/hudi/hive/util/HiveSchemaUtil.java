@@ -174,6 +174,11 @@ public class HiveSchemaUtil {
     LinkedHashMap<String, String> hiveSchema = new LinkedHashMap<>();
     List<HoodieSchemaField> fields = schema.getFields();
     for (HoodieSchemaField field : fields) {
+      // Fields of the "null" type always hold null and have no Hive equivalent. They are skipped, the same
+      // way the parquet writer skips them, so the Hive schema matches the columns present in the data files.
+      if (field.schema().isSchemaNull()) {
+        continue;
+      }
       hiveSchema.put(field.name(), convertField(field.schema(), supportTimestamp, doFormat));
     }
     return hiveSchema;
@@ -269,6 +274,9 @@ public class HiveSchemaUtil {
     StringBuilder struct = new StringBuilder();
     struct.append(doFormat ? "STRUCT< " : "STRUCT<");
     for (HoodieSchemaField field : fields) {
+      if (field.schema().isSchemaNull()) {
+        continue;
+      }
       // TODO: struct field name is only translated to support special char($)
       // We will need to extend it to other collection type
       struct.append(hiveCompatibleFieldName(field.name(), true, doFormat)).append(doFormat ? " : " : ":");
