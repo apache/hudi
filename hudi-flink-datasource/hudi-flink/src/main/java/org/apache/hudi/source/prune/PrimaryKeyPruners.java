@@ -36,6 +36,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.keygen.KeyGenerator.EMPTY_RECORDKEY_PLACEHOLDER;
+import static org.apache.hudi.keygen.KeyGenerator.NULL_RECORDKEY_PLACEHOLDER;
+
 /**
  * Utilities for primary key based file pruning.
  */
@@ -55,6 +58,18 @@ public class PrimaryKeyPruners {
         // the hash keys must be evaluated in the record key field sequence.
         .sorted(java.util.Map.Entry.comparingByKey())
         .map(Pair::getValue)
+        .map(value -> {
+          // Compound record keys are decoded by KeyGenUtils.extractRecordKeysByFields before hashing.
+          // Match its placeholder handling even when the bucket index uses only one of the key fields.
+          if (pkFields.size() > 1) {
+            if (NULL_RECORDKEY_PLACEHOLDER.equals(value)) {
+              return null;
+            } else if (EMPTY_RECORDKEY_PLACEHOLDER.equals(value)) {
+              return "";
+            }
+          }
+          return value;
+        })
         .collect(Collectors.toList());
     // step2: generate bucket id
     return (numBuckets) -> BucketIdentifier.getBucketId(values, numBuckets);
