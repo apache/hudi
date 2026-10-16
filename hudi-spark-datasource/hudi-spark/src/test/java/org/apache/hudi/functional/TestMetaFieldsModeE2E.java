@@ -46,6 +46,7 @@ import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -137,11 +138,9 @@ class TestMetaFieldsModeE2E extends SparkClientFunctionalTestHarness {
         expectedMode.isCommitTimePopulated(), expectedMode);
     assertMetaColumn(raw, total, HoodieRecord.FILENAME_METADATA_FIELD,
         expectedMode.isFileNamePopulated(), expectedMode);
-    // Record key, partition path, and commit seq no are ALL-only.
-    boolean allMode = expectedMode == MetaFieldsMode.ALL;
-    assertMetaColumn(raw, total, HoodieRecord.RECORD_KEY_METADATA_FIELD, allMode, expectedMode);
-    assertMetaColumn(raw, total, HoodieRecord.PARTITION_PATH_METADATA_FIELD, allMode, expectedMode);
-    assertMetaColumn(raw, total, HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, allMode, expectedMode);
+    assertMetaColumn(raw, total, HoodieRecord.RECORD_KEY_METADATA_FIELD, expectedMode.isRecordKeyPopulated(), expectedMode);
+    assertMetaColumn(raw, total, HoodieRecord.PARTITION_PATH_METADATA_FIELD, expectedMode.isPartitionPathPopulated(), expectedMode);
+    assertMetaColumn(raw, total, HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, expectedMode.isCommitSeqnoPopulated(), expectedMode);
   }
 
   private static void assertMetaColumn(Dataset<Row> raw, long total, String column,
@@ -180,14 +179,35 @@ class TestMetaFieldsModeE2E extends SparkClientFunctionalTestHarness {
         .map(row -> row.getString(0)).sorted().collect(Collectors.toList()),
         "concat must preserve both existing records and the duplicate insert");
     assertMetaColumn(latest, 3, HoodieRecord.COMMIT_TIME_METADATA_FIELD, mode.isCommitTimePopulated(), mode);
-    assertMetaColumn(latest, 3, HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, mode == MetaFieldsMode.ALL, mode);
+    assertMetaColumn(latest, 3, HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, mode.isCommitSeqnoPopulated(), mode);
     assertMetaColumn(latest, 3, HoodieRecord.RECORD_KEY_METADATA_FIELD, mode.isRecordKeyPopulated(), mode);
-    assertMetaColumn(latest, 3, HoodieRecord.PARTITION_PATH_METADATA_FIELD, mode == MetaFieldsMode.ALL, mode);
+    assertMetaColumn(latest, 3, HoodieRecord.PARTITION_PATH_METADATA_FIELD, mode.isPartitionPathPopulated(), mode);
     assertMetaColumn(latest, 3, HoodieRecord.FILENAME_METADATA_FIELD, mode.isFileNamePopulated(), mode);
     if (mode.isFileNamePopulated()) {
       for (Row row : latest.collectAsList()) {
         assertTrue(row.<String>getAs("actual_file").endsWith("/" + row.getAs(HoodieRecord.FILENAME_METADATA_FIELD)));
       }
+    }
+  }
+
+  @ParameterizedTest
+  @CsvSource({"bulk_insert,true,false", "insert,false,false", "insert,false,true"})
+  void allExceptRecordKeyPopulatesOtherColumns(String operation, boolean rowWriter, boolean sparkRecords) {
+    Map<String, String> options = baseOptions();
+    options.put(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.ALL_EXCEPT_RECORD_KEY.name());
+    options.put(DataSourceWriteOptions.OPERATION().key(), operation);
+    options.put("hoodie.datasource.write.row.writer.enable", Boolean.toString(rowWriter));
+    if (sparkRecords) {
+      options.put("hoodie.write.record.merge.custom.implementation.classes", "org.apache.hudi.DefaultSparkRecordMerger");
+    }
+    HoodieTableConfig tableConfig = writeSampleAndGetTableConfig(options, basePath());
+    assertEquals(MetaFieldsMode.ALL_EXCEPT_RECORD_KEY, tableConfig.getMetaFieldsMode());
+    assertMetaColumnPopulation(basePath(), MetaFieldsMode.ALL_EXCEPT_RECORD_KEY);
+    List<Row> rows = spark().read().parquet(basePath() + "/*/*.parquet").collectAsList();
+    for (Row row : rows) {
+      assertEquals("p1", row.getAs(HoodieRecord.PARTITION_PATH_METADATA_FIELD));
+      assertTrue(row.<String>getAs(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD)
+          .startsWith(row.<String>getAs(HoodieRecord.COMMIT_TIME_METADATA_FIELD) + "_"));
     }
   }
 
