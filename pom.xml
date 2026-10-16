@@ -83,6 +83,8 @@
   </organization>
 
   <properties>
+    <!-- surefire JVMs for the functional-tests profiles; CI passes -DforkCount=2 -->
+    <forkCount>1</forkCount>
     <maven-jar-plugin.version>3.5.0</maven-jar-plugin.version>
     <maven-surefire-plugin.version>3.5.4</maven-surefire-plugin.version>
     <maven-failsafe-plugin.version>3.5.4</maven-failsafe-plugin.version>
@@ -2227,7 +2229,7 @@
             <version>${maven-surefire-plugin.version}</version>
             <configuration combine.self="append">
               <skip>${skipFTs}</skip>
-              <forkCount>1</forkCount>
+              <forkCount>${forkCount}</forkCount>
               <reuseForks>true</reuseForks>
               <groups>functional</groups>
             </configuration>
@@ -2275,7 +2277,7 @@
             <version>${maven-surefire-plugin.version}</version>
             <configuration combine.self="append">
               <skip>${skipFTs}</skip>
-              <forkCount>1</forkCount>
+              <forkCount>${forkCount}</forkCount>
               <reuseForks>true</reuseForks>
               <groups>functional-b</groups>
             </configuration>
@@ -2323,7 +2325,7 @@
             <version>${maven-surefire-plugin.version}</version>
             <configuration combine.self="append">
               <skip>${skipFTs}</skip>
-              <forkCount>1</forkCount>
+              <forkCount>${forkCount}</forkCount>
               <reuseForks>true</reuseForks>
               <groups>functional-c</groups>
             </configuration>
