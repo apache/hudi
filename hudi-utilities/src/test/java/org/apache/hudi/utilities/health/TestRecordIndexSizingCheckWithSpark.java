@@ -58,6 +58,15 @@ public class TestRecordIndexSizingCheckWithSpark extends SparkClientFunctionalTe
   private static final int FILE_GROUPS_PER_DATA_PARTITION = 1;
   private static final int DATA_PARTITIONS = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS.length;
   private static final String ONE_GIB = String.valueOf(1024L * 1024 * 1024);
+  /**
+   * A maximum file-group size small enough that the fixture index estimates several file groups
+   * rather than clamping to the configured minimum. With ONE_GIB the estimate is zero for any
+   * fixture-sized index, so the ideal comes from the floor and says nothing about the table --
+   * which is the bug these tests exist to catch, not a configuration to assert against.
+   */
+  private static final String SIXTEEN_KIB = String.valueOf(16 * 1024);
+  /** Smaller still, so the estimate clears the 0.5 healthy ratio rather than sitting on it. */
+  private static final String FOUR_KIB = String.valueOf(4 * 1024);
 
   private final RecordIndexSizingCheck check = new RecordIndexSizingCheck();
   private HoodieTableMetaClient metaClient;
@@ -157,34 +166,38 @@ public class TestRecordIndexSizingCheckWithSpark extends SparkClientFunctionalTe
 
   @Test
   public void recordIndexMatchingItsConfiguredSizingIsHealthy() throws Exception {
-    // given a global index whose writer still sizes it at the two file groups it was initialized with
+    // given a global index sized so the estimate derives from the index's own bytes rather than
+    // clamping to the floor, and lands at or below what the index already has
     writeGlobalRecordIndex();
-    TypedProperties props = globalSizingProps(GLOBAL_FILE_GROUPS, GLOBAL_FILE_GROUPS, ONE_GIB);
+    TypedProperties props = globalSizingProps(1, 64, SIXTEEN_KIB);
 
     // when the check runs
     HealthCheckResult result = runCheck(props, false);
 
-    // then observed and ideal agree and the index is healthy
+    // then the ideal is size-derived and the index is not called undersized
     assertEquals(HealthStatus.HEALTHY, result.getStatus(), result.getSummary());
     assertEquals("2", result.getEffectiveConfigs().get("observed.file.group.count"));
-    assertEquals("2", result.getEffectiveConfigs().get("effective.ideal.file.group.count"));
     assertEquals("whole index (global record index)", result.getEffectiveConfigs().get("effective.count.comparison"));
-    assertTrue(result.getFindings().isEmpty(), "healthy verdict should carry no findings: " + result.getFindings());
+    int ideal = Integer.parseInt(result.getEffectiveConfigs().get("effective.ideal.file.group.count"));
+    assertTrue(ideal > 1, "fixture should exercise the estimate, not the floor; ideal was " + ideal);
   }
 
   @Test
   public void fewerFileGroupsThanTheWriterNowSizesForIsUnhealthyAndSaysToRebootstrap() throws Exception {
-    // given the writer's sizing has since been raised to a fixed ten file groups, five times what exists
+    // given a maximum file-group size small enough that the index's own bytes call for more file
+    // groups than it was built with -- a real shortfall, not one manufactured by the floor
     writeGlobalRecordIndex();
-    TypedProperties props = globalSizingProps(10, 10, ONE_GIB);
+    TypedProperties props = globalSizingProps(1, 64, FOUR_KIB);
 
     // when the check runs
     HealthCheckResult result = runCheck(props, false);
 
     // then it reports the index undersized, with the counts and the only remedy spelled out
     assertEquals(HealthStatus.UNHEALTHY, result.getStatus(), result.getSummary());
-    assertEquals("10", result.getEffectiveConfigs().get("effective.ideal.file.group.count"));
-    assertEquals("5", result.getEffectiveConfigs().get("effective.min.healthy.file.group.count"));
+    int ideal = Integer.parseInt(result.getEffectiveConfigs().get("effective.ideal.file.group.count"));
+    assertTrue(ideal > 1, "the ideal must come from the estimate, not the floor; was " + ideal);
+    assertEquals(String.valueOf((int) Math.ceil(0.5 * ideal)),
+        result.getEffectiveConfigs().get("effective.min.healthy.file.group.count"));
     assertEquals("2", result.getEffectiveConfigs().get("observed.file.group.count"));
     assertTrue(result.getFindings().stream().anyMatch(f -> f.contains("Record index was initialized with 2 file group(s)")),
         "expected a finding stating the observed count, got: " + result.getFindings());
@@ -240,11 +253,18 @@ public class TestRecordIndexSizingCheckWithSpark extends SparkClientFunctionalTe
     // when the check runs
     HealthCheckResult result = runCheck(new TypedProperties(), true);
 
-    // then it runs, and against the stock minimum of ten file groups the two-file-group index is undersized
+    // then it runs rather than skipping, and reports the stock sizing it reasoned with
     assertNotEquals(HealthStatus.SKIPPED, result.getStatus(), result.getSummary());
-    assertEquals(HealthStatus.UNHEALTHY, result.getStatus(), result.getSummary());
     assertEquals(String.valueOf(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.defaultValue()),
         result.getEffectiveConfigs().get(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key()));
+    // A fixture-sized index against the stock 1 GiB maximum file-group size estimates zero file
+    // groups, so the ideal is the configured minimum and carries nothing about the table. That is
+    // not a shortfall to act on: it must not read as UNHEALTHY and must not recommend a rebuild.
+    assertEquals(HealthStatus.HEALTHY, result.getStatus(), result.getSummary());
+    assertTrue(result.getFindings().stream().anyMatch(f -> f.contains("comes from the configured minimum")),
+        "expected the floor to be named as the reason, got: " + result.getFindings());
+    assertTrue(result.getFindings().stream().noneMatch(f -> f.contains("metadata delete-record-index")),
+        "a floor-bound ideal must not recommend a re-bootstrap, got: " + result.getFindings());
   }
 
   @Test
@@ -276,7 +296,7 @@ public class TestRecordIndexSizingCheckWithSpark extends SparkClientFunctionalTe
     Map<String, String> configs = runCheck(props, false).getEffectiveConfigs();
 
     // then every supplied value, derived threshold and measurement is reported alongside the verdict
-    assertEquals("false", configs.get(HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key()));
+    assertEquals("global", configs.get("observed.index.layout"));
     assertEquals("2", configs.get(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key()));
     assertEquals("2", configs.get(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key()));
     assertEquals(ONE_GIB, configs.get(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP.key()));
@@ -295,28 +315,29 @@ public class TestRecordIndexSizingCheckWithSpark extends SparkClientFunctionalTe
   }
 
   @Test
-  public void partitionedConfigOnAGlobalIndexSkipsTheCountComparisonAndStillChecksFileGroupSize() throws Exception {
-    // given a global index, but a writer configuration that says the index is partitioned and sizes it
-    // at ten file groups per data partition, with a maximum file-group size the index is already past
+  public void partitionedConfigOnAGlobalIndexAsksForTheGlobalSizingKeys() throws Exception {
+    // given a global index, but a writer configuration that says the index is partitioned, with a
+    // maximum file-group size the index is already past
     writeGlobalRecordIndex();
     TypedProperties props = partitionedSizingProps(10, 10, "512");
 
     // when the check runs
     HealthCheckResult result = runCheck(props, false);
 
-    // then the count comparison is skipped and says why, the count keys are absent, and the size rule still fires
-    assertCountComparisonAbsent(result.getEffectiveConfigs());
-    assertTrue(result.getEffectiveConfigs().get("effective.count.comparison").contains("index on storage is global"),
-        result.getEffectiveConfigs().toString());
-    assertEquals(HealthStatus.UNHEALTHY, result.getStatus(), result.getSummary());
-    assertTrue(result.getFindings().stream().anyMatch(f -> f.contains("past the configured maximum of 512 bytes")),
-        "expected the oversized finding, got: " + result.getFindings());
-    assertTrue(result.getFindings().stream().noneMatch(f -> f.contains("was initialized with")),
-        "expected no undersized finding, got: " + result.getFindings());
+    // then the layout comes from storage, so the check asks for the sizing keys the index on disk
+    // actually needs rather than silently judging it against the partitioned ones it was handed
+    assertEquals(HealthStatus.SKIPPED, result.getStatus(), result.getSummary());
+    assertTrue(result.getSummary().contains(
+            HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key()),
+        "expected the global sizing key to be named, got: " + result.getSummary());
+    // and it judges nothing until it has them -- naming the missing key beats guessing with the
+    // wrong one, per the checker's fail-fast contract
+    assertTrue(result.getFindings().isEmpty(),
+        "a skipped check must not carry findings, got: " + result.getFindings());
   }
 
   @Test
-  public void partitionedConfigOnAGlobalIndexDoesNotReportAFalseShortfall() throws Exception {
+  public void partitionedConfigOnAGlobalIndexNeverComparesPerPartitionAgainstTheTotal() throws Exception {
     // given the same mismatch but a generous maximum file-group size
     writeGlobalRecordIndex();
     TypedProperties props = partitionedSizingProps(10, 10, ONE_GIB);
@@ -324,10 +345,12 @@ public class TestRecordIndexSizingCheckWithSpark extends SparkClientFunctionalTe
     // when the check runs
     HealthCheckResult result = runCheck(props, false);
 
-    // then ten-per-partition is never compared against the two-file-group total, and the index reads healthy
-    assertCountComparisonAbsent(result.getEffectiveConfigs());
-    assertEquals(HealthStatus.HEALTHY, result.getStatus(), result.getSummary());
-    assertTrue(result.getSummary().contains("not compared"), result.getSummary());
+    // then no false shortfall: a per-partition count is never compared against the whole-index
+    // total, because the global sizing keys govern an index that is global on storage
+    assertEquals(HealthStatus.SKIPPED, result.getStatus(), result.getSummary());
+    assertTrue(result.getSummary().contains(
+            HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key()),
+        "expected the global sizing key to be named, got: " + result.getSummary());
   }
 
   @Test
@@ -343,7 +366,7 @@ public class TestRecordIndexSizingCheckWithSpark extends SparkClientFunctionalTe
     // then the total is reported, the comparison is per data partition, and the index is healthy
     assertEquals(HealthStatus.HEALTHY, result.getStatus(), result.getSummary());
     Map<String, String> configs = result.getEffectiveConfigs();
-    assertEquals("true", configs.get(HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key()));
+    assertEquals("partitioned", configs.get("observed.index.layout"));
     assertEquals(String.valueOf(DATA_PARTITIONS), configs.get("observed.data.partition.count"));
     assertEquals(String.valueOf(DATA_PARTITIONS * FILE_GROUPS_PER_DATA_PARTITION), configs.get("observed.file.group.count"));
     assertEquals("1", configs.get("observed.worst.data.partition.file.group.count"));
@@ -354,10 +377,10 @@ public class TestRecordIndexSizingCheckWithSpark extends SparkClientFunctionalTe
 
   @Test
   public void partitionedIndexUndersizedInADataPartitionIsUnhealthyAndNamesThePartition() throws Exception {
-    // given a partitioned index with one file group per data partition, and a writer that now sizes
-    // every data partition at a fixed four
+    // given a partitioned index with one file group per data partition, and a maximum file-group
+    // size small enough that each partition's own bytes call for more than the one it has
     writePartitionedRecordIndex();
-    TypedProperties props = partitionedSizingProps(4, 4, ONE_GIB);
+    TypedProperties props = partitionedSizingProps(1, 64, SIXTEEN_KIB);
 
     // when the check runs
     HealthCheckResult result = runCheck(props, false);
@@ -366,8 +389,10 @@ public class TestRecordIndexSizingCheckWithSpark extends SparkClientFunctionalTe
     // against four -- and the worst partition is named in the finding with the remedy
     assertEquals(HealthStatus.UNHEALTHY, result.getStatus(), result.getSummary());
     Map<String, String> configs = result.getEffectiveConfigs();
-    assertEquals("4", configs.get("effective.ideal.file.group.count"));
-    assertEquals("2", configs.get("effective.min.healthy.file.group.count"));
+    int partitionedIdeal = Integer.parseInt(configs.get("effective.ideal.file.group.count"));
+    assertTrue(partitionedIdeal > 1, "the ideal must come from the estimate, not the floor; was " + partitionedIdeal);
+    assertEquals(String.valueOf((int) Math.ceil(0.5 * partitionedIdeal)),
+        configs.get("effective.min.healthy.file.group.count"));
     assertEquals("1", configs.get("observed.worst.data.partition.file.group.count"));
     String worstPartition = configs.get("observed.worst.data.partition");
     assertTrue(result.getFindings().stream().anyMatch(f -> f.contains(
