@@ -1,0 +1,48 @@
+name: Restore Hudi build
+description: >-
+  Restores a build saved by save-hudi-build into a fresh checkout of the same commit:
+  every module's target/ directory and the org/apache/hudi artifacts of the local Maven
+  repository. Afterwards the job is in the state a `mvn clean install -DskipTests` of the
+  same modules and profiles would have left it in, so `mvn test` steps run without
+  rebuilding. Run it after actions/checkout and actions/setup-java.
+inputs:
+  name:
+    description: Artifact name given to save-hudi-build.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Download build outputs
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ inputs.name }}
+        path: ${{ runner.temp }}/hudi-build
+    - name: Unpack build outputs
+      shell: bash
+      env:
+        BUILD_NAME: ${{ inputs.name }}
+        PACK_DIR: ${{ runner.temp }}/hudi-build
+      run: |
+        set -euo pipefail
+        expected=$(printf 'name=%s\nsha=%s' "$BUILD_NAME" "$GITHUB_SHA")
+        if [ "$(cat "$PACK_DIR/manifest")" != "$expected" ]; then
+          echo "::error::Build artifact does not match this job. Expected:"
+          echo "$expected"
+          echo "Found:"
+          cat "$PACK_DIR/manifest"
+          exit 1
+        fi
+        # Drop any org/apache/hudi artifacts restored by the setup-java dependency cache,
+        # so nothing can resolve to a snapshot that was built from another commit.
+        rm -rf "$HOME/.m2/repository/org/apache/hudi"
+        mkdir -p "$HOME/.m2/repository"
+        zstd -d -q -c "$PACK_DIR/m2-hudi.tar.zst" | tar -C "$HOME/.m2/repository" -xf -
+        zstd -d -q -c "$PACK_DIR/workspace-target.tar.zst" | tar -C "$GITHUB_WORKSPACE" -xf -
+        # Keep the build job's order of modification times but move them after this job's
+        # checkout, so maven-compiler-plugin, scala-maven-plugin and maven-jar-plugin see
+        # every module as up to date (see compress_mtimes.py).
+        mapfile -t target_dirs < "$PACK_DIR/target-dirs"
+        (cd "$GITHUB_WORKSPACE" && python3 "$GITHUB_ACTION_PATH/compress_mtimes.py" \
+          "$HOME/.m2/repository/org/apache/hudi" "${target_dirs[@]}")
+        echo "Restored $(wc -l < "$PACK_DIR/target-dirs") target directories built from $GITHUB_SHA"
+        rm -rf "$PACK_DIR"
