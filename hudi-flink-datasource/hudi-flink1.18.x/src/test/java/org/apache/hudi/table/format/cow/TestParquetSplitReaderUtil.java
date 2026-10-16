@@ -24,6 +24,7 @@ import org.apache.flink.table.data.ArrayData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.columnar.vector.VectorizedColumnBatch;
 import org.apache.flink.table.types.logical.ArrayType;
+import org.apache.flink.table.types.logical.DecimalType;
 import org.apache.flink.table.types.logical.IntType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
@@ -39,6 +40,7 @@ import org.apache.parquet.schema.MessageTypeParser;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.File;
@@ -147,6 +149,93 @@ public class TestParquetSplitReaderUtil {
   }
 
   @Test
+  void testReadBareRepeatedGroupNamedAfterItsParentAsArrayOfRow() throws IOException {
+    // A repeated group with one field named <parent>_tuple is the element itself, not a wrapper.
+    MessageType schema = MessageTypeParser.parseMessageType(
+        "message m { optional group info { repeated group info_tuple { optional int32 x; } } }");
+    Consumer<Group> writer = record -> {
+      Group info = record.addGroup("info");
+      info.addGroup("info_tuple").append("x", 1);
+      info.addGroup("info_tuple").append("x", 2);
+    };
+    LogicalType infoType = rowType(new String[] {"info_tuple"}, new ArrayType(rowType(new String[] {"x"}, new IntType())));
+
+    List<String> values = writeAndRead(schema, writer, "info", infoType, row -> {
+      ArrayData tuples = row.getRow(0, 1).getArray(0);
+      List<Integer> xs = new ArrayList<>();
+      for (int i = 0; i < tuples.size(); i++) {
+        xs.add(tuples.getRow(i, 1).getInt(0));
+      }
+      return xs.toString();
+    });
+
+    assertEquals(Arrays.asList("[1, 2]", "[1, 2]", "[1, 2]"), values);
+  }
+
+  @Test
+  void testReadRowWithFieldMissingFromFileAfterLongArray() throws IOException {
+    // The row's last field in the file is an array with more elements than the batch size, which
+    // must not count as more rows when sizing the placeholder of the absent field.
+    MessageType schema = MessageTypeParser.parseMessageType(
+        "message m { optional group info { optional binary name (UTF8); "
+            + "optional group nums (LIST) { repeated group list { optional int32 element; } } } }");
+    int[] recordIndex = {0};
+    Consumer<Group> writer = record -> {
+      Group info = record.addGroup("info");
+      info.append("name", "r" + recordIndex[0]++);
+      Group nums = info.addGroup("nums");
+      for (int i = 0; i < 100; i++) {
+        nums.addGroup("list").append("element", i);
+      }
+    };
+    LogicalType infoType = rowType(new String[] {"name", "nums", "added"}, STRING, new ArrayType(new IntType()), STRING);
+
+    List<String> values = writeAndRead(schema, writer, "info", infoType, row -> {
+      RowData info = row.getRow(0, 3);
+      return info.getString(0) + ":" + info.getArray(1).size() + ":" + (info.isNullAt(2) ? "null" : info.getString(2));
+    }, 2);
+
+    assertEquals(Arrays.asList("r0:100:null", "r1:100:null", "r2:100:null"), values);
+  }
+
+  @ParameterizedTest
+  @CsvSource({"int32, 9", "int64, 18"})
+  void testReadArrayOfRowWithIntegerEncodedDecimal(String physicalType, int precision) throws IOException {
+    MessageType schema = MessageTypeParser.parseMessageType(
+        "message m { optional group items (LIST) { repeated group list { optional group element { "
+            + "optional " + physicalType + " amount (DECIMAL(" + precision + ",2)); } } } }");
+    Consumer<Group> writer = record -> {
+      Group items = record.addGroup("items");
+      appendUnscaled(items.addGroup("list").addGroup("element"), physicalType, 12345);
+      appendUnscaled(items.addGroup("list").addGroup("element"), physicalType, -1);
+    };
+    LogicalType itemsType = new ArrayType(rowType(new String[] {"amount"}, new DecimalType(precision, 2)));
+
+    List<String> values = writeAndRead(schema, writer, "items", itemsType, row -> {
+      ArrayData items = row.getArray(0);
+      List<String> amounts = new ArrayList<>();
+      for (int i = 0; i < items.size(); i++) {
+        amounts.add(items.getRow(i, 1).getDecimal(0, precision, 2).toString());
+      }
+      return amounts.toString();
+    });
+
+    assertEquals(Arrays.asList("[123.45, -0.01]", "[123.45, -0.01]", "[123.45, -0.01]"), values);
+  }
+
+  @ParameterizedTest
+  @CsvSource({"int32, 9", "int64, 18"})
+  void testReadIntegerEncodedDecimal(String physicalType, int precision) throws IOException {
+    MessageType schema = MessageTypeParser.parseMessageType(
+        "message m { optional " + physicalType + " amount (DECIMAL(" + precision + ",2)); }");
+
+    List<String> values = writeAndRead(schema, record -> appendUnscaled(record, physicalType, 12345), "amount",
+        new DecimalType(precision, 2), row -> row.getDecimal(0, precision, 2).toString());
+
+    assertEquals(Arrays.asList("123.45", "123.45", "123.45"), values);
+  }
+
+  @Test
   void testReadThreeLevelArrayOfPrimitive() throws IOException {
     MessageType schema = MessageTypeParser.parseMessageType(
         "message m { optional group nums (LIST) { repeated group list { required int32 element; } } }");
@@ -176,6 +265,17 @@ public class TestParquetSplitReaderUtil {
         row -> formatInts(row.getArray(0)));
 
     assertEquals(Arrays.asList("[1, 2]", "[1, 2]", "[1, 2]"), values);
+  }
+
+  /**
+   * Appends the unscaled value of a decimal to the {@code amount} field, as the given physical type.
+   */
+  private static void appendUnscaled(Group group, String physicalType, int unscaled) {
+    if (physicalType.equals("int32")) {
+      group.append("amount", unscaled);
+    } else {
+      group.append("amount", (long) unscaled);
+    }
   }
 
   private static MessageType itemsSchema(ListEncoding encoding) {
