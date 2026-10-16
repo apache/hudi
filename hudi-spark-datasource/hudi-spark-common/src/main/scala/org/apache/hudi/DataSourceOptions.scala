@@ -594,6 +594,17 @@ object DataSourceWriteOptions {
     .withDocumentation("When set to true, the sql insert statement will use bulk insert. " +
       "This config is deprecated as of 0.14.0. Please use hoodie.spark.sql.insert.into.operation instead.")
 
+  val SQL_TRUNCATE_TABLE_PURGE_ENABLED: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.sql.truncate.purge.enabled")
+    .defaultValue("false")
+    .markAdvanced()
+    .sinceVersion("1.3.0")
+    .withDocumentation("Controls how `TRUNCATE TABLE` (without a partition spec) clears a Hudi table. "
+      + "When false (default), the table is truncated with a single replacecommit that replaces every file group, "
+      + "so the timeline, savepoints, metadata table and incremental/streaming reader offsets stay valid. "
+      + "When true, the table's base path is deleted and hoodie.properties is re-initialized, discarding all "
+      + "history (the pre-1.3.0 behavior).")
+
   @Deprecated
   val SQL_INSERT_MODE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.sql.insert.mode")
