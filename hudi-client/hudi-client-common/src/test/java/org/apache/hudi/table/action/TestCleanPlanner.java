@@ -596,7 +596,7 @@ public class TestCleanPlanner {
     Map<String, HoodieSavepointPartitionMetadata> partitionMetadata = new HashMap<>();
     List<String> fileNames = paths.stream().map(path -> path.substring(path.lastIndexOf("/") + 1)).collect(Collectors.toList());
     partitionMetadata.put(partition, new HoodieSavepointPartitionMetadata(partition, fileNames));
-    return new HoodieSavepointMetadata("user", 1L, "comments", partitionMetadata, 1);
+    return new HoodieSavepointMetadata("user", 1L, "comments", partitionMetadata, 1, null);
   }
 
   private static HoodieCleanMetadata getCleanCommitMetadata(List<String> partitions, String instantTime, String earliestCommitToRetain,
@@ -613,7 +613,7 @@ public class TestCleanPlanner {
   private static HoodieSavepointMetadata getSavepointMetadata(List<String> partitions) {
     Map<String, HoodieSavepointPartitionMetadata> partitionMetadata = new HashMap<>();
     partitions.forEach(partition -> partitionMetadata.put(partition, new HoodieSavepointPartitionMetadata(partition, Collections.emptyList())));
-    return new HoodieSavepointMetadata("user", 1L, "comments", partitionMetadata, 1);
+    return new HoodieSavepointMetadata("user", 1L, "comments", partitionMetadata, 1, null);
   }
 
   private static HoodieCleanerPlan mockLastCleanCommit(HoodieTable hoodieTable, String timestamp, String earliestCommitToRetain, HoodieActiveTimeline activeTimeline,
