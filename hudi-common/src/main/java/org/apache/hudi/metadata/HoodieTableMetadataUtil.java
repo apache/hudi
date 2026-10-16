@@ -2462,8 +2462,23 @@ public class HoodieTableMetadataUtil {
                 }
                 return null;
               }
+              // Where a file lives never changes while it exists under the same name, so the two
+              // records can only ever carry the same source partition path, and taking whichever
+              // one is set is commutative. Two different paths means the name was reused for a
+              // file elsewhere, which ordering cannot resolve either: pick the same one whichever
+              // way the records arrive, so readers merging in different orders at least agree.
+              String oldSourcePartitionPath = oldFileInfo.getSourcePartitionPath();
+              String newSourcePartitionPath = newFileInfo.getSourcePartitionPath();
+              String sourcePartitionPath =
+                  newSourcePartitionPath != null ? newSourcePartitionPath : oldSourcePartitionPath;
+              if (oldSourcePartitionPath != null && newSourcePartitionPath != null
+                  && !oldSourcePartitionPath.equals(newSourcePartitionPath)) {
+                log.warn("A file is listed under two different source partition paths in the files partition "
+                    + "of the metadata table: {} is at both {} and {}", key, oldSourcePartitionPath, newSourcePartitionPath);
+                sourcePartitionPath = Collections.min(Arrays.asList(oldSourcePartitionPath, newSourcePartitionPath));
+              }
               return new HoodieMetadataFileInfo(
-                  Math.max(newFileInfo.getSize(), oldFileInfo.getSize()), false);
+                  Math.max(newFileInfo.getSize(), oldFileInfo.getSize()), false, sourcePartitionPath);
             });
       });
     }
