@@ -616,7 +616,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     // compare partitions
 
-    List<String> allPartitions = validatePartitions(engineContext, basePath, metaClient);
+    List<String> allPartitions = validatePartitions(engineContext, basePath, metaClient, baseFilesForCleaning);
     if (allPartitions.isEmpty()) {
       log.warn("The result of getting all partitions is null or empty, skip current validation. {}", taskLabels);
       return true;
@@ -745,7 +745,8 @@ public class HoodieMetadataTableValidator implements Serializable {
    * Compare the listing partitions result between metadata table and fileSystem.
    */
   @VisibleForTesting
-  List<String> validatePartitions(HoodieSparkEngineContext engineContext, StoragePath basePath, HoodieTableMetaClient metaClient) {
+  List<String> validatePartitions(HoodieSparkEngineContext engineContext, StoragePath basePath, HoodieTableMetaClient metaClient,
+                                  Set<String> baseFilesForCleaning) {
     // compare partitions
     HoodieTimeline completedTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
     List<String> allPartitionPathsFromFS = getPartitionsFromFileSystem(engineContext, metaClient, completedTimeline);
@@ -810,6 +811,12 @@ public class HoodieMetadataTableValidator implements Serializable {
         }
       }
       if (misMatch.get()) {
+        // The partition lists genuinely disagree, so this run fails either way. Before reporting it,
+        // validate the partitions both sides do agree on: throwing here skips the per-partition file
+        // validation the caller would otherwise run, which leaves the operator knowing only that the
+        // partition lists differ and nothing about whether the rest of the table is consistent.
+        List<String> commonPartitions = new ArrayList<>(allPartitionPathsFromFS);
+        commonPartitions.retainAll(allPartitionPathsMeta);
         String message = "Compare Partitions Failed! " + " Additional "
             + additionalFromFS.size() + " partitions from FS, but missing from MDT : \""
             + toStringWithThreshold(additionalFromFS, cfg.logDetailMaxLength)
@@ -817,12 +824,56 @@ public class HoodieMetadataTableValidator implements Serializable {
             + " partitions from MDT, but missing from FS listing : \""
             + toStringWithThreshold(actualAdditionalPartitionsInMDT, cfg.logDetailMaxLength)
             + "\".\n All " + allPartitionPathsFromFS.size() + " partitions from FS listing "
-            + toStringWithThreshold(allPartitionPathsFromFS, cfg.logDetailMaxLength);
+            + toStringWithThreshold(allPartitionPathsFromFS, cfg.logDetailMaxLength)
+            + "\n" + summarizeFileValidationForCommonPartitions(engineContext, metaClient, commonPartitions, baseFilesForCleaning);
         log.error(message);
         throw new HoodieValidationException(message);
       }
     }
     return allPartitionPathsMeta;
+  }
+
+  /**
+   * Validates the file listing for the partitions present on both sides and returns a summary of the
+   * outcome. Unlike the other {@code validate} methods here, this one never throws: it reports through
+   * its return value instead.
+   *
+   * <p>Only called once a partition mismatch has already been detected and this run is going to fail.
+   * The result is reported alongside the mismatch rather than thrown, so that the partition list
+   * difference stays the reported cause; a file level problem found here is extra detail about a run
+   * that was failing anyway. Any error raised while validating a common partition is captured for the
+   * same reason.
+   */
+  private String summarizeFileValidationForCommonPartitions(HoodieSparkEngineContext engineContext, HoodieTableMetaClient metaClient,
+                                                            List<String> commonPartitions, Set<String> baseFilesForCleaning) {
+    if (commonPartitions.isEmpty()) {
+      return "No partitions are common to FS listing and MDT, so there are no file listings to compare.";
+    }
+    try (HoodieMetadataValidationContext metadataTableBasedContext =
+             new HoodieMetadataValidationContext(engineContext, props, metaClient, true, cfg.viewStorageTypeForMetadata);
+         HoodieMetadataValidationContext fsBasedContext =
+             new HoodieMetadataValidationContext(engineContext, props, metaClient, false, cfg.viewStorageTypeForFSListing)) {
+      List<String> failures = engineContext.parallelize(commonPartitions, commonPartitions.size())
+          .map(partitionPath -> {
+            try {
+              validateFilesInPartition(metadataTableBasedContext, fsBasedContext, partitionPath, baseFilesForCleaning);
+              return "";
+            } catch (Exception e) {
+              return partitionPath + " (" + e.getMessage() + ")";
+            }
+          }).collectAsList().stream().filter(failure -> !failure.isEmpty()).collect(Collectors.toList());
+
+      if (failures.isEmpty()) {
+        return "File listings match for all " + commonPartitions.size() + " partitions common to FS listing and MDT.";
+      }
+      return "File listings also differ for " + failures.size() + " of the " + commonPartitions.size()
+          + " partitions common to FS listing and MDT : \"" + toStringWithThreshold(failures, cfg.logDetailMaxLength) + "\".";
+    } catch (Exception e) {
+      // Reporting the partition mismatch matters more than this supplementary check succeeding.
+      log.warn("Failed to validate file listings for the partitions common to FS listing and MDT.", e);
+      return "File listings for the " + commonPartitions.size()
+          + " partitions common to FS listing and MDT could not be compared : " + e.getMessage();
+    }
   }
 
   @VisibleForTesting
