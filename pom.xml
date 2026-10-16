@@ -567,6 +567,7 @@
               <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
               <lance.skip.tests>${lance.skip.tests}</lance.skip.tests>
               <vortex.skip.tests>${vortex.skip.tests}</vortex.skip.tests>
+              <hoodie.test.fork.number>fork${surefire.forkNumber}</hoodie.test.fork.number>
             </systemPropertyVariables>
             <useSystemClassLoader>false</useSystemClassLoader>
             <forkedProcessExitTimeoutInSeconds>30</forkedProcessExitTimeoutInSeconds>
