@@ -230,4 +230,24 @@ public class TestMetadataTableSyncCheckFunctional extends HoodieSparkClientTestB
     assertTrue(result.getFindings().stream().anyMatch(f -> f.contains("drops every index")),
         "expected the dropped indexes to be named, got: " + result.getFindings());
   }
+
+  @Test
+  public void validatorCommandCarriesTheSchemeQualifiedBasePath() throws Exception {
+    // given a drifted listing, so the finding that recommends the validator is emitted
+    writeTableWithMetadataTable();
+    deleteOneFileFromStorage("2015/03/16", path -> path.getName().endsWith(".parquet"));
+
+    // when the check runs
+    HealthCheckResult result = runCheck();
+
+    // then the recommended command names a scheme-qualified path. HoodieMetadataTableValidator
+    // compares the two listings by full path string: the metadata side echoes the path it was
+    // given, the file-system side is always returned scheme-qualified, so a bare --base-path makes
+    // every file compare unequal and the validator reports drift on a healthy table.
+    assertEquals(HealthStatus.UNHEALTHY, result.getStatus());
+    assertTrue(result.getFindings().stream().anyMatch(f -> f.contains("--base-path file:")),
+        "expected a scheme-qualified --base-path in the validator command, got: " + result.getFindings());
+    assertTrue(result.getFindings().stream().anyMatch(f -> f.contains("The scheme matters")),
+        "expected the finding to say why the scheme matters, got: " + result.getFindings());
+  }
 }
