@@ -110,15 +110,25 @@ configuration must be corrected before the rebuild or the result will be undersi
 The one recommendation to be most careful with is rebuilding the metadata table. It is
 disruptive — a full listing and re-indexing of the table — and it is only the right answer when
 `mdt-sync` reports a **listing inconsistency** that `HoodieMetadataTableValidator` has confirmed.
-Sync lag and compaction lag both recover on their own once the writer's next commit or compaction
-runs; recommending a rebuild for either trades a transient condition for an outage.
+Compaction lag does recover on its own once the next compaction runs, so recommending a rebuild for
+it trades a transient condition for an outage.
+
+**Sync lag is different, and the distinction matters.** A later write does not replay an instant the
+metadata table missed — the writer re-initializes only when the metadata timeline is empty
+(`HoodieBackedTableMetadataWriter.isBootstrapNeeded`), so the next write writes its own delta commit
+and moves the synced instant past the gap. The check then reads healthy while the missed write's
+files stay absent from listings. So sync lag that does not correspond to an in-flight write is a
+possible inconsistency, not a delay: confirm it with `HoodieMetadataTableValidator`, which compares
+listings rather than instant times. Telling the user to wait is the one answer that can leave the
+table silently wrong.
 
 ## Guardrails
 
 - Every claim about the metadata table must come from the report. If you have not run the tool,
   say you have not, and do not speculate.
 - Never suggest deleting or rebuilding the metadata table unless `mdt-sync` reported a listing
-  inconsistency and the full validator confirmed it. Lag of either kind is not a reason.
+  inconsistency and the full validator confirmed it. Lag on its own is not a reason -- but do not
+  tell the user to wait for sync lag to clear either; run the validator and act on what it finds.
 - Never pass `--apply-all-defaults` without the user's explicit choice.
 - Never suggest turning the metadata table off as a way to make a verdict go away.
 - If the user asks about compaction, cleaning, or archival of the data table itself, or about
