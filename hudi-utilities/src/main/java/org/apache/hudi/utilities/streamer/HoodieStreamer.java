@@ -434,6 +434,10 @@ public class HoodieStreamer implements Serializable {
     @Parameter(names = {"--max-retry-count"}, description = "the max retry count if --retry-on-source-failures is enabled")
     public Integer maxRetryCount = 3;
 
+    @Parameter(names = {"--clustering-conflict-retry-interval-seconds"}, description = "In continuous mode, how long to wait before retrying "
+        + "a write that was rejected because it conflicts with a pending clustering plan")
+    public Integer clusteringConflictRetryIntervalSecs = 60;
+
     @Parameter(names = {"--allow-commit-on-no-checkpoint-change"}, description = "allow commits even if checkpoint has not changed before and after fetch data"
         + "from source. This might be useful in sources like SqlSource where there is not checkpoint. And is not recommended to enable in continuous mode.")
     public Boolean allowCommitOnNoCheckpointChange = false;
@@ -892,10 +896,10 @@ public class HoodieStreamer implements Serializable {
 
     private void handleUpsertException(HoodieUpsertException ue) {
       if (ue.getCause() instanceof HoodieClusteringUpdateException) {
-        log.warn("Write rejected due to conflicts with pending clustering operation. Going to retry after 1 min with the hope "
-            + "that clustering will complete by then.", ue);
+        log.warn("Write rejected due to conflicts with pending clustering operation. Going to retry after {}s with the hope "
+            + "that clustering will complete by then.", cfg.clusteringConflictRetryIntervalSecs, ue);
         try {
-          Thread.sleep(60000); // Intentionally not using cfg.minSyncIntervalSeconds, since it could be too high or it could be 0.
+          Thread.sleep(cfg.clusteringConflictRetryIntervalSecs * 1000L); // Intentionally not using cfg.minSyncIntervalSeconds, since it could be too high or it could be 0.
           // Once the Hudi Streamer gets past this clustering update exception, regular syncs will honor cfg.minSyncIntervalSeconds.
         } catch (InterruptedException e) {
           throw new HoodieException("Deltastreamer interrupted while waiting for next round ", e);

@@ -2576,6 +2576,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.tableType = HoodieTableType.COPY_ON_WRITE.name();
     cfg.configs.addAll(getTableServicesConfigs(totalRecords, "false", "", "", "true", "2"));
     cfg.configs.add(String.format("%s=%s", "hoodie.datasource.write.row.writer.enable", "false"));
+    cfg.clusteringConflictRetryIntervalSecs = 2;
     HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
     deltaStreamerTestRunner(ds, cfg, (r) -> {
       // when pending clustering overlaps w/ incoming, incoming batch will fail and hence will result in rollback.
