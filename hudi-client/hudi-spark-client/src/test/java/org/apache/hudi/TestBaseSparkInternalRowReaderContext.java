@@ -19,6 +19,7 @@
 
 package org.apache.hudi;
 
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
@@ -26,6 +27,7 @@ import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.HoodieStorage;
@@ -36,11 +38,13 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
+import org.apache.spark.sql.types.Decimal;
 import org.apache.spark.unsafe.types.UTF8String;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -139,6 +143,24 @@ class TestBaseSparkInternalRowReaderContext {
     assertTrue(result.isNullAt(0));
     assertEquals("Dan", result.getUTF8String(1).toString());
     assertTrue(result.getBoolean(2));
+  }
+
+  @Test
+  void testConvertOrderingValueToJava() {
+    RecordContext<InternalRow> recordContext = readerContext.getRecordContext();
+    HoodieUTF8String comparableString = new HoodieUTF8String(UTF8String.fromString("abc")) {
+      @Override
+      public int compareTo(HoodieUTF8String other) {
+        return toString().compareTo(other.toString());
+      }
+    };
+    assertEquals("abc", recordContext.convertOrderingValueToJava(comparableString));
+    assertEquals("raw", recordContext.convertOrderingValueToJava(UTF8String.fromString("raw")));
+    assertEquals(new BigDecimal("1.50"), recordContext.convertOrderingValueToJava(Decimal.apply(new BigDecimal("1.50"))));
+    assertEquals(5L, recordContext.convertOrderingValueToJava(5L));
+    assertEquals(
+        new ArrayComparable(new Comparable[]{"abc", new BigDecimal("1.50"), 5L}),
+        recordContext.convertOrderingValueToJava(new ArrayComparable(new Comparable[]{comparableString, Decimal.apply(new BigDecimal("1.50")), 5L})));
   }
 
   static class DummySparkReaderContext extends BaseSparkInternalRowReaderContext {

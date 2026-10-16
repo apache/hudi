@@ -240,6 +240,14 @@ public abstract class RecordContext<T> implements Serializable {
   }
 
   /**
+   * Converts an ordering value of the engine type, e.g., one returned by {@link #convertOrderingValueToEngineType},
+   * to a Java type that a delete block can store.
+   */
+  public Comparable convertOrderingValueToJava(Comparable value) {
+    return value;
+  }
+
+  /**
    * Converts an Avro record, e.g., serialized in the log files, to an engine-specific record.
    *
    * @param avroRecord The Avro record.
