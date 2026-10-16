@@ -311,6 +311,10 @@ public class HoodieTableHealthChecker implements Serializable {
         splitter = IdentitySplitter.class)
     public List<String> configs = new ArrayList<>();
 
+    @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master for the checks that need one. "
+        + "Ignored when the job already has a master, as under spark-submit")
+    public String sparkMaster = "local[*]";
+
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
 
@@ -320,6 +324,7 @@ public class HoodieTableHealthChecker implements Serializable {
           + "   --base-path " + basePath + ", \n"
           + "   --checks " + checks + ", \n"
           + "   --apply-all-defaults " + applyAllDefaults + ", \n"
+          + "   --spark-master " + sparkMaster + ", \n"
           + "   --output " + output + ", \n"
           + "   --verbose " + verbose + ", \n"
           + "   --props " + propsFilePath + ", \n"
@@ -338,14 +343,22 @@ public class HoodieTableHealthChecker implements Serializable {
       System.exit(EXIT_ERROR);
     }
 
+    // Built unconditionally: a local context costs little, and building it only for the checks
+    // that need one would mean the set of selected checks decides whether the tool can run at all.
+    JavaSparkContext jsc = null;
     try {
-      System.exit(new HoodieTableHealthChecker(new Configuration(), cfg).run());
+      jsc = UtilHelpers.buildSparkContext("table-health-checker", cfg.sparkMaster, false);
+      System.exit(new HoodieTableHealthChecker(new Configuration(), cfg, Option.of(jsc)).run());
     } catch (IllegalArgumentException e) {
       System.err.println("ERROR: " + e.getMessage());
       System.exit(EXIT_ERROR);
     } catch (Throwable t) {
       log.error("Failed to run table health check for {}", cfg, t);
       System.exit(EXIT_ERROR);
+    } finally {
+      if (jsc != null) {
+        jsc.stop();
+      }
     }
   }
 

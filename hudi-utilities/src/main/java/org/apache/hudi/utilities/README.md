@@ -36,9 +36,14 @@ spark-submit \
   --props s3://bucket/path/to/writer.properties
 ```
 
-The checks currently shipped are timeline-only, so no Spark session is used for the work itself --
-but the bundle still needs the Hadoop, Jackson and slf4j classes that `spark-submit` puts on the
-classpath, so run it that way rather than as a bare `java -cp`.
+Run it with `spark-submit` rather than a bare `java -cp`: the tool builds a Spark context for the
+checks that need one, and the bundle relies on the Hadoop, Jackson and slf4j classes that
+`spark-submit` puts on the classpath. `--spark-master` sets the master when the job does not
+already have one; under `spark-submit` the submitted master wins.
+
+Most checks read only the timeline and finish in seconds whatever the table size. Checks that
+compare metadata-table listings against storage are the exception -- they scan the table, so size
+the job accordingly rather than assuming the whole run is cheap.
 
 ## Why writer properties are required
 
