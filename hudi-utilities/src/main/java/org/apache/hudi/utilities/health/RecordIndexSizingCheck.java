@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.index.record.HoodieRecordIndex;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -35,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.RECORD_INDEX_AVERAGE_RECORD_SIZE;
 
 /**
@@ -109,7 +111,14 @@ public class RecordIndexSizingCheck implements HealthCheck {
     }
 
     TypedProperties props = context.getProps();
-    boolean partitionedIndex = ConfigUtils.getBooleanWithAltKeys(props, HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP);
+    // The layout is a fact about the table, so read it from the index definition on storage rather
+    // than from a writer property. The property describes what a writer wants, defaults to false
+    // when unset, and would silently send a partitioned table down the global branch -- picking the
+    // wrong sizing keys, naming the wrong keys in the skip message, and skipping the per-data-
+    // partition comparison entirely under --apply-all-defaults.
+    Option<Boolean> layoutOnStorage = partitionedIndexOnStorage(context.getMetaClient());
+    boolean partitionedIndex = layoutOnStorage.orElseGet(
+        () -> ConfigUtils.getBooleanWithAltKeys(props, HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP));
     ConfigProperty<Integer> minCountProp = partitionedIndex
         ? HoodieMetadataConfig.RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP
         : HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP;
@@ -131,12 +140,30 @@ public class RecordIndexSizingCheck implements HealthCheck {
         Long.parseLong(configValue(props, HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP)));
 
     HealthCheckResult.Builder result = HealthCheckResult.builder(NAME)
-        .config(HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key(), partitionedIndex)
+        .config("observed.index.layout", partitionedIndex ? "partitioned" : "global")
+        .config("observed.index.layout.source",
+            layoutOnStorage.isPresent() ? "index definition on storage" : "writer properties")
         .config(minCountProp.key(), sizing.minFileGroupCount)
         .config(maxCountProp.key(), sizing.maxFileGroupCount)
         .config(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP.key(), sizing.maxFileGroupSizeBytes)
         .config(HoodieMetadataConfig.RECORD_INDEX_GROWTH_FACTOR_PROP.key(), sizing.growthFactor)
         .config("effective.average.record.size.bytes", RECORD_INDEX_AVERAGE_RECORD_SIZE);
+
+    // A writer configured for a layout the table does not have is worth saying out loud: the index
+    // keeps the shape it was initialized with, so the writer's sizing keys are not the ones
+    // governing it.
+    if (layoutOnStorage.isPresent()
+        && props.containsKey(HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key())
+        && ConfigUtils.getBooleanWithAltKeys(props, HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP)
+            != layoutOnStorage.get()) {
+      result.finding(String.format(
+          "The index on storage is %s, but the writer sets %s=%s. The layout is fixed at "
+              + "initialization, so the index keeps the shape it has and the %s sizing keys are the "
+              + "ones governing it.",
+          partitionedIndex ? "partitioned" : "global",
+          HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key(), !layoutOnStorage.get(),
+          partitionedIndex ? "partitioned" : "global"));
+    }
 
     if (sizing.maxFileGroupSizeBytes < RECORD_INDEX_AVERAGE_RECORD_SIZE) {
       return result.status(HealthStatus.SKIPPED)
@@ -163,7 +190,26 @@ public class RecordIndexSizingCheck implements HealthCheck {
     boolean oversizedFileGroup = footprint.largestFileGroupBytes > maxHealthyFileGroupBytes;
 
     if (!undersized && !oversizedFileGroup) {
-      return result.status(HealthStatus.HEALTHY)
+      HealthCheckResult.Builder healthy = result.status(HealthStatus.HEALTHY);
+      if (comparison.isPresent() && comparison.get().idealIsFloor) {
+        CountComparison floorBound = comparison.get();
+        // Report the floor rather than passing silently: the index is below the configured
+        // minimum, and an operator who looks at the raw counts should find out here why that is
+        // not a problem, instead of reading it as one the check missed.
+        healthy.summary(String.format(
+            "%s has %d file group(s), fewer than the configured minimum of %d, but its estimated %d records are "
+                + "well inside what one file group holds, so the minimum is the only thing calling for more",
+            floorBound.subject(), floorBound.observedFileGroupCount, sizing.minFileGroupCount,
+            floorBound.estimatedRecordCount));
+        healthy.finding(String.format(
+            "The writer's sizing resolves to %d file group(s) for this index, but that number comes from the "
+                + "configured minimum rather than from the table: at %d bytes on storage the estimate is below one "
+                + "file group's worth of records. There is no shortfall to act on, and re-bootstrapping to reach "
+                + "the minimum would buy nothing.",
+            floorBound.idealFileGroupCount, floorBound.observedSizeBytes));
+        return healthy.build();
+      }
+      return healthy
           .summary(comparison.isPresent()
               ? String.format("%s has %d file group(s) against an ideal of %d for an estimated %d records; largest "
                       + "file group is %d bytes", comparison.get().subject(), comparison.get().observedFileGroupCount,
@@ -266,15 +312,33 @@ public class RecordIndexSizingCheck implements HealthCheck {
         + "the record index is unavailable until the rebuild completes, and the drop cannot be undone in place. "
         + "Plan it as a maintenance window.";
     if (partitionedIndex) {
-      return preamble + " Note that HoodieIndexer cannot currently rebuild a partitioned record index: it maps the "
-          + "on-storage 'record_index' partition to the global enable flag unconditionally, so a rebuild produces a "
-          + "global index with default sizing, and supplying the partitioned key in its own --props does not help "
-          + "because that mapping overwrites it. See https://github.com/apache/hudi/issues/20343. Until that is "
-          + "fixed, treat this finding as a sizing problem to plan around rather than one to re-bootstrap away.";
+      return preamble + " Two things make a rebuild the wrong move here. HoodieIndexer cannot currently rebuild a "
+          + "partitioned record index: it maps the on-storage 'record_index' partition to the global enable flag "
+          + "unconditionally, so a rebuild produces a global index with default sizing, and supplying the "
+          + "partitioned key in its own --props does not help because that mapping overwrites it "
+          + "(https://github.com/apache/hudi/issues/20343). And a rebuild would not hold anyway: data partitions "
+          + "added afterwards are always initialized at "
+          + HoodieMetadataConfig.RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key() + " file groups, never from the "
+          + "size estimate, so tomorrow's partition starts undersized again. Raising that minimum is the lever that "
+          + "persists; it applies to partitions created from then on, not to the ones already initialized.";
     }
     return preamble + " Drop it with 'metadata delete-record-index' in hudi-cli (or HoodieIndexer --mode dropindex "
         + "--index-types RECORD_INDEX; note the hudi-cli command takes a backup by default), correct the sizing "
         + "configuration, then rebuild it with HoodieIndexer --mode scheduleAndExecute --index-types RECORD_INDEX.";
+  }
+
+  /**
+   * The index layout as recorded on storage, when the table has an index definition for the record
+   * index. {@code HoodieRecordIndex.IS_PARTITIONED_OPTION} is written at initialization, so it
+   * describes the index that exists rather than the one a writer is configured for.
+   *
+   * @return empty when no record-index definition is present, in which case the caller falls back
+   *         to the writer property.
+   */
+  private static Option<Boolean> partitionedIndexOnStorage(HoodieTableMetaClient metaClient) {
+    return metaClient.getIndexMetadata()
+        .map(metadata -> metadata.getIndexDefinitions().get(PARTITION_NAME_RECORD_INDEX))
+        .map(HoodieRecordIndex::isPartitioned);
   }
 
   /**
@@ -343,14 +407,21 @@ public class RecordIndexSizingCheck implements HealthCheck {
     final long observedSizeBytes;
     final long estimatedRecordCount;
     final int idealFileGroupCount;
+    /**
+     * Whether {@link #idealFileGroupCount} came from the configured floor rather than from the
+     * table's own size. When it did, the ideal carries no information about how full the index
+     * actually is, so a shortfall against it says nothing about index health.
+     */
+    final boolean idealIsFloor;
 
     private CountComparison(Option<String> dataPartition, int observedFileGroupCount, long observedSizeBytes,
-                            long estimatedRecordCount, int idealFileGroupCount) {
+                            long estimatedRecordCount, int idealFileGroupCount, boolean idealIsFloor) {
       this.dataPartition = dataPartition;
       this.observedFileGroupCount = observedFileGroupCount;
       this.observedSizeBytes = observedSizeBytes;
       this.estimatedRecordCount = estimatedRecordCount;
       this.idealFileGroupCount = idealFileGroupCount;
+      this.idealIsFloor = idealIsFloor;
     }
 
     static CountComparison of(Option<String> dataPartition, RecordIndexFootprint footprint, SizingConfig sizing) {
@@ -359,7 +430,24 @@ public class RecordIndexSizingCheck implements HealthCheck {
           MetadataPartitionType.RECORD_INDEX, () -> estimatedRecordCount, RECORD_INDEX_AVERAGE_RECORD_SIZE,
           sizing.minFileGroupCount, sizing.maxFileGroupCount, sizing.growthFactor, sizing.maxFileGroupSizeBytes);
       return new CountComparison(dataPartition, footprint.fileGroupCount, footprint.totalSizeBytes,
-          estimatedRecordCount, idealFileGroupCount);
+          estimatedRecordCount, idealFileGroupCount, isFloorBound(estimatedRecordCount, sizing));
+    }
+
+    /**
+     * Mirrors the two branches in {@code HoodieTableMetadataUtil.estimateFileGroupCount} that
+     * return the minimum without regard to table size: a fixed count, where min and max are equal,
+     * and an estimate at or below the minimum. A 3 MB index against a 1 GiB maximum file-group
+     * size estimates zero file groups and is clamped up to the floor, which is how a tiny index
+     * ends up being told it needs ten.
+     */
+    private static boolean isFloorBound(long estimatedRecordCount, SizingConfig sizing) {
+      if (sizing.minFileGroupCount == sizing.maxFileGroupCount && sizing.minFileGroupCount != 0) {
+        return true;
+      }
+      long expectedNumRecords = (long) Math.ceil(estimatedRecordCount * (double) sizing.growthFactor);
+      long maxRecordsPerFileGroup = sizing.maxFileGroupSizeBytes / Math.max(RECORD_INDEX_AVERAGE_RECORD_SIZE, 1L);
+      long estimatedFileGroupCount = expectedNumRecords / Math.max(maxRecordsPerFileGroup, 1L);
+      return estimatedFileGroupCount <= sizing.minFileGroupCount;
     }
 
     int minHealthyFileGroupCount() {
@@ -367,7 +455,10 @@ public class RecordIndexSizingCheck implements HealthCheck {
     }
 
     boolean isUndersized() {
-      return observedFileGroupCount < minHealthyFileGroupCount();
+      // A shortfall against a floor-derived ideal is not evidence of anything: the index is below
+      // the configured minimum, but the estimate says it is nowhere near a single file group's
+      // capacity, so there is no sizing problem to re-bootstrap away.
+      return !idealIsFloor && observedFileGroupCount < minHealthyFileGroupCount();
     }
 
     double ratio() {
