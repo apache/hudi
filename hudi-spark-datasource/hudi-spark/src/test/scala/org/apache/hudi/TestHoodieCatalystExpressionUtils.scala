@@ -57,11 +57,9 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
   }
 
   @Test
-  def testUnaryMathAndStringTransformationsPreserveOrdering(): Unit = {
+  def testUnaryMathTransformationsPreserveOrdering(): Unit = {
     assertEquals(Some(dblAttr), matched(Exp(dblAttr)))
     assertEquals(Some(dblAttr), matched(Log(dblAttr)))
-    assertEquals(Some(strAttr), matched(Upper(strAttr)))
-    assertEquals(Some(strAttr), matched(Lower(strAttr)))
   }
 
   @Test
@@ -103,5 +101,8 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     assertEquals(None, matched(Add(Literal(1), Literal(2))))
     // Sqrt is not one of the whitelisted order-preserving transformations.
     assertEquals(None, matched(Sqrt(dblAttr)))
+    // Case folding breaks the binary ordering of strings: "Zebra" < "apple", but lower("Zebra") > "apple".
+    assertEquals(None, matched(Lower(strAttr)))
+    assertEquals(None, matched(Upper(strAttr)))
   }
 }
