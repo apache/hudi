@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.core.io.storage.HoodieAvroBootstrapFileReader;
 import org.apache.hudi.core.io.storage.HoodieFileReader;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.variant.Spark4VariantShreddingProvider;
@@ -37,19 +38,34 @@ import org.apache.hudi.variant.Spark4VariantShreddingProvider;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.avro.AvroParquetWriter;
+import org.apache.parquet.example.data.Group;
+import org.apache.parquet.example.data.simple.SimpleGroupFactory;
+import org.apache.parquet.hadoop.ParquetWriter;
+import org.apache.parquet.hadoop.example.ExampleParquetWriter;
+import org.apache.parquet.io.api.Binary;
+import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.MessageTypeParser;
 import org.apache.spark.types.variant.Variant;
 import org.apache.spark.types.variant.VariantBuilder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.time.ZoneOffset;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
+import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -68,6 +84,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * InternalRow reader), so this is the only place the alignment is exercised end to end.
  * The null/throw guards of {@code create} are covered by {@code TestHoodieVariantReconstruction}
  * (hudi-hadoop-common); the provider's shred/rebuild in isolation by {@code TestSpark4VariantShreddingProvider}.
+ * Files with typed_value encodings Hudi's writer never produces are read through {@link HoodieAvroParquetReader},
+ * which hands the reconstruction the footer's parquet type.
  */
 class TestHoodieVariantReconstructionRoundTrip {
 
@@ -89,7 +107,9 @@ class TestHoodieVariantReconstructionRoundTrip {
 
     HoodieStorage storage = HoodieTestUtils.getStorage(tmp.toString()); // allow.reading.shredded defaults true
     HoodieVariantReconstruction reconstruction =
-        HoodieVariantReconstruction.create(fileSchema, requestedSchema, storage);
+        HoodieVariantReconstruction.create(fileSchema,
+            getAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(fileSchema),
+            requestedSchema, storage);
     assertNotNull(reconstruction, "create should build a reconstruction for a shredded variant column");
 
     // Build the input the parquet-avro reader would produce: a record at the intermediate (shredded)
@@ -120,8 +140,8 @@ class TestHoodieVariantReconstructionRoundTrip {
   @Test
   void createThenReconstructRebuildsAValueLessShreddedGroup(@TempDir Path tmp) throws Exception {
     // The shredding spec lets a writer omit `value` when nothing is left over. TestHoodieVariantReconstruction
-    // pins that Hudi detects the resulting two-field group, but its stub provider ignores the shredded
-    // schema, so this is the only place the real provider sees the shape: buildVariantSchema assigns
+    // pins that Hudi detects the resulting two-field group, but its stub provider ignores the parquet
+    // group, so this is the only place the real provider sees the shape: buildReadVariantSchema assigns
     // variantIdx = -1 there, which shifts every other ordinal and is what ShreddingUtils.rebuild reads to
     // decide there is no residual. Get the mapping wrong and the rebuild reads the wrong Avro field.
     Map<String, HoodieSchema> shreddedFields = new LinkedHashMap<>();
@@ -157,7 +177,9 @@ class TestHoodieVariantReconstructionRoundTrip {
 
     HoodieStorage storage = HoodieTestUtils.getStorage(tmp.toString()); // allow.reading.shredded defaults true
     HoodieVariantReconstruction reconstruction =
-        HoodieVariantReconstruction.create(fileSchema, requestedSchema, storage);
+        HoodieVariantReconstruction.create(fileSchema,
+            getAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(fileSchema),
+            requestedSchema, storage);
     assertNotNull(reconstruction, "a shredded group with no value column must still engage");
 
     GenericRecord valueLessV = new GenericData.Record(
@@ -235,6 +257,105 @@ class TestHoodieVariantReconstructionRoundTrip {
       assertFalse(iterator.hasNext());
     }
     reader.close();
+  }
+
+  private static final String VARIANT_TEST_NAMESPACE = "org.apache.hudi.test";
+
+  private static Variant scalar(Consumer<VariantBuilder> append) {
+    VariantBuilder builder = new VariantBuilder(false);
+    append.accept(builder);
+    return builder.result();
+  }
+
+  /** A required shredded variant group {@code column} with the given optional typed_value declaration. */
+  private static String shreddedGroup(String column, String typedValue) {
+    return " required group " + column + " { required binary metadata; optional binary value; optional "
+        + typedValue + "; }";
+  }
+
+  private static StoragePath writeParquet(Path tmp, MessageType schema, Group row) throws IOException {
+    Path file = tmp.resolve("shredded.parquet");
+    try (ParquetWriter<Group> writer =
+             ExampleParquetWriter.builder(new org.apache.hadoop.fs.Path(file.toString())).withType(schema).build()) {
+      writer.write(row);
+    }
+    return new StoragePath(file.toUri().toString());
+  }
+
+  @Test
+  void readerRebuildsTypedValueEncodingsTheFooterConversionLoses(@TempDir Path tmp) throws Exception {
+    // A file from another writer whose typed_value leaves the footer's Avro conversion reads as a plain
+    // int, long, fixed and bytes. The reader decodes each leaf by its parquet type, as Spark 4 does.
+    String json = "{\"a\":[1,2]}";
+    byte[] bytes = {1, 2, 3, (byte) 0xFF};
+    long millis = 1_700_000_000_123L;
+    MessageType fileSchema = MessageTypeParser.parseMessageType("message r {"
+        + shreddedGroup("v_dec", "int32 typed_value (DECIMAL(9,2))")
+        + shreddedGroup("v_ts", "int64 typed_value (TIMESTAMP(MILLIS,true))")
+        + shreddedGroup("v_fixed", "fixed_len_byte_array(4) typed_value")
+        + shreddedGroup("v_u64", "int64 typed_value (INTEGER(64,false))")
+        + shreddedGroup("v_json", "binary typed_value (JSON)") + " }");
+    Binary metadata = Binary.fromConstantByteArray(scalar(VariantBuilder::appendNull).getMetadata());
+    Group row = new SimpleGroupFactory(fileSchema).newGroup();
+    row.addGroup("v_dec").append(HoodieSchema.Variant.VARIANT_METADATA_FIELD, metadata)
+        .append(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD, 150);
+    row.addGroup("v_ts").append(HoodieSchema.Variant.VARIANT_METADATA_FIELD, metadata)
+        .append(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD, millis);
+    row.addGroup("v_fixed").append(HoodieSchema.Variant.VARIANT_METADATA_FIELD, metadata)
+        .append(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD, Binary.fromConstantByteArray(bytes));
+    row.addGroup("v_u64").append(HoodieSchema.Variant.VARIANT_METADATA_FIELD, metadata)
+        .append(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD, -1L);
+    row.addGroup("v_json").append(HoodieSchema.Variant.VARIANT_METADATA_FIELD, metadata)
+        .append(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD, json);
+
+    Map<String, Variant> expected = new LinkedHashMap<>();
+    expected.put("v_dec", scalar(b -> b.appendDecimal(new BigDecimal("1.50"))));
+    expected.put("v_ts", scalar(b -> b.appendTimestamp(millis * 1000)));
+    expected.put("v_fixed", scalar(b -> b.appendBinary(bytes)));
+    expected.put("v_u64", scalar(b -> b.appendDecimal(new BigDecimal("18446744073709551615"))));
+    expected.put("v_json", scalar(b -> b.appendString(json)));
+    HoodieSchema requestedSchema = HoodieSchema.createRecord("r", VARIANT_TEST_NAMESPACE, null,
+        expected.keySet().stream()
+            .map(name -> HoodieSchemaField.of(name, HoodieSchema.createVariant(name, VARIANT_TEST_NAMESPACE, null)))
+            .collect(Collectors.toList()));
+
+    HoodieStorage storage = HoodieTestUtils.getStorage(tmp.toString());
+    try (HoodieAvroParquetReader reader = new HoodieAvroParquetReader(storage, writeParquet(tmp, fileSchema, row));
+         ClosableIterator<IndexedRecord> records = reader.getIndexedRecordIterator(requestedSchema, requestedSchema)) {
+      GenericRecord out = (GenericRecord) records.next();
+      for (Map.Entry<String, Variant> column : expected.entrySet()) {
+        GenericRecord rebuiltV = (GenericRecord) out.get(column.getKey());
+        Variant rebuilt = new Variant(
+            toBytes(rebuiltV.get(HoodieSchema.Variant.VARIANT_VALUE_FIELD)),
+            toBytes(rebuiltV.get(HoodieSchema.Variant.VARIANT_METADATA_FIELD)));
+        assertEquals(column.getValue().toJson(ZoneOffset.UTC), rebuilt.toJson(ZoneOffset.UTC), column.getKey());
+        // The binary also pins the variant type (e.g. decimal vs long), which the json can hide.
+        assertArrayEquals(column.getValue().getValue(), rebuilt.getValue(), column.getKey());
+      }
+    }
+  }
+
+  @Test
+  void readerFailsOnOpenForTypedValueEncodingSparkRejects(@TempDir Path tmp) throws Exception {
+    // Spark 4 rejects a TIMESTAMP(NANOS) typed_value when it opens the file, whatever the rows hold. So
+    // does the reader, here with every typed_value null and the variant kept in the residual value.
+    MessageType fileSchema = MessageTypeParser.parseMessageType("message r {"
+        + shreddedGroup("v", "int64 typed_value (TIMESTAMP(NANOS,true))") + " }");
+    Variant variant = scalar(b -> b.appendLong(7));
+    Group row = new SimpleGroupFactory(fileSchema).newGroup();
+    row.addGroup("v")
+        .append(HoodieSchema.Variant.VARIANT_METADATA_FIELD, Binary.fromConstantByteArray(variant.getMetadata()))
+        .append(HoodieSchema.Variant.VARIANT_VALUE_FIELD, Binary.fromConstantByteArray(variant.getValue()));
+    HoodieSchema requestedSchema = HoodieSchema.createRecord("r", VARIANT_TEST_NAMESPACE, null,
+        Collections.singletonList(HoodieSchemaField.of("v", HoodieSchema.createVariant())));
+
+    HoodieStorage storage = HoodieTestUtils.getStorage(tmp.toString());
+    try (HoodieAvroParquetReader reader = new HoodieAvroParquetReader(storage, writeParquet(tmp, fileSchema, row))) {
+      HoodieException e = assertThrows(HoodieException.class,
+          () -> reader.getIndexedRecordIterator(requestedSchema, requestedSchema));
+      assertTrue(e.getMessage().contains("column 'v'") && e.getMessage().contains("TIMESTAMP(NANOS,true)"),
+          e.getMessage());
+    }
   }
 
   private static byte[] toBytes(Object byteBuffer) {

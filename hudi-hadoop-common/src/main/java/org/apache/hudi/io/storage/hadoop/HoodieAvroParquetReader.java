@@ -52,6 +52,7 @@ import org.apache.parquet.avro.HoodieAvroParquetReaderBuilder;
 import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.util.HadoopInputFile;
+import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -72,6 +73,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
   private final HoodieStorage storage;
   private final FileFormatUtils parquetUtils;
   private final List<ParquetReaderIterator> readerIterators = new ArrayList<>();
+  private Option<MessageType> fileParquetSchema = Option.empty();
   private Option<HoodieSchema> fileSchema = Option.empty();
 
   public HoodieAvroParquetReader(HoodieStorage storage, StoragePath path) {
@@ -127,9 +129,19 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
     // Lazy initialization with caching: read schema from parquet file footer on first call,
     // then cache it in fileSchema to avoid repeated I/O on subsequent calls
     return fileSchema.orElseGet(() -> {
-      HoodieSchema schema = parquetUtils.readSchema(storage, path);
+      // Same conversion as ParquetUtils.readSchema, from the footer cached for the variant reconstruction.
+      HoodieSchema schema = getAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class))
+          .convert(getParquetSchema());
       fileSchema = Option.ofNullable(schema);
       return schema;
+    });
+  }
+
+  private MessageType getParquetSchema() {
+    return fileParquetSchema.orElseGet(() -> {
+      MessageType messageType = ParquetUtils.readFileMetadataOnly(storage, path).getFileMetaData().getSchema();
+      fileParquetSchema = Option.of(messageType);
+      return messageType;
     });
   }
 
@@ -190,7 +202,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
     Configuration hadoopConf = storage.getConf().unwrapCopyAs(Configuration.class);
     // If the on-disk file shreds variant columns, read them in their shredded (typed_value-bearing)
     // shape and reconstruct the unshredded variant per-record below (#18931). null when not needed.
-    HoodieVariantReconstruction reconstruction = HoodieVariantReconstruction.create(getSchema(), schema, storage);
+    HoodieVariantReconstruction reconstruction = HoodieVariantReconstruction.create(getSchema(), getParquetSchema(), schema, storage);
     HoodieSchema readSchema = reconstruction == null ? schema : reconstruction.intermediateSchema();
     HoodieSchema repairedFileSchema = HoodieSchemaRepair.repairLogicalTypes(getSchema(), readSchema);
     Option<HoodieSchema> promotedSchema = Option.empty();
