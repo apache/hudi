@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.HoodieSyncTool;
@@ -44,6 +45,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
 
+import java.io.FileNotFoundException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -356,7 +358,8 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     }
   }
 
-  private boolean validateAndSyncPartitions(String tableName, boolean tableExists) {
+  @VisibleForTesting
+  boolean validateAndSyncPartitions(String tableName, boolean tableExists) {
     boolean syncIncremental = isIncrementalSync();
     Option<String> lastCommitTimeSynced = (tableExists && syncIncremental)
         ? syncClient.getLastCommitTimeSynced(tableName) : Option.empty();
@@ -382,16 +385,51 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
           config.getString(META_SYNC_BASE_PATH), config.getHadoopFileSystem());
       partitionsChanged = syncAllPartitions(tableName);
     } else {
-      List<String> writtenPartitionsSince = syncClient.getWrittenPartitionsSince(lastCommitTimeSynced, lastCommitCompletionTimeSynced);
+      List<String> writtenPartitionsSince;
+      Set<String> droppedPartitions;
+      try {
+        writtenPartitionsSince = syncClient.getWrittenPartitionsSince(lastCommitTimeSynced, lastCommitCompletionTimeSynced);
+        // find dropped partitions, if any, in the latest commit
+        droppedPartitions = syncClient.getDroppedPartitionsSince(lastCommitTimeSynced, lastCommitCompletionTimeSynced);
+      } catch (HoodieIOException e) {
+        if (!shouldSyncAllPartitionsAfterReadFailure(lastCommitTimeSynced.get(), e)) {
+          throw e;
+        }
+        log.warn("Instants since last commit time synced {} were archived while reading the timeline. Listing all partitions in {}",
+            lastCommitTimeSynced.get(), config.getString(META_SYNC_BASE_PATH), e);
+        return syncAllPartitions(tableName);
+      }
       log.info("Storage partitions scan complete. Found {}", writtenPartitionsSince.size());
-
-      // Sync the partitions if needed
-      // find dropped partitions, if any, in the latest commit
-      Set<String> droppedPartitions = syncClient.getDroppedPartitionsSince(lastCommitTimeSynced, lastCommitCompletionTimeSynced);
       log.info("Partitions dropped since last sync: {}", droppedPartitions.size());
+      // Sync the partitions if needed
       partitionsChanged = syncPartitions(tableName, writtenPartitionsSince, droppedPartitions);
     }
     return partitionsChanged;
+  }
+
+  /**
+   * Whether a timeline read failure during an incremental sync means the archiver removed instants the sync still
+   * needed, in which case listing all partitions on storage gives the right answer: either an instant inside the
+   * window vanished (a FileNotFoundException in the cause chain), or the last commit time synced itself fell off
+   * the active timeline. The latter is checked on a fresh listing without replacing the timeline this sync works
+   * from, so the last commit time synced recorded at the end still matches what was synced.
+   */
+  @VisibleForTesting
+  boolean shouldSyncAllPartitionsAfterReadFailure(String lastCommitTimeSynced, HoodieIOException readFailure) {
+    if (hasFileNotFoundCause(readFailure)) {
+      return true;
+    }
+    return syncClient.getMetaClient().getActiveTimeline().reload()
+        .getCommitsTimeline().filterCompletedInstants().isBeforeTimelineStarts(lastCommitTimeSynced);
+  }
+
+  private static boolean hasFileNotFoundCause(Throwable throwable) {
+    for (Throwable cause = throwable; cause != null; cause = cause.getCause()) {
+      if (cause instanceof FileNotFoundException) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private boolean isIncrementalSync() {

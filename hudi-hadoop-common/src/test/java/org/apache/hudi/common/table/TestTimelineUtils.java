@@ -52,6 +52,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -61,6 +62,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT;
@@ -662,6 +664,75 @@ class TestTimelineUtils extends HoodieCommonTestHarness {
     activeTimeline.deleteInstantFileIfExists(metaClient.getActiveTimeline().getCleanerTimeline().filterCompletedInstants().lastInstant().get());
     droppedPartitions = TimelineUtils.getDroppedPartitions(metaClient, Option.empty(), Option.empty());
     assertTrue(droppedPartitions.isEmpty());
+  }
+
+  /**
+   * With a last commit time synced, only the cleans since it are read, and a clean in that window that cannot be
+   * read fails the call instead of being skipped.
+   */
+  @Test
+  void testGetDroppedPartitionsReadsOnlyCleansSinceLastCommitTimeSynced() throws Exception {
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+    String olderPartition = "p1";
+    HoodieInstant instant1 = new HoodieInstant(INFLIGHT, COMMIT_ACTION, "00001", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
+    activeTimeline.createNewInstant(instant1);
+    activeTimeline.saveAsComplete(instant1, getCommitMetadata(basePath, olderPartition, "00001", 2, Collections.emptyMap()));
+    HoodieInstant instant2 = new HoodieInstant(INFLIGHT, COMMIT_ACTION, "00002", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
+    activeTimeline.createNewInstant(instant2);
+    activeTimeline.saveAsComplete(instant2, getCommitMetadata(basePath, "p2", "00002", 2, Collections.emptyMap()));
+    HoodieInstant cleanInstant = new HoodieInstant(INFLIGHT, CLEAN_ACTION, "00003", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
+    activeTimeline.createNewInstant(cleanInstant);
+    activeTimeline.saveAsComplete(cleanInstant, getCleanMetadata(olderPartition, "00003", true));
+    metaClient.reloadActiveTimeline();
+
+    HoodieInstant completedClean = metaClient.getActiveTimeline().getCleanerTimeline().filterCompletedInstants().lastInstant().get();
+    Option<String> completionTimeSynced = Option.of(completedClean.getCompletionTime());
+
+    // The clean is after the last commit time synced, so it is read and reports the drop.
+    assertEquals(Collections.singletonList(olderPartition),
+        TimelineUtils.getDroppedPartitions(metaClient, Option.of("00002"), completionTimeSynced));
+
+    // Corrupt the clean file: inside the window it is still read, and the failure surfaces.
+    StoragePath cleanPath = metaClient.getStorage().listDirectEntries(metaClient.getTimelinePath()).stream()
+        .map(pathInfo -> pathInfo.getPath())
+        .filter(path -> path.getName().endsWith(CLEAN_ACTION))
+        .findFirst().get();
+    try (OutputStream out = metaClient.getStorage().create(cleanPath, true)) {
+      out.write("not an avro file".getBytes());
+    }
+    HoodieIOException corrupt = assertThrows(HoodieIOException.class,
+        () -> TimelineUtils.getDroppedPartitions(metaClient, Option.of("00002"), completionTimeSynced));
+    assertTrue(corrupt.getMessage().startsWith("Failed to get partitions cleaned at"), corrupt.getMessage());
+
+    // The clean is neither after the last commit time synced nor completed after the completion time synced,
+    // so it is not read at all.
+    assertEquals(Collections.emptyList(),
+        TimelineUtils.getDroppedPartitions(metaClient, Option.of("00003"), completionTimeSynced));
+    // Without the completion time synced the window cannot be trusted, so every active clean is read.
+    assertThrows(HoodieIOException.class,
+        () -> TimelineUtils.getDroppedPartitions(metaClient, Option.of("00003"), Option.empty()));
+
+    // Missing inside the window: the drop cannot be known, so the call fails.
+    metaClient.getStorage().deleteFile(cleanPath);
+    assertThrows(HoodieIOException.class,
+        () -> TimelineUtils.getDroppedPartitions(metaClient, Option.of("00002"), completionTimeSynced));
+    // Missing without a last commit time synced: skipped, as the whole active timeline is scanned best effort.
+    assertEquals(Collections.emptyList(),
+        TimelineUtils.getDroppedPartitions(metaClient, Option.empty(), Option.empty()));
+  }
+
+  @Test
+  void testGetInstantsSince() {
+    HoodieInstant olderClean = new HoodieInstant(COMPLETED, CLEAN_ACTION, "001", "002", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
+    // Requested before the last commit time synced but completed after the last completion time synced.
+    HoodieInstant hollowClean = new HoodieInstant(COMPLETED, CLEAN_ACTION, "003", "012", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
+    HoodieInstant inflightClean = new HoodieInstant(INFLIGHT, CLEAN_ACTION, "004", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
+    HoodieInstant newerClean = new HoodieInstant(COMPLETED, CLEAN_ACTION, "011", "013", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
+    HoodieTimeline cleans = new BaseTimelineV2(Stream.of(olderClean, hollowClean, inflightClean, newerClean), null);
+
+    verifyTimeline(Collections.singletonList(newerClean), TimelineUtils.getInstantsSince(cleans, "010", Option.empty()));
+    verifyTimeline(Arrays.asList(hollowClean, newerClean), TimelineUtils.getInstantsSince(cleans, "010", Option.of("011")));
+    verifyTimeline(Collections.singletonList(newerClean), TimelineUtils.getInstantsSince(cleans, "010", Option.of("012")));
   }
 
   @Test
