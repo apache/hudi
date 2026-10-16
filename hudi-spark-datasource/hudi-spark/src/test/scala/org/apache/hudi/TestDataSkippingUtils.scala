@@ -714,6 +714,31 @@ object TestDataSkippingUtils {
             B_maxValue = "2022-03-06", // 03/06/2022
             B_nullCount = 0)
         ),
+        Seq("file_1")),
+      arguments(
+        // datediff(end, start) preserves the ordering of its end date, hence is translated
+        "datediff(CAST(C AS DATE), DATE '2022-03-07') >= 2",
+        Seq(
+          IndexRow("file_1", valueCount = 1,
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
+            C_nullCount = 0),
+          IndexRow("file_2", valueCount = 1,
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_nullCount = 0)
+        ),
+        Seq("file_1")),
+      arguments(
+        // NOTE: datediff(end, start) reverses the ordering of its start date, so it isn't translated:
+        //       file_1 holds 03/08/2022 (1 day before the end date) though its min is 2 days before it
+        "datediff(DATE '2022-03-09', CAST(C AS DATE)) <= 1",
+        Seq(
+          IndexRow("file_1", valueCount = 1,
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_nullCount = 0)
+        ),
         Seq("file_1"))
 
     )
