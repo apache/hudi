@@ -36,7 +36,6 @@ import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.ZoneOffset;
 import java.time.temporal.ChronoField;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -141,6 +140,8 @@ public class ExpressionUtils {
 
   /**
    * Returns the value with given value literal expression.
+   * Timestamp literals retain their full precision as {@link LocalDateTime}; consumers convert
+   * them to storage units only when required.
    *
    * <p>Returns null if the value can not parse as the output data type correctly,
    * should call {@code ValueLiteralExpression.isNull} first to decide whether
@@ -151,9 +152,7 @@ public class ExpressionUtils {
     LogicalType logicalType = expr.getOutputDataType().getLogicalType();
     switch (logicalType.getTypeRoot()) {
       case TIMESTAMP_WITHOUT_TIME_ZONE:
-        return expr.getValueAs(LocalDateTime.class)
-            .map(ldt -> ldt.toInstant(ZoneOffset.UTC).toEpochMilli())
-            .orElse(null);
+        return expr.getValueAs(LocalDateTime.class).orElse(null);
       case TIME_WITHOUT_TIME_ZONE:
         return expr.getValueAs(LocalTime.class)
             .map(lt -> lt.get(ChronoField.MILLI_OF_DAY))
@@ -193,9 +192,12 @@ public class ExpressionUtils {
   /**
    * Returns the field as part of a hoodie key with given value literal expression.
    *
-   * <p>CAUTION: the data type and value parsing should follow the impl of {@link #getValueFromLiteral(ValueLiteralExpression)}.
+   * <p>Literal values are extracted by {@link #getValueFromLiteral(ValueLiteralExpression)}
+   * and converted to the writer's key representation.
    *
-   * <p>CAUTION: the data and timestamp conversion should follow the impl if {@code HoodieAvroUtils.convertValueForAvroLogicalTypes}.
+   * <p>For timestamps, {@code logicalTimestamp=true} preserves the {@link LocalDateTime}
+   * for string conversion; {@code false} converts it to epoch milliseconds using the JVM default
+   * time zone, matching {@code RowDataKeyGen}. Dates are converted to {@link LocalDate}.
    *
    * <p>Returns null if the value can not parse as the output data type correctly,
    * should call {@code ValueLiteralExpression.isNull} first to decide whether
@@ -210,7 +212,7 @@ public class ExpressionUtils {
     LogicalType logicalType = expr.getOutputDataType().getLogicalType();
     switch (logicalType.getTypeRoot()) {
       case TIMESTAMP_WITHOUT_TIME_ZONE:
-        return logicalTimestamp ? new Timestamp((long) val) : val;
+        return logicalTimestamp ? val : Timestamp.valueOf((LocalDateTime) val).getTime();
       case DATE:
         return LocalDate.ofEpochDay((int) val);
       default:

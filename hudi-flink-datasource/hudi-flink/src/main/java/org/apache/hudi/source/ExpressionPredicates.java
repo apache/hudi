@@ -18,6 +18,7 @@
 
 package org.apache.hudi.source;
 
+import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.util.ImplicitTypeConverter;
 
 import lombok.extern.slf4j.Slf4j;
@@ -29,10 +30,13 @@ import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.apache.flink.table.functions.FunctionDefinition;
 import org.apache.flink.table.types.logical.LogicalType;
+import org.apache.flink.table.types.logical.TimestampType;
 import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.filter2.predicate.Operators;
 
 import java.io.Serializable;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -231,7 +235,8 @@ public class ExpressionPredicates {
 
     @Override
     public FilterPredicate filter() {
-      Serializable convertedLiteral = ImplicitTypeConverter.convertImplicitly(literalType, literal);
+      Serializable convertedLiteral = literalType instanceof TimestampType
+          ? literal : ImplicitTypeConverter.convertImplicitly(literalType, literal);
       return toParquetPredicate(getFunctionDefinition(), literalType, columnName, convertedLiteral);
     }
 
@@ -465,9 +470,10 @@ public class ExpressionPredicates {
       FilterPredicate filterPredicate = null;
       for (Serializable literal : literals) {
         FilterPredicate predicate = toParquetPredicate(BuiltInFunctionDefinitions.EQUALS, literalType, columnName, literal);
-        if (predicate != null) {
-          filterPredicate = filterPredicate == null ? predicate : or(filterPredicate, predicate);
+        if (predicate == null) {
+          return null;
         }
+        filterPredicate = filterPredicate == null ? predicate : or(filterPredicate, predicate);
       }
       return filterPredicate;
     }
@@ -653,8 +659,26 @@ public class ExpressionPredicates {
       case DATE:
       case TIME_WITHOUT_TIME_ZONE:
         return predicateSupportsLtGt(functionDefinition, intColumn(columnName), (Integer) literal);
-      case BIGINT:
       case TIMESTAMP_WITHOUT_TIME_ZONE:
+        // Flink writes TIMESTAMP(3) as INT64 millis and TIMESTAMP(6) as INT64 micros.
+        int precision = ((TimestampType) literalType).getPrecision();
+        if ((precision != 3 && precision != 6) || !(literal instanceof LocalDateTime)) {
+          return null;
+        }
+        LocalDateTime timestamp = (LocalDateTime) literal;
+        int nanosPerUnit = precision == 3 ? 1_000_000 : 1_000;
+        // Truncating a finer literal can change comparisons, including those nested under NOT.
+        if (timestamp.getNano() % nanosPerUnit != 0) {
+          return null;
+        }
+        try {
+          long value = precision == 3 ? timestamp.toInstant(ZoneOffset.UTC).toEpochMilli()
+              : DateTimeUtils.instantToMicros(timestamp.toInstant(ZoneOffset.UTC));
+          return predicateSupportsLtGt(functionDefinition, longColumn(columnName), value);
+        } catch (ArithmeticException e) {
+          return null;
+        }
+      case BIGINT:
         return predicateSupportsLtGt(functionDefinition, longColumn(columnName), (Long) literal);
       case FLOAT:
         return predicateSupportsLtGt(functionDefinition, floatColumn(columnName), (Float) literal);

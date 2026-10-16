@@ -36,6 +36,7 @@ import javax.annotation.Nonnull;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -557,6 +558,7 @@ public class ExpressionEvaluators {
   private static int compare(@Nonnull Object val1, @Nonnull Object val2, LogicalType logicalType) {
     switch (logicalType.getTypeRoot()) {
       case TIMESTAMP_WITHOUT_TIME_ZONE:
+        return ((LocalDateTime) val1).compareTo((LocalDateTime) val2);
       case TIME_WITHOUT_TIME_ZONE:
       case DATE:
         return ((Long) val1).compareTo((Long) val2); 
