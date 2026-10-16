@@ -121,9 +121,32 @@ import static org.junit.jupiter.api.Assertions.fail;
 @Slf4j
 public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTestHarness {
 
+  /**
+   * Opt-in switch for reusing one Spark context per test class (see {@link #reuseSparkContextAcrossTests()}).
+   */
+  public static final String REUSE_SPARK_CONTEXT_PROP = "hoodie.test.spark.reuse.context";
+
+  /**
+   * Spark context shared by the tests of one class when {@link #REUSE_SPARK_CONTEXT_PROP} is enabled.
+   */
+  private static SharedSparkContext sharedSparkContext;
+
+  /**
+   * Number of failed resets of the shared Spark context in the current test class.
+   */
+  private static int sharedSparkContextResetFailures;
+
+  private static final long SHARED_SPARK_CONTEXT_JOB_DRAIN_TIMEOUT_MS = 30_000;
+
   @AfterAll
   public static void tearDownAll() throws IOException {
+    stopSharedSparkContext();
     FileSystem.closeAll();
+    int resetFailures = sharedSparkContextResetFailures;
+    sharedSparkContextResetFailures = 0;
+    if (resetFailures > 0) {
+      throw new IllegalStateException(resetFailures + " reset(s) of the shared Spark context failed, see the ERROR log above");
+    }
   }
 
   protected JavaSparkContext jsc;
@@ -188,6 +211,15 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     Option<Consumer<SparkSessionExtensions>> sparkSessionExtensionsInjector =
         getSparkSessionExtensionsInjector();
 
+    boolean reuse = isSparkContextReuseEnabled();
+    if (reuse && sharedSparkContext != null) {
+      if (sharedSparkContext.isReusableFor(getClass(), extraConf, sparkSessionExtensionsInjector.isPresent())) {
+        attachSharedSparkContext();
+        return;
+      }
+      stopSharedSparkContext();
+    }
+
     if (sparkSessionExtensionsInjector.isPresent()) {
       // In case we need to inject extensions into Spark Session, we have
       // to stop any session that might still be active, since Spark will try
@@ -219,6 +251,213 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     //       as such by Spark
     System.setProperty("spark.testing", "true");
     sparkSession.sparkContext().persistentRdds().foreach(rdd -> rdd._2.persist());
+    if (reuse) {
+      sharedSparkContext = new SharedSparkContext(getClass(), extraConf, sparkSessionExtensionsInjector.isPresent(),
+          jsc, sparkSession, sqlContext);
+    }
+  }
+
+  /**
+   * Whether this class may run all of its tests on one Spark context when {@link #REUSE_SPARK_CONTEXT_PROP} is set.
+   * Classes that need a fresh {@link SparkContext} per test (e.g. ones that assert on context-wide state such as
+   * listeners, accumulators or executor-side statics) override this to return {@code false}.
+   */
+  protected boolean reuseSparkContextAcrossTests() {
+    return true;
+  }
+
+  private boolean isSparkContextReuseEnabled() {
+    return Boolean.getBoolean(REUSE_SPARK_CONTEXT_PROP) && reuseSparkContextAcrossTests();
+  }
+
+  private void attachSharedSparkContext() {
+    jsc = sharedSparkContext.jsc;
+    sparkSession = sharedSparkContext.sparkSession;
+    sqlContext = sharedSparkContext.sqlContext;
+    SparkSession.setActiveSession(sparkSession);
+    SparkSession.setDefaultSession(sparkSession);
+    storageConf = HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration());
+    context = new HoodieSparkEngineContext(jsc, sqlContext);
+  }
+
+  private static void stopSharedSparkContext() {
+    if (sharedSparkContext != null) {
+      SharedSparkContext shared = sharedSparkContext;
+      sharedSparkContext = null;
+      shared.stop();
+    }
+  }
+
+  /**
+   * One {@link SparkSession}/{@link JavaSparkContext} reused by the tests of a single class. Between tests it is
+   * reset to the state it had right after creation: SQL confs, Hadoop conf, local properties, listeners, cached
+   * data, temp views and catalog entries. If a reset step fails the context is stopped, and the next test creates
+   * a fresh one.
+   */
+  private static final class SharedSparkContext {
+    private final Class<?> ownerClass;
+    private final Map<String, String> extraConf;
+    private final boolean withExtensions;
+    private final JavaSparkContext jsc;
+    private final SparkSession sparkSession;
+    private final SQLContext sqlContext;
+    private final Map<String, String> initialSqlConf;
+    private final org.apache.hadoop.conf.Configuration initialHadoopConf;
+    private final List<org.apache.spark.scheduler.SparkListenerInterface> initialListeners;
+    private final java.util.Set<String> initialFunctions;
+
+    SharedSparkContext(Class<?> ownerClass, Map<String, String> extraConf, boolean withExtensions,
+                       JavaSparkContext jsc, SparkSession sparkSession, SQLContext sqlContext) {
+      this.ownerClass = ownerClass;
+      this.extraConf = new HashMap<>(extraConf);
+      this.withExtensions = withExtensions;
+      this.jsc = jsc;
+      this.sparkSession = sparkSession;
+      this.sqlContext = sqlContext;
+      this.initialSqlConf = new HashMap<>(scala.collection.JavaConverters.mapAsJavaMapConverter(
+          sparkSession.conf().getAll()).asJava());
+      this.initialHadoopConf = new org.apache.hadoop.conf.Configuration(jsc.hadoopConfiguration());
+      this.initialListeners = new ArrayList<>(jsc.sc().listenerBus().listeners());
+      this.initialFunctions = userFunctions(sparkSession);
+    }
+
+    boolean isReusableFor(Class<?> testClass, Map<String, String> conf, boolean extensions) {
+      return ownerClass.equals(testClass) && extraConf.equals(conf) && withExtensions == extensions
+          && !jsc.sc().isStopped();
+    }
+
+    /**
+     * Restores the context for the next test; returns false (after stopping it) if that fails.
+     */
+    boolean reset() {
+      try {
+        SparkSession.setActiveSession(sparkSession);
+        SparkSession.setDefaultSession(sparkSession);
+        stopStreamingQueries();
+        cancelAllJobsAndWait();
+        jsc.sc().setLocalProperties(new Properties());
+        jsc.setLogLevel("ERROR");
+        for (org.apache.spark.scheduler.SparkListenerInterface listener
+            : new ArrayList<>(jsc.sc().listenerBus().listeners())) {
+          // Spark registers some of its own listeners lazily (e.g. the streaming query listener bus): keep those
+          if (!initialListeners.contains(listener) && !isSparkInternal(listener)) {
+            jsc.sc().removeSparkListener(listener);
+          }
+        }
+        resetSqlConf();
+        resetCatalog();
+        sparkSession.catalog().clearCache();
+        jsc.getPersistentRDDs().values().forEach(rdd -> rdd.unpersist(true));
+        org.apache.hadoop.conf.Configuration hadoopConf = jsc.hadoopConfiguration();
+        hadoopConf.clear();
+        initialHadoopConf.forEach(e -> hadoopConf.set(e.getKey(), e.getValue()));
+        return true;
+      } catch (Throwable t) {
+        log.error("Failed to reset the shared Spark context of {}, stopping it", ownerClass.getSimpleName(), t);
+        sharedSparkContextResetFailures++;
+        if (t instanceof InterruptedException) {
+          Thread.currentThread().interrupt();
+        }
+        stop();
+        return false;
+      }
+    }
+
+    private void resetSqlConf() {
+      Map<String, String> current = scala.collection.JavaConverters.mapAsJavaMapConverter(
+          sparkSession.conf().getAll()).asJava();
+      for (String key : new ArrayList<>(current.keySet())) {
+        if (!initialSqlConf.containsKey(key)) {
+          sparkSession.conf().unset(key);
+        }
+      }
+      initialSqlConf.forEach((key, value) -> {
+        if (!value.equals(current.get(key))) {
+          sparkSession.conf().set(key, value);
+        }
+      });
+    }
+
+    // A job still running after the test (e.g. from a leaked async service) would otherwise run into the next test
+    private void cancelAllJobsAndWait() throws InterruptedException {
+      jsc.cancelAllJobs();
+      long deadline = System.currentTimeMillis() + SHARED_SPARK_CONTEXT_JOB_DRAIN_TIMEOUT_MS;
+      while (jsc.statusTracker().getActiveJobIds().length > 0) {
+        if (System.currentTimeMillis() > deadline) {
+          throw new IllegalStateException("Spark jobs " + java.util.Arrays.toString(jsc.statusTracker().getActiveJobIds())
+              + " are still running after the test");
+        }
+        jsc.cancelAllJobs();
+        Thread.sleep(50);
+      }
+    }
+
+    private static boolean isSparkInternal(org.apache.spark.scheduler.SparkListenerInterface listener) {
+      Class<?> clazz = listener.getClass();
+      java.security.CodeSource source = clazz.getProtectionDomain().getCodeSource();
+      return clazz.getName().startsWith("org.apache.spark.")
+          && source != null && source.getLocation() != null && source.getLocation().getPath().endsWith(".jar");
+    }
+
+    private void stopStreamingQueries() throws Exception {
+      for (org.apache.spark.sql.streaming.StreamingQuery query : sparkSession.streams().active()) {
+        query.stop();
+      }
+      sparkSession.streams().resetTerminated();
+    }
+
+    private void resetCatalog() throws Exception {
+      org.apache.spark.sql.catalog.Catalog catalog = sparkSession.catalog();
+      sparkSession.sql("USE spark_catalog.default");
+      for (String function : userFunctions(sparkSession)) {
+        if (initialFunctions.contains(function)) {
+          continue;
+        }
+        if (!function.contains(".")) {
+          sparkSession.sql("DROP TEMPORARY FUNCTION IF EXISTS `" + function + "`");
+        } else if (function.startsWith("spark_catalog.default.")) {
+          // persistent functions in other databases go away with DROP DATABASE ... CASCADE below
+          sparkSession.sql("DROP FUNCTION IF EXISTS `default`.`" + function.substring("spark_catalog.default.".length()) + "`");
+        }
+      }
+      for (org.apache.spark.sql.catalog.Table table : catalog.listTables().collectAsList()) {
+        if (table.isTemporary()) {
+          catalog.dropTempView(table.name());
+        }
+      }
+      String globalTempDb = sparkSession.conf().get("spark.sql.globalTempDatabase", "global_temp");
+      for (org.apache.spark.sql.catalog.Table table : catalog.listTables(globalTempDb).collectAsList()) {
+        catalog.dropGlobalTempView(table.name());
+      }
+      for (org.apache.spark.sql.catalog.Database db : catalog.listDatabases().collectAsList()) {
+        if (!"default".equals(db.name())) {
+          sparkSession.sql("DROP DATABASE IF EXISTS `" + db.name() + "` CASCADE");
+        }
+      }
+      for (org.apache.spark.sql.catalog.Table table : catalog.listTables("default").collectAsList()) {
+        if (!table.isTemporary()) {
+          sparkSession.sql("DROP TABLE IF EXISTS `default`.`" + table.name() + "`");
+        }
+      }
+    }
+
+    // Catalog.listFunctions() materializes every built-in function, which is too slow to run per test
+    private static java.util.Set<String> userFunctions(SparkSession sparkSession) {
+      java.util.Set<String> functions = new java.util.HashSet<>();
+      // temporary functions have single-part names; persistent ones are catalog-qualified
+      for (org.apache.spark.sql.Row row : sparkSession.sql("SHOW USER FUNCTIONS").collectAsList()) {
+        functions.add(row.getString(0));
+      }
+      return functions;
+    }
+
+    void stop() {
+      try {
+        sparkSession.stop();
+      } finally {
+        jsc.stop();
+      }
+    }
   }
 
   /**
@@ -237,6 +476,17 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
    * Cleanups Spark contexts ({@link JavaSparkContext} and {@link SQLContext}).
    */
   protected void cleanupSparkContexts() {
+    if (sharedSparkContext != null && sparkSession == sharedSparkContext.sparkSession) {
+      // the shared context outlives the test: reset it instead of stopping it
+      if (!sharedSparkContext.reset()) {
+        sharedSparkContext = null;
+      }
+      sparkSession = null;
+      sqlContext = null;
+      jsc = null;
+      context = null;
+      return;
+    }
     if (sparkSession != null) {
       sparkSession.stop();
       sparkSession = null;
