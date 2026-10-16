@@ -176,9 +176,11 @@ object TestDataSkippingUtils {
         Seq(
           IndexRow("file_1", valueCount = 1, B_minValue = "aba", B_maxValue = "adf", B_nullCount = 1), // may contain strings starting w/ "abc"
           IndexRow("file_2", valueCount = 1, B_minValue = "adf", B_maxValue = "azy", B_nullCount = 0),
-          IndexRow("file_3", valueCount = 1, B_minValue = "aaa", B_maxValue = "aba", B_nullCount = 0)
+          IndexRow("file_3", valueCount = 1, B_minValue = "aaa", B_maxValue = "aba", B_nullCount = 0),
+          // NOTE: min sorts after the prefix itself ("abc123" > "abc"), yet starts w/ it
+          IndexRow("file_4", valueCount = 2, B_minValue = "abc123", B_maxValue = "abd", B_nullCount = 0)
         ),
-        Seq("file_1")),
+        Seq("file_1", "file_4")),
       arguments(
         Not(sparkAdapter.getExpressionFromColumn(col("B").startsWith("abc"))),
         Seq(
@@ -532,6 +534,20 @@ object TestDataSkippingUtils {
             C_nullCount = 0)
         ),
         Seq("file_2")),
+      arguments(
+        // NOTE: the transformed min "20220308" sorts after the prefix "2022030", yet starts w/ it
+        "startswith(date_format(C, 'yyyyMMdd'), '2022030')",
+        Seq(
+          IndexRow("file_1", valueCount = 2,
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
+            C_nullCount = 0),
+          IndexRow("file_2", valueCount = 2,
+            C_minValue = new Timestamp(1648785048000L), // 04/01/2022
+            C_maxValue = new Timestamp(1648871448000L), // 04/02/2022
+            C_nullCount = 0)
+        ),
+        Seq("file_1")),
       arguments(
         "'03/07/2022' = date_format(C, 'MM/dd/yyyy')",
         Seq(
