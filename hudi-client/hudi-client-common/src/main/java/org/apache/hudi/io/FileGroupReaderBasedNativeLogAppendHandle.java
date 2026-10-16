@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.schema.internal.utils.SerDeHelper;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.util.Option;
@@ -97,8 +98,13 @@ public class FileGroupReaderBasedNativeLogAppendHandle<T, I, K, O> extends Hoodi
         .withSortOutput(hoodieTable.requireSortedRecords())
         // instead of using config.enableOptimizedLogBlocksScan(), we set to true as log compaction blocks only supported in scanV2
         .build()) {
+      // Log compaction reads deletes through the engine reader context. A table that writes them through another
+      // record context, e.g. the Avro one for the Avro record type, can only store Java ordering values.
+      boolean javaOrderingForDeletes = readerContext.getRecordContext().getEngineRecordType()
+          != hoodieTable.getRecordContextForWrite().getEngineRecordType();
       recordItr = new CloseableMappingIterator<>(fileGroupReader.getLogRecordsOnly(), record -> {
-        HoodieRecord<T> hoodieRecord = readerContext.getRecordContext().constructHoodieRecord(record);
+        HoodieRecord<T> hoodieRecord = readerContext.getRecordContext().constructHoodieRecord(
+            javaOrderingForDeletes ? withJavaOrderingValue(record) : record);
         hoodieRecord.setCurrentLocation(newRecordLocation);
         return hoodieRecord;
       });
@@ -109,6 +115,14 @@ public class FileGroupReaderBasedNativeLogAppendHandle<T, I, K, O> extends Hoodi
     } catch (IOException e) {
       throw new HoodieIOException("Failed to initialize file group reader for " + fileId, e);
     }
+  }
+
+  private BufferedRecord<T> withJavaOrderingValue(BufferedRecord<T> record) {
+    if (!record.isDelete()) {
+      return record;
+    }
+    Comparable orderingValue = readerContext.getRecordContext().convertOrderingValueToJava(record.getOrderingValue());
+    return new BufferedRecord<>(record.getRecordKey(), orderingValue, record.getRecord(), record.getSchemaId(), record.getHoodieOperation());
   }
 
   @Override

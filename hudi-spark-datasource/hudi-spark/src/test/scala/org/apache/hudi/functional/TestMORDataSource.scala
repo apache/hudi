@@ -2002,7 +2002,9 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   }
 
   @ParameterizedTest
-  @CsvSource(value = Array("AVRO;string;8", "AVRO;decimal(10,2);9", "SPARK;string;9", "SPARK;decimal(10,2);8"), delimiter = ';')
+  @CsvSource(value = Array(
+    "AVRO;string;8", "AVRO;decimal(10,2);9", "SPARK;string;9", "SPARK;decimal(10,2);8", "AVRO;decimal(10,2);10",
+    "SPARK;decimal(10,2);10"), delimiter = ';')
   def testLogCompactionRewritesDeletesWithEngineOrdering(recordType: HoodieRecordType, orderingType: String, tableVersion: Int): Unit = {
     val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
     val opts = writeOpts ++ Map(
@@ -2026,7 +2028,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     }
 
     write(Seq(("id1", "100", false), ("id2", "100", false)), SaveMode.Overwrite)
-    // The delete lands in a delete block, the update in a data block of the same file slice.
+    // The delete and the update land in the same file slice, as log blocks or, on version 10, as native log files.
     write(Seq(("id1", "110", true)), SaveMode.Append)
     write(Seq(("id2", "120", false)), SaveMode.Append)
 
