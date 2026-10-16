@@ -14,6 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 {{- $g := .Values.gateway }}
+{{- if not (has .Values.sqlBackend (list "trino" "spark-connect")) }}
+{{- fail "sqlBackend must be trino or spark-connect" }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -57,6 +60,8 @@ spec:
               value: {{ $g.model | quote }}
             - name: GATEWAY_LLM_TIMEOUT_SECONDS
               value: {{ $g.llmTimeoutSeconds | quote }}
+            - name: GATEWAY_CHAT_TIMEOUT_SECONDS
+              value: {{ $g.chatTimeoutSeconds | quote }}
             {{- with $g.ollama.baseUrl }}
             - name: GATEWAY_OLLAMA_BASE_URL
               value: {{ . | quote }}
@@ -68,6 +73,23 @@ spec:
             {{- with $g.systemPromptExtra }}
             - name: GATEWAY_SYSTEM_PROMPT_EXTRA
               value: {{ . | quote }}
+            {{- end }}
+            - name: GATEWAY_SQL_BACKEND
+              value: {{ .Values.sqlBackend | quote }}
+            {{- if eq .Values.sqlBackend "spark-connect" }}
+            - name: GATEWAY_SPARK_CONNECT_URI
+              {{- if .Values.sparkConnect.existingSecret }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.sparkConnect.existingSecret | quote }}
+                  key: {{ .Values.sparkConnect.uriSecretKey | quote }}
+              {{- else }}
+              value: {{ .Values.sparkConnect.uri | quote }}
+              {{- end }}
+            - name: GATEWAY_SPARK_CONNECT_CATALOG
+              value: {{ .Values.sparkConnect.catalog | quote }}
+            - name: GATEWAY_SPARK_CONNECT_SCHEMA
+              value: {{ .Values.sparkConnect.schema | quote }}
             {{- end }}
             - name: GATEWAY_TRINO_HOST
               value: {{ .Values.trino.host | quote }}
@@ -109,7 +131,7 @@ spec:
               path: /ready
               port: http
             periodSeconds: 10
-            # /ready's own dependency checks budget up to ~8s (5s trino ping +
+            # /ready's own dependency checks budget up to ~8s (5s lakehouse ping +
             # 3s LLM probe) on a cache miss; the k8s default of 1s would flap.
             timeoutSeconds: 9
             failureThreshold: 3
