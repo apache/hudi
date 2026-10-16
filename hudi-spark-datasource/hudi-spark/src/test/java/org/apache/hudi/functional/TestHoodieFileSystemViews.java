@@ -85,33 +85,40 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
   @Getter(AccessLevel.PROTECTED)
   private HoodieTableType tableType = HoodieTableType.COPY_ON_WRITE;
 
+  /**
+   * Every table is written with the metadata table enabled and compared against both the in-memory and the spillable view
+   * (see {@link #viewStorageTypesToValidate}). The writer uses the spillable view for every older supported table version
+   * and both view storage types for the current table version.
+   */
   public static List<Arguments> tableTypeMetadataFSVTypeArgs() {
     List<Arguments> testCases = new ArrayList<>();
     for (HoodieTableType tableType : HoodieTableType.values()) {
-      for (boolean enableMdt : Arrays.asList(true, false)) {
-        for (FileSystemViewStorageType viewStorageType : Arrays.asList(FileSystemViewStorageType.MEMORY, FileSystemViewStorageType.SPILLABLE_DISK)) {
-          if (!enableMdt && viewStorageType == FileSystemViewStorageType.MEMORY) {
-            // This is the baseline case, no need to test here.
-            continue;
-          }
-          for (int writerVersion : Arrays.asList(6, 8)) {
-            testCases.add(Arguments.of(tableType, enableMdt, viewStorageType, writerVersion));
-          }
-        }
+      for (HoodieTableVersion olderTableVersion : Arrays.asList(HoodieTableVersion.SIX, HoodieTableVersion.EIGHT, HoodieTableVersion.NINE)) {
+        testCases.add(Arguments.of(tableType, true, FileSystemViewStorageType.SPILLABLE_DISK, olderTableVersion.versionCode()));
+      }
+      for (FileSystemViewStorageType writerViewStorageType : Arrays.asList(FileSystemViewStorageType.MEMORY, FileSystemViewStorageType.SPILLABLE_DISK)) {
+        testCases.add(Arguments.of(tableType, true, writerViewStorageType, HoodieTableVersion.current().versionCode()));
       }
     }
     return testCases;
   }
 
+  private static List<FileSystemViewStorageType> viewStorageTypesToValidate(boolean enableMdt, FileSystemViewStorageType writerViewStorageType) {
+    return enableMdt
+        ? Arrays.asList(FileSystemViewStorageType.MEMORY, FileSystemViewStorageType.SPILLABLE_DISK)
+        : Collections.singletonList(writerViewStorageType);
+  }
+
   @ParameterizedTest
   @MethodSource("tableTypeMetadataFSVTypeArgs")
-  public void testFileSystemViewConsistency(HoodieTableType tableType, boolean enableMdt, FileSystemViewStorageType storageType, int writeVersion) throws IOException {
+  public void testFileSystemViewConsistency(HoodieTableType tableType, boolean enableMdt, FileSystemViewStorageType writerViewStorageType, int tableVersion) throws IOException {
     metaClient.getStorage().deleteDirectory(new StoragePath(basePath));
     this.tableType = tableType;
+    List<FileSystemViewStorageType> viewStorageTypes = viewStorageTypesToValidate(enableMdt, writerViewStorageType);
     Properties properties = new Properties();
-    properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), Integer.toString(writeVersion));
-    properties.setProperty(HoodieTableConfig.VERSION.key(), Integer.toString(writeVersion));
-    properties.setProperty(HoodieTableConfig.TIMELINE_LAYOUT_VERSION.key(), writeVersion == 6
+    properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), Integer.toString(tableVersion));
+    properties.setProperty(HoodieTableConfig.VERSION.key(), Integer.toString(tableVersion));
+    properties.setProperty(HoodieTableConfig.TIMELINE_LAYOUT_VERSION.key(), tableVersion == 6
         ? Integer.toString(TimelineLayoutVersion.LAYOUT_VERSION_1.getVersion()) : Integer.toString(TimelineLayoutVersion.LAYOUT_VERSION_2.getVersion()));
     initMetaClient(tableType, properties);
     HoodieWriteConfig.Builder configBuilder = getConfigBuilder();
@@ -120,13 +127,13 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
           .withMaxNumDeltaCommitsBeforeCompaction(3).build());
     }
     configBuilder
-        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withStorageType(storageType).build())
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withStorageType(writerViewStorageType).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMdt).build())
         .withClusteringConfig(HoodieClusteringConfig.newBuilder().withInlineClustering(true).withInlineClusteringNumCommits(5).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(4).build())
         // set aggressive values so that within 20 batches few iterations of cleaner and archival will kick in
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(6, 8).build())
-        .withWriteTableVersion(writeVersion);
+        .withWriteTableVersion(tableVersion);
     HoodieWriteConfig config = configBuilder.build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
       insertRecords(client, 100, WriteOperationType.BULK_INSERT);
@@ -136,65 +143,55 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
       // base line file system view is in-memory for any combination.
       HoodieTableFileSystemView expectedFileSystemView = FileSystemViewManager.createInMemoryFileSystemView(context, metaClient,
           HoodieMetadataConfig.newBuilder().enable(false).build());
+      List<Pair<FileSystemViewStorageType, HoodieTableFileSystemView>> actualFileSystemViews = viewStorageTypes.stream()
+          .map(viewStorageType -> Pair.of(viewStorageType, createFileSystemView(config, viewStorageType)))
+          .collect(Collectors.toList());
+      try {
+        assertFileSystemViews(config, enableMdt, viewStorageTypes);
+        for (int i = 3; i < 10; i++) {
+          upsertRecords(client, 50);
+        }
+        syncAndAssertFileSystemViews(expectedFileSystemView, actualFileSystemViews, enableMdt, Option.empty());
+        for (int i = 10; i < 23; i++) {
+          upsertRecords(client, 50);
+        }
 
-      // to be compared against.
-      // if no mdt enabled, compare w/ spillable.
-      // if mdt is enabled, depending on storage type, either it will be mdt fsv or spillable fsv w/ mdt enabled.
-      FileSystemViewStorageConfig viewStorageConfig = FileSystemViewStorageConfig.newBuilder().fromProperties(config.getProps())
-          .withStorageType(storageType).build();
-      HoodieTableFileSystemView actualFileSystemView = (HoodieTableFileSystemView) FileSystemViewManager
-          .createViewManager(context, config.getMetadataConfig(), viewStorageConfig, config.getCommonConfig(),
-              (SerializableFunctionUnchecked<HoodieTableMetaClient, HoodieTableMetadata>) v1 ->
-                  metaClient.getTableFormat().getMetadataFactory().create(context, metaClient.getStorage(), config.getMetadataConfig(), config.getBasePath()))
-          .getFileSystemView(basePath);
-
-      assertFileSystemViews(config, enableMdt, storageType);
-      for (int i = 3; i < 10; i++) {
-        upsertRecords(client, 50);
-      }
-      expectedFileSystemView.sync();
-      actualFileSystemView.sync();
-      assertForFSVEquality(expectedFileSystemView, actualFileSystemView, enableMdt, Option.empty());
-      for (int i = 10; i < 23; i++) {
-        upsertRecords(client, 50);
-      }
-      
-      HoodieCommitMetadata commitMetadata = null;
-      boolean rollbackExecuted = false;
-      for (int i = 23; i < 26; i++) {
-        // We want to rollback deltacommit and commit instant here. With table version 6 and 8,
-        // the last instant can be compaction in MDT table at different instants due to change in how the
-        // MDT tables are initialised. Therefore we need to take a range of commits and see at what instant rollback
-        // is feasible
-        upsertRecords(client, 50);
-        HoodieInstant lastInstant = metaClient.reloadActiveTimeline().getWriteTimeline().lastInstant().get();
-        if (!rollbackExecuted) {
-          // rollback needs to be performed for delta commit or commit instant
-          if (isRollbackPossible(enableMdt, lastInstant)) {
-            // rollback last completed deltacommit or commit operation and retry few more operations.
-            commitMetadata = metaClient.getActiveTimeline().readCommitMetadata(lastInstant);
-            client.rollback(lastInstant.requestedTime());
-            rollbackExecuted = true;
+        HoodieCommitMetadata commitMetadata = null;
+        boolean rollbackExecuted = false;
+        for (int i = 23; i < 26; i++) {
+          // We want to rollback deltacommit and commit instant here. With table version 6 and 8,
+          // the last instant can be compaction in MDT table at different instants due to change in how the
+          // MDT tables are initialised. Therefore we need to take a range of commits and see at what instant rollback
+          // is feasible
+          upsertRecords(client, 50);
+          HoodieInstant lastInstant = metaClient.reloadActiveTimeline().getWriteTimeline().lastInstant().get();
+          if (!rollbackExecuted) {
+            // rollback needs to be performed for delta commit or commit instant
+            if (isRollbackPossible(enableMdt, lastInstant)) {
+              // rollback last completed deltacommit or commit operation and retry few more operations.
+              commitMetadata = metaClient.getActiveTimeline().readCommitMetadata(lastInstant);
+              client.rollback(lastInstant.requestedTime());
+              rollbackExecuted = true;
+            }
           }
         }
-      }
-      // validate rollback was executed
-      assertTrue(rollbackExecuted);
+        // validate rollback was executed
+        assertTrue(rollbackExecuted);
 
-      expectedFileSystemView.sync();
-      actualFileSystemView.sync();
-      // pass the commit metadata for the instant being deleted (mimic failure). so that we can account for during validation with table version 6.
-      assertForFSVEquality(expectedFileSystemView, actualFileSystemView, enableMdt,
-          metaClient.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT) ? Option.empty() : Option.of(commitMetadata));
+        // pass the commit metadata for the instant being deleted (mimic failure). so that we can account for during validation with table version 6.
+        syncAndAssertFileSystemViews(expectedFileSystemView, actualFileSystemViews, enableMdt,
+            metaClient.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT) ? Option.empty() : Option.of(commitMetadata));
 
-      // add few more updates
-      for (int i = 26; i < 28; i++) {
-        upsertRecords(client, 50);
+        // add few more updates
+        for (int i = 26; i < 28; i++) {
+          upsertRecords(client, 50);
+        }
+      } finally {
+        actualFileSystemViews.forEach(view -> view.getRight().close());
+        expectedFileSystemView.close();
       }
-      actualFileSystemView.close();
-      expectedFileSystemView.close();
     }
-    assertFileSystemViews(config, enableMdt, storageType);
+    assertFileSystemViews(config, enableMdt, viewStorageTypes);
   }
 
   private boolean isRollbackPossible(boolean enableMdt, HoodieInstant lastInstant) {
@@ -208,27 +205,51 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
     return shouldRollback;
   }
 
-  private void assertFileSystemViews(HoodieWriteConfig writeConfig, boolean enableMdt, FileSystemViewStorageType baseStorageType) {
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    // base line file system view is in-memory for any combination.
-    HoodieTableFileSystemView expectedFileSystemView = FileSystemViewManager.createInMemoryFileSystemView(context, metaClient,
-        HoodieMetadataConfig.newBuilder().enable(false).build());
-
-    // to be compared against.
-    // if no mdt enabled, compare w/ spillable.
-    // if mdt is enabled, depending on storage type, either it will be mdt fsv or spillable fsv w/ mdt enabled.
+  /**
+   * Creates a view of the given storage type with the writer's metadata config, i.e. backed by the metadata table if it is enabled.
+   */
+  private HoodieTableFileSystemView createFileSystemView(HoodieWriteConfig writeConfig, FileSystemViewStorageType viewStorageType) {
     FileSystemViewStorageConfig viewStorageConfig = FileSystemViewStorageConfig.newBuilder().fromProperties(writeConfig.getProps())
-        .withStorageType(baseStorageType).build();
-    HoodieTableFileSystemView actualFileSystemView = (HoodieTableFileSystemView) FileSystemViewManager
+        .withStorageType(viewStorageType).build();
+    return (HoodieTableFileSystemView) FileSystemViewManager
         .createViewManager(context, writeConfig.getMetadataConfig(), viewStorageConfig, writeConfig.getCommonConfig(),
             (SerializableFunctionUnchecked<HoodieTableMetaClient, HoodieTableMetadata>) v1 ->
                 metaClient.getTableFormat().getMetadataFactory().create(context, metaClient.getStorage(), writeConfig.getMetadataConfig(), writeConfig.getBasePath()))
         .getFileSystemView(basePath);
+  }
+
+  private static void syncAndAssertFileSystemViews(HoodieTableFileSystemView expectedFileSystemView,
+                                                   List<Pair<FileSystemViewStorageType, HoodieTableFileSystemView>> actualFileSystemViews,
+                                                   boolean enableMdt, Option<HoodieCommitMetadata> commitMetadataOpt) {
+    expectedFileSystemView.sync();
+    for (Pair<FileSystemViewStorageType, HoodieTableFileSystemView> actualFileSystemView : actualFileSystemViews) {
+      actualFileSystemView.getRight().sync();
+      assertForFSVEquality(expectedFileSystemView, actualFileSystemView.getLeft(), actualFileSystemView.getRight(), enableMdt, commitMetadataOpt);
+    }
+  }
+
+  private static void assertForFSVEquality(HoodieTableFileSystemView expectedFileSystemView, FileSystemViewStorageType viewStorageType,
+                                           HoodieTableFileSystemView actualFileSystemView, boolean enableMdt, Option<HoodieCommitMetadata> commitMetadataOpt) {
     try {
-      assertForFSVEquality(expectedFileSystemView, actualFileSystemView, enableMdt, Option.empty());
-    } finally {
-      expectedFileSystemView.close();
-      actualFileSystemView.close();
+      assertForFSVEquality(expectedFileSystemView, actualFileSystemView, enableMdt, commitMetadataOpt);
+    } catch (AssertionError | HoodieException e) {
+      throw new AssertionError(viewStorageType + " view does not match the baseline view", e);
+    }
+  }
+
+  private void assertFileSystemViews(HoodieWriteConfig writeConfig, boolean enableMdt, List<FileSystemViewStorageType> viewStorageTypes) {
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    for (FileSystemViewStorageType viewStorageType : viewStorageTypes) {
+      // base line file system view is in-memory for any combination.
+      HoodieTableFileSystemView expectedFileSystemView = FileSystemViewManager.createInMemoryFileSystemView(context, metaClient,
+          HoodieMetadataConfig.newBuilder().enable(false).build());
+      HoodieTableFileSystemView actualFileSystemView = createFileSystemView(writeConfig, viewStorageType);
+      try {
+        assertForFSVEquality(expectedFileSystemView, viewStorageType, actualFileSystemView, enableMdt, Option.empty());
+      } finally {
+        expectedFileSystemView.close();
+        actualFileSystemView.close();
+      }
     }
   }
 
