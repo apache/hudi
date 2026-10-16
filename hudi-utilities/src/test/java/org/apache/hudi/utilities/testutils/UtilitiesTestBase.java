@@ -280,7 +280,7 @@ public class UtilitiesTestBase {
     conf.put("spark.executor.memory", "1G");
     conf.put("spark.driver.memory", "1G");
     conf.put("spark.hadoop.mapred.output.compress", "true");
-    conf.put("spark.ui.enable", "false");
+    conf.put("spark.ui.enabled", "false");
     return conf;
   }
 
