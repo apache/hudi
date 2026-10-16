@@ -29,7 +29,7 @@ import org.apache.spark.sql.catalyst.expressions.{Expression, InSet, Not}
 import org.apache.spark.sql.catalyst.optimizer.OptimizeIn
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
-import org.apache.spark.sql.functions.{col, lower, upper}
+import org.apache.spark.sql.functions.{col, date_format, lower, upper}
 import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.internal.SQLConf.SESSION_LOCAL_TIMEZONE
 import org.apache.spark.sql.types._
@@ -189,19 +189,13 @@ object TestDataSkippingUtils {
         ),
         Seq("file_1", "file_2", "file_3")),
       arguments(
-        // Composite expression
-        // NOTE: lower() does not preserve the binary ordering of strings, so this filter isn't translated
-        //       and no file is pruned. For ex, file_5 may hold "B" (sorting between "ABC" and "abc"), whose
-        //       lower-case form doesn't start w/ "abc"
+        // NOTE: file_1 may hold "B" (sorting between "ABC" and "abc"), whose lower-case form "b" doesn't
+        //       start w/ "abc", even though lower(B_minValue) = lower(B_maxValue) = "abc" does
         Not(sparkAdapter.getExpressionFromColumn(lower(col("B")).startsWith("abc"))),
         Seq(
-          IndexRow("file_1", valueCount = 1, B_minValue = "ABA", B_maxValue = "ADF", B_nullCount = 1), // may contain strings starting w/ "ABC"
-          IndexRow("file_2", valueCount = 1, B_minValue = "ADF", B_maxValue = "AZY", B_nullCount = 0),
-          IndexRow("file_3", valueCount = 1, B_minValue = "AAA", B_maxValue = "ABA", B_nullCount = 0),
-          IndexRow("file_4", valueCount = 1, B_minValue = "ABC123", B_maxValue = "ABC345", B_nullCount = 0), // all strings start w/ "ABC"
-          IndexRow("file_5", valueCount = 3, B_minValue = "ABC", B_maxValue = "abc", B_nullCount = 0)
+          IndexRow("file_1", valueCount = 3, B_minValue = "ABC", B_maxValue = "abc", B_nullCount = 0)
         ),
-        Seq("file_1", "file_2", "file_3", "file_4", "file_5")),
+        Seq("file_1")),
       arguments(
         // NOTE: file_1 holds "Zebra", whose lower-case form is the queried "zebra", even though
         //       lower(B_maxValue) = "apple" sorts before it
@@ -283,19 +277,31 @@ object TestDataSkippingUtils {
   }
 
   def testMiscLookupFilterExpressionsSource(): java.util.stream.Stream[Arguments] = {
-    // NOTE: Have to use [[Arrays.stream]], as Scala can't resolve properly 2 overloads for [[Stream.of]]
-    //       (for single element)
-    java.util.Arrays.stream(
-      Array(
-        arguments(
-          InSet(UnresolvedAttribute("A"), HashSet(0, 1)),
-          Seq(
-            IndexRow("file_1", valueCount = 1, 1, 2, 0),
-            IndexRow("file_2", valueCount = 1, -1, 1, 0),
-            IndexRow("file_3", valueCount = 1, -2, -1, 0)
-          ),
-          Seq("file_1", "file_2"))
-      )
+    java.util.stream.Stream.of(
+      arguments(
+        InSet(UnresolvedAttribute("A"), HashSet(0, 1)),
+        Seq(
+          IndexRow("file_1", valueCount = 1, 1, 2, 0),
+          IndexRow("file_2", valueCount = 1, -1, 1, 0),
+          IndexRow("file_3", valueCount = 1, -2, -1, 0)
+        ),
+        Seq("file_1", "file_2")),
+      arguments(
+        // Composite expression
+        // NOTE: date_format(C, 'yyyy-MM-dd') preserves the ordering of C, so this filter is translated and
+        //       file_1, whose dates all fall in 03/2022, is pruned
+        Not(sparkAdapter.getExpressionFromColumn(date_format(col("C"), "yyyy-MM-dd").startsWith("2022-03"))),
+        Seq(
+          IndexRow("file_1", valueCount = 2,
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
+            C_nullCount = 0),
+          IndexRow("file_2", valueCount = 2,
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1648785048000L), // 04/01/2022
+            C_nullCount = 0)
+        ),
+        Seq("file_2"))
     )
   }
 

@@ -74,7 +74,6 @@ abstract class BaseHoodieCatalystExpressionUtils extends HoodieCatalystExpressio
         // String Expressions
         // NOTE: Lower/Upper are not matched: case folding does not preserve the binary ordering
         //       of strings (for ex, "Zebra" < "apple", but lower("Zebra") = "zebra" > "apple")
-
         // Left API change: Improve RuntimeReplaceable
         // https://issues.apache.org/jira/browse/SPARK-38240
         case org.apache.spark.sql.catalyst.expressions.Left(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
