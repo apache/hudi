@@ -22,6 +22,7 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -95,6 +96,7 @@ import org.slf4j.Logger;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -104,6 +106,7 @@ import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX;
@@ -832,6 +835,48 @@ public class TestStreamWriteOperatorCoordinator {
     completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
     assertThat("The pending compaction should be recommitted",
         completedTimeline.nthFromLastInstant(3).get(), is(compactionInstant));
+  }
+
+  @Test
+  void testSkipInlineMetadataTableServices() throws Exception {
+    coordinator.close();
+    reset();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    int metadataCompactionDeltaCommits = 5;
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS, metadataCompactionDeltaCommits);
+    conf.setString(HoodieMetadataConfig.INLINE_TABLE_SERVICES_ENABLED.key(), "false");
+    coordinator = startCoordinator(conf, 1);
+
+    final String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(tempFile.getAbsolutePath());
+    HoodieTableMetaClient metadataTableMetaClient = HoodieTestUtils.createMetaClient(
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf)), metadataTableBasePath);
+    List<HoodieInstant> before = metadataTableMetaClient.getActiveTimeline().getInstants();
+
+    // Commits past the compaction threshold only add their own deltacommits: no clean, compaction or archival.
+    List<String> instants = new ArrayList<>();
+    for (int ckp = 0; ckp <= metadataCompactionDeltaCommits; ckp++) {
+      instants.add(mockWriteWithMetadata(ckp));
+    }
+    List<HoodieInstant> afterWrites = metadataTableMetaClient.reloadActiveTimeline().getInstants();
+    assertTrue(afterWrites.containsAll(before), "nothing should have been archived");
+    List<HoodieInstant> added = afterWrites.stream().filter(i -> !before.contains(i)).collect(Collectors.toList());
+    assertTrue(added.stream().allMatch(i -> i.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION)),
+        "unexpected metadata instants " + added);
+    assertEquals(instants, added.stream().map(HoodieInstant::requestedTime).collect(Collectors.toList()));
+
+    // Restarting the coordinator does not run them either.
+    coordinator.close();
+    coordinator = startCoordinator(conf, 1);
+    assertEquals(afterWrites, metadataTableMetaClient.reloadActiveTimeline().getInstants());
+
+    // The same restart with the services enabled compacts, so the checks above cannot pass vacuously.
+    coordinator.close();
+    conf.setString(HoodieMetadataConfig.INLINE_TABLE_SERVICES_ENABLED.key(), "true");
+    coordinator = startCoordinator(conf, 1);
+    assertTrue(metadataTableMetaClient.reloadActiveTimeline().getInstants().stream()
+            .anyMatch(i -> i.getAction().equals(HoodieTimeline.COMMIT_ACTION) && !afterWrites.contains(i)),
+        "a compaction was due and should have run");
   }
 
   @Test
