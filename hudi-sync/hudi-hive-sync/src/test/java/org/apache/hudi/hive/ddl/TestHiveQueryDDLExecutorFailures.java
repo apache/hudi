@@ -54,7 +54,7 @@ class TestHiveQueryDDLExecutorFailures {
     setField(executor, "config", config);
     setField(executor, "partitionValueExtractor", partitionValueExtractor);
 
-    assertDoesNotThrow(() -> executor.runSQLs(Collections.emptyList()));
+    assertDoesNotThrow(() -> executor.runSQLs(Collections.emptyList(), index -> { }));
     assertDoesNotThrow(() -> executor.dropPartitionsToTable("table", Collections.emptyList()));
 
     when(metaStoreClient.getTable(anyString(), anyString())).thenThrow(new TException("unavailable"));

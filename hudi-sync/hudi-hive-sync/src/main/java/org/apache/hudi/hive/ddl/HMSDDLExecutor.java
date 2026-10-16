@@ -54,6 +54,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.IntConsumer;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
@@ -196,7 +197,7 @@ public class HMSDDLExecutor implements DDLExecutor {
   }
 
   @Override
-  public void addPartitionsToTable(String tableName, List<String> partitionsToAdd) {
+  public void addPartitionsToTable(String tableName, List<String> partitionsToAdd, IntConsumer onPartitionsAdded) {
     if (partitionsToAdd.isEmpty()) {
       log.info("No partitions to add for {}", tableName);
       return;
@@ -221,6 +222,7 @@ public class HMSDDLExecutor implements DDLExecutor {
         });
         client.add_partitions(partitionList, true, false);
         log.info("HMSDDLExecutor add a batch partitions done: {}", partitionList.size());
+        onPartitionsAdded.accept(partitionList.size());
       }
     } catch (TException e) {
       log.error("{}.{} add partition failed", databaseName, tableName, e);

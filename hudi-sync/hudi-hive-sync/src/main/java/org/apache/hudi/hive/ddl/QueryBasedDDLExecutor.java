@@ -38,6 +38,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.IntConsumer;
 
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
@@ -83,10 +84,15 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
    * to fan the list out across workers. The contract requires that the list
    * has no positional dependencies — callers must fully qualify table names
    * with {@code `db`.`tbl`} so any statement can run on any worker.
+   *
+   * <p>{@code onStatementSucceeded} is given the index of each statement that succeeds. Subclasses
+   * that parallelize call it from their workers, so it may be called from several threads at once
+   * and out of order.
    */
-  protected void runSQLs(List<String> sqls) {
-    for (String sql : sqls) {
-      runSQL(sql);
+  protected void runSQLs(List<String> sqls, IntConsumer onStatementSucceeded) {
+    for (int i = 0; i < sqls.size(); i++) {
+      runSQL(sqls.get(i));
+      onStatementSucceeded.accept(i);
     }
   }
 
@@ -95,7 +101,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
    *
    * <p>The base implementation returns {@code partitionCount}, i.e. one statement
    * covering every partition — the long-standing behavior, and the only correct choice
-   * when {@link #runSQLs(List)} executes the list serially. Splitting a TOUCH into
+   * when {@link #runSQLs(List, IntConsumer)} executes the list serially. Splitting a TOUCH into
    * several statements changes failure semantics (a mid-list failure leaves some
    * partitions touched and some not), so it is only worth doing when the resulting
    * statements are actually dispatched in parallel. Subclasses that parallelize
@@ -143,14 +149,17 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
   }
 
   @Override
-  public void addPartitionsToTable(String tableName, List<String> partitionsToAdd) {
+  public void addPartitionsToTable(String tableName, List<String> partitionsToAdd, IntConsumer onPartitionsAdded) {
     if (partitionsToAdd.isEmpty()) {
       log.info("No partitions to add for {}", tableName);
       return;
     }
     log.info("Adding partitions {} to table {}", partitionsToAdd.size(), tableName);
-    List<String> sqls = constructAddPartitions(tableName, partitionsToAdd);
-    runSQLs(sqls);
+    int batchSize = config.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM);
+    List<String> sqls = constructAddPartitions(tableName, partitionsToAdd, batchSize);
+    // statement i adds the i-th batch of batchSize partitions; if it is the last statement, it adds
+    // what is left, which can be fewer
+    runSQLs(sqls, i -> onPartitionsAdded.accept(Math.min(batchSize, partitionsToAdd.size() - i * batchSize)));
   }
 
   @Override
@@ -161,7 +170,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
     }
     log.info("Changing partitions {} on {}", changedPartitions.size(), tableName);
     List<String> sqls = constructPartitionAlterStatements(tableName, changedPartitions, PartitionAlterType.SET_LOCATION);
-    runSQLs(sqls);
+    runSQLs(sqls, index -> { });
   }
 
   @Override
@@ -188,9 +197,8 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
     return false;
   }
 
-  private List<String> constructAddPartitions(String tableName, List<String> partitions) {
+  private List<String> constructAddPartitions(String tableName, List<String> partitions, int batchSyncPartitionNum) {
     List<String> result = new ArrayList<>();
-    int batchSyncPartitionNum = config.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM);
     StringBuilder alterSQL = getAlterTablePrefix(tableName);
     for (int i = 0; i < partitions.size(); i++) {
       String partitionClause = getPartitionClause(partitions.get(i));
@@ -244,7 +252,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
     }
     log.info("Touching partitions {} on {}", touchPartitions.size(), tableName);
     List<String> sqls = constructPartitionAlterStatements(tableName, touchPartitions, PartitionAlterType.TOUCH);
-    runSQLs(sqls);
+    runSQLs(sqls, index -> { });
   }
 
   /**

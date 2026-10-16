@@ -29,6 +29,7 @@ import org.apache.hudi.sync.common.model.Partition;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.IntConsumer;
 
 public interface HoodieMetaSyncOperations {
 
@@ -97,6 +98,19 @@ public interface HoodieMetaSyncOperations {
    */
   default void addPartitionsToTable(String tableName, List<String> partitionsToAdd) {
 
+  }
+
+  /**
+   * Add partitions to the table in metastore, reporting them as the metastore takes them.
+   *
+   * @param onPartitionsAdded Given the number of partitions each time some are added, so that when
+   *                          adding fails part way, the partitions added before the failure are still
+   *                          reported. It may be called from several threads at once. By default it
+   *                          is called once, after all the partitions are added.
+   */
+  default void addPartitionsToTable(String tableName, List<String> partitionsToAdd, IntConsumer onPartitionsAdded) {
+    addPartitionsToTable(tableName, partitionsToAdd);
+    onPartitionsAdded.accept(partitionsToAdd.size());
   }
 
   /**
