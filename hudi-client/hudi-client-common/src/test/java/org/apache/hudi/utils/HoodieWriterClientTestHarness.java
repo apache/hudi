@@ -454,6 +454,24 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
         .build());
   }
 
+  /**
+   * Makes the heartbeats of the given (failed, no longer running) writes look expired by moving their heartbeat
+   * files' modification time back past the tolerable interval, instead of waiting that interval out, and checks
+   * that the client now sees them as expired.
+   */
+  protected void expireHeartbeats(BaseHoodieWriteClient client, String... instantTimes) throws IOException {
+    HoodieWriteConfig config = client.getConfig();
+    long expiredTime = System.currentTimeMillis()
+        - config.getHoodieClientHeartbeatIntervalInMs() * (config.getHoodieClientHeartbeatTolerableMisses() + 1L);
+    for (String instantTime : instantTimes) {
+      StoragePath heartbeatFile = new StoragePath(HoodieTableMetaClient.getHeartbeatFolderPath(basePath), instantTime);
+      if (storage.exists(heartbeatFile)) {
+        storage.setModificationTime(heartbeatFile, expiredTime);
+      }
+      assertTrue(client.getHeartbeatClient().isHeartbeatExpired(instantTime));
+    }
+  }
+
   protected HoodieWriteConfig getParallelWritingWriteConfig(HoodieFailedWritesCleaningPolicy cleaningPolicy, boolean populateMetaFields) {
     Properties properties = new Properties();
     properties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
@@ -1427,12 +1445,8 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     assertEquals(0, metaClient.getActiveTimeline().getTimelineOfActions(CollectionUtils.createSet(ROLLBACK_ACTION)).countInstants());
     assertEquals(2, metaClient.getActiveTimeline().filterInflights().countInstants());
     assertEquals(2, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants());
-    // Wait till enough time passes such that the first 2 failed commits heartbeats are expired
-    boolean conditionMet = false;
-    while (!conditionMet) {
-      conditionMet = client.getHeartbeatClient().isHeartbeatExpired("300");
-      Thread.sleep(100);
-    }
+    // Let the heartbeats of the 2 failed commits expire
+    expireHeartbeats(client, "200", "300");
     client.close();
     client = getHoodieWriteClient(getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
     // Perform 1 successful write
@@ -1484,12 +1498,8 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
         100, dataGen::generateInserts, BaseHoodieWriteClient::bulkInsert, false, 100, 300,
         0, true, INSTANT_GENERATOR, true);
     client.close();
-    // Wait till enough time passes such that the 2 failed commits heartbeats are expired
-    boolean conditionMet = false;
-    while (!conditionMet) {
-      conditionMet = client.getHeartbeatClient().isHeartbeatExpired("400");
-      Thread.sleep(2000);
-    }
+    // Let the heartbeats of the failed commits expire
+    expireHeartbeats(client, "200", "300", "400");
     client.clean();
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline().reload();
     assertEquals(3, timeline.getTimelineOfActions(CollectionUtils.createSet(ROLLBACK_ACTION)).countInstants());
@@ -1548,12 +1558,8 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     assertEquals(2, metaClient.getActiveTimeline().filterInflights().countInstants());
     assertEquals(2, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants());
     client = getHoodieWriteClient(getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
-    // Wait till enough time passes such that the first 2 failed commits heartbeats are expired
-    boolean conditionMet = false;
-    while (!conditionMet) {
-      conditionMet = client.getHeartbeatClient().isHeartbeatExpired("300");
-      Thread.sleep(2000);
-    }
+    // Let the heartbeats of the 2 failed commits expire
+    expireHeartbeats(client, "200", "300");
     Future<Object> commit4 = service.submit(() -> castWriteBatch(getHoodieWriteClient(getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields)),
         "500", "400", Option.of(Arrays.asList("500")), "500", 100, dataGen::generateInserts,
         BaseHoodieWriteClient::bulkInsert, false, 100, 100, 0, INSTANT_GENERATOR));
