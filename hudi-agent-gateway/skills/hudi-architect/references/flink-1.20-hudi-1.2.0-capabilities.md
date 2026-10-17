@@ -83,6 +83,7 @@ the current checkout contains it.
 | Auto-generated-key durability warning | Supported |
 | Replay-idempotence classification | Supported |
 | First bounded mutable COW upsert/delete path | Supported after schema-2 validation |
+| First bounded mutable MOR upsert/delete path | Supported after schema-3 validation |
 | Stable non-null mutable record key | Required; auto-key is `BLOCKED` |
 | Mutable ordering | One non-null `BIGINT` or `TIMESTAMP(p<=6)` event-time field |
 | Mutable source changelog | Normalized UPSERT (`I`, `UA`, `D`, no `UB`) |
@@ -91,7 +92,12 @@ the current checkout contains it.
 | Mutable index | Global `FLINK_STATE`, TTL 0, bootstrap enabled |
 | Alternative indexes, expiring state, custom mergers, or retract normalization | `BLOCKED`; deferred |
 | Full changelog history / Hudi CDC query | Not claimed; output is latest-state behavior |
-| MOR and compaction ownership | Deferred to PR4 |
+| COW/MOR derivation | Workload-derived for mutable paths; append-only remains COW |
+| MOR compaction ownership | Same Flink writer only; standalone or unknown ownership withholds SQL |
+| MOR compaction | Async schedule and execution, `num_commits`, five delta commits |
+| MOR snapshot freshness | Base files plus log state at a visible completed instant |
+| MOR read-optimized freshness | Compacted base-file state; current only after compaction |
+| Detailed compaction tuning or clustering | `BLOCKED`; deferred to operations/separate work |
 | New-table, single-writer, append-only COW SQL | Supported after static validation |
 | Stable-key DDL | `PRIMARY KEY (...) NOT ENFORCED` |
 | Explicitly accepted auto-generated keys | Supported with durable warning |
@@ -188,13 +194,41 @@ Bootstrap closes the cold-start gap for a table created and operated under this 
 loss must not make existing keys look new. It does not expand the path into arbitrary
 existing-table takeover; that still needs the separate PR5 evidence and compatibility flow.
 
+## Implemented PR4 mutable MOR contract
+
+Schema 3 reuses every schema-2 mutable safety invariant and changes only the table type plus an
+explicit read/table-service contract. The skill derives MOR from sustained mutable writes and
+reader needs; it does not ask the user to select a Hudi table type without context. Low or
+occasional updates, simplest-operation priority, and strict read-optimized freshness derive COW.
+Append-only MOR is rejected because Hudi 1.2.0 treats MOR insert as append mode and does not enter
+the verified mutable compaction schedule path.
+
+The canonical MOR sink pins `MERGE_ON_READ` upsert, event-time ordering, global `FLINK_STATE` with
+TTL 0 and bootstrap, and `changelog.enabled=false`. The same Flink writer owns compaction;
+`compaction.schedule.enabled`, `compaction.async.enabled`, and
+`compaction.operation.execute.async.enabled` are true, with `num_commits` and five delta commits.
+Both clustering controls remain false. Five is the Hudi 1.2.0 effective default selected as a fixed
+bounded contract, not a workload-tuned SLA.
+
+Snapshot queries read base files plus log state at a visible completed instant. Read-optimized
+queries read compacted base files and can lag delta commits until compaction. The reader requirement
+is recorded in the design contract, but reader-side query options are not emitted into sink DDL.
+A standalone compactor is treated as an independent writer and remains review-required; unknown
+ownership also fails closed. Compaction parallelism, time triggers, target IO, clustering,
+concurrency configuration, and live service execution are not claimed.
+
+The pinned Flink planner fixture consumes the exact schema-3 golden SQL and verifies the mutable
+writer, index bootstrap, `compact_plan_generate`, `compact_task`, and `compact_commit` operators.
+Focused release-bundle fixtures retain effective MOR, compaction, clustering, and query-mode
+semantics without claiming that a live job ran.
+
 ## Status vocabulary
 
 - `INCOMPLETE` — a required workload fact, schema, or lifecycle fact is missing.
 - `BLOCKED` — the requested path is known to be outside the currently implemented Flink scope.
 - `REVIEW_REQUIRED` — compatibility, writer topology, catalog behavior, or another operational
   risk requires human confirmation.
-- `CONFIG_VALIDATED` — every applicable gate and all load-bearing PR2 or PR3 design values passed the
+- `CONFIG_VALIDATED` — every applicable gate and all load-bearing PR2, PR3, or PR4 design values passed the
   pinned static validator. Canonical SQL was emitted without unresolved placeholders.
 
 No status claims that storage permissions, JAR deployment, source availability, catalog

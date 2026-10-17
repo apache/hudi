@@ -140,7 +140,7 @@ First ask whether existing logical records can change:
 > - **Yes — updates or deletes occur**
 > - **Not sure**
 
-- Mutable → enter the bounded PR3 candidate flow. Require a stable, non-null business key and one
+- Mutable → enter the bounded mutable candidate flow. Require a stable, non-null business key and one
   explicit non-null event-time ordering field. Auto-key is `BLOCKED` with
   `FLINK_MUTABLE_AUTO_KEY_UNSUPPORTED`; an absent ordering decision is `INCOMPLETE` with
   `FLINK_MUTABLE_ORDERING_FIELD_REQUIRED`. Do not infer either value.
@@ -207,8 +207,8 @@ For append-only input:
 
 - Cannot occur → continue and record the confirmed assumption boundary.
 - Duplicates acceptable → continue and record duplicate tolerance in the ADR.
-- Copies must collapse → continue only for an otherwise eligible mutable schema-2 path. For the
-  append-only schema-1 path, use `FLINK_REPLAY_IDEMPOTENCE_DEFERRED` with `BLOCKED`.
+- Copies must collapse → continue only for an otherwise eligible mutable schema-2 or schema-3
+  path. For the append-only schema-1 path, use `FLINK_REPLAY_IDEMPOTENCE_DEFERRED` with `BLOCKED`.
 - Not sure → `REVIEW_REQUIRED` with `FLINK_REPLAY_BEHAVIOR_UNRESOLVED`.
 
 ## F7 — Physical table and source contract
@@ -298,16 +298,70 @@ State that a completed checkpoint coordinates the Hudi commit. Do not claim end-
 exactly-once: the source, checkpoint storage, restart behavior, and the rest of the pipeline remain
 deployment responsibilities. If known rate and active-partition evidence indicates very little
 data per checkpoint, surface `FLINK_CHECKPOINT_SMALL_FILE_RISK`; do not enable clustering or tune
-file sizing in PR2.
+file sizing in the bounded executable paths.
 
-## PR2/PR3 validation and completion
+## F10 — Mutable table type, query freshness, and MOR ownership
 
-After all applicable questions, build a version-1 JSON contract for append-only or a version-2
-JSON contract for mutable COW. Both contain confirmed safety facts, physical schemas, identity,
-source, write, and runtime contracts. Version 2 additionally records event-time ordering,
-normalized UPSERT, full-row delete posture, immutable partition fields, and the fixed global
-FLINK_STATE/bootstrap/no-TTL contract. Do not insert placeholders. Record an explicitly empty
-pass-through connector-option map; neither renderer accepts an ignored option.
+Ask this section only for an otherwise eligible mutable workload. Append-only stays on schema 1
+COW and must not receive compaction questions.
+
+First establish write/read pressure in workload terms:
+
+> "Are updates sustained enough that rewriting whole data files is a concern, and how will
+> consumers read the latest state?"
+>
+> - **Updates are low or occasional; prefer the simplest operations**
+> - **Sustained upserts; consumers use snapshot reads**
+> - **Sustained upserts; consumers use read-optimized scans and accept compaction lag**
+> - **Read-optimized scans must include every completed write immediately**
+> - **Not sure**
+
+- Low/occasional updates or simplest operations → derive mutable COW and schema 2.
+- Sustained upserts with snapshot reads → recommend MOR and continue the schema-3 questions.
+- Sustained upserts with read-optimized consumers that accept compaction lag → recommend MOR and
+  continue. Record `read_optimized_freshness=after_compaction`.
+- Read-optimized results required after every commit → recommend COW. If MOR remains mandatory,
+  add `FLINK_MOR_READ_OPTIMIZED_FRESHNESS_UNSUPPORTED` with `BLOCKED`.
+- Unknown query/freshness requirement → `FLINK_MOR_QUERY_REQUIREMENT_UNRESOLVED` with `INCOMPLETE`;
+  do not emit MOR SQL.
+
+For a MOR candidate, record whether readers require snapshot, read-optimized, or both. Snapshot
+reads expose base files plus log state at a visible completed instant. Read-optimized reads expose
+compacted base-file state and therefore advance only after compaction. Do not render reader-side
+`hoodie.datasource.query.type` into sink DDL, and do not turn the fixed five-delta-commit trigger
+into a wall-clock freshness SLA.
+
+Then establish compaction ownership:
+
+> "Who will schedule and execute compaction for this table?"
+>
+> - **The same Flink writer job**
+> - **A separately deployed compaction service**
+> - **Not sure**
+
+- Same Flink writer → schema 3 may continue with asynchronous schedule and execution enabled,
+  `num_commits`, five delta commits, and clustering disabled.
+- Standalone service → `REVIEW_REQUIRED` with `FLINK_MULTI_WRITER_REVIEW`; emit no SQL. PR7 owns
+  the concurrency contract.
+- Not sure → `REVIEW_REQUIRED` with `FLINK_WRITER_MODEL_UNRESOLVED`; do not guess ownership.
+- Missing owner in a schema-3 contract → `INCOMPLETE` with
+  `FLINK_MOR_COMPACTION_OWNER_REQUIRED`.
+
+Do not ask for compaction tasks, seconds, target IO, strategy alternatives, or other tuning. If
+the request supplies such tuning, add `FLINK_MOR_COMPACTION_TUNING_UNSUPPORTED`; operational
+tuning is outside this bounded design path. Clustering must remain disabled or
+`FLINK_MOR_CLUSTERING_UNSUPPORTED` blocks output.
+
+## PR2/PR3/PR4 validation and completion
+
+After all applicable questions, build a version-1 JSON contract for append-only COW, a version-2
+contract for mutable COW, or a version-3 contract for mutable MOR. All contain confirmed safety
+facts, physical schemas, identity, source, write, and runtime contracts. Versions 2 and 3 record
+event-time ordering, normalized UPSERT, full-row delete posture, immutable partition fields, and the fixed global
+FLINK_STATE/bootstrap/no-TTL contract. Version 3 additionally records query modes and
+read-optimized freshness, compaction ownership and fixed schedule/execution settings, and disabled
+clustering. Do not insert placeholders. Record an explicitly empty
+pass-through connector-option map; no renderer accepts an ignored option.
 
 Run:
 

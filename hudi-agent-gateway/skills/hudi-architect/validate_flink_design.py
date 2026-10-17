@@ -43,9 +43,11 @@ from validate_flink_capabilities import (
 
 APPEND_CONTRACT_SCHEMA_VERSION = 1
 MUTABLE_CONTRACT_SCHEMA_VERSION = 2
+MUTABLE_MOR_CONTRACT_SCHEMA_VERSION = 3
 SUPPORTED_CONTRACT_SCHEMAS = {
     APPEND_CONTRACT_SCHEMA_VERSION,
     MUTABLE_CONTRACT_SCHEMA_VERSION,
+    MUTABLE_MOR_CONTRACT_SCHEMA_VERSION,
 }
 MAX_TYPE_LENGTH = 2_147_483_647
 STATUS_PRIORITY = {"INCOMPLETE": 0, "REVIEW_REQUIRED": 1, "BLOCKED": 2}
@@ -92,6 +94,13 @@ FINDING_STATUS = {
     "FLINK_MUTABLE_ORDERING_FIELD_REQUIRED": "INCOMPLETE",
     "FLINK_MUTABLE_PARTITION_EVOLUTION_UNSUPPORTED": "BLOCKED",
     "FLINK_MUTABLE_SOURCE_CHANGELOG_UNSUPPORTED": "BLOCKED",
+    "FLINK_MOR_APPEND_ONLY_UNSUPPORTED": "BLOCKED",
+    "FLINK_MOR_CLUSTERING_UNSUPPORTED": "BLOCKED",
+    "FLINK_MOR_COMPACTION_CONFIGURATION_UNSUPPORTED": "BLOCKED",
+    "FLINK_MOR_COMPACTION_OWNER_REQUIRED": "INCOMPLETE",
+    "FLINK_MOR_COMPACTION_TUNING_UNSUPPORTED": "BLOCKED",
+    "FLINK_MOR_QUERY_REQUIREMENT_UNRESOLVED": "INCOMPLETE",
+    "FLINK_MOR_READ_OPTIMIZED_FRESHNESS_UNSUPPORTED": "BLOCKED",
     "FLINK_OPTION_NOT_VERIFIED": "REVIEW_REQUIRED",
     "FLINK_PARTITION_FIELD_MISSING": "BLOCKED",
     "FLINK_PHYSICAL_SCHEMA_REQUIRED": "INCOMPLETE",
@@ -111,6 +120,7 @@ FINDING_STATUS = {
     "FLINK_WRITER_MODEL_UNRESOLVED": "REVIEW_REQUIRED",
     "FLINK_PR2_WRITE_PATH_UNSUPPORTED": "BLOCKED",
     "FLINK_PR3_WRITE_PATH_UNSUPPORTED": "BLOCKED",
+    "FLINK_PR4_WRITE_PATH_UNSUPPORTED": "BLOCKED",
     "FLINK_SCHEMA_TYPE_UNVERIFIED": "REVIEW_REQUIRED",
 }
 
@@ -369,7 +379,11 @@ def _render_sql(
     source = contract["source"]
     runtime = contract["runtime"]
     identity = contract["identity"]
-    mutable = contract["contract_schema"] == MUTABLE_CONTRACT_SCHEMA_VERSION
+    mutable = contract["contract_schema"] in {
+        MUTABLE_CONTRACT_SCHEMA_VERSION,
+        MUTABLE_MOR_CONTRACT_SCHEMA_VERSION,
+    }
+    mutable_mor = contract["contract_schema"] == MUTABLE_MOR_CONTRACT_SCHEMA_VERSION
 
     definitions = [
         f"  {_quote_identifier(column['name'])} {column['type']}"
@@ -390,11 +404,12 @@ def _render_sql(
         table_ddl += f"\nPARTITIONED BY ({partition_sql})"
     if mutable:
         ordering_field = contract["ordering"]["fields"][0]
+        table_type = "MERGE_ON_READ" if mutable_mor else "COPY_ON_WRITE"
         table_ddl += (
             "\nWITH (\n"
             "  'connector' = 'hudi',\n"
             f"  'path' = {_sql_string(table['path'])},\n"
-            "  'table.type' = 'COPY_ON_WRITE',\n"
+            f"  'table.type' = '{table_type}',\n"
             "  'write.operation' = 'upsert',\n"
             f"  'ordering.fields' = {_sql_string(ordering_field)},\n"
             "  'hoodie.write.record.merge.mode' = 'EVENT_TIME_ORDERING',\n"
@@ -402,9 +417,19 @@ def _render_sql(
             "  'index.global.enabled' = 'true',\n"
             "  'index.state.ttl' = '0',\n"
             "  'index.bootstrap.enabled' = 'true',\n"
-            "  'changelog.enabled' = 'false'\n"
-            ");"
+            "  'changelog.enabled' = 'false'"
         )
+        if mutable_mor:
+            table_ddl += (
+                ",\n  'compaction.schedule.enabled' = 'true',\n"
+                "  'compaction.async.enabled' = 'true',\n"
+                "  'compaction.operation.execute.async.enabled' = 'true',\n"
+                "  'compaction.trigger.strategy' = 'num_commits',\n"
+                "  'compaction.delta_commits' = '5',\n"
+                "  'clustering.schedule.enabled' = 'false',\n"
+                "  'clustering.async.enabled' = 'false'"
+            )
+        table_ddl += "\n);"
     else:
         table_ddl += (
             "\nWITH (\n"
@@ -438,7 +463,7 @@ def _render_sql(
 def assess_design(
     contract: dict[str, Any], manifest: dict[str, Any]
 ) -> dict[str, Any]:
-    """Validate one explicit append-only or mutable COW contract."""
+    """Validate one explicit append-only COW, mutable COW, or mutable MOR contract."""
 
     assessment = Assessment()
     manifest_errors = validate_manifest(manifest)
@@ -466,34 +491,58 @@ def assess_design(
             "hudi_version",
             "identity",
             "ordering",
+            "read",
             "runtime",
             "safety",
             "source",
             "table",
+            "table_services",
             "write",
         },
         "contract",
         assessment,
     )
     contract_schema = contract.get("contract_schema")
-    if (
-        not isinstance(contract_schema, int)
-        or isinstance(contract_schema, bool)
-        or contract_schema not in SUPPORTED_CONTRACT_SCHEMAS
-    ):
+    supported_contract_schema = (
+        isinstance(contract_schema, int)
+        and not isinstance(contract_schema, bool)
+        and contract_schema in SUPPORTED_CONTRACT_SCHEMAS
+    )
+    if not supported_contract_schema:
         assessment.add(
             "FLINK_DESIGN_CONTRACT_INVALID",
-            "contract_schema must be 1 (append-only) or 2 (mutable COW)",
+            "contract_schema must be 1 (append-only), 2 (mutable COW), or 3 (mutable MOR)",
         )
-    mutable_contract = contract_schema == MUTABLE_CONTRACT_SCHEMA_VERSION
-    contract_profile = manifest[
-        "mutable_executable_contract" if mutable_contract else "executable_contract"
-    ]
+    mutable_contract = supported_contract_schema and contract_schema in {
+        MUTABLE_CONTRACT_SCHEMA_VERSION,
+        MUTABLE_MOR_CONTRACT_SCHEMA_VERSION,
+    }
+    mutable_mor_contract = (
+        supported_contract_schema
+        and contract_schema == MUTABLE_MOR_CONTRACT_SCHEMA_VERSION
+    )
+    if mutable_mor_contract:
+        contract_profile = manifest["mutable_mor_executable_contract"]
+    elif mutable_contract:
+        contract_profile = manifest["mutable_executable_contract"]
+    else:
+        contract_profile = manifest["executable_contract"]
     if not mutable_contract and "ordering" in contract:
         assessment.add(
             "FLINK_DESIGN_CONTRACT_INVALID",
-            "ordering is supported only by contract_schema 2",
+            "ordering is supported only by mutable contract schemas 2 and 3",
         )
+    if not mutable_mor_contract:
+        if "read" in contract:
+            assessment.add(
+                "FLINK_DESIGN_CONTRACT_INVALID",
+                "read is supported only by contract_schema 3",
+            )
+        if "table_services" in contract:
+            assessment.add(
+                "FLINK_DESIGN_CONTRACT_INVALID",
+                "table_services is supported only by contract_schema 3",
+            )
     if contract.get("baseline_id") != manifest.get("baseline_id"):
         assessment.add("FLINK_VERSION_UNVERIFIED", "The capability baseline does not match")
     if not _non_empty_string(contract.get("hudi_version")) or not _non_empty_string(
@@ -549,12 +598,12 @@ def assess_design(
         if mutability != "mutable":
             assessment.add(
                 "FLINK_MUTABILITY_REQUIRED",
-                "contract_schema 2 requires mutable input",
+                "Mutable contract schemas 2 and 3 require mutable input",
             )
     elif mutability == "mutable":
         assessment.add(
             "FLINK_MUTABLE_COW_DEFERRED",
-            "Mutable COW requires the explicit contract_schema 2 safety contract",
+            "Mutable input requires an explicit mutable safety contract",
         )
     elif mutability != "append_only":
         assessment.add("FLINK_MUTABILITY_REQUIRED", "Append-only input must be confirmed")
@@ -865,6 +914,8 @@ def assess_design(
     write_keys = {"connector_options", "operation", "table_type"}
     if mutable_contract:
         write_keys.update({"changelog_enabled", "index", "record_merge_mode"})
+        if mutable_mor_contract:
+            write_keys.add("clustering")
     else:
         write_keys.add("insert_cluster")
     _check_keys(
@@ -880,7 +931,14 @@ def assess_design(
             "FLINK_DESIGN_CONTRACT_INVALID",
             "write.table_type and write.operation must be explicit",
         )
-    elif mutable_contract and (
+    elif mutable_mor_contract and (
+        table_type != "MERGE_ON_READ" or operation != "upsert"
+    ):
+        assessment.add(
+            "FLINK_PR4_WRITE_PATH_UNSUPPORTED",
+            "The first mutable MOR path supports only MERGE_ON_READ upsert",
+        )
+    elif mutable_contract and not mutable_mor_contract and (
         table_type != "COPY_ON_WRITE" or operation != "upsert"
     ):
         assessment.add(
@@ -890,19 +948,33 @@ def assess_design(
     elif not mutable_contract and (
         table_type != "COPY_ON_WRITE" or operation != "insert"
     ):
-        assessment.add(
-            "FLINK_PR2_WRITE_PATH_UNSUPPORTED",
-            "PR2 supports only COPY_ON_WRITE with write.operation=insert",
-        )
+        if table_type == "MERGE_ON_READ":
+            assessment.add(
+                "FLINK_MOR_APPEND_ONLY_UNSUPPORTED",
+                "The bounded append-only path remains COPY_ON_WRITE",
+            )
+        else:
+            assessment.add(
+                "FLINK_PR2_WRITE_PATH_UNSUPPORTED",
+                "PR2 supports only COPY_ON_WRITE with write.operation=insert",
+            )
     if mutable_contract:
         if write.get("record_merge_mode") != "EVENT_TIME_ORDERING":
             assessment.add(
-                "FLINK_PR3_WRITE_PATH_UNSUPPORTED",
+                (
+                    "FLINK_PR4_WRITE_PATH_UNSUPPORTED"
+                    if mutable_mor_contract
+                    else "FLINK_PR3_WRITE_PATH_UNSUPPORTED"
+                ),
                 "write.record_merge_mode must be EVENT_TIME_ORDERING",
             )
         if write.get("changelog_enabled") is not False:
             assessment.add(
-                "FLINK_PR3_WRITE_PATH_UNSUPPORTED",
+                (
+                    "FLINK_PR4_WRITE_PATH_UNSUPPORTED"
+                    if mutable_mor_contract
+                    else "FLINK_PR3_WRITE_PATH_UNSUPPORTED"
+                ),
                 "write.changelog_enabled must be explicitly false",
             )
         index = _dict(write.get("index"), "write.index", assessment)
@@ -932,6 +1004,22 @@ def assess_design(
                 "FLINK_MUTABLE_INDEX_BOOTSTRAP_REQUIRED",
                 "FLINK_STATE must bootstrap existing keys after state loss or cold restart",
             )
+        if mutable_mor_contract:
+            clustering = _dict(write.get("clustering"), "write.clustering", assessment)
+            _check_keys(
+                clustering,
+                {"async_enabled", "schedule_enabled"},
+                "write.clustering",
+                assessment,
+            )
+            if (
+                clustering.get("schedule_enabled") is not False
+                or clustering.get("async_enabled") is not False
+            ):
+                assessment.add(
+                    "FLINK_MOR_CLUSTERING_UNSUPPORTED",
+                    "The bounded MOR path requires clustering schedule and execution disabled",
+                )
     else:
         insert_cluster = write.get("insert_cluster")
         if insert_cluster is True:
@@ -969,27 +1057,159 @@ def assess_design(
         raw_table_type = connector_options.get("table.type")
         raw_operation = connector_options.get("write.operation")
         expected_operation = "upsert" if mutable_contract else "insert"
+        expected_table_type = "MERGE_ON_READ" if mutable_mor_contract else "COPY_ON_WRITE"
         if (
             "table.type" in connector_options
-            and raw_table_type != "COPY_ON_WRITE"
+            and raw_table_type != expected_table_type
         ) or (
             "write.operation" in connector_options
             and raw_operation != expected_operation
         ):
             assessment.add(
                 (
-                    "FLINK_PR3_WRITE_PATH_UNSUPPORTED"
-                    if mutable_contract
-                    else "FLINK_PR2_WRITE_PATH_UNSUPPORTED"
+                    "FLINK_PR4_WRITE_PATH_UNSUPPORTED"
+                    if mutable_mor_contract
+                    else (
+                        "FLINK_PR3_WRITE_PATH_UNSUPPORTED"
+                        if mutable_contract
+                        else "FLINK_PR2_WRITE_PATH_UNSUPPORTED"
+                    )
                 ),
-                "A connector-option override leaves the bounded COW path",
+                "A connector-option override leaves the bounded write path",
             )
+        if mutable_mor_contract:
+            if any(key.startswith("clustering.") for key in connector_options):
+                assessment.add(
+                    "FLINK_MOR_CLUSTERING_UNSUPPORTED",
+                    "Clustering connector overrides are not supported by the bounded MOR path",
+                )
+            if any(
+                key in {
+                    "compaction.tasks",
+                    "compaction.delta_seconds",
+                    "compaction.target.io",
+                    "compaction.timeout.seconds",
+                }
+                for key in connector_options
+            ):
+                assessment.add(
+                    "FLINK_MOR_COMPACTION_TUNING_UNSUPPORTED",
+                    "Detailed compaction tuning is outside the bounded Architect path",
+                )
         verified_overrides = sorted(set(connector_options) - set(unknown_options))
         if verified_overrides:
             assessment.add(
                 "FLINK_DESIGN_CONTRACT_INVALID",
                 "Connector settings must use canonical structured fields; "
                 f"pass-through overrides are not rendered: {verified_overrides}",
+            )
+
+    if mutable_mor_contract:
+        table_services = _dict(
+            contract.get("table_services"), "table_services", assessment
+        )
+        _check_keys(table_services, {"compaction"}, "table_services", assessment)
+        compaction = _dict(
+            table_services.get("compaction"),
+            "table_services.compaction",
+            assessment,
+        )
+        compaction_keys = {
+            "async_enabled",
+            "delta_commits",
+            "mode",
+            "operation_execute_async_enabled",
+            "owner",
+            "schedule_enabled",
+            "trigger_strategy",
+        }
+        tuning_keys = {
+            "delta_seconds",
+            "target_io_mb",
+            "tasks",
+            "timeout_seconds",
+        }
+        unknown_compaction_keys = set(compaction) - compaction_keys
+        if unknown_compaction_keys & tuning_keys:
+            assessment.add(
+                "FLINK_MOR_COMPACTION_TUNING_UNSUPPORTED",
+                "Detailed compaction tuning is outside the bounded Architect path: "
+                f"{sorted(unknown_compaction_keys & tuning_keys)}",
+            )
+        remaining_unknown = unknown_compaction_keys - tuning_keys
+        if remaining_unknown:
+            assessment.add(
+                "FLINK_DESIGN_CONTRACT_INVALID",
+                "table_services.compaction contains unsupported fields: "
+                f"{sorted(remaining_unknown)}",
+            )
+        owner = compaction.get("owner")
+        if owner is None:
+            assessment.add(
+                "FLINK_MOR_COMPACTION_OWNER_REQUIRED",
+                "The MOR compaction owner must be explicit",
+            )
+        elif owner == "standalone_service":
+            assessment.add(
+                "FLINK_MULTI_WRITER_REVIEW",
+                "A standalone compactor is an independent table-service writer",
+            )
+        elif owner != "flink_writer":
+            assessment.add(
+                "FLINK_WRITER_MODEL_UNRESOLVED",
+                "The MOR compaction owner is unresolved",
+            )
+        expected_compaction = {
+            "async_enabled": True,
+            "delta_commits": 5,
+            "mode": "async",
+            "operation_execute_async_enabled": True,
+            "schedule_enabled": True,
+            "trigger_strategy": "num_commits",
+        }
+        mismatches = [
+            key
+            for key, expected_value in expected_compaction.items()
+            if compaction.get(key) != expected_value
+        ]
+        if mismatches:
+            assessment.add(
+                "FLINK_MOR_COMPACTION_CONFIGURATION_UNSUPPORTED",
+                "The bounded MOR compaction contract has incompatible fields: "
+                f"{mismatches}",
+            )
+
+        read = _dict(contract.get("read"), "read", assessment)
+        _check_keys(
+            read,
+            {"query_modes", "read_optimized_freshness"},
+            "read",
+            assessment,
+        )
+        query_modes = _string_list(read.get("query_modes"), "read.query_modes", assessment)
+        allowed_query_modes = {"snapshot", "read_optimized"}
+        if not query_modes or not set(query_modes).issubset(allowed_query_modes):
+            assessment.add(
+                "FLINK_MOR_QUERY_REQUIREMENT_UNRESOLVED",
+                "MOR readers must explicitly require snapshot and/or read_optimized queries",
+            )
+        read_optimized_freshness = read.get("read_optimized_freshness")
+        if "read_optimized" in query_modes:
+            if read_optimized_freshness is None or read_optimized_freshness == "unknown":
+                assessment.add(
+                    "FLINK_MOR_QUERY_REQUIREMENT_UNRESOLVED",
+                    "The acceptable read-optimized freshness must be explicit",
+                )
+            elif read_optimized_freshness != "after_compaction":
+                assessment.add(
+                    "FLINK_MOR_READ_OPTIMIZED_FRESHNESS_UNSUPPORTED",
+                    "Read-optimized results can be current only after compaction",
+                )
+        elif read_optimized_freshness != "NOT_APPLICABLE":
+            assessment.add(
+                "FLINK_DESIGN_CONTRACT_INVALID",
+                "read.read_optimized_freshness must be NOT_APPLICABLE without "
+                "read_optimized queries",
             )
 
     runtime = _dict(contract.get("runtime"), "runtime", assessment)
@@ -1012,9 +1232,13 @@ def assess_design(
     elif execution_mode != "STREAMING":
         assessment.add(
             (
-                "FLINK_PR3_WRITE_PATH_UNSUPPORTED"
-                if mutable_contract
-                else "FLINK_PR2_WRITE_PATH_UNSUPPORTED"
+                "FLINK_PR4_WRITE_PATH_UNSUPPORTED"
+                if mutable_mor_contract
+                else (
+                    "FLINK_PR3_WRITE_PATH_UNSUPPORTED"
+                    if mutable_contract
+                    else "FLINK_PR2_WRITE_PATH_UNSUPPORTED"
+                )
             ),
             "The executable path supports streaming execution",
         )

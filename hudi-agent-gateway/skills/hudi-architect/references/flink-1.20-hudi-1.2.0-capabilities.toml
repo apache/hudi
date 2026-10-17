@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-schema_version = 3
+schema_version = 4
 baseline_id = "hudi-1.2.0-flink-1.20"
 validation_surface = "initial-flink-sql-sink"
 
@@ -61,6 +61,34 @@ allow_emits_deletes = [false, true]
 delete_payload_when_deletes = "FULL_ROW"
 delete_payload_without_deletes = "NOT_APPLICABLE"
 partition_fields_mutable = false
+
+[mutable_mor_executable_contract]
+contract_schema = 3
+table_lifecycle = "new"
+writer_model = "single_writer"
+external_catalog = false
+mutability = "mutable"
+source_changelog_mode = "UPSERT"
+execution_mode = "STREAMING"
+require_checkpointing = true
+record_key_mode = "stable_key"
+allow_replay_behaviors = ["cannot_occur", "duplicates_acceptable", "must_collapse"]
+ordering_mode = "event_time"
+ordering_field_types = ["BIGINT", "TIMESTAMP"]
+reserved_ordering_field_values = ["no_precombine"]
+allow_emits_deletes = [false, true]
+delete_payload_when_deletes = "FULL_ROW"
+delete_payload_without_deletes = "NOT_APPLICABLE"
+partition_fields_mutable = false
+table_type = "MERGE_ON_READ"
+operation = "upsert"
+compaction_owner = "flink_writer"
+compaction_mode = "async"
+compaction_trigger_strategy = "num_commits"
+compaction_delta_commits = 5
+query_modes = ["snapshot", "read_optimized"]
+read_optimized_freshness = "after_compaction"
+clustering_enabled = false
 
 # The executable paths intentionally validate a bounded scalar physical-schema surface. Complex,
 # computed, metadata, and watermark columns remain unverified rather than being guessed.
@@ -142,7 +170,7 @@ purpose = "Writer-side prepending of Hudi metadata fields to the Flink row type"
 id = "options_resolver"
 path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/configuration/OptionsResolver.java"
 sha256 = "1a63ef88bbdf84cbcebb92f402557c21b6f84bdd0112726792ce22da635ad766"
-purpose = "Effective append-mode predicate and no-precombine ordering sentinel resolution"
+purpose = "Effective append mode, MOR table type, compaction gates, and no-precombine resolution"
 
 [[source_anchors]]
 id = "table_factory"
@@ -172,7 +200,19 @@ purpose = "Release behavior exercised by the existing factory fixtures"
 id = "table_sink"
 path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/table/HoodieTableSink.java"
 sha256 = "59c36ec6c97524386c4ce0fb7c70960816a6cfc9dee89e82de86f401f28e1087"
-purpose = "Sink changelog-mode negotiation for upsert writes"
+purpose = "Sink changelog-mode negotiation and mutable MOR compaction-pipeline selection"
+
+[[source_anchors]]
+id = "table_source"
+path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/table/HoodieTableSource.java"
+sha256 = "94819175df0f9b3f76a641f45f70f6c1eee0e2da3976c3f4ff4883a831618504"
+purpose = "Snapshot and read-optimized Flink SQL source construction"
+
+[[source_anchors]]
+id = "hoodie_source"
+path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/source/HoodieSource.java"
+sha256 = "1100c640aa61e8bf4f3bcd584b00d720388cbb6a801d864028c5bf98591ec7dc"
+purpose = "Snapshot and read-optimized MOR file-slice selection"
 
 [[source_anchors]]
 id = "changelog_modes"
@@ -190,7 +230,7 @@ purpose = "FLINK_STATE backend and zero-TTL state behavior"
 id = "pipelines"
 path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/sink/utils/Pipelines.java"
 sha256 = "9278096f0894a0ad34be09206ee06d317fda4185101833018a314e87ade5e262"
-purpose = "Index bootstrap insertion into the Flink write pipeline"
+purpose = "Index bootstrap and compaction operators in the Flink write pipeline"
 
 [[source_anchors]]
 id = "bootstrap_operator"
@@ -217,6 +257,48 @@ key = "changelog.enabled"
 value_type = "boolean"
 source_anchors = ["flink_options", "table_sink", "changelog_modes"]
 source_symbol = "CHANGELOG_ENABLED"
+
+[[verified_options]]
+key = "clustering.async.enabled"
+value_type = "boolean"
+source_anchors = ["flink_options"]
+source_symbol = "CLUSTERING_ASYNC_ENABLED"
+
+[[verified_options]]
+key = "clustering.schedule.enabled"
+value_type = "boolean"
+source_anchors = ["flink_options"]
+source_symbol = "CLUSTERING_SCHEDULE_ENABLED"
+
+[[verified_options]]
+key = "compaction.async.enabled"
+value_type = "boolean"
+source_anchors = ["flink_options", "options_resolver", "table_sink", "pipelines"]
+source_symbol = "COMPACTION_ASYNC_ENABLED"
+
+[[verified_options]]
+key = "compaction.delta_commits"
+value_type = "integer"
+source_anchors = ["flink_options"]
+source_symbol = "COMPACTION_DELTA_COMMITS"
+
+[[verified_options]]
+key = "compaction.operation.execute.async.enabled"
+value_type = "boolean"
+source_anchors = ["flink_options", "table_sink", "pipelines"]
+source_symbol = "COMPACTION_OPERATION_EXECUTE_ASYNC_ENABLED"
+
+[[verified_options]]
+key = "compaction.schedule.enabled"
+value_type = "boolean"
+source_anchors = ["flink_options", "options_resolver"]
+source_symbol = "COMPACTION_SCHEDULE_ENABLED"
+
+[[verified_options]]
+key = "compaction.trigger.strategy"
+value_type = "string"
+source_anchors = ["flink_options"]
+source_symbol = "COMPACTION_TRIGGER_STRATEGY"
 
 [[verified_options]]
 key = "hoodie.datasource.write.partitionpath.field"
@@ -345,6 +427,81 @@ key = "write.operation"
 value = "upsert"
 applies_to = "pr3-mutable-cow"
 
+[[required_effective_settings]]
+key = "changelog.enabled"
+value = false
+applies_to = "pr4-mutable-mor"
+
+[[required_effective_settings]]
+key = "clustering.async.enabled"
+value = false
+applies_to = "pr4-mutable-mor"
+
+[[required_effective_settings]]
+key = "clustering.schedule.enabled"
+value = false
+applies_to = "pr4-mutable-mor"
+
+[[required_effective_settings]]
+key = "compaction.async.enabled"
+value = true
+applies_to = "pr4-mutable-mor"
+
+[[required_effective_settings]]
+key = "compaction.delta_commits"
+value = 5
+applies_to = "pr4-mutable-mor"
+
+[[required_effective_settings]]
+key = "compaction.operation.execute.async.enabled"
+value = true
+applies_to = "pr4-mutable-mor"
+
+[[required_effective_settings]]
+key = "compaction.schedule.enabled"
+value = true
+applies_to = "pr4-mutable-mor"
+
+[[required_effective_settings]]
+key = "compaction.trigger.strategy"
+value = "num_commits"
+applies_to = "pr4-mutable-mor"
+
+[[required_effective_settings]]
+key = "hoodie.write.record.merge.mode"
+value = "EVENT_TIME_ORDERING"
+applies_to = "pr4-mutable-mor"
+
+[[required_effective_settings]]
+key = "index.bootstrap.enabled"
+value = true
+applies_to = "pr4-mutable-mor"
+
+[[required_effective_settings]]
+key = "index.global.enabled"
+value = true
+applies_to = "pr4-mutable-mor"
+
+[[required_effective_settings]]
+key = "index.state.ttl"
+value = 0.0
+applies_to = "pr4-mutable-mor"
+
+[[required_effective_settings]]
+key = "index.type"
+value = "FLINK_STATE"
+applies_to = "pr4-mutable-mor"
+
+[[required_effective_settings]]
+key = "table.type"
+value = "MERGE_ON_READ"
+applies_to = "pr4-mutable-mor"
+
+[[required_effective_settings]]
+key = "write.operation"
+value = "upsert"
+applies_to = "pr4-mutable-mor"
+
 [[implemented_acceptance_checks]]
 id = "FLINK_BINARY_ROUTING_FIELD_UNSUPPORTED"
 requirement = "Reject binary record-key and partition fields whose Hudi 1.2.0 routing strings depend on Java object identity."
@@ -416,3 +573,33 @@ id = "FLINK_MUTABLE_INDEX_BOOTSTRAP_REQUIRED"
 requirement = "Require index bootstrap so a cold restart does not treat existing keys as new."
 python_test = "test_pr3_requires_index_bootstrap"
 java_test = "testPinnedMutableIndexBootstrapConfiguration"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_MOR_CLUSTERING_UNSUPPORTED"
+requirement = "Keep clustering disabled on the first mutable MOR path."
+python_test = "test_pr4_rejects_clustering"
+java_test = "testPinnedMorClusteringDisabled"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_MOR_APPEND_ONLY_UNSUPPORTED"
+requirement = "Keep append-only writes on COW because MOR insert enters append mode and does not schedule compaction."
+python_test = "test_pr4_rejects_append_only_mor"
+java_test = "testPinnedAppendOnlyMorDoesNotScheduleCompaction"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_MOR_COMPACTION_CONFIGURATION_UNSUPPORTED"
+requirement = "Pin scheduling and async compaction to the same Flink writer with a five-delta-commit trigger."
+python_test = "test_pr4_rejects_incompatible_compaction_configuration"
+java_test = "testPinnedMorCompactionConfiguration"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_MOR_READ_OPTIMIZED_FRESHNESS_UNSUPPORTED"
+requirement = "Record that read-optimized queries expose compacted base-file state rather than every delta commit."
+python_test = "test_pr4_rejects_strict_read_optimized_freshness"
+java_test = "testPinnedMorQuerySemantics"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_PR4_WRITE_PATH_UNSUPPORTED"
+requirement = "Plan the exact mutable MOR SQL through the released connector and retain its writer plus compaction operators."
+python_test = "test_pr4_valid_mutable_mor_design_renders_exact_executable_sql"
+java_test = "testMutableMorSinkAndCompactionPlan"

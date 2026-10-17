@@ -143,10 +143,37 @@ class TestFlinkArchitectSqlFixtures {
     assertTrue(plan.contains("stream_write: default_database.orders_mutable_hudi"), plan);
     assertTrue(plan.contains("changelogMode=[I,UA,D]"), plan);
     assertTrue(plan.contains("index_bootstrap"), plan);
+    assertFalse(plan.contains("compact_plan_generate"), plan);
+    assertFalse(plan.contains("compact_task"), plan);
+    assertFalse(plan.contains("compact_commit"), plan);
     assertEquals(
         Set.of(RowKind.INSERT, RowKind.UPDATE_AFTER, RowKind.DELETE),
         ChangelogModes.UPSERT.getContainedKinds());
     assertFalse(ChangelogModes.UPSERT.contains(RowKind.UPDATE_BEFORE));
+  }
+
+  @Test
+  void testMutableMorSinkAndCompactionPlan() throws Exception {
+    TestContext context = newTestContext();
+    StreamTableEnvironment tableEnv = context.tableEnv;
+    registerMutableSource(context);
+
+    SqlFixture fixture = SqlFixture.load("mutable_mor.sql");
+    applyRuntimeStatements(tableEnv, fixture.runtimeSql);
+    tableEnv.executeSql(fixture.tableDdl);
+    String plan = tableEnv.explainSql(
+        fixture.insertSql,
+        ExplainDetail.CHANGELOG_MODE,
+        ExplainDetail.JSON_EXECUTION_PLAN);
+
+    assertPinnedArtifacts();
+    assertTrue(plan.contains("orders_mutable_mor_hudi"), plan);
+    assertTrue(plan.contains("stream_write: default_database.orders_mutable_mor_hudi"), plan);
+    assertTrue(plan.contains("changelogMode=[I,UA,D]"), plan);
+    assertTrue(plan.contains("index_bootstrap"), plan);
+    assertTrue(plan.contains("compact_plan_generate"), plan);
+    assertTrue(plan.contains("compact_task"), plan);
+    assertTrue(plan.contains("compact_commit"), plan);
   }
 
   @Test
@@ -177,6 +204,48 @@ class TestFlinkArchitectSqlFixtures {
     Configuration conf = mutableConfiguration();
 
     assertTrue(conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED));
+  }
+
+  @Test
+  void testPinnedMorCompactionConfiguration() {
+    Configuration conf = mutableMorConfiguration();
+
+    assertTrue(OptionsResolver.isMorTable(conf));
+    assertTrue(OptionsResolver.needsScheduleCompaction(conf));
+    assertTrue(OptionsResolver.needsAsyncCompaction(conf));
+    assertTrue(conf.get(FlinkOptions.COMPACTION_SCHEDULE_ENABLED));
+    assertTrue(conf.get(FlinkOptions.COMPACTION_ASYNC_ENABLED));
+    assertTrue(conf.get(FlinkOptions.COMPACTION_OPERATION_EXECUTE_ASYNC_ENABLED));
+    assertEquals(FlinkOptions.NUM_COMMITS, conf.get(FlinkOptions.COMPACTION_TRIGGER_STRATEGY));
+    assertEquals(5, conf.get(FlinkOptions.COMPACTION_DELTA_COMMITS));
+  }
+
+  @Test
+  void testPinnedMorClusteringDisabled() {
+    Configuration conf = mutableMorConfiguration();
+
+    assertFalse(conf.get(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED));
+    assertFalse(conf.get(FlinkOptions.CLUSTERING_ASYNC_ENABLED));
+  }
+
+  @Test
+  void testPinnedMorQuerySemantics() {
+    Configuration conf = mutableMorConfiguration();
+
+    assertEquals("snapshot", FlinkOptions.QUERY_TYPE_SNAPSHOT);
+    assertEquals("read_optimized", FlinkOptions.QUERY_TYPE_READ_OPTIMIZED);
+    assertEquals(FlinkOptions.QUERY_TYPE_SNAPSHOT, conf.get(FlinkOptions.QUERY_TYPE));
+    conf.set(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_READ_OPTIMIZED);
+    assertEquals(FlinkOptions.QUERY_TYPE_READ_OPTIMIZED, conf.get(FlinkOptions.QUERY_TYPE));
+  }
+
+  @Test
+  void testPinnedAppendOnlyMorDoesNotScheduleCompaction() {
+    Configuration conf = mutableMorConfiguration();
+    conf.set(FlinkOptions.OPERATION, "insert");
+
+    assertTrue(OptionsResolver.isAppendMode(conf));
+    assertFalse(OptionsResolver.needsScheduleCompaction(conf));
   }
 
   @Test
@@ -429,6 +498,19 @@ class TestFlinkArchitectSqlFixtures {
     conf.set(FlinkOptions.INDEX_STATE_TTL, 0.0);
     conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
     conf.set(FlinkOptions.CHANGELOG_ENABLED, false);
+    return conf;
+  }
+
+  private static Configuration mutableMorConfiguration() {
+    Configuration conf = mutableConfiguration();
+    conf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+    conf.set(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, true);
+    conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, true);
+    conf.set(FlinkOptions.COMPACTION_OPERATION_EXECUTE_ASYNC_ENABLED, true);
+    conf.set(FlinkOptions.COMPACTION_TRIGGER_STRATEGY, FlinkOptions.NUM_COMMITS);
+    conf.set(FlinkOptions.COMPACTION_DELTA_COMMITS, 5);
+    conf.set(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED, false);
+    conf.set(FlinkOptions.CLUSTERING_ASYNC_ENABLED, false);
     return conf;
   }
 

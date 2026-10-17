@@ -46,8 +46,8 @@ do not replace the shared table-design rules and do not form a standalone planne
 - Do not equate a stable record key with replay idempotence.
 - Do not reuse this baseline for another Hudi or Flink version.
 - Emit executable output only when `validate_flink_design.py` returns `CONFIG_VALIDATED` for a
-  complete version-1 append-only or version-2 mutable contract. Never hand-write around a
-  validator finding.
+  complete version-1 append-only COW, version-2 mutable COW, or version-3 mutable MOR contract.
+  Never hand-write around a validator finding.
 
 ## Gate outcomes
 
@@ -93,13 +93,21 @@ do not replace the shared table-design rules and do not form a standalone planne
 | Mutable index is not global `FLINK_STATE` with TTL 0 | `FLINK_MUTABLE_INDEX_CONFIGURATION_UNSUPPORTED` | `BLOCKED` | No |
 | FLINK_STATE index bootstrap is not enabled | `FLINK_MUTABLE_INDEX_BOOTSTRAP_REQUIRED` | `BLOCKED` | No |
 | Table type, operation, merge mode, changelog setting, or execution mode is outside PR3 | `FLINK_PR3_WRITE_PATH_UNSUPPORTED` | `BLOCKED` | No |
+| Append-only input requests MOR | `FLINK_MOR_APPEND_ONLY_UNSUPPORTED` | `BLOCKED` | No |
+| MOR compaction owner is missing | `FLINK_MOR_COMPACTION_OWNER_REQUIRED` | `INCOMPLETE` | No |
+| MOR compaction schedule, execution, mode, trigger, or threshold differs from the bounded contract | `FLINK_MOR_COMPACTION_CONFIGURATION_UNSUPPORTED` | `BLOCKED` | No |
+| MOR request supplies detailed compaction tuning | `FLINK_MOR_COMPACTION_TUNING_UNSUPPORTED` | `BLOCKED` | No |
+| MOR reader mode or freshness requirement is unresolved | `FLINK_MOR_QUERY_REQUIREMENT_UNRESOLVED` | `INCOMPLETE` | No |
+| MOR read-optimized results must include every completed write | `FLINK_MOR_READ_OPTIMIZED_FRESHNESS_UNSUPPORTED` | `BLOCKED` | No |
+| MOR enables clustering | `FLINK_MOR_CLUSTERING_UNSUPPORTED` | `BLOCKED` | No |
+| Table type, operation, merge mode, changelog setting, compaction, clustering, or execution mode is outside PR4 | `FLINK_PR4_WRITE_PATH_UNSUPPORTED` | `BLOCKED` | No |
 | Checkpointing is explicitly disabled | `FLINK_CHECKPOINTING_REQUIRED` | `BLOCKED` | No |
 | Checkpoint interval is absent or non-positive | `FLINK_CHECKPOINT_INTERVAL_REQUIRED` | `INCOMPLETE` | No |
 | Positive checkpoint interval is below the 1000 ms Architect safety floor | `FLINK_CHECKPOINT_INTERVAL_UNSUPPORTED` | `BLOCKED` | No |
 | Target table, target path, source table, or another load-bearing value is a placeholder | `FLINK_LOAD_BEARING_VALUE_REQUIRED` | `INCOMPLETE` | No |
 | Design-contract structure is malformed or contains an ignored field | `FLINK_DESIGN_CONTRACT_INVALID` | `INCOMPLETE` | No |
 | A connector option is outside the pinned allowlist | `FLINK_OPTION_NOT_VERIFIED` | `REVIEW_REQUIRED` | No |
-| Complete PR2 or PR3 contract passes deterministic validation | — | `CONFIG_VALIDATED` | Yes |
+| Complete PR2, PR3, or PR4 contract passes deterministic validation | — | `CONFIG_VALIDATED` | Yes |
 
 ## Final-status precedence
 
@@ -124,9 +132,9 @@ only bounded static validation against the pinned release contract.
 
 | Mutability | Stable business key | Replay requirement | Result |
 |---|---|---|---|
-| Mutable | Yes | Replays impossible | Continue into the bounded PR3 mutable contract |
+| Mutable | Yes | Replays impossible | Continue to COW/MOR derivation, then schema 2 or 3 |
 | Mutable | Yes | Duplicates acceptable | Continue; record duplicate tolerance |
-| Mutable | Yes | Copies must collapse | Continue into the bounded PR3 mutable contract |
+| Mutable | Yes | Copies must collapse | Continue to COW/MOR derivation, then schema 2 or 3 |
 | Mutable | Yes | Replay behavior unknown | `REVIEW_REQUIRED` |
 | Mutable | No | Any | `BLOCKED` — auto-key cannot express mutable identity |
 | Mutable | Unknown | Any | `INCOMPLETE` |
@@ -171,7 +179,7 @@ and executable eligibility, not exact natural-language wording.
 | `F05_CATALOG` | External consumer requires catalog visibility | `REVIEW_REQUIRED` | No |
 | `F06_SCHEMA` | Physical schema is missing | `INCOMPLETE` | No |
 | `F06_SCHEMA_POINTER` | Only a schema location is supplied; field names and types are unavailable | `INCOMPLETE` | No |
-| `F07_MUTABLE` | Otherwise-safe mutable workload enters the schema-2 candidate flow | Proceed to PR3 validation | Not decided by gates alone |
+| `F07_MUTABLE` | Otherwise-safe mutable workload enters table-type derivation | Proceed to schema-2 or schema-3 validation | Not decided by gates alone |
 | `F08_REPLAY_COLLAPSE` | Append-only independent replay must deduplicate | `BLOCKED` | No |
 | `F09_REPLAY_UNKNOWN` | Replay behavior is unknown | `REVIEW_REQUIRED` | No |
 | `F10_SAFE_APPEND` | Baseline new-table single-writer append-only path with a stable key passes every gate | Proceed to PR2 validation | Not decided by gates alone |
@@ -221,6 +229,27 @@ to the executable contract just like `F10_SAFE_APPEND`.
   arbitrary existing-table takeover, which remains deferred.
 - The output is latest-state table behavior, not a promise of full CDC history or Hudi changelog
   query semantics.
+
+## PR4 mutable MOR executable invariants
+
+- Version-3 contracts preserve every mutable schema-2 identity, ordering, changelog, delete,
+  partition, index, checkpoint, and new-table safety invariant; only the table type and explicit
+  MOR service/read contract differ.
+- The workload decision selects MOR only for sustained mutable writes when snapshot readers are
+  acceptable or read-optimized readers explicitly accept compaction lag. Append-only remains COW;
+  strict read-optimized freshness derives COW rather than an unsafe MOR promise.
+- Canonical output fixes `MERGE_ON_READ` upsert, `EVENT_TIME_ORDERING`, global `FLINK_STATE`, TTL
+  `0`, bootstrap enabled, and `changelog.enabled=false`.
+- The same Flink writer owns asynchronous compaction. Scheduling, async execution, and async
+  compaction-operation execution are enabled with `num_commits` and five delta commits. Five is a
+  fixed Hudi 1.2.0 effective default, not a tuned SLA.
+- A standalone compactor is an independent writer and remains `REVIEW_REQUIRED`; concurrency
+  configuration is deferred to PR7. Unknown ownership also withholds SQL.
+- Snapshot readers see base plus log state at a visible completed instant. Read-optimized readers
+  see compacted base-file state and advance only after compaction. Reader `query.type` is not a
+  sink option and is not rendered into the DDL.
+- Clustering is disabled. Detailed compaction tuning, append-only MOR, existing tables, catalogs,
+  multi-writer operation, and live service validation remain outside this path.
 
 ## Evidence and secret handling
 

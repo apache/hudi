@@ -123,10 +123,10 @@ ordering, and partition references can eventually be checked.
 **Trigger:** Existing logical records can be updated or deleted, but the request is still using the
 version-1 append contract.
 
-**Message:** Mutable COW requires the explicit version-2 identity, ordering, changelog, delete,
-partition, and index safety contract.
+**Message:** Mutable input requires the explicit version-2 COW or version-3 MOR identity, ordering,
+changelog, delete, partition, and index safety contract after table-type derivation.
 
-**Action:** `BLOCKED`; qualify the request for schema 2 or generate no executable configuration.
+**Action:** `BLOCKED`; qualify the request for schema 2 or 3 or generate no executable configuration.
 
 ## FLINK_MUTABILITY_REQUIRED
 
@@ -195,7 +195,7 @@ one table record.
 **Message:** This requires stable record identity and an upsert-capable design. The append-only
 insert path cannot be presented as deduplicating.
 
-**Action:** `BLOCKED`; use the mutable schema-2 contract only if all of its gates are satisfied.
+**Action:** `BLOCKED`; use a mutable schema-2 or schema-3 contract only if all gates are satisfied.
 
 ## FLINK_REPLAY_BEHAVIOR_UNRESOLVED
 
@@ -317,7 +317,7 @@ the target field.
 **Trigger:** The declared source changelog contains updates or deletes.
 
 **Message:** Sink-factory construction does not prove the complete source-to-sink statement is
-append-only. An eligible mutable request must use the separate schema-2 contract.
+append-only. An eligible mutable request must use a schema-2 COW or schema-3 MOR contract.
 
 **Action:** `BLOCKED`; do not generate executable append SQL.
 
@@ -414,6 +414,79 @@ bounded COW upsert path.
 mutable configuration surface.
 
 **Action:** `BLOCKED`; retain the request as a later capability rather than guessing settings.
+
+## FLINK_MOR_APPEND_ONLY_UNSUPPORTED
+
+**Trigger:** An append-only contract requests a MOR table.
+
+**Message:** The bounded append route remains COW. Hudi 1.2.0 treats MOR insert as append mode and
+does not schedule the mutable MOR compaction path that PR4 verifies.
+
+**Action:** `BLOCKED`; use schema-1 COW or reassess whether the workload is actually mutable.
+
+## FLINK_MOR_COMPACTION_OWNER_REQUIRED
+
+**Trigger:** A schema-3 MOR contract omits compaction ownership.
+
+**Message:** The validator cannot assume that compaction runs inside the only confirmed writer.
+
+**Action:** `INCOMPLETE`; identify the owner before emitting SQL.
+
+## FLINK_MOR_COMPACTION_CONFIGURATION_UNSUPPORTED
+
+**Trigger:** MOR schedule, async execution, operation execution, mode, trigger strategy, or delta
+commit threshold differs from the bounded schema-3 contract.
+
+**Message:** PR4 verifies same-writer asynchronous compaction using `num_commits` and five delta
+commits; it is not a general compaction planner.
+
+**Action:** `BLOCKED`; retain the fixed contract or defer to operational design.
+
+## FLINK_MOR_COMPACTION_TUNING_UNSUPPORTED
+
+**Trigger:** A request supplies compaction task count, seconds, target IO, timeout, or other
+detailed tuning.
+
+**Message:** These values depend on observed workload behavior and are outside design-time static
+validation.
+
+**Action:** `BLOCKED`; defer tuning to operations rather than passing it through silently.
+
+## FLINK_MOR_QUERY_REQUIREMENT_UNRESOLVED
+
+**Trigger:** Snapshot/read-optimized usage or the acceptable read-optimized freshness is missing
+or unresolved.
+
+**Message:** MOR suitability depends on whether consumers read logs or can accept compaction lag.
+
+**Action:** `INCOMPLETE`; obtain the reader contract before selecting schema 3.
+
+## FLINK_MOR_READ_OPTIMIZED_FRESHNESS_UNSUPPORTED
+
+**Trigger:** Read-optimized consumers require every completed delta commit immediately.
+
+**Message:** Read-optimized queries expose compacted base files; the five-delta-commit trigger is
+not an immediate or time-based freshness guarantee.
+
+**Action:** `BLOCKED`; derive COW or explicitly accept freshness only after compaction.
+
+## FLINK_MOR_CLUSTERING_UNSUPPORTED
+
+**Trigger:** Clustering schedule or async execution is enabled for schema 3.
+
+**Message:** PR4 owns only the minimum MOR compaction service and does not compose clustering.
+
+**Action:** `BLOCKED`; keep both clustering controls disabled.
+
+## FLINK_PR4_WRITE_PATH_UNSUPPORTED
+
+**Trigger:** Mutable MOR table type, operation, merge mode, changelog, compaction, clustering, or
+runtime leaves the bounded schema-3 path.
+
+**Message:** PR4 implements one conservative mutable MOR route, not the complete Hudi table-service
+surface.
+
+**Action:** `BLOCKED`; do not guess or pass through unsupported settings.
 
 ## FLINK_CHECKPOINTING_REQUIRED
 
