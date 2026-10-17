@@ -23,7 +23,6 @@ import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.MetaFieldsMode;
-import org.apache.hudi.common.model.debezium.DebeziumConstants;
 import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
@@ -597,24 +596,21 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   }
 
   /**
-   * Below version 9 {@link MySqlDebeziumAvroPayload} orders records on its sequence field, which the 9 to 8 downgrade
-   * records under the deprecated precombine key whatever the ordering fields at version 9 are. A table created below
-   * version 9 records the same, next to its ordering fields, and keeps the payload class out of
-   * {@code hoodie.table.legacy.payload.class}.
+   * The deprecated precombine key repeats a single declared ordering field whatever the payload: 0.x and 1.0.x Spark
+   * writers dedup a {@link MySqlDebeziumAvroPayload} batch on the field it names, the same field 1.x uses.
    */
   @ParameterizedTest
   @CsvSource(delimiter = '|', nullValues = "null", value = {
-      "SIX|_event_bin_file,_event_pos", "EIGHT|_event_bin_file,_event_pos", "SIX|ts", "EIGHT|ts", "SIX|null", "EIGHT|null"})
-  void testMySqlDebeziumPayloadRecordsSequenceFieldUnderLegacyKey(HoodieTableVersion version, String orderingFields) throws IOException {
+      "SIX|_event_seq|_event_seq", "EIGHT|_event_seq|_event_seq", "SIX|ts|ts", "EIGHT|ts|ts",
+      "SIX|_event_bin_file,_event_pos|null", "EIGHT|_event_bin_file,_event_pos|null", "SIX|null|null", "EIGHT|null|null"})
+  void testMySqlDebeziumPayloadLegacyKeyFollowsDeclaredOrderingField(HoodieTableVersion version, String orderingFields, String legacyOrderingField) throws IOException {
     Properties props = orderingFieldsTableBuilder(version)
         .setPayloadClass(MySqlDebeziumAvroPayload.class)
         .setOrderingFields(orderingFields)
         .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath() + Path.SEPARATOR + "mysql-debezium-v" + version.versionCode())
         .getTableConfig().getProps();
     assertEquals(orderingFields, props.getProperty(HoodieTableConfig.ORDERING_FIELDS.key()));
-    assertEquals(orderingFields == null ? null : DebeziumConstants.ADDED_SEQ_COL_NAME,
-        props.getProperty(HoodieTableConfig.PRECOMBINE_FIELD.key()), "precombine key at version " + version.versionCode());
-    assertFalse(props.containsKey(HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key()));
+    assertEquals(legacyOrderingField, props.getProperty(HoodieTableConfig.PRECOMBINE_FIELD.key()), "precombine key at version " + version.versionCode());
   }
 
   /**
