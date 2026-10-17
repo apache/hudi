@@ -1,0 +1,128 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+name: PR Validation
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+    branches:
+      - master
+      - branch-0.x
+
+concurrency:
+  group: pr-validation-${{ github.ref }}
+  cancel-in-progress: ${{ !contains(github.ref, 'master') && !contains(github.ref, 'branch-0.x') }}
+
+jobs:
+  # All PR metadata checks share one job: each takes seconds, so a job per check spent more on
+  # runner startup than on the check itself. Every check step runs even when an earlier one
+  # fails, so one run reports every problem; the failed step's name says which check it was.
+  validate-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check PR description
+        env:
+          REQUEST_BODY: ${{ github.event.pull_request.body }}
+          REQUEST_TITLE: ${{ github.event.pull_request.title }}
+        run: python3 scripts/pr_compliance.py
+
+      # Seconds of stdlib-only unit tests, so they run on every PR instead of path-filtering
+      # on scripts/pr_compliance.py.
+      - name: Test pr_compliance.py
+        if: ${{ !cancelled() }}
+        run: python3 scripts/pr_compliance.py run-tests > test.log || { echo "::error::pr_compliance.py $(cat test.log)" && exit 1; }
+
+      - name: Check for legacy PR title format using JIRA or MINOR
+        id: check-legacy-format
+        if: ${{ !cancelled() }}
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          title="$PR_TITLE"
+          echo "Checking PR title: $title"
+
+          # Check for HUDI JIRA format: [HUDI-1234] description
+          if [[ "$title" =~ ^\[HUDI-[0-9]+\]\ .+ ]]; then
+            echo "Title matches HUDI JIRA format"
+            echo "skip_conventional=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Check for MINOR format: [MINOR] description
+          if [[ "$title" =~ ^\[MINOR\]\ .+ ]]; then
+            echo "Title matches MINOR format"
+            echo "skip_conventional=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "Title does not match JIRA/MINOR format, will validate as conventional commit"
+          echo "skip_conventional=false" >> $GITHUB_OUTPUT
+
+      - name: Validate PR title with Conventional Commits spec
+        if: ${{ !cancelled() && steps.check-legacy-format.outputs.skip_conventional == 'false' }}
+        uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            chore
+          requireScope: false
+          # Disable subject case validation to be more permissive
+          subjectPattern: ^.+$
+          subjectPatternError: |
+            The subject "{subject}" found in the pull request title "{title}"
+            is empty. Please provide a meaningful description.
+          # Allow ignoring certain labels
+          ignoreLabels: |
+            bot
+            ignore-semantic-pull-request
+          validateSingleCommit: false
+          headerPattern: '^(\w+)(?:\(([^)]+)\))?!?: (.+)$'
+          headerPatternCorrespondence: type,scope,subject
+
+      - name: Check commits for Claude co-author trailers
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          echo "Checking commits of PR #${PR_NUMBER} for Claude co-author trailers..."
+          flagged=$(gh api "repos/${REPO}/pulls/${PR_NUMBER}/commits" --paginate \
+            --jq '.[] | select(.commit.message | test("(^|\\n)co-authored-by:\\s*(claude\\s+(opus|sonnet|haiku|fable|mythos|instant|code|[0-9])|[^\\n]*<noreply@anthropic\\.com>)"; "i")) | .sha')
+
+          if [[ -n "$flagged" ]]; then
+            echo "The following commits contain a Claude co-author trailer:"
+            echo "$flagged"
+            echo ""
+            echo "Commits must not credit Claude as a co-author."
+            echo "Remove the 'Co-authored-by: Claude ...' trailer from the commit message(s),"
+            echo "e.g., by amending the commit or rebasing, and force-push the branch."
+            exit 1
+          fi
+
+          echo "No Claude co-author trailers found."
