@@ -18,8 +18,11 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.avro.model.HoodieCompactionOperation;
+import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.CompactionAdminClient.ValidationOpResult;
 import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -81,6 +84,35 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
     validateUnSchedulePlan(client, "004", "005", numEntriesPerInstant);
     // There are no delta-commits after compaction instant
     validateUnSchedulePlan(client, "006", "007", numEntriesPerInstant);
+  }
+
+  @Test
+  public void testUnscheduleCompactionFileIdKeepsSiblingOpsInSamePartition() throws Exception {
+    int numOpsInPlan = 3;
+    CompactionTestUtils.setupAndValidateCompactionOperations(metaClient, false, numOpsInPlan,
+        0, 0, 0);
+    String compactionInstant = "001";
+    HoodieCompactionPlan planBefore = CompactionUtils.getCompactionPlan(metaClient, compactionInstant);
+    assertEquals(numOpsInPlan, planBefore.getOperations().size());
+
+    HoodieCompactionOperation targetOp = planBefore.getOperations().get(0);
+    Set<String> siblingFileIds = planBefore.getOperations().stream()
+        .skip(1)
+        .map(HoodieCompactionOperation::getFileId)
+        .collect(Collectors.toSet());
+
+    client.unscheduleCompactionFileId(
+        new HoodieFileGroupId(targetOp.getPartitionPath(), targetOp.getFileId()), false, false);
+
+    metaClient = HoodieTestUtils.createMetaClient(metaClient.getStorageConf(), basePath);
+    HoodieCompactionPlan planAfter = CompactionUtils.getCompactionPlan(metaClient, compactionInstant);
+    assertEquals(numOpsInPlan - 1, planAfter.getOperations().size(),
+        "Only the target file group should be removed from the plan");
+    Set<String> remainingFileIds = planAfter.getOperations().stream()
+        .map(HoodieCompactionOperation::getFileId)
+        .collect(Collectors.toSet());
+    assertEquals(siblingFileIds, remainingFileIds,
+        "Sibling operations in the same partition must remain scheduled");
   }
 
   @Test
