@@ -668,10 +668,14 @@ class TestTimelineUtils extends HoodieCommonTestHarness {
 
   /**
    * With a last commit time synced, only the cleans since it are read, and a clean in that window that cannot be
-   * read fails the call instead of being skipped.
+   * read fails the call instead of being skipped. Runs on both timeline layouts, since layout V1 (table version 6)
+   * derives completion times from file modification times rather than the instant file name.
    */
-  @Test
-  void testGetDroppedPartitionsReadsOnlyCleansSinceLastCommitTimeSynced() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void testGetDroppedPartitionsReadsOnlyCleansSinceLastCommitTimeSynced(boolean preTableVersion8) throws Exception {
+    initMetaClient(preTableVersion8);
+    assertEquals(preTableVersion8 ? HoodieTableVersion.SIX : HoodieTableVersion.current(), metaClient.getTableConfig().getTableVersion());
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     String olderPartition = "p1";
     HoodieInstant instant1 = new HoodieInstant(INFLIGHT, COMMIT_ACTION, "00001", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
