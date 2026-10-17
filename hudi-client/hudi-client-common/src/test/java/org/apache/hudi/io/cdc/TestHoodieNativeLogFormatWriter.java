@@ -23,8 +23,10 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -58,6 +60,7 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -198,6 +201,30 @@ public class TestHoodieNativeLogFormatWriter {
     writeDeleteLogFooterWithPositions(Option.empty(), record, schema, new ArrayList<>());
 
     verify(record, never()).getOrderingValue(eq(schema), any(), any());
+    verify(record, never()).getOrderingValueAsJava(eq(schema), any(), any());
+  }
+
+  @ParameterizedTest
+  @CsvSource({"SPARK,java", "AVRO,engine"})
+  public void testWritesJavaOrderingValueForEmptyRecordOfOtherRecordContext(
+      HoodieRecord.HoodieRecordType recordType, String expectedOrderingValue) throws Exception {
+    // The two ordering values only tell which one the writer stores in the Avro delete row.
+    HoodieRecord record = new HoodieEmptyRecord<>(
+        new HoodieKey("key-1", "partition"), HoodieOperation.DELETE, "engine", "java", recordType);
+
+    assertEquals(expectedOrderingValue, writeDeleteRowWithOrderingField(record).get(1).toString());
+  }
+
+  @Test
+  public void testKeepsEngineOrderingValueForNonEmptyRecordOfOtherRecordContext() throws Exception {
+    // Such as a Flink record that a table with the Avro record merger writes: its ordering value is stored as before.
+    HoodieRecord record = mock(HoodieRecord.class);
+    when(record.getRecordKey()).thenReturn("key-1");
+    when(record.getRecordType()).thenReturn(HoodieRecord.HoodieRecordType.FLINK);
+    doReturn("engine").when(record).getOrderingValue(any(HoodieSchema.class), any(), any());
+
+    assertEquals("engine", writeDeleteRowWithOrderingField(record).get(1).toString());
+    verify(record, never()).getOrderingValueAsJava(any(HoodieSchema.class), any(), any());
   }
 
   @Test
@@ -523,6 +550,38 @@ public class TestHoodieNativeLogFormatWriter {
     ArgumentCaptor<Map<String, String>> footerCaptor = ArgumentCaptor.forClass(Map.class);
     verify(fileWriter).addFooterMetadata(footerCaptor.capture());
     return NativeLogFooterMetadata.fromFooterMetadata(footerCaptor.getValue());
+  }
+
+  private static IndexedRecord writeDeleteRowWithOrderingField(HoodieRecord record) throws Exception {
+    String schemaString = "{\"type\":\"record\",\"name\":\"test\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"ts\",\"type\":\"string\"}]}";
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withSchema(schemaString)
+        .build();
+    HoodieSchema schema = HoodieSchema.parse(schemaString);
+    HoodieStorage storage = mock(HoodieStorage.class);
+    HoodieFileWriter deleteFileWriter = mock(HoodieFileWriter.class);
+    TaskContextSupplier taskContextSupplier = mock(TaskContextSupplier.class);
+
+    try (MockedStatic<HoodieFileWriterFactory> writerFactory = mockStatic(HoodieFileWriterFactory.class)) {
+      writerFactory.when(() -> HoodieFileWriterFactory.getFileWriter(
+              eq("100"), any(StoragePath.class), eq(storage), eq(config), any(HoodieSchema.class),
+              eq(taskContextSupplier), eq(HoodieRecord.HoodieRecordType.AVRO)))
+          .thenReturn(deleteFileWriter);
+
+      try (HoodieNativeLogFormatWriter writer = new HoodieNativeLogFormatWriter(
+          4096, storage, new StoragePath("/tmp/partition"), "file-1", "100", 1, "1-0-1", 1024L,
+          new LogFileCreationCallback() {
+          }, HoodieTableVersion.current(), config, HoodieFileFormat.PARQUET, schema,
+          taskContextSupplier, new AvroRecordContext(), Collections.singletonList("ts"), Option.empty())) {
+        writer.appendDeleteRecord(record, schema);
+      }
+    }
+
+    ArgumentCaptor<IndexedRecord> deleteRecordCaptor = ArgumentCaptor.forClass(IndexedRecord.class);
+    verify(deleteFileWriter).writeRow(eq("key-1"), deleteRecordCaptor.capture());
+    return deleteRecordCaptor.getValue();
   }
 
   private static void assertNoBufferedRecordPositions(HoodieNativeLogFormatWriter writer, String fieldName) throws Exception {

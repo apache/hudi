@@ -29,6 +29,7 @@ import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.DefaultJavaTypeConverter;
+import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.util.OrderingValueEngineTypeConverter;
 
 import org.apache.spark.sql.HoodieInternalRowUtils;
@@ -129,6 +130,8 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
           hoodieKey,
           bufferedRecord.getHoodieOperation(),
           bufferedRecord.getOrderingValue(),
+          // Comparisons keep the engine ordering value, delete blocks store the Java one.
+          convertOrderingValueToJava(bufferedRecord.getOrderingValue()),
           HoodieRecord.HoodieRecordType.SPARK);
     }
 
@@ -181,6 +184,15 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
   @Override
   public Comparable convertOrderingValueToEngineType(Comparable value) {
     return orderingValueConverter.convert(value);
+  }
+
+  @Override
+  public Comparable convertOrderingValueToJava(Comparable value) {
+    if (value instanceof ArrayComparable) {
+      return ((ArrayComparable) value).apply(this::convertOrderingValueToJava);
+    }
+    // String ordering values are wrapped into HoodieUTF8String to stay comparable, see ensureComparability.
+    return value instanceof HoodieUTF8String ? value.toString() : (Comparable) sparkTypeToJavaType(value);
   }
 
   @Override

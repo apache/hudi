@@ -2035,6 +2035,58 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   }
 
   @ParameterizedTest
+  @CsvSource(value = Array(
+    "AVRO;string;8", "AVRO;decimal(10,2);9", "SPARK;string;9", "SPARK;decimal(10,2);8", "AVRO;decimal(10,2);10",
+    "SPARK;decimal(10,2);10"), delimiter = ';')
+  def testLogCompactionRewritesDeletesWithEngineOrdering(recordType: HoodieRecordType, orderingType: String, tableVersion: Int): Unit = {
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+    val opts = writeOpts ++ Map(
+      TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL,
+      RECORDKEY_FIELD.key -> "id",
+      PARTITIONPATH_FIELD.key -> "",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "ts",
+      HoodieWriteConfig.RECORD_MERGE_MODE.key -> RecordMergeMode.EVENT_TIME_ORDERING.name(),
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> tableVersion.toString,
+      HoodieTableConfig.VERSION.key -> tableVersion.toString,
+      HoodieCompactionConfig.INLINE_COMPACT.key -> "false",
+      HoodieCompactionConfig.ENABLE_LOG_COMPACTION.key -> "true",
+      HoodieCompactionConfig.LOG_COMPACTION_BLOCKS_THRESHOLD.key -> "1")
+
+    def write(rows: Seq[(String, String, Boolean)], mode: SaveMode): Unit = {
+      val localSpark = spark
+      import localSpark.implicits._
+      rows.toDF("id", "ts", "_hoodie_is_deleted")
+        .withColumn("ts", col("ts").cast(orderingType))
+        .coalesce(1).write.format("hudi").options(opts).mode(mode).save(basePath)
+    }
+
+    write(Seq(("id1", "100", false), ("id2", "100", false), ("id3", "100", false)), SaveMode.Overwrite)
+    // The delete and the update land in the same file slice, as log blocks or, on version 10, as native log files.
+    // The slice also holds an update of id3 and an older delete of it, so log compaction compares their ordering values.
+    write(Seq(("id1", "110", true)), SaveMode.Append)
+    write(Seq(("id2", "120", false), ("id3", "130", false)), SaveMode.Append)
+    write(Seq(("id3", "125", true)), SaveMode.Append)
+
+    val client = DataSourceUtils.createHoodieClient(spark.sparkContext, "", basePath, tableName, opts.asJava)
+      .asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
+    try {
+      val logCompactionInstant = client.scheduleLogCompaction(Option.empty()).get()
+      client.logCompact(logCompactionInstant, true)
+    } finally {
+      client.close()
+    }
+
+    def readOrdering(): Map[String, Int] = spark.read.format("hudi").options(readOpts).load(basePath)
+      .select("id", "ts").collect().map(row => row.getString(0) -> BigDecimal(row.get(1).toString).toInt).toMap
+
+    // The compacted delete keeps its ordering value: an older update leaves id1 deleted, a newer one brings it back.
+    write(Seq(("id1", "105", false)), SaveMode.Append)
+    assertEquals(Map("id2" -> 120, "id3" -> 130), readOrdering())
+    write(Seq(("id1", "115", false)), SaveMode.Append)
+    assertEquals(Map("id1" -> 115, "id2" -> 120, "id3" -> 130), readOrdering())
+  }
+
+  @ParameterizedTest
   @CsvSource(Array(
     "6,8,true,UPGRADE", // Normal upgrade: table=6, write=8, autoUpgrade=true → should upgrade
     "6,9,true,UPGRADE", // Normal upgrade: table=6, write=9, autoUpgrade=true → should upgrade
