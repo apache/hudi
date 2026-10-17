@@ -148,6 +148,11 @@ public class SparkBinaryCopyClusteringExecutionStrategy<T> extends SparkSortAndS
    * 4. Check Schema Optional or Required consistency for the same field
    */
   public boolean supportBinaryStreamCopy(List<ClusteringGroupInfo> inputGroups, Map<String, String> strategyParams) {
+    if (getHoodieTable().getMetaClient().getTableConfig().isLSMTreeStorageLayout()) {
+      log.warn("SparkBinaryCopyClusteringExecutionStrategy does not preserve the sorted-run invariant required by LSM tables. "
+          + "Will fall back to common clustering execution strategy.");
+      return false;
+    }
     if (getHoodieTable().getMetaClient().getTableType() != COPY_ON_WRITE) {
       log.warn("SparkBinaryCopyClusteringExecutionStrategy is only supported for COW tables. Will fall back to common clustering execution strategy.");
       return false;
