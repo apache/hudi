@@ -103,9 +103,13 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   //       [[estimateFileSliceCacheWeight]] for how they were calibrated.
   private static final int FILE_SLICE_CACHE_ENTRY_OVERHEAD_BYTES = 256;
   private static final int FILE_SLICE_CACHE_BYTES_PER_FILE = 960;
-  // NOTE: Every described file carries its own full path, and the path carries the partition path; the 2 is because
-  //       the path is held both as a String and inside the StoragePath's URI.
-  private static final int FILE_SLICE_CACHE_BYTES_PER_PATH_CHAR = 2;
+  // NOTE: The PartitionPath key holds the partition path once, as a String.
+  private static final int FILE_SLICE_CACHE_KEY_BYTES_PER_PATH_CHAR = 2;
+  // NOTE: Every described file holds its own full path several times over -- as the file object's own path String,
+  //       and inside its StoragePathInfo's StoragePath, whose URI keeps the parsed components and whose toString is
+  //       cached. Measured at ~5.4 bytes per character of the full path; charged at 6 so that the error from a long
+  //       path runs towards over-charging.
+  private static final int FILE_SLICE_CACHE_BYTES_PER_PATH_CHAR = 6;
 
   @Getter(AccessLevel.PROTECTED)
   private final String[] partitionColumns;
@@ -757,27 +761,50 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
    *
    * <p>This counts structure rather than walking the object graph, because Caffeine calls a weigher on every single
    * insertion, lazy listing is the default and this budget defaults to 500 MB -- so an exact estimator here runs on
-   * every Spark read. Walking the graph with {@link org.apache.hudi.common.util.ObjectSizeCalculator} measured 374us
-   * per partition at 20 file groups and 2.6ms at 100, i.e. of the order of tens of seconds of driver CPU for one cold
-   * plan of a table with many partitions. (The spillable-map flavour of this same cache can afford that estimator only
+   * every Spark read. Walking the graph with {@link org.apache.hudi.common.util.ObjectSizeCalculator} measured, on
+   * one developer machine and one JDK, about 90us per partition at 20 file groups once warm and about 380us on the
+   * first call, and 0.5-0.9ms at 140 file slices; counting structure instead takes 0.4us and 0.8us on the same two
+   * shapes. Those absolute figures are machine- and load-dependent -- an earlier run of the same measurement under a
+   * concurrent build reported 2.6ms for the 140-slice case -- but the ratio between the two is three orders of
+   * magnitude either way, which is the point: an exact estimator is tens of seconds of driver CPU for one cold plan
+   * of a table with many partitions. (The spillable-map flavour of this same cache can afford that estimator only
    * because {@code ExternalSpillableMap} samples it -- on the first insertion, then every hundredth.)
    *
    * <p>What is counted instead is what the exact size is nearly linear in: the number of files described, and the
-   * length of the partition path each of their paths embeds. Every file slice carries a {@code HoodieBaseFile}, every
-   * log file a {@code HoodieLogFile} and every bootstrapped base file an external source {@code BaseFile}, each
-   * wrapping a {@code StoragePathInfo} with its own {@code StoragePath}, {@code URI} and path {@code String}.
-   * Calibrated against {@code ObjectSizeCalculator} over 0-500 file slices x 0-10 log files each x partition paths of
-   * 4, 54 and 202 characters, this lands within 0.94x-1.14x of the exact figure on every non-empty point of that grid.
+   * length of the path each of them holds. Every file slice carries a {@code HoodieBaseFile}, every log file a
+   * {@code HoodieLogFile} and every bootstrapped base file an external source {@code BaseFile}, each holding its own
+   * full path as a {@code String} and again inside a {@code StoragePathInfo}'s {@code StoragePath}, whose {@code URI}
+   * keeps the parsed components and whose {@code toString} and parent are cached -- measured at about 5.4 bytes of
+   * heap per character of that path, charged here at 6.
    *
-   * <p>A proxy necessarily mis-charges, and it is worth being explicit about which way. It over-charges a file slice
-   * holding only log files and no base file (by one file's worth), and a partition holding nothing at all (a few
-   * hundred bytes against a true 136-336), both of which only make the bound tighter than asked. It under-charges
-   * whatever it cannot see from the partition path: file names longer than the uuid-plus-write-token ones this was
-   * calibrated on, and a bootstrap source file living under a path far longer than the Hudi partition's. So the
-   * resident set should be read as being within roughly 10% of {@code hoodie.file.index.cache.max.mem} for ordinary
-   * tables, and as a small multiple of it only for a table whose file names are themselves pathological. That is
-   * deliberate: the cache is a cache, so mis-charging trades heap against re-listing and cannot lose data either way,
-   * whereas an exact weigher costs the CPU above on every read.
+   * <p>The path length is <em>sampled</em>, not summed: the first file path this entry offers is taken as the length
+   * of every file path in the partition. That keeps the weigher O(slices) with no walk into each slice's log files,
+   * and it is a good sample because every path in a partition shares the table base path and the partition path and
+   * differs only in the file name. It has to be the real file path and not {@code partition.getPath()}: the partition
+   * path is relative and omits both the table base path and the file name, which for an ordinary local-filesystem
+   * table is 4 characters standing in for 117. A bootstrapped table's external source files live under a different,
+   * potentially much longer path, so they are counted and sampled separately rather than charged at the Hudi path's
+   * length; a 1000-character external path is otherwise invisible to the weigher.
+   *
+   * <p>Calibrated against {@code ObjectSizeCalculator} over absolute-path shapes: table base paths of 44, 59 and 120
+   * characters, partition paths of 4, 33 and 202, 1-500 file slices, 0-10 log files each, file names of 73, 128 and
+   * 255 characters, and bootstrap source files under external paths of 17 and 1000 characters. Over that grid the
+   * proxy lands between 0.94x and 1.78x of the exact figure, and on entries actually produced by listing a table
+   * through {@code HoodieTestTable} at 1, 6, 26 and 126 file groups it lands at 1.13x-1.15x.
+   *
+   * <p>A proxy necessarily mis-charges, and it is worth being explicit about which way, because the two directions
+   * are not symmetric: under-charging lets the cache exceed the configured budget, over-charging only makes the bound
+   * tighter than asked. On every shape measured the under-charge bottoms out at 0.94x, i.e. the resident set runs at
+   * most about 6% over {@code hoodie.file.index.cache.max.mem}. The rest of the spread is over-charge, and it is
+   * concentrated in three shapes: a file slice with log files and no base file at all (a MOR file group before its
+   * first compaction) is charged for a base file that does not exist, which is 1.78x at one log file, 1.26x at three
+   * and 1.07x at ten; a partition whose base files have names far longer than its log files' -- 255-character names
+   * against ordinary ones -- reaches 1.50x, because one sampled path is applied to both; and a bootstrapped table
+   * under a 1000-character external path sits at 1.14x. Ordinary copy-on-write partitions, local or object-store,
+   * stay within 0.94x-1.16x. So "pathological" here means specifically a partition whose file paths differ widely in
+   * length from the first one sampled, and the consequence of hitting it is a cache that holds less than the budget
+   * allows, not more. That trade is deliberate: mis-charging a cache trades heap against re-listing and cannot lose
+   * data either way, whereas an exact weigher costs the CPU above on every read.
    *
    * <p>Note that this makes {@code hoodie.file.index.cache.max.mem} and
    * {@code hoodie.file.index.cache.spillable.mem} approximations of different shapes rather than one quantity: the
@@ -786,13 +813,47 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
    */
   static int estimateFileSliceCacheWeight(PartitionPath partition, List<FileSlice> fileSlices) {
     long files = 0;
+    long bootstrapFiles = 0;
+    // NOTE: Sampled, not summed: one file path per partition, applied to every file in it. Within a partition every
+    //       path shares the table base path and the partition path and differs only in the file name, so one sample
+    //       is representative; summing would cost a pass over every log file, which is what this weigher exists to
+    //       avoid. -1 means "nothing sampled yet".
+    int filePathLength = -1;
+    int bootstrapPathLength = -1;
     for (FileSlice fileSlice : fileSlices) {
       // The slice itself, its log files, and -- for a bootstrapped table -- the base file's external source file
-      files += 1 + fileSlice.getLogFileCnt() + (fileSlice.hasBootstrapBase() ? 1 : 0);
+      files += 1 + fileSlice.getLogFileCnt();
+      Option<HoodieBaseFile> baseFile = fileSlice.getBaseFile();
+      if (baseFile.isPresent()) {
+        if (filePathLength < 0) {
+          filePathLength = baseFile.get().getPath().length();
+        }
+        Option<BaseFile> bootstrapBaseFile = baseFile.get().getBootstrapBaseFile();
+        if (bootstrapBaseFile.isPresent()) {
+          bootstrapFiles++;
+          if (bootstrapPathLength < 0) {
+            bootstrapPathLength = bootstrapBaseFile.get().getPath().length();
+          }
+        }
+      } else if (filePathLength < 0 && fileSlice.hasLogFiles()) {
+        // A slice with no base file at all (MOR before its first compaction): sample a log file's path instead
+        filePathLength = fileSlice.getLatestLogFile().get().getPath().toString().length();
+      }
     }
-    long pathCost = (long) FILE_SLICE_CACHE_BYTES_PER_PATH_CHAR * partition.getPath().length();
-    long weight = FILE_SLICE_CACHE_ENTRY_OVERHEAD_BYTES + pathCost
-        + files * (FILE_SLICE_CACHE_BYTES_PER_FILE + pathCost);
+    if (filePathLength < 0) {
+      // Nothing to sample from -- an empty partition, or one holding only empty slices. The file terms are zero
+      // anyway; fall back to the partition path so the figure stays defined.
+      filePathLength = partition.getPath().length();
+    }
+    if (bootstrapPathLength < 0) {
+      bootstrapPathLength = filePathLength;
+    }
+    long weight = FILE_SLICE_CACHE_ENTRY_OVERHEAD_BYTES
+        + (long) FILE_SLICE_CACHE_KEY_BYTES_PER_PATH_CHAR * partition.getPath().length()
+        + files * (FILE_SLICE_CACHE_BYTES_PER_FILE
+            + (long) FILE_SLICE_CACHE_BYTES_PER_PATH_CHAR * filePathLength)
+        + bootstrapFiles * (FILE_SLICE_CACHE_BYTES_PER_FILE
+            + (long) FILE_SLICE_CACHE_BYTES_PER_PATH_CHAR * bootstrapPathLength);
     // NOTE: Caffeine weights are ints. A single partition heavier than Integer.MAX_VALUE bytes cannot be expressed,
     //       and clamping it simply means such an entry is treated as "as heavy as an entry can be".
     return (int) Math.max(1L, Math.min(Integer.MAX_VALUE, weight));

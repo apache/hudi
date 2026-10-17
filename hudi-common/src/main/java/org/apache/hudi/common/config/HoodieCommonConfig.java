@@ -180,8 +180,8 @@ public class HoodieCommonConfig extends HoodieConfig {
       .defaultValue(500 * 1024L * 1024L) // 500 MB, same ceiling as hoodie.file.index.cache.spillable.mem
       .markAdvanced()
       .sinceVersion("1.3.0")
-      .withDocumentation("Maximum amount of memory in bytes, estimated the same way as for "
-          + "hoodie.file.index.cache.spillable.mem, that the in-memory input-file-slice cache of "
+      .withDocumentation("Maximum estimated heap size in bytes, based on file counts and sampled path lengths, "
+          + "that the in-memory input-file-slice cache of "
           + "org.apache.hudi.core.read.BaseHoodieTableFileIndex may hold when partitions are listed lazily. Past that "
           + "budget the least valuable partitions are evicted, which bounds the heap held by a file index that is "
           + "reused across many queries in a long-lived session (for example, a Spark catalog table whose relation is "

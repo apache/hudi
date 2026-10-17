@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.util.ObjectSizeCalculator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.core.read.BaseHoodieTableFileIndex;
 import org.apache.hudi.core.read.BaseHoodieTableFileIndex.PartitionPath;
@@ -51,6 +52,7 @@ import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -478,6 +480,51 @@ class TestBaseHoodieTableFileIndex extends HoodieCommonTestHarness {
     TestLocalIndex disabled = newIndex(maxMemoryProps(0L), true);
     Assertions.assertFalse(fileSliceCache(disabled).policy().eviction().isPresent(),
         "A non-positive budget must disable the bound entirely");
+  }
+
+  /**
+   * The weigher is a proxy, and a proxy is only as good as the shape it was calibrated on. An earlier calibration was
+   * built from file slices whose paths were <em>relative</em> -- {@code partition.getPath() + "/" + name} -- and the
+   * formula that came out of it had the partition path as its only path term. Listing produces absolute paths: for a
+   * {@code dt=0} partition of a local-filesystem table the partition path is 4 characters and the real base file path
+   * is around 117, so the proxy charged for 4 characters of path per file where the entry held 117 characters' worth,
+   * and came out at 0.67x of the true size -- roughly 1.5x over the configured budget on every object-store table,
+   * with no test noticing.
+   *
+   * <p>So this pins the weigher against an entry that {@code HoodieTestTable} and the index itself produced, rather
+   * than against hand-built slices: it lists one partition for real, reads the weight Caffeine actually charged, and
+   * compares it to {@code ObjectSizeCalculator} over the very list that is in the cache. A calibration that drifts
+   * back to relative paths fails here.
+   */
+  @Test
+  void testWeightChargedForARealListedEntryTracksItsRealSize() throws Exception {
+    initMetaClient();
+    int fileGroups = 20;
+    String instantTime = "20260101000000001";
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient).addCommit(instantTime);
+    int[] fileLengths = new int[fileGroups];
+    Arrays.fill(fileLengths, 1024);
+    testTable.withBaseFilesInPartition("dt=0", fileLengths);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+
+    TestLocalIndex fileIndex = newIndex(maxMemoryProps(512L * 1024 * 1024), true);
+    PartitionPath partition = new PartitionPath("dt=0", new Object[] {"dt=0"});
+    List<FileSlice> slices = fileIndex.getInputFileSlicesForTest(partition).get(partition);
+    Assertions.assertEquals(fileGroups, slices.size(), "The partition must have been listed in full");
+
+    String baseFilePath = slices.get(0).getBaseFile().get().getPath();
+    Assertions.assertTrue(baseFilePath.length() > 4 * partition.getPath().length(),
+        "This test is only meaningful while the real file path (" + baseFilePath.length() + " chars) is much longer "
+            + "than the partition path (" + partition.getPath().length() + " chars): " + baseFilePath);
+
+    long charged = weightedSize(fileIndex);
+    long actual = ObjectSizeCalculator.getObjectSize(slices);
+    double ratio = (double) charged / actual;
+    Assertions.assertTrue(ratio >= 0.9 && ratio <= 1.6,
+        "A real listed entry of " + slices.size() + " file slices holds " + actual + " bytes (base file path is "
+            + baseFilePath.length() + " chars) but was charged " + charged + " (" + ratio + "x). Outside 0.9x-1.6x "
+            + "the byte budget no longer means what its javadoc says; under 0.9x the cache overruns it. A weigher "
+            + "calibrated on relative paths lands near 0.67x here.");
   }
 
   private static TypedProperties maxMemoryProps(long maxMemory) {

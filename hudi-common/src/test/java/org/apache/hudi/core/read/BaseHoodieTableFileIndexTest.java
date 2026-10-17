@@ -19,6 +19,7 @@
 package org.apache.hudi.core.read;
 
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.core.read.BaseHoodieTableFileIndex.PartitionPath;
 import org.apache.hudi.storage.StoragePath;
@@ -40,6 +41,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 public class BaseHoodieTableFileIndexTest {
+
+  /**
+   * A realistic absolute table base path. Listing never produces a relative one, and the difference matters to the
+   * weigher: it charges per character of the full file path.
+   */
+  private static final String TABLE_BASE_PATH = "file:/tmp/junit-6913148002031446690/dataset";
 
   /**
    * Regression test for the empty-partition NPE that surfaces in {@code getInputFileSlices}
@@ -132,8 +139,10 @@ public class BaseHoodieTableFileIndexTest {
 
   /**
    * The weigher runs on every single insertion into a cache that lazy listing populates one partition at a time, so it
-   * has to be cheap: walking the entry's object graph with {@code ObjectSizeCalculator} measured 374us per partition
-   * at 20 file groups and 2.6ms at 100, which is tens of seconds of driver CPU for one cold plan of a wide table.
+   * has to be cheap: walking the entry's object graph with {@code ObjectSizeCalculator} measured about 90us per
+   * partition at 20 file groups once warm (380us on the first call) and 0.5-0.9ms at 140 file slices, against 0.4us
+   * and 0.8us for counting structure -- which is tens of seconds of driver CPU for one cold plan of a wide table.
+   * The absolute figures are machine- and load-dependent; the three-orders-of-magnitude ratio is not.
    * This pins that the weigher's cost does not grow with what the entry describes beyond the one unavoidable pass over
    * the file-slice list: the per-slice work must be O(1), which rules out re-walking each slice's files.
    */
@@ -160,17 +169,40 @@ public class BaseHoodieTableFileIndexTest {
     return (System.nanoTime() - start) / 1000;
   }
 
+  /**
+   * Listing hands the index file slices whose paths are <em>absolute</em> -- the table base path, then the partition
+   * path, then the file name -- and the weigher is calibrated on that. An earlier version of this helper built paths
+   * as {@code partition.getPath() + "/" + name}, i.e. relative ones, which for a {@code dt=0} partition is 12
+   * characters standing in for a real 117, and calibrating against that shape is exactly how the weigher came to
+   * under-charge every object-store table by around 1.5x. Build them the way listing does.
+   */
   private static List<FileSlice> fileSlices(PartitionPath partition, int count, int logFilesPerSlice) {
     List<FileSlice> slices = new ArrayList<>();
+    String partitionDir = TABLE_BASE_PATH + "/" + partition.getPath();
     for (int i = 0; i < count; i++) {
       FileSlice slice = new FileSlice(partition.getPath(), "20260101000000001", "file-" + i);
+      slice.setBaseFile(new HoodieBaseFile(pathInfo(
+          partitionDir + "/file-" + i + "_0-1-2_20260101000000001.parquet")));
       for (int l = 0; l < logFilesPerSlice; l++) {
-        slice.addLogFile(new HoodieLogFile(new StoragePathInfo(
-            new StoragePath(partition.getPath() + "/.file-" + i + "_20260101000000001.log." + (l + 1) + "_0-1-2"),
-            1024L, false, (short) 1, 1024L, 1700000000000L)));
+        slice.addLogFile(new HoodieLogFile(pathInfo(
+            partitionDir + "/.file-" + i + "_20260101000000001.log." + (l + 1) + "_0-1-2")));
       }
       slices.add(slice);
     }
     return slices;
+  }
+
+  /**
+   * Materialises what listing materialises -- the {@code URI}'s parsed components, the cached {@code toString} and
+   * the cached parent -- so that an {@code ObjectSizeCalculator} run over these slices sees the same graph a listed
+   * entry has.
+   */
+  private static StoragePathInfo pathInfo(String path) {
+    StoragePath storagePath = new StoragePath(path);
+    storagePath.toUri().getPath();
+    storagePath.toString();
+    storagePath.getName();
+    storagePath.getParent();
+    return new StoragePathInfo(storagePath, 1024L, false, (short) 1, 1024L, 1700000000000L);
   }
 }
