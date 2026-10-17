@@ -114,6 +114,152 @@ jobs:
       - name: RAT check
         run: ./scripts/release/validate_source_rat.sh
 
+  # Build once, test many: each build-* job compiles and installs Hudi once for one
+  # JDK/profile combination and publishes the result (every module's target/ directory
+  # plus ~/.m2/repository/org/apache/hudi) as an artifact of this run. The test jobs of that
+  # combination restore it (.github/actions/restore-hudi-build) and run only their test
+  # steps, instead of each repeating the same `mvn clean install -DskipTests`. The artifact
+  # name carries the commit and every flag that changes the compiled output, and the restore
+  # action refuses an archive whose manifest does not match, so a test job can only ever run
+  # against classes built from its own commit with its own profiles.
+  #
+  # Builds that intentionally use other flags keep building in their own job:
+  # validate-bundles and validate-bundle-spark4 (-DdeployArtifacts=true, shaded bundles)
+  # and integration-tests (-Pintegration-tests, docker/hoodie/hadoop and hudi-integ-test).
+
+  # Full build for test-spark-client-and-hadoop-common, test-utilities,
+  # test-hudi-hadoop-mr-and-hudi-java-client and test-common-and-other-modules. It is the
+  # build test-common-and-other-modules ran itself before, which is a superset of the
+  # `-am -pl` builds of the other three (same JDK 11 and Scala/Spark/Flink profiles, with
+  # -Phudi-platform-service). It runs in the hudi-ci image because -Pthrift-gen-source needs
+  # the thrift compiler from that image. The workspace is mounted at its host path so the
+  # source paths recorded by maven-compiler-plugin (target/maven-status) match the host test
+  # jobs and their `mvn test` does not recompile. Checkstyle and RAT stay skipped here as
+  # they were; validate-bundles still runs both over every module with these profiles.
+  build-jdk11-spark35:
+    runs-on: ubuntu-latest
+    needs: changes
+    timeout-minutes: 120
+    strategy:
+      matrix:
+        include:
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.5"
+            flinkProfile: "flink2.2"
+
+    steps:
+      - if: needs.changes.outputs.relevant == 'true'
+        uses: actions/checkout@v5
+      - name: Set up JDK 11
+        if: needs.changes.outputs.relevant == 'true'
+        uses: actions/setup-java@v5
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Build Docker image
+        if: needs.changes.outputs.relevant == 'true'
+        run: docker build -t hudi-ci .
+      - name: Build Project
+        if: needs.changes.outputs.relevant == 'true'
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" \
+            -v "$HOME/.m2:/root/.m2" \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -w "$GITHUB_WORKSPACE" \
+            hudi-ci \
+            /bin/bash -c "MAVEN_OPTS='-Xmx8g' mvn clean install -T 2 -D$SCALA_PROFILE -D$SPARK_PROFILE -D$FLINK_PROFILE -Phudi-platform-service -Pthrift-gen-source -DskipTests=true -Dmaven.compiler.maxmem=8192m -Dcheckstyle.skip=true -Drat.skip=true $MVN_ARGS"
+      - name: Save Hudi build
+        if: needs.changes.outputs.relevant == 'true'
+        uses: ./.github/actions/save-hudi-build
+        with:
+          name: hudi-build-${{ github.sha }}-jdk11-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-${{ matrix.flinkProfile }}
+
+  # Build for the five test-spark-java17-* jobs, which all ran this same command. Part 1
+  # additionally listed hudi-spark4-common, which -am pulls in for hudi-spark4.2.x anyway.
+  build-java17-spark42:
+    runs-on: ubuntu-latest
+    needs: changes
+    timeout-minutes: 120
+    strategy:
+      matrix:
+        include:
+          - scalaProfile: "scala-2.13"
+            sparkProfile: "spark4.2"
+            sparkModules: "hudi-spark-datasource/hudi-spark4-common,hudi-spark-datasource/hudi-spark4.2.x"
+
+    steps:
+      - if: needs.changes.outputs.relevant == 'true'
+        uses: actions/checkout@v5
+      - name: Set up JDK 17
+        if: needs.changes.outputs.relevant == 'true'
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Build Project
+        if: needs.changes.outputs.relevant == 'true'
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_MODULES: ${{ matrix.sparkModules }}
+        run:
+          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+      - name: Save Hudi build
+        if: needs.changes.outputs.relevant == 'true'
+        uses: ./.github/actions/save-hudi-build
+        with:
+          name: hudi-build-${{ github.sha }}-jdk17-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}
+
+  # Build for test-flink-1 and test-flink-2. Each of them used to build twice: the
+  # hudi-examples-flink closure, then `mvn clean install -Pintegration-tests -pl
+  # hudi-flink-datasource/hudi-flink -am` inside the integration test step. hudi-flink is in
+  # the hudi-examples-flink closure, and -Pintegration-tests only adds modules outside it and
+  # changes test-skipping properties, so both produced the same classes.
+  build-flink:
+    runs-on: ubuntu-latest
+    needs: changes
+    timeout-minutes: 120
+    strategy:
+      matrix:
+        include:
+          - flinkProfile: "flink2.2"
+            flinkAvroVersion: "1.11.4"
+            flinkParquetVersion: '1.15.2'
+    steps:
+      - if: needs.changes.outputs.relevant == 'true'
+        uses: actions/checkout@v5
+      - name: Set up JDK 11
+        if: needs.changes.outputs.relevant == 'true'
+        uses: actions/setup-java@v5
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Build Project
+        if: needs.changes.outputs.relevant == 'true'
+        env:
+          SCALA_PROFILE: 'scala-2.12'
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
+          FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
+        run:
+          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -DskipTests=true $MVN_ARGS
+      - name: Save Hudi build
+        if: needs.changes.outputs.relevant == 'true'
+        uses: ./.github/actions/save-hudi-build
+        with:
+          name: hudi-build-${{ github.sha }}-jdk11-scala-2.12-${{ matrix.flinkProfile }}-avro${{ matrix.flinkAvroVersion }}-parquet${{ matrix.flinkParquetVersion }}
+
   # hudi-cli rides along with hudi-spark-client here rather than joining the catch-all
   # module lists in test-common-and-other-modules: its functional suite starts a
   # SparkSession per test class, and this job has the headroom for it while that one does
@@ -122,7 +268,7 @@ jobs:
   # job's UT_MODULES/FT_MODULES exclusions so the tests are not run twice.
   test-spark-client-and-hadoop-common:
     runs-on: ubuntu-latest
-    needs: changes
+    needs: [changes, build-jdk11-spark35]
     timeout-minutes: 75
     strategy:
       matrix:
@@ -142,14 +288,11 @@ jobs:
           distribution: 'temurin'
           architecture: x64
           cache: maven
-      - name: Build Project
+      - name: Restore Hudi build
         if: needs.changes.outputs.relevant == 'true'
-        env:
-          SCALA_PROFILE: ${{ matrix.scalaProfile }}
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-        run:
-          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DskipTests=true -Phudi-platform-service $MVN_ARGS -am -pl hudi-client/hudi-spark-client,hudi-cli
+        uses: ./.github/actions/restore-hudi-build
+        with:
+          name: hudi-build-${{ github.sha }}-jdk11-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-${{ matrix.flinkProfile }}
       - name: UT - hudi-hadoop-common
         if: needs.changes.outputs.relevant == 'true'
         env:
@@ -165,7 +308,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
-          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -fae -pl hudi-client/hudi-spark-client $MVN_ARGS -Djacoco.skip=false
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -fae -pl hudi-client/hudi-spark-client $MVN_ARGS -Djacoco.skip=false -DforkCount=2 '-Djacoco.agent.dest.filename=jacoco-fork${surefire.forkNumber}.exec'
       - name: FT - hudi-client/hudi-spark-client
         if: needs.changes.outputs.relevant == 'true'
         env:
@@ -173,7 +316,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
-          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -fae -pl hudi-client/hudi-spark-client $MVN_ARGS -Djacoco.skip=false
+          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -fae -pl hudi-client/hudi-spark-client $MVN_ARGS -Djacoco.skip=false -DforkCount=2 '-Djacoco.agent.dest.filename=jacoco-fork${surefire.forkNumber}.exec'
       - name: UT - hudi-cli
         if: needs.changes.outputs.relevant == 'true'
         env:
@@ -204,7 +347,7 @@ jobs:
 
   test-utilities:
     runs-on: ubuntu-latest
-    needs: changes
+    needs: [changes, build-jdk11-spark35]
     timeout-minutes: 60
     strategy:
       matrix:
@@ -224,14 +367,11 @@ jobs:
           distribution: 'temurin'
           architecture: x64
           cache: maven
-      - name: Build Project
+      - name: Restore Hudi build
         if: needs.changes.outputs.relevant == 'true'
-        env:
-          SCALA_PROFILE: ${{ matrix.scalaProfile }}
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-        run:
-          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DskipTests=true -Phudi-platform-service -Pthrift-gen-source $MVN_ARGS -am -pl hudi-utilities
+        uses: ./.github/actions/restore-hudi-build
+        with:
+          name: hudi-build-${{ github.sha }}-jdk11-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-${{ matrix.flinkProfile }}
       - name: UT - hudi-utilities (TestHoodie*)
         if: needs.changes.outputs.relevant == 'true'
         env:
@@ -262,7 +402,7 @@ jobs:
 
   test-common-and-other-modules:
     runs-on: ubuntu-latest
-    needs: changes
+    needs: [changes, build-jdk11-spark35]
     timeout-minutes: 90
     strategy:
       matrix:
@@ -291,20 +431,11 @@ jobs:
       - name: Build Docker image
         if: needs.changes.outputs.relevant == 'true'
         run: docker build -t hudi-ci .
-      - name: Build Project
+      - name: Restore Hudi build
         if: needs.changes.outputs.relevant == 'true'
-        env:
-          SCALA_PROFILE: ${{ matrix.scalaProfile }}
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-        run: |
-          docker run --rm \
-            -v "$GITHUB_WORKSPACE:/hudi" \
-            -v "$HOME/.m2:/root/.m2" \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            -w /hudi \
-            hudi-ci \
-            /bin/bash -c "MAVEN_OPTS='-Xmx8g' mvn clean install -T 2 -D$SCALA_PROFILE -D$SPARK_PROFILE -D$FLINK_PROFILE -Phudi-platform-service -Pthrift-gen-source -DskipTests=true -Dmaven.compiler.maxmem=8192m -Dcheckstyle.skip=true -Drat.skip=true $MVN_ARGS"
+        uses: ./.github/actions/restore-hudi-build
+        with:
+          name: hudi-build-${{ github.sha }}-jdk11-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-${{ matrix.flinkProfile }}
       - name: UT - common and other modules
         if: needs.changes.outputs.relevant == 'true'
         env:
@@ -313,10 +444,10 @@ jobs:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run: |
           docker run --rm \
-            -v "$GITHUB_WORKSPACE:/hudi" \
+            -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" \
             -v "$HOME/.m2:/root/.m2" \
             -v /var/run/docker.sock:/var/run/docker.sock \
-            -w /hudi \
+            -w "$GITHUB_WORKSPACE" \
             hudi-ci \
             /bin/bash -c "MAVEN_OPTS='-Xmx4g' mvn test -Punit-tests -D$SCALA_PROFILE -D$SPARK_PROFILE -D$FLINK_PROFILE -fae -pl $UT_MODULES -Dcheckstyle.skip=true -Drat.skip=true $MVN_ARGS -Djacoco.skip=false"
       - name: UT - hudi-utilities (non-TestHoodie)
@@ -327,10 +458,10 @@ jobs:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run: |
           docker run --rm \
-            -v "$GITHUB_WORKSPACE:/hudi" \
+            -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" \
             -v "$HOME/.m2:/root/.m2" \
             -v /var/run/docker.sock:/var/run/docker.sock \
-            -w /hudi \
+            -w "$GITHUB_WORKSPACE" \
             hudi-ci \
             /bin/bash -c "MAVEN_OPTS='-Xmx4g' mvn test -Punit-tests -D$SCALA_PROFILE -D$SPARK_PROFILE -D$FLINK_PROFILE -fae -Dtest='!TestHoodie*' -Dsurefire.failIfNoSpecifiedTests=false -pl hudi-utilities -Dcheckstyle.skip=true -Drat.skip=true $MVN_ARGS -Djacoco.skip=false"
       - name: FT - common and other modules
@@ -341,10 +472,10 @@ jobs:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run: |
           docker run --rm \
-            -v "$GITHUB_WORKSPACE:/hudi" \
+            -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" \
             -v "$HOME/.m2:/root/.m2" \
             -v /var/run/docker.sock:/var/run/docker.sock \
-            -w /hudi \
+            -w "$GITHUB_WORKSPACE" \
             hudi-ci \
             /bin/bash -c "MAVEN_OPTS='-Xmx4g' mvn test -Pfunctional-tests -D$SCALA_PROFILE -D$SPARK_PROFILE -D$FLINK_PROFILE -fae -pl $FT_MODULES -Dcheckstyle.skip=true -Drat.skip=true $MVN_ARGS -Djacoco.skip=false"
       - name: Generate merged coverage report
@@ -690,7 +821,7 @@ jobs:
 
   test-hudi-hadoop-mr-and-hudi-java-client:
     runs-on: ubuntu-latest
-    needs: changes
+    needs: [changes, build-jdk11-spark35]
     timeout-minutes: 40
     strategy:
       matrix:
@@ -710,14 +841,11 @@ jobs:
           distribution: 'temurin'
           architecture: x64
           cache: maven
-      - name: Build Project
+      - name: Restore Hudi build
         if: needs.changes.outputs.relevant == 'true'
-        env:
-          SCALA_PROFILE: ${{ matrix.scalaProfile }}
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-        run:
-          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DskipTests=true -Phudi-platform-service $MVN_ARGS -am -pl hudi-hadoop-mr,hudi-client/hudi-java-client
+        uses: ./.github/actions/restore-hudi-build
+        with:
+          name: hudi-build-${{ github.sha }}-jdk11-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-${{ matrix.flinkProfile }}
       - name: UT - hudi-hadoop-mr and hudi-client/hudi-java-client
         if: needs.changes.outputs.relevant == 'true'
         env:
@@ -740,7 +868,7 @@ jobs:
 
   test-spark-java17-java-tests-part1:
     runs-on: ubuntu-latest
-    needs: changes
+    needs: [changes, build-java17-spark42]
     strategy:
       matrix:
         include:
@@ -772,14 +900,11 @@ jobs:
           distribution: 'temurin'
           architecture: x64
           cache: maven
-      - name: Build Project
+      - name: Restore Hudi build
         if: needs.changes.outputs.relevant == 'true'
-        env:
-          SCALA_PROFILE: ${{ matrix.scalaProfile }}
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          SPARK_MODULES: ${{ matrix.sparkModules }}
-        run:
-          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+        uses: ./.github/actions/restore-hudi-build
+        with:
+          name: hudi-build-${{ github.sha }}-jdk17-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}
       - name: Java UT 1 - Common & Spark
         if: needs.changes.outputs.relevant == 'true'
         env:
@@ -787,7 +912,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER1 -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER1 -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false -DforkCount=2 '-Djacoco.agent.dest.filename=jacoco-fork${surefire.forkNumber}.exec'
       - name: Generate merged coverage report
         if: always() && needs.changes.outputs.relevant == 'true'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
@@ -802,7 +927,7 @@ jobs:
 
   test-spark-java17-java-tests-part2:
     runs-on: ubuntu-latest
-    needs: changes
+    needs: [changes, build-java17-spark42]
     strategy:
       matrix:
         include:
@@ -831,14 +956,11 @@ jobs:
           distribution: 'temurin'
           architecture: x64
           cache: maven
-      - name: Build Project
+      - name: Restore Hudi build
         if: needs.changes.outputs.relevant == 'true'
-        env:
-          SCALA_PROFILE: ${{ matrix.scalaProfile }}
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          SPARK_MODULES: ${{ matrix.sparkModules }}
-        run:
-          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+        uses: ./.github/actions/restore-hudi-build
+        with:
+          name: hudi-build-${{ github.sha }}-jdk17-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}
       - name: Quickstart Test
         if: needs.changes.outputs.relevant == 'true'
         env:
@@ -853,7 +975,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER2 -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER2 -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false -DforkCount=2 '-Djacoco.agent.dest.filename=jacoco-fork${surefire.forkNumber}.exec'
       - name: Java FTA - Spark
         if: needs.changes.outputs.relevant == 'true'
         env:
@@ -861,7 +983,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false -DforkCount=2 '-Djacoco.agent.dest.filename=jacoco-fork${surefire.forkNumber}.exec'
       - name: Generate merged coverage report
         if: always() && needs.changes.outputs.relevant == 'true'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
@@ -876,7 +998,7 @@ jobs:
 
   test-spark-java17-java-tests-part3:
     runs-on: ubuntu-latest
-    needs: changes
+    needs: [changes, build-java17-spark42]
     strategy:
       matrix:
         include:
@@ -905,14 +1027,11 @@ jobs:
           distribution: 'temurin'
           architecture: x64
           cache: maven
-      - name: Build Project
+      - name: Restore Hudi build
         if: needs.changes.outputs.relevant == 'true'
-        env:
-          SCALA_PROFILE: ${{ matrix.scalaProfile }}
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          SPARK_MODULES: ${{ matrix.sparkModules }}
-        run:
-          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+        uses: ./.github/actions/restore-hudi-build
+        with:
+          name: hudi-build-${{ github.sha }}-jdk17-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}
       - name: Java FTB - Spark
         if: needs.changes.outputs.relevant == 'true'
         env:
@@ -920,7 +1039,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Pfunctional-tests-b -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+          mvn test -Pfunctional-tests-b -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false -DforkCount=2 '-Djacoco.agent.dest.filename=jacoco-fork${surefire.forkNumber}.exec'
       - name: Java FTC - Spark
         if: needs.changes.outputs.relevant == 'true'
         env:
@@ -928,7 +1047,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Pfunctional-tests-c -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+          mvn test -Pfunctional-tests-c -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false -DforkCount=2 '-Djacoco.agent.dest.filename=jacoco-fork${surefire.forkNumber}.exec'
       - name: Generate merged coverage report
         if: always() && needs.changes.outputs.relevant == 'true'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
@@ -943,7 +1062,7 @@ jobs:
 
   test-spark-java17-scala-dml-tests:
     runs-on: ubuntu-latest
-    needs: changes
+    needs: [changes, build-java17-spark42]
     strategy:
       matrix:
         include:
@@ -972,14 +1091,11 @@ jobs:
           distribution: 'temurin'
           architecture: x64
           cache: maven
-      - name: Build Project
+      - name: Restore Hudi build
         if: needs.changes.outputs.relevant == 'true'
-        env:
-          SCALA_PROFILE: ${{ matrix.scalaProfile }}
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          SPARK_MODULES: ${{ matrix.sparkModules }}
-        run:
-          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+        uses: ./.github/actions/restore-hudi-build
+        with:
+          name: hudi-build-${{ github.sha }}-jdk17-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}
       - name: Scala UT - Common & Spark
         if: needs.changes.outputs.relevant == 'true'
         env:
@@ -1010,7 +1126,7 @@ jobs:
 
   test-spark-java17-scala-other-tests:
     runs-on: ubuntu-latest
-    needs: changes
+    needs: [changes, build-java17-spark42]
     strategy:
       matrix:
         include:
@@ -1039,14 +1155,11 @@ jobs:
           distribution: 'temurin'
           architecture: x64
           cache: maven
-      - name: Build Project
+      - name: Restore Hudi build
         if: needs.changes.outputs.relevant == 'true'
-        env:
-          SCALA_PROFILE: ${{ matrix.scalaProfile }}
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          SPARK_MODULES: ${{ matrix.sparkModules }}
-        run:
-          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+        uses: ./.github/actions/restore-hudi-build
+        with:
+          name: hudi-build-${{ github.sha }}-jdk17-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}
       - name: Scala UT - Common & Spark
         if: needs.changes.outputs.relevant == 'true'
         env:
@@ -1077,7 +1190,7 @@ jobs:
 
   test-flink-1:
     runs-on: ubuntu-latest
-    needs: changes
+    needs: [changes, build-flink]
     strategy:
       matrix:
         include:
@@ -1108,15 +1221,11 @@ jobs:
           distribution: 'temurin'
           architecture: x64
           cache: maven
-      - name: Build Project
+      - name: Restore Hudi build
         if: needs.changes.outputs.relevant == 'true'
-        env:
-          SCALA_PROFILE: 'scala-2.12'
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-          FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
-          FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
-        run:
-          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -DskipTests=true $MVN_ARGS
+        uses: ./.github/actions/restore-hudi-build
+        with:
+          name: hudi-build-${{ github.sha }}-jdk11-scala-2.12-${{ matrix.flinkProfile }}-avro${{ matrix.flinkAvroVersion }}-parquet${{ matrix.flinkParquetVersion }}
       - name: Quickstart Test
         if: needs.changes.outputs.relevant == 'true'
         env:
@@ -1133,8 +1242,7 @@ jobs:
           FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
           FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
         if: ${{ endsWith(env.FLINK_PROFILE, '2.2') && needs.changes.outputs.relevant == 'true' }}
-        run: |
-          mvn clean install -T 2 -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -DskipTests=true $MVN_ARGS
+        run:
           mvn verify -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" $FLINK_IT_FILTER1 -pl hudi-flink-datasource/hudi-flink $MVN_ARGS -Djacoco.skip=false
       - name: Generate merged coverage report
         if: always() && endsWith(matrix.flinkProfile, '2.2') && needs.changes.outputs.relevant == 'true'
@@ -1150,7 +1258,7 @@ jobs:
 
   test-flink-2:
     runs-on: ubuntu-latest
-    needs: changes
+    needs: [changes, build-flink]
     strategy:
       matrix:
         include:
@@ -1168,15 +1276,11 @@ jobs:
           distribution: 'temurin'
           architecture: x64
           cache: maven
-      - name: Build Project
+      - name: Restore Hudi build
         if: needs.changes.outputs.relevant == 'true'
-        env:
-          SCALA_PROFILE: 'scala-2.12'
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-          FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
-          FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
-        run:
-          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -DskipTests=true $MVN_ARGS
+        uses: ./.github/actions/restore-hudi-build
+        with:
+          name: hudi-build-${{ github.sha }}-jdk11-scala-2.12-${{ matrix.flinkProfile }}-avro${{ matrix.flinkAvroVersion }}-parquet${{ matrix.flinkParquetVersion }}
       - name: Integration Test 2
         env:
           SCALA_PROFILE: 'scala-2.12'
@@ -1184,8 +1288,7 @@ jobs:
           FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
           FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
         if: ${{ endsWith(env.FLINK_PROFILE, '2.2') && needs.changes.outputs.relevant == 'true' }}
-        run: |
-          mvn clean install -T 2 -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -DskipTests=true $MVN_ARGS
+        run:
           mvn verify -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" $FLINK_IT_FILTER2 -pl hudi-flink-datasource/hudi-flink $MVN_ARGS -Djacoco.skip=false
       - name: Generate merged coverage report
         if: always() && endsWith(matrix.flinkProfile, '2.2') && needs.changes.outputs.relevant == 'true'

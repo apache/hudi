@@ -82,6 +82,8 @@
   </organization>
 
   <properties>
+    <!-- surefire JVMs for the functional-tests profiles; CI passes -DforkCount=2 -->
+    <forkCount>1</forkCount>
     <maven-jar-plugin.version>3.5.0</maven-jar-plugin.version>
     <maven-surefire-plugin.version>3.5.4</maven-surefire-plugin.version>
     <maven-failsafe-plugin.version>3.5.4</maven-failsafe-plugin.version>
@@ -565,6 +567,7 @@
               <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
               <lance.skip.tests>${lance.skip.tests}</lance.skip.tests>
               <vortex.skip.tests>${vortex.skip.tests}</vortex.skip.tests>
+              <hoodie.test.fork.number>fork${surefire.forkNumber}</hoodie.test.fork.number>
             </systemPropertyVariables>
             <useSystemClassLoader>false</useSystemClassLoader>
             <forkedProcessExitTimeoutInSeconds>30</forkedProcessExitTimeoutInSeconds>
@@ -2224,7 +2227,7 @@
             <version>${maven-surefire-plugin.version}</version>
             <configuration combine.self="append">
               <skip>${skipFTs}</skip>
-              <forkCount>1</forkCount>
+              <forkCount>${forkCount}</forkCount>
               <reuseForks>true</reuseForks>
               <groups>functional</groups>
             </configuration>
@@ -2272,7 +2275,7 @@
             <version>${maven-surefire-plugin.version}</version>
             <configuration combine.self="append">
               <skip>${skipFTs}</skip>
-              <forkCount>1</forkCount>
+              <forkCount>${forkCount}</forkCount>
               <reuseForks>true</reuseForks>
               <groups>functional-b</groups>
             </configuration>
@@ -2320,7 +2323,7 @@
             <version>${maven-surefire-plugin.version}</version>
             <configuration combine.self="append">
               <skip>${skipFTs}</skip>
-              <forkCount>1</forkCount>
+              <forkCount>${forkCount}</forkCount>
               <reuseForks>true</reuseForks>
               <groups>functional-c</groups>
             </configuration>
