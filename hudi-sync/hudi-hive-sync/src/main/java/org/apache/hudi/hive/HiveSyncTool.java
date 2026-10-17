@@ -392,7 +392,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
         // find dropped partitions, if any, in the latest commit
         droppedPartitions = syncClient.getDroppedPartitionsSince(lastCommitTimeSynced, lastCommitCompletionTimeSynced);
       } catch (HoodieIOException e) {
-        if (!shouldSyncAllPartitionsAfterReadFailure(lastCommitTimeSynced.get(), e)) {
+        if (!hasFileNotFoundCause(e)) {
           throw e;
         }
         log.warn("Instants since last commit time synced {} were archived while reading the timeline. Listing all partitions in {}",
@@ -408,21 +408,10 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   }
 
   /**
-   * Whether a timeline read failure during an incremental sync means the archiver removed instants the sync still
-   * needed, in which case listing all partitions on storage gives the right answer: either an instant inside the
-   * window vanished (a FileNotFoundException in the cause chain), or the last commit time synced itself fell off
-   * the active timeline. The latter is checked on a fresh listing without replacing the timeline this sync works
-   * from, so the last commit time synced recorded at the end still matches what was synced.
+   * A timeline read that fails because the archiver removed the instant file carries a FileNotFoundException in
+   * its cause chain, directly from the open or wrapped by the Avro or JSON reader on a lazy read. Listing all
+   * partitions on storage is then the right answer; any other read failure is a real error.
    */
-  @VisibleForTesting
-  boolean shouldSyncAllPartitionsAfterReadFailure(String lastCommitTimeSynced, HoodieIOException readFailure) {
-    if (hasFileNotFoundCause(readFailure)) {
-      return true;
-    }
-    return syncClient.getMetaClient().getActiveTimeline().reload()
-        .getCommitsTimeline().filterCompletedInstants().isBeforeTimelineStarts(lastCommitTimeSynced);
-  }
-
   private static boolean hasFileNotFoundCause(Throwable throwable) {
     for (Throwable cause = throwable; cause != null; cause = cause.getCause()) {
       if (cause instanceof FileNotFoundException) {

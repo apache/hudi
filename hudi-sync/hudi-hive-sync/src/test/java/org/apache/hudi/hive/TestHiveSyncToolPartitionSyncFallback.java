@@ -19,7 +19,6 @@
 package org.apache.hudi.hive;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.MockHoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
@@ -46,7 +45,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * Tests the incremental partition sync falling back to a full listing, within the same sync, when a timeline read
- * fails because the archiver removed instants the sync still needed.
+ * fails because the archiver removed an instant the sync still needed.
  */
 class TestHiveSyncToolPartitionSyncFallback {
 
@@ -54,28 +53,8 @@ class TestHiveSyncToolPartitionSyncFallback {
   private static final String LAST_COMMIT_TIME_SYNCED = "102";
 
   @Test
-  void syncsAllPartitionsWhenLastCommitTimeSyncedIsArchivedMidSync() {
-    HoodieActiveTimeline timeline = mock(HoodieActiveTimeline.class);
-    HoodieSyncClient syncClient = mockSyncClient(timeline);
-    // The sync starts with 102 inside the active timeline; the fresh listing after the failed read no longer has it.
-    when(syncClient.getActiveTimeline()).thenReturn(new MockHoodieTimeline(Stream.of("100", "102", "104"), Stream.empty()));
-    when(timeline.reload()).thenReturn(new MockHoodieTimeline(Stream.of("104", "106"), Stream.empty()));
-    when(syncClient.getWrittenPartitionsSince(any(), any())).thenThrow(new HoodieIOException("Could not read commit details"));
-    HiveSyncTool tool = toolWith(syncClient);
-
-    assertFalse(tool.validateAndSyncPartitions(TABLE_NAME, true));
-
-    verify(syncClient).getAllPartitionPathsOnStorage();
-    verify(syncClient, never()).getDroppedPartitionsSince(any(), any());
-    // The timeline this sync works from is left alone, so the last commit time synced recorded later matches it.
-    verify(syncClient.getMetaClient(), never()).reloadActiveTimeline();
-  }
-
-  @Test
-  void syncsAllPartitionsWhenAnInstantInTheWindowIsArchived() {
-    HoodieActiveTimeline timeline = mock(HoodieActiveTimeline.class);
-    HoodieSyncClient syncClient = mockSyncClient(timeline);
-    when(syncClient.getActiveTimeline()).thenReturn(new MockHoodieTimeline(Stream.of("100", "102", "104"), Stream.empty()));
+  void syncsAllPartitionsWhenAnInstantSinceLastSyncIsArchived() {
+    HoodieSyncClient syncClient = mockSyncClient();
     when(syncClient.getWrittenPartitionsSince(any(), any())).thenReturn(Collections.singletonList("p"));
     // The shape of a lazy S3 read of a deleted instant: the FileNotFoundException is two causes deep.
     when(syncClient.getDroppedPartitionsSince(any(), any())).thenThrow(new HoodieIOException("Failed to get partitions cleaned at 103",
@@ -85,31 +64,27 @@ class TestHiveSyncToolPartitionSyncFallback {
     assertFalse(tool.validateAndSyncPartitions(TABLE_NAME, true));
 
     verify(syncClient).getAllPartitionPathsOnStorage();
-    verify(timeline, never()).reload();
+    // The timeline this sync works from is left alone, so the last commit time synced recorded later matches it.
+    verify(syncClient.getMetaClient(), never()).reloadActiveTimeline();
   }
 
   @Test
-  void rethrowsWhenLastCommitTimeSyncedIsStillActive() {
-    HoodieActiveTimeline timeline = mock(HoodieActiveTimeline.class);
-    HoodieSyncClient syncClient = mockSyncClient(timeline);
-    when(syncClient.getActiveTimeline()).thenReturn(new MockHoodieTimeline(Stream.of("100", "102", "104"), Stream.empty()));
-    when(timeline.reload()).thenReturn(new MockHoodieTimeline(Stream.of("100", "102", "104", "106"), Stream.empty()));
+  void rethrowsAReadFailureThatIsNotAMissingInstant() {
+    HoodieSyncClient syncClient = mockSyncClient();
     when(syncClient.getWrittenPartitionsSince(any(), any())).thenReturn(Collections.singletonList("p"));
-    HoodieIOException readFailure = new HoodieIOException("Could not read commit details");
+    HoodieIOException readFailure = new HoodieIOException("Failed to get partitions cleaned at 103", new IOException("Not an Avro data file."));
     when(syncClient.getDroppedPartitionsSince(any(), any())).thenThrow(readFailure);
     HiveSyncTool tool = toolWith(syncClient);
 
     assertSame(readFailure, assertThrows(HoodieIOException.class, () -> tool.validateAndSyncPartitions(TABLE_NAME, true)));
 
-    verify(timeline).reload();
     verify(syncClient, never()).getAllPartitionPathsOnStorage();
   }
 
-  private static HoodieSyncClient mockSyncClient(HoodieActiveTimeline timeline) {
-    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
-    when(metaClient.getActiveTimeline()).thenReturn(timeline);
+  private static HoodieSyncClient mockSyncClient() {
     HoodieSyncClient syncClient = mock(HoodieSyncClient.class);
-    when(syncClient.getMetaClient()).thenReturn(metaClient);
+    when(syncClient.getMetaClient()).thenReturn(mock(HoodieTableMetaClient.class));
+    when(syncClient.getActiveTimeline()).thenReturn(new MockHoodieTimeline(Stream.of("100", "102", "104"), Stream.empty()));
     when(syncClient.getLastCommitTimeSynced(TABLE_NAME)).thenReturn(Option.of(LAST_COMMIT_TIME_SYNCED));
     when(syncClient.getLastCommitCompletionTimeSynced(TABLE_NAME)).thenReturn(Option.empty());
     return syncClient;
