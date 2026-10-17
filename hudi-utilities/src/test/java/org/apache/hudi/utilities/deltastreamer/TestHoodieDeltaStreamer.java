@@ -197,6 +197,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -214,6 +215,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -1772,6 +1774,58 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @MethodSource("continuousModeMorArgs")
   public void testUpsertsMORContinuousMode(HoodieRecordType recordType, String writeTableVersion) throws Exception {
     testUpsertsContinuousMode(HoodieTableType.MERGE_ON_READ, "continuous_mor", recordType, writeTableVersion);
+  }
+
+  /**
+   * The in-process async compactor gets the ingest write client itself, so the ingest thread and the
+   * compactor thread take the table service lock through one TransactionManager and one lock provider
+   * instance. See TestTransactionManagerSharedAcrossThreads for what that means for mutual exclusion.
+   */
+  @Test
+  public void testAsyncCompactorSharesIngestWriteClientAndTransactionManager() throws Exception {
+    String tableBasePath = basePath + "/async_compactor_shared_client";
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
+    cfg.continuousMode = true;
+    cfg.tableType = HoodieTableType.MERGE_ON_READ.name();
+    cfg.configs.add(String.format("%s=%d", SourceTestConfig.MAX_UNIQUE_RECORDS_PROP.key(), 1000));
+    cfg.configs.add(String.format("%s=false", HoodieCleanConfig.AUTO_CLEAN.key()));
+    assertTrue(cfg.isAsyncCompactionEnabled());
+    HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
+    AtomicReference<Object> ingestClient = new AtomicReference<>();
+    AtomicReference<Object> compactorClient = new AtomicReference<>();
+    deltaStreamerTestRunner(ds, cfg, (r) -> {
+      Object service = ds.getIngestionService();
+      Option<?> asyncCompactService = (Option<?>) readField(service, "asyncCompactService");
+      Object streamSync = readField(service, "streamSync");
+      if (asyncCompactService == null || !asyncCompactService.isPresent() || streamSync == null) {
+        return false;
+      }
+      ingestClient.set(readField(streamSync, "writeClient"));
+      compactorClient.set(readField(readField(asyncCompactService.get(), "compactor"), "compactionClient"));
+      return ingestClient.get() != null && compactorClient.get() != null;
+    });
+
+    assertSame(ingestClient.get(), compactorClient.get(),
+        "the async compactor must be handed the ingest thread's own write client");
+    Object tableServiceClient = readField(ingestClient.get(), "tableServiceClient");
+    assertSame(readField(tableServiceClient, "txnManager"), readField(readField(compactorClient.get(), "tableServiceClient"), "txnManager"),
+        "both threads take the table service lock through the same TransactionManager");
+    UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
+  }
+
+  private static Object readField(Object target, String name) {
+    for (Class<?> c = target.getClass(); c != null; c = c.getSuperclass()) {
+      try {
+        java.lang.reflect.Field field = c.getDeclaredField(name);
+        field.setAccessible(true);
+        return field.get(target);
+      } catch (NoSuchFieldException e) {
+        // look in the superclass
+      } catch (IllegalAccessException e) {
+        throw new IllegalStateException(e);
+      }
+    }
+    throw new IllegalStateException("No field " + name + " on " + target.getClass());
   }
 
   @Test
