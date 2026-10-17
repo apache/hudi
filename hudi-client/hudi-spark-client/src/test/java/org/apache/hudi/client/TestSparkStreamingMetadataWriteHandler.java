@@ -23,6 +23,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.storage.StoragePath;
@@ -56,6 +57,9 @@ public class TestSparkStreamingMetadataWriteHandler extends SparkClientFunctiona
     when(mockHoodieTable.getMetaClient()).thenReturn(metaClient);
     HoodieEngineContext engineContext = mock(HoodieEngineContext.class);
     when(mockHoodieTable.getContext()).thenReturn(engineContext);
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    when(writeConfig.getTableName()).thenReturn("test_table");
+    when(mockHoodieTable.getConfig()).thenReturn(writeConfig);
   }
 
   private static Stream<Arguments> coalesceDivisorTestArgs() {
