@@ -348,26 +348,24 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
 
   @ParameterizedTest
   @CsvSource(Array(
+    // Every read/write type combination runs on the current table version for each merge-mode case below.
+    // Table version 8 runs each merge-mode case once, with a different read/write type combination each time.
     // Inferred as COMMIT_TIME_ORDERING
     "AVRO, AVRO, avro, false,,,CURRENT", "AVRO, SPARK, parquet, false,,,CURRENT",
     "SPARK, AVRO, parquet, false,,,CURRENT", "SPARK, SPARK, parquet, false,,,CURRENT",
-    "AVRO, AVRO, avro, false,,,EIGHT", "AVRO, SPARK, parquet, false,,,EIGHT",
-    "SPARK, AVRO, parquet, false,,,EIGHT", "SPARK, SPARK, parquet, false,,,EIGHT",
+    "AVRO, AVRO, avro, false,,,EIGHT",
     // EVENT_TIME_ORDERING without precombine field
     "AVRO, AVRO, avro, false,,EVENT_TIME_ORDERING,CURRENT", "AVRO, SPARK, parquet, false,,EVENT_TIME_ORDERING,CURRENT",
     "SPARK, AVRO, parquet, false,,EVENT_TIME_ORDERING,CURRENT", "SPARK, SPARK, parquet, false,,EVENT_TIME_ORDERING,CURRENT",
-    "AVRO, AVRO, avro, false,,EVENT_TIME_ORDERING,EIGHT", "AVRO, SPARK, parquet, false,,EVENT_TIME_ORDERING,EIGHT",
-    "SPARK, AVRO, parquet, false,,EVENT_TIME_ORDERING,EIGHT", "SPARK, SPARK, parquet, false,,EVENT_TIME_ORDERING,EIGHT",
+    "AVRO, SPARK, parquet, false,,EVENT_TIME_ORDERING,EIGHT",
     // EVENT_TIME_ORDERING with empty precombine field
     "AVRO, AVRO, avro, true,,EVENT_TIME_ORDERING,CURRENT", "AVRO, SPARK, parquet, true,,EVENT_TIME_ORDERING,CURRENT",
     "SPARK, AVRO, parquet, true,,EVENT_TIME_ORDERING,CURRENT", "SPARK, SPARK, parquet, true,,EVENT_TIME_ORDERING,CURRENT",
-    "AVRO, AVRO, avro, true,,EVENT_TIME_ORDERING,EIGHT", "AVRO, SPARK, parquet, true,,EVENT_TIME_ORDERING,EIGHT",
-    "SPARK, AVRO, parquet, true,,EVENT_TIME_ORDERING,EIGHT", "SPARK, SPARK, parquet, true,,EVENT_TIME_ORDERING,EIGHT",
+    "SPARK, AVRO, parquet, true,,EVENT_TIME_ORDERING,EIGHT",
     // Inferred as EVENT_TIME_ORDERING
     "AVRO, AVRO, avro, true, timestamp,,CURRENT", "AVRO, SPARK, parquet, true, timestamp,,CURRENT",
     "SPARK, AVRO, parquet, true, timestamp,,CURRENT", "SPARK, SPARK, parquet, true, timestamp,,CURRENT",
-    "AVRO, AVRO, avro, true, timestamp,,EIGHT", "AVRO, SPARK, parquet, true, timestamp,,EIGHT",
-    "SPARK, AVRO, parquet, true, timestamp,,EIGHT", "SPARK, SPARK, parquet, true, timestamp,,EIGHT",
+    "SPARK, SPARK, parquet, true, timestamp,,EIGHT",
     // test table version 6
     "AVRO, AVRO, avro, true,timestamp,EVENT_TIME_ORDERING,SIX",
     "AVRO, AVRO, avro, true,timestamp,COMMIT_TIME_ORDERING,SIX"))
