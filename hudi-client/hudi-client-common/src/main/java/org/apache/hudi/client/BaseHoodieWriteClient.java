@@ -116,6 +116,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
@@ -1143,7 +1144,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   @VisibleForTesting
   String startCommit(Option<String> providedInstantTime, String actionType, HoodieTableMetaClient metaClient) {
-    if (needsUpgrade(metaClient)) {
+    if (needsUpgradeOrBackfill(metaClient)) {
       // unclear what instant to use, since upgrade does have a given instant.
       executeUsingTxnManager(Option.empty(), () -> tryUpgrade(metaClient, Option.empty()));
     }
@@ -1464,7 +1465,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       ownerInstant = Option.of(metaClient.createNewInstant(HoodieInstant.State.INFLIGHT, CommitUtils.getCommitActionType(operationType,
           metaClient.getTableType()), instantTime.get()));
     }
-    boolean requiresInitTable = needsUpgrade(metaClient) || config.isMetadataTableEnabled();
+    boolean requiresInitTable = needsUpgradeOrBackfill(metaClient) || config.isMetadataTableEnabled();
     if (requiresInitTable) {
       executeUsingTxnManager(ownerInstant, () -> {
         tryUpgrade(metaClient, instantTime);
@@ -1684,7 +1685,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
-   * Upgrades the hoodie table if need be when moving to a new Hudi version.
+   * Upgrades the hoodie table if need be when moving to a new Hudi version, and backfills the table configs
+   * that readers of the table version need but the table does not carry.
    * This method is called within a lock. Try to avoid double locking from within this method.
    * @param metaClient instance of {@link HoodieTableMetaClient} to use.
    * @param instantTime instant time of interest if we have one.
@@ -1710,11 +1712,31 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       metaClient.reloadTableConfig();
       metaClient.reloadActiveTimeline();
     }
+
+    backfillTableConfigs(metaClient);
   }
 
-  private boolean needsUpgrade(HoodieTableMetaClient metaClient) {
+  private void backfillTableConfigs(HoodieTableMetaClient metaClient) {
+    if (!HoodieTableConfig.getMissingKeyGeneratorClass(metaClient.getTableConfig()).isPresent()) {
+      return;
+    }
+    // another writer may have backfilled the table since this meta client loaded its config
+    metaClient.reloadTableConfig();
+    Option<String> missingKeyGeneratorClass = HoodieTableConfig.getMissingKeyGeneratorClass(metaClient.getTableConfig());
+    if (missingKeyGeneratorClass.isPresent()) {
+      log.info("Backfilling {}={} for table {}", HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(),
+          missingKeyGeneratorClass.get(), metaClient.getBasePath());
+      Properties updatedProps = new Properties();
+      updatedProps.setProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), missingKeyGeneratorClass.get());
+      HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), updatedProps);
+      metaClient.reloadTableConfig();
+    }
+  }
+
+  private boolean needsUpgradeOrBackfill(HoodieTableMetaClient metaClient) {
     UpgradeDowngrade upgradeDowngrade = new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper);
-    return upgradeDowngrade.needsUpgrade(config.getWriteVersion());
+    return upgradeDowngrade.needsUpgrade(config.getWriteVersion())
+        || HoodieTableConfig.getMissingKeyGeneratorClass(metaClient.getTableConfig()).isPresent();
   }
 
   /**

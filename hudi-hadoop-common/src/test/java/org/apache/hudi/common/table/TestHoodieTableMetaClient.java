@@ -43,6 +43,9 @@ import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -58,8 +61,10 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.assertTableConfigs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -292,21 +297,62 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     }
   }
 
-  @Test
-  void testTableVersion() throws IOException {
+  @ParameterizedTest
+  @MethodSource("tableVersionsAndKeyGeneratorSettings")
+  void testTableConfigsBasedOnVersion(HoodieTableVersion version, boolean setKeyGeneratorType) throws IOException {
     final String basePath = tempDir.toAbsolutePath() + Path.SEPARATOR + "t1";
-    HoodieTableMetaClient metaClient1 = HoodieTableMetaClient.newTableBuilder()
+    HoodieTableMetaClient.TableBuilder tableBuilder = HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.MERGE_ON_READ.name())
         .setTableName("table-version-test")
-        .setTableVersion(HoodieTableVersion.SIX.versionCode())
-        .initTable(this.metaClient.getStorageConf(), basePath);
-    assertEquals(HoodieTableVersion.SIX, metaClient1.getTableConfig().getTableVersion());
+        .setTableVersion(version.versionCode())
+        .setRecordKeyFields("key")
+        .setPartitionFields("partition")
+        .setOrderingFields("ts");
+    if (setKeyGeneratorType) {
+      tableBuilder.setKeyGeneratorType(KeyGeneratorType.SIMPLE.name());
+    } else {
+      tableBuilder.setKeyGeneratorClassProp(KeyGeneratorType.SIMPLE.getClassName());
+    }
+    HoodieTableMetaClient createdMetaClient = tableBuilder.initTable(this.metaClient.getStorageConf(), basePath);
+    assertEquals(version, createdMetaClient.getTableConfig().getTableVersion());
+    assertTableConfigs(createdMetaClient.getStorage(), basePath, expectedTableConfigs(version));
+  }
 
-    HoodieTableMetaClient metaClient2 = HoodieTableMetaClient.builder()
-        .setConf(this.metaClient.getStorageConf())
-        .setBasePath(basePath)
-        .build();
-    assertEquals(HoodieTableVersion.SIX, metaClient2.getTableConfig().getTableVersion());
+  private static Stream<Arguments> tableVersionsAndKeyGeneratorSettings() {
+    return Stream.of(HoodieTableVersion.SIX, HoodieTableVersion.EIGHT, HoodieTableVersion.NINE, HoodieTableVersion.TEN)
+        .flatMap(version -> Stream.of(Arguments.of(version, false), Arguments.of(version, true)));
+  }
+
+  private static Map<String, String> expectedTableConfigs(HoodieTableVersion version) {
+    Map<String, String> configs = new HashMap<>();
+    configs.put("hoodie.table.name", "table-version-test");
+    configs.put("hoodie.table.type", "MERGE_ON_READ");
+    configs.put("hoodie.table.version", String.valueOf(version.versionCode()));
+    configs.put("hoodie.table.recordkey.fields", "key");
+    configs.put("hoodie.table.partition.fields", "partition");
+    configs.put("hoodie.table.ordering.fields", "ts");
+    configs.put("hoodie.table.keygenerator.type", "SIMPLE");
+    configs.put("hoodie.meta.fields.mode", "ALL");
+    configs.put("hoodie.datasource.write.drop.partition.columns", "false");
+    configs.put("hoodie.archivelog.folder", "archived");
+    configs.put("hoodie.timeline.path", "timeline");
+    configs.put("hoodie.timeline.history.path", "history");
+    if (version.lesserThan(HoodieTableVersion.EIGHT)) {
+      configs.put("hoodie.timeline.layout.version", "1");
+      configs.put("hoodie.table.keygenerator.class", "org.apache.hudi.keygen.SimpleKeyGenerator");
+    } else {
+      configs.put("hoodie.timeline.layout.version", "2");
+      configs.put("hoodie.table.initial.version", String.valueOf(version.versionCode()));
+      configs.put("hoodie.record.merge.mode", "EVENT_TIME_ORDERING");
+    }
+    if (version.lesserThan(HoodieTableVersion.NINE)) {
+      configs.put("hoodie.compaction.payload.class", "org.apache.hudi.common.model.DefaultHoodieRecordPayload");
+      configs.put("hoodie.record.merge.strategy.id", "eeb8d96f-b1e4-49fd-bbf8-28ac514178e5");
+    }
+    if (version.lesserThan(HoodieTableVersion.TEN)) {
+      configs.put("hoodie.populate.meta.fields", "true");
+    }
+    return configs;
   }
 
   @Test
