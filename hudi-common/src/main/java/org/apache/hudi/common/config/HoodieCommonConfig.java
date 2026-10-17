@@ -183,10 +183,12 @@ public class HoodieCommonConfig extends HoodieConfig {
       .withDocumentation("Maximum estimated heap size in bytes, based on file counts and sampled path lengths, "
           + "that the in-memory input-file-slice cache of "
           + "org.apache.hudi.core.read.BaseHoodieTableFileIndex may hold when partitions are listed lazily. Past that "
-          + "budget the least valuable partitions are evicted, which bounds the heap held by a file index that is "
-          + "reused across many queries in a long-lived session (for example, a Spark catalog table whose relation is "
+          + "budget the least valuable partitions are evicted, which limits cached file slices retained between queries "
+          + "in a long-lived session (for example, a Spark catalog table whose relation is "
           + "cached for the lifetime of the session). Evicted partitions are re-listed by the next query that needs "
-          + "them. A value of 0 or less disables the bound. The bound does not apply when all partitions are listed "
+          + "them. A single query still materializes its complete file listing, so this budget does not limit peak "
+          + "memory during a query. A value of 0 or less disables the bound. The bound does not apply when all "
+          + "partitions are listed "
           + "eagerly, nor when hoodie.file.index.cache.use.spillable.map is enabled -- that mode is budgeted by "
           + "hoodie.file.index.cache.spillable.mem instead.");
 

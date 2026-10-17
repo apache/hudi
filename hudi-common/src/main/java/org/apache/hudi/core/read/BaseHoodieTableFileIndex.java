@@ -44,7 +44,6 @@ import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap.DiskMapType;
 import org.apache.hudi.common.util.collection.Pair;
@@ -166,7 +165,6 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   //       refresh has switched this index over to the spillable map, since that branch replaces
   //       [[cachedAllInputFileSlices]] without touching this field. So it is only meaningful alongside
   //       [[cachedAllInputFileSlices]], never on its own.
-  @VisibleForTesting
   private transient volatile Cache<PartitionPath, List<FileSlice>> fileSliceCache = null;
 
   // NOTE: The total size (in bytes) of the files of each partition this index has listed since its last refresh,
