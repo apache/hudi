@@ -193,15 +193,24 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
     fieldValues[0] = recordContext.convertValueToEngineType(recordKey);
     if (!OrderingValues.isCommitTimeOrderingValue(orderingValue)) {
       if (orderingFieldNames.size() == 1) {
-        fieldValues[1] = orderingValue;
+        fieldValues[1] = toDeleteLogFieldValue(orderingValue);
       } else {
         List<Comparable> orderingValues = OrderingValues.getValues((ArrayComparable) orderingValue);
         for (int i = 0; i < orderingValues.size(); i++) {
-          fieldValues[i + 1] = orderingValues.get(i);
+          fieldValues[i + 1] = toDeleteLogFieldValue(orderingValues.get(i));
         }
       }
     }
     return fieldValues;
+  }
+
+  /**
+   * Ordering values come in their comparable form, e.g. HoodieUTF8String on Spark, and a null ordering field as the
+   * default ordering value. The delete row holds the type the engine stores, or NULL for a null field.
+   */
+  private Object toDeleteLogFieldValue(Comparable orderingValue) {
+    return OrderingValues.isCommitTimeOrderingValue(orderingValue)
+        ? null : recordContext.convertValueToEngineType(orderingValue);
   }
 
   public AppendResult flushAppend(Map<HeaderMetadataType, String> header) throws IOException {
