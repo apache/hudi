@@ -70,7 +70,6 @@ jobs:
         with:
           java-version: '25'
           distribution: 'temurin'
-          cache: maven
       - name: Read Trino version
         id: trino-version
         working-directory: trino

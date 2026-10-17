@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSyncTableStrategy;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
@@ -58,6 +59,7 @@ import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 import org.apache.hudi.sync.common.model.PartitionEvent;
 import org.apache.hudi.sync.common.model.PartitionEvent.PartitionEventType;
+import org.apache.hudi.sync.common.util.HoodieMetastoreTableDescriptor;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -919,6 +921,18 @@ public class TestHiveSyncTool {
     reInitHiveSyncClient();
     reSyncHiveTable();
 
+    if (syncAsDataSourceTable) {
+      assertEquals(
+          HoodieMetastoreTableDescriptor.forSnapshotView(
+              hiveClient.getStorageSchema(true),
+              Collections.singletonList("datestr"),
+              HoodieTableType.COPY_ON_WRITE,
+              HiveTestUtil.basePath,
+              true)
+              .getTableParameters(),
+          syncedDescriptorParameters());
+    }
+
     SessionState.start(HiveTestUtil.getHiveConf());
     Driver hiveDriver = new org.apache.hadoop.hive.ql.Driver(HiveTestUtil.getHiveConf());
     String dbTableName = HiveTestUtil.DB_NAME + "." + HiveTestUtil.TABLE_NAME;
@@ -1420,6 +1434,16 @@ public class TestHiveSyncTool {
       }
     }
     assertEquals(2, commentCnt, "hive schema field comment numbers should match the avro schema field doc numbers");
+    assertEquals(
+        HoodieMetastoreTableDescriptor.forSnapshotView(
+            hiveClient.getStorageSchema(true),
+            Collections.singletonList("datestr"),
+            HoodieTableType.COPY_ON_WRITE,
+            HiveTestUtil.basePath,
+            true)
+            .getTableParameters(),
+        syncedDescriptorParameters());
+    assertSparkSchemaPropertyContainsComments("\"comment\":\"name_comment\"", "\"comment\":\"favorite_number_comment\"");
   }
 
   private static final String STANDARD_COLUMNS =
@@ -1600,6 +1624,20 @@ public class TestHiveSyncTool {
     return hiveClient.getMetastoreFieldSchemas(tableName)
         .stream()
         .collect(Collectors.toMap(FieldSchema::getName, FieldSchema::getCommentOrEmpty));
+  }
+
+  private Map<String, String> syncedDescriptorParameters() throws Exception {
+    IMetaStoreClient client = IMetaStoreClientUtil.getMSC(getHiveConf());
+    try {
+      return client.getTable(HiveTestUtil.DB_NAME, HiveTestUtil.TABLE_NAME)
+          .getParameters()
+          .entrySet()
+          .stream()
+          .filter(entry -> entry.getKey().equals("EXTERNAL") || entry.getKey().startsWith("spark.sql."))
+          .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    } finally {
+      client.close();
+    }
   }
 
   @ParameterizedTest
