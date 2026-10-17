@@ -77,6 +77,8 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     .config("hoodie.insert.shuffle.parallelism", "4")
     .config("hoodie.upsert.shuffle.parallelism", "4")
     .config("hoodie.delete.shuffle.parallelism", "4")
+    // Single-process tests have no cross-host clock skew; avoid the 200ms default sleep per instant time.
+    .config("hoodie.time.generator.max_expected_clock_skew_ms", "1")
     .config(sparkConf())
     .getOrCreate()
 
