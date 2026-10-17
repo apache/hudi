@@ -81,6 +81,7 @@ import java.util.function.BiConsumer
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.util.{Failure, Success, Try}
+import scala.util.control.NonFatal
 
 object HoodieSparkSqlWriter {
 
@@ -969,6 +970,26 @@ class HoodieSparkSqlWriterInternal {
       if (failedMetaSyncs.nonEmpty) {
         throw getHoodieMetaSyncException(failedMetaSyncs.asJava)
       }
+    }
+
+    // Spark's own file-based writers invalidate the session cache from
+    // InsertIntoHadoopFsRelationCommand. Hudi writes do not go through that command, so without
+    // this a cached Hudi table keeps serving the pre-write snapshot with no signal to the reader.
+    // Matching by path rather than by plan also reaches entries built from a DataFrame that was
+    // never registered in the catalog, which the refreshTable below cannot see.
+    //
+    // A failure here must not fail the write. The commit has already succeeded, and
+    // CacheManager.recacheByCondition drops the matching entries before it attempts to rebuild
+    // them, so the invalidation has taken effect even when the rebuild throws. The rebuild does
+    // throw when the cached plan is no longer valid against the table it was built from: an
+    // overwrite that replaces a partitioned table with a non-partitioned one leaves the cached
+    // plan holding the old partition schema, and re-optimizing it fails on the new layout.
+    try {
+      spark.catalog.refreshByPath(basePath.toString)
+    } catch {
+      case NonFatal(e) =>
+        log.warn(s"Failed to rebuild the Spark cache entries for $basePath after the write. The "
+          + "stale entries have been dropped and will be recomputed on the next query.", e)
     }
 
     // Since Hive tables are now synced as Spark data source tables which are cached after Spark SQL queries
