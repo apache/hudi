@@ -2627,6 +2627,37 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   def testNestedFieldPartition(): Unit = {
     TestCOWDataSource.runNestedFieldPartitionTest(spark, basePath, storage, "MOR")
   }
+
+  @ParameterizedTest
+  @CsvSource(value = Array("AVRO;bigint;8", "SPARK;bigint;9", "SPARK;string;8", "SPARK;decimal(10,2);9"), delimiter = ';')
+  def testDeleteWithNestedOrderingField(recordType: HoodieRecordType, orderingType: String, tableVersion: Int): Unit = {
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+    val opts = writeOpts ++ Map(
+      TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL,
+      RECORDKEY_FIELD.key -> "id",
+      PARTITIONPATH_FIELD.key -> "",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "meta.ts",
+      HoodieWriteConfig.RECORD_MERGE_MODE.key -> RecordMergeMode.EVENT_TIME_ORDERING.name(),
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> tableVersion.toString,
+      HoodieTableConfig.VERSION.key -> tableVersion.toString,
+      HoodieCompactionConfig.INLINE_COMPACT.key -> "false")
+
+    def write(rows: Seq[(String, String, Boolean)], mode: SaveMode): Unit = {
+      val localSpark = spark
+      import localSpark.implicits._
+      rows.toDF("id", "ts", "_hoodie_is_deleted")
+        .select(col("id"), struct(col("ts").cast(orderingType).as("ts")).as("meta"), col("_hoodie_is_deleted"))
+        .coalesce(1).write.format("hudi").options(opts).mode(mode).save(basePath)
+    }
+
+    write(Seq(("id1", "100", false), ("id2", "100", false)), SaveMode.Overwrite)
+    // The delete of id1 is older than the stored row and must not remove it; the delete of id2 is newer.
+    write(Seq(("id1", "050", true), ("id2", "150", true)), SaveMode.Append)
+
+    val rows = spark.read.format("hudi").options(readOpts).load(basePath).select("id", "meta.ts").collect()
+    assertEquals(Seq("id1"), rows.map(_.getString(0)).toSeq)
+    assertEquals(100, BigDecimal(rows.head.get(1).toString).toInt)
+  }
 }
 
 object TestMORDataSource {
