@@ -21,6 +21,7 @@ package org.apache.hudi.io.cdc;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -185,7 +186,12 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
     if (orderingFieldNames.isEmpty()) {
       return OrderingValues.getDefault();
     }
-    return record.getOrderingValue(recordSchema, recordProperties, orderingFieldNames.toArray(new String[0]));
+    String[] orderingFields = orderingFieldNames.toArray(new String[0]);
+    // Log compaction of an Avro-typed table reads its deletes through the Spark context: their empty records keep
+    // the Spark ordering value next to a Java copy, and only the copy fits the delete row of another record context.
+    return record instanceof HoodieEmptyRecord && record.getRecordType() != recordContext.getEngineRecordType()
+        ? record.getOrderingValueAsJava(recordSchema, recordProperties, orderingFields)
+        : record.getOrderingValue(recordSchema, recordProperties, orderingFields);
   }
 
   private Object[] createDeleteLogFieldValues(String recordKey, Comparable orderingValue) {

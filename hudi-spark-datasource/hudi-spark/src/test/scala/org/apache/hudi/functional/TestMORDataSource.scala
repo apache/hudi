@@ -2027,10 +2027,12 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
         .coalesce(1).write.format("hudi").options(opts).mode(mode).save(basePath)
     }
 
-    write(Seq(("id1", "100", false), ("id2", "100", false)), SaveMode.Overwrite)
+    write(Seq(("id1", "100", false), ("id2", "100", false), ("id3", "100", false)), SaveMode.Overwrite)
     // The delete and the update land in the same file slice, as log blocks or, on version 10, as native log files.
+    // The slice also holds an update of id3 and an older delete of it, so log compaction compares their ordering values.
     write(Seq(("id1", "110", true)), SaveMode.Append)
-    write(Seq(("id2", "120", false)), SaveMode.Append)
+    write(Seq(("id2", "120", false), ("id3", "130", false)), SaveMode.Append)
+    write(Seq(("id3", "125", true)), SaveMode.Append)
 
     val client = DataSourceUtils.createHoodieClient(spark.sparkContext, "", basePath, tableName, opts.asJava)
       .asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
@@ -2046,9 +2048,9 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
 
     // The compacted delete keeps its ordering value: an older update leaves id1 deleted, a newer one brings it back.
     write(Seq(("id1", "105", false)), SaveMode.Append)
-    assertEquals(Map("id2" -> 120), readOrdering())
+    assertEquals(Map("id2" -> 120, "id3" -> 130), readOrdering())
     write(Seq(("id1", "115", false)), SaveMode.Append)
-    assertEquals(Map("id1" -> 115, "id2" -> 120), readOrdering())
+    assertEquals(Map("id1" -> 115, "id2" -> 120, "id3" -> 130), readOrdering())
   }
 
   @ParameterizedTest

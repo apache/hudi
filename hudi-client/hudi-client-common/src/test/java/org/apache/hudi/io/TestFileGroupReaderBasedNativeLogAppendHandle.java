@@ -22,11 +22,9 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
-import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -67,7 +65,7 @@ public class TestFileGroupReaderBasedNativeLogAppendHandle {
     HoodieWriteConfig config = config();
     HoodieTable table = table(config);
     CompactionOperation operation = operation();
-    HoodieReaderContext readerContext = readerContext();
+    HoodieReaderContext readerContext = mock(HoodieReaderContext.class);
     HoodieFileGroupReader reader = mock(HoodieFileGroupReader.class);
     ClosableIterator records = mock(ClosableIterator.class);
     HoodieReadStats readStats = readStats();
@@ -122,7 +120,7 @@ public class TestFileGroupReaderBasedNativeLogAppendHandle {
     try (MockedStatic<HoodieFileGroupReader> fileGroupReaders = mockStatic(HoodieFileGroupReader.class)) {
       fileGroupReaders.when(HoodieFileGroupReader::builder).thenReturn(builder);
       TestableFileGroupReaderHandle handle = new TestableFileGroupReaderHandle(
-          config, table, operation(), readerContext());
+          config, table, operation(), mock(HoodieReaderContext.class));
       assertThrows(HoodieIOException.class, handle::doAppend);
       verify(reader).close();
     }
@@ -142,8 +140,6 @@ public class TestFileGroupReaderBasedNativeLogAppendHandle {
     HoodieStorage storage = mock(HoodieStorage.class);
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
-    RecordContext recordContext = avroRecordContext();
-    when(table.getRecordContextForWrite()).thenReturn(recordContext);
     when(table.getStorage()).thenReturn(storage);
     when(table.getConfig()).thenReturn(config);
     when(table.getMetaClient()).thenReturn(metaClient);
@@ -156,19 +152,6 @@ public class TestFileGroupReaderBasedNativeLogAppendHandle {
     when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.COMMIT_TIME_ORDERING);
     when(tableConfig.getPayloadClassIfPresent()).thenReturn(Option.empty());
     return table;
-  }
-
-  private static HoodieReaderContext readerContext() {
-    HoodieReaderContext readerContext = mock(HoodieReaderContext.class);
-    RecordContext recordContext = avroRecordContext();
-    when(readerContext.getRecordContext()).thenReturn(recordContext);
-    return readerContext;
-  }
-
-  private static RecordContext avroRecordContext() {
-    RecordContext recordContext = mock(RecordContext.class);
-    when(recordContext.getEngineRecordType()).thenReturn(HoodieRecord.HoodieRecordType.AVRO);
-    return recordContext;
   }
 
   private static CompactionOperation operation() {
