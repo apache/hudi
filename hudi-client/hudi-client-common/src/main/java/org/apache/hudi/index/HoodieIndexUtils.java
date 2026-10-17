@@ -27,6 +27,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.index.vector.VectorIndexOptions;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -101,6 +102,8 @@ import static org.apache.hudi.core.index.expression.HoodieExpressionIndex.IDENTI
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_VECTOR_INDEX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_VECTOR_INDEX_PREFIX;
 import static org.apache.hudi.table.action.commit.HoodieDeleteHelper.createDeleteRecord;
 
 /**
@@ -671,6 +674,51 @@ public class HoodieIndexUtils {
         .withIndexOptions(options)
         .withVersion(indexVersion)
         .build();
+  }
+
+  static HoodieIndexDefinition getVectorIndexDefinition(
+      HoodieTableMetaClient metaClient,
+      String userIndexName,
+      Map<String, Map<String, String>> columns,
+      Map<String, String> options) throws Exception {
+    String fullIndexName = userIndexName.startsWith(PARTITION_NAME_VECTOR_INDEX_PREFIX)
+        ? userIndexName
+        : PARTITION_NAME_VECTOR_INDEX_PREFIX + userIndexName;
+    if (indexExists(metaClient, fullIndexName)) {
+      throw new HoodieMetadataIndexException("Index already exists: " + userIndexName);
+    }
+    checkArgument(columns.size() == 1, "Only one vector column can be indexed at a time.");
+    validateEligibilityForVectorIndex(metaClient, columns, userIndexName);
+
+    Map<String, String> normalizedOptions = VectorIndexOptions.validateAndNormalize(options);
+    HoodieIndexVersion indexVersion = HoodieIndexVersion.getCurrentVersion(
+        metaClient.getTableConfig().getTableVersion(), MetadataPartitionType.VECTOR_INDEX);
+    return HoodieIndexDefinition.newBuilder()
+        .withIndexName(fullIndexName)
+        .withIndexType(PARTITION_NAME_VECTOR_INDEX)
+        .withIndexFunction(normalizedOptions.get(VectorIndexOptions.QUANTIZER))
+        .withSourceFields(new ArrayList<>(columns.keySet()))
+        .withIndexOptions(normalizedOptions)
+        .withVersion(indexVersion)
+        .build();
+  }
+
+  static void validateEligibilityForVectorIndex(
+      HoodieTableMetaClient metaClient,
+      Map<String, Map<String, String>> columns,
+      String userIndexName) throws Exception {
+    String columnName = columns.keySet().iterator().next();
+    HoodieSchema tableSchema = new TableSchemaResolver(metaClient).getTableSchema();
+    HoodieSchema fieldSchema = HoodieSchemaUtils.getNestedField(tableSchema, columnName)
+        .orElseThrow(() -> new HoodieMetadataIndexException(String.format(
+            "Cannot create vector index '%s': Column '%s' does not exist in the table schema.",
+            userIndexName, columnName)))
+        .getRight().schema().getNonNullType();
+    if (fieldSchema.getType() != HoodieSchemaType.VECTOR) {
+      throw new HoodieMetadataIndexException(String.format(
+          "Cannot create vector index '%s': Column '%s' has type '%s'; expected VECTOR.",
+          userIndexName, columnName, fieldSchema.getType()));
+    }
   }
 
   static boolean indexExists(HoodieTableMetaClient metaClient, String indexName) {
