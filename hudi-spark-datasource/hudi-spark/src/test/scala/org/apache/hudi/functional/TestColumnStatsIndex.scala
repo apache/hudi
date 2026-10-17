@@ -75,7 +75,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c4","c5","c6","c7","c8")
 
   @ParameterizedTest
-  @MethodSource(Array("testMetadataColumnStatsIndexParams"))
+  @MethodSource(Array("columnStatsIndexParams"))
   def testMetadataColumnStatsIndex(testCase: ColumnStatsTestCase): Unit = {
     withRDDPersistenceValidation {
       val metadataOpts = Map(
@@ -635,7 +635,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
   }
 
   @ParameterizedTest
-  @MethodSource(Array("testTableTypePartitionTypeParams"))
+  @MethodSource(Array("tableTypePartitionTypeParams"))
   def testMetadataColumnStatsIndexInitializationWithUpserts(tableType: HoodieTableType, partitionCol : String, tableVersion: Int): Unit = {
     val testCase = ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion)
     val metadataOpts = Map(
@@ -756,7 +756,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
   }
 
   @ParameterizedTest
-  @MethodSource(Array("testTableTypePartitionTypeParams"))
+  @MethodSource(Array("tableTypePartitionTypeParams"))
   def testMetadataColumnStatsIndexInitializationWithRollbacks(tableType: HoodieTableType, partitionCol : String, tableVersion: Int): Unit = {
     val testCase = ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion)
     val metadataOpts = Map(
@@ -1500,6 +1500,46 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 }
 
 object TestColumnStatsIndex {
+  private val olderTableVersions = Seq(HoodieTableVersion.SIX, HoodieTableVersion.EIGHT, HoodieTableVersion.NINE)
+    .map(_.versionCode())
+
+  /**
+   * Every table type / read mode combination on the current table version. Each older table version runs
+   * both table types once, and the read mode alternates so that both read modes are covered on every version.
+   */
+  def columnStatsIndexParams: java.util.stream.Stream[Arguments] = {
+    val current = HoodieTableVersion.current().versionCode()
+    val latest = for (tableType <- HoodieTableType.values().toSeq; inMemory <- Seq(true, false))
+      yield Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = inMemory, tableVersion = current))
+    val older = olderTableVersions.zipWithIndex.flatMap { case (version, i) =>
+      HoodieTableType.values().toSeq.zipWithIndex.map { case (tableType, j) =>
+        Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = (i + j) % 2 == 0, tableVersion = version))
+      }
+    }
+    java.util.stream.Stream.of(latest ++ older: _*)
+  }
+
+  /**
+   * Every table type / partitioning combination on the current table version. Each older table version runs
+   * both table types once, and the partitioning alternates so that both are covered on every version.
+   * Partitioned MOR also runs on version 6: it is the only older-version case here whose rollback appends a
+   * rollback command block (the log-block path of RollbackHelperV1).
+   */
+  def tableTypePartitionTypeParams: java.util.stream.Stream[Arguments] = {
+    val current = HoodieTableVersion.current().versionCode().toString
+    val partitionCols = Seq("c8", "")
+    val latest = for (tableType <- HoodieTableType.values().toSeq; partitionCol <- partitionCols)
+      yield Arguments.arguments(tableType, partitionCol, current)
+    val older = olderTableVersions.zipWithIndex.flatMap { case (version, i) =>
+      HoodieTableType.values().toSeq.zipWithIndex.map { case (tableType, j) =>
+        Arguments.arguments(tableType, partitionCols((i + j) % 2), version.toString)
+      }
+    }
+    val v6PartitionedMor = Arguments.arguments(
+      HoodieTableType.MERGE_ON_READ, "c8", HoodieTableVersion.SIX.versionCode().toString)
+    java.util.stream.Stream.of(latest ++ older :+ v6PartitionedMor: _*)
+  }
+
   def testMORDeleteBlocksParams: java.util.stream.Stream[Arguments] = {
     val currentVersionCode = HoodieTableVersion.current().versionCode().toString
     java.util.stream.Stream.of(Seq(
