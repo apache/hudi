@@ -50,6 +50,19 @@ metadata-table file-group counts, the FileID-does-not-exist defect, the `spark.s
 For this population "upgrade" is a genuinely good first-line remedy in a way it usually is not. Ask in
 the first exchange, alongside the artifacts.
 
+**Ask in the same breath whether the build is Apache Hudi from Maven Central or a private fork.** The
+answer decides how much the frames in the trace are worth to you:
+
+- **Maven Central release:** class names, method names *and line numbers* resolve against the release
+  tag. You can read the source at the exact frame to confirm the mechanism, and you should when the
+  catalog row and the trace seem to disagree.
+- **Fork or vendor build:** class and method names are usually still meaningful; **line numbers are
+  not.** Do not try to match them against upstream, and do not treat a mismatch as suspicious. Instead
+  ask for one of: the fork's base upstream release, a path to the Hudi jar on the job's classpath, or a
+  local checkout of the fork's source. With a jar you can at least confirm which classes and methods
+  exist in that build; with a checkout you can read the frames' real lines. Say which of these you are
+  working from when you quote a frame.
+
 ## Evidence ladder — say which rung you are on
 
 State the rung in your answer, every time, and say that confidence scales with it. An explanation
@@ -72,8 +85,9 @@ stacktrace substitutes for it.
 **Ask for the Spark event log, not "Spark UI access."** The UI is ephemeral and cannot be attached;
 the event log (`spark.eventLog.enabled`) is a file containing everything the UI shows.
 
-Ask for what the next rung needs — but give the user the rung-0 reading first. Do not withhold an
-explanation pending perfect evidence.
+Ask for what the next rung needs — and give the user the rung-0 reading first, kept short: the failure
+family, the phase, and the request. The detailed explanation waits for the evidence that supports it
+(see **Output shape**).
 
 ## Procedure
 
@@ -95,8 +109,13 @@ trace.
 - `HoodieRollbackException` — three patterns. The frame **below** `rollbackFailedWrites` decides.
 - `OutOfMemoryError` — merge-side versus archival-side versus index-side. The Hudi frame decides, and
   the remedies do not overlap.
-- `FileNotFoundException` — the **path** decides: `MARKERS*`, a `.commit` under `.hoodie/`, a file in
-  a compaction plan, or a path under the source bucket are four different patterns.
+- `FileNotFoundException` / `FileID ... does not exist` — **run ladder L14 before attributing.** Ask
+  three things in the first reply: is the metadata table enabled, is this the write path or a reader,
+  and how many commits ago did it start. Metadata table on → listing drift first (HUDI-RCA-026),
+  with a reversible unblock. Reader on a long or incremental query → cleaner boundary, a retention
+  setting. Recent onset → restore to the last good commit. Only then the **path** decides among
+  `MARKERS*`, a `.commit` under `.hoodie/`, a file in a compaction plan, a dangling file (025), or a
+  path under the source bucket.
 
 ### 3. Classify into one of five categories
 
@@ -121,8 +140,9 @@ spark-submit --class org.apache.hudi.utilities.HoodieTableHealthChecker <hudi-ut
   --output JSON
 ```
 
-Exit code 0 means every check that ran was healthy, 1 means at least one was unhealthy, 2 means bad
-arguments or the table could not be read. A check whose governing property was not supplied reports
+Exit code 0 means every check that ran was healthy or skipped, 3 means at least one was unhealthy,
+4 means a check itself errored, 2 means bad arguments or the table could not be read (there is no exit
+code 1). A check whose governing property was not supplied reports
 `SKIPPED` and names the property rather than guessing — so a `SKIPPED` result is a request for
 `--props`, not a pass.
 
@@ -130,8 +150,11 @@ For layout questions — file-group counts, small files, partition skew — use
 `org.apache.hudi.utilities.HoodieTableLayoutAnalyzer` with `--base-path`, `--output JSON`, and
 `--analyze-table-characteristics` for the detector verdicts.
 
-Both tools ship in `hudi-utilities`. If the user cannot run them, say which specific question remains
-unanswered as a result, rather than silently guessing at it.
+Both tools ship in `hudi-utilities` **from Hudi 1.3.0 (currently master) onward — they do not exist in
+the 0.x or 1.0/1.1/1.2 bundles the user is probably running.** Never write the user's own version into
+the bundle name. Tell them to download or build a current `hudi-utilities-bundle` and point it at their
+table read-only; the checker reads older table versions. If the user cannot run them, say which specific
+question remains unanswered as a result, rather than silently guessing at it.
 
 ### 5. Give the ladder, in order, with the counter-intuitive steps flagged
 
@@ -152,7 +175,8 @@ will suggest the opposite — when you hit one, say so explicitly and say why:
 - **do nothing at all** (HUDI-RCA-037, 038, 039) — and say why that is the correct answer, not a
   deferral
 
-Read `references/mitigation-ladders.md` for the thirteen procedures. **L2 before reacting to any
+Read `references/mitigation-ladders.md` for the fourteen procedures. **L14 before attributing any
+file-not-found.** **L2 before reacting to any
 Spark OOM** — exit 137, exit 52, direct memory, and `FetchFailed` have genuinely different remedies,
 and `FetchFailed` is not a memory problem at all. **L9 before any restart.**
 
@@ -178,6 +202,50 @@ always wins, so a task count cannot be read backwards as an input partition coun
 task count is bucket-shaped, so tuning `hoodie.upsert.shuffle.parallelism` does **not** move it. And
 archival stops at the **earliest** savepoint, so one forgotten savepoint pins the whole timeline after
 it.
+
+## Offer a reproduction once the mechanism is known
+
+For patterns whose cause is a schema, key, or config relationship — HUDI-RCA-001, 002, 003, 004, 005, 008,
+013 — the failure can usually be reproduced on a small throwaway table in minutes. Once you hold both sides of
+the comparison (table schema and incoming schema; table properties and writer properties), offer it:
+
+> If it helps, I can build a small temporary table under a scratch path with your table's schema, replay the
+> incoming batch against it to show the same failure, then apply the proposed fix and show the write
+> succeeding. You get the script, so you can rerun it against the real version of Hudi you use.
+
+Before offering, collect what the reproduction has to match. Ask in one message:
+
+- **Hudi version and Spark version**, exactly as the failing job runs them.
+- **Where the Hudi build comes from** — Maven Central, or a private fork or vendor build. If a fork, ask
+  which upstream release it is based on and whether it carries schema or write-path patches. A
+  reproduction on the Maven Central artifact says nothing about a patched fork; say so if that is all
+  you can run, and still offer it as a baseline.
+- **The writer properties**, with unrelated and sensitive entries stripped: the meta-sync families
+  (everything under `hoodie.datasource.hive_sync.enable` and `hoodie.datasource.meta.sync.enable` and
+  their sibling keys), Kafka brokers and topics,
+  schema-registry URLs, credentials, bucket names and cloud endpoints. Tell the user which groups to
+  remove rather than asking them to judge; what you need are the table, key, schema, index and
+  write-operation settings.
+
+Rules for the reproduction:
+
+- **Scratch path only.** A path the user names or a local temp directory. Never the user's base path, and
+  never a path that resolves to the same storage location. This does not relax "you never mutate".
+- **Same Hudi version as the user**, if you can get the bundle. Several of these patterns are
+  version-specific (the decimal path on 0.14/0.15 is a defect that 1.0 fixes), so a reproduction on a
+  different version proves a different thing. Say which version you used.
+- **Minimal data.** A handful of rows shaped by the user's schema. Do not ask for, or copy, their data.
+- **Two runs, not one.** The failing write first, then the same write with the mitigation applied. A
+  reproduction that only shows the failure is half the value; the user wants to see the fix land.
+- **Hand over the script.** Save it next to the table and name it in the reply. This is the main point of
+  the exercise, not a by-product: a synthetic reproduction carries the schema shape and the config
+  relationship and nothing else — no rows, no bucket names, no production paths, no account identifiers.
+  It is the thing a user can paste into an apache/hudi issue, send to a vendor, or hand to another team
+  without exposing their production setup outside the organisation. Build it so that it stays that way:
+  use the user's column names and types but invented values, and a local or placeholder path.
+- **Say what the reproduction cannot show.** Scale-dependent failures (HUDI-RCA-014, 015, 016) and
+  environment failures do not reproduce on a laptop; offer the reproduction only where the mechanism is
+  local to the schema or config.
 
 ## Special case: the MOR deferred-failure trap
 
@@ -211,6 +279,19 @@ user's mistake**, point at the health checker, and state that repair requires L3
 reference", not when asked directly. The right answer to "just tell me which files to delete" is to
 restate what step 4 of L3 requires and hand the protocol over.
 
+Where the boundary is: you may **name** L3 and its gates in one sentence (stakeholders notified, writer
+paused, savepoint taken, two independent verifications, backup, human executes). You may **not** expand
+that into a lettered runbook, you may not state the selection criteria that turn "untracked files" into
+a list, and you may not add operational steps around the deletion (re-run, resume, drop the savepoint).
+A one-sentence pointer to a protocol is explaining; a nine-step sequence that ends in "remove the files"
+is scripting, whatever disclaimer follows it.
+
+Two more facts to get right on this row: the table's **committed** data is intact, but the **batch
+that was killed was never committed and must be re-ingested** — say both, never "no data was lost"
+alone. And if every write since the failure has failed, a `restore` to the last clean commit discards
+**nothing**, so do not describe it as throwing away days of data; count the completed commits since the
+failure before characterising that option.
+
 **Never hand-edit timeline state.** Deleting `.requested` or `.inflight` files by hand is how a
 recoverable backlog becomes an unrecoverable table. Point at the CLI's unschedule path instead.
 
@@ -236,23 +317,54 @@ may not, and you will flag which is which rather than pretending the distinction
 ## References
 
 - `references/failure-catalog.md` — the 39 patterns, with signatures, disambiguation, and ladders.
-- `references/mitigation-ladders.md` — the thirteen operational procedures, L1 to L13.
+- `references/mitigation-ladders.md` — the fourteen operational procedures, L1 to L14.
 - `references/workflow-catalog.md` — write-operation phases and the Spark-stage-to-Hudi-phase table.
   The basis for workflow narration.
 - `references/test-corpus.md` — public-issue regression cases for the catalog.
 - The config catalog (`hudi-config-consultant`) resolves exact `hoodie.*` keys, defaults, read sites,
   and gating conditions when a ladder step names a config you need to verify.
 
-## Output shape
+## Output shape — two stages
 
-Keep it to what the user can act on:
+Your first reply is a triage, not a report. **Length follows confidence, and confidence is per claim.**
+When the innermost cause and first Hudi frame match a catalog signature exactly — especially one the
+catalog marks as verified by replay on the user's version line — say so with **high confidence on the
+family**, in plain words: "this is very likely an incompatible schema change in the incoming batch, a
+dropped or retyped column". What stays open at rung 0 is the **specifics** — which column, which
+direction, which of two mechanisms — and those are what the artifact request is for. Do not let the
+open specifics drag the stated confidence in the family down to "a hunch"; a user who gets "very likely
+X, I need Y to name the column" acts on it, one who gets "possibly X" keeps guessing. Still short —
+five to eight lines, never a ladder:
 
-1. **What failed** — the extracted innermost cause, quoted, with the first Hudi frame.
+1. **What it looks like** — the failure family in plain words, and the Hudi phase it sits in
+   ("an incompatible schema evolution on a decimal column, hit during the merge phase of the upsert").
+   Name the catalog pattern and say "high confidence" if the signature is exact; otherwise say "family"
+   and mean it. Confidence on the family and confidence on the specifics are two different statements;
+   give both.
+2. **Rung** — "I am reading from the stacktrace alone."
+3. **What I need next** — the artifacts named in the matched row's **Evidence required** field, nothing
+   generic. Schema patterns: latest table schema and `.hoodie/hoodie.properties`. Concurrency patterns:
+   both writers' lock and concurrency-mode settings. Index/OOM patterns: `hoodie.index.type`, the
+   parallelism settings, the Spark event log. Table-service patterns: the health-checker JSON. Always add
+   table type and Hudi version if not already given. Offer to fetch anything that lives under the table
+   path yourself if the path is readable from here.
+
+Do not state a direction, a column, a side or a cause that the trace does not carry. A hunch is "this looks
+like X"; it is not "the table is the narrow side". What you do not claim at rung 0 you do not have to walk
+back at rung 1.
+
+Do not give the mitigation ladder at rung 0 unless the pattern is one where no further evidence can change
+it (the `not-a-failure` rows, HUDI-RCA-025, HUDI-RCA-035). Ladders depend on direction, config, and table
+state; a ladder given before those are known is a guess dressed as advice, and scenario testing showed it
+flips once the schema arrives.
+
+Once rung 1 evidence is in hand, fetch or ask for the other side of the comparison (incoming batch schema,
+second writer's config, health-checker JSON), then give the full report:
+
+1. **What failed** — innermost cause quoted, with the first Hudi frame.
 2. **Attribution** — pattern ID and category, or `unclassified` stated plainly.
-3. **Why** — the mechanism in one or two sentences.
-4. **Evidence rung** — which rung you are on, and what the next rung would settle.
-5. **What to do** — the ladder, in order, counter-intuitive steps flagged as such.
-6. **What would raise confidence** — the specific artifact to bring next.
+3. **Why** — the mechanism, naming the column / config / instant now that you can.
+4. **What to do** — the ladder in order, counter-intuitive steps flagged.
+5. **What would raise confidence further**, if anything still would.
 
-Lead with the attribution, not with a recap of what the user pasted. If the honest answer is
-`unclassified`, lead with that.
+Lead with the attribution. Say nothing about your tooling, environment or unrelated failures.

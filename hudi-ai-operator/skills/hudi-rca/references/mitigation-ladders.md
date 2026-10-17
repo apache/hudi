@@ -127,6 +127,26 @@ blocked accomplishes nothing.
    whose Spark job is hung, cancel it so it can be rolled back. **If the rollback itself is slow, read
    HUDI-RCA-021 before restarting anything** — restarting makes a listing-based rollback strictly
    worse.
+
+   **Check for a pending clustering plan before anything else in this step** — a
+   `<instant>.replacecommit.requested` or `.replacecommit.inflight` with no completed `.replacecommit`.
+   It is the most likely blocker, because clustering is optional: a user enables it, something goes
+   wrong or they change their mind, they turn it off, and the plan it already scheduled stays on the
+   timeline forever. **Nothing else rolls it back** — not the ingestion writer, not the lazy-cleaning
+   rollback of failed writes, not the cleaner. Only a clustering run does. The remedy is to **re-enable
+   clustering with the same scheduling mode that created the plan** (`hoodie.clustering.inline=true` or
+   `hoodie.clustering.async.enabled=true`), let the pending plan execute to a completed
+   `.replacecommit`, and only then disable it again if that is the intent. The alternative is an
+   explicit unschedule through hudi-cli, which is also a human decision. A pending compaction plan on
+   MOR behaves the same way if compaction was turned off after scheduling it; re-enable, let it finish,
+   then decide. Never remove the `.requested` or `.inflight` file by hand.
+
+   Keep the two questions separate. **The RCA is "a long-pending or leftover clustering plan is holding
+   the timeline"** — that is the finding, and it is complete once the instant is named. **How to get rid
+   of a clustering that fails when re-enabled is a different problem**: an unbounded plan is
+   HUDI-RCA-022, a schema or file-group problem inside the plan is its own investigation. Report the
+   blocker, recommend re-enabling, and if the re-enabled run fails, start a new diagnosis on that
+   failure rather than stretching this one.
 5. Compaction also cannot touch a file group a writer is actively writing to. A file group that looks
    permanently skipped may simply be hot.
 
@@ -312,3 +332,73 @@ available answer — and a bare `NullPointerException` with no Hudi or user fram
 specifically **not attributable**. For that case, say so, and note that
 `hoodie.streamer.row.throw.explicit.exceptions=true` will surface the underlying exception on a
 re-run. It costs performance; it is a diagnostic, not a setting, so turn it back off afterwards.
+
+---
+
+## L14 — A file Hudi expects is not on storage: triage in this order
+
+`FileNotFoundException`, `FileID ... does not exist`, or a reader failing on a path under the table all
+mean the same thing at first sight and have at least four different causes with different remedies.
+**Run this ladder before attributing to HUDI-RCA-025.** Three facts decide the branch, so ask for them
+in the first reply: **is the metadata table enabled**, **is the failure on the write path or the read
+path**, and **how many commits ago did it start**.
+
+1. **Metadata table enabled → suspect the listing first.** The most common reason something tries to
+   read a file that is not there is that the metadata table's `files` listing and the actual storage
+   listing have drifted (HUDI-RCA-026). Confirm it before anything else: run the health checker's
+   `mdt-sync` check, or `HoodieMetadataTableValidator` for the affected partition, and compare the two
+   listings for the file in question.
+
+   **If the user is blocked and the table is high-severity**, the fastest safe unblock is:
+   a. **Back up the table first** if its size makes that reasonable — copy the base path, `.hoodie`
+      included. The investigation into *how* the metadata table drifted continues on the copy; without
+      it, the next step destroys the evidence (see L5 step 2).
+   b. **Disable the metadata table on the writer** (`hoodie.metadata.enable=false`) and resume
+      ingestion from storage listings. Say plainly what this does: with
+      `hoodie.metadata.auto.delete.partitions` at its default, the writer deletes the metadata table and
+      **every index in it** (record index, column stats, bloom filters, secondary indexes). Stop every
+      other writer first, and make sure readers are not configured to require the metadata table.
+   c. **Re-enable it after a few clean commits.** Hudi re-bootstraps the metadata table from storage
+      on the next write with it enabled; indexes come back as the writer properties enable them.
+   This is a human-gated change (it drops indexes), but it is reversible and it does not touch data
+   files, which is why it is the unblock and hand-deletion is not.
+
+2. **Read path, long-running or incremental query, a `.clean` inside the query window → cleaner
+   boundary, not a defect.** The query planned its file slices at start, ran for a while, the cleaner
+   completed during that window and removed an older file version the plan still referenced. Signature:
+   read-side frames (the Parquet reader, `FileScanRDD`, the file-group reader), the missing file is
+   **not** the latest version of its file group, and the timeline has a completed `.clean` with a
+   completion time between the query's start and its failure. Remedy: raise cleaner retention past the
+   longest query the table serves — `hoodie.clean.commits.retained`, or switch to
+   `KEEP_LATEST_BY_HOURS` with `hoodie.clean.hours.retained` so the guarantee is in time rather than in
+   commits. For incremental queries, also make sure the consumer's start instant cannot fall behind
+   what the cleaner retains. Nothing to delete, nothing to rebuild.
+
+3. **Metadata table not enabled, write path, deterministic on the same file ID → a dangling file
+   from an incomplete rollback (HUDI-RCA-025).** There is no shortcut on this branch; the only honest
+   path is to get to the bottom of the specific file:
+   a. Find the rollback that targeted the failed commit (the `.rollback` whose `commitsRollback` names
+      it; the driver log line `Rollback of Commits [<instant>] is complete`).
+   b. **Deserialize both halves properly**: the plan in `<instant>.rollback.requested`
+      (`HoodieRollbackPlan`) and the result in `<instant>.rollback` (`HoodieRollbackMetadata`, with
+      per-partition `successDeleteFiles` and `failedDeleteFiles`). Use `hudi-cli` `show rollback`, the
+      timeline inspector, or an Avro decoder — never `grep` or `strings` on these files (L5 steps 4-6).
+   c. Decide which case the file is in: **named in the plan and in the deleted list but still on
+      storage** (the delete did not take, or the store is eventually consistent); **named in the plan
+      but in `failedDeleteFiles` or in neither list** (the rollback did not finish its work); **not in
+      the plan at all** (the rollback never saw it: a task-attempt or marker-less file).
+   d. Report the case and the evidence. The agent may do all of this read-only. Removing the file
+      remains L3, human-driven, and the explain-only block on HUDI-RCA-025 still applies in full.
+
+4. **Recent onset — the last one or two commits, or within the last day → restore is available and
+   usually fastest.** Find the last known-good commit: run incremental or as-of queries commit by commit
+   backwards until the read succeeds, or run the validator as of each instant. Then restore to it
+   (`savepoint` + `restore`, or the `rollback_to_instant` procedure). This rewrites the timeline and
+   discards every commit after that point, so count those commits and say they must be re-ingested; if
+   every write since the onset failed anyway, it discards nothing. Human-gated, L3-grade.
+
+**Do not skip to step 3.** On a table with the metadata table enabled, step 1 is the likely answer and
+is reversible; on a reader, step 2 is a retention setting; and step 4 is often cheaper than either
+investigation when the damage is recent. Step 3 is where you end up when the others are ruled out.
+
+---

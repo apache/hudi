@@ -69,7 +69,7 @@ Four signatures map to more than one pattern. Resolve them here before attributi
 | `ConcurrentModificationException` / `HoodieWriteConflictException` | HUDI-RCA-006 healthy OCC retry **vs** HUDI-RCA-006 no lock provider | **Writer config, not the trace** — the stacktrace is identical. If `hoodie.write.lock.provider` is set and two writers are intended, this is a by-design rejection: retry the application attempt. If no lock provider is set and two writers exist, the table is being corrupted silently and the conflict exception is the lucky case. |
 | `HoodieRollbackException` | HUDI-RCA-027 rollback wedge · HUDI-RCA-026 metadata-table divergence · HUDI-RCA-025 dangling files | **The frame below `rollbackFailedWrites`.** `AsyncCleanerService.waitForCompletion` → cleaner/metadata-table path (026). A lock-provider frame (`LockManager.lock`, `*LockProvider.acquireLock`) → lock problem first (006). `HoodieMergeHandle.getLatestBaseFile` with `FileID ... does not exist` → 025. |
 | `OutOfMemoryError` | HUDI-RCA-015 merge-side · HUDI-RCA-015 archival-side · HUDI-RCA-014 bloom index · HUDI-RCA-021 driver/timeline-server | **The Hudi frame.** `HoodieMergedLogRecordScanner` / `ExternalSpillableMap` → merge side (015a). `TimelineArchiverV1`/`TimelineArchiverV2.writeToFile` (pre-1.0: `HoodieTimelineArchiveLog`) / `HoodieAvroDataBlock.serializeRecords` → **archival side (015b), where adding executor memory is the wrong answer entirely** — the fix is to shrink commit metadata. Kryo / `ExternalSorter` frames under a shuffle read with no Hudi frame → bloom index (014). `Requested array size exceeds VM limit` in a driver Jetty thread → 021, a structural ceiling that more heap cannot move. |
-| `FileNotFoundException` | HUDI-RCA-031 markers · HUDI-RCA-033 archiver race · HUDI-RCA-025 stale plan · HUDI-RCA-036 source file | **The path.** `MARKERS*` or `.hoodie/.temp/` → 031. A `.commit` / `.deltacommit` under `.hoodie/` → 033. A data or log file named in a compaction plan → 025. A path under the **source** bucket, not under the table → 036. A path under the table ending `.log.<n>` → treat as a compaction race, see 025's note. |
+| `FileNotFoundException` / `FileID ... does not exist` | **Run ladder L14 first** (metadata table enabled? read or write path? how recent?) · then HUDI-RCA-026 listing drift · cleaner-boundary read (L14 step 2) · HUDI-RCA-031 markers · HUDI-RCA-033 archiver race · HUDI-RCA-025 dangling file · HUDI-RCA-036 source file | **The path, after L14.** `MARKERS*` or `.hoodie/.temp/` → 031. A `.commit` / `.deltacommit` under `.hoodie/` → 033. A data or log file named in a compaction plan → 025. A path under the **source** bucket, not under the table → 036. A path under the table ending `.log.<n>` → treat as a compaction race, see 025's note. |
 
 ## Cross-cutting trap: MOR defers the failure
 
@@ -103,14 +103,30 @@ data or config; nothing is wrong with Hudi or the cluster.
 - **Root cause:** The incoming Avro schema is not a backward-compatible evolution of the table schema
   under Hudi's rules. Full schema-on-read evolution is off by default, and decimal precision widening
   was rejected outright until the `SchemaChangeUtils.isTypeUpdateAllow` relaxation.
+  The decimal signature has **two distinct mechanisms, and the trace does not say which**:
+  - *(a) Scale growth.* Table `decimal(13,2)`, batch `decimal(13,4)`. On the merge path each **existing**
+    value is rescaled to the batch's scale and then encoded into the batch's schema
+    (`HoodieAvroUtils.rewritePrimaryTypeWithDiffSchemaType`, 0.14.1 line 984: `setScale` then `toFixed`).
+    Trailing zeros count toward precision, so a 12-digit stored value becomes 14 digits and overflows.
+    Deterministic from the code on every version; upgrading does not change the arithmetic.
+  - *(b) Wider batch at the same scale, values in range.* Table `decimal(13,2)`, batch `decimal(14,2)`.
+    This is what #11335 actually is: every reporter had **clustering** enabled, and the replace-commit
+    row writer produced files with inconsistent decimal types on 0.14/0.15. Reproduced by a maintainer,
+    clean on 1.0.0. Spark 3.4+ `round()` on a `decimal(13,2)` column returns `decimal(14,2)`, so an
+    upstream "rounding fix" produces exactly this shape.
+  **Do not name a direction until both the table schema and the batch schema are in hand.**
 - **Evidence required:** stacktrace · writer props · `hoodie.properties` (table schema) · for the MOR
   variant, table state to show which file slices span the change.
 - **Disambiguation:** a compaction frame here means the offending write already committed — see the
   MOR deferred-failure rule above. Distinguish from HUDI-RCA-003 by *direction*: a field the table has
   and the batch lacks is 003; a field whose **type** changed is 001.
 - **Mitigation ladder:**
-  1. Upgrade if the signature is decimal precision — fixed in 1.0.x, and no config works around it on
-     0.14/0.15.
+  1. Decimal, mechanism (b) (wider batch, same scale, clustering on): cast the column back to the
+     table's type as the immediate, lossless unblock; upgrade to 1.0.x as the fix. No config works
+     around it on 0.14/0.15. Ask whether clustering is enabled.
+  1b. Decimal, mechanism (a) (scale grew): casting back re-rounds and discards the new digits, so this
+     is a decision — cast back to restore writes, or widen the table column deliberately as a planned
+     schema change. Upgrading alone does not help.
   2. Set `hoodie.datasource.write.reconcile.schema=true`, with `hoodie.schema.on.read.enable=true`.
   3. Stop dropping or retyping the column in the writer: keep it and write typed nulls.
   4. If MOR and already wedged, the table cannot compact until the pending compaction is unscheduled
@@ -160,26 +176,58 @@ data or config; nothing is wrong with Hudi or the cluster.
 ## HUDI-RCA-003 — Source drops a column the table still has
 
 - **Category:** `input/config` · **Discoverability:** `needs-expertise`
-- **Signature** (innermost cause), **1.x and 0.14.1+** — the write fails on the **driver**, before any
-  Parquet is read:
+- **Signature — verified per version on 2026-10-17 by replaying the same column drop (COW, upsert,
+  default writer configs) against each release:**
+
+  | Hudi | What the user sees | Innermost class | First Hudi frame |
+  |---|---|---|---|
+  | 1.0.1, 1.1.1, master | Fails on the **driver**, before any file is touched. Message **names the field** and prints both schemas. | `MissingSchemaFieldException: Schema validation failed due to missing field. Fields missing from incoming schema: {<record>.<field>}` | `AvroSchemaUtils.checkValidEvolution` (1.0.1 `:529`, 1.1.1 `:631`); on master `HoodieSchemaCompatibility.checkValidEvolution(:159)`; then `HoodieSchemaUtils$.deduceWriterSchemaWithoutReconcile` → `deduceWriterSchema` |
+  | 0.14.0, 0.14.1 | Fails on the driver too, but the message is **generic**: it does not name the field, does not print either schema, and has no `Caused by`. | `SchemaCompatibilityException: Incoming batch schema is not compatible with the table's one` | 0.14.1: `HoodieSchemaUtils$.deduceWriterSchema(:179)`; 0.14.0: `HoodieSparkSqlWriter$.deduceWriterSchema(:582)` |
+  | pre-0.14 | The write **proceeds** and fails later on the merge path while reading the *table's* Parquet (deferred; on MOR deferred to compaction). | `org.apache.parquet.io.InvalidRecordException: Parquet/Avro schema mismatch: Avro field '<field>' not found` | `AvroRecordConverter.getAvroField` → `ParquetReaderIterator.hasNext` → `HoodieMergeHelper.runMerge`, wrapped by `HoodieUpsertException: Error upserting bucketType UPDATE for partition :\d+` |
+
+  Regexes, innermost cause:
   - `org\.apache\.hudi\.exception\.MissingSchemaFieldException: Schema validation failed due to missing field\. Fields missing from incoming schema: \{([^}]+)\}`
-  - Frames: `HoodieSchemaUtils.deduceWriterSchema` → `HoodieSchemaCompatibility.checkSchemaCompatible`
-    (`HoodieSchemaCompatibility.java:117`, and `:159` for the recursive path)
-  - Note `MissingSchemaFieldException extends SchemaCompatibilityException`, so a handler matching the
-    parent still catches it. Match the specific class: it is what names the dropped fields.
-- **Signature, pre-0.14 variant** — the same cause surfacing later, on the merge path while *reading
-  existing Parquet*:
+  - `org\.apache\.hudi\.exception\.SchemaCompatibilityException: Incoming batch schema is not compatible with the table's one`
   - `org\.apache\.parquet\.io\.InvalidRecordException: Parquet/Avro schema mismatch: Avro field '([^']+)' not found`
-  - Frames, in order: `AvroRecordConverter.getAvroField` → `ParquetReaderIterator.hasNext` →
-    `HoodieMergeHelper.runMerge`
-  - Wrapped by `HoodieUpsertException: Error upserting bucketType UPDATE for partition :\d+`
+
+  `MissingSchemaFieldException extends SchemaCompatibilityException`; match the specific class first because
+  it is the one that names the field. **On 0.14.x the trace cannot tell you which column is missing** —
+  the same generic message also fires for a type change the writer rejects. **Confidence at rung 0 is
+  still high on the family**: this exact class + message + `deduceWriterSchema` frame on 0.14.x has one
+  meaning — the incoming batch's schema was rejected against the table's, i.e. a column was dropped or
+  retyped. Say that plainly and up front. What the schemas add is the column name and the kind of change,
+  not the attribution. **This is where the skill earns its place: it names the field the exception
+  withheld.** Do the diff yourself; do not hand the user two schemas and a suggestion.
+
+  **Schema diff procedure (shared with HUDI-RCA-001):**
+  1. **Table schema.** If the table path is readable, get it yourself: the latest completed commit's
+     `extraMetadata.schema` (plain JSON in `.hoodie/*.commit` / `*.deltacommit` before 1.0; Avro-encoded
+     on 1.x, so decode it properly or load the table with Spark and read the schema). Otherwise ask for
+     `spark.read.format("hudi").load(path).printSchema()` or the commit's schema field. Not
+     `hoodie.properties` — `hoodie.table.create.schema` there is the schema at creation, not now.
+  2. **Incoming schema.** Ask for `df.printSchema()` from the failing job, taken right before `save()`,
+     or the source's declared schema (Avro from the registry, JDBC DDL, the Kafka value schema).
+  3. **Diff by field name, then by type**, meta fields excluded, and classify every difference:
+     - in table, not in batch → **dropped** → this row (003);
+     - same name, different type / precision / scale / nullability → **retyped** → HUDI-RCA-001,
+       note the direction and whether it is a decimal;
+     - in batch, not in table → **added** → ordinarily fine; schema evolution adds it. Only a problem if
+       `hoodie.avro.schema.validate` or `reconcile.schema` settings forbid it;
+     - **case differs only** → Hudi does not normalise case; treat as drop + add and say so.
+  4. **Report per column**: name, table type, batch type, the classification, and the fix for that
+     column (typed null re-add, cast back, or accept the evolution). One line each. The user came in
+     with "incompatible"; they leave with "`segment` string was dropped from the feed; re-add it as
+     `cast(null as string)` or set `hoodie.write.set.null.for.missing.columns=true`".
+  5. If more than one column differs, say which one tripped the guard is not knowable from the 0.14
+     message — the guard stops at the first incompatibility — and that all of them need fixing.
 - **Symptom:** Every sync fails after an upstream schema change. On the pre-0.14 variant the exception
   arrives while reading the *table's* Parquet, so operators look at their table instead of their batch.
   On 1.x it fails earlier and names the missing fields directly.
-- **Root cause:** The incoming batch no longer carries a column the table has. On 1.x this is caught as
-  **Step 1** of `checkSchemaCompatible` — a missing-field check gated only by `allowProjection` — which
-  is why it fails before any data file is touched. Before that check existed, the write proceeded and
-  the Parquet-to-Avro converter failed on the merge path instead.
+- **Root cause:** The incoming batch no longer carries a column the table has. 0.14.0 introduced a
+  driver-side compatibility check in `deduceWriterSchema`, so the write fails before any data file is
+  touched, but with a generic message. 1.0 split that check so the missing-field case raises its own
+  exception naming the fields. Before 0.14 there was no driver-side check: the write proceeded and the
+  Parquet-to-Avro converter failed on the merge path instead.
 - **Evidence required:** stacktrace · writer props · last commit metadata (`extraMetadata.schema`) for
   the field's declared type
 - **Disambiguation:** same exception class as HUDI-RCA-001's field-not-found variant. The
@@ -307,7 +355,18 @@ data or config; nothing is wrong with Hudi or the cluster.
   2. **Lower** `hoodie.write.lock.wait_time_ms` to around 5000. Counter-intuitive: a long wait converts
      a fast, retryable rejection into a long stall that looks like a hang, and the later writer has to
      retry regardless.
-  3. For DynamoDB locks, set the endpoint URL explicitly and use on-demand billing; stale lock rows
+  3. **Which provider to recommend.** Cross-process providers that are safe to recommend:
+     `org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider` (keys
+     `hoodie.write.lock.zookeeper.url`, `.port`, `.lock_key`, `.base_path`),
+     `org.apache.hudi.aws.transaction.lock.DynamoDBBasedLockProvider` on AWS, and **on Hudi 1.2.0 or
+     later only** the storage-native `org.apache.hudi.client.transaction.lock.StorageBasedLockProvider`,
+     which needs no extra service because it uses the object store's conditional writes. Do not offer
+     the storage-based provider to a user below 1.2.0; confirm the version before naming it.
+     **Do not recommend `HiveMetastoreBasedLockProvider`.** Its `ALREADY_ACQUIRED` failure is one of
+     this row's own signatures, it leaves stale locks in the metastore that need manual cleanup, and it
+     puts lock traffic on a service that is usually already the bottleneck. If a user is already on it
+     and hitting lock problems, moving off it is part of the fix, not a side note.
+     For DynamoDB locks, set the endpoint URL explicitly and use on-demand billing; stale lock rows
      occasionally need manual removal.
   4. Add retry of the whole application attempt at the orchestrator. The later committer is rejected by
      design and must retry.
@@ -790,7 +849,11 @@ advice, because several ladders here run *downward*.
   1. Run `HoodieTableHealthChecker --checks archival,cleaner,compaction,mdt-compaction --output JSON`
      and read the chain rather than guessing which service is behind.
   2. Finish or roll back pending table-service instants on the data table first; metadata-table archival
-     unblocks behind it.
+     unblocks behind it. **Look for a pending clustering plan first** (`.replacecommit.requested` /
+     `.inflight` without a completed `.replacecommit`): clustering is optional, so it is routinely
+     enabled and later disabled, and a plan it scheduled is rolled back by nothing — not the writer, not
+     lazy failed-write cleaning. Re-enable clustering in the same mode, let the plan complete, then
+     disable if wanted (L4 step 4).
   3. Fix the **cleaner** configuration if `earliestCommitToRetain` is what pins the timeline. Tuning
      archival while the cleaner holds the line does nothing.
   4. For MOR, ensure compaction is actually scheduled and running — inline with
@@ -1098,16 +1161,28 @@ user's mistake, and saying so plainly is part of the job.
   the file exists on storage, its instant is **not** in the active timeline, and its instant **is**
   named by a later `.rollback`.
 - **How this is explained to the user:**
+  0. **Run ladder L14 before attributing here.** If the metadata table is enabled, listing drift
+     (HUDI-RCA-026) is the likelier cause and has a reversible unblock; if the failure is on the read
+     path, it is probably the cleaner boundary; if the onset is recent, restore is cheaper than any
+     investigation. This row is where you land after those are ruled out.
   1. Name it: this is a known timeline-consistency defect class, not a configuration mistake. The error
      message is misleading by design-accident.
   2. Point at `HoodieTableHealthChecker` to characterize the table's current state.
   3. State that repair means removing untracked files, that this is destructive and irreversible, and
-     that it must run inside the **safe-deletion protocol (L3)** — stakeholder notice, writer paused,
-     savepoint taken, **two independent verifications of the deletion premise**, backup copy, then delete.
+     that it must run inside the **safe-deletion protocol (L3)**. Name the protocol and its gates in
+     **one sentence** (stakeholder notice, writer paused, savepoint taken, two independent verifications
+     of the deletion premise, backup copy, human executes). **Do not** expand it into a lettered
+     runbook, do not state the criteria that identify the files, and do not add re-run/resume/drop-
+     savepoint steps around it. The user gets the protocol's name and a human; not a procedure.
   4. State that a **human must drive it**, and that if any verification is ambiguous the correct action
      is to stop: deleting a non-orphan corrupts the table silently.
+  4b. Be precise about data: the table's committed data is intact, **and** the killed batch was never
+     committed, so it must be re-ingested once writes resume. Never say "no data lost" without the
+     second half.
   5. Where the release supports it, note that `rollback` or `restore` to the last clean commit is an
      alternative to hand-deletion — it rewrites the timeline, so it is also expert-only and also L3.
+     Count the completed commits since the failing instant before describing its cost: when every write
+     since the failure has itself failed, restore discards nothing.
   6. Upgrade: the deltacommit-removed-while-requested-remained trigger is fixed in later releases, so
      establishing the version is worthwhile before anything else.
 - **Governing configs:** `hoodie.clean.failed.writes.policy`, `hoodie.rollback.using.markers`,
