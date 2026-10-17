@@ -50,6 +50,11 @@ start_datanode () {
   local dn=$1
   local data_dir="$DOCKER_TEST_DIR/additional_datanode/$dn"
   local pid_dir="$DOCKER_TEST_DIR/pid/datanode-$dn"
+  local datanode_options=()
+  if [ "$SPARK_PROFILE" = "spark4.0" ]; then
+    # Avoid the native shared-memory crash in the Spark 4 image's Hadoop 3.4.0.
+    datanode_options+=(-Ddfs.short.circuit.shared.memory.watcher.interrupt.check.ms=0)
+  fi
 
   echo "::warning::docker_test_java17.sh starting datanode:$dn"
   mkdir -p "$data_dir" "$pid_dir" || return 1
@@ -57,7 +62,8 @@ start_datanode () {
     -Dhadoop.tmp.dir="$data_dir" \
     -Ddfs.datanode.address="localhost:5001$dn" \
     -Ddfs.datanode.http.address="localhost:5008$dn" \
-    -Ddfs.datanode.ipc.address="localhost:5002$dn"
+    -Ddfs.datanode.ipc.address="localhost:5002$dn" \
+    "${datanode_options[@]}"
 }
 
 setup_hdfs () {

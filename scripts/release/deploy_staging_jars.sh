@@ -95,7 +95,8 @@ elif [ "$#" == "1" ]; then
   exit 1
 fi
 
-COMMON_OPTIONS="-DdeployArtifacts=true -DskipTests -DretryFailedDeploymentCount=10"
+# Spark profiles can override skipITs, so explicitly skip integration tests during deployment.
+COMMON_OPTIONS="-DdeployArtifacts=true -DskipTests -DskipITs=true -DretryFailedDeploymentCount=10"
 for v in "${ALL_VERSION_OPTS[@]}"
 do
   # TODO: consider cleaning all modules by listing directories instead of specifying profile
