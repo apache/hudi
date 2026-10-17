@@ -76,13 +76,16 @@ are read-only and ship in `hudi-utilities`.
 **Table services and timeline state:**
 
 ```
-java -cp "$HUDI_UTILITIES_BUNDLE" org.apache.hudi.utilities.HoodieTableHealthChecker \
+spark-submit --class org.apache.hudi.utilities.HoodieTableHealthChecker \
+  --master "local[2]" "$HUDI_UTILITIES_BUNDLE" \
   --base-path <table-path> \
   --props <writer.properties> \
   --output JSON
 ```
 
-Exit `0` every check healthy or skipped, `1` at least one unhealthy, `2` bad arguments or unreadable.
+Exit `0` every check healthy or skipped, `3` at least one unhealthy, `4` a check itself errored, `2` bad
+arguments or unreadable; there is no exit code `1`. Run it through `spark-submit`: the bundle does not
+shade Jackson or the Spark classes it needs, so a bare `java -cp` fails with `NoClassDefFoundError`.
 **A `SKIPPED` check is a request for `--props`, not a pass** — it names the property it needed.
 
 **Layout, file sizes, partition skew:**
@@ -94,19 +97,24 @@ spark-submit --class org.apache.hudi.utilities.HoodieTableLayoutAnalyzer \
   --enable-partition-stats --analyze-table-characteristics --output JSON
 ```
 
-This one needs `spark-submit`; a bare `java -cp` fails with `NoClassDefFoundError`. Add
+Filter stdout before parsing: with `--output JSON` the analyzer prints two
+`# WARNING: Unable to get Instrumentation...` lines (JOL attach) ahead of the JSON, so write to a file
+and drop lines starting with `#`, or pipe through `grep -v '^# WARNING'`. Add
 `--include-row-counts` when you need record counts for index sizing — it is slow without a
 `column_stats` partition, because every Parquet footer is read.
 
 **The event log:**
 
 ```
-java -cp "$HUDI_UTILITIES_BUNDLE" org.apache.hudi.utilities.HoodieSparkEventLogAnalyzer \
+spark-submit --class org.apache.hudi.utilities.HoodieSparkEventLogAnalyzer \
+  --master "local[1]" "$HUDI_UTILITIES_BUNDLE" \
   --event-log <path> --output JSON --output-file <local-file>
 ```
 
-No Spark session needed — it reads a file. Prefer `--output-file`: some logging configurations write
-to stdout and would corrupt the JSON.
+It opens no Spark session — it reads a file — but it needs Spark's jars on the classpath (Jackson among
+them), so a bare `java -cp` on the bundle fails with
+`NoClassDefFoundError: com/fasterxml/jackson/databind/JsonNode`. Prefer `--output-file`: some logging
+configurations write to stdout and would corrupt the JSON.
 
 **If the user already has output, accept it.** `--health-json` and `--layout-json` skip the
 invocation. Use them when the user has a partial environment, cannot run `spark-submit`, or has

@@ -412,6 +412,13 @@ analogue — nothing breaks, ever, which is exactly why nobody finds them.
 - **Caveat:** This bucket contains deduplication too. `BaseWriteHelper` tags only `Tagging:` and
   leaves `deduplicateRecords` untagged, so both land together. A large share may be dedup, not the
   index. `bundledSteps` on the stage says when the tool thinks this is material.
+- **Caveat, SIMPLE index:** the analyzer has no `simpleIndexLookup` sub-phase. `HoodieSimpleIndex`
+  builds its join through generic `HoodieJavaRDD` / `HoodieJavaPairRDD` call sites, so its stages carry
+  whatever job description was current — `workloadProfile` or `tagging` — and a reading keyed on
+  sub-phase names under-counts the index. Recognise it by the measurement: on a replayed 250-file table
+  the three simple-index stages each planned exactly 250 tasks and were 51% of stage wall clock,
+  labelled `workloadProfile`. A task count equal to `layout.totalFiles` inside this bucket is the
+  simple index, whatever the label says.
 
 ## OBS-012 — File-group count is growing without bound
 
