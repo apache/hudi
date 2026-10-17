@@ -737,6 +737,39 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   }
 
   @ParameterizedTest
+  @CsvSource(value = Array("string;8", "string;9", "decimal(10,2);8", "decimal(10,2);9"), delimiter = ';')
+  def testPrecombinedDeleteWithEngineOrdering(orderingType: String, tableVersion: Int): Unit = {
+    val (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.SPARK)
+    val opts = writeOpts ++ Map(
+      TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL,
+      RECORDKEY_FIELD.key -> "id",
+      PARTITIONPATH_FIELD.key -> "",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "ts",
+      HoodieWriteConfig.RECORD_MERGE_MODE.key -> RecordMergeMode.EVENT_TIME_ORDERING.name(),
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> tableVersion.toString,
+      HoodieTableConfig.VERSION.key -> tableVersion.toString,
+      "hoodie.compact.inline" -> "false")
+
+    def write(rows: Seq[(String, String, Boolean)], mode: SaveMode): Unit = {
+      val localSpark = spark
+      import localSpark.implicits._
+      rows.toDF("id", "ts", "_hoodie_is_deleted")
+        .withColumn("ts", col("ts").cast(orderingType))
+        .coalesce(1).write.format("hudi").options(opts).mode(mode).save(basePath)
+    }
+
+    write(Seq(("id1", "100", false), ("id2", "100", false)), SaveMode.Overwrite)
+    // Both keys go through precombine. The older delete must not remove id1's base row.
+    write(Seq(("id1", "050", false), ("id1", "060", true),
+      ("id2", "050", false), ("id2", "110", true)), SaveMode.Append)
+
+    val rows = spark.read.format("hudi").options(readOpts).load(basePath).select("id", "ts").collect()
+    assertEquals(1, rows.length)
+    assertEquals("id1", rows.head.getString(0))
+    assertEquals(0, BigDecimal(rows.head.get(1).toString).compare(BigDecimal(100)))
+  }
+
+  @ParameterizedTest
   @CsvSource(value = Array("AVRO,6", "AVRO,8", "SPARK,6", "SPARK,8"))
   def testPayloadDelete(recordType: HoodieRecordType, tableVersion: Int) {
     var (writeOpts, readOpts) = getWriterReaderOpts(recordType)
