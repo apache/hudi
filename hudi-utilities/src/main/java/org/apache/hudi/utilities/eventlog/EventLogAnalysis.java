@@ -257,11 +257,19 @@ public class EventLogAnalysis {
     if (present.contains(HudiPhase.DEDUP_AND_INDEX_TAGGING)) {
       caveats.add("DEDUP_AND_INDEX_TAGGING covers deduplication and tagging together: BaseWriteHelper "
           + "tags only the tagging step and deduplicateRecords runs untagged immediately before it.");
+      caveats.add("There is no simpleIndexLookup subPhase: HoodieSimpleIndex builds its join through "
+          + "generic HoodieJavaRDD call sites, so its stages carry the job description current at the "
+          + "time, usually workloadProfile or tagging. A stage in this bucket whose planned task count "
+          + "equals the table's base-file count is the simple-index join, whatever its subPhase says.");
     }
     if (present.contains(HudiPhase.DATA_TABLE_WRITE)) {
       caveats.add("DATA_TABLE_WRITE includes the small-file probe, and can also absorb earlier write "
           + "work that was not forced until the commit action ran. The subPhase on each stage says "
           + "which part of the bucket it was.");
+      caveats.add("The stage that actually writes the data files is usually forced by the commit "
+          + "action and so carries the commitStats subPhase; a commitStats stage with one task per "
+          + "written file group and most of the bucket's executor time is the write itself, not the "
+          + "stats collection.");
     }
     if (present.contains(HudiPhase.UNKNOWN)) {
       caveats.add("Some stages carry no recognised job description and are reported as UNKNOWN; they "

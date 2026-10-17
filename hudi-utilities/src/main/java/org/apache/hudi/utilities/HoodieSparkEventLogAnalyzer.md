@@ -26,16 +26,21 @@ stage 14 was bloom-index probing inside an upsert, so its advice stays generic. 
 Spark job description that Hudi publishes for each of its jobs and maps it onto a named operation and
 phase. That join is the point of the tool; the Spark metrics around it are the standard ones.
 
-The tool is **read-only**. It never writes to the event log or to any Hudi table, and it needs no
-`SparkContext` — it reads a file.
+The tool is **read-only**. It never writes to the event log or to any Hudi table, and it opens no
+`SparkContext` — it reads a file. It does, however, need Spark's jars on the classpath (Jackson among
+them), because the utilities bundle does not shade them.
 
 ## Running it
 
 ```
-java -cp "$HUDI_UTILITIES_BUNDLE" \
-  org.apache.hudi.utilities.HoodieSparkEventLogAnalyzer \
+spark-submit --class org.apache.hudi.utilities.HoodieSparkEventLogAnalyzer \
+  --master "local[1]" "$HUDI_UTILITIES_BUNDLE" \
   --event-log /path/to/eventlog --output TABLE
 ```
+
+A bare `java -cp "$HUDI_UTILITIES_BUNDLE" ...` fails with
+`NoClassDefFoundError: com/fasterxml/jackson/databind/JsonNode` unless `$SPARK_HOME/jars/*` is added to
+the classpath.
 
 | Flag | Default | Meaning |
 |---|---|---|
