@@ -39,6 +39,8 @@ import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
+import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.source.ExpressionEvaluators;
 import org.apache.hudi.source.ExpressionPredicates;
@@ -496,7 +498,37 @@ public class HoodieTableSource extends FileIndexReader implements
     if (!ExpressionUtils.isFilteringByAllFields(indexKeyFilters, indexKeyFields)) {
       return Option.empty();
     }
-    return Option.of(PrimaryKeyPruners.getBucketIdFunc(indexKeyFilters, conf));
+    return resolvePrefixedSingleFieldKey()
+        .map(prefixedSingleFieldKey -> PrimaryKeyPruners.getBucketIdFunc(indexKeyFilters, conf, prefixedSingleFieldKey));
+  }
+
+  /**
+   * Resolves whether the bucket writers hash a single record key field as {@code <field>:<value>}.
+   *
+   * @return empty when the form of the stored record keys cannot be determined, which skips the bucket pruning
+   */
+  private Option<Boolean> resolvePrefixedSingleFieldKey() {
+    if (metaClient == null) {
+      // a streaming read of a table that does not exist yet has no record key encoding to follow
+      return Option.empty();
+    }
+    if (!metaClient.getTableConfig().isComplexKeyGenWithSingleRecordKeyField()) {
+      return Option.of(false);
+    }
+    // a single-field complex keygen table stores `<field>:<value>` record keys under the FIELD_PREFIXED encoding;
+    // only the recorded encoding is followed, because deducing it from the data would read files at planning time,
+    // so a table that has not recorded it yet is not pruned by key until a write or an upgrade records it
+    Option<ComplexKeyGenEncoding> encodingOpt = metaClient.getTableConfig().getComplexKeyGenEncoding();
+    if (!encodingOpt.isPresent()) {
+      return Option.empty();
+    }
+    if (!encodingOpt.get().encodesFieldName()) {
+      return Option.of(false);
+    }
+    // Spark writes `<field>:<value>` keys into a FIELD_PREFIXED table, while the Flink key generator follows the job
+    // configuration and writes bare keys for an explicit complex key generator with a single partition field, so
+    // when this job would not prefix, the stored keys can take either form
+    return RowDataKeyGen.isFieldPrefixedSingleRecordKey(conf) ? Option.of(true) : Option.empty();
   }
 
   public InputFormat<RowData, ?> getInputFormat() {
