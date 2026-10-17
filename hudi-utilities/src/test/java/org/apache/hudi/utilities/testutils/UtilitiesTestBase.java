@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.TestAvroOrcUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.hadoop.fs.NioPermissionLocalFileSystem;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.ddl.JDBCExecutor;
 import org.apache.hudi.hive.ddl.QueryBasedDDLExecutor;
@@ -142,6 +143,7 @@ public class UtilitiesTestBase {
 
   public static void initTestServices(boolean needsHdfs, boolean needsHive, boolean needsZookeeper) throws Exception {
     hadoopConf = HoodieTestUtils.getDefaultStorageConf().unwrap();
+    NioPermissionLocalFileSystem.install(hadoopConf);
 
     if (needsZookeeper) {
       zookeeperTestService = new ZookeeperTestService(hadoopConf);
