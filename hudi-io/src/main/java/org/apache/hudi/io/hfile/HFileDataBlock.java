@@ -29,7 +29,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT32;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_BEFORE_BLOCK_FIRST_KEY;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_FOUND;
@@ -114,9 +113,10 @@ public class HFileDataBlock extends HFileBlock {
     while (relativeOffset < uncompressedContentEndRelativeOffset) {
       // Compare the entry key against the lookup key directly on the buffer, without materializing
       // a KeyValue/Key for every scanned entry. Layout at `relativeOffset`: [int keyLength]
-      // [int valueLength][short keyContentLength][key content]...; see KeyValue and Key.
-      int keyContentLength = IOUtils.readShort(byteBuff, relativeOffset + KEY_OFFSET);
-      int keyContentOffset = relativeOffset + KEY_OFFSET + SIZEOF_INT16;
+      // [int valueLength][key]...; see KeyValue. Key's static helpers read the key's own layout.
+      int keyOffset = relativeOffset + KEY_OFFSET;
+      int keyContentLength = Key.contentLength(byteBuff, keyOffset);
+      int keyContentOffset = Key.contentOffset(keyOffset);
       int comp = IOUtils.compareTo(
           byteBuff, keyContentOffset, keyContentLength,
           lookupBytes, lookupContentOffset, lookupContentLength);
