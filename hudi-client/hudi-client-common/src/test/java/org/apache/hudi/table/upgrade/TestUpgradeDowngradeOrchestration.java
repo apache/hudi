@@ -36,6 +36,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.MockedStatic;
 
@@ -113,8 +114,9 @@ class TestUpgradeDowngradeOrchestration {
     }
   }
 
-  @Test
-  void testDowngradeBelowNineRefusesSeveralOrderingFieldsBeforeAnyStep() throws Exception {
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"EIGHT", "SIX"})
+  void testDowngradeBelowNineRefusesSeveralOrderingFieldsBeforeAnyStep(HoodieTableVersion toVersion) throws Exception {
     TestContext testContext = new TestContext(HoodieTableVersion.TEN);
     when(testContext.tableConfig.getOrderingFieldsStr()).thenReturn(Option.of("ts,seq"));
     TrackingUpgradeDowngrade upgradeDowngrade = testContext.trackingUpgradeDowngrade();
@@ -122,9 +124,10 @@ class TestUpgradeDowngradeOrchestration {
     try (MockedStatic<UpgradeDowngradeUtils> upgradeUtils = mockStatic(UpgradeDowngradeUtils.class);
          MockedStatic<HoodieTableConfig> tableConfigStatic = mockStatic(HoodieTableConfig.class)) {
       HoodieUpgradeDowngradeException exception = assertThrows(HoodieUpgradeDowngradeException.class,
-          () -> upgradeDowngrade.run(HoodieTableVersion.EIGHT, "100"));
-      assertTrue(exception.getMessage().startsWith(
-          "Cannot downgrade to table version 8: hoodie.table.ordering.fields=ts,seq orders records on several fields"), exception.getMessage());
+          () -> upgradeDowngrade.run(toVersion, "100"));
+      assertTrue(exception.getMessage().startsWith(String.format(
+          "Cannot downgrade to table version %d: hoodie.table.ordering.fields=ts,seq orders records on several fields", toVersion.versionCode())),
+          exception.getMessage());
 
       // no rollback or compaction, metadata table lookup, version hop or table config write ran before the refusal
       assertTrue(upgradeDowngrade.hops.isEmpty());
