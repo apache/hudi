@@ -77,6 +77,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -171,6 +172,16 @@ public class StreamWriteOperatorCoordinator
    * that the instant write succeed then we can commit it.
    */
   private transient EventBuffers eventBuffers;
+
+  /**
+   * The number of failover resets, an instant request made before a reset is from a failed attempt.
+   */
+  private final AtomicLong resetCount = new AtomicLong();
+
+  /**
+   * The latest checkpoint ID notified as complete.
+   */
+  private final AtomicLong latestCompletedCheckpointId = new AtomicLong(-1L);
 
   /**
    * Task number of the operator.
@@ -277,6 +288,8 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public void close() throws Exception {
+    // drop a blocked instant creation instead of interrupting it
+    invalidateInstantRequests();
     // teardown the resource
     if (executor != null) {
       executor.close();
@@ -321,6 +334,8 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public void notifyCheckpointComplete(long checkpointId) {
+    // record it before the commit wakes up a blocked instant creation that checks whether its request is stale
+    this.latestCompletedCheckpointId.accumulateAndGet(checkpointId, Math::max);
     executor.execute(
         () -> {
           // for streaming mode, commits the ever received events anyway,
@@ -340,6 +355,7 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public void resetToCheckpoint(long checkpointID, byte[] checkpointData) {
+    invalidateInstantRequests();
     if (checkpointData != null) {
       // resetToCheckpoint() is called in two cases:
       // 1. The job is restarted from state, start() will be called later.
@@ -390,6 +406,7 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public void subtaskReset(int i, long resetCkpId) {
+    invalidateInstantRequests();
     // There exists pending instants waiting for recommiting.
     if (tableState.isRecordLevelIndex && !eventBuffers.getPendingInstantsBefore(resetCkpId).isEmpty()) {
       // use sync execution here to make sure the recommitting finishes before RLI bootstrapping
@@ -428,10 +445,19 @@ public class StreamWriteOperatorCoordinator
     // Existing instants must remain available while another checkpoint's creation is blocked.
     Pair<String, EventBuffer> instantTimeAndEventBuffer = this.eventBuffers.getInstantAndEventBuffer(checkpointId);
     if (instantTimeAndEventBuffer == null && !instantRequestExecutor.hasRunningTasks()) {
+      final long resetCountAtRequest = this.resetCount.get();
+      final long completedCheckpointIdAtRequest = this.latestCompletedCheckpointId.get();
       instantRequestExecutor.execute(() -> {
+        if (this.eventBuffers.getInstantAndEventBuffer(checkpointId) != null) {
+          return;
+        }
+        // Wait until the instants of the previous checkpoints are committed.
+        if (!eventBuffers.awaitAllInstantsToCompleteIfNecessary(checkpointId,
+            () -> isStaleInstantRequest(checkpointId, resetCountAtRequest, completedCheckpointIdAtRequest))) {
+          log.info("Drop the stale instant request for checkpoint {}", checkpointId);
+          return;
+        }
         if (this.eventBuffers.getInstantAndEventBuffer(checkpointId) == null) {
-          // Wait until previous instants are committed.
-          eventBuffers.awaitAllInstantsToCompleteIfNecessary();
           this.eventBuffers.initNewEventBuffer(checkpointId, startInstant());
         }
       }, "request instant time");
@@ -457,6 +483,27 @@ public class StreamWriteOperatorCoordinator
           .filter(entry -> entry.getKey() < checkpointId)
           .forEach(entry -> recommitInstant(completedTimeline, entry.getKey(), entry.getValue().getLeft(), entry.getValue().getRight()));
       this.metaClient.reloadActiveTimeline();
+    }
+  }
+
+  /**
+   * Returns whether an instant request is from a writer that is not going to use the instant: a failover has reset
+   * the coordinator since the request, or a checkpoint after the requested one has completed since the request,
+   * which a live writer can not do before it gets the requested instant.
+   */
+  private boolean isStaleInstantRequest(long checkpointId, long resetCountAtRequest, long completedCheckpointIdAtRequest) {
+    return this.resetCount.get() != resetCountAtRequest
+        || this.latestCompletedCheckpointId.get() > Math.max(checkpointId, completedCheckpointIdAtRequest);
+  }
+
+  /**
+   * Makes the pending instant requests stale, so that a blocked instant creation from a failed attempt or a closing
+   * coordinator does not start an instant that no writer is going to use.
+   */
+  private void invalidateInstantRequests() {
+    this.resetCount.incrementAndGet();
+    if (this.eventBuffers != null) {
+      this.eventBuffers.unblock();
     }
   }
 

@@ -32,11 +32,13 @@ import org.apache.flink.configuration.Configuration;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -137,14 +139,34 @@ public class EventBuffers implements Serializable {
     this.eventBuffers.put(checkpointId, Pair.of(instantTime, new EventBuffer(dataWriteParallelism, indexWriteParallelism)));
   }
 
-  public void awaitAllInstantsToCompleteIfNecessary() {
-    if (this.commitGuardOption.isPresent() && nonEmpty()) {
-      this.commitGuardOption.get().blockFor(getPendingInstants());
+  /**
+   * Waits until the instants of all the checkpoints before the given one are committed if the instant generation is blocking.
+   *
+   * <p>Starting a new instant rolls back the inflight instants, so an earlier instant is waited for from the creation
+   * of its buffer until the buffer is reset, whether its write metadata events have been received or not.
+   *
+   * @param checkpointId The checkpoint ID to create the instant for
+   * @param stale        Whether the request is stale, which stops the waiting
+   *
+   * @return false if the request became stale while waiting, true otherwise or if the instant generation is not blocking
+   */
+  public boolean awaitAllInstantsToCompleteIfNecessary(long checkpointId, BooleanSupplier stale) {
+    if (!this.commitGuardOption.isPresent()) {
+      return true;
     }
+    this.commitGuardOption.get().blockFor(() -> stale.getAsBoolean() ? Collections.emptyList() : getPendingInstantsBefore(checkpointId));
+    return !stale.getAsBoolean();
   }
 
   public void reset(long checkpointId) {
     this.eventBuffers.remove(checkpointId);
+    unblock();
+  }
+
+  /**
+   * Wakes up the blocked instant creation to check its request again.
+   */
+  public void unblock() {
     this.commitGuardOption.ifPresent(CommitGuard::unblock);
   }
 
@@ -160,10 +182,6 @@ public class EventBuffers implements Serializable {
         .filter(entry -> entry.getKey() < checkpointId)
         .map(entry -> entry.getValue().getLeft())
         .collect(Collectors.toList());
-  }
-
-  public String getPendingInstants() {
-    return this.eventBuffers.values().stream().map(Pair::getKey).collect(Collectors.joining(","));
   }
 
   /**

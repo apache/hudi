@@ -51,24 +51,6 @@ public class CommitGuard {
   }
 
   /**
-   * Wait until all the pending instants are committed.
-   *
-   * @param instants Current pending instants
-   */
-  public void blockFor(String instants) {
-    lock.lock();
-    try {
-      if (!condition.await(commitAckTimeout, TimeUnit.MILLISECONDS)) {
-        throw new HoodieException("Timeout(" + commitAckTimeout + "ms) while waiting for instants [" + instants + "] to commit");
-      }
-    } catch (InterruptedException e) {
-      throw new HoodieException("Blocking for instants completion is interrupted.", e);
-    } finally {
-      lock.unlock();
-    }
-  }
-
-  /**
    * Wait until the pending instants are committed.
    *
    * @param pendingInstants Supplier to get the pending instants

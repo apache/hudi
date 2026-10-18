@@ -106,6 +106,7 @@ import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
@@ -1160,6 +1161,173 @@ public class TestStreamWriteOperatorCoordinator {
     } finally {
       gate.countDown();
     }
+
+    // The released creation waits for the commit of the existing instant instead of rolling it back.
+    coordinator.handleEventFromOperator(0, createOperatorEvent(0, 1L, existingInstant, "par1", false, true, 0.1));
+    coordinator.handleEventFromOperator(1, createOperatorEvent(1, 1L, existingInstant, "par2", false, true, 0.1));
+    coordinator.notifyCheckpointComplete(2L);
+    String newInstant = requestInstantTime(2L);
+    assertNotEquals(existingInstant, newInstant);
+    assertEquals(existingInstant, TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()));
+    assertEquals(0, TestUtils.getCompletedInstantCount(tempFile.getAbsolutePath(), HoodieTimeline.ROLLBACK_ACTION));
+    assertFalse(ctx.isJobFailed());
+  }
+
+  @Test
+  void testInstantCreationWaitsForEarlierInstantWithoutEvents() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1_000L);
+    coordinator.close();
+    reset();
+    coordinator = startCoordinator(conf, 2);
+    MockOperatorCoordinatorContext ctx = (MockOperatorCoordinatorContext) coordinator.getContext();
+
+    String instant1 = requestInstantTime(1L);
+    // The writers have sent the write metadata of checkpoint 1, but the coordinator has not applied it yet,
+    // so the buffer of instant1 holds no events when the instant of checkpoint 2 is requested.
+    Correspondent.InstantTimeResponse response = CoordinationResponseSerDe.unwrap(
+        coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(2L))
+            .get(10, TimeUnit.SECONDS));
+    assertEquals(0, TestUtils.getCompletedInstantCount(tempFile.getAbsolutePath(), HoodieTimeline.ROLLBACK_ACTION),
+        "The instant creation of checkpoint 2 must not roll back the pending instant of checkpoint 1");
+    assertNull(response.getInstant(), "The instant creation of checkpoint 2 must wait for instant1 to commit");
+    assertEquals(instant1, TestUtils.getLastPendingInstant(tempFile.getAbsolutePath()));
+    // the synchronous creation gives up waiting for instant1 after the commit ack timeout
+    Throwable cause = ctx.getJobFailureReason();
+    while (cause != null && !(cause.getMessage() != null
+        && cause.getMessage().contains("while waiting for instants") && cause.getMessage().contains(instant1))) {
+      cause = cause.getCause();
+    }
+    assertNotNull(cause, "The instant creation of checkpoint 2 must time out waiting for instant1");
+
+    coordinator.handleEventFromOperator(0, createOperatorEvent(0, 1L, instant1, "par1", false, true, 0.1));
+    coordinator.handleEventFromOperator(1, createOperatorEvent(1, 1L, instant1, "par2", false, true, 0.1));
+    coordinator.notifyCheckpointComplete(2L);
+    assertEquals(instant1, TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()));
+
+    String instant2 = requestInstantTime(2L);
+    assertNotEquals(instant1, instant2);
+    assertEquals(0, TestUtils.getCompletedInstantCount(tempFile.getAbsolutePath(), HoodieTimeline.ROLLBACK_ACTION));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"regional", "global", "global_without_checkpoint"})
+  void testInstantRequestFromFailedAttemptIsDropped(String failover) throws Exception {
+    MockOperatorCoordinatorContext ctx = (MockOperatorCoordinatorContext) coordinator.getContext();
+    String instant1 = requestInstantTime(1L);
+    AtomicReference<Thread> workerThread = new AtomicReference<>();
+    NonThrownExecutor worker = newInstantRequestWorker(ctx, workerThread);
+    coordinator.setInstantRequestExecutor(worker);
+
+    // A writer requests the instant of checkpoint 2 while instant1 is pending, then its attempt fails over.
+    Correspondent.InstantTimeResponse pending = CoordinationResponseSerDe.unwrap(
+        coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(2L))
+            .get(1, TimeUnit.SECONDS));
+    assertNull(pending.getInstant());
+    assertTrue(waitUntilInstantCreationBlocks(workerThread));
+    switch (failover) {
+      case "regional":
+        coordinator.subtaskReset(0, 1L);
+        break;
+      case "global":
+        CompletableFuture<byte[]> checkpoint = new CompletableFuture<>();
+        coordinator.checkpointCoordinator(1L, checkpoint);
+        coordinator.resetToCheckpoint(1L, checkpoint.get());
+        break;
+      default:
+        coordinator.resetToCheckpoint(OperatorCoordinator.NO_CHECKPOINT, null);
+    }
+
+    assertTrue(TestUtils.waitUntil(() -> !worker.hasRunningTasks(), 10));
+    assertNull(coordinator.getEventBuffer(2L), "The request of the failed attempt must not create an instant");
+    assertEquals(instant1, TestUtils.getLastPendingInstant(tempFile.getAbsolutePath()));
+    assertEquals(0, TestUtils.getCompletedInstantCount(tempFile.getAbsolutePath(), HoodieTimeline.ROLLBACK_ACTION));
+    assertFalse(ctx.isJobFailed());
+
+    // The restored writers reuse instant1, which the next checkpoint commits.
+    assertEquals(instant1, requestInstantTime(1L));
+    coordinator.handleEventFromOperator(0, createOperatorEvent(0, 1L, instant1, "par1", false, true, 0.1));
+    coordinator.handleEventFromOperator(1, createOperatorEvent(1, 1L, instant1, "par2", false, true, 0.1));
+    coordinator.notifyCheckpointComplete(2L);
+    assertEquals(instant1, TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()));
+    assertNotEquals(instant1, requestInstantTime(2L));
+    assertEquals(0, TestUtils.getCompletedInstantCount(tempFile.getAbsolutePath(), HoodieTimeline.ROLLBACK_ACTION));
+  }
+
+  @Test
+  void testInstantRequestFromFailedAttemptIsDroppedBeforeItRuns() throws Exception {
+    MockOperatorCoordinatorContext ctx = (MockOperatorCoordinatorContext) coordinator.getContext();
+    String instant1 = requestInstantTime(1L);
+    CountDownLatch gate = new CountDownLatch(1);
+    NonThrownExecutor worker = new GatedInstantRequestExecutor(
+        Mockito.mock(Logger.class),
+        (errMsg, t) -> ctx.failJob(new HoodieException(errMsg, t)), gate);
+    coordinator.setInstantRequestExecutor(worker);
+
+    // The failover resets the coordinator before the instant creation requested by the failed attempt starts.
+    try {
+      Correspondent.InstantTimeResponse pending = CoordinationResponseSerDe.unwrap(
+          coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(2L))
+              .get(1, TimeUnit.SECONDS));
+      assertNull(pending.getInstant());
+      coordinator.subtaskReset(0, 1L);
+    } finally {
+      gate.countDown();
+    }
+
+    assertTrue(TestUtils.waitUntil(() -> !worker.hasRunningTasks(), 10));
+    assertNull(coordinator.getEventBuffer(2L), "The request of the failed attempt must not create an instant");
+    assertEquals(instant1, TestUtils.getLastPendingInstant(tempFile.getAbsolutePath()));
+    assertEquals(0, TestUtils.getCompletedInstantCount(tempFile.getAbsolutePath(), HoodieTimeline.ROLLBACK_ACTION));
+    assertFalse(ctx.isJobFailed());
+  }
+
+  @Test
+  void testInstantRequestAfterFailoverDroppedOnceLaterCheckpointCompletes() throws Exception {
+    MockOperatorCoordinatorContext ctx = (MockOperatorCoordinatorContext) coordinator.getContext();
+    String instant1 = requestInstantTime(1L);
+    coordinator.subtaskReset(0, 1L);
+    AtomicReference<Thread> workerThread = new AtomicReference<>();
+    NonThrownExecutor worker = newInstantRequestWorker(ctx, workerThread);
+    coordinator.setInstantRequestExecutor(worker);
+
+    // A task of the failed attempt that is still running requests the instant of checkpoint 2 after the failover.
+    Correspondent.InstantTimeResponse pending = CoordinationResponseSerDe.unwrap(
+        coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(2L))
+            .get(1, TimeUnit.SECONDS));
+    assertNull(pending.getInstant());
+    assertTrue(waitUntilInstantCreationBlocks(workerThread));
+
+    // The restored writers reuse instant1, and checkpoint 3 commits it, which no writer waiting for checkpoint 2 can complete.
+    assertEquals(instant1, requestInstantTime(1L));
+    coordinator.handleEventFromOperator(0, createOperatorEvent(0, 1L, instant1, "par1", false, true, 0.1));
+    coordinator.handleEventFromOperator(1, createOperatorEvent(1, 1L, instant1, "par2", false, true, 0.1));
+    coordinator.notifyCheckpointComplete(3L);
+
+    assertTrue(TestUtils.waitUntil(() -> !worker.hasRunningTasks(), 10));
+    assertNull(coordinator.getEventBuffer(2L), "The stale request of checkpoint 2 must not create an instant");
+    assertEquals(instant1, TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()));
+    assertEquals(0, TestUtils.getCompletedInstantCount(tempFile.getAbsolutePath(), HoodieTimeline.ROLLBACK_ACTION));
+    assertFalse(ctx.isJobFailed());
+    assertNotEquals(instant1, requestInstantTime(3L));
+  }
+
+  @Test
+  void testCloseDropsBlockedInstantCreation() throws Exception {
+    MockOperatorCoordinatorContext ctx = (MockOperatorCoordinatorContext) coordinator.getContext();
+    String instant1 = requestInstantTime(1L);
+    AtomicReference<Thread> workerThread = new AtomicReference<>();
+    coordinator.setInstantRequestExecutor(newInstantRequestWorker(ctx, workerThread));
+    Correspondent.InstantTimeResponse pending = CoordinationResponseSerDe.unwrap(
+        coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(2L))
+            .get(1, TimeUnit.SECONDS));
+    assertNull(pending.getInstant());
+    assertTrue(waitUntilInstantCreationBlocks(workerThread));
+
+    coordinator.close();
+    assertFalse(ctx.isJobFailed(), "Closing the coordinator must drop the blocked instant creation instead of failing the job");
+    assertEquals(instant1, TestUtils.getLastPendingInstant(tempFile.getAbsolutePath()));
+    coordinator = startCoordinator(TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()), 2);
   }
 
   // -------------------------------------------------------------------------
@@ -1261,6 +1429,27 @@ public class TestStreamWriteOperatorCoordinator {
         action.run();
       }, actionName, actionParams);
     }
+  }
+
+  /**
+   * Returns a real single-thread instant-request worker that keeps a reference to its thread.
+   */
+  private static NonThrownExecutor newInstantRequestWorker(MockOperatorCoordinatorContext ctx, AtomicReference<Thread> workerThread) {
+    return NonThrownExecutor.builder(Mockito.mock(Logger.class))
+        .threadFactory(runnable -> {
+          Thread thread = new Thread(runnable, "instant-request");
+          workerThread.set(thread);
+          return thread;
+        })
+        .exceptionHook((errMsg, t) -> ctx.failJob(new HoodieException(errMsg, t)))
+        .build();
+  }
+
+  /**
+   * Waits until the instant creation blocks on the commit of an earlier instant.
+   */
+  private static boolean waitUntilInstantCreationBlocks(AtomicReference<Thread> workerThread) throws InterruptedException {
+    return TestUtils.waitUntil(() -> workerThread.get() != null && workerThread.get().getState() == Thread.State.TIMED_WAITING, 10);
   }
 
   private String mockWriteWithMetadata(long checkpointId) {
