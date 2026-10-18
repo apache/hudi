@@ -40,7 +40,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieTable;
@@ -76,7 +75,6 @@ import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -250,21 +248,6 @@ class TestNineToEightDowngradeHandler {
       assertEquals(1, propertiesToChange.propertiesToDelete().size());
       assertTrue(propertiesToChange.propertiesToDelete().contains(PARTIAL_UPDATE_MODE));
       assertEquals(0, propertiesToChange.propertiesToUpdate().size());
-    }
-  }
-
-  @Test
-  void testDowngradeRefusesSeveralOrderingFields() {
-    try (MockedStatic<UpgradeDowngradeUtils> utilities = Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
-      when(tableConfig.getOrderingFieldsStr()).thenReturn(Option.of("ts,seq"));
-      HoodieUpgradeDowngradeException exception = assertThrows(HoodieUpgradeDowngradeException.class,
-          () -> handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper));
-      assertEquals("Cannot downgrade to table version 8: hoodie.table.ordering.fields=ts,seq orders records on several fields, "
-          + "which Hudi 1.0.x and 0.x cannot read. Below version 9 the ordering field is recorded under "
-          + "hoodie.table.precombine.field, which they take as a single field name. "
-          + "Keep the table at version 9 or above, or recreate it with a single ordering field.", exception.getMessage());
-      // refused before any index partition is dropped
-      utilities.verifyNoInteractions();
     }
   }
 

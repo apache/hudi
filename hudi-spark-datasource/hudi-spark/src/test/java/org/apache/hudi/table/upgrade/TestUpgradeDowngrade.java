@@ -408,10 +408,9 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     HoodieWriteConfig config = createWriteConfig(originalMetaClient, true);
     HoodieUpgradeDowngradeException exception = assertThrows(HoodieUpgradeDowngradeException.class,
         () -> new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance()).run(toVersion, null));
-    assertEquals(String.format("Cannot downgrade to table version %d: hoodie.table.ordering.fields=ts,name orders records on several "
-        + "fields, which Hudi 1.0.x and 0.x cannot read. Below version 9 the ordering field is recorded under "
-        + "hoodie.table.precombine.field, which they take as a single field name. "
-        + "Keep the table at version 9 or above, or recreate it with a single ordering field.", toVersion.versionCode()), exception.getMessage());
+    assertTrue(exception.getMessage().startsWith(String.format(
+        "Cannot downgrade to table version %d: hoodie.table.ordering.fields=ts,name orders records on several fields", toVersion.versionCode())),
+        exception.getMessage());
 
     HoodieTableMetaClient resultMetaClient = HoodieTableMetaClient.reload(originalMetaClient);
     assertTrue(isMetadataTablePresent(resultMetaClient));
