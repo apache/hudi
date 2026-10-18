@@ -124,6 +124,83 @@ public class SchemaRepair {
     }
   }
 
+  /**
+   * Re-types every decimal leaf of {@code requestedSchema} that {@code fileSchema} stores as INT32 or INT64 to that
+   * physical type, so the projection matches the column chunks. parquet-avro derives FIXED_LEN_BYTE_ARRAY or
+   * BINARY for an Avro decimal, which the file does not have for an integer-backed column. Returns the same
+   * instance when nothing changes.
+   */
+  public static MessageType alignDecimalPhysicalTypes(MessageType requestedSchema, MessageType fileSchema) {
+    List<Type> alignedFields = alignFields(requestedSchema.getFields(), fileSchema);
+    if (alignedFields == null) {
+      return requestedSchema;
+    }
+    return new MessageType(requestedSchema.getName(), alignedFields);
+  }
+
+  /**
+   * Whether {@code type} is a DECIMAL-annotated INT32 or INT64 leaf.
+   */
+  public static boolean isIntegerBackedDecimal(PrimitiveType type) {
+    PrimitiveType.PrimitiveTypeName typeName = type.getPrimitiveTypeName();
+    return (typeName == PrimitiveType.PrimitiveTypeName.INT32 || typeName == PrimitiveType.PrimitiveTypeName.INT64)
+        && type.getLogicalTypeAnnotation() instanceof LogicalTypeAnnotation.DecimalLogicalTypeAnnotation;
+  }
+
+  /**
+   * Whether {@code type} is, or contains at any depth, a DECIMAL-annotated INT32 or INT64 leaf.
+   */
+  public static boolean containsIntegerBackedDecimal(Type type) {
+    if (type.isPrimitive()) {
+      return isIntegerBackedDecimal(type.asPrimitiveType());
+    }
+    return type.asGroupType().getFields().stream().anyMatch(SchemaRepair::containsIntegerBackedDecimal);
+  }
+
+  private static List<Type> alignFields(List<Type> requestedFields, GroupType fileGroup) {
+    List<Type> alignedFields = null;
+    for (int i = 0; i < requestedFields.size(); i++) {
+      Type requestedField = requestedFields.get(i);
+      Type aligned = fileGroup.containsField(requestedField.getName())
+          ? alignField(requestedField, fileGroup.getType(requestedField.getName()))
+          : requestedField;
+      if (alignedFields == null && aligned != requestedField) {
+        alignedFields = new ArrayList<>(requestedFields.subList(0, i));
+      }
+      if (alignedFields != null) {
+        alignedFields.add(aligned);
+      }
+    }
+    return alignedFields;
+  }
+
+  private static Type alignField(Type requestedField, Type fileField) {
+    if (requestedField.isPrimitive() && fileField.isPrimitive()) {
+      PrimitiveType filePrimitive = fileField.asPrimitiveType();
+      if (isIntegerBackedDecimal(filePrimitive)
+          && requestedField.getLogicalTypeAnnotation() instanceof LogicalTypeAnnotation.DecimalLogicalTypeAnnotation
+          && requestedField.asPrimitiveType().getPrimitiveTypeName() != filePrimitive.getPrimitiveTypeName()) {
+        Types.PrimitiveBuilder<PrimitiveType> aligned = Types.primitive(filePrimitive.getPrimitiveTypeName(), requestedField.getRepetition())
+            .as(filePrimitive.getLogicalTypeAnnotation());
+        if (requestedField.getId() != null) {
+          aligned = aligned.id(requestedField.getId().intValue());
+        }
+        return aligned.named(requestedField.getName());
+      }
+      return requestedField;
+    }
+    if (!requestedField.isPrimitive() && !fileField.isPrimitive()) {
+      GroupType requestedGroup = requestedField.asGroupType();
+      List<Type> alignedFields = alignFields(requestedGroup.getFields(), fileField.asGroupType());
+      if (alignedFields == null) {
+        return requestedField;
+      }
+      return new GroupType(requestedGroup.getRepetition(), requestedGroup.getName(), requestedGroup.getLogicalTypeAnnotation(),
+          alignedFields, requestedGroup.getId());
+    }
+    return requestedField;
+  }
+
   private static PrimitiveType repairPrimitiveType(PrimitiveType fileSchemaPrimitiveType, PrimitiveType tableSchemaPrimitiveType) {
     // Quick check if repair is needed (no allocations)
     if (needsLogicalTypeRepair(fileSchemaPrimitiveType, tableSchemaPrimitiveType)) {

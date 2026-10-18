@@ -20,20 +20,28 @@ package org.apache.parquet.avro;
 
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.conf.ParquetConfiguration;
+import org.apache.parquet.io.api.RecordMaterializer;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.SchemaRepair;
 import org.apache.parquet.schema.Type;
 
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 
 /**
  * Support to avro-record read parquet-log which written by spark-record.
@@ -42,16 +50,20 @@ import java.util.Map;
  */
 public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
 
+  private static final String AVRO_READ_SCHEMA_KEY = "avro.read.schema";
+  private static final MethodHandle PARENT_PREPARE_FOR_READ = lookupParentPrepareForRead();
+
+  private final GenericData model;
   private Option<MessageType> tableSchema;
 
   public HoodieAvroReadSupport(GenericData model, Option<MessageType> tableSchema) {
     super(model);
+    this.model = model;
     this.tableSchema = tableSchema;
   }
 
   public HoodieAvroReadSupport() {
-    super(GenericData.get());
-    tableSchema = Option.empty();
+    this(GenericData.get(), Option.empty());
   }
 
   @Override
@@ -66,7 +78,8 @@ public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
     if (!legacyMode) {
       requestedSchema = new MessageType(requestedSchema.getName(), convertLegacyMap(requestedSchema.getFields()));
     }
-    return new ReadContext(requestedSchema, readContext.getReadSupportMetadata());
+    requestedSchema = SchemaRepair.alignDecimalPhysicalTypes(requestedSchema, fileSchema);
+    return new ReadContext(requestedSchema, withDecimalReadSchema(requestedSchema, readContext.getReadSupportMetadata(), keyValueMetaData, configuration));
   }
 
   /**
@@ -95,7 +108,7 @@ public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
 
     String avroReadSchema = configuration.get("parquet.avro.read.schema");
     if (avroReadSchema != null) {
-      metadata.put("avro.read.schema", avroReadSchema);
+      metadata.put(AVRO_READ_SCHEMA_KEY, avroReadSchema);
     }
 
     if (configuration.getBoolean(AVRO_COMPATIBILITY, AVRO_DEFAULT_COMPATIBILITY)) {
@@ -110,7 +123,119 @@ public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
     if (!legacyMode) {
       requestedSchema = new MessageType(requestedSchema.getName(), convertLegacyMap(requestedSchema.getFields()));
     }
-    return new ReadContext(requestedSchema, readContext.getReadSupportMetadata());
+    requestedSchema = SchemaRepair.alignDecimalPhysicalTypes(requestedSchema, fileSchema);
+    Configuration conf = new Configuration(false);
+    configuration.forEach(entry -> conf.set(entry.getKey(), entry.getValue()));
+    return new ReadContext(requestedSchema, withDecimalReadSchema(requestedSchema, readContext.getReadSupportMetadata(), keyValueMetaData, conf));
+  }
+
+  @Override
+  public RecordMaterializer<T> prepareForRead(Configuration configuration, Map<String, String> keyValueMetaData,
+                                              MessageType fileSchema, ReadContext readContext) {
+    RecordMaterializer<T> materializer = super.prepareForRead(configuration, keyValueMetaData, fileSchema, withoutCompatibility(readContext));
+    return readIntegerDecimals(materializer, configuration, keyValueMetaData, readContext);
+  }
+
+  /**
+   * Entry point on parquet 1.14+, whose record reader dispatches through {@link ParquetConfiguration}. The parent's
+   * overload of this signature does the real work there and is reached with a super-call method handle, since
+   * naming it in source would not compile against the parquet versions that lack it; on those versions this overload
+   * is never dispatched to and simply falls back to the {@link Configuration} path.
+   */
+  public RecordMaterializer<T> prepareForRead(ParquetConfiguration configuration, Map<String, String> keyValueMetaData,
+                                              MessageType fileSchema, ReadContext readContext) {
+    Configuration conf = new Configuration(false);
+    configuration.forEach(entry -> conf.set(entry.getKey(), entry.getValue()));
+    if (PARENT_PREPARE_FOR_READ == null) {
+      return prepareForRead(conf, keyValueMetaData, fileSchema, readContext);
+    }
+    RecordMaterializer<T> materializer;
+    try {
+      materializer = unsafeCast(PARENT_PREPARE_FOR_READ.invoke(this, configuration, keyValueMetaData, fileSchema, withoutCompatibility(readContext)));
+    } catch (RuntimeException e) {
+      throw e;
+    } catch (Throwable t) {
+      throw new HoodieException("Failed to prepare the Avro parquet reader", t);
+    }
+    return readIntegerDecimals(materializer, conf, keyValueMetaData, readContext);
+  }
+
+  private static MethodHandle lookupParentPrepareForRead() {
+    try {
+      return MethodHandles.lookup().findSpecial(AvroReadSupport.class, "prepareForRead",
+          MethodType.methodType(RecordMaterializer.class, ParquetConfiguration.class, Map.class, MessageType.class, ReadContext.class),
+          HoodieAvroReadSupport.class);
+    } catch (NoSuchMethodException | IllegalAccessException e) {
+      return null;
+    }
+  }
+
+  private static boolean hasIntegerBackedDecimal(MessageType schema) {
+    return schema.getFields().stream().anyMatch(SchemaRepair::containsIntegerBackedDecimal);
+  }
+
+  /**
+   * Without a read schema, parquet-avro derives the record schema from the projection with its own converter, which
+   * types an INT32/INT64 decimal column as int or long. The wrapped converter would then put a decimal into that
+   * slot, so the Hudi-converted schema is supplied as the read schema instead. A writer-stored Avro schema in the
+   * footer keeps precedence, as in {@link AvroReadSupport}.
+   */
+  private static Map<String, String> withDecimalReadSchema(MessageType requestedSchema, Map<String, String> metadata,
+                                                           Map<String, String> keyValueMetaData, Configuration configuration) {
+    if (metadata.get(AVRO_READ_SCHEMA_KEY) != null
+        || keyValueMetaData.get(AVRO_SCHEMA_METADATA_KEY) != null
+        || keyValueMetaData.get(OLD_AVRO_SCHEMA_METADATA_KEY) != null
+        || !hasIntegerBackedDecimal(requestedSchema)) {
+      return metadata;
+    }
+    Map<String, String> adjusted = new LinkedHashMap<>(metadata);
+    adjusted.put(AVRO_READ_SCHEMA_KEY,
+        HoodieAvroParquetSchemaConverter.getAvroSchemaConverter(configuration).convert(requestedSchema).toAvroSchema().toString());
+    return adjusted;
+  }
+
+  /**
+   * The compat materializer parquet-avro picks by default builds a converter this class cannot wrap, so a projection
+   * with an INT32/INT64 decimal column is read through the regular record converter instead.
+   */
+  private static ReadContext withoutCompatibility(ReadContext readContext) {
+    Map<String, String> metadata = readContext.getReadSupportMetadata();
+    if (!hasIntegerBackedDecimal(readContext.getRequestedSchema()) || !Boolean.parseBoolean(metadata.get(AVRO_COMPATIBILITY))) {
+      return readContext;
+    }
+    Map<String, String> adjusted = new LinkedHashMap<>(metadata);
+    adjusted.put(AVRO_COMPATIBILITY, "false");
+    return new ReadContext(readContext.getRequestedSchema(), adjusted);
+  }
+
+  private RecordMaterializer<T> readIntegerDecimals(RecordMaterializer<T> materializer, Configuration configuration,
+                                                    Map<String, String> keyValueMetaData, ReadContext readContext) {
+    MessageType requestedSchema = readContext.getRequestedSchema();
+    if (materializer instanceof IntegerDecimalRecordConverter.Materializer || !hasIntegerBackedDecimal(requestedSchema)) {
+      return materializer;
+    }
+    Schema avroSchema = resolveAvroReadSchema(configuration, keyValueMetaData, readContext.getReadSupportMetadata(), requestedSchema);
+    GenericData dataModel = model != null ? model : GenericData.get();
+    return new IntegerDecimalRecordConverter.Materializer<>(materializer, requestedSchema, avroSchema, dataModel);
+  }
+
+  /**
+   * The Avro schema the parent materializer reads with, resolved in the same order as {@link AvroReadSupport}: the
+   * requested read schema, the Avro schema the writer stored in the footer, else a conversion of the projection. The
+   * conversion goes through the Hudi converter so that integer-backed decimal columns surface as decimals.
+   */
+  private static Schema resolveAvroReadSchema(Configuration configuration, Map<String, String> keyValueMetaData,
+                                              Map<String, String> metadata, MessageType requestedSchema) {
+    if (metadata.get(AVRO_READ_SCHEMA_KEY) != null) {
+      return new Schema.Parser().parse(metadata.get(AVRO_READ_SCHEMA_KEY));
+    }
+    if (keyValueMetaData.get(AVRO_SCHEMA_METADATA_KEY) != null) {
+      return new Schema.Parser().parse(keyValueMetaData.get(AVRO_SCHEMA_METADATA_KEY));
+    }
+    if (keyValueMetaData.get(OLD_AVRO_SCHEMA_METADATA_KEY) != null) {
+      return new Schema.Parser().parse(keyValueMetaData.get(OLD_AVRO_SCHEMA_METADATA_KEY));
+    }
+    return HoodieAvroParquetSchemaConverter.getAvroSchemaConverter(configuration).convert(requestedSchema).toAvroSchema();
   }
 
   /**

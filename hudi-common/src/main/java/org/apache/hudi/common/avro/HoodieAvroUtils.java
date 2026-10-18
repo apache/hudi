@@ -1305,6 +1305,23 @@ public class HoodieAvroUtils {
     }
   }
 
+  private static boolean isDecimal(Schema schema) {
+    return (schema.getType() == Schema.Type.FIXED || schema.getType() == Schema.Type.BYTES)
+        && schema.getLogicalType() instanceof LogicalTypes.Decimal;
+  }
+
+  /**
+   * The unscaled integer behind a decimal value. A table schema that types a parquet INT32/INT64 decimal column as
+   * plain int or long reads the column this way, which is the value parquet stores for it.
+   */
+  private static BigInteger unscaledDecimalValue(Object value, Schema schema) {
+    LogicalType decimal = schema.getLogicalType();
+    BigDecimal bigDecimal = schema.getType() == Schema.Type.FIXED
+        ? DECIMAL_CONVERSION.fromFixed((GenericFixed) value, schema, decimal)
+        : DECIMAL_CONVERSION.fromBytes((ByteBuffer) value, schema, decimal);
+    return bigDecimal.unscaledValue();
+  }
+
   private static Object rewritePrimaryTypeWithDiffSchemaType(Object oldValue, Schema oldSchema, Schema newSchema) {
     switch (newSchema.getType()) {
       case NULL:
@@ -1314,10 +1331,16 @@ public class HoodieAvroUtils {
         if (newSchema.getLogicalType() == LogicalTypes.date() && oldSchema.getType() == Schema.Type.STRING) {
           return fromJavaDate(java.sql.Date.valueOf(oldValue.toString()));
         }
+        if (newSchema.getLogicalType() == null && isDecimal(oldSchema)) {
+          return unscaledDecimalValue(oldValue, oldSchema).intValueExact();
+        }
         break;
       case LONG:
         if (oldSchema.getType() == Schema.Type.INT) {
           return ((Integer) oldValue).longValue();
+        }
+        if (newSchema.getLogicalType() == null && isDecimal(oldSchema)) {
+          return unscaledDecimalValue(oldValue, oldSchema).longValueExact();
         }
         break;
       case FLOAT:

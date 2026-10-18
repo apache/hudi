@@ -292,11 +292,25 @@ public class HoodieArrayWritableSchemaUtils {
     }
   }
 
+  /**
+   * The unscaled integer behind a decimal at its schema scale (Hive drops trailing zeros, so the writable's own
+   * scale cannot be used). A table schema that types an integer-backed parquet decimal column as int or long
+   * reads the column this way, which is the value parquet stores for it.
+   */
+  private static BigInteger unscaledDecimalValue(Writable writable, HoodieSchema decimalSchema) {
+    int scale = ((HoodieSchema.Decimal) decimalSchema).getScale();
+    return ((HiveDecimalWritable) writable).getHiveDecimal().bigDecimalValue().setScale(scale).unscaledValue();
+  }
+
   private static Writable rewritePrimaryTypeWithDiffSchemaType(Writable writable, HoodieSchema oldSchema, HoodieSchema newSchema) {
     switch (newSchema.getType()) {
       case NULL:
       case BOOLEAN:
+        break;
       case INT:
+        if (oldSchema.getType() == HoodieSchemaType.DECIMAL) {
+          return new IntWritable(unscaledDecimalValue(writable, oldSchema).intValueExact());
+        }
         break;
       case DATE:
         if (oldSchema.getType() == HoodieSchemaType.STRING) {
@@ -306,6 +320,9 @@ public class HoodieArrayWritableSchemaUtils {
       case LONG:
         if (oldSchema.getType() == HoodieSchemaType.INT) {
           return new LongWritable(((IntWritable) writable).get());
+        }
+        if (oldSchema.getType() == HoodieSchemaType.DECIMAL) {
+          return new LongWritable(unscaledDecimalValue(writable, oldSchema).longValueExact());
         }
         break;
       case FLOAT:
