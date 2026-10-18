@@ -72,7 +72,7 @@ import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.PAYLOAD_CLASSE
  *     set hoodie.record.merge.strategy.id accordingly
  *   remove any properties with prefix hoodie.record.merge.property.
  *   fix precombine field value for MySqlDebeziumAvroPayload.
- *   refuse a table that orders records on several fields, since Hudi 1.0.x reads the precombine field as one field name.
+ *   tables ordered on several fields are refused earlier, by UpgradeDowngrade.run, since Hudi 1.0.x reads the precombine field as one field name.
  */
 public class NineToEightDowngradeHandler implements DowngradeHandler {
   @Override
@@ -82,7 +82,6 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
                                                          SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     HoodieTableMetaClient metaClient = table.getMetaClient();
-    validateOrderingFields(metaClient.getTableConfig(), HoodieTableVersion.EIGHT);
     // Handle index Changes
     UpgradeDowngradeUtils.dropNonV1IndexPartitions(
         config, context, table, upgradeDowngradeHelper, "downgrading from table version nine to eight");
@@ -145,7 +144,7 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
                                              HoodieTableConfig tableConfig) {
     List<String> orderingFields = getOrderingFieldsBelowVersionNine(tableConfig);
     if (orderingFields.size() == 1) {
-      // the parsed field, so that a stray separator as in `ts,` does not end up in a key read as one field name
+      // Write the parsed field rather than the raw string, so a stray separator as in `ts,` does not end up in the key.
       propertiesToAdd.put(HoodieTableConfig.PRECOMBINE_FIELD, orderingFields.get(0));
       propertiesToRemove.add(HoodieTableConfig.ORDERING_FIELDS);
     }
