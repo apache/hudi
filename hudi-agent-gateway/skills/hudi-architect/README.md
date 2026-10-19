@@ -40,7 +40,8 @@ Target Hudi version: **1.2.0**.
   stable identity, event-time ordering, normalized UPSERT changelog, full-row deletes when present, immutable
   partitions, and the fixed global FLINK_STATE/bootstrap/no-TTL contract. MOR additionally fixes
   same-writer asynchronous compaction, records snapshot/read-optimized freshness, and disables
-  clustering. Other Flink designs remain fail-closed.
+  clustering. It also provides a read-only, non-executable exact-match reconciliation report for
+  an existing table backed by structured evidence. Other Flink designs remain fail-closed.
 
 ## How to invoke
 
@@ -85,6 +86,8 @@ Even without invoking as a Skill, the files in `references/` are readable design
 - `flink-1.20-hudi-1.2.0-capabilities.toml` — the machine-readable manifest pinned to the Hudi
   1.2.0 source revision.
 - `flink-config-templates.md` — non-executable and bounded executable Flink output envelopes.
+- `flink-existing-table-reconciliation.md` — evidence authority, comparison, and writer-transition
+  rules for the assessment-only existing-table path.
 
 The Skill itself is defined in `SKILL.md`.
 
@@ -127,6 +130,13 @@ The mutable schema-2 fixture is
 The mutable MOR schema-3 fixture is
 `hudi-agent-gateway/tests/fixtures/hudi_architect/flink_pr4/mutable_mor.json`.
 
+Validate a structured existing-table reconciliation contract without rendering SQL:
+
+```bash
+python3 hudi-agent-gateway/skills/hudi-architect/validate_flink_existing_table.py \
+  --input hudi-agent-gateway/tests/fixtures/hudi_architect/flink_pr5/compatible_mutable_cow.json
+```
+
 Credential-bearing evidence can be sanitized without executing or parsing it as configuration:
 
 ```bash
@@ -148,7 +158,7 @@ This is **Milestone 1 of a longer arc** — meant to be shareable and playable, 
 ## What's out of scope in Milestone 1
 
 - Flink append-only MOR, standalone compaction, detailed compaction tuning, clustering,
-  existing-table takeover, external catalogs, multiple writers, alternative indexes, custom
+  existing-table SQL generation or takeover, external catalogs, multiple writers, alternative indexes, custom
   mergers, retract normalization, partition movement, key-only deletes, full CDC history,
   DataStream API, `HoodieFlinkStreamer`, source connector generation, and submit/deploy commands.
   Those paths do not reuse the bounded SQL output as if it were generally applicable.

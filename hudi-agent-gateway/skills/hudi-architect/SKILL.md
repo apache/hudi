@@ -65,6 +65,8 @@ Within the Flink route, load the remaining references only when needed:
   the final status.
 - Consult `references/flink-warnings.md` only for the warning that a gate triggers.
 - Load `references/flink-config-templates.md` only when producing the final safety assessment.
+- Load `references/flink-existing-table-reconciliation.md` only after F1 confirms an existing
+  table; use it to collect provenance-bearing evidence and produce the assessment-only PR5 report.
 
 The verified Flink baseline is Apache Hudi 1.2.0 at source revision
 `f05c83f2b97732de7a558ff9b26959e1139c05f5` with Apache Flink 1.20; build and test fixtures use
@@ -75,16 +77,18 @@ that manifest with options discovered from the enclosing checkout. If the user e
 another Hudi or Flink version, do not silently reuse the baseline: add a `REVIEW_REQUIRED` finding
 unless a separate verified capability reference exists.
 
-The Flink implementation includes the PR1 safety foundation and three bounded executable paths:
-PR2 append-only COW, PR3 mutable COW, and PR4 mutable MOR. All require a new table, confirmed
-single writer, no external catalog, streaming checkpointing, and `CONFIG_VALIDATED` from
-`validate_flink_design.py`. Both mutable paths additionally require stable non-null identity, one
+The Flink implementation includes the PR1 safety foundation, three bounded executable paths, and
+one existing-table assessment path. PR2 append-only COW, PR3 mutable COW, and PR4 mutable MOR all
+require a new table, confirmed single writer, no external catalog, streaming checkpointing, and
+`CONFIG_VALIDATED` from `validate_flink_design.py`. Both mutable paths additionally require stable non-null identity, one
 event-time ordering field, normalized UPSERT changelog, full-row deletes when present, immutable
 partitions, and fixed global FLINK_STATE/bootstrap/no-TTL settings. The MOR path further requires
 snapshot/read-optimized expectations, compaction owned by the same Flink writer, fixed asynchronous
-five-delta-commit compaction, and clustering disabled. Append-only MOR, standalone table services,
-detailed compaction tuning, existing-table takeover, catalog, multi-writer, alternative indexes,
-custom mergers, retract normalization, and full CDC history still fail closed.
+five-delta-commit compaction, and clustering disabled. PR5 can reconcile an explicit schema 1, 2,
+or 3 desired contract with structured evidence from an existing table, but it never renders SQL or
+authorizes mutation. Append-only MOR, standalone table services, detailed compaction tuning,
+separate-writer or cross-engine takeover, catalog, multi-writer, alternative indexes, custom
+mergers, retract normalization, and full CDC history still fail closed.
 
 ## Flow structure
 
@@ -93,7 +97,8 @@ The conversation has three parts:
 1. **Tier gate** — a single scoping question to figure out which downstream questions fire.
 2. **Rounds 1-3** — workload questions, gated conditionally by tier.
 3. **Output** — engine-specific output: the established Spark artifacts, a non-executable Flink
-  assessment, or bounded validator-rendered PR2/PR3/PR4 SQL artifacts.
+  assessment, a PR5 existing-table reconciliation report, or bounded validator-rendered
+  PR2/PR3/PR4 SQL artifacts.
 
 Load `references/question-flow.md` for the full round-by-round question list with conditional gating.
 
@@ -209,6 +214,10 @@ every stable identifier. If a finding remains, emit only the non-executable enve
 safety gate passes, create the explicit JSON design contract described by `flink-question-flow.md`
 and run `validate_flink_design.py`. Only its successful, canonical artifacts may be emitted as
 runtime SQL, Hudi DDL, and the sink-side `INSERT INTO`; never modify them after validation.
+For an existing table, create the same explicit desired contract, collect and confirm evidence per
+`flink-existing-table-reconciliation.md`, and run `validate_flink_existing_table.py` instead. Emit
+its report and deployment checks exactly as assessment data; never reinterpret `COMPATIBLE` as
+permission to generate or run SQL.
 
 The Flink status vocabulary is:
 
@@ -216,8 +225,10 @@ The Flink status vocabulary is:
 - `BLOCKED` — the requested path is known to be unsupported or outside the currently implemented
   Flink capability.
 - `REVIEW_REQUIRED` — a compatibility or operational risk needs human confirmation.
-- `CONFIG_VALIDATED` — every safety gate and load-bearing executable design value passed pinned static
-  validation, and canonical SQL was emitted. It does not prove the live environment.
+- `CONFIG_VALIDATED` — every applicable gate and load-bearing value passed pinned static
+  validation. New-table schemas 1–3 include canonical SQL and executable eligibility `true`; the
+  assessment-only PR5 reconciler instead returns `COMPATIBLE`, executable eligibility `false`, and
+  no SQL. Neither result proves the live environment.
 
 **Revisit conditions must be measurable.** Not "revisit if write amp becomes an issue." Yes: "if p95 commit duration exceeds the ingestion interval on a COW table above 1TB, evaluate switching to MOR — note this requires a table rewrite, so decide before the table grows further."
 
@@ -259,6 +270,7 @@ fact `INCOMPLETE`; do not ask the user to reveal the secret.
 - Reuse the Hudi 1.2.0 and Flink 1.20 capability baseline for another explicit version.
 - Discover Hudi 1.2.0 Flink options from the current checkout instead of the pinned manifest.
 - Emit executable Flink output while any safety or design-contract finding remains.
+- Render SQL or mutation commands from an existing-table reconciliation result.
 - Hand-write, repair, or extend SQL after `validate_flink_design.py` renders it.
 - Treat a successful `HoodieTableFactory` construction as proof that the source changelog is
   append-only.

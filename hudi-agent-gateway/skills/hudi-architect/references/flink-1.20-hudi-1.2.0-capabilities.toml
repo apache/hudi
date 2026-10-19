@@ -13,9 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-schema_version = 4
+schema_version = 5
 baseline_id = "hudi-1.2.0-flink-1.20"
-validation_surface = "initial-flink-sql-sink"
+validation_surface = "flink-sql-sink-and-existing-table-reconciliation"
 
 [hudi]
 version = "1.2.0"
@@ -90,6 +90,114 @@ query_modes = ["snapshot", "read_optimized"]
 read_optimized_freshness = "after_compaction"
 clustering_enabled = false
 
+[existing_table_reconciliation_contract]
+reconciliation_schema = 1
+supported_design_contract_schemas = [1, 2, 3]
+assessment_only = true
+executable_sql = false
+allowed_evidence_kinds = [
+  "flink_table_ddl",
+  "flink_writer_config",
+  "hoodie_properties",
+  "hudi_table_identity",
+  "hudi_table_schema",
+  "timeline_summary",
+  "writer_inventory",
+]
+required_evidence_kinds = [
+  "hoodie_properties",
+  "hudi_table_identity",
+  "hudi_table_schema",
+  "timeline_summary",
+  "writer_inventory",
+]
+allowed_writer_transitions = [
+  "cold_start_new_job",
+  "cross_engine_takeover",
+  "flink_writer_takeover",
+  "same_job_restore",
+  "unknown",
+]
+supported_table_versions = [9]
+supported_initial_table_versions = [9]
+supported_timeline_layout_versions = [2]
+supported_base_file_formats = ["PARQUET"]
+required_hoodie_property_facts = [
+  "base_file_format",
+  "key_generator_type",
+  "initial_table_version",
+  "ordering_fields",
+  "partition_fields",
+  "record_key_fields",
+  "table_name",
+  "table_type",
+  "table_version",
+  "timeline_layout_version",
+]
+conditional_hoodie_property_facts = [
+  "hive_style_partitioning",
+  "record_merge_mode",
+  "url_encode_partitioning",
+]
+required_identity_facts = ["table_path"]
+required_schema_facts = ["columns"]
+required_timeline_facts = ["pending_instants"]
+required_writer_inventory_facts = ["concurrent_writers"]
+conditional_writer_inventory_facts = ["previous_writer_engine", "previous_writer_stopped"]
+comparison_fields = [
+  "schema.columns",
+  "table_config.base_file_format",
+  "table_config.hive_style_partitioning",
+  "table_config.initial_table_version",
+  "table_config.key_generator_type",
+  "table_config.ordering_fields",
+  "table_config.partition_fields",
+  "table_config.record_key_fields",
+  "table_config.record_merge_mode",
+  "table_config.table_name",
+  "table_config.table_type",
+  "table_config.table_version",
+  "table_config.timeline_layout_version",
+  "table_config.url_encode_partitioning",
+  "evidence_scope.table_path",
+  "table_identity.table_path",
+  "timeline.pending_instants",
+  "writer_config.checkpoint_recovery_available",
+  "writer_config.compaction_owner",
+  "writer_config.design_contract_schema",
+  "writer_config.index_bootstrap_enabled",
+  "writer_config.index_global",
+  "writer_config.index_state_ttl_days",
+  "writer_config.index_type",
+  "writer_config.operation",
+  "writer_config.timestamp_key_generator",
+  "writer_inventory.concurrent_writers",
+  "writer_inventory.previous_writer_engine",
+  "writer_inventory.previous_writer_stopped",
+]
+comparison_results = ["CONFLICT", "MATCH", "NOT_APPLICABLE", "UNVERIFIED"]
+reconciliation_results = ["COMPATIBLE", "CONFLICT", "UNVERIFIED"]
+change_dispositions = [
+  "DEPLOYMENT_CONFIGURATION_CHANGE",
+  "MIGRATION_REQUIRED",
+  "NO_CHANGE",
+  "UNVERIFIED",
+]
+
+[existing_table_reconciliation_contract.finding_status]
+FLINK_EXISTING_ENGINE_TAKEOVER_UNVERIFIED = "REVIEW_REQUIRED"
+FLINK_EXISTING_EVIDENCE_CONFLICT = "REVIEW_REQUIRED"
+FLINK_EXISTING_EVIDENCE_INVALID = "INCOMPLETE"
+FLINK_EXISTING_EVIDENCE_REQUIRED = "INCOMPLETE"
+FLINK_EXISTING_SCHEMA_CONFLICT = "BLOCKED"
+FLINK_EXISTING_SCHEMA_EVOLUTION_UNVERIFIED = "REVIEW_REQUIRED"
+FLINK_EXISTING_TABLE_PROPERTY_CONFLICT = "BLOCKED"
+FLINK_EXISTING_TABLE_PROPERTY_UNVERIFIED = "REVIEW_REQUIRED"
+FLINK_EXISTING_TABLE_VERSION_UNVERIFIED = "REVIEW_REQUIRED"
+FLINK_EXISTING_TIMELINE_UNRESOLVED = "REVIEW_REQUIRED"
+FLINK_EXISTING_WRITER_CONFIG_CONFLICT = "REVIEW_REQUIRED"
+FLINK_EXISTING_WRITER_TRANSITION_UNRESOLVED = "REVIEW_REQUIRED"
+
 # The executable paths intentionally validate a bounded scalar physical-schema surface. Complex,
 # computed, metadata, and watermark columns remain unverified rather than being guessed.
 [physical_types]
@@ -161,6 +269,18 @@ sha256 = "11587947231d5a5727fea25169c986a20a3079d7f62787d3efe44c1f6e3f066e"
 purpose = "Canonical Hudi metadata field names reserved by the write path"
 
 [[source_anchors]]
+id = "hoodie_table_config"
+path = "hudi-common/src/main/java/org/apache/hudi/common/table/HoodieTableConfig.java"
+sha256 = "c10ad0beaac593a76398f8811a7a0224bcbdd7519df10b79d100e1a55014647a"
+purpose = "Persistent existing-table identity, type, version, ordering, partition, and file-format properties"
+
+[[source_anchors]]
+id = "hoodie_table_version"
+path = "hudi-common/src/main/java/org/apache/hudi/common/table/HoodieTableVersion.java"
+sha256 = "ee3bc3372e759382ddc1237ac3f1a5e12185daf6c1b83bcb79eebcfbc54742f7"
+purpose = "Hudi 1.2.0 current table version and timeline-layout mapping"
+
+[[source_anchors]]
 id = "flink_data_type_utils"
 path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/util/DataTypeUtils.java"
 sha256 = "62e99e81fede5fdf1e6b50ce81553812f4149502e821db300e227c03dce2c240"
@@ -176,7 +296,7 @@ purpose = "Effective append mode, MOR table type, compaction gates, and no-preco
 id = "table_factory"
 path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/table/HoodieTableFactory.java"
 sha256 = "a029bd86cf1f2796c99c5639a69a495cf5fd16f06201f139023ecef93d1e678b"
-purpose = "Sink factory sanity checks and their append-mode boundary"
+purpose = "Sink factory sanity checks, append-mode boundary, and existing-table option enrichment"
 
 [[source_anchors]]
 id = "catalog_options"
@@ -189,6 +309,12 @@ id = "key_generator_options"
 path = "hudi-common/src/main/java/org/apache/hudi/keygen/constant/KeyGeneratorOptions.java"
 sha256 = "2686e25676b4d59f8d5a30acb52326aeb74016ed35bb8e73b38757a36521b2cd"
 purpose = "Canonical record-key and partition-path option keys"
+
+[[source_anchors]]
+id = "key_generator_type"
+path = "hudi-common/src/main/java/org/apache/hudi/keygen/constant/KeyGeneratorType.java"
+sha256 = "762c5c6cfaa5fb89761d48576107d74fb5410c5978047828bd2ed128f02ee877"
+purpose = "Pinned built-in key-generator type and class mappings"
 
 [[source_anchors]]
 id = "table_factory_tests"
@@ -603,3 +729,9 @@ id = "FLINK_PR4_WRITE_PATH_UNSUPPORTED"
 requirement = "Plan the exact mutable MOR SQL through the released connector and retain its writer plus compaction operators."
 python_test = "test_pr4_valid_mutable_mor_design_renders_exact_executable_sql"
 java_test = "testMutableMorSinkAndCompactionPlan"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_EXISTING_TABLE_PROPERTY_CONFLICT"
+requirement = "Compare existing-table identity and durable properties using pinned table-version and partition-field semantics."
+python_test = "test_pr5_property_and_schema_conflicts_are_blocked_and_preserved"
+java_test = "testPinnedExistingTableTypeOverridesConflictingOption"

@@ -80,6 +80,18 @@ FINDING_STATUS = {
     "FLINK_CHECKPOINT_INTERVAL_UNSUPPORTED": "BLOCKED",
     "FLINK_DESIGN_CONTRACT_INVALID": "INCOMPLETE",
     "FLINK_EXISTING_TABLE_DEFERRED": "BLOCKED",
+    "FLINK_EXISTING_EVIDENCE_CONFLICT": "REVIEW_REQUIRED",
+    "FLINK_EXISTING_EVIDENCE_INVALID": "INCOMPLETE",
+    "FLINK_EXISTING_EVIDENCE_REQUIRED": "INCOMPLETE",
+    "FLINK_EXISTING_ENGINE_TAKEOVER_UNVERIFIED": "REVIEW_REQUIRED",
+    "FLINK_EXISTING_SCHEMA_CONFLICT": "BLOCKED",
+    "FLINK_EXISTING_SCHEMA_EVOLUTION_UNVERIFIED": "REVIEW_REQUIRED",
+    "FLINK_EXISTING_TABLE_PROPERTY_CONFLICT": "BLOCKED",
+    "FLINK_EXISTING_TABLE_PROPERTY_UNVERIFIED": "REVIEW_REQUIRED",
+    "FLINK_EXISTING_TABLE_VERSION_UNVERIFIED": "REVIEW_REQUIRED",
+    "FLINK_EXISTING_TIMELINE_UNRESOLVED": "REVIEW_REQUIRED",
+    "FLINK_EXISTING_WRITER_TRANSITION_UNRESOLVED": "REVIEW_REQUIRED",
+    "FLINK_EXISTING_WRITER_CONFIG_CONFLICT": "REVIEW_REQUIRED",
     "FLINK_EXTERNAL_CATALOG_REVIEW": "REVIEW_REQUIRED",
     "FLINK_HUDI_METADATA_FIELD_CONFLICT": "BLOCKED",
     "FLINK_LOAD_BEARING_VALUE_REQUIRED": "INCOMPLETE",
@@ -461,9 +473,22 @@ def _render_sql(
 
 
 def assess_design(
-    contract: dict[str, Any], manifest: dict[str, Any]
+    contract: dict[str, Any],
+    manifest: dict[str, Any],
+    *,
+    expected_table_lifecycle: str = "new",
+    render_sql: bool = True,
 ) -> dict[str, Any]:
-    """Validate one explicit append-only COW, mutable COW, or mutable MOR contract."""
+    """Validate one explicit append-only COW, mutable COW, or mutable MOR contract.
+
+    The public CLI keeps the executable new-table defaults.  The existing-table
+    reconciler uses the same bounded design checks with ``render_sql=False`` and
+    an explicit existing lifecycle; accepting that lifecycle here never makes
+    the ordinary design-validator CLI an existing-table renderer.
+    """
+
+    if expected_table_lifecycle not in {"new", "existing"}:
+        raise ValueError("expected_table_lifecycle must be 'new' or 'existing'")
 
     assessment = Assessment()
     manifest_errors = validate_manifest(manifest)
@@ -571,12 +596,12 @@ def assess_design(
     lifecycle = safety.get("table_lifecycle")
     if lifecycle is None:
         assessment.add("FLINK_TABLE_LIFECYCLE_REQUIRED", "Table lifecycle is required")
-    elif lifecycle == "existing":
+    elif lifecycle == "existing" and expected_table_lifecycle == "new":
         assessment.add(
             "FLINK_EXISTING_TABLE_DEFERRED",
             "The executable contracts support only a new Architect-managed table",
         )
-    elif lifecycle != "new":
+    elif lifecycle != expected_table_lifecycle:
         assessment.add("FLINK_TABLE_LIFECYCLE_REQUIRED", "Table lifecycle is unresolved")
     writer_model = safety.get("writer_model")
     if writer_model is None:
@@ -1274,7 +1299,7 @@ def assess_design(
         )
 
     status = assessment.final_status()
-    executable = status == "CONFIG_VALIDATED"
+    executable = status == "CONFIG_VALIDATED" and render_sql and expected_table_lifecycle == "new"
     result: dict[str, Any] = {
         "status": status,
         "executable_eligible": executable,

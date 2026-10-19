@@ -26,7 +26,9 @@ A practical guide to running the Hudi Architect agent: what it does, how to set 
 bundle, and a runnable submit command — all pinned to **Hudi 1.2.0**. The Flink route is pinned to
 **Hudi 1.2.0 / Flink 1.20** and remains fail-closed by default. It can emit validated Flink SQL for
 bounded append-only COW, mutable COW, and mutable MOR new-table, single-writer,
-no-external-catalog paths.
+no-external-catalog paths. For an existing table, it can instead produce a read-only exact-match
+reconciliation report from provenance-bearing table, schema, writer, and timeline evidence; that
+report never contains SQL or mutation commands.
 
 ---
 
@@ -148,6 +150,8 @@ normalized UPSERT changelog, full-row deletes when present, immutable partitions
 FLINK_STATE/bootstrap/no-TTL contract. Mutable MOR additionally requires same-writer asynchronous
 compaction, explicit snapshot/read-optimized freshness expectations, and disabled clustering. Its artifacts are runtime `SET`
 statements, Hudi `CREATE TABLE`, and an explicit-column `INSERT INTO`; deployment remains manual.
+An existing-table session emits comparisons, evidence provenance, findings, and deployment rechecks
+with executable eligibility `false`, including when the static result is `COMPATIBLE`.
 
 Then: land a first commit in a staging path, run your real read patterns against it, and check the ADR's operational playbook section for what to monitor from day one (commit duration, pending compactions, active timeline size, small-file ratio).
 
@@ -157,7 +161,7 @@ Be aware of what the agent will *decline* to decide — it defers honestly rathe
 
 - **Flink executable coverage** — bounded append-only COW, mutable COW, and mutable MOR
   new-table, single-writer, no-external-catalog streaming SQL sinks are implemented. Append-only
-  MOR, standalone compaction, detailed compaction tuning, clustering, existing-table takeover,
+  MOR, standalone compaction, detailed compaction tuning, clustering, existing-table SQL or takeover,
   catalogs, multiple writers, alternative indexes, custom mergers, retract normalization,
   partition movement, key-only deletes, full CDC history, DataStream API, `HoodieFlinkStreamer`,
   source connector generation, and submit/deploy commands remain out of scope.

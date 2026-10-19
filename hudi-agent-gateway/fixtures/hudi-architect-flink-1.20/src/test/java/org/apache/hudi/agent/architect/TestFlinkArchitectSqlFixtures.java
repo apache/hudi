@@ -18,10 +18,16 @@
 
 package org.apache.hudi.agent.architect;
 
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.HoodieTableFactory;
 import org.apache.hudi.util.ChangelogModes;
 import org.apache.hudi.util.DataTypeUtils;
@@ -49,11 +55,13 @@ import org.apache.flink.table.types.logical.TimeType;
 import org.apache.flink.types.Row;
 import org.apache.flink.types.RowKind;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Duration;
@@ -63,6 +71,10 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.INPUT_TIME_UNIT;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -204,6 +216,77 @@ class TestFlinkArchitectSqlFixtures {
     Configuration conf = mutableConfiguration();
 
     assertTrue(conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED));
+  }
+
+  @Test
+  void testPinnedExistingTableConfigFacts() {
+    assertPinnedArtifacts();
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    tableConfig.setValue(HoodieTableConfig.VERSION, "9");
+    tableConfig.setValue(HoodieTableConfig.INITIAL_VERSION, "9");
+    tableConfig.setValue(HoodieTableConfig.TIMELINE_LAYOUT_VERSION, "2");
+    tableConfig.setValue(HoodieTableConfig.TYPE, "COPY_ON_WRITE");
+    tableConfig.setValue(HoodieTableConfig.RECORDKEY_FIELDS, "id");
+    tableConfig.setValue(HoodieTableConfig.ORDERING_FIELDS, "event_version");
+    tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS, "partition_date:SIMPLE");
+    tableConfig.setValue(HoodieTableConfig.RECORD_MERGE_MODE, "EVENT_TIME_ORDERING");
+
+    assertEquals(HoodieTableVersion.NINE, HoodieTableVersion.current());
+    assertEquals(HoodieTableVersion.NINE, HoodieTableConfig.getTableVersion(tableConfig));
+    assertEquals(HoodieTableVersion.NINE, tableConfig.getTableInitialVersion());
+    assertEquals("COPY_ON_WRITE", tableConfig.getString(HoodieTableConfig.TYPE));
+    assertEquals("id", tableConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS));
+    assertEquals("event_version", tableConfig.getString(HoodieTableConfig.ORDERING_FIELDS));
+    assertEquals(RecordMergeMode.EVENT_TIME_ORDERING, tableConfig.getRecordMergeMode());
+    assertEquals(
+        List.of("partition_date"),
+        List.of(HoodieTableConfig.getPartitionFields(tableConfig).get()));
+
+    Configuration datePartition = new Configuration();
+    HoodieTableFactory.setupTimestampKeygenOptions(datePartition, DataTypes.DATE());
+    assertEquals("org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator",
+        datePartition.get(FlinkOptions.KEYGEN_CLASS_NAME));
+    assertEquals("SCALAR", datePartition.getString(TIMESTAMP_TYPE_FIELD.key(), ""));
+    assertEquals("DAYS", datePartition.getString(INPUT_TIME_UNIT.key(), ""));
+    assertEquals("yyyyMMdd", datePartition.getString(TIMESTAMP_OUTPUT_DATE_FORMAT.key(), ""));
+    assertEquals("UTC", datePartition.getString(TIMESTAMP_OUTPUT_TIMEZONE_FORMAT.key(), ""));
+    assertFalse(datePartition.get(FlinkOptions.HIVE_STYLE_PARTITIONING));
+    assertFalse(datePartition.get(FlinkOptions.URL_ENCODE_PARTITIONING));
+
+    for (int precision : new int[] {0, 3}) {
+      Configuration timestampPartition = new Configuration();
+      HoodieTableFactory.setupTimestampKeygenOptions(
+          timestampPartition, DataTypes.TIMESTAMP(precision));
+      assertEquals(precision == 0 ? "UNIX_TIMESTAMP" : "EPOCHMILLISECONDS",
+          timestampPartition.getString(TIMESTAMP_TYPE_FIELD.key(), ""));
+      assertEquals("yyyyMMddHH",
+          timestampPartition.getString(TIMESTAMP_OUTPUT_DATE_FORMAT.key(), ""));
+      assertEquals("UTC", timestampPartition.getString(TIMESTAMP_OUTPUT_TIMEZONE_FORMAT.key(), ""));
+    }
+  }
+
+  @Test
+  void testPinnedExistingTableTypeOverridesConflictingOption(@TempDir Path tempDir)
+      throws Exception {
+    String basePath = initExistingTable(tempDir.resolve("type-override"));
+    Configuration conf = new Configuration();
+    conf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+
+    applyExistingTableOptions(basePath, conf);
+
+    assertEquals(FlinkOptions.TABLE_TYPE_COPY_ON_WRITE, conf.get(FlinkOptions.TABLE_TYPE));
+  }
+
+  @Test
+  void testPinnedExistingTableConfigEnrichesRecordKeyAndOrdering(@TempDir Path tempDir)
+      throws Exception {
+    String basePath = initExistingTable(tempDir.resolve("option-enrichment"));
+    Configuration conf = new Configuration();
+
+    applyExistingTableOptions(basePath, conf);
+
+    assertEquals("id", conf.get(FlinkOptions.RECORD_KEY_FIELD));
+    assertEquals("event_version", conf.get(FlinkOptions.ORDERING_FIELDS));
   }
 
   @Test
@@ -477,6 +560,26 @@ class TestFlinkArchitectSqlFixtures {
     assertNotNull(HoodieTableFactory.class.getProtectionDomain().getCodeSource());
     assertEquals("1.2.0", HoodieTableFactory.class.getPackage().getImplementationVersion());
     assertEquals("1.20.1", EnvironmentSettings.class.getPackage().getImplementationVersion());
+  }
+
+  private static String initExistingTable(Path tablePath) throws IOException {
+    String basePath = tablePath.toUri().toString();
+    HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE)
+        .setTableName("existing_orders")
+        .setRecordKeyFields("id")
+        .setOrderingFields("event_version")
+        .initTable(
+            new HadoopStorageConfiguration(new org.apache.hadoop.conf.Configuration()), basePath);
+    return basePath;
+  }
+
+  private static void applyExistingTableOptions(String basePath, Configuration conf)
+      throws Exception {
+    Method method = HoodieTableFactory.class.getDeclaredMethod(
+        "setupTableOptions", String.class, Configuration.class);
+    method.setAccessible(true);
+    method.invoke(new HoodieTableFactory(), basePath, conf);
   }
 
   private static RowDataKeyGen newRowDataKeyGen(Configuration conf, RowType rowType)
