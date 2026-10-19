@@ -76,6 +76,10 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
     return getFieldValueFromInternalRowInternal(row, recordSchema, fieldName, true);
   }
 
+  public static Object getFieldValueFromInternalRowAsJava(InternalRow row, HoodieUnsafeRowUtils.NestedFieldPath nestedFieldPath) {
+    return sparkTypeToJavaType(HoodieUnsafeRowUtils.getNestedInternalRowValue(row, nestedFieldPath));
+  }
+
   private static Object getFieldValueFromInternalRowInternal(InternalRow row, HoodieSchema recordSchema, String fieldName, boolean convertToJavaType) {
     return getFieldValueFromInternalRowInternal(row, getCachedSchema(recordSchema), fieldName, convertToJavaType);
   }

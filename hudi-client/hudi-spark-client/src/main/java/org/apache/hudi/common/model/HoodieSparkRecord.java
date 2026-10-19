@@ -392,10 +392,12 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
       StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
       return OrderingValues.create(orderingFields, field -> {
         // Ordering fields can be nested, so resolve them by path as doGetOrderingValue does.
-        if (HoodieInternalRowUtils.getCachedPosList(structType, field).isEmpty()) {
+        scala.Option<NestedFieldPath> cachedNestedFieldPath =
+            HoodieInternalRowUtils.getCachedPosList(structType, field);
+        if (cachedNestedFieldPath.isEmpty()) {
           return OrderingValues.getDefault();
         }
-        return (Comparable<?>) getColumnValueAsJava(recordSchema, field, props);
+        return (Comparable<?>) getFieldValueFromInternalRowAsJava(data, cachedNestedFieldPath.get());
       });
     }
   }

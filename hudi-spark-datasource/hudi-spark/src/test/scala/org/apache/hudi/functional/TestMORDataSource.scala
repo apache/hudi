@@ -2597,7 +2597,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
 
   @ParameterizedTest
   @CsvSource(value = Array("AVRO;bigint;8", "SPARK;bigint;9", "SPARK;string;8", "SPARK;decimal(10,2);9"), delimiter = ';')
-  def testDeleteWithNestedOrderingField(recordType: HoodieRecordType, orderingType: String, tableVersion: Int): Unit = {
+  def testDeleteWithNestedOrderingFieldRespectsEventTimeOrdering(recordType: HoodieRecordType, orderingType: String, tableVersion: Int): Unit = {
     val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
     val opts = writeOpts ++ Map(
       TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL,
@@ -2619,6 +2619,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
 
     write(Seq(("id1", "100", false), ("id2", "100", false)), SaveMode.Overwrite)
     // The delete of id1 is older than the stored row and must not remove it; the delete of id2 is newer.
+    // "050" has a leading zero so that it also sorts before "100" as a string.
     write(Seq(("id1", "050", true), ("id2", "150", true)), SaveMode.Append)
 
     val rows = spark.read.format("hudi").options(readOpts).load(basePath).select("id", "meta.ts").collect()
