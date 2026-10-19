@@ -19,6 +19,9 @@
 package org.apache.hudi.hive.ddl;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 
@@ -29,6 +32,7 @@ import org.apache.hadoop.hive.ql.parse.ParseDriver;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -89,6 +93,29 @@ class TestQueryBasedDDLExecutorEscaping {
     executor.touchPartitionsToTable("tbl", partitions);
     assertEquals(2, executor.executed.size());
     assertEquals(Collections.singletonList(expectedValue), parseLiterals(executor.executed.get(1)));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"/tmp/warehouse", "/tmp/warehouse's", "/tmp/warehouse\\data",
+      "/tmp/warehouse's\\data", "/tmp/warehouse\\'data", "/tmp/warehouse\\"})
+  void createTableDdlPreservesBasePath(String basePath) throws Exception {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(META_SYNC_DATABASE_NAME.key(), "db");
+    props.setProperty(META_SYNC_BASE_PATH.key(), basePath);
+    props.setProperty(META_SYNC_PARTITION_FIELDS.key(), "p");
+    RecordingExecutor executor = new RecordingExecutor(new HiveSyncConfig(props));
+    HoodieSchema schema = HoodieSchema.createRecord("record", null, null,
+        Collections.singletonList(HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING))));
+    String serde = "org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe";
+    String inputFormat = "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat";
+    String outputFormat = "org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat";
+
+    // Exercise generateCreateDDL through the same createTable path used by JDBC and HiveQL.
+    executor.createTable("tbl", schema, inputFormat, outputFormat, serde,
+        Collections.emptyMap(), Collections.emptyMap());
+
+    assertEquals(1, executor.executed.size());
+    assertEquals(Arrays.asList(serde, inputFormat, outputFormat, basePath), parseLiterals(executor.executed.get(0)));
   }
 
   private static List<String> parseLiterals(String sql) throws Exception {
