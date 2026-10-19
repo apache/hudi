@@ -21,7 +21,6 @@ package org.apache.hudi.sink.utils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
@@ -32,13 +31,11 @@ import org.apache.flink.configuration.Configuration;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -50,26 +47,21 @@ public class EventBuffers implements Serializable {
 
   // {checkpointId -> (instant, data write events, index write events)}
   private final Map<Long, Pair<String, EventBuffer>> eventBuffers;
-  private final Option<CommitGuard> commitGuardOption;
   private final int dataWriteParallelism;
   private final int indexWriteParallelism;
 
   private EventBuffers(
       Map<Long, Pair<String, EventBuffer>> eventBuffers,
-      Option<CommitGuard> commitGuardOption,
       int dataWriteParallelism,
       int indexWriteParallelism) {
     this.eventBuffers = eventBuffers;
-    this.commitGuardOption = commitGuardOption;
     this.dataWriteParallelism = dataWriteParallelism;
     this.indexWriteParallelism = indexWriteParallelism;
   }
 
   public static EventBuffers getInstance(Configuration conf, int dataWriteParallelism) {
-    final Option<CommitGuard> commitGuardOpt = OptionsResolver.isBlockingInstantGeneration(conf)
-        ? Option.of(CommitGuard.create(conf.get(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT))) : Option.empty();
     final int indexWriteParallelism = OptionsResolver.indexWriteParallelism(conf);
-    return new EventBuffers(new ConcurrentSkipListMap<>(), commitGuardOpt, dataWriteParallelism, indexWriteParallelism);
+    return new EventBuffers(new ConcurrentSkipListMap<>(), dataWriteParallelism, indexWriteParallelism);
   }
 
   public EventBuffer addEventToBuffer(WriteMetadataEvent event) {
@@ -140,34 +132,14 @@ public class EventBuffers implements Serializable {
   }
 
   /**
-   * Waits until the instants of all the checkpoints before the given one are committed if the instant generation is blocking.
-   *
-   * <p>Starting a new instant rolls back the inflight instants, so an earlier instant is waited for from the creation
-   * of its buffer until the buffer is reset, whether its write metadata events have been received or not.
-   *
-   * @param checkpointId The checkpoint ID to create the instant for
-   * @param stale        Whether the request is stale, which stops the waiting
-   *
-   * @return false if the request became stale while waiting, true otherwise or if the instant generation is not blocking
+   * Returns whether any instant is pending, even if its write metadata events have not arrived yet.
    */
-  public boolean awaitAllInstantsToCompleteIfNecessary(long checkpointId, BooleanSupplier stale) {
-    if (!this.commitGuardOption.isPresent()) {
-      return true;
-    }
-    this.commitGuardOption.get().blockFor(() -> stale.getAsBoolean() ? Collections.emptyList() : getPendingInstantsBefore(checkpointId));
-    return !stale.getAsBoolean();
+  public boolean hasPendingInstants() {
+    return !this.eventBuffers.isEmpty();
   }
 
   public void reset(long checkpointId) {
     this.eventBuffers.remove(checkpointId);
-    unblock();
-  }
-
-  /**
-   * Wakes up the blocked instant creation to check its request again.
-   */
-  public void unblock() {
-    this.commitGuardOption.ifPresent(CommitGuard::unblock);
   }
 
   public boolean nonEmpty() {
