@@ -53,9 +53,8 @@ github:
           # indefinitely. Reviewers gate on the checks the PR shows.
           - validate-ci-baseline
           - validate-source
+          # validate-pr also runs the PR title and commit co-author checks.
           - validate-pr
-          - validate-pr-title
-          - validate-commit-coauthor
   collaborators:
     - ad1happy2go
     - rangareddy
