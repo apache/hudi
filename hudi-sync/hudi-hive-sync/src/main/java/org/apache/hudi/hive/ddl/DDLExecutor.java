@@ -23,7 +23,6 @@ import org.apache.hudi.common.util.collection.Pair;
 
 import java.util.List;
 import java.util.Map;
-import java.util.function.IntConsumer;
 
 /**
  * DDLExecutor is the interface which defines the ddl functions for Hive.
@@ -69,15 +68,12 @@ public interface DDLExecutor extends AutoCloseable {
   Map<String, String> getTableSchema(String tableName);
 
   /**
-   * Adds partitions to table, reporting them as the metastore takes them.
+   * Adds partition to table.
    *
    * @param tableName
    * @param partitionsToAdd
-   * @param onPartitionsAdded given the number of partitions each time some are added, so that when
-   *                          adding fails part way, the partitions added before the failure are still
-   *                          reported. It may be called from several threads at once.
    */
-  void addPartitionsToTable(String tableName, List<String> partitionsToAdd, IntConsumer onPartitionsAdded);
+  void addPartitionsToTable(String tableName, List<String> partitionsToAdd);
 
   /**
    * Updates partitions for a given table.

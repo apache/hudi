@@ -43,7 +43,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.IntConsumer;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
@@ -114,7 +113,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
 
   @Override
   public void runSQL(String sql) {
-    updateHiveSQLs(Collections.singletonList(sql), index -> { });
+    updateHiveSQLs(Collections.singletonList(sql));
   }
 
   /**
@@ -127,12 +126,12 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
    * session Driver when no pool is configured.
    */
   @Override
-  protected void runSQLs(List<String> sqls, IntConsumer onStatementSucceeded) {
+  protected void runSQLs(List<String> sqls) {
     if (sqls.isEmpty()) {
       return;
     }
     if (!driverPool.isPresent()) {
-      updateHiveSQLs(sqls, onStatementSucceeded);
+      updateHiveSQLs(sqls);
       return;
     }
     HiveDriverPool pool = driverPool.get();
@@ -143,21 +142,17 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
     if (useStatementCount > 0) {
       List<String> setupStatements = sqls.subList(0, useStatementCount);
       pool.runOnEachWorker(setupStatements);
-      for (int i = 0; i < useStatementCount; i++) {
-        onStatementSucceeded.accept(i);
-      }
     }
     List<String> partitionStatements = sqls.subList(useStatementCount, sqls.size());
     if (partitionStatements.isEmpty()) {
       return;
     }
-    int offset = useStatementCount;
-    pool.awaitAll(pool.dispatchAll(partitionStatements, i -> onStatementSucceeded.accept(offset + i)));
+    pool.awaitAll(pool.dispatchAll(partitionStatements));
   }
 
   /**
    * Splits TOUCH into batches of {@code HIVE_BATCH_SYNC_PARTITION_NUM} only when a
-   * driver pool is actually present — i.e. only when {@link #runSQLs(List, IntConsumer)} will
+   * driver pool is actually present — i.e. only when {@link #runSQLs(List)} will
    * dispatch those batches in parallel. Keyed on pool presence rather than on the
    * {@code batching.enabled} config so the split can never take effect on a path
    * that would just execute the batches serially (the base class, and therefore
@@ -182,7 +177,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
    * bound for the duration, and the thread handed back as found: it may belong to another executor
    * or to an application that embeds this sync and holds a session of its own.
    */
-  private void updateHiveSQLs(List<String> sqls, IntConsumer onStatementSucceeded) {
+  private void updateHiveSQLs(List<String> sqls) {
     HoodieTimer timer = HoodieTimer.start();
     // Authorization can replace Hive's cached instance and close its client. Detach without
     // closing, only on the owning thread and only once. A sync with no statements stays cached
@@ -195,9 +190,8 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
     ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
     try {
       SessionState.setCurrentSessionState(sessionState);
-      for (int i = 0; i < sqls.size(); i++) {
-        HiveStatementExecutor.executeOrThrow(hiveDriver, sqls.get(i));
-        onStatementSucceeded.accept(i);
+      for (String sql : sqls) {
+        HiveStatementExecutor.executeOrThrow(hiveDriver, sql);
       }
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed in executing SQL", e);

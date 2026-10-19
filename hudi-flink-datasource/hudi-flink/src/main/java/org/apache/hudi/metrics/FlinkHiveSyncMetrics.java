@@ -18,7 +18,7 @@
 
 package org.apache.hudi.metrics;
 
-import org.apache.hudi.hive.HiveSyncStats;
+import org.apache.hudi.hive.HoodieHiveSyncMetrics;
 
 import com.codahale.metrics.SlidingWindowReservoir;
 import org.apache.flink.dropwizard.metrics.DropwizardHistogramWrapper;
@@ -34,6 +34,9 @@ import org.apache.flink.metrics.ThreadSafeSimpleCounter;
  * <p>A sync runs on the coordinator's Hive sync executor after a checkpoint commit, and on its event
  * executor after the commit that ends a bounded input, so each metric may be updated from either
  * thread.
+ *
+ * <p>The breakdown of each sync, from the init duration to the schema evolved count, is only
+ * registered when {@code hoodie.datasource.hive_sync.detailed_metrics.enabled} is set.
  */
 public class FlinkHiveSyncMetrics extends HoodieFlinkMetrics {
   private static final int HISTOGRAM_WINDOW_SIZE = 100;
@@ -92,9 +95,10 @@ public class FlinkHiveSyncMetrics extends HoodieFlinkMetrics {
   private final Histogram remainingDurationMs = newHistogram();
 
   /**
-   * Number of partitions added to the metastore. A MERGE_ON_READ table adds the same partitions to
-   * each of its Hive tables, and they are counted once. It staying flat while commits land means
-   * the syncs register nothing.
+   * Number of partitions added to the metastore, counting for each sync the most added to any one of
+   * its Hive tables. A MERGE_ON_READ table normally adds the same partitions to each of its Hive
+   * tables, and they are counted once. It staying flat while commits land means the syncs register
+   * nothing.
    */
   private final Counter partitionsAddedCount = new ThreadSafeSimpleCounter();
 
@@ -104,8 +108,15 @@ public class FlinkHiveSyncMetrics extends HoodieFlinkMetrics {
    */
   private final Counter schemaEvolvedCount = new ThreadSafeSimpleCounter();
 
-  public FlinkHiveSyncMetrics(MetricGroup metricGroup) {
+  private final boolean detailedMetricsEnabled;
+
+  /**
+   * @param detailedMetricsEnabled whether to register and update the breakdown of each sync, which the sync records
+   *     only when its detailed metrics are enabled
+   */
+  public FlinkHiveSyncMetrics(MetricGroup metricGroup, boolean detailedMetricsEnabled) {
     super(metricGroup);
+    this.detailedMetricsEnabled = detailedMetricsEnabled;
   }
 
   @Override
@@ -114,27 +125,35 @@ public class FlinkHiveSyncMetrics extends HoodieFlinkMetrics {
     metricGroup.counter(HIVE_SYNC_FAILURE_COUNT, syncFailureCount);
     metricGroup.histogram(HIVE_SYNC_DURATION_MS, syncDurationMs);
     metricGroup.gauge(HIVE_SYNC_LAST_SUCCESS_TIME_MS, () -> lastSyncSuccessTimeMs);
-    metricGroup.histogram(HIVE_SYNC_INIT_DURATION_MS, initDurationMs);
-    metricGroup.histogram(HIVE_SYNC_SCHEMA_READ_DURATION_MS, schemaReadDurationMs);
-    metricGroup.histogram(HIVE_SYNC_PARTITION_SCAN_DURATION_MS, partitionScanDurationMs);
-    metricGroup.histogram(HIVE_SYNC_REMAINING_DURATION_MS, remainingDurationMs);
-    metricGroup.counter(HIVE_SYNC_PARTITIONS_ADDED_COUNT, partitionsAddedCount);
-    metricGroup.counter(HIVE_SYNC_SCHEMA_EVOLVED_COUNT, schemaEvolvedCount);
+    if (detailedMetricsEnabled) {
+      metricGroup.histogram(HIVE_SYNC_INIT_DURATION_MS, initDurationMs);
+      metricGroup.histogram(HIVE_SYNC_SCHEMA_READ_DURATION_MS, schemaReadDurationMs);
+      metricGroup.histogram(HIVE_SYNC_PARTITION_SCAN_DURATION_MS, partitionScanDurationMs);
+      metricGroup.histogram(HIVE_SYNC_REMAINING_DURATION_MS, remainingDurationMs);
+      metricGroup.counter(HIVE_SYNC_PARTITIONS_ADDED_COUNT, partitionsAddedCount);
+      metricGroup.counter(HIVE_SYNC_SCHEMA_EVOLVED_COUNT, schemaEvolvedCount);
+    }
   }
 
   public void updateInitDuration(long durationMs) {
+    if (!detailedMetricsEnabled) {
+      return;
+    }
     initDurationMs.update(durationMs);
   }
 
   /**
    * Records what a sync did, after it completed or failed.
    */
-  public void updateSyncStats(HiveSyncStats stats) {
-    stats.getSchemaReadMs().ifPresent(schemaReadDurationMs::update);
-    stats.getPartitionScanMs().ifPresent(partitionScanDurationMs::update);
-    stats.getRemainingMs().ifPresent(remainingDurationMs::update);
-    partitionsAddedCount.inc(stats.getPartitionsAdded());
-    if (stats.isSchemaEvolved()) {
+  public void updateSyncMetrics(HoodieHiveSyncMetrics syncMetrics) {
+    if (!detailedMetricsEnabled) {
+      return;
+    }
+    syncMetrics.getSchemaReadMs().ifPresent(schemaReadDurationMs::update);
+    syncMetrics.getPartitionScanMs().ifPresent(partitionScanDurationMs::update);
+    syncMetrics.getRemainingMs().ifPresent(remainingDurationMs::update);
+    partitionsAddedCount.inc(syncMetrics.getPartitionsAdded());
+    if (syncMetrics.isSchemaEvolved()) {
       schemaEvolvedCount.inc();
     }
   }

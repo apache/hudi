@@ -18,24 +18,40 @@
 
 package org.apache.hudi.hive;
 
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+
+import java.util.function.LongConsumer;
+import java.util.function.Supplier;
 
 /**
  * What one {@link HiveSyncTool#syncHoodieTable()} did, for callers that report on their syncs.
  *
  * <p>A MERGE_ON_READ table is registered as several Hive tables, all synced by one call. The
- * durations add up over those tables. The partition count and the schema flag describe one of them,
- * since each gets the same partitions and the same schema.
+ * durations add up over those tables. The partition count is the most partitions added to any one
+ * of them, and the schema flag is set when any of them had its schema evolved.
  *
- * <p>After a failed sync, the stats cover the steps that ran before the failure.
+ * <p>After a failed sync, the metrics cover the steps that ran before the failure.
+ *
+ * <p>Unless {@code hoodie.datasource.hive_sync.detailed_metrics.enabled} is set, the sync steps run
+ * untimed and nothing is recorded, so the metrics stay empty.
  */
-public class HiveSyncStats {
+public class HoodieHiveSyncMetrics {
 
+  private final boolean detailedMetricsEnabled;
   private long totalMs = -1;
   private long schemaReadMs = -1;
   private long partitionScanMs = -1;
   private int partitionsAdded = 0;
   private boolean schemaEvolved = false;
+
+  /**
+   * @param detailedMetricsEnabled whether to time the sync steps and keep what is recorded; disabled
+   *     metrics run the steps untimed and stay empty
+   */
+  public HoodieHiveSyncMetrics(boolean detailedMetricsEnabled) {
+    this.detailedMetricsEnabled = detailedMetricsEnabled;
+  }
 
   /**
    * Time spent reading the table schema from storage, or empty when no step read it, as when the
@@ -66,7 +82,14 @@ public class HiveSyncStats {
     return Option.of(Math.max(0, totalMs - Math.max(0, schemaReadMs) - Math.max(0, partitionScanMs)));
   }
 
-  /** Number of partitions added to the metastore. */
+  /**
+   * The most partitions added to any one Hive table of the sync. They are counted once adding them
+   * all succeeds, so a sync that fails while adding partitions counts none of them.
+   *
+   * <p>The Hive tables of a MERGE_ON_READ table normally get the same partitions, which this counts
+   * once. It is not a count of distinct partitions: when the tables were missing different
+   * partitions, as after one of them was repaired by hand, it counts the larger of their additions.
+   */
   public int getPartitionsAdded() {
     return partitionsAdded;
   }
@@ -74,6 +97,33 @@ public class HiveSyncStats {
   /** Whether the storage schema differed from the metastore's and was pushed to it. */
   public boolean isSchemaEvolved() {
     return schemaEvolved;
+  }
+
+  void timeTotal(Runnable sync) {
+    time(() -> {
+      sync.run();
+      return null;
+    }, this::setTotalMs);
+  }
+
+  <T> T timeSchemaRead(Supplier<T> step) {
+    return time(step, this::addSchemaReadMs);
+  }
+
+  <T> T timePartitionScan(Supplier<T> step) {
+    return time(step, this::addPartitionScanMs);
+  }
+
+  void recordPartitionsAdded(int count) {
+    if (detailedMetricsEnabled) {
+      partitionsAdded = Math.max(partitionsAdded, count);
+    }
+  }
+
+  void markSchemaEvolved() {
+    if (detailedMetricsEnabled) {
+      schemaEvolved = true;
+    }
   }
 
   void setTotalMs(long totalMs) {
@@ -88,15 +138,15 @@ public class HiveSyncStats {
     partitionScanMs = Math.max(0, partitionScanMs) + durationMs;
   }
 
-  /**
-   * Keeps the largest count rather than the sum: the Hive tables of a MERGE_ON_READ table each get
-   * the same partitions, so summing would count them once per table.
-   */
-  void recordPartitionsAdded(int count) {
-    partitionsAdded = Math.max(partitionsAdded, count);
-  }
-
-  void markSchemaEvolved() {
-    schemaEvolved = true;
+  private <T> T time(Supplier<T> step, LongConsumer recorder) {
+    if (!detailedMetricsEnabled) {
+      return step.get();
+    }
+    HoodieTimer timer = HoodieTimer.start();
+    try {
+      return step.get();
+    } finally {
+      recorder.accept(timer.endTimer());
+    }
   }
 }

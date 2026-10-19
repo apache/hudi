@@ -19,7 +19,7 @@
 package org.apache.hudi.metrics;
 
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.hive.HiveSyncStats;
+import org.apache.hudi.hive.HoodieHiveSyncMetrics;
 
 import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.Gauge;
@@ -48,6 +48,7 @@ import static org.apache.hudi.metrics.FlinkHiveSyncMetrics.HIVE_SYNC_SCHEMA_READ
 import static org.apache.hudi.metrics.FlinkHiveSyncMetrics.HIVE_SYNC_SUCCESS_COUNT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -63,7 +64,7 @@ class TestFlinkHiveSyncMetrics {
   @BeforeEach
   void setUp() {
     metricGroup = new CapturingMetricGroup();
-    metrics = new FlinkHiveSyncMetrics(metricGroup);
+    metrics = new FlinkHiveSyncMetrics(metricGroup, true);
     metrics.registerMetrics();
   }
 
@@ -79,6 +80,23 @@ class TestFlinkHiveSyncMetrics {
     assertNotNull(metricGroup.histograms.get(HIVE_SYNC_REMAINING_DURATION_MS));
     assertNotNull(metricGroup.counters.get(HIVE_SYNC_PARTITIONS_ADDED_COUNT));
     assertNotNull(metricGroup.counters.get(HIVE_SYNC_SCHEMA_EVOLVED_COUNT));
+  }
+
+  @Test
+  void testBreakdownMetricsNotRegisteredWhenDetailedMetricsDisabled() {
+    CapturingMetricGroup group = new CapturingMetricGroup();
+    new FlinkHiveSyncMetrics(group, false).registerMetrics();
+
+    assertNotNull(group.counters.get(HIVE_SYNC_SUCCESS_COUNT));
+    assertNotNull(group.counters.get(HIVE_SYNC_FAILURE_COUNT));
+    assertNotNull(group.histograms.get(HIVE_SYNC_DURATION_MS));
+    assertNotNull(group.gauges.get(HIVE_SYNC_LAST_SUCCESS_TIME_MS));
+    assertNull(group.histograms.get(HIVE_SYNC_INIT_DURATION_MS));
+    assertNull(group.histograms.get(HIVE_SYNC_SCHEMA_READ_DURATION_MS));
+    assertNull(group.histograms.get(HIVE_SYNC_PARTITION_SCAN_DURATION_MS));
+    assertNull(group.histograms.get(HIVE_SYNC_REMAINING_DURATION_MS));
+    assertNull(group.counters.get(HIVE_SYNC_PARTITIONS_ADDED_COUNT));
+    assertNull(group.counters.get(HIVE_SYNC_SCHEMA_EVOLVED_COUNT));
   }
 
   @Test
@@ -104,9 +122,9 @@ class TestFlinkHiveSyncMetrics {
   }
 
   @Test
-  void testUpdateSyncStats() {
-    metrics.updateSyncStats(stats(Option.of(10L), Option.of(20L), Option.of(30L), 4, true));
-    metrics.updateSyncStats(stats(Option.of(11L), Option.of(21L), Option.of(31L), 2, false));
+  void testUpdateSyncMetrics() {
+    metrics.updateSyncMetrics(stats(Option.of(10L), Option.of(20L), Option.of(30L), 4, true));
+    metrics.updateSyncMetrics(stats(Option.of(11L), Option.of(21L), Option.of(31L), 2, false));
 
     assertEquals(2, histogram(HIVE_SYNC_SCHEMA_READ_DURATION_MS).getCount());
     assertEquals(11L, histogram(HIVE_SYNC_SCHEMA_READ_DURATION_MS).getStatistics().getMax());
@@ -119,8 +137,8 @@ class TestFlinkHiveSyncMetrics {
   }
 
   @Test
-  void testUpdateSyncStatsSkipsStepsThatDidNotRun() {
-    metrics.updateSyncStats(stats(Option.empty(), Option.empty(), Option.of(5L), 0, false));
+  void testUpdateSyncMetricsSkipsStepsThatDidNotRun() {
+    metrics.updateSyncMetrics(stats(Option.empty(), Option.empty(), Option.of(5L), 0, false));
 
     assertEquals(0, histogram(HIVE_SYNC_SCHEMA_READ_DURATION_MS).getCount(),
         "A sync that read no schema must not record a schema read of 0 ms");
@@ -241,9 +259,9 @@ class TestFlinkHiveSyncMetrics {
     return metricGroup.counters.get(name).getCount();
   }
 
-  private static HiveSyncStats stats(Option<Long> schemaReadMs, Option<Long> partitionScanMs,
+  private static HoodieHiveSyncMetrics stats(Option<Long> schemaReadMs, Option<Long> partitionScanMs,
                                      Option<Long> remainingMs, int partitionsAdded, boolean schemaEvolved) {
-    HiveSyncStats stats = mock(HiveSyncStats.class);
+    HoodieHiveSyncMetrics stats = mock(HoodieHiveSyncMetrics.class);
     when(stats.getSchemaReadMs()).thenReturn(schemaReadMs);
     when(stats.getPartitionScanMs()).thenReturn(partitionScanMs);
     when(stats.getRemainingMs()).thenReturn(remainingMs);

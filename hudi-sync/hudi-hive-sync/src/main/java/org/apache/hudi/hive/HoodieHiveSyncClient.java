@@ -62,7 +62,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.function.IntConsumer;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.hadoop.utils.HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP;
@@ -299,12 +298,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
 
   @Override
   public void addPartitionsToTable(String tableName, List<String> partitionsToAdd) {
-    ddlExecutor.addPartitionsToTable(tableName, partitionsToAdd, added -> { });
-  }
-
-  @Override
-  public void addPartitionsToTable(String tableName, List<String> partitionsToAdd, IntConsumer onPartitionsAdded) {
-    ddlExecutor.addPartitionsToTable(tableName, partitionsToAdd, onPartitionsAdded);
+    ddlExecutor.addPartitionsToTable(tableName, partitionsToAdd);
   }
 
   @Override

@@ -150,6 +150,17 @@ public class HiveSyncConfigHolder {
           + "`hoodie.datasource.hive_sync.batching.enabled` is true. The same value sizes both pools: the "
           + "Hive Driver workers used for ADD/TOUCH/SET_LOCATION and the metastore (Thrift) clients used "
           + "for DROP. Ignored otherwise.");
+  public static final ConfigProperty<Boolean> HIVE_SYNC_DETAILED_METRICS_ENABLED = ConfigProperty
+      .key("hoodie.datasource.hive_sync.detailed_metrics.enabled")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("When true, each Hive sync records a breakdown of what it did: the time spent "
+          + "reading the table schema, the time spent finding the partitions to sync, the time spent on "
+          + "the rest, the most partitions added to any one Hive table, and whether the schema was "
+          + "pushed to the metastore. When false, the sync steps are not timed. The Flink write "
+          + "coordinator reports the breakdown, and the time to build the sync tool, as metrics only "
+          + "when this is true.");
   public static final ConfigProperty<String> HIVE_SYNC_MODE = ConfigProperty
       .key("hoodie.datasource.hive_sync.mode")
       .noDefaultValue()

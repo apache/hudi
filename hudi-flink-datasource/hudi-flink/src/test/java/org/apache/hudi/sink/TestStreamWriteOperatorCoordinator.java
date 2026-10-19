@@ -47,6 +47,7 @@ import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.MissingSchemaFieldException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.hive.HiveSyncConfigHolder;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -623,9 +624,32 @@ public class TestStreamWriteOperatorCoordinator {
   }
 
   @Test
-  void testHiveSyncFailureUpdatesMetrics() throws Exception {
+  void testHiveSyncBreakdownMetricsNotRegisteredUnlessDetailedMetricsEnabled() throws Exception {
+    coordinator.close();
+    CapturingCoordinatorMetricGroup metricGroup = new CapturingCoordinatorMetricGroup();
+    coordinator = startCoordinator(getUnreachableMetastoreConf(), metricGroup);
+
+    assertThrows(HoodieHiveSyncException.class, () -> coordinator.doSyncHive());
+
+    assertEquals(1, metricGroup.counters.get("hiveSyncFailureCount").getCount(),
+        "A failed sync is counted whether or not the detailed metrics are enabled");
+    assertNotNull(metricGroup.counters.get("hiveSyncSuccessCount"));
+    assertNotNull(metricGroup.histograms.get("hiveSyncDurationMs"));
+    assertNotNull(metricGroup.gauges.get("hiveSyncLastSuccessTimeMs"));
+    assertNull(metricGroup.histograms.get("hiveSyncInitDurationMs"));
+    assertNull(metricGroup.histograms.get("hiveSyncSchemaReadDurationMs"));
+    assertNull(metricGroup.histograms.get("hiveSyncPartitionScanDurationMs"));
+    assertNull(metricGroup.histograms.get("hiveSyncRemainingDurationMs"));
+    assertNull(metricGroup.counters.get("hiveSyncPartitionsAddedCount"));
+    assertNull(metricGroup.counters.get("hiveSyncSchemaEvolvedCount"));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"", "properties."})
+  void testHiveSyncFailureUpdatesMetrics(String keyPrefix) throws Exception {
     coordinator.close();
     Configuration conf = getUnreachableMetastoreConf();
+    conf.setString(keyPrefix + HiveSyncConfigHolder.HIVE_SYNC_DETAILED_METRICS_ENABLED.key(), "true");
     CapturingCoordinatorMetricGroup metricGroup = new CapturingCoordinatorMetricGroup();
     coordinator = startCoordinator(conf, metricGroup);
 
@@ -648,6 +672,7 @@ public class TestStreamWriteOperatorCoordinator {
     coordinator.close();
     Configuration conf = getUnreachableMetastoreConf();
     conf.set(FlinkOptions.HIVE_SYNC_IGNORE_EXCEPTIONS, true);
+    conf.setString(HiveSyncConfigHolder.HIVE_SYNC_DETAILED_METRICS_ENABLED.key(), "true");
     CapturingCoordinatorMetricGroup metricGroup = new CapturingCoordinatorMetricGroup();
     coordinator = startCoordinator(conf, metricGroup);
 

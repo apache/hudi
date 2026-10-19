@@ -22,16 +22,17 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests for {@link HiveSyncStats}.
+ * Tests for {@link HoodieHiveSyncMetrics}.
  */
-class TestHiveSyncStats {
+class TestHoodieHiveSyncMetrics {
 
   @Test
   void testNothingRecordedBeforeASync() {
-    HiveSyncStats stats = new HiveSyncStats();
+    HoodieHiveSyncMetrics stats = new HoodieHiveSyncMetrics(true);
     assertFalse(stats.getSchemaReadMs().isPresent());
     assertFalse(stats.getPartitionScanMs().isPresent());
     assertFalse(stats.getRemainingMs().isPresent());
@@ -41,7 +42,7 @@ class TestHiveSyncStats {
 
   @Test
   void testMetastoreTimeIsWhatTheOtherStepsLeave() {
-    HiveSyncStats stats = new HiveSyncStats();
+    HoodieHiveSyncMetrics stats = new HoodieHiveSyncMetrics(true);
     stats.addSchemaReadMs(10);
     stats.addSchemaReadMs(5);
     stats.addPartitionScanMs(30);
@@ -54,7 +55,7 @@ class TestHiveSyncStats {
 
   @Test
   void testMetastoreTimeWithoutOtherSteps() {
-    HiveSyncStats stats = new HiveSyncStats();
+    HoodieHiveSyncMetrics stats = new HoodieHiveSyncMetrics(true);
     stats.setTotalMs(40);
 
     assertFalse(stats.getSchemaReadMs().isPresent());
@@ -64,7 +65,7 @@ class TestHiveSyncStats {
 
   @Test
   void testPartitionsAddedAndSchemaEvolvedDescribeOneTable() {
-    HiveSyncStats stats = new HiveSyncStats();
+    HoodieHiveSyncMetrics stats = new HoodieHiveSyncMetrics(true);
     stats.recordPartitionsAdded(3);
     stats.recordPartitionsAdded(3);
     stats.markSchemaEvolved();
@@ -72,5 +73,56 @@ class TestHiveSyncStats {
 
     assertEquals(3, stats.getPartitionsAdded());
     assertTrue(stats.isSchemaEvolved());
+  }
+
+  @Test
+  void testPartitionsAddedIsTheMostAddedToOneTable() {
+    HoodieHiveSyncMetrics stats = new HoodieHiveSyncMetrics(true);
+    stats.recordPartitionsAdded(2);
+    stats.recordPartitionsAdded(3);
+    stats.recordPartitionsAdded(1);
+
+    assertEquals(3, stats.getPartitionsAdded());
+  }
+
+  @Test
+  void testTimedStepsRecordTheirDurations() {
+    HoodieHiveSyncMetrics stats = new HoodieHiveSyncMetrics(true);
+    stats.timeTotal(() -> {
+      assertEquals("schema", stats.timeSchemaRead(() -> "schema"));
+      assertEquals("partitions", stats.timePartitionScan(() -> "partitions"));
+    });
+
+    assertTrue(stats.getSchemaReadMs().isPresent());
+    assertTrue(stats.getPartitionScanMs().isPresent());
+    assertTrue(stats.getRemainingMs().isPresent());
+  }
+
+  @Test
+  void testTimedStepsThatFailAreStillRecorded() {
+    HoodieHiveSyncMetrics stats = new HoodieHiveSyncMetrics(true);
+    assertThrows(IllegalStateException.class, () -> stats.timeTotal(() -> stats.timePartitionScan(() -> {
+      throw new IllegalStateException("listing fails");
+    })));
+
+    assertTrue(stats.getPartitionScanMs().isPresent());
+    assertTrue(stats.getRemainingMs().isPresent());
+  }
+
+  @Test
+  void testDisabledStatsRunTheStepsAndRecordNothing() {
+    HoodieHiveSyncMetrics stats = new HoodieHiveSyncMetrics(false);
+    stats.timeTotal(() -> {
+      assertEquals("schema", stats.timeSchemaRead(() -> "schema"));
+      assertEquals("partitions", stats.timePartitionScan(() -> "partitions"));
+    });
+    stats.recordPartitionsAdded(3);
+    stats.markSchemaEvolved();
+
+    assertFalse(stats.getSchemaReadMs().isPresent());
+    assertFalse(stats.getPartitionScanMs().isPresent());
+    assertFalse(stats.getRemainingMs().isPresent());
+    assertEquals(0, stats.getPartitionsAdded());
+    assertFalse(stats.isSchemaEvolved());
   }
 }

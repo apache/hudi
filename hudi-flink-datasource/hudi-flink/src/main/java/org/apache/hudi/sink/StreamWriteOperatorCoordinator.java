@@ -464,7 +464,7 @@ public class StreamWriteOperatorCoordinator
         .threadFactory(getThreadFactory("hive-sync"))
         .waitForTasksFinish(true).build();
     this.hiveSyncContext = HiveSyncContext.create(conf, this.storageConf);
-    this.hiveSyncMetrics = new FlinkHiveSyncMetrics(context.metricGroup());
+    this.hiveSyncMetrics = new FlinkHiveSyncMetrics(context.metricGroup(), hiveSyncContext.isDetailedMetricsEnabled());
     this.hiveSyncMetrics.registerMetrics();
   }
 
@@ -494,7 +494,7 @@ public class StreamWriteOperatorCoordinator
       try {
         syncTool.syncHoodieTable();
       } finally {
-        hiveSyncMetrics.updateSyncStats(syncTool.getSyncStats());
+        hiveSyncMetrics.updateSyncMetrics(syncTool.getSyncMetrics());
       }
     } catch (Throwable t) {
       hiveSyncMetrics.markSyncFailed(timer.endTimer());
@@ -504,18 +504,19 @@ public class StreamWriteOperatorCoordinator
   }
 
   /**
-   * Builds the sync tool, recording how long that took even when it fails, as when the metastore
-   * cannot be reached.
+   * Builds the sync tool. With detailed metrics enabled, records how long that took even when it
+   * fails, as when the metastore cannot be reached.
    */
   private HiveSyncTool createHiveSyncTool() {
+    if (!hiveSyncContext.isDetailedMetricsEnabled()) {
+      return hiveSyncContext.hiveSyncTool();
+    }
     HoodieTimer timer = HoodieTimer.start();
-    HiveSyncTool tool;
     try {
-      tool = hiveSyncContext.hiveSyncTool();
+      return hiveSyncContext.hiveSyncTool();
     } finally {
       hiveSyncMetrics.updateInitDuration(timer.endTimer());
     }
-    return tool;
   }
 
   private void scheduleTableServices(Boolean committed) {
