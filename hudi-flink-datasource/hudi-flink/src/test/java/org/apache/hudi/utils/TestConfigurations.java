@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utils;
 
+import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
@@ -50,6 +51,15 @@ import java.util.stream.Collectors;
  */
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class TestConfigurations {
+
+  /**
+   * Max expected clock skew used by the tests. With a non-InProcess lock provider (e.g. the FileSystemBasedLockProvider
+   * Flink configures when the metadata table is enabled) the 200ms default is slept on every instant/completion time
+   * generation. All writers in a test share one JVM clock and generate times serially under the lock, so 1ms (the value
+   * Hudi infers for InProcessLockProvider) keeps them monotonic without the latency.
+   */
+  public static final String CLOCK_SKEW_MS_KEY = HoodieTimeGeneratorConfig.MAX_EXPECTED_CLOCK_SKEW_MS.key();
+  public static final String CLOCK_SKEW_MS = "1";
 
   public static final DataType ROW_DATA_TYPE = DataTypes.ROW(
           DataTypes.FIELD("uuid", DataTypes.VARCHAR(20)),// record key
@@ -377,6 +387,7 @@ public class TestConfigurations {
             .getContextClassLoader().getResource("test_read_schema.avsc")).toString());
     conf.set(FlinkOptions.TABLE_NAME, "TestHoodieTable");
     conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition");
+    conf.setString(CLOCK_SKEW_MS_KEY, CLOCK_SKEW_MS);
     return conf;
   }
 
@@ -388,6 +399,7 @@ public class TestConfigurations {
     conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, HoodieSchemaConverter.convertToSchema(dataType.getLogicalType()).toString());
     conf.set(FlinkOptions.TABLE_NAME, "TestHoodieTable");
     conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition");
+    conf.setString(CLOCK_SKEW_MS_KEY, CLOCK_SKEW_MS);
     return conf;
   }
 
@@ -432,6 +444,7 @@ public class TestConfigurations {
 
     public Sql(String tableName) {
       options = new HashMap<>();
+      options.put(CLOCK_SKEW_MS_KEY, CLOCK_SKEW_MS);
       this.tableName = tableName;
     }
 
