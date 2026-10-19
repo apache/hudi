@@ -484,17 +484,23 @@ public class HoodieIncrSource extends RowSource {
     if (StringUtils.isNullOrEmpty(endCompletionTime)) {
       return;
     }
-    List<HoodieInstant> instants = queryContext.getInstants().stream()
-        .filter(i -> compareTimestamps(i.getCompletionTime(), LESSER_THAN_OR_EQUALS, endCompletionTime))
-        .collect(Collectors.toList());
-    if (instants.isEmpty()) {
-      return;
-    }
-    this.upstreamEventTimeWatermarks = UpstreamEventTimeWatermarkExtractor
-        .extractPerPartitionWatermarks(queryContext.getActiveTimeline(), instants);
-    if (!this.upstreamEventTimeWatermarks.isEmpty()) {
-      log.info("Propagating upstream event-time watermarks for {} partition(s) from {} commit(s)",
-          this.upstreamEventTimeWatermarks.size(), instants.size());
+    try {
+      List<HoodieInstant> instants = queryContext.getInstants().stream()
+          .filter(i -> compareTimestamps(i.getCompletionTime(), LESSER_THAN_OR_EQUALS, endCompletionTime))
+          .collect(Collectors.toList());
+      if (instants.isEmpty()) {
+        return;
+      }
+      this.upstreamEventTimeWatermarks = UpstreamEventTimeWatermarkExtractor
+          .extractPerPartitionWatermarks(queryContext.getActiveTimeline(), instants);
+      if (!this.upstreamEventTimeWatermarks.isEmpty()) {
+        log.info("Propagating upstream event-time watermarks for {} partition(s) from {} commit(s) (completion-time path)",
+            this.upstreamEventTimeWatermarks.size(), instants.size());
+      }
+    } catch (Exception e) {
+      // Don't fail the source if watermark extraction has trouble; propagation is best-effort.
+      log.warn("Failed to extract upstream event-time watermarks (completion-time path) up to {}: {}",
+          endCompletionTime, e.getMessage());
     }
   }
 
@@ -522,7 +528,7 @@ public class HoodieIncrSource extends RowSource {
       this.upstreamEventTimeWatermarks = UpstreamEventTimeWatermarkExtractor
           .extractPerPartitionWatermarks(completedCommits, instants);
       if (!this.upstreamEventTimeWatermarks.isEmpty()) {
-        log.info("Propagating upstream event-time watermarks for {} partition(s) from {} commit(s)",
+        log.info("Propagating upstream event-time watermarks for {} partition(s) from {} commit(s) (request-time path)",
             this.upstreamEventTimeWatermarks.size(), instants.size());
       }
     } catch (Exception e) {
