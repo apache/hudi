@@ -196,7 +196,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
       String partitionClause = getPartitionClause(partitions.get(i));
       String fullPartitionPath =
           FSUtils.constructAbsolutePath(config.getString(META_SYNC_BASE_PATH), partitions.get(i)).toString();
-      alterSQL.append("  PARTITION (").append(partitionClause).append(") LOCATION '").append(fullPartitionPath)
+      alterSQL.append("  PARTITION (").append(partitionClause).append(") LOCATION '").append(HiveSchemaUtil.escapeSqlString(fullPartitionPath))
           .append("' ");
       if ((i + 1) % batchSyncPartitionNum == 0) {
         result.add(alterSQL.toString());
@@ -231,7 +231,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
         // This is a decode operator for encode in KeyGenUtils#getRecordPartitionPath
         partitionValue = PartitionPathEncodeUtils.unescapePathName(partitionValue);
       }
-      partBuilder.add("`" + config.getSplitStrings(META_SYNC_PARTITION_FIELDS).get(i) + "`='" + partitionValue + "'");
+      partBuilder.add("`" + config.getSplitStrings(META_SYNC_PARTITION_FIELDS).get(i) + "`='" + HiveSchemaUtil.escapeSqlString(partitionValue) + "'");
     }
     return String.join(",", partBuilder);
   }
@@ -289,7 +289,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
           String partitionScheme = partitionPath.toUri().getScheme();
           String fullPartitionPath = StorageSchemes.HDFS.getScheme().equals(partitionScheme)
               ? HadoopFSUtils.getDFSFullPartitionPath(config.getHadoopFileSystem(), partitionPath) : partitionPath.toString();
-          result.add(alterTablePrefix + " PARTITION (" + partitionClause + ") SET LOCATION '" + fullPartitionPath + "'");
+          result.add(alterTablePrefix + " PARTITION (" + partitionClause + ") SET LOCATION '" + HiveSchemaUtil.escapeSqlString(fullPartitionPath) + "'");
         }
         break;
       default:
