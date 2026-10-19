@@ -4,7 +4,7 @@ summary: "In this page, we describe async compaction in Hudi."
 toc: true
 toc_min_heading_level: 2
 toc_max_heading_level: 4
-last_modified_at: 2026-10-17T18:46:05
+last_modified_at: 2026-10-19T17:27:22
 ---
 ## Background
 
@@ -44,6 +44,10 @@ There are two steps to compaction.
 
 - **Compaction Scheduling**: In this step, Hudi scans the partitions and selects file slices to be compacted. A compaction plan is finally written to Hudi timeline.
 - **Compaction Execution**: In this step the compaction plan is read and file slices are compacted.
+
+### Compaction planning parallelism
+
+Starting with 1.1.2, `hoodie.compaction.plan.parallelism` limits concurrent partition scans when planning compaction or log compaction. The default is `200`; actual parallelism is capped by the number of partitions selected by the compaction strategy. Set a positive, lower value to reduce concurrent requests and memory pressure on the file system view server. This setting controls planning, independently of compaction execution parallelism.
 
 ### Strategies in Compaction Scheduling
 
@@ -169,7 +173,7 @@ ingests data to Hudi table continuously from upstream sources. In this mode, Hud
 compactions. Here is an example snippet for running in continuous mode with async compactions
 
 ```properties
-spark-submit --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.2,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.2 \
+spark-submit --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.1.2,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.1.2 \
 --class org.apache.hudi.utilities.streamer.HoodieStreamer \
 --table-type MERGE_ON_READ \
 --target-base-path <hudi_base_path> \
@@ -209,7 +213,7 @@ The compactor utility allows to do scheduling and execution of compaction.
 Example:
 
 ```properties
-spark-submit --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.2,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.2 \
+spark-submit --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.1.2,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.1.2 \
 --class org.apache.hudi.utilities.HoodieCompactor \
 --base-path <base_path> \
 --table-name <table_name> \
@@ -257,7 +261,3 @@ Offline compaction needs to submit the Flink task on the command line. The progr
 <h3>Blogs</h3>
 [Apache Hudi Compaction](https://medium.com/@simpsons/apache-hudi-compaction-6e6383790234)
 [Standalone HoodieCompactor Utility](https://medium.com/@simpsons/standalone-hoodiecompactor-utility-890198e4c539)
-
-### Compaction planning parallelism
-
-Starting with 1.1.2, `hoodie.compaction.plan.parallelism` limits concurrent partition scans when planning compaction or log compaction. The default is `200`; actual parallelism is capped by the number of partitions selected by the compaction strategy. Set a positive, lower value to reduce concurrent requests and memory pressure on the file system view server. This setting controls planning, independently of compaction execution parallelism.

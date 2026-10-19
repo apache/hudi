@@ -120,6 +120,6 @@ the `write.rate.limit` option can be turned on to ensure smooth writing.
 
 Version 1.1.2 fixes streaming write recovery after global failover and task retries, and reclaims memory from inactive write buckets when the buffer pool is exhausted. It also reduces repeated timeline loading and schema validation during writes.
 
-Keep `write.ignore.failed` at its default of `false` to fail on write-status errors. The common key `hoodie.write.ignore.failed` is accepted as a fallback; setting either option to `true` can allow checkpoints to complete despite write-status errors.
+Keep `write.ignore.failed` at its default of `false` so that record write exceptions fail the task instead of being recorded in the write status. The common key `hoodie.write.ignore.failed` is accepted as a fallback. Since 1.1.2 the coordinator no longer rolls back an instant whose write statuses contain errors; such errors are logged and the instant is committed regardless of the flag. Errors recorded without throwing, such as a partition-path mismatch in `HoodieAppendHandle`, can still be committed with `false`.
 
 For upserts with CDC enabled, instant generation now waits for commit acknowledgement to preserve instant ordering, including on Merge-on-Read tables. The wait is governed by `write.commit.ack.timeout`.

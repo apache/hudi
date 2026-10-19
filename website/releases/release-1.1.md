@@ -2,7 +2,7 @@
 title: "Release 1.1"
 layout: releases
 toc: true
-last_modified_at: 2026-10-17T18:59:30
+last_modified_at: 2026-10-19T17:27:22
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -14,7 +14,7 @@ This page contains release notes for all Apache Hudi 1.1.x releases, including:
 
 ---
 
-## [Release 1.1.2](https://github.com/apache/hudi/tree/release-1.1.2) {#release-112}
+## [Release 1.1.2](https://github.com/apache/hudi/releases/tag/release-1.1.2) {#release-112}
 
 ## Migration Guide
 
@@ -30,7 +30,7 @@ The same engine versions as 1.1.1 are supported: Spark 3.3â€“4.0 and Flink 1.17â
 * Flink upserts with CDC enabled now use blocking instant generation to preserve instant ordering, including on Merge-on-Read tables ([#18206](https://github.com/apache/hudi/pull/18206)).
 * Compaction and log-compaction planning now limit concurrent partition scans with `hoodie.compaction.plan.parallelism`. The default is `200`, capped by the number of selected partitions; the value must be positive ([#20024](https://github.com/apache/hudi/pull/20024)).
 * Timeline compaction adds `hoodie.timeline.compaction.target.file.max.bytes`, defaulting to `1048576000` bytes (1000 MiB), to limit each archived timeline file ([#17784](https://github.com/apache/hudi/pull/17784)).
-* The new common writer option `hoodie.write.ignore.failed` defaults to `true` for backward compatibility. Flink's existing `write.ignore.failed` still defaults to `false` and now accepts the common option as a fallback key. With failure ignoring disabled, write-status errors fail the write earlier. Enabling it can allow checkpoints to proceed despite write-status errors.
+* The new common writer option `hoodie.write.ignore.failed` defaults to `true` for backward compatibility. Flink's existing `write.ignore.failed` still defaults to `false` and now accepts the common option as a fallback key. With the Flink option set to `false`, record write exceptions fail the task eagerly instead of being recorded in the write status. Since 1.1.2, the Flink coordinator no longer rolls back an instant because its write statuses contain errors: it logs those errors and commits the instant regardless of this flag ([#12150](https://github.com/apache/hudi/pull/12150)). Errors recorded without throwing, such as a partition-path mismatch in `HoodieAppendHandle`, can therefore be committed even when the flag is `false`.
 
 See the [1.1.2 configuration reference](/docs/1.1.2/configurations) for the added settings.
 

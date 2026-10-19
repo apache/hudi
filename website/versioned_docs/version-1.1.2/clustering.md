@@ -2,7 +2,7 @@
 title: Clustering
 summary: "In this page, we describe async compaction in Hudi."
 toc: true
-last_modified_at: 2025-11-24T02:44:48
+last_modified_at: 2026-10-19T17:27:22
 ---
 
 ## Background
@@ -249,9 +249,9 @@ A sample spark-submit command to setup HoodieClusteringJob is as below:
 
 ```bash
 spark-submit \
---jars "packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.2.jar,packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-1.0.2.jar" \
+--jars "packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.1.2.jar,packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-1.1.2.jar" \
 --class org.apache.hudi.utilities.HoodieClusteringJob \
-/path/to/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.2.jar \
+/path/to/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.1.2.jar \
 --props /path/to/config/clusteringjob.properties \
 --mode scheduleAndExecute \
 --base-path /path/to/hudi_table/basePath \
@@ -280,9 +280,9 @@ A sample spark-submit command to setup Hudi Streamer is as below:
 
 ```bash
 spark-submit \
---jars "packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.2.jar,packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-1.0.2.jar" \
+--jars "packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.1.2.jar,packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-1.1.2.jar" \
 --class org.apache.hudi.utilities.streamer.HoodieStreamer \
-/path/to/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.2.jar \
+/path/to/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.1.2.jar \
 --props /path/to/config/clustering_kafka.properties \
 --schemaprovider-class org.apache.hudi.utilities.schema.SchemaRegistryProvider \
 --source-class org.apache.hudi.utilities.sources.AvroKafkaSource \

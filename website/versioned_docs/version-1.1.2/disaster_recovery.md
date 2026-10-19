@@ -148,7 +148,7 @@ Make sure you replace 20220128160245447 with the latest commit in your table.
 
 ```shell
 export SPARK_VERSION=3.5
-export HUDI_VERSION=1.0.2
+export HUDI_VERSION=1.1.2
 
 spark-sql --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:$HUDI_VERSION \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
@@ -307,7 +307,7 @@ Make sure you replace 20220128160245447 with the latest savepoint in your table.
 
 ```sh
 export SPARK_VERSION=3.5
-export HUDI_VERSION=1.0.2
+export HUDI_VERSION=1.1.2
 
 spark-sql --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:$HUDI_VERSION \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
