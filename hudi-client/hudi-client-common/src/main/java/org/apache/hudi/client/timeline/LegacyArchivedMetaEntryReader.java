@@ -55,6 +55,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.convertMetadataToByteArray;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
@@ -184,6 +185,20 @@ public class LegacyArchivedMetaEntryReader {
 
         @Override
         public boolean hasNext() {
+          List<Pair<HoodieInstant, Option<byte[]>>> instantAndDetails = readNextInstantGroup();
+          // Legacy archives can hold instants that never completed (e.g. a requested-only commit); they are not part of the timeline.
+          while (!instantAndDetails.isEmpty() && instantAndDetails.stream().noneMatch(instantAndDetail -> instantAndDetail.getKey().isCompleted())) {
+            log.warn("Skipping archived instant with no completed state: {}", instantAndDetails.stream().map(Pair::getKey).collect(Collectors.toList()));
+            instantAndDetails = readNextInstantGroup();
+          }
+          if (!instantAndDetails.isEmpty()) {
+            this.activeAction = ActiveActionWithDetails.fromInstantAndDetails(instantAndDetails);
+            return true;
+          }
+          return false;
+        }
+
+        private List<Pair<HoodieInstant, Option<byte[]>>> readNextInstantGroup() {
           List<Pair<HoodieInstant, Option<byte[]>>> instantAndDetails = new ArrayList<>();
           String lastInstantTime = null;
           if (nextInstantAndDetail != null) {
@@ -207,11 +222,7 @@ public class LegacyArchivedMetaEntryReader {
               }
             }
           }
-          if (!instantAndDetails.isEmpty()) {
-            this.activeAction = ActiveActionWithDetails.fromInstantAndDetails(instantAndDetails);
-            return true;
-          }
-          return false;
+          return instantAndDetails;
         }
 
         @Override
